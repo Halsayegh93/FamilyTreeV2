@@ -6,66 +6,72 @@
 	objectVersion = 77;
 	objects = {
 
-/* Begin PBXContainerItemProxy section */
-		9F71E6B22F0B04F90001F8B7 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 9F71E69C2F0B04F70001F8B7 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = 9F71E6A32F0B04F70001F8B7;
-			remoteInfo = FamilyTreeV2;
-		};
-		9F71E6BC2F0B04F90001F8B7 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 9F71E69C2F0B04F70001F8B7 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = 9F71E6A32F0B04F70001F8B7;
-			remoteInfo = FamilyTreeV2;
-		};
-/* End PBXContainerItemProxy section */
+/* Begin PBXBuildFile section */
+		9A8DF3002F406AED000B2DD7 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 9A8DF3012F406AED000B2DD7 /* Supabase */; };
+/* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		9F71E6A42F0B04F70001F8B7 /* FamilyTreeV2.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FamilyTreeV2.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		9F71E6B12F0B04F90001F8B7 /* FamilyTreeV2Tests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FamilyTreeV2Tests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		9F71E6BB2F0B04F90001F8B7 /* FamilyTreeV2UITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FamilyTreeV2UITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		9A8DF20B2F406AEB000B2DD7 /* FamilyTreeV2.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FamilyTreeV2.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		9F71E7492F0D83E20001F8B7 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		9A1DE92D2F41077300C92E8A /* Exceptions for "FamilyTreeV2" folder in "FamilyTreeV2" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 9A8DF20A2F406AEB000B2DD7 /* FamilyTreeV2 */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		9F71E6A62F0B04F70001F8B7 /* FamilyTreeV2 */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				9A1DE92D2F41077300C92E8A /* Exceptions for "FamilyTreeV2" folder in "FamilyTreeV2" target */,
+			);
 			path = FamilyTreeV2;
 			sourceTree = "<group>";
 		};
-		9F71E6B42F0B04F90001F8B7 /* FamilyTreeV2Tests */ = {
+		9F71E6CE2F0B05150001F8B7 /* Core */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = FamilyTreeV2Tests;
+			path = Core;
 			sourceTree = "<group>";
 		};
-		9F71E6BE2F0B04F90001F8B7 /* FamilyTreeV2UITests */ = {
+		9F71E6CF2F0B05220001F8B7 /* Models */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = FamilyTreeV2UITests;
+			path = Models;
+			sourceTree = "<group>";
+		};
+		9F71E6D12F0B052E0001F8B7 /* ViewModels */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = ViewModels;
+			sourceTree = "<group>";
+		};
+		9F71E6D42F0B054A0001F8B7 /* Views */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Views;
+			sourceTree = "<group>";
+		};
+		9F71E6D62F0B05550001F8B7 /* Services */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Services;
+			sourceTree = "<group>";
+		};
+		9F71E6D82F0B05610001F8B7 /* Components */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Components;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		9F71E6A12F0B04F70001F8B7 /* Frameworks */ = {
+		9A8DF2082F406AEB000B2DD7 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		9F71E6AE2F0B04F90001F8B7 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		9F71E6B82F0B04F90001F8B7 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
+				9A8DF3002F406AED000B2DD7 /* Supabase in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -75,33 +81,28 @@
 		9F71E69B2F0B04F70001F8B7 = {
 			isa = PBXGroup;
 			children = (
+				9F71E7492F0D83E20001F8B7 /* Localizable.xcstrings */,
 				9F71E6A62F0B04F70001F8B7 /* FamilyTreeV2 */,
-				9F71E6B42F0B04F90001F8B7 /* FamilyTreeV2Tests */,
-				9F71E6BE2F0B04F90001F8B7 /* FamilyTreeV2UITests */,
-				9F71E6A52F0B04F70001F8B7 /* Products */,
+				9F71E6CE2F0B05150001F8B7 /* Core */,
+				9F71E6CF2F0B05220001F8B7 /* Models */,
+				9F71E6D12F0B052E0001F8B7 /* ViewModels */,
+				9F71E6D42F0B054A0001F8B7 /* Views */,
+				9F71E6D62F0B05550001F8B7 /* Services */,
+				9F71E6D82F0B05610001F8B7 /* Components */,
+				9A8DF20B2F406AEB000B2DD7 /* FamilyTreeV2.app */,
 			);
-			sourceTree = "<group>";
-		};
-		9F71E6A52F0B04F70001F8B7 /* Products */ = {
-			isa = PBXGroup;
-			children = (
-				9F71E6A42F0B04F70001F8B7 /* FamilyTreeV2.app */,
-				9F71E6B12F0B04F90001F8B7 /* FamilyTreeV2Tests.xctest */,
-				9F71E6BB2F0B04F90001F8B7 /* FamilyTreeV2UITests.xctest */,
-			);
-			name = Products;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		9F71E6A32F0B04F70001F8B7 /* FamilyTreeV2 */ = {
+		9A8DF20A2F406AEB000B2DD7 /* FamilyTreeV2 */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 9F71E6C52F0B04F90001F8B7 /* Build configuration list for PBXNativeTarget "FamilyTreeV2" */;
+			buildConfigurationList = 9A8DF22F2F406AEC000B2DD7 /* Build configuration list for PBXNativeTarget "FamilyTreeV2" */;
 			buildPhases = (
-				9F71E6A02F0B04F70001F8B7 /* Sources */,
-				9F71E6A12F0B04F70001F8B7 /* Frameworks */,
-				9F71E6A22F0B04F70001F8B7 /* Resources */,
+				9A8DF2072F406AEB000B2DD7 /* Sources */,
+				9A8DF2082F406AEB000B2DD7 /* Frameworks */,
+				9A8DF2092F406AEB000B2DD7 /* Resources */,
 			);
 			buildRules = (
 			);
@@ -109,59 +110,20 @@
 			);
 			fileSystemSynchronizedGroups = (
 				9F71E6A62F0B04F70001F8B7 /* FamilyTreeV2 */,
+				9F71E6CE2F0B05150001F8B7 /* Core */,
+				9F71E6CF2F0B05220001F8B7 /* Models */,
+				9F71E6D12F0B052E0001F8B7 /* ViewModels */,
+				9F71E6D42F0B054A0001F8B7 /* Views */,
+				9F71E6D62F0B05550001F8B7 /* Services */,
+				9F71E6D82F0B05610001F8B7 /* Components */,
 			);
 			name = FamilyTreeV2;
 			packageProductDependencies = (
+				9A8DF3012F406AED000B2DD7 /* Supabase */,
 			);
 			productName = FamilyTreeV2;
-			productReference = 9F71E6A42F0B04F70001F8B7 /* FamilyTreeV2.app */;
+			productReference = 9A8DF20B2F406AEB000B2DD7 /* FamilyTreeV2.app */;
 			productType = "com.apple.product-type.application";
-		};
-		9F71E6B02F0B04F90001F8B7 /* FamilyTreeV2Tests */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = 9F71E6C82F0B04F90001F8B7 /* Build configuration list for PBXNativeTarget "FamilyTreeV2Tests" */;
-			buildPhases = (
-				9F71E6AD2F0B04F90001F8B7 /* Sources */,
-				9F71E6AE2F0B04F90001F8B7 /* Frameworks */,
-				9F71E6AF2F0B04F90001F8B7 /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-				9F71E6B32F0B04F90001F8B7 /* PBXTargetDependency */,
-			);
-			fileSystemSynchronizedGroups = (
-				9F71E6B42F0B04F90001F8B7 /* FamilyTreeV2Tests */,
-			);
-			name = FamilyTreeV2Tests;
-			packageProductDependencies = (
-			);
-			productName = FamilyTreeV2Tests;
-			productReference = 9F71E6B12F0B04F90001F8B7 /* FamilyTreeV2Tests.xctest */;
-			productType = "com.apple.product-type.bundle.unit-test";
-		};
-		9F71E6BA2F0B04F90001F8B7 /* FamilyTreeV2UITests */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = 9F71E6CB2F0B04F90001F8B7 /* Build configuration list for PBXNativeTarget "FamilyTreeV2UITests" */;
-			buildPhases = (
-				9F71E6B72F0B04F90001F8B7 /* Sources */,
-				9F71E6B82F0B04F90001F8B7 /* Frameworks */,
-				9F71E6B92F0B04F90001F8B7 /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-				9F71E6BD2F0B04F90001F8B7 /* PBXTargetDependency */,
-			);
-			fileSystemSynchronizedGroups = (
-				9F71E6BE2F0B04F90001F8B7 /* FamilyTreeV2UITests */,
-			);
-			name = FamilyTreeV2UITests;
-			packageProductDependencies = (
-			);
-			productName = FamilyTreeV2UITests;
-			productReference = 9F71E6BB2F0B04F90001F8B7 /* FamilyTreeV2UITests.xctest */;
-			productType = "com.apple.product-type.bundle.ui-testing";
 		};
 /* End PBXNativeTarget section */
 
@@ -173,56 +135,36 @@
 				LastSwiftUpdateCheck = 2620;
 				LastUpgradeCheck = 2620;
 				TargetAttributes = {
-					9F71E6A32F0B04F70001F8B7 = {
+					9A8DF20A2F406AEB000B2DD7 = {
 						CreatedOnToolsVersion = 26.2;
-					};
-					9F71E6B02F0B04F90001F8B7 = {
-						CreatedOnToolsVersion = 26.2;
-						TestTargetID = 9F71E6A32F0B04F70001F8B7;
-					};
-					9F71E6BA2F0B04F90001F8B7 = {
-						CreatedOnToolsVersion = 26.2;
-						TestTargetID = 9F71E6A32F0B04F70001F8B7;
 					};
 				};
 			};
 			buildConfigurationList = 9F71E69F2F0B04F70001F8B7 /* Build configuration list for PBXProject "FamilyTreeV2" */;
-			developmentRegion = en;
+			developmentRegion = ar;
 			hasScannedForEncodings = 0;
 			knownRegions = (
 				en,
 				Base,
+				ar,
 			);
 			mainGroup = 9F71E69B2F0B04F70001F8B7;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				9F71E6F02F0B077E0001F8B7 /* XCRemoteSwiftPackageReference "supabase-swift" */,
+			);
 			preferredProjectObjectVersion = 77;
-			productRefGroup = 9F71E6A52F0B04F70001F8B7 /* Products */;
+			productRefGroup = 9F71E69B2F0B04F70001F8B7;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				9F71E6A32F0B04F70001F8B7 /* FamilyTreeV2 */,
-				9F71E6B02F0B04F90001F8B7 /* FamilyTreeV2Tests */,
-				9F71E6BA2F0B04F90001F8B7 /* FamilyTreeV2UITests */,
+				9A8DF20A2F406AEB000B2DD7 /* FamilyTreeV2 */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		9F71E6A22F0B04F70001F8B7 /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		9F71E6AF2F0B04F90001F8B7 /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		9F71E6B92F0B04F90001F8B7 /* Resources */ = {
+		9A8DF2092F406AEB000B2DD7 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -232,21 +174,7 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		9F71E6A02F0B04F70001F8B7 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		9F71E6AD2F0B04F90001F8B7 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		9F71E6B72F0B04F90001F8B7 /* Sources */ = {
+		9A8DF2072F406AEB000B2DD7 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -255,20 +183,85 @@
 		};
 /* End PBXSourcesBuildPhase section */
 
-/* Begin PBXTargetDependency section */
-		9F71E6B32F0B04F90001F8B7 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = 9F71E6A32F0B04F70001F8B7 /* FamilyTreeV2 */;
-			targetProxy = 9F71E6B22F0B04F90001F8B7 /* PBXContainerItemProxy */;
-		};
-		9F71E6BD2F0B04F90001F8B7 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = 9F71E6A32F0B04F70001F8B7 /* FamilyTreeV2 */;
-			targetProxy = 9F71E6BC2F0B04F90001F8B7 /* PBXContainerItemProxy */;
-		};
-/* End PBXTargetDependency section */
-
 /* Begin XCBuildConfiguration section */
+		9A8DF2292F406AEC000B2DD7 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = QN7V7JU7DP;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = FamilyTreeV2/Info.plist;
+				INFOPLIST_KEY_OTP_FALLBACK_API_KEY = MY_OTP_KEY_2026;
+				INFOPLIST_KEY_OTP_FALLBACK_URL = "https://poxyxsgvzwmnmewytsiw.supabase.co/functions/v1/otp-fallback";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.6;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = Hasan.FamilyTreeV2;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		9A8DF22A2F406AEC000B2DD7 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = QN7V7JU7DP;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = FamilyTreeV2/Info.plist;
+				INFOPLIST_KEY_OTP_FALLBACK_API_KEY = MY_OTP_KEY_2026;
+				INFOPLIST_KEY_OTP_FALLBACK_URL = "https://poxyxsgvzwmnmewytsiw.supabase.co/functions/v1/otp-fallback";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.6;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = Hasan.FamilyTreeV2;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 		9F71E6C32F0B04F90001F8B7 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -329,6 +322,7 @@
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 			};
 			name = Debug;
@@ -386,161 +380,23 @@
 				MTL_FAST_MATH = YES;
 				SDKROOT = iphoneos;
 				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_EMIT_LOC_STRINGS = YES;
 				VALIDATE_PRODUCT = YES;
-			};
-			name = Release;
-		};
-		9F71E6C62F0B04F90001F8B7 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = QN7V7JU7DP;
-				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-				);
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.yourname.FamilyTreeV2;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-			};
-			name = Debug;
-		};
-		9F71E6C72F0B04F90001F8B7 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = QN7V7JU7DP;
-				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-				);
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.yourname.FamilyTreeV2;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-			};
-			name = Release;
-		};
-		9F71E6C92F0B04F90001F8B7 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = QN7V7JU7DP;
-				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.yourname.FamilyTreeV2Tests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				STRING_CATALOG_GENERATE_SYMBOLS = NO;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/FamilyTreeV2.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/FamilyTreeV2";
-			};
-			name = Debug;
-		};
-		9F71E6CA2F0B04F90001F8B7 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = QN7V7JU7DP;
-				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.yourname.FamilyTreeV2Tests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				STRING_CATALOG_GENERATE_SYMBOLS = NO;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/FamilyTreeV2.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/FamilyTreeV2";
-			};
-			name = Release;
-		};
-		9F71E6CC2F0B04F90001F8B7 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = QN7V7JU7DP;
-				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.yourname.FamilyTreeV2UITests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				STRING_CATALOG_GENERATE_SYMBOLS = NO;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_TARGET_NAME = FamilyTreeV2;
-			};
-			name = Debug;
-		};
-		9F71E6CD2F0B04F90001F8B7 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = QN7V7JU7DP;
-				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.yourname.FamilyTreeV2UITests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				STRING_CATALOG_GENERATE_SYMBOLS = NO;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_TARGET_NAME = FamilyTreeV2;
 			};
 			name = Release;
 		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		9A8DF22F2F406AEC000B2DD7 /* Build configuration list for PBXNativeTarget "FamilyTreeV2" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				9A8DF2292F406AEC000B2DD7 /* Debug */,
+				9A8DF22A2F406AEC000B2DD7 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		9F71E69F2F0B04F70001F8B7 /* Build configuration list for PBXProject "FamilyTreeV2" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -550,34 +406,26 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		9F71E6C52F0B04F90001F8B7 /* Build configuration list for PBXNativeTarget "FamilyTreeV2" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				9F71E6C62F0B04F90001F8B7 /* Debug */,
-				9F71E6C72F0B04F90001F8B7 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		9F71E6C82F0B04F90001F8B7 /* Build configuration list for PBXNativeTarget "FamilyTreeV2Tests" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				9F71E6C92F0B04F90001F8B7 /* Debug */,
-				9F71E6CA2F0B04F90001F8B7 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		9F71E6CB2F0B04F90001F8B7 /* Build configuration list for PBXNativeTarget "FamilyTreeV2UITests" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				9F71E6CC2F0B04F90001F8B7 /* Debug */,
-				9F71E6CD2F0B04F90001F8B7 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		9F71E6F02F0B077E0001F8B7 /* XCRemoteSwiftPackageReference "supabase-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/supabase-community/supabase-swift";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.5.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		9A8DF3012F406AED000B2DD7 /* Supabase */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 9F71E6F02F0B077E0001F8B7 /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Supabase;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 9F71E69C2F0B04F70001F8B7 /* Project object */;
 }

@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "supabase-functions",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-c", "echo 'Supabase Functions running on port 54321' && while true; do sleep 3600; done"],
+      "port": 54321
+    }
+  ]
+}
