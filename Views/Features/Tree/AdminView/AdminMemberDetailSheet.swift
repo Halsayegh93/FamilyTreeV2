@@ -12,6 +12,7 @@ struct AdminMemberDetailSheet: View {
     @State private var phoneNumber: String
     @State private var selectedFatherId: UUID?
     @State private var fullName: String
+    @State private var familyName: String
 
     // البيانات الشخصية
     @State private var birthDate: Date
@@ -41,6 +42,9 @@ struct AdminMemberDetailSheet: View {
         self._phoneNumber = State(initialValue: detectedPhone.localDigits)
         self._selectedFatherId = State(initialValue: member.fatherId)
         self._fullName = State(initialValue: member.fullName)
+        // استخراج اسم العائلة من الاسم الكامل (آخر كلمة)
+        let nameParts = member.fullName.trimmingCharacters(in: .whitespacesAndNewlines).split(whereSeparator: \.isWhitespace).map(String.init)
+        self._familyName = State(initialValue: nameParts.count > 1 ? (nameParts.last ?? "") : "")
 
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
@@ -69,12 +73,16 @@ struct AdminMemberDetailSheet: View {
                 DS.Color.background.ignoresSafeArea()
 
                 ScrollView(showsIndicators: false) {
-                    VStack(spacing: DS.Spacing.md) {
-                        compactMemberHeader
-
-                        // تم دمج البيانات الأساسية داخل الهيدر العلوي
+                    VStack(spacing: DS.Spacing.sm) {
+                        // ربط العضو بالأب أولاً
                         adminSection(title: "ربط العضو بالأب", icon: "person.2.fill", color: .orange) {
                             fatherLinkComponent
+                        }
+
+                        compactMemberHeader
+
+                        adminSection(title: L10n.t("تفعيل الهاتف", "Phone"), icon: "phone.fill", color: DS.Color.success) {
+                            phoneInput
                         }
 
                         // قسم الأبناء المحدث
@@ -84,11 +92,7 @@ struct AdminMemberDetailSheet: View {
                             birthDateInput
                         }
 
-                        adminSection(title: "تفعيل الهاتف", icon: "phone.fill", color: DS.Color.success) {
-                            phoneInput
-                        }
-
-                        adminSection(title: "الحالة الصحية", icon: "heart.text.square.fill", color: DS.Color.error) {
+                        adminSection(title: L10n.t("الحالة الصحية", "Health Status"), icon: "heart.text.square.fill", color: DS.Color.error) {
                             deceasedStatusInput
                         }
 
@@ -100,7 +104,7 @@ struct AdminMemberDetailSheet: View {
 
                         footerButtons
 
-                        Spacer(minLength: 16)
+                        Spacer(minLength: 8)
                     }
                     .padding(.top, DS.Spacing.xs)
                 }
@@ -141,9 +145,26 @@ struct AdminMemberDetailSheet: View {
         HStack {
             TextField(L10n.t("الاسم الكامل", "Full Name"), text: $fullName)
                 .multilineTextAlignment(.leading)
-                .font(DS.Font.caption1)
+                .font(DS.Font.body)
         }
-        .padding(DS.Spacing.md)
+        .padding(.horizontal, DS.Spacing.md)
+        .padding(.vertical, DS.Spacing.md)
+        .background(DS.Color.surfaceElevated.opacity(0.5))
+        .cornerRadius(DS.Radius.md)
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Radius.md)
+                .stroke(DS.Color.primary.opacity(0.15), lineWidth: 1)
+        )
+    }
+
+    private var familyNameInput: some View {
+        HStack {
+            TextField(L10n.t("اسم العائلة", "Family Name"), text: $familyName)
+                .multilineTextAlignment(.leading)
+                .font(DS.Font.body)
+        }
+        .padding(.horizontal, DS.Spacing.md)
+        .padding(.vertical, DS.Spacing.md)
         .background(DS.Color.surfaceElevated.opacity(0.5))
         .cornerRadius(DS.Radius.md)
         .overlay(
@@ -153,10 +174,10 @@ struct AdminMemberDetailSheet: View {
     }
 
     private var birthDateInput: some View {
-        VStack(spacing: DS.Spacing.md) {
+        VStack(spacing: DS.Spacing.sm) {
             Toggle(isOn: $hasBirthDate.animation()) {
                 HStack {
-                    Text("تاريخ الميلاد معروف؟").font(DS.Font.caption1)
+                    Text(L10n.t("تاريخ الميلاد متوفر", "Birth date available")).font(DS.Font.caption1)
                     Spacer()
                 }
             }
@@ -177,10 +198,10 @@ struct AdminMemberDetailSheet: View {
     }
 
     private var deceasedStatusInput: some View {
-        VStack(spacing: DS.Spacing.md) {
+        VStack(spacing: DS.Spacing.sm) {
             Toggle(isOn: $isDeceased.animation()) {
                 HStack {
-                    Text("انتقل إلى رحمة الله (متوفى)").font(DS.Font.caption1)
+                    Text(L10n.t("متوفي", "Deceased")).font(DS.Font.caption1)
                     Spacer()
                 }
             }
@@ -190,7 +211,7 @@ struct AdminMemberDetailSheet: View {
                 DSDivider()
                 Toggle(isOn: $hasDeathDate.animation()) {
                     HStack {
-                        Text("تاريخ الوفاة معروف؟").font(DS.Font.caption1)
+                        Text(L10n.t("تاريخ الوفاة متوفر", "Death date available")).font(DS.Font.caption1)
                         Spacer()
                     }
                 }
@@ -212,8 +233,15 @@ struct AdminMemberDetailSheet: View {
 
     // MARK: - قسم الأبناء مع الترتيب اليدوي الصحيح
     private var childrenSection: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.md) {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             HStack {
+                Text(L10n.t("قائمة الأبناء (\(localChildren.count))", "Children (\(localChildren.count))"))
+                    .font(DS.Font.caption1)
+                    .fontWeight(.bold)
+                    .foregroundColor(DS.Color.textSecondary)
+
+                Spacer()
+
                 // زر الترتيب
                 Button(action: {
                     withAnimation {
@@ -222,7 +250,7 @@ struct AdminMemberDetailSheet: View {
                 }) {
                     HStack(spacing: DS.Spacing.xs) {
                         Image(systemName: editMode == .active ? "checkmark" : "arrow.up.arrow.down")
-                        Text(editMode == .active ? "حفظ الترتيب" : "ترتيب")
+                        Text(editMode == .active ? L10n.t("حفظ", "Save") : L10n.t("ترتيب", "Sort"))
                     }
                     .font(DS.Font.caption1)
                     .fontWeight(.bold)
@@ -238,20 +266,17 @@ struct AdminMemberDetailSheet: View {
 
                 // زر الإضافة
                 Button(action: { showAddSonSheet = true }) {
-                    Label(L10n.t("إضافة", "Add"), systemImage: "plus.circle.fill")
-                        .font(DS.Font.caption1)
-                        .fontWeight(.bold)
-                        .foregroundColor(.white)
-                        .padding(.horizontal, DS.Spacing.md).padding(.vertical, DS.Spacing.xs + 2)
-                        .background(DS.Color.gradientPrimary)
-                        .cornerRadius(DS.Radius.sm)
-                }
-
-                Spacer()
-                Text("قائمة الأبناء (\(localChildren.count))")
+                    HStack(spacing: DS.Spacing.xs) {
+                        Image(systemName: "plus")
+                        Text(L10n.t("إضافة", "Add"))
+                    }
                     .font(DS.Font.caption1)
                     .fontWeight(.bold)
-                    .foregroundColor(DS.Color.textSecondary)
+                    .foregroundColor(.white)
+                    .padding(.horizontal, DS.Spacing.md).padding(.vertical, DS.Spacing.xs + 2)
+                    .background(DS.Color.gradientPrimary)
+                    .cornerRadius(DS.Radius.sm)
+                }
             }
             .padding(.horizontal, DS.Spacing.lg)
 
@@ -277,8 +302,7 @@ struct AdminMemberDetailSheet: View {
                         .onMove(perform: moveChild)
                     }
                     .listStyle(.plain)
-                    .scrollDisabled(true)
-                    .frame(height: CGFloat(max(localChildren.count * 44, 44)))
+                    .frame(height: CGFloat(min(localChildren.count * 38, 260)))
                     .environment(\.editMode, $editMode)
                 }
             }
@@ -290,12 +314,12 @@ struct AdminMemberDetailSheet: View {
     }
 
     private var compactMemberHeader: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
             HStack(spacing: DS.Spacing.xs + 2) {
                 Image(systemName: "person.text.rectangle")
                     .foregroundColor(.white)
-                    .font(.system(size: 10))
-                    .frame(width: 22, height: 22)
+                    .font(DS.Font.scaled(10))
+                    .frame(width: 20, height: 20)
                     .background(
                         LinearGradient(
                             colors: [DS.Color.primary, DS.Color.accent],
@@ -312,12 +336,12 @@ struct AdminMemberDetailSheet: View {
             }
             .padding(.horizontal, DS.Spacing.lg)
 
-            DSCard {
-                VStack(alignment: .leading, spacing: DS.Spacing.md) {
-                    HStack(spacing: DS.Spacing.md) {
+            DSCard(padding: DS.Spacing.sm) {
+                VStack(alignment: .leading, spacing: DS.Spacing.xs + 2) {
+                    HStack(spacing: DS.Spacing.sm) {
                         Circle()
                             .fill(DS.Color.gradientPrimary)
-                            .frame(width: 45, height: 45)
+                            .frame(width: 36, height: 36)
                             .overlay(
                                 Text(fullName.prefix(1))
                                     .font(DS.Font.caption1)
@@ -326,19 +350,19 @@ struct AdminMemberDetailSheet: View {
                             .dsGlowShadow()
                             .offset(x: 1)
 
-                        VStack(alignment: .trailing, spacing: 2) {
+                        VStack(alignment: .trailing, spacing: 1) {
                             Text(fullName)
                                 .font(DS.Font.caption1)
                             Text("تعديل البيانات والصلاحيات")
-                                .font(DS.Font.caption1)
+                                .font(DS.Font.scaled(10))
                                 .foregroundColor(DS.Color.textSecondary)
                         }
                         Spacer()
                     }
 
                     fullNameInput
+                    familyNameInput
                 }
-                .padding(DS.Spacing.sm)
             }
             .padding(.horizontal, DS.Spacing.md)
         }
@@ -359,7 +383,8 @@ struct AdminMemberDetailSheet: View {
                 Text("رأس شجرة (غير مرتبط)").font(DS.Font.caption1).foregroundColor(DS.Color.textSecondary)
             }
         }
-        .padding(DS.Spacing.sm)
+        .padding(.horizontal, DS.Spacing.sm)
+        .padding(.vertical, DS.Spacing.xs + 2)
         .background(DS.Color.surfaceElevated.opacity(0.5))
         .cornerRadius(DS.Radius.md)
     }
@@ -380,7 +405,7 @@ struct AdminMemberDetailSheet: View {
                     Text(selectedPhoneCountry.dialingCode)
                         .font(DS.Font.caption1)
                     Image(systemName: "chevron.down")
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(DS.Font.scaled(10, weight: .semibold))
                 }
                 .foregroundColor(DS.Color.textSecondary)
                 .padding(.horizontal, 10)
@@ -401,7 +426,8 @@ struct AdminMemberDetailSheet: View {
             phoneNumber = KuwaitPhone.userTypedDigits(phoneNumber, maxDigits: newCountry.maxDigits)
         }
         .environment(\.layoutDirection, .leftToRight)
-        .padding(DS.Spacing.sm)
+        .padding(.horizontal, DS.Spacing.sm)
+        .padding(.vertical, DS.Spacing.xs + 2)
         .background(DS.Color.surfaceElevated.opacity(0.5))
         .cornerRadius(DS.Radius.md)
         .overlay(
@@ -421,7 +447,7 @@ struct AdminMemberDetailSheet: View {
     }
 
     private var footerButtons: some View {
-        VStack(spacing: DS.Spacing.md) {
+        VStack(spacing: DS.Spacing.sm) {
             DSPrimaryButton(
                 L10n.t("حفظ التغييرات", "Save Changes"),
                 isLoading: authVM.isLoading,
@@ -444,16 +470,16 @@ struct AdminMemberDetailSheet: View {
             }
         }
         .padding(.horizontal, DS.Spacing.lg)
-        .padding(.top, DS.Spacing.sm)
+        .padding(.top, DS.Spacing.xs)
     }
 
     private func adminSection<Content: View>(title: String, icon: String, color: Color, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
             HStack(spacing: DS.Spacing.xs + 2) {
                 Image(systemName: icon)
                     .foregroundColor(.white)
-                    .font(.system(size: 10))
-                    .frame(width: 22, height: 22)
+                    .font(DS.Font.scaled(10))
+                    .frame(width: 20, height: 20)
                     .background(
                         LinearGradient(
                             colors: [DS.Color.primary, DS.Color.accent],
@@ -470,9 +496,10 @@ struct AdminMemberDetailSheet: View {
             }
             .padding(.horizontal, DS.Spacing.lg)
 
-            DSCard {
+            DSCard(padding: DS.Spacing.sm) {
                 VStack { content() }
-                    .padding(DS.Spacing.sm)
+                    .padding(.horizontal, DS.Spacing.xs)
+                    .padding(.vertical, DS.Spacing.xs)
             }
             .padding(.horizontal, DS.Spacing.md)
         }
@@ -494,7 +521,22 @@ struct AdminMemberDetailSheet: View {
             let finalBirthDate = hasBirthDate ? birthDate : nil
             let finalDeathDate = (isDeceased && hasDeathDate) ? deathDate : nil
 
-            await authVM.updateMemberName(memberId: member.id, fullName: fullName)
+            // إضافة اسم العائلة في نهاية الاسم الكامل إذا لم يكن موجود
+            let cleanFamily = familyName.trimmingCharacters(in: .whitespacesAndNewlines)
+            var finalFullName = fullName.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !cleanFamily.isEmpty && !finalFullName.hasSuffix(cleanFamily) {
+                // إزالة اسم العائلة القديم إن وُجد ثم إضافة الجديد
+                let parts = finalFullName.split(whereSeparator: \.isWhitespace).map(String.init)
+                // نعتبر الاسم الكامل بدون آخر كلمة + اسم العائلة الجديد
+                if parts.count > 1 {
+                    let nameWithoutLast = parts.dropLast().joined(separator: " ")
+                    finalFullName = nameWithoutLast + " " + cleanFamily
+                } else {
+                    finalFullName = finalFullName + " " + cleanFamily
+                }
+            }
+
+            await authVM.updateMemberName(memberId: member.id, fullName: finalFullName)
             if canManageAccessPermissions {
                 await authVM.updateMemberRole(memberId: member.id, newRole: selectedRole)
             }

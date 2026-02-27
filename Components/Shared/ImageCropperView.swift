@@ -56,7 +56,7 @@ struct ImageCropperView: View {
                 HStack {
                     Button { onCancel() } label: {
                         Text(L10n.t("إلغاء", "Cancel"))
-                            .font(.system(size: 16, weight: .medium))
+                            .font(DS.Font.scaled(16, weight: .medium))
                             .foregroundColor(.white)
                             .padding(.horizontal, 16)
                             .padding(.vertical, 8)
@@ -65,7 +65,7 @@ struct ImageCropperView: View {
                     Spacer()
 
                     Text(L10n.t("تعديل الصورة", "Edit Photo"))
-                        .font(.system(size: 17, weight: .bold))
+                        .font(DS.Font.scaled(17, weight: .bold))
                         .foregroundColor(.white)
 
                     Spacer()
@@ -75,7 +75,7 @@ struct ImageCropperView: View {
                         onCrop(cropped)
                     } label: {
                         Text(L10n.t("تأكيد", "Confirm"))
-                            .font(.system(size: 16, weight: .bold))
+                            .font(DS.Font.scaled(16, weight: .bold))
                             .foregroundColor(.black)
                             .padding(.horizontal, 16)
                             .padding(.vertical, 8)
@@ -89,7 +89,7 @@ struct ImageCropperView: View {
                 Spacer()
 
                 Text(L10n.t("اسحب وكبّر الصورة للتعديل", "Drag and pinch to adjust"))
-                    .font(.system(size: 13))
+                    .font(DS.Font.scaled(13))
                     .foregroundColor(.white.opacity(0.6))
                     .padding(.bottom, 50)
             }

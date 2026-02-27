@@ -123,7 +123,7 @@ struct WaitingForApprovalView: View {
                 .overlay(Circle().stroke(Color.white.opacity(0.2), lineWidth: 0.5))
 
             Image(systemName: "clock.badge.checkmark.fill")
-                .font(.system(size: 48, weight: .bold))
+                .font(DS.Font.scaled(48, weight: .bold))
                 .foregroundColor(.white)
         }
         .dsGlowShadow()
@@ -217,7 +217,7 @@ struct WaitingForApprovalView: View {
             }) {
                 HStack(spacing: DS.Spacing.sm) {
                     Image(systemName: "rectangle.portrait.and.arrow.right")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(DS.Font.scaled(14, weight: .semibold))
                     Text(L10n.t("تسجيل الخروج", "Sign Out"))
                 }
                 .font(DS.Font.calloutBold)

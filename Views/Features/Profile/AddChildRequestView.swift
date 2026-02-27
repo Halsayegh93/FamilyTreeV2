@@ -97,7 +97,7 @@ struct AddChildRequestView: View {
                             Text(selectedPhoneCountry.flag)
                             Text(selectedPhoneCountry.dialingCode).font(DS.Font.callout)
                             Image(systemName: "chevron.down")
-                                .font(.system(size: 10, weight: .semibold))
+                                .font(DS.Font.scaled(10, weight: .semibold))
                         }
                         .foregroundColor(DS.Color.textSecondary)
                         .padding(.horizontal, 10)
@@ -228,7 +228,7 @@ struct AddChildRequestView: View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: icon)
-                    .font(.system(size: 12))
+                    .font(DS.Font.scaled(12))
                     .foregroundColor(DS.Color.primary)
                 Text(title)
                     .font(DS.Font.caption1)

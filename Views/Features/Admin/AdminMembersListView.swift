@@ -71,7 +71,7 @@ struct AdminMembersListView: View {
                     .fill(DS.Color.gradientPrimary)
                     .frame(width: 36, height: 36)
                 Image(systemName: "magnifyingglass")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(DS.Font.scaled(14, weight: .semibold))
                     .foregroundColor(.white)
             }
 
@@ -116,7 +116,7 @@ struct AdminMembersListView: View {
                     .fill(DS.Color.gradientPrimary)
                     .frame(width: 60, height: 60)
                 Image(systemName: "person.fill.questionmark")
-                    .font(.system(size: 26, weight: .semibold))
+                    .font(DS.Font.scaled(26, weight: .semibold))
                     .foregroundColor(.white)
             }
 
@@ -169,7 +169,7 @@ struct MemberAdminRow: View {
 
                 // أيقونة توضح إمكانية الدخول للتعديل
                 Image(systemName: "chevron.left")
-                    .font(.system(size: 11, weight: .bold))
+                    .font(DS.Font.scaled(11, weight: .bold))
                     .foregroundColor(.white)
                     .frame(width: 26, height: 26)
                     .background(DS.Color.primary.opacity(0.7))

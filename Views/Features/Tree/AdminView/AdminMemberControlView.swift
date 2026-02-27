@@ -78,7 +78,7 @@ struct AdminMemberControlView: View {
                                                     )
                                                     .overlay(
                                                         Image(systemName: "person.fill")
-                                                            .font(.system(size: 28, weight: .bold))
+                                                            .font(DS.Font.scaled(28, weight: .bold))
                                                             .foregroundColor(DS.Color.primary)
                                                     )
                                             }
@@ -99,7 +99,7 @@ struct AdminMemberControlView: View {
                                         HStack(spacing: DS.Spacing.sm) {
                                             Image(systemName: "camera.fill")
                                                 .foregroundColor(.white)
-                                                .font(.system(size: 12))
+                                                .font(DS.Font.scaled(12))
                                                 .frame(width: 28, height: 28)
                                                 .background(DS.Color.gradientPrimary)
                                                 .clipShape(Circle())
@@ -136,7 +136,7 @@ struct AdminMemberControlView: View {
                                     HStack(spacing: DS.Spacing.md) {
                                         Image(systemName: "person.fill")
                                             .foregroundColor(.white)
-                                            .font(.system(size: 14))
+                                            .font(DS.Font.scaled(14))
                                             .frame(width: DS.Icon.sizeSm, height: DS.Icon.sizeSm)
                                             .background(DS.Color.gradientPrimary)
                                             .cornerRadius(DS.Radius.sm)
@@ -153,7 +153,7 @@ struct AdminMemberControlView: View {
                                     HStack(spacing: DS.Spacing.md) {
                                         Image(systemName: "calendar")
                                             .foregroundColor(.white)
-                                            .font(.system(size: 14))
+                                            .font(DS.Font.scaled(14))
                                             .frame(width: DS.Icon.sizeSm, height: DS.Icon.sizeSm)
                                             .background(DS.Color.gradientPrimary)
                                             .cornerRadius(DS.Radius.sm)
@@ -169,7 +169,7 @@ struct AdminMemberControlView: View {
                                     HStack(spacing: DS.Spacing.md) {
                                         Image(systemName: "heart.fill")
                                             .foregroundColor(.white)
-                                            .font(.system(size: 14))
+                                            .font(DS.Font.scaled(14))
                                             .frame(width: DS.Icon.sizeSm, height: DS.Icon.sizeSm)
                                             .background(DS.Color.gradientPrimary)
                                             .cornerRadius(DS.Radius.sm)
@@ -194,7 +194,7 @@ struct AdminMemberControlView: View {
                                     HStack(spacing: DS.Spacing.md) {
                                         Image(systemName: "cross.fill")
                                             .foregroundColor(.white)
-                                            .font(.system(size: 14))
+                                            .font(DS.Font.scaled(14))
                                             .frame(width: DS.Icon.sizeSm, height: DS.Icon.sizeSm)
                                             .background(DS.Color.gradientPrimary)
                                             .cornerRadius(DS.Radius.sm)
@@ -212,7 +212,7 @@ struct AdminMemberControlView: View {
                                         HStack(spacing: DS.Spacing.md) {
                                             Image(systemName: "calendar.badge.exclamationmark")
                                                 .foregroundColor(.white)
-                                                .font(.system(size: 14))
+                                                .font(DS.Font.scaled(14))
                                                 .frame(width: DS.Icon.sizeSm, height: DS.Icon.sizeSm)
                                                 .background(DS.Color.gradientPrimary)
                                                 .cornerRadius(DS.Radius.sm)

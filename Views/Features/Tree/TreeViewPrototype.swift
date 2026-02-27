@@ -298,7 +298,7 @@ struct VariantA_Node: View {
                         VStack {
                             Spacer()
                             Text(lifeSpan)
-                                .font(.system(size: 8, weight: .bold))
+                                .font(DS.Font.scaled(8, weight: .bold))
                                 .foregroundColor(.white)
                                 .padding(.horizontal, 4)
                                 .padding(.vertical, 2)
@@ -316,7 +316,7 @@ struct VariantA_Node: View {
             Button(action: onToggle) {
                 VStack(spacing: 4) {
                     Text(member.firstName)
-                        .font(.system(size: 11, weight: .bold))
+                        .font(DS.Font.scaled(11, weight: .bold))
                         .lineLimit(1)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 4)
@@ -333,7 +333,7 @@ struct VariantA_Node: View {
                                 .overlay(Circle().stroke(Color.white.opacity(0.9), lineWidth: 2))
                                 .shadow(color: .black.opacity(0.2), radius: 2, y: 1)
                             Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                                .font(.system(size: 11, weight: .black))
+                                .font(DS.Font.scaled(11, weight: .black))
                                 .foregroundColor(.white)
                         }
                     }
@@ -367,7 +367,7 @@ struct VariantA_ZoomControls: View {
                 Image(systemName: "minus").frame(width: 44, height: 42)
             }
         }
-        .font(.system(size: 15, weight: .bold))
+        .font(DS.Font.scaled(15, weight: .bold))
         .foregroundColor(.primary)
         .background(Color(uiColor: .secondarySystemGroupedBackground))
         .clipShape(RoundedRectangle(cornerRadius: 12))
@@ -436,19 +436,19 @@ struct VariantB_CardBranch: View {
                                 .stroke(member.isDeceased ? Color.gray.opacity(0.4) : member.role.color.opacity(0.5), lineWidth: 1.5)
                                 .frame(width: 46, height: 46)
                             Text(String(member.firstName.prefix(1)))
-                                .font(.system(size: 18, weight: .bold))
+                                .font(DS.Font.scaled(18, weight: .bold))
                                 .foregroundColor(member.isDeceased ? .gray : member.role.color)
                         }
 
                         VStack(alignment: .leading, spacing: 3) {
                             Text(member.fullName)
-                                .font(.system(size: 14, weight: .bold))
+                                .font(DS.Font.scaled(14, weight: .bold))
                                 .foregroundColor(.primary)
                                 .lineLimit(1)
 
                             HStack(spacing: 6) {
                                 Text(member.role.label)
-                                    .font(.system(size: 11, weight: .medium))
+                                    .font(DS.Font.scaled(11, weight: .medium))
                                     .foregroundColor(member.role.color)
                                     .padding(.horizontal, 7)
                                     .padding(.vertical, 2)
@@ -457,7 +457,7 @@ struct VariantB_CardBranch: View {
 
                                 if member.isDeceased {
                                     Text(lifeSpan)
-                                        .font(.system(size: 11, weight: .medium))
+                                        .font(DS.Font.scaled(11, weight: .medium))
                                         .foregroundColor(.red.opacity(0.8))
                                 }
                             }
@@ -474,10 +474,10 @@ struct VariantB_CardBranch: View {
                             }) {
                                 HStack(spacing: 4) {
                                     Text("\(children.count)")
-                                        .font(.system(size: 12, weight: .bold))
+                                        .font(DS.Font.scaled(12, weight: .bold))
                                         .foregroundColor(.secondary)
                                     Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                                        .font(.system(size: 12, weight: .bold))
+                                        .font(DS.Font.scaled(12, weight: .bold))
                                         .foregroundColor(.blue)
                                 }
                                 .padding(.horizontal, 10)
@@ -579,13 +579,13 @@ struct VariantC_Row: View {
 
                         VStack(alignment: .leading, spacing: 1) {
                             Text(member.fullName)
-                                .font(.system(size: 13, weight: depth == 0 ? .bold : .semibold))
+                                .font(DS.Font.scaled(13, weight: depth == 0 ? .bold : .semibold))
                                 .foregroundColor(member.isDeceased ? .secondary : .primary)
                                 .strikethrough(member.isDeceased, color: .secondary)
 
                             if member.isDeceased, let b = member.birthYear, let d = member.deathYear {
                                 Text("\(b)–\(d)")
-                                    .font(.system(size: 10, weight: .medium))
+                                    .font(DS.Font.scaled(10, weight: .medium))
                                     .foregroundColor(.red.opacity(0.7))
                             }
                         }
@@ -600,7 +600,7 @@ struct VariantC_Row: View {
                                 }
                             }) {
                                 Image(systemName: isExpanded ? "chevron.down" : "chevron.left")
-                                    .font(.system(size: 11, weight: .semibold))
+                                    .font(DS.Font.scaled(11, weight: .semibold))
                                     .foregroundColor(.secondary)
                                     .frame(width: 28, height: 28)
                             }
@@ -662,15 +662,15 @@ struct ProtoMemberDetailSheet: View {
                         .stroke(member.isDeceased ? Color.gray.opacity(0.4) : member.role.color.opacity(0.4), lineWidth: 2)
                         .frame(width: 88, height: 88)
                     Text(String(member.firstName.prefix(1)))
-                        .font(.system(size: 36, weight: .bold))
+                        .font(DS.Font.scaled(36, weight: .bold))
                         .foregroundColor(member.isDeceased ? .gray : member.role.color)
                 }
 
                 VStack(spacing: 4) {
                     Text(member.fullName)
-                        .font(.system(size: 20, weight: .bold))
+                        .font(DS.Font.scaled(20, weight: .bold))
                     Text(member.role.label)
-                        .font(.system(size: 13, weight: .medium))
+                        .font(DS.Font.scaled(13, weight: .medium))
                         .foregroundColor(member.role.color)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 4)
@@ -720,15 +720,15 @@ struct DetailInfoRow: View {
                     .fill(color.opacity(0.1))
                     .frame(width: 36, height: 36)
                 Image(systemName: icon)
-                    .font(.system(size: 15))
+                    .font(DS.Font.scaled(15))
                     .foregroundColor(color)
             }
             VStack(alignment: .leading, spacing: 1) {
                 Text(label)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(DS.Font.scaled(11, weight: .medium))
                     .foregroundColor(.secondary)
                 Text(value)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(DS.Font.scaled(14, weight: .semibold))
                     .foregroundColor(.primary)
             }
             Spacer()

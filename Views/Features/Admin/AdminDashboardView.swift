@@ -163,7 +163,7 @@ struct AdminDashboardView: View {
     private func adminSectionHeader(title: String, icon: String) -> some View {
         HStack(spacing: DS.Spacing.sm) {
             Image(systemName: icon)
-                .font(.system(size: 16, weight: .black))
+                .font(DS.Font.scaled(16, weight: .black))
                 .foregroundColor(adminAccent)
 
             Text(title)
@@ -254,7 +254,7 @@ struct AdminDashboardView: View {
         VStack(spacing: DS.Spacing.xs) {
             ZStack {
                 Circle().fill(color.opacity(0.12)).frame(width: 32, height: 32)
-                Image(systemName: icon).font(.system(size: 14, weight: .bold)).foregroundColor(color)
+                Image(systemName: icon).font(DS.Font.scaled(14, weight: .bold)).foregroundColor(color)
             }
 
             Text(value)
@@ -297,7 +297,7 @@ struct AdminDashboardView: View {
             VStack(alignment: .leading, spacing: DS.Spacing.sm) {
                 HStack(spacing: DS.Spacing.sm) {
                     Image(systemName: "exclamationmark.triangle.fill")
-                        .font(.system(size: 15, weight: .bold))
+                        .font(DS.Font.scaled(15, weight: .bold))
                         .foregroundColor(DS.Color.error)
                     Text(L10n.t("تنبيه توافق قاعدة البيانات", "Database Compatibility Warning"))
                         .font(DS.Font.calloutBold)

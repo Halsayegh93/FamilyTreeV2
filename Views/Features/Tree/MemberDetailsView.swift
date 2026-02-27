@@ -18,9 +18,28 @@ struct MemberDetailsView: View {
     @State private var showDeleteGalleryPhotoAlert = false
     @State private var showDeleteAvatarAlert = false
     @State private var selectedTab = 0 // 0: البيانات، 1: الصور
-    @State private var showAvatarPreview = false
     @State private var avatarPreviewScale: CGFloat = 1.0
     @State private var lastAvatarPreviewScale: CGFloat = 1.0
+    @State private var pendingCropImage: UIImage? = nil
+    @State private var cropTarget: CropTarget = .avatar
+    @State private var fullScreenMode: FullScreenMode? = nil
+    
+    private enum CropTarget {
+        case avatar
+        case gallery
+    }
+    
+    private enum FullScreenMode: Identifiable {
+        case avatarPreview
+        case cropper
+        
+        var id: Int {
+            switch self {
+            case .avatarPreview: return 0
+            case .cropper: return 1
+            }
+        }
+    }
 
     var isAdminOrSupervisor: Bool {
         let role = authVM.currentUser?.role
@@ -53,7 +72,7 @@ struct MemberDetailsView: View {
                 .ignoresSafeArea()
 
                 ScrollView(showsIndicators: false) {
-                    VStack(spacing: DS.Spacing.xl) {
+                    VStack(spacing: DS.Spacing.lg) {
 
                         if member.isDeleted {
                             // عرض رسالة للعضو المحذوف
@@ -64,7 +83,7 @@ struct MemberDetailsView: View {
                                         .fill(Color.gray.opacity(0.15))
                                         .frame(width: 100, height: 100)
                                     Image(systemName: "person.slash.fill")
-                                        .font(.system(size: 36))
+                                        .font(DS.Font.scaled(36))
                                         .foregroundColor(.gray)
                                 }
                                 Text(L10n.t("هذا العضو حذف حسابه", "This member deleted their account"))
@@ -76,109 +95,64 @@ struct MemberDetailsView: View {
                                 Spacer()
                             }
                             .frame(maxWidth: .infinity)
-                        } else if selectedTab == 0 {
-                            personalInfoTab
-                                .transition(.asymmetric(insertion: .move(edge: .leading), removal: .opacity))
                         } else {
+                            personalInfoTab
+
                             photosTab
-                                .transition(.asymmetric(insertion: .move(edge: .trailing), removal: .opacity))
                         }
 
                         Spacer(minLength: 20)
                     }
-                    .padding(.vertical, DS.Spacing.xl)
                 }
             }
-            .animation(.spring(response: 0.4, dampingFraction: 0.8), value: selectedTab)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                // زر التعديل (يسار)
-                ToolbarItem(placement: .topBarLeading) {
-                    if isAdminOrSupervisor, !member.isDeleted {
-                        Button { showAdminControl = true } label: {
-                            Image(systemName: "pencil")
-                                .font(.system(size: 14, weight: .bold))
-                                .foregroundColor(.white)
-                                .padding(DS.Spacing.sm)
-                                .background(DS.Color.gradientPrimary)
-                                .clipShape(Circle())
-                                .dsGlowShadow()
-                        }
-                    }
-                }
-
-                // مفتاح الأقسام في المنتصف
-                ToolbarItem(placement: .principal) {
-                    if member.isDeleted {
-                        Text(L10n.t("عضو محذوف", "Deleted Member"))
-                            .font(DS.Font.calloutBold)
-                            .foregroundColor(.gray)
-                    } else {
-                        Picker("", selection: $selectedTab) {
-                            Text(L10n.t("البيانات", "Info")).tag(0)
-                            Text(L10n.t("الصور", "Photos")).tag(1)
-                        }
-                        .pickerStyle(.segmented)
-                        .frame(width: 180)
-                        .tint(DS.Color.primary)
-                    }
-                }
-
-                // زر الإغلاق (يمين)
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button { dismiss() } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundColor(DS.Color.textPrimary)
-                            .padding(DS.Spacing.sm)
-                            .background(DS.Color.surfaceElevated)
-                            .clipShape(Circle())
-                            .overlay(Circle().stroke(Color.gray.opacity(0.2), lineWidth: 1))
-                    }
-                }
-            }
+            .navigationBarHidden(true)
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-            .sheet(isPresented: $showAdminControl) {
-                AdminMemberDetailSheet(member: member)
-            }
-            .photosPicker(isPresented: $showImagePicker, selection: $selectedImageItem, matching: .images)
-            .onChange(of: selectedImageItem) { _, newValue in
-                handleImageChange(newValue)
-            }
-            .photosPicker(isPresented: $showAvatarPicker, selection: $selectedAvatarItem, matching: .images)
-            .onChange(of: selectedAvatarItem) { _, newValue in
-                handleAvatarImageChange(newValue)
-            }
             .onAppear {
                 galleryPhotoURL = member.photoURL
                 avatarURL = member.avatarUrl
             }
-            .alert(L10n.t("حذف الصورة", "Delete Photo"), isPresented: $showDeleteGalleryPhotoAlert) {
-                Button(L10n.t("حذف", "Delete"), role: .destructive) {
-                    Task { await deleteGalleryPhoto() }
-                }
-                Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { }
-            } message: {
-                Text(L10n.t("هل تريد حذف صورة المعرض لهذا العضو؟", "Delete gallery photo for this member?"))
+            .onChange(of: selectedImageItem) { _, newValue in
+                handleImageChange(newValue)
             }
-            .alert(L10n.t("حذف صورة البروفايل", "Delete Profile Photo"), isPresented: $showDeleteAvatarAlert) {
-                Button(L10n.t("حذف", "Delete"), role: .destructive) {
-                    Task { await deleteAvatarPhoto() }
-                }
-                Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { }
-            } message: {
-                Text(L10n.t("هل تريد حذف صورة البروفايل لهذا العضو؟", "Delete profile photo for this member?"))
+            .onChange(of: selectedAvatarItem) { _, newValue in
+                handleAvatarImageChange(newValue)
             }
-            .fullScreenCover(isPresented: $showAvatarPreview) {
+            .sheet(isPresented: $showAdminControl) {
+                AdminMemberDetailSheet(member: member)
+            }
+        }
+        .photosPicker(isPresented: $showImagePicker, selection: $selectedImageItem, matching: .images)
+        .photosPicker(isPresented: $showAvatarPicker, selection: $selectedAvatarItem, matching: .images)
+        .fullScreenCover(item: $fullScreenMode) { mode in
+            switch mode {
+            case .avatarPreview:
                 avatarPreviewOverlay
+            case .cropper:
+                cropperView
             }
+        }
+        .alert(L10n.t("حذف الصورة", "Delete Photo"), isPresented: $showDeleteGalleryPhotoAlert) {
+            Button(L10n.t("حذف", "Delete"), role: .destructive) {
+                Task { await deleteGalleryPhoto() }
+            }
+            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { }
+        } message: {
+            Text(L10n.t("هل تريد حذف صورة المعرض لهذا العضو؟", "Delete gallery photo for this member?"))
+        }
+        .alert(L10n.t("حذف صورة البروفايل", "Delete Profile Photo"), isPresented: $showDeleteAvatarAlert) {
+            Button(L10n.t("حذف", "Delete"), role: .destructive) {
+                Task { await deleteAvatarPhoto() }
+            }
+            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { }
+        } message: {
+            Text(L10n.t("هل تريد حذف صورة البروفايل لهذا العضو؟", "Delete profile photo for this member?"))
         }
     }
 
     // MARK: - التبويبات
 
     private var personalInfoTab: some View {
-        VStack(spacing: DS.Spacing.xxl) {
+        VStack(spacing: DS.Spacing.md) {
             headerSection
 
             HStack(spacing: DS.Spacing.md) {
@@ -199,6 +173,7 @@ struct MemberDetailsView: View {
                 }
             }
             .padding(.horizontal)
+            .padding(.top, DS.Spacing.xxxxl)
         }
     }
 
@@ -235,7 +210,7 @@ struct MemberDetailsView: View {
 
                             VStack(spacing: DS.Spacing.xs) {
                                 Image(systemName: "plus")
-                                    .font(.system(size: 22, weight: .bold))
+                                    .font(DS.Font.scaled(22, weight: .bold))
                                     .foregroundStyle(DS.Color.gradientPrimary)
                                 Text(L10n.t("إضافة صورة", "Add Photo"))
                                     .font(DS.Font.caption1)
@@ -308,71 +283,145 @@ struct MemberDetailsView: View {
     // MARK: - المكونات الفرعية
 
     private var headerSection: some View {
-        VStack(spacing: DS.Spacing.lg) {
+        ZStack(alignment: .bottom) {
+            // صورة هيدر كبيرة بدون فراغ علوي
             Button {
-                showAvatarPreview = true
+                fullScreenMode = .avatarPreview
             } label: {
-                avatarContent
-                    .frame(width: 120, height: 120)
-                    .clipShape(Circle())
-                    .overlay(
-                        Circle()
-                            .stroke(DS.Color.gradientPrimary, lineWidth: 3.5)
-                    )
-                    .dsGlowShadow()
+                GeometryReader { geo in
+                    avatarContent
+                        .frame(width: geo.size.width, height: 280)
+                        .clipped()
+                        .overlay(
+                            LinearGradient(
+                                colors: [Color.black.opacity(0.15), .clear, .clear, DS.Color.background.opacity(0.5), DS.Color.background],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                }
+                .frame(height: 280)
             }
             .buttonStyle(.plain)
 
-            if isManager {
-                HStack(spacing: DS.Spacing.sm) {
-                    Button {
-                        showAvatarPicker = true
-                    } label: {
-                        Label(L10n.t("تغيير صورة البروفايل", "Change Profile Photo"), systemImage: "camera.fill")
-                            .font(DS.Font.caption1)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(DS.Color.primary)
-
-                    if avatarURL != nil || localAvatarPreviewImage != nil || member.avatarUrl != nil {
-                        Button(role: .destructive) {
-                            showDeleteAvatarAlert = true
-                        } label: {
-                            Label(L10n.t("حذف", "Delete"), systemImage: "trash")
-                                .font(DS.Font.caption1)
+            // أزرار فوق الصورة
+            VStack {
+                HStack {
+                    // زر التعديل
+                    if isAdminOrSupervisor, !member.isDeleted {
+                        Button { showAdminControl = true } label: {
+                            Image(systemName: "pencil")
+                                .font(DS.Font.scaled(14, weight: .bold))
+                                .foregroundColor(.white)
+                                .padding(10)
+                                .background(.ultraThinMaterial)
+                                .clipShape(Circle())
+                                .shadow(color: .black.opacity(0.3), radius: 4, y: 2)
                         }
-                        .buttonStyle(.bordered)
-                        .tint(DS.Color.error)
+                    }
+
+                    Spacer()
+
+                    // زر الإغلاق
+                    Button { dismiss() } label: {
+                        Image(systemName: "xmark")
+                            .font(DS.Font.scaled(12, weight: .bold))
+                            .foregroundColor(.white)
+                            .padding(10)
+                            .background(.ultraThinMaterial)
+                            .clipShape(Circle())
+                            .shadow(color: .black.opacity(0.3), radius: 4, y: 2)
+                    }
+                }
+                .padding(.horizontal, DS.Spacing.lg)
+                .padding(.top, 54)
+
+                Spacer()
+            }
+            .frame(height: 280)
+
+            // الاسم في كبسولة زجاجية
+            VStack(spacing: DS.Spacing.sm) {
+                Text(member.fullName)
+                    .font(DS.Font.scaled(18, weight: .bold))
+                    .foregroundColor(DS.Color.textPrimary)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .padding(.horizontal, DS.Spacing.xl)
+                    .padding(.vertical, DS.Spacing.sm + 2)
+                    .background(.ultraThinMaterial)
+                    .clipShape(Capsule())
+                    .shadow(color: .black.opacity(0.1), radius: 8, y: 4)
+
+                HStack(spacing: DS.Spacing.sm) {
+                    Text(member.roleName)
+                        .font(DS.Font.scaled(11, weight: .heavy))
+                        .padding(.horizontal, DS.Spacing.md).padding(.vertical, 5)
+                        .background(
+                            Group {
+                                if member.isDeceased == true {
+                                    Color.gray.opacity(0.1)
+                                } else {
+                                    LinearGradient(
+                                        colors: [DS.Color.primary.opacity(0.12), DS.Color.accent.opacity(0.12)],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                }
+                            }
+                        )
+                        .foregroundColor(member.isDeceased == true ? .gray : DS.Color.primary)
+                        .clipShape(Capsule())
+
+                    if isManager {
+                        Button {
+                            showAvatarPicker = true
+                        } label: {
+                            Image(systemName: "camera.fill")
+                                .font(DS.Font.scaled(12, weight: .bold))
+                                .foregroundColor(.white)
+                                .padding(8)
+                                .background(DS.Color.gradientPrimary)
+                                .clipShape(Circle())
+                        }
+
+                        if avatarURL != nil || localAvatarPreviewImage != nil || member.avatarUrl != nil {
+                            Button(role: .destructive) {
+                                showDeleteAvatarAlert = true
+                            } label: {
+                                Image(systemName: "trash")
+                                    .font(DS.Font.scaled(11, weight: .bold))
+                                    .foregroundColor(.white)
+                                    .padding(8)
+                                    .background(DS.Color.error)
+                                    .clipShape(Circle())
+                            }
+                        }
                     }
                 }
             }
+            .offset(y: 36)
+        }
+    }
 
-            VStack(spacing: DS.Spacing.xs) {
-                Text(member.fullName)
-                    .font(DS.Font.title2)
-                    .multilineTextAlignment(.center)
-                    .lineLimit(2)
-                    .padding(.horizontal, DS.Spacing.xxxl)
-
-                Text(member.roleName)
-                    .font(.system(size: 11, weight: .heavy))
-                    .padding(.horizontal, DS.Spacing.md).padding(.vertical, 5)
-                    .background(
-                        Group {
-                            if member.isDeceased == true {
-                                Color.gray.opacity(0.1)
-                            } else {
-                                LinearGradient(
-                                    colors: [DS.Color.primary.opacity(0.12), DS.Color.accent.opacity(0.12)],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            }
-                        }
-                    )
-                    .foregroundColor(member.isDeceased == true ? .gray : DS.Color.primary)
-                    .clipShape(Capsule())
-            }
+    @ViewBuilder
+    private var cropperView: some View {
+        if let img = pendingCropImage {
+            ImageCropperView(
+                image: img,
+                cropShape: .square,
+                onCrop: { cropped in
+                    if cropTarget == .avatar {
+                        confirmAvatarCrop(cropped)
+                    } else {
+                        confirmGalleryCrop(cropped)
+                    }
+                },
+                onCancel: { fullScreenMode = nil }
+            )
+        } else {
+            Color.black.ignoresSafeArea()
+                .onAppear { fullScreenMode = nil }
         }
     }
 
@@ -395,7 +444,7 @@ struct MemberDetailsView: View {
                             endPoint: .bottomTrailing
                         )
                     )
-                    .overlay(Image(systemName: "person.fill").font(.system(size: 35)).foregroundColor(DS.Color.primary))
+                    .overlay(Image(systemName: "person.fill").font(DS.Font.scaled(35)).foregroundColor(DS.Color.primary))
             }
         }
     }
@@ -433,16 +482,16 @@ struct MemberDetailsView: View {
             .onTapGesture {
                 avatarPreviewScale = 1
                 lastAvatarPreviewScale = 1
-                showAvatarPreview = false
+                fullScreenMode = nil
             }
 
             Button {
                 avatarPreviewScale = 1
                 lastAvatarPreviewScale = 1
-                showAvatarPreview = false
+                fullScreenMode = nil
             } label: {
                 Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 30))
+                    .font(DS.Font.scaled(30))
                     .foregroundColor(.white.opacity(0.92))
                     .padding()
             }
@@ -451,11 +500,11 @@ struct MemberDetailsView: View {
     }
 
     private func modernCompactCard(icon: String, title: String, value: String, color: Color) -> some View {
-        VStack(spacing: DS.Spacing.sm) {
+        VStack(spacing: DS.Spacing.xs) {
             Image(systemName: icon)
-                .font(.system(size: 16))
+                .font(DS.Font.scaled(13))
                 .foregroundColor(color)
-                .frame(width: 34, height: 34)
+                .frame(width: 28, height: 28)
                 .background(color.opacity(0.10))
                 .clipShape(Circle())
             VStack(spacing: 2) {
@@ -470,8 +519,8 @@ struct MemberDetailsView: View {
             }
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, DS.Spacing.lg)
-        .glassCard(radius: DS.Radius.xl)
+        .padding(.vertical, DS.Spacing.md)
+        .glassCard(radius: DS.Radius.lg)
     }
 
     private func emptyState(text: String, icon: String) -> some View {
@@ -484,7 +533,7 @@ struct MemberDetailsView: View {
                     .fill(DS.Color.accent.opacity(0.06))
                     .frame(width: 56, height: 56)
                 Image(systemName: icon)
-                    .font(.system(size: 28))
+                    .font(DS.Font.scaled(28))
                     .foregroundStyle(DS.Color.gradientPrimary)
             }
             Text(text)
@@ -504,7 +553,7 @@ struct MemberDetailsView: View {
                 .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl))
 
             Text(title)
-                .font(.system(size: 9, weight: .bold))
+                .font(DS.Font.scaled(9, weight: .bold))
                 .foregroundColor(.white)
                 .padding(.horizontal, DS.Spacing.xs + 2)
                 .padding(.vertical, 3)
@@ -517,16 +566,23 @@ struct MemberDetailsView: View {
 
     private func handleImageChange(_ item: PhotosPickerItem?) {
         Task {
-            guard let data = try? await item?.loadTransferable(type: Data.self),
-                  let uiImage = UIImage(data: data) else { return }
-
-            await MainActor.run {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    self.localPreviewImage = uiImage
-                }
-            }
-
-            let uploadedURL = await authVM.uploadMemberGalleryPhoto(image: uiImage, for: member.id)
+            guard let data = try? await item?.loadTransferable(type: Data.self) else { return }
+            let resized = await downsampleInBackground(data)
+            guard let resized else { return }
+            pendingCropImage = resized
+            cropTarget = .gallery
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            fullScreenMode = .cropper
+        }
+    }
+    
+    private func confirmGalleryCrop(_ croppedImage: UIImage) {
+        fullScreenMode = nil
+        withAnimation(.easeInOut(duration: 0.2)) {
+            self.localPreviewImage = croppedImage
+        }
+        Task {
+            let uploadedURL = await authVM.uploadMemberGalleryPhoto(image: croppedImage, for: member.id)
             await MainActor.run {
                 if let uploadedURL {
                     self.galleryPhotoURL = uploadedURL
@@ -548,17 +604,49 @@ struct MemberDetailsView: View {
 
     private func handleAvatarImageChange(_ item: PhotosPickerItem?) {
         Task {
-            guard let data = try? await item?.loadTransferable(type: Data.self),
-                  let uiImage = UIImage(data: data) else { return }
-            await MainActor.run {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    self.localAvatarPreviewImage = uiImage
-                }
-            }
-            await authVM.uploadAvatar(image: uiImage, for: member.id)
+            guard let data = try? await item?.loadTransferable(type: Data.self) else { return }
+            let resized = await downsampleInBackground(data)
+            guard let resized else { return }
+            pendingCropImage = resized
+            cropTarget = .avatar
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            fullScreenMode = .cropper
+        }
+    }
+    
+    private func confirmAvatarCrop(_ croppedImage: UIImage) {
+        fullScreenMode = nil
+        withAnimation(.easeInOut(duration: 0.2)) {
+            self.localAvatarPreviewImage = croppedImage
+        }
+        Task {
+            await authVM.uploadAvatar(image: croppedImage, for: member.id)
         }
     }
 
+    private func downsampleInBackground(_ data: Data) async -> UIImage? {
+        await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                let maxPixels: CGFloat = 1600
+                guard let source = CGImageSourceCreateWithData(data as CFData, nil) else {
+                    continuation.resume(returning: UIImage(data: data))
+                    return
+                }
+                let options: [CFString: Any] = [
+                    kCGImageSourceCreateThumbnailFromImageAlways: true,
+                    kCGImageSourceThumbnailMaxPixelSize: maxPixels,
+                    kCGImageSourceCreateThumbnailWithTransform: true
+                ]
+                guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
+                    continuation.resume(returning: UIImage(data: data))
+                    return
+                }
+                let result = UIImage(cgImage: cgImage)
+                continuation.resume(returning: result)
+            }
+        }
+    }
+    
     private func deleteAvatarPhoto() async {
         await authVM.deleteAvatar(for: member.id)
         await MainActor.run {

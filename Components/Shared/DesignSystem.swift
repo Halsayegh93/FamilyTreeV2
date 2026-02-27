@@ -85,22 +85,42 @@ enum DS {
         static let gridContact   = SwiftUI.Color(hex: "#516F80") // Slate Blue
     }
 
-    // MARK: Typography — خطوط عصرية ونظيفة (Rounded)
+    // MARK: Typography — خطوط عصرية ونظيفة (Rounded) مع دعم Dynamic Type
     enum Font {
-        static let hero        = SwiftUI.Font.system(size: 40, weight: .bold, design: .rounded)
-        static let largeTitle  = SwiftUI.Font.system(size: 36, weight: .bold, design: .rounded)
-        static let title1      = SwiftUI.Font.system(size: 28, weight: .bold, design: .rounded)
-        static let title2      = SwiftUI.Font.system(size: 22, weight: .bold, design: .rounded)
-        static let title3      = SwiftUI.Font.system(size: 20, weight: .semibold, design: .rounded)
-        static let headline    = SwiftUI.Font.system(size: 17, weight: .bold, design: .rounded)
-        static let body        = SwiftUI.Font.system(size: 17, weight: .regular, design: .rounded)
-        static let bodyBold    = SwiftUI.Font.system(size: 17, weight: .semibold, design: .rounded)
-        static let callout     = SwiftUI.Font.system(size: 16, weight: .regular, design: .rounded)
-        static let calloutBold = SwiftUI.Font.system(size: 16, weight: .bold, design: .rounded)
-        static let subheadline = SwiftUI.Font.system(size: 15, weight: .regular, design: .rounded)
-        static let footnote    = SwiftUI.Font.system(size: 13, weight: .regular, design: .rounded)
-        static let caption1    = SwiftUI.Font.system(size: 12, weight: .regular, design: .rounded)
-        static let caption2    = SwiftUI.Font.system(size: 11, weight: .regular, design: .rounded)
+        static let hero        = SwiftUI.Font.system(.largeTitle, design: .rounded).weight(.bold)
+        static let largeTitle  = SwiftUI.Font.system(.largeTitle, design: .rounded).weight(.bold)
+        static let title1      = SwiftUI.Font.system(.title, design: .rounded).weight(.bold)
+        static let title2      = SwiftUI.Font.system(.title2, design: .rounded).weight(.bold)
+        static let title3      = SwiftUI.Font.system(.title3, design: .rounded).weight(.semibold)
+        static let headline    = SwiftUI.Font.system(.headline, design: .rounded).weight(.bold)
+        static let body        = SwiftUI.Font.system(.body, design: .rounded)
+        static let bodyBold    = SwiftUI.Font.system(.body, design: .rounded).weight(.semibold)
+        static let callout     = SwiftUI.Font.system(.callout, design: .rounded)
+        static let calloutBold = SwiftUI.Font.system(.callout, design: .rounded).weight(.bold)
+        static let subheadline = SwiftUI.Font.system(.subheadline, design: .rounded)
+        static let footnote    = SwiftUI.Font.system(.footnote, design: .rounded)
+        static let caption1    = SwiftUI.Font.system(.caption, design: .rounded)
+        static let caption2    = SwiftUI.Font.system(.caption2, design: .rounded)
+        
+        /// خط مرن يدعم Dynamic Type - يُستخدم بدل .system(size:weight:)
+        static func scaled(_ size: CGFloat, weight: SwiftUI.Font.Weight = .regular) -> SwiftUI.Font {
+            let style: SwiftUI.Font.TextStyle
+            switch size {
+            case ...10: style = .caption2
+            case 11: style = .caption2
+            case 12: style = .caption
+            case 13: style = .footnote
+            case 14...15: style = .subheadline
+            case 16: style = .callout
+            case 17: style = .body
+            case 18...19: style = .headline
+            case 20...21: style = .title3
+            case 22...27: style = .title2
+            case 28...35: style = .title
+            default: style = .largeTitle
+            }
+            return SwiftUI.Font.system(style, design: .rounded).weight(weight)
+        }
     }
 
     // MARK: Spacing
@@ -400,7 +420,7 @@ struct DSPrimaryButton: View {
                     ProgressView().tint(.white)
                 } else {
                     HStack(spacing: DS.Spacing.sm) {
-                        if let icon { Image(systemName: icon).font(.system(size: 16, weight: .bold)) }
+                        if let icon { Image(systemName: icon).font(DS.Font.scaled(16, weight: .bold)) }
                         Text(title).fontWeight(.bold)
                     }
                 }
@@ -447,7 +467,7 @@ struct DSSecondaryButton: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: DS.Spacing.sm) {
-                if let icon { Image(systemName: icon).font(.system(size: 14, weight: .bold)) }
+                if let icon { Image(systemName: icon).font(DS.Font.scaled(14, weight: .bold)) }
                 Text(title).fontWeight(.bold)
             }
             .font(DS.Font.calloutBold)
@@ -535,7 +555,7 @@ struct DSIcon: View {
 
     var body: some View {
         Image(systemName: name)
-            .font(.system(size: iconSize, weight: .bold))
+            .font(DS.Font.scaled(iconSize, weight: .bold))
             .foregroundColor(color)
             .frame(width: size, height: size)
             .background(color.opacity(DS.Icon.opacity))
@@ -598,7 +618,7 @@ struct DSActionRow: View {
             }
 
             Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
-                .font(.system(size: 13, weight: .bold))
+                .font(DS.Font.scaled(13, weight: .bold))
                 .foregroundColor(DS.Color.textTertiary)
         }
         .padding(.horizontal, DS.Spacing.lg)
@@ -616,7 +636,7 @@ struct DSSectionHeader: View {
         HStack(spacing: DS.Spacing.sm) {
             if let icon {
                 Image(systemName: icon)
-                    .font(.system(size: 15, weight: .bold))
+                    .font(DS.Font.scaled(15, weight: .bold))
                     .foregroundColor(DS.Color.primary)
             }
             Text(title)
@@ -724,7 +744,7 @@ struct DSStatCard: View {
     var body: some View {
         VStack(spacing: DS.Spacing.sm) {
             Image(systemName: icon)
-                .font(.system(size: 26, weight: .bold))
+                .font(DS.Font.scaled(26, weight: .bold))
                 .foregroundColor(color)
                 .frame(width: DS.Icon.sizeLg, height: DS.Icon.sizeLg)
                 .background(color.opacity(0.12))
@@ -757,7 +777,7 @@ struct DSFloatingButton: View {
         Button(action: action) {
             HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: icon)
-                    .font(.system(size: 20, weight: .black))
+                    .font(DS.Font.scaled(20, weight: .black))
                 if let label {
                     Text(label).font(DS.Font.calloutBold)
                 }

@@ -133,7 +133,7 @@ extension NewsCardView {
                     .frame(width: 48, height: 48)
 
                 Text(String(authorName.first ?? "U"))
-                    .font(.system(size: 20, weight: .bold))
+                    .font(DS.Font.scaled(20, weight: .bold))
                     .foregroundColor(.white)
             }
             .overlay(
@@ -198,7 +198,7 @@ extension NewsCardView {
                             Spacer()
                             if selectedPollOption == index {
                                 Image(systemName: "checkmark.circle.fill")
-                                    .font(.system(size: 22))
+                                    .font(DS.Font.scaled(22))
                                     .foregroundStyle(DS.Color.gradientPrimary)
                             } else {
                                 Circle()
@@ -250,7 +250,7 @@ extension NewsCardView {
                 
                 Button(action: {}) {
                     Image(systemName: "square.and.arrow.up")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(DS.Font.scaled(14, weight: .semibold))
                         .foregroundColor(DS.Color.textPrimary)
                         .frame(width: 36, height: 36)
                         .background(
@@ -269,7 +269,7 @@ extension NewsCardView {
     private func actionPill(icon: String, text: String, tint: Color) -> some View {
         HStack(spacing: DS.Spacing.xs) {
             Image(systemName: icon)
-                .font(.system(size: 13, weight: .semibold))
+                .font(DS.Font.scaled(13, weight: .semibold))
             Text(text)
                 .font(DS.Font.subheadline)
                 .fontWeight(.bold)

@@ -105,7 +105,7 @@ struct AIChatView: View {
                     .frame(width: 70, height: 70)
                     .dsGlowShadow()
                 Image(systemName: "brain.head.profile")
-                    .font(.system(size: 28, weight: .bold))
+                    .font(DS.Font.scaled(28, weight: .bold))
                     .foregroundColor(.white)
             }
 
@@ -201,7 +201,7 @@ struct AIChatView: View {
                 Task { await aiVM.sendChatMessage() }
             } label: {
                 Image(systemName: "arrow.up.circle.fill")
-                    .font(.system(size: 36))
+                    .font(DS.Font.scaled(36))
                     .foregroundStyle(DS.Color.gradientPrimary)
             }
             .disabled(

@@ -91,7 +91,7 @@ struct EditProfileView: View {
                                                 Circle().fill(DS.Color.primary.opacity(0.1))
                                                     .frame(width: 32, height: 32)
                                                 Image(systemName: "eye.slash.fill")
-                                                    .font(.system(size: 12, weight: .semibold))
+                                                    .font(DS.Font.scaled(12, weight: .semibold))
                                                     .foregroundColor(DS.Color.primary)
                                             }
                                             Toggle(L10n.t("إخفاء رقم الهاتف عن الآخرين", "Hide phone number from others"), isOn: $isPhoneHidden)
@@ -118,7 +118,7 @@ struct EditProfileView: View {
                                             Circle().fill(DS.Color.primary.opacity(0.1))
                                                 .frame(width: 32, height: 32)
                                             Image(systemName: "heart.fill")
-                                                .font(.system(size: 12, weight: .semibold))
+                                                .font(DS.Font.scaled(12, weight: .semibold))
                                                 .foregroundColor(DS.Color.primary)
                                         }
                                         Toggle(L10n.t("متزوج", "Married"), isOn: $isMarried)
@@ -136,7 +136,7 @@ struct EditProfileView: View {
                                             Circle().fill(Color.gray.opacity(0.1))
                                                 .frame(width: 32, height: 32)
                                             Image(systemName: "leaf.fill")
-                                                .font(.system(size: 12, weight: .semibold))
+                                                .font(DS.Font.scaled(12, weight: .semibold))
                                                 .foregroundColor(.gray)
                                         }
                                         Toggle(L10n.t("متوفى", "Deceased"), isOn: $isDeceased)
@@ -245,7 +245,7 @@ struct EditProfileView: View {
                                 } else if phase.error != nil {
                                     Circle().fill(DS.Color.surface)
                                         .frame(width: 80, height: 80)
-                                        .overlay(Image(systemName: "person.fill").font(.system(size: 30)).foregroundColor(DS.Color.textTertiary))
+                                        .overlay(Image(systemName: "person.fill").font(DS.Font.scaled(30)).foregroundColor(DS.Color.textTertiary))
                                 } else {
                                     ZStack {
                                         Circle().fill(DS.Color.surface)
@@ -257,7 +257,7 @@ struct EditProfileView: View {
                         } else {
                             Circle().fill(DS.Color.surface)
                                 .frame(width: 80, height: 80)
-                                .overlay(Image(systemName: "person.fill").font(.system(size: 30)).foregroundColor(DS.Color.textTertiary))
+                                .overlay(Image(systemName: "person.fill").font(DS.Font.scaled(30)).foregroundColor(DS.Color.textTertiary))
                         }
                     }
                     .frame(width: 80, height: 80)
@@ -276,7 +276,7 @@ struct EditProfileView: View {
                             .frame(width: 28, height: 28)
 
                         Image(systemName: "camera.fill")
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(DS.Font.scaled(12, weight: .semibold))
                             .foregroundColor(.white)
                     }
                     .overlay(Circle().stroke(DS.Color.surface, lineWidth: 2))
@@ -294,7 +294,7 @@ struct EditProfileView: View {
         VStack(alignment: .leading, spacing: DS.Spacing.md) {
             HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: icon)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(DS.Font.scaled(14, weight: .semibold))
                     .foregroundColor(DS.Color.primary)
                 Text(title)
                     .font(DS.Font.subheadline)
@@ -317,7 +317,7 @@ struct EditProfileView: View {
                 Circle().fill(DS.Color.primary.opacity(0.1))
                     .frame(width: 32, height: 32)
                 Image(systemName: icon)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(DS.Font.scaled(12, weight: .semibold))
                     .foregroundColor(DS.Color.primary)
             }
             
@@ -341,7 +341,7 @@ struct EditProfileView: View {
                 Circle().fill(DS.Color.primary.opacity(0.1))
                     .frame(width: 32, height: 32)
                 Image(systemName: "phone.fill")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(DS.Font.scaled(12, weight: .semibold))
                     .foregroundColor(DS.Color.primary)
             }
 
@@ -365,7 +365,7 @@ struct EditProfileView: View {
                             Text(selectedPhoneCountry.dialingCode)
                                 .font(DS.Font.callout)
                             Image(systemName: "chevron.down")
-                                .font(.system(size: 10, weight: .semibold))
+                                .font(DS.Font.scaled(10, weight: .semibold))
                         }
                         .foregroundColor(DS.Color.textSecondary)
                         .padding(.horizontal, 10)
@@ -399,7 +399,7 @@ struct EditProfileView: View {
                 Circle().fill(DS.Color.primary.opacity(0.1))
                     .frame(width: 32, height: 32)
                 Image(systemName: icon)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(DS.Font.scaled(12, weight: .semibold))
                     .foregroundColor(DS.Color.primary)
             }
             Text(label)
@@ -517,7 +517,7 @@ struct EditProfileView: View {
         VStack(alignment: .leading, spacing: DS.Spacing.md) {
             HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: "photo.on.rectangle.angled")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(DS.Font.scaled(14, weight: .semibold))
                     .foregroundColor(DS.Color.primary)
                 Text(L10n.t("صور المعرض", "Gallery Photos"))
                     .font(DS.Font.subheadline)
@@ -540,7 +540,7 @@ struct EditProfileView: View {
                                 )
                             VStack(spacing: DS.Spacing.sm) {
                                 Image(systemName: "photo.badge.plus")
-                                    .font(.system(size: 20))
+                                    .font(DS.Font.scaled(20))
                                     .foregroundColor(DS.Color.primary)
                             }
                         }
@@ -577,7 +577,7 @@ struct EditProfileView: View {
                                 pendingDeletePhoto = photo
                             } label: {
                                 Image(systemName: "minus.circle.fill")
-                                    .font(.system(size: 20))
+                                    .font(DS.Font.scaled(20))
                                     .symbolRenderingMode(.palette)
                                     .foregroundStyle(.white, DS.Color.error)
                                     .background(Circle().fill(.white).frame(width: 18, height: 18))
@@ -619,7 +619,7 @@ struct EditProfileView: View {
                                 showDeleteLegacyPhotoAlert = true
                             } label: {
                                 Image(systemName: "minus.circle.fill")
-                                    .font(.system(size: 20))
+                                    .font(DS.Font.scaled(20))
                                     .symbolRenderingMode(.palette)
                                     .foregroundStyle(.white, DS.Color.error)
                                     .background(Circle().fill(.white).frame(width: 18, height: 18))
@@ -729,7 +729,7 @@ struct GalleryPhotoViewer: View {
                             }
                     } else if phase.error != nil {
                         Image(systemName: "photo")
-                            .font(.system(size: 42))
+                            .font(DS.Font.scaled(42))
                             .foregroundColor(.white.opacity(0.7))
                     } else {
                         ProgressView()
@@ -742,7 +742,7 @@ struct GalleryPhotoViewer: View {
             HStack {
                 Button(action: onClose) {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 30))
+                        .font(DS.Font.scaled(30))
                         .foregroundStyle(.white, .black.opacity(0.35))
                 }
 
@@ -750,7 +750,7 @@ struct GalleryPhotoViewer: View {
 
                 Button(role: .destructive, action: onDelete) {
                     Image(systemName: "trash.circle.fill")
-                        .font(.system(size: 30))
+                        .font(DS.Font.scaled(30))
                         .foregroundStyle(.red, .black.opacity(0.35))
                 }
             }

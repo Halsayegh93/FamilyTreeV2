@@ -115,7 +115,7 @@ struct EditChildSheet: View {
                                 .fill(DS.Color.gradientPrimary)
                                 .frame(width: 50, height: 50)
                             Image(systemName: "camera.fill")
-                                .font(.system(size: 20, weight: .bold))
+                                .font(DS.Font.scaled(20, weight: .bold))
                                 .foregroundColor(.white)
                         }
                     }
@@ -178,7 +178,7 @@ struct EditChildSheet: View {
                             Text(selectedPhoneCountry.flag)
                             Text(selectedPhoneCountry.dialingCode).font(DS.Font.callout)
                             Image(systemName: "chevron.down")
-                                .font(.system(size: 10, weight: .semibold))
+                                .font(DS.Font.scaled(10, weight: .semibold))
                         }
                         .foregroundColor(DS.Color.textSecondary)
                         .padding(.horizontal, 10)
@@ -287,7 +287,7 @@ struct EditChildSheet: View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: icon)
-                    .font(.system(size: 12))
+                    .font(DS.Font.scaled(12))
                     .foregroundColor(DS.Color.primary)
                 Text(title)
                     .font(DS.Font.caption1)

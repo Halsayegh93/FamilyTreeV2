@@ -23,7 +23,7 @@ struct ApprovalSheet: View {
                             .fill(DS.Color.gradientPrimary)
                             .frame(width: 66, height: 66)
                         Image(systemName: "person.badge.plus")
-                            .font(.system(size: 28, weight: .semibold))
+                            .font(DS.Font.scaled(28, weight: .semibold))
                             .foregroundColor(.white)
                     }
                     .dsGlowShadow()
@@ -55,7 +55,7 @@ struct ApprovalSheet: View {
                                 .fill(DS.Color.gradientPrimary)
                                 .frame(width: 32, height: 32)
                             Image(systemName: "magnifyingglass")
-                                .font(.system(size: 12, weight: .semibold))
+                                .font(DS.Font.scaled(12, weight: .semibold))
                                 .foregroundColor(.white)
                         }
 
@@ -82,11 +82,11 @@ struct ApprovalSheet: View {
                     HStack(spacing: DS.Spacing.md) {
                         if selectedFather?.id == father.id {
                             Image(systemName: "checkmark.circle.fill")
-                                .font(.system(size: 20))
+                                .font(DS.Font.scaled(20))
                                 .foregroundStyle(DS.Color.gradientPrimary)
                         } else {
                             Image(systemName: "circle")
-                                .font(.system(size: 20))
+                                .font(DS.Font.scaled(20))
                                 .foregroundColor(DS.Color.textTertiary)
                         }
 

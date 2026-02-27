@@ -73,7 +73,7 @@ struct AddSonByAdminSheet: View {
                                             Text(selectedPhoneCountry.flag)
                                             Text(selectedPhoneCountry.dialingCode).font(DS.Font.caption1)
                                             Image(systemName: "chevron.down")
-                                                .font(.system(size: 10, weight: .semibold))
+                                                .font(DS.Font.scaled(10, weight: .semibold))
                                         }
                                         .foregroundColor(DS.Color.textSecondary)
                                         .padding(.horizontal, 10)
@@ -180,7 +180,7 @@ struct AddSonByAdminSheet: View {
         HStack {
             Image(systemName: icon)
                 .foregroundColor(.white)
-                .font(.system(size: 14))
+                .font(DS.Font.scaled(14))
                 .frame(width: 32, height: 32)
                 .background(
                     LinearGradient(
@@ -202,7 +202,7 @@ struct AddSonByAdminSheet: View {
         HStack {
             Image(systemName: icon)
                 .foregroundColor(.white)
-                .font(.system(size: 14))
+                .font(DS.Font.scaled(14))
                 .frame(width: 32, height: 32)
                 .background(
                     LinearGradient(

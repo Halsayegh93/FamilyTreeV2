@@ -28,7 +28,7 @@ struct ProfileView: View {
                         ) {
                             Button(action: { showEditProfile = true }) {
                                 Image(systemName: "pencil")
-                                    .font(.system(size: 18, weight: .bold))
+                                    .font(DS.Font.scaled(18, weight: .bold))
                                     .foregroundColor(.white)
                                     .frame(width: 44, height: 44)
                                     .background(Color.white.opacity(0.15))
@@ -101,7 +101,7 @@ struct ProfileView: View {
                         .frame(width: 100, height: 100)
                         .overlay(
                             Text(String(user.firstName.first ?? "P"))
-                                .font(.system(size: 40, weight: .bold))
+                                .font(DS.Font.scaled(40, weight: .bold))
                                 .foregroundColor(DS.Color.primary)
                         )
                 }
@@ -132,7 +132,7 @@ struct ProfileView: View {
                     Spacer()
                     Button(action: { showEditProfile = true }) {
                         Image(systemName: "pencil")
-                            .font(.system(size: 14, weight: .bold))
+                            .font(DS.Font.scaled(14, weight: .bold))
                             .foregroundColor(.white)
                             .padding(DS.Spacing.xs + 2)
                             .background(DS.Color.gradientPrimary)
@@ -187,7 +187,7 @@ struct ProfileView: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
                 Image(systemName: icon)
-                    .font(.system(size: 12))
+                    .font(DS.Font.scaled(12))
                     .foregroundColor(DS.Color.primary)
                 Text(title)
                     .font(DS.Font.caption1)
@@ -231,7 +231,7 @@ struct ProfileView: View {
                     Spacer()
                     Button(action: { showAddChild = true }) {
                         Image(systemName: "plus")
-                            .font(.system(size: 16, weight: .bold))
+                            .font(DS.Font.scaled(16, weight: .bold))
                             .foregroundColor(.white)
                             .frame(width: 36, height: 36)
                             .background(DS.Color.gradientPrimary)
@@ -247,7 +247,7 @@ struct ProfileView: View {
                 if authVM.currentMemberChildren.isEmpty {
                     VStack(spacing: DS.Spacing.sm) {
                         Image(systemName: "person.2.slash")
-                            .font(.system(size: 22))
+                            .font(DS.Font.scaled(22))
                             .foregroundColor(DS.Color.textTertiary)
                         Text(L10n.t("لا يوجد أبناء مضافين حالياً", "No children added yet"))
                             .font(DS.Font.callout)
@@ -264,7 +264,7 @@ struct ProfileView: View {
                                         .fill(DS.Color.primary.opacity(0.10))
                                         .frame(width: 30, height: 30)
                                     Text(String(son.firstName.first ?? "A"))
-                                        .font(.system(size: 13, weight: .bold))
+                                        .font(DS.Font.scaled(13, weight: .bold))
                                         .foregroundColor(DS.Color.primary)
                                 }
                                 Text(son.firstName.isEmpty ? L10n.t("الاسم", "Name") : son.firstName)
@@ -272,7 +272,7 @@ struct ProfileView: View {
                                     .foregroundColor(DS.Color.textPrimary)
                                 Spacer()
                                 Image(systemName: "pencil")
-                                    .font(.system(size: 12, weight: .bold))
+                                    .font(DS.Font.scaled(12, weight: .bold))
                                     .foregroundColor(.white)
                                     .frame(width: 24, height: 24)
                                     .background(DS.Color.gradientPrimary)
@@ -312,7 +312,7 @@ struct ProfileView: View {
         Button(action: { Task { await authVM.signOut() } }) {
             HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: "power")
-                    .font(.system(size: 16, weight: .bold))
+                    .font(DS.Font.scaled(16, weight: .bold))
                 Text(L10n.t("تسجيل الخروج", "Sign Out"))
                     .font(DS.Font.headline)
             }

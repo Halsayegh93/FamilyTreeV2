@@ -14,11 +14,15 @@ struct TreeView: View {
     @State private var showingNotifications = false
     @State private var selectedMember: FamilyMember? = nil
     @State private var scrollTarget: UUID? = nil
+    @State private var scrollCounter: Int = 0
     @State private var currentLocationMemberID: UUID? = nil
+    @State private var isRefreshing = false
 
     private let viewMode: TreeDisplayMode = .interactive
 
     @State private var searchText = ""
+    @State private var debouncedSearchText = ""
+    @State private var searchDebounceTask: Task<Void, Never>?
     @State private var isSearchFocused = false
     @State private var searchedMemberID: UUID? = nil
 
@@ -31,12 +35,18 @@ struct TreeView: View {
     @Environment(\.colorScheme) var colorScheme
     @State private var activePath: Set<UUID> = []
 
+    // MARK: - بيانات مُخزنة مؤقتاً لتجنب إعادة الحساب كل render
+    @State private var cachedVisibleMembers: [FamilyMember] = []
+    @State private var cachedMemberById: [UUID: FamilyMember] = [:]
+    @State private var cachedRootMembers: [FamilyMember] = []
+    @State private var cachedChildrenByFatherId: [UUID: [FamilyMember]] = [:]
+
     private var lightweightFullTree: Bool {
-        visibleMembers.count > 90
+        cachedVisibleMembers.count > 90
     }
 
     private var preferredBaseScale: CGFloat {
-        let count = visibleMembers.count
+        let count = cachedVisibleMembers.count
         if count > 140 { return 0.7 }
         if count > 100 { return 0.78 }
         if count > 70 { return 0.88 }
@@ -54,33 +64,29 @@ struct TreeView: View {
         return "\(max(40, min(300, zoom)))%"
     }
 
-
-    private var visibleMembers: [FamilyMember] {
-        authVM.allMembers.filter { !$0.isHiddenFromTree }
-    }
-
-    private var memberById: [UUID: FamilyMember] {
-        Dictionary(uniqueKeysWithValues: visibleMembers.map { ($0.id, $0) })
-    }
-
-    private var rootMembers: [FamilyMember] {
-        let roots = visibleMembers.filter { member in
-            guard let fatherId = member.fatherId else { return true }
-            return memberById[fatherId] == nil
-        }
-        return sortedMembers(roots)
-    }
-
     private var primaryRootMember: FamilyMember? {
-        rootMembers.first ?? sortedMembers(visibleMembers).first
+        cachedRootMembers.first
     }
 
-    private var childrenByFatherId: [UUID: [FamilyMember]] {
-        Dictionary(
-            grouping: visibleMembers.filter { $0.fatherId != nil },
+    /// يُعاد حساب البيانات المُخزنة عند تغيّر الأعضاء فقط
+    private func rebuildCache() {
+        let visible = authVM.allMembers.filter { !$0.isHiddenFromTree }
+        let byId = Dictionary(uniqueKeysWithValues: visible.map { ($0.id, $0) })
+
+        let roots = sortedMembers(visible.filter { member in
+            guard let fatherId = member.fatherId else { return true }
+            return byId[fatherId] == nil
+        })
+
+        let childrenMap = Dictionary(
+            grouping: visible.filter { $0.fatherId != nil },
             by: { $0.fatherId! }
-        )
-        .mapValues(sortedMembers)
+        ).mapValues(sortedMembers)
+
+        cachedVisibleMembers = visible
+        cachedMemberById = byId
+        cachedRootMembers = roots
+        cachedChildrenByFatherId = childrenMap
     }
 
     private func sortedMembers(_ members: [FamilyMember]) -> [FamilyMember] {
@@ -92,14 +98,15 @@ struct TreeView: View {
     }
 
     var filteredMembers: [FamilyMember] {
-        let normalizedSearch = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedSearch = debouncedSearchText.trimmingCharacters(in: .whitespacesAndNewlines)
         if normalizedSearch.isEmpty { return [] }
+        let folded = normalizedSearch.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
 
-        return visibleMembers.filter { member in
+        return cachedVisibleMembers.filter { member in
             !(member.isDeceased ?? false) &&
-            getFullLineage(for: member, lookup: memberById)
+            getFullLineage(for: member, lookup: cachedMemberById)
                 .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
-                .contains(normalizedSearch.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current))
+                .contains(folded)
         }.prefix(20).map { $0 }
     }
 
@@ -111,7 +118,7 @@ struct TreeView: View {
                     BoldTreeBackground()
                         .edgesIgnoringSafeArea(.all)
 
-                    if visibleMembers.isEmpty {
+                    if cachedVisibleMembers.isEmpty {
                         emptyStateView
                     } else {
                         ScrollViewReader { proxy in
@@ -140,8 +147,8 @@ struct TreeView: View {
                                 .padding(.vertical, 150)
                                 .padding(.horizontal, 50)
                             }
-                            .onChange(of: scrollTarget) { _, targetID in
-                                if let id = targetID {
+                            .onChange(of: scrollCounter) { _, _ in
+                                if let id = scrollTarget {
                                     withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
                                         proxy.scrollTo(id, anchor: .center)
                                     }
@@ -155,14 +162,49 @@ struct TreeView: View {
                             selectedTab: $selectedTab,
                             showingNotifications: $showingNotifications,
                             title: L10n.t("شجرة العائلة", "Family Tree"),
-                            subtitle: "\(visibleMembers.count) " + L10n.t("عضو", "members") + " • " + "\(rootMembers.count) " + L10n.t("جذور", "roots"),
+                            subtitle: "\(cachedVisibleMembers.count) " + L10n.t("عضو", "members") + " • " + "\(cachedRootMembers.count) " + L10n.t("جذور", "roots"),
                             icon: "leaf.fill"
                         ) {
+                            // زر تحديث الشجرة
+                            Button(action: {
+                                guard !isRefreshing else { return }
+                                isRefreshing = true
+                                Task {
+                                    await authVM.fetchAllMembers()
+                                    rebuildCache()
+                                    withAnimation { isRefreshing = false }
+                                }
+                            }) {
+                                ZStack {
+                                    Circle()
+                                        .fill(Color.white.opacity(0.15))
+                                        .frame(width: 44, height: 44)
+                                        .overlay(Circle().stroke(Color.white.opacity(0.3), lineWidth: 1))
+                                    if isRefreshing {
+                                        ProgressView()
+                                            .tint(.white)
+                                            .scaleEffect(0.8)
+                                    } else {
+                                        Image(systemName: "arrow.clockwise")
+                                            .font(DS.Font.scaled(16, weight: .bold))
+                                            .foregroundColor(.white)
+                                    }
+                                }
+                                .contentShape(Circle())
+                            }
+                            .buttonStyle(BounceButtonStyle())
+                            .disabled(isRefreshing)
+
+                            // زر الموقع
                             Button(action: {
                                 if let currentUserID = authVM.currentUser?.id,
-                                   let userMember = visibleMembers.first(where: { $0.id == currentUserID }) ?? authVM.allMembers.first(where: { $0.id == currentUserID }) {
+                                   let userMember = cachedMemberById[currentUserID] ?? authVM.allMembers.first(where: { $0.id == currentUserID }) {
                                     currentLocationMemberID = userMember.id
-                                    centerOnMember(userMember, highlight: false, includeFocusedMemberInPath: false)
+                                    centerOnMember(userMember, highlight: true, includeFocusedMemberInPath: false)
+                                    Task {
+                                        try? await Task.sleep(nanoseconds: 3_000_000_000)
+                                        withAnimation { currentLocationMemberID = nil }
+                                    }
                                 }
                             }) {
                                 ZStack {
@@ -171,7 +213,7 @@ struct TreeView: View {
                                         .frame(width: 44, height: 44)
                                         .overlay(Circle().stroke(Color.white.opacity(0.3), lineWidth: 1))
                                     Image(systemName: "location.fill")
-                                        .font(.system(size: 18, weight: .bold))
+                                        .font(DS.Font.scaled(18, weight: .bold))
                                         .foregroundColor(.white)
                                 }
                                 .contentShape(Circle())
@@ -185,13 +227,13 @@ struct TreeView: View {
                     }
                     .zIndex(101)
 
-                    if !visibleMembers.isEmpty {
+                    if !cachedVisibleMembers.isEmpty {
                         overlayTools
                     }
                 }
                 .onTapGesture {
                     isSearchFocused = false
-                    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) // MainActor safe
                 }
             }
             .navigationBarHidden(true)
@@ -203,15 +245,24 @@ struct TreeView: View {
             .onAppear {
                 Task {
                     await authVM.fetchAllMembers()
+                    rebuildCache()
                     currentLocationMemberID = authVM.currentUser?.id
                     resetToTopRoot()
                 }
             }
-            .onChange(of: activePath.count) { _, _ in
-                let target = preferredScaleForCurrentExpansion()
-                if scale > target {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        scale = target
+            .onChange(of: authVM.allMembers.count) { _, _ in
+                rebuildCache()
+            }
+            .onChange(of: searchText) { _, newValue in
+                searchDebounceTask?.cancel()
+                if newValue.isEmpty {
+                    debouncedSearchText = ""
+                } else {
+                    searchDebounceTask = Task {
+                        try? await Task.sleep(nanoseconds: 300_000_000) // 0.3 ثانية
+                        if !Task.isCancelled {
+                            debouncedSearchText = newValue
+                        }
                     }
                 }
             }
@@ -228,7 +279,7 @@ struct TreeView: View {
         while let fatherId = current.fatherId,
               let father = lookup[fatherId],
               !visited.contains(father.id),
-              depth < 3 {
+              depth < 5 {
             name += " " + father.firstName
             current = father
             visited.insert(father.id)
@@ -246,7 +297,7 @@ struct TreeView: View {
                             .fill(DS.Color.primary.opacity(0.12))
                             .frame(width: 32, height: 32)
                         Image(systemName: "magnifyingglass")
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(DS.Font.scaled(14, weight: .semibold))
                             .foregroundColor(DS.Color.primary)
                     }
 
@@ -263,7 +314,7 @@ struct TreeView: View {
                                     .fill(DS.Color.error.opacity(0.12))
                                     .frame(width: 28, height: 28)
                                 Image(systemName: "xmark")
-                                    .font(.system(size: 11, weight: .bold))
+                                    .font(DS.Font.scaled(11, weight: .bold))
                                     .foregroundColor(DS.Color.error)
                             }
                         }
@@ -288,8 +339,7 @@ struct TreeView: View {
                     VStack(spacing: 0) {
                         ForEach(filteredMembers) { member in
                             Button(action: { selectMemberFromSearch(member) }) {
-                                HStack(spacing: DS.Spacing.md) {
-                                    // أيقونة الفرد بتدرج
+                                HStack(spacing: 8) {
                                     ZStack {
                                         Circle()
                                             .fill(
@@ -298,37 +348,38 @@ struct TreeView: View {
                                                     startPoint: .topLeading, endPoint: .bottomTrailing
                                                 )
                                             )
-                                            .frame(width: 36, height: 36)
+                                            .frame(width: 28, height: 28)
                                         Text(String(member.firstName.prefix(1)))
-                                            .font(.system(size: 14, weight: .bold))
+                                            .font(DS.Font.scaled(11, weight: .bold))
                                             .foregroundColor(.white)
                                     }
 
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text(getFullLineage(for: member, lookup: memberById))
-                                            .font(DS.Font.calloutBold)
+                                    VStack(alignment: .leading, spacing: 1) {
+                                        Text(getFullLineage(for: member, lookup: cachedMemberById))
+                                            .font(DS.Font.scaled(13, weight: .semibold))
                                             .foregroundColor(DS.Color.textPrimary)
+                                            .lineLimit(1)
                                         Text(member.roleName)
-                                            .font(DS.Font.caption1)
+                                            .font(DS.Font.scaled(10))
                                             .foregroundColor(DS.Color.textSecondary)
                                     }
                                     Spacer()
                                     Image(systemName: "arrow.up.left.circle.fill")
-                                        .font(.system(size: 20))
+                                        .font(DS.Font.scaled(16))
                                         .foregroundColor(member.roleColor.opacity(0.7))
                                 }
-                                .padding(.horizontal, DS.Spacing.md + 2)
-                                .padding(.vertical, DS.Spacing.md)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 7)
                             }
                             if member.id != filteredMembers.last?.id {
-                                Divider().padding(.horizontal, DS.Spacing.md + 2)
+                                Divider().padding(.horizontal, 10)
                             }
                         }
                     }
                 }
                 .glassCard(radius: DS.Radius.lg)
-                .frame(maxHeight: 280)
-                .padding(.top, 5)
+                .frame(maxHeight: 220)
+                .padding(.top, 4)
             }
         }
         .zIndex(100)
@@ -346,13 +397,18 @@ struct TreeView: View {
             if visited.contains(pId) { break }
             visited.insert(pId)
             ancestors.insert(pId)
-            currentParentId = memberById[pId]?.fatherId
+            currentParentId = cachedMemberById[pId]?.fatherId
         }
+        // فتح المسار
         withAnimation(.spring()) {
             activePath = ancestors
             activePath.insert(member.id)
-            scale = 1.0
+        }
+        // الانتقال للعضو بعد بناء العقد
+        Task {
+            try? await Task.sleep(nanoseconds: 500_000_000)
             scrollTarget = member.id
+            scrollCounter += 1
         }
     }
 
@@ -365,11 +421,10 @@ struct TreeView: View {
             if visited.contains(pId) { break }
             visited.insert(pId)
             ancestors.insert(pId)
-            currentParentId = memberById[pId]?.fatherId
+            currentParentId = cachedMemberById[pId]?.fatherId
         }
         
-        let updates = {
-            scale = preferredBaseScale
+        withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
             activePath = ancestors
             if includeFocusedMemberInPath {
                 activePath.insert(member.id)
@@ -379,16 +434,18 @@ struct TreeView: View {
             } else {
                 searchedMemberID = nil
             }
-            // treeID = UUID() // تمت إزالته لعدم إفساد الـ ScrollView
-            scrollTarget = member.id
         }
         
-        withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) { updates() }
-
+        Task {
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            scrollTarget = member.id
+            scrollCounter += 1
+        }
         
-        // Remove highlight after a brief moment
+        // Remove highlight after 4 seconds
         if highlight {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            Task {
+                try? await Task.sleep(nanoseconds: 4_000_000_000)
                 withAnimation { searchedMemberID = nil }
             }
         }
@@ -402,6 +459,7 @@ struct TreeView: View {
                 searchedMemberID = nil
                 treeID = UUID()
                 scrollTarget = root.id
+                scrollCounter += 1
             }
             if animated {
                 withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) { updates() }
@@ -419,7 +477,7 @@ struct TreeView: View {
                 Spacer()
                 VStack(spacing: 0) {
                     Text(currentZoomPercentText)
-                        .font(.system(size: 12, weight: .bold))
+                        .font(DS.Font.scaled(12, weight: .bold))
                         .foregroundColor(DS.Color.primary)
                         .frame(width: 44, height: 44)
                         .background(Color.white.opacity(0.1))
@@ -431,7 +489,7 @@ struct TreeView: View {
                     // زر تكبير
                     Button(action: { withAnimation(.easeInOut(duration: 0.3)) { scale = min(scale + 0.15, 3.0) } }) {
                         Image(systemName: "plus")
-                            .font(.system(size: 16, weight: .bold))
+                            .font(DS.Font.scaled(16, weight: .bold))
                             .foregroundColor(DS.Color.primary)
                             .frame(width: 44, height: 44)
                             .background(Color.white.opacity(0.1))
@@ -445,7 +503,7 @@ struct TreeView: View {
                     // زر إعادة
                     Button(action: { resetToTopRoot() }) {
                         Image(systemName: "arrow.counterclockwise")
-                            .font(.system(size: 15, weight: .bold))
+                            .font(DS.Font.scaled(15, weight: .bold))
                             .foregroundColor(DS.Color.primary)
                             .frame(width: 44, height: 44)
                             .background(Color.white.opacity(0.1))
@@ -459,7 +517,7 @@ struct TreeView: View {
                     // زر تصغير
                     Button(action: { withAnimation(.easeInOut(duration: 0.3)) { scale = max(scale - 0.15, 0.4) } }) {
                         Image(systemName: "minus")
-                            .font(.system(size: 16, weight: .bold))
+                            .font(DS.Font.scaled(16, weight: .bold))
                             .foregroundColor(DS.Color.primary)
                             .frame(width: 44, height: 44)
                             .background(Color.white.opacity(0.1))
@@ -482,13 +540,14 @@ struct TreeView: View {
     private func rootBranch(for root: FamilyMember) -> some View {
         RecursiveTreeBranch(
             member: root,
-            childrenByFatherId: childrenByFatherId,
+            childrenByFatherId: cachedChildrenByFatherId,
             ancestorIDs: [],
             activePath: $activePath,
             searchedMemberID: $searchedMemberID,
             selectedMember: $selectedMember,
             scrollTarget: $scrollTarget,
             scrollAnchor: $currentAnchor,
+            scrollCounter: $scrollCounter,
             level: 0,
             viewMode: viewMode,
             lightweightFullTree: lightweightFullTree,
@@ -509,7 +568,7 @@ struct TreeView: View {
                     .fill(DS.Color.gridTree.opacity(0.1))
                     .frame(width: 80, height: 80)
                 Image(systemName: "leaf.arrow.triangle.circlepath")
-                    .font(.system(size: 36, weight: .medium))
+                    .font(DS.Font.scaled(36, weight: .medium))
                     .foregroundStyle(DS.Color.gradientPrimary)
             }
 
@@ -648,6 +707,7 @@ struct RecursiveTreeBranch: View {
     @Binding var selectedMember: FamilyMember?
     @Binding var scrollTarget: UUID?
     @Binding var scrollAnchor: UnitPoint
+    @Binding var scrollCounter: Int
     let level: Int
 
     var viewMode: TreeDisplayMode
@@ -656,7 +716,7 @@ struct RecursiveTreeBranch: View {
 
     @State private var isExpanded: Bool
 
-    init(member: FamilyMember, childrenByFatherId: [UUID: [FamilyMember]], ancestorIDs: Set<UUID>, activePath: Binding<Set<UUID>>, searchedMemberID: Binding<UUID?>, selectedMember: Binding<FamilyMember?>, scrollTarget: Binding<UUID?>, scrollAnchor: Binding<UnitPoint>, level: Int, viewMode: TreeDisplayMode, lightweightFullTree: Bool, currentLocationMemberID: UUID?) {
+    init(member: FamilyMember, childrenByFatherId: [UUID: [FamilyMember]], ancestorIDs: Set<UUID>, activePath: Binding<Set<UUID>>, searchedMemberID: Binding<UUID?>, selectedMember: Binding<FamilyMember?>, scrollTarget: Binding<UUID?>, scrollAnchor: Binding<UnitPoint>, scrollCounter: Binding<Int>, level: Int, viewMode: TreeDisplayMode, lightweightFullTree: Bool, currentLocationMemberID: UUID?) {
         self.member = member
         self.childrenByFatherId = childrenByFatherId
         self.ancestorIDs = ancestorIDs
@@ -665,6 +725,7 @@ struct RecursiveTreeBranch: View {
         self._selectedMember = selectedMember
         self._scrollTarget = scrollTarget
         self._scrollAnchor = scrollAnchor
+        self._scrollCounter = scrollCounter
         self.level = level
         self.viewMode = viewMode
         self.lightweightFullTree = lightweightFullTree
@@ -711,10 +772,17 @@ struct RecursiveTreeBranch: View {
                     isExpanded.toggle()
                     if isExpanded {
                         activePath = ancestorIDs.union([member.id])
-                        scrollTarget = member.id
                     } else {
                         activePath = ancestorIDs
                         searchedMemberID = nil
+                    }
+                }
+                // بعد فتح العقدة، ننتقل للعضو ليكون في النص مع أبنائه
+                if isExpanded {
+                    Task {
+                        try? await Task.sleep(nanoseconds: 300_000_000)
+                        scrollTarget = member.id
+                        scrollCounter += 1
                     }
                 }
             }.id(member.id)
@@ -753,6 +821,7 @@ struct RecursiveTreeBranch: View {
                                         selectedMember: $selectedMember,
                                         scrollTarget: $scrollTarget,
                                         scrollAnchor: $scrollAnchor,
+                                        scrollCounter: $scrollCounter,
                                         level: level + 1,
                                         viewMode: viewMode,
                                         lightweightFullTree: lightweightFullTree,
@@ -790,12 +859,24 @@ struct TreeMemberNode: View {
         member.id == currentLocationMemberID
     }
 
-    // لون مبني على عضوية الشخص — موحّد مع UserRole.color
+    // لون دائرة الصورة — موحّد لكل الأحياء بلون التطبيق
     private var nodeAccentColor: Color {
         if member.isDeceased == true {
             return Color.gray.opacity(0.7)
         }
-        return member.roleColor
+        return DS.Color.primary
+    }
+
+    // لون الإطار — بنفسجي للمدير، برتقالي للمشرف، لون التطبيق فاتح للباقي
+    private var borderColor: Color {
+        if member.isDeceased == true {
+            return Color.gray.opacity(0.5)
+        }
+        switch member.role {
+        case .admin: return .purple.opacity(0.6)
+        case .supervisor: return .orange.opacity(0.6)
+        default: return DS.Color.primary.opacity(0.5)
+        }
     }
 
     var body: some View {
@@ -813,7 +894,7 @@ struct TreeMemberNode: View {
                             .frame(width: 14, height: 14)
 
                         Text(fullDisplayName)
-                            .font(.system(size: 10, weight: .bold))
+                            .font(DS.Font.scaled(10, weight: .bold))
                             .foregroundColor(DS.Color.textPrimary)
                             .lineLimit(nil)
                             .multilineTextAlignment(.center)
@@ -821,7 +902,7 @@ struct TreeMemberNode: View {
 
                         if member.isDeceased ?? false {
                             Text(getLifeSpan())
-                                .font(.system(size: 8, weight: .black))
+                                .font(DS.Font.scaled(8, weight: .black))
                                 .foregroundColor(DS.Color.textSecondary)
                                 .lineLimit(1)
                         }
@@ -830,20 +911,20 @@ struct TreeMemberNode: View {
                     .frame(height: 26)
                     .background(DS.Color.surface)
                     .clipShape(Capsule())
-                        .overlay(
-                            ZStack {
-                            if isCurrentLocationMember {
-                                Capsule()
-                                    .stroke(Color(red: 0.56, green: 0.95, blue: 0.66), lineWidth: 2.8)
-                                    .scaleEffect(x: isPulsing ? 1.24 : 1.0, y: isPulsing ? 1.52 : 1.0)
-                                    .opacity(isPulsing ? 0.05 : 0.95)
-                                    .shadow(color: Color(red: 0.56, green: 0.95, blue: 0.66).opacity(0.45), radius: 7)
-                                    .animation(Animation.easeOut(duration: 1.5).repeatForever(autoreverses: false), value: isPulsing)
-                                    .onAppear { isPulsing = true }
-                            }
-                            Capsule().stroke(nodeAccentColor, lineWidth: 2.5)
-                        }
+                    .overlay(
+                        Capsule().stroke(borderColor, lineWidth: 2.5)
                     )
+                    .overlay {
+                        if isCurrentLocationMember {
+                            Capsule()
+                                .stroke(Color(red: 0.56, green: 0.95, blue: 0.66), lineWidth: 2.8)
+                                .scaleEffect(isPulsing ? 1.3 : 1.0)
+                                .opacity(isPulsing ? 0.0 : 0.9)
+                                .shadow(color: Color(red: 0.56, green: 0.95, blue: 0.66).opacity(0.45), radius: 7)
+                                .animation(Animation.easeOut(duration: 1.5).repeatForever(autoreverses: false), value: isPulsing)
+                                .onAppear { isPulsing = true }
+                        }
+                    }
                 }
                 .buttonStyle(.plain)
                 .frame(minWidth: 114, alignment: .top)
@@ -853,44 +934,43 @@ struct TreeMemberNode: View {
                 VStack(spacing: 5) {
                     Button(action: onTap) {
                         ZStack {
-                            if isCurrentLocationMember {
-                                Circle()
-                                    .stroke(Color(red: 0.56, green: 0.95, blue: 0.66), lineWidth: 4.2)
-                                    .frame(width: 56 + (isPulsing ? 34 : 8), height: 56 + (isPulsing ? 34 : 8))
-                                    .opacity(isPulsing ? 0.08 : 1.0)
-                                    .shadow(color: Color(red: 0.56, green: 0.95, blue: 0.66).opacity(0.5), radius: 10)
-                                    .animation(Animation.easeOut(duration: 1.5).repeatForever(autoreverses: false), value: isPulsing)
-                                    .onAppear { isPulsing = true }
-                            }
-
-                            if isCurrentLocationMember {
-                                VStack {
-                                    Text(L10n.t("موقعك ( أنا )", "Your Location (Me)"))
-                                        .font(.system(size: 10, weight: .bold))
-                                        .foregroundColor(.black.opacity(0.85))
-                                        .padding(.horizontal, 7)
-                                        .padding(.vertical, 2)
-                                        .background(Color(red: 0.56, green: 0.95, blue: 0.66))
-                                        .clipShape(Capsule())
-                                    Spacer()
-                                }
-                                .frame(width: 96, height: 96)
-                                .offset(y: -6)
-                            }
-                            
                             Circle()
                                 .fill(nodeAccentColor)
                                 .frame(width: 56, height: 56)
                                 .shadow(color: nodeAccentColor.opacity(0.25), radius: 6, y: 2)
 
                             Text(String(fullDisplayName.prefix(1)))
-                                .font(.system(size: 19, weight: .black))
+                                .font(DS.Font.scaled(19, weight: .black))
                                 .foregroundColor(.white)
+                        }
+                    }
+                    .overlay {
+                        if isCurrentLocationMember {
+                            Circle()
+                                .stroke(Color(red: 0.56, green: 0.95, blue: 0.66), lineWidth: 4.2)
+                                .frame(width: 64, height: 64)
+                                .scaleEffect(isPulsing ? 1.4 : 1.0)
+                                .opacity(isPulsing ? 0.0 : 0.9)
+                                .shadow(color: Color(red: 0.56, green: 0.95, blue: 0.66).opacity(0.5), radius: 10)
+                                .animation(Animation.easeOut(duration: 1.5).repeatForever(autoreverses: false), value: isPulsing)
+                                .onAppear { isPulsing = true }
+                        }
+                    }
+                    .overlay(alignment: .top) {
+                        if isCurrentLocationMember {
+                            Text(L10n.t("موقعك ( أنا )", "Your Location (Me)"))
+                                .font(DS.Font.scaled(10, weight: .bold))
+                                .foregroundColor(.black.opacity(0.85))
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 2)
+                                .background(Color(red: 0.56, green: 0.95, blue: 0.66))
+                                .clipShape(Capsule())
+                                .offset(y: -14)
                         }
                     }
 
                     Text(fullDisplayName)
-                        .font(.system(size: 10, weight: .bold))
+                        .font(DS.Font.scaled(10, weight: .bold))
                         .foregroundColor(DS.Color.textPrimary)
                         .multilineTextAlignment(.center)
                         .lineLimit(nil)
@@ -899,7 +979,7 @@ struct TreeMemberNode: View {
                         .frame(minWidth: 60, minHeight: 22)
                         .background(DS.Color.surface)
                         .clipShape(Capsule())
-                        .overlay(Capsule().stroke(nodeAccentColor, lineWidth: 2.5))
+                        .overlay(Capsule().stroke(borderColor, lineWidth: 2.5))
                 }
                 .frame(minWidth: 126, alignment: .top)
                 .zIndex(5)
@@ -910,48 +990,9 @@ struct TreeMemberNode: View {
             VStack(spacing: 0) {
                 Button(action: onTap) {
                     ZStack {
-                        // حلقة البحث المتوهجة
-                        if searchedMemberID == member.id {
-                            Circle()
-                                .stroke(
-                                    LinearGradient(
-                                        colors: [DS.Color.success, DS.Color.success.opacity(0.5)],
-                                        startPoint: .topLeading, endPoint: .bottomTrailing
-                                    ),
-                                    lineWidth: 3
-                                )
-                                .frame(width: interactiveNodeSize + 10, height: interactiveNodeSize + 10)
-                                .shadow(color: DS.Color.success.opacity(0.4), radius: 8)
-                        }
-
-                        if isCurrentLocationMember {
-                            Circle()
-                                .stroke(Color(red: 0.56, green: 0.95, blue: 0.66), lineWidth: 4.2)
-                                .frame(width: interactiveNodeSize + (isPulsing ? 36 : 10), height: interactiveNodeSize + (isPulsing ? 36 : 10))
-                                .opacity(isPulsing ? 0.08 : 1.0)
-                                .shadow(color: Color(red: 0.56, green: 0.95, blue: 0.66).opacity(0.5), radius: 12)
-                                .animation(Animation.easeOut(duration: 1.5).repeatForever(autoreverses: false), value: isPulsing)
-                                .onAppear { isPulsing = true }
-                        }
-
-                        if isCurrentLocationMember {
-                            VStack {
-                                Text(L10n.t("موقعك ( أنا )", "Your Location (Me)"))
-                                    .font(.system(size: 10, weight: .bold))
-                                    .foregroundColor(.black.opacity(0.85))
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 3)
-                                    .background(Color(red: 0.56, green: 0.95, blue: 0.66))
-                                    .clipShape(Capsule())
-                                Spacer()
-                            }
-                            .frame(width: interactiveNodeSize + 34, height: interactiveNodeSize + 34)
-                            .offset(y: -8)
-                        }
-
-                        // حلقة خارجية بلون موحد
+                        // حلقة خارجية بلون الرتبة
                         Circle()
-                            .stroke(nodeAccentColor, lineWidth: 3)
+                            .stroke(borderColor, lineWidth: 3)
                             .frame(width: interactiveNodeSize + 4, height: interactiveNodeSize + 4)
 
                         // الدائرة الرئيسية
@@ -967,7 +1008,7 @@ struct TreeMemberNode: View {
                                     image.resizable().scaledToFill()
                                 } else {
                                     Image(systemName: "person.fill")
-                                        .font(.system(size: 30))
+                                        .font(DS.Font.scaled(30))
                                         .foregroundColor(.white.opacity(0.7))
                                 }
                             }
@@ -983,14 +1024,56 @@ struct TreeMemberNode: View {
 
                         if member.isDeceased ?? false { deathTag }
                     }
-                }.onAppear { shouldLoadImage = true }
+                }
+                .overlay {
+                    // حلقة البحث المتوهجة — overlay لا يأثر على الـ layout
+                    if searchedMemberID == member.id {
+                        Circle()
+                            .stroke(
+                                LinearGradient(
+                                    colors: [DS.Color.success, DS.Color.success.opacity(0.5)],
+                                    startPoint: .topLeading, endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 3
+                            )
+                            .frame(width: interactiveNodeSize + 10, height: interactiveNodeSize + 10)
+                            .shadow(color: DS.Color.success.opacity(0.4), radius: 8)
+                    }
+                }
+                .overlay {
+                    // وميض الموقع — overlay لا يأثر على الـ layout
+                    if isCurrentLocationMember {
+                        Circle()
+                            .stroke(Color(red: 0.56, green: 0.95, blue: 0.66), lineWidth: 4.2)
+                            .frame(width: interactiveNodeSize + 10, height: interactiveNodeSize + 10)
+                            .scaleEffect(isPulsing ? 1.35 : 1.0)
+                            .opacity(isPulsing ? 0.0 : 0.9)
+                            .shadow(color: Color(red: 0.56, green: 0.95, blue: 0.66).opacity(0.5), radius: 12)
+                            .animation(Animation.easeOut(duration: 1.5).repeatForever(autoreverses: false), value: isPulsing)
+                            .onAppear { isPulsing = true }
+                    }
+                }
+                .overlay(alignment: .top) {
+                    // علامة "موقعك" — overlay لا يأثر على الـ layout
+                    if isCurrentLocationMember {
+                        Text(L10n.t("موقعك ( أنا )", "Your Location (Me)"))
+                            .font(DS.Font.scaled(10, weight: .bold))
+                            .foregroundColor(.black.opacity(0.85))
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(Color(red: 0.56, green: 0.95, blue: 0.66))
+                            .clipShape(Capsule())
+                            .offset(y: -16)
+                    }
+                }
+                .onAppear { shouldLoadImage = true }
 
                 Button(action: onToggle) {
                     VStack(spacing: 4) {
                         if showName {
                             ZStack {
                                 Text(displayName)
-                                    .font(.system(size: 13, weight: .bold))
+                                    .font(DS.Font.scaled(13, weight: .bold))
                                     .foregroundColor(DS.Color.textPrimary)
                                     .lineLimit(1)
                                     .multilineTextAlignment(.center)
@@ -1000,7 +1083,7 @@ struct TreeMemberNode: View {
                                 if childrenCount > 0 {
                                     HStack(spacing: 4) {
                                         Text("\(childrenCount)")
-                                            .font(.system(size: 11, weight: .black))
+                                            .font(DS.Font.scaled(11, weight: .black))
                                             .foregroundColor(DS.Color.textPrimary)
                                             .padding(.horizontal, 6)
                                             .padding(.vertical, 2)
@@ -1016,7 +1099,7 @@ struct TreeMemberNode: View {
                             .frame(height: interactiveLabelHeight + 2, alignment: .center)
                             .background(DS.Color.surface)
                             .clipShape(Capsule())
-                            .overlay(Capsule().stroke(nodeAccentColor, lineWidth: 2.5))
+                            .overlay(Capsule().stroke(borderColor, lineWidth: 2.5))
                         }
 
                         if hasChildren {
@@ -1028,7 +1111,7 @@ struct TreeMemberNode: View {
                                     .overlay(Circle().stroke(LinearGradient(colors: [Color.white, Color.white.opacity(0.3)], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1.5))
 
                                 Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                                    .font(.system(size: 18, weight: .black))
+                                    .font(DS.Font.scaled(18, weight: .black))
                                     .foregroundColor(.white)
                                     .shadow(color: .black.opacity(0.3), radius: 2, y: 1)
                             }
@@ -1044,7 +1127,7 @@ struct TreeMemberNode: View {
         VStack {
             Spacer()
             Text(getLifeSpan())
-                .font(.system(size: 9, weight: .black))
+                .font(DS.Font.scaled(9, weight: .black))
                 .foregroundColor(.white)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)

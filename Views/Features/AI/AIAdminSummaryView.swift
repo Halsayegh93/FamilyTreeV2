@@ -48,7 +48,7 @@ struct AIAdminSummaryView: View {
                                         .fill(.white.opacity(0.15))
                                         .frame(width: 50, height: 50)
                                     Image(systemName: "sparkles")
-                                        .font(.system(size: 22, weight: .bold))
+                                        .font(DS.Font.scaled(22, weight: .bold))
                                         .foregroundColor(.white)
                                 }
                             }

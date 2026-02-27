@@ -54,7 +54,7 @@ struct AdminDeceasedRequestsView: View {
                             .frame(width: 44, height: 44)
                         Image(systemName: "bolt.heart.fill")
                             .foregroundColor(DS.Color.error)
-                            .font(.system(size: 18, weight: .semibold))
+                            .font(DS.Font.scaled(18, weight: .semibold))
                     }
 
                     VStack(alignment: .leading, spacing: DS.Spacing.xs) {
@@ -118,7 +118,7 @@ struct AdminDeceasedRequestsView: View {
                     .fill(DS.Color.gradientPrimary)
                     .frame(width: 60, height: 60)
                 Image(systemName: "tray")
-                    .font(.system(size: 26, weight: .semibold))
+                    .font(DS.Font.scaled(26, weight: .semibold))
                     .foregroundColor(.white)
             }
             Text("لا توجد طلبات حالياً")

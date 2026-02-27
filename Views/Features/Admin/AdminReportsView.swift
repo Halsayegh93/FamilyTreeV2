@@ -83,7 +83,7 @@ struct AdminReportsView: View {
                                     .fill(DS.Color.gradientPrimary)
                                     .frame(width: 32, height: 32)
                                 Image(systemName: "magnifyingglass")
-                                    .font(.system(size: 12, weight: .semibold))
+                                    .font(DS.Font.scaled(12, weight: .semibold))
                                     .foregroundColor(.white)
                             }
 
@@ -109,7 +109,7 @@ struct AdminReportsView: View {
                                 } label: {
                                     HStack(spacing: DS.Spacing.xs) {
                                         Image(systemName: "checkmark.circle.fill")
-                                            .font(.system(size: 12))
+                                            .font(DS.Font.scaled(12))
                                         Text("تحديد الكل (\(filteredMembers.count))")
                                             .font(DS.Font.caption1)
                                     }
@@ -125,7 +125,7 @@ struct AdminReportsView: View {
                                 } label: {
                                     HStack(spacing: DS.Spacing.xs) {
                                         Image(systemName: "xmark.circle.fill")
-                                            .font(.system(size: 12))
+                                            .font(DS.Font.scaled(12))
                                         Text("إلغاء التحديد")
                                             .font(DS.Font.caption1)
                                     }
@@ -152,7 +152,7 @@ struct AdminReportsView: View {
                                 } label: {
                                     HStack(spacing: DS.Spacing.md) {
                                         Image(systemName: selectedMemberIds.contains(member.id) ? "checkmark.circle.fill" : "circle")
-                                            .font(.system(size: 20))
+                                            .font(DS.Font.scaled(20))
                                             .foregroundStyle(
                                                 selectedMemberIds.contains(member.id)
                                                     ? AnyShapeStyle(DS.Color.gradientPrimary)

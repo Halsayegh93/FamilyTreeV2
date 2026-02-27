@@ -125,7 +125,7 @@ struct LoginView: View {
                     .frame(width: 100, height: 100)
 
                 Text("🌳")
-                    .font(.system(size: 54))
+                    .font(DS.Font.scaled(54))
             }
             .shadow(color: .black.opacity(0.05), radius: 10, x: 0, y: 5)
             .padding(.bottom, DS.Spacing.sm)
@@ -154,10 +154,10 @@ struct LoginView: View {
             // حقل الهاتف
             HStack(spacing: 0) {
                 HStack(spacing: DS.Spacing.xs) {
-                    Text(flagEmoji(for: authVM.dialingCode)).font(.system(size: 20))
+                    Text(flagEmoji(for: authVM.dialingCode)).font(DS.Font.scaled(20))
                     TextField("+965", text: countryCodeBinding)
                         .keyboardType(.phonePad)
-                        .font(.system(size: 16, weight: .bold))
+                        .font(DS.Font.scaled(16, weight: .bold))
                         .multilineTextAlignment(.center)
                         .foregroundColor(.primary)
                 }
@@ -175,14 +175,14 @@ struct LoginView: View {
                             .foregroundStyle(Color(UIColor.placeholderText))
                     } else {
                         Text(authVM.phoneNumber)
-                            .font(.system(size: 20, weight: .bold, design: .rounded))
+                            .font(DS.Font.scaled(20, weight: .bold))
                             .foregroundColor(.primary)
                             .allowsHitTesting(false)
                     }
 
                     TextField("", text: phoneBinding)
                         .keyboardType(.numberPad)
-                        .font(.system(size: 20, weight: .bold, design: .rounded))
+                        .font(DS.Font.scaled(20, weight: .bold))
                         .foregroundColor(.clear)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
@@ -228,7 +228,7 @@ struct LoginView: View {
                              : L10n.t("متابعة", "Continue"))
                             .font(DS.Font.calloutBold)
                         Image(systemName: "arrow.left")
-                            .font(.system(size: 14, weight: .bold))
+                            .font(DS.Font.scaled(14, weight: .bold))
                             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
                     }
                 }
@@ -263,7 +263,7 @@ struct LoginView: View {
                         .frame(width: 46, height: 46)
 
                     Image(systemName: "lock.shield")
-                        .font(.system(size: 20, weight: .light))
+                        .font(DS.Font.scaled(20, weight: .light))
                         .foregroundColor(.primary)
                 }
 
@@ -276,7 +276,7 @@ struct LoginView: View {
                         .font(DS.Font.caption1)
                         .foregroundColor(.secondary)
                     Text("\(authVM.dialingCode)\(authVM.phoneNumber)")
-                        .font(.system(size: 14, weight: .bold, design: .rounded))
+                        .font(DS.Font.scaled(14, weight: .bold))
                         .foregroundColor(DS.Color.accent)
                     
                     Button(action: {
@@ -289,7 +289,7 @@ struct LoginView: View {
                         }
                     }) {
                         Image(systemName: "pencil.circle.fill")
-                            .font(.system(size: 16))
+                            .font(DS.Font.scaled(16))
                             .foregroundColor(.secondary)
                     }
                     .padding(.leading, DS.Spacing.xs)
@@ -299,7 +299,7 @@ struct LoginView: View {
             // حقل OTP — Clean minimal style
             TextField("------", text: otpBinding)
                 .keyboardType(.numberPad)
-                .font(.system(size: 32, weight: .bold, design: .rounded))
+                .font(DS.Font.scaled(32, weight: .bold))
                 .foregroundColor(.primary)
                 .multilineTextAlignment(.center)
                 .tracking(12)
@@ -355,7 +355,7 @@ struct LoginView: View {
             HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .foregroundColor(DS.Color.error)
-                    .font(.system(size: 16, weight: .bold))
+                    .font(DS.Font.scaled(16, weight: .bold))
                 Text(error)
                     .font(DS.Font.footnote)
                     .fontWeight(.semibold)
@@ -370,7 +370,7 @@ struct LoginView: View {
             HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: "checkmark.circle.fill")
                     .foregroundColor(DS.Color.success)
-                    .font(.system(size: 16, weight: .bold))
+                    .font(DS.Font.scaled(16, weight: .bold))
                 Text(authVM.otpStatusMessage)
                     .font(DS.Font.footnote)
                     .fontWeight(.semibold)

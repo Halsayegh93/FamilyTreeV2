@@ -14,7 +14,7 @@ struct HomeHeaderView: View {
                 // Logout
                 Button(action: onLogout) {
                     Image(systemName: "rectangle.portrait.and.arrow.right")
-                        .font(.system(size: 17, weight: .bold))
+                        .font(DS.Font.scaled(17, weight: .bold))
                         .foregroundColor(DS.Color.error)
                         .frame(width: DS.Icon.size, height: DS.Icon.size)
                         .background(DS.Color.error.opacity(0.10))
@@ -26,7 +26,7 @@ struct HomeHeaderView: View {
                 // Notifications
                 Button(action: onNotificationTap) {
                     Image(systemName: "bell.badge.fill")
-                        .font(.system(size: 17, weight: .bold))
+                        .font(DS.Font.scaled(17, weight: .bold))
                         .foregroundColor(DS.Color.primary)
                         .frame(width: DS.Icon.size, height: DS.Icon.size)
                         .background(DS.Color.primary.opacity(0.10))

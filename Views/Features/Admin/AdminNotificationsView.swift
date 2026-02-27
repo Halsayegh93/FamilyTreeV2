@@ -32,7 +32,7 @@ struct AdminNotificationsView: View {
                                 HStack(spacing: DS.Spacing.md) {
                                     Image(systemName: "textformat")
                                         .foregroundColor(.white)
-                                        .font(.system(size: 14))
+                                        .font(DS.Font.scaled(14))
                                         .frame(width: DS.Icon.sizeSm, height: DS.Icon.sizeSm)
                                         .background(DS.Color.gradientPrimary)
                                         .cornerRadius(DS.Radius.sm)
@@ -49,7 +49,7 @@ struct AdminNotificationsView: View {
                                 HStack(alignment: .top, spacing: DS.Spacing.md) {
                                     Image(systemName: "text.alignright")
                                         .foregroundColor(.white)
-                                        .font(.system(size: 14))
+                                        .font(DS.Font.scaled(14))
                                         .frame(width: DS.Icon.sizeSm, height: DS.Icon.sizeSm)
                                         .background(DS.Color.gradientPrimary)
                                         .cornerRadius(DS.Radius.sm)
@@ -76,7 +76,7 @@ struct AdminNotificationsView: View {
                                 HStack(spacing: DS.Spacing.md) {
                                     Image(systemName: "person.3.fill")
                                         .foregroundColor(.white)
-                                        .font(.system(size: 12))
+                                        .font(DS.Font.scaled(12))
                                         .frame(width: DS.Icon.sizeSm, height: DS.Icon.sizeSm)
                                         .background(DS.Color.gradientPrimary)
                                         .cornerRadius(DS.Radius.sm)

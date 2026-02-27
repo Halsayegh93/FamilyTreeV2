@@ -21,7 +21,7 @@ struct MemberNodeView: View {
                         .overlay(
                             Image(systemName: "person.slash.fill")
                                 .foregroundColor(.gray)
-                                .font(.system(size: 22, weight: .bold))
+                                .font(DS.Font.scaled(22, weight: .bold))
                         )
                 } else if let urlString = member.photoURL, let url = URL(string: urlString) {
                     AsyncImage(url: url) { image in
@@ -41,7 +41,7 @@ struct MemberNodeView: View {
                         .overlay(
                             Image(systemName: "person.fill")
                                 .foregroundColor(roleColor)
-                                .font(.system(size: 22, weight: .bold))
+                                .font(DS.Font.scaled(22, weight: .bold))
                         )
                 }
 
@@ -64,7 +64,7 @@ struct MemberNodeView: View {
                     VStack {
                         Spacer()
                         Text(L10n.t("رحمه الله", "Deceased"))
-                            .font(.system(size: 8, weight: .black))
+                            .font(DS.Font.scaled(8, weight: .black))
                             .frame(maxWidth: .infinity)
                             .background(Color.black.opacity(0.80))
                             .foregroundColor(.white)
@@ -78,13 +78,13 @@ struct MemberNodeView: View {
             // كبسولة الاسم — bold gradient background
             HStack(spacing: 4) {
                 Text(member.isDeleted ? L10n.t("محذوف", "Deleted") : member.firstName)
-                    .font(.system(size: 11, weight: .black))
+                    .font(DS.Font.scaled(11, weight: .black))
                     .foregroundColor(.white)
 
                 if !member.isDeleted {
                     Button(action: onArrowTap) {
                         Image(systemName: "chevron.down")
-                            .font(.system(size: 10, weight: .black))
+                            .font(DS.Font.scaled(10, weight: .black))
                             .foregroundColor(.white.opacity(0.8))
                     }
                 }

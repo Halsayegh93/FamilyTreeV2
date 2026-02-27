@@ -167,7 +167,7 @@ struct HomeNewsView: View {
                 } else {
                     VStack {
                         Image(systemName: "bubble.left.and.bubble.right.fill")
-                            .font(.system(size: 44))
+                            .font(DS.Font.scaled(44))
                             .foregroundColor(DS.Color.textTertiary)
                         Text(L10n.t("لا توجد تعليقات بعد", "No comments yet"))
                             .font(DS.Font.callout)
@@ -194,7 +194,7 @@ struct HomeNewsView: View {
                         }
                     }) {
                         Image(systemName: "paperplane.fill")
-                            .font(.system(size: 15, weight: .bold))
+                            .font(DS.Font.scaled(15, weight: .bold))
                             .foregroundColor(.white)
                             .frame(width: 42, height: 42)
                             .background(DS.Color.gradientPrimary)
@@ -236,7 +236,7 @@ struct HomeNewsView: View {
         Button(action: action) {
             VStack(spacing: DS.Spacing.xs) {
                 Image(systemName: icon)
-                    .font(.system(size: 24, weight: .semibold))
+                    .font(DS.Font.scaled(24, weight: .semibold))
                     .foregroundColor(color)
                     .frame(width: 60, height: 60)
                     .background(color.opacity(0.12))
@@ -274,7 +274,7 @@ struct HomeNewsView: View {
                         showingAddNews = true
                     }) {
                         Image(systemName: "plus")
-                            .font(.system(size: 20, weight: .bold))
+                            .font(DS.Font.scaled(20, weight: .bold))
                             .foregroundColor(.white)
                             .frame(width: 56, height: 56)
                             .background(DS.Color.gradientPrimary)
@@ -294,7 +294,7 @@ struct HomeNewsView: View {
     private var emptyNewsView: some View {
         VStack(spacing: DS.Spacing.md) {
             Image(systemName: "newspaper")
-                .font(.system(size: 44))
+                .font(DS.Font.scaled(44))
                 .foregroundColor(DS.Color.textTertiary)
             Text(L10n.t("لا توجد أخبار حديثة", "No recent news"))
                 .font(DS.Font.callout)
@@ -378,7 +378,7 @@ struct HomeNewsCardView: View {
                         .fill(DS.Color.gradientPrimary)
                         .frame(width: 44, height: 44)
                     Text(String(authorName.first ?? "A"))
-                        .font(.system(size: 18, weight: .bold, design: .rounded))
+                        .font(DS.Font.scaled(18, weight: .bold))
                         .foregroundColor(.white)
                 }
 
@@ -408,7 +408,7 @@ struct HomeNewsCardView: View {
                         }
                     } label: {
                         Image(systemName: "ellipsis")
-                            .font(.system(size: 16, weight: .bold))
+                            .font(DS.Font.scaled(16, weight: .bold))
                             .foregroundColor(DS.Color.textPrimary)
                             .frame(width: 32, height: 32)
                             .background(Color.gray.opacity(0.1))
@@ -505,7 +505,7 @@ struct HomeNewsCardView: View {
                     HStack(spacing: DS.Spacing.sm) {
                         Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                             .foregroundColor(isSelected ? DS.Color.primary : DS.Color.textSecondary)
-                            .font(.system(size: 18))
+                            .font(DS.Font.scaled(18))
                         Text(option).font(DS.Font.callout)
                             .foregroundColor(DS.Color.textPrimary)
                         Spacer()
@@ -577,7 +577,7 @@ struct HomeNewsCardView: View {
                 Button(action: onLikeTap) {
                     HStack(spacing: DS.Spacing.xs) {
                         Image(systemName: isLiked ? "heart.fill" : "heart")
-                            .font(.system(size: 14, weight: isLiked ? .bold : .medium))
+                            .font(DS.Font.scaled(14, weight: isLiked ? .bold : .medium))
                             .foregroundColor(isLiked ? DS.Color.error : DS.Color.textSecondary)
                             .symbolEffect(.bounce, value: isLiked)
 
@@ -619,7 +619,7 @@ struct HomeNewsCardView: View {
                         }
 
                         Image(systemName: "text.bubble.fill")
-                            .font(.system(size: 14, weight: .medium))
+                            .font(DS.Font.scaled(14, weight: .medium))
                             .foregroundColor(DS.Color.primary)
                     }
                     .padding(.horizontal, DS.Spacing.sm)
@@ -1083,7 +1083,7 @@ struct headerIconView: View {
     let color: Color
     var body: some View {
         Image(systemName: icon)
-            .font(.system(size: 16, weight: .bold))
+            .font(DS.Font.scaled(16, weight: .bold))
             .foregroundColor(color)
             .frame(width: 44, height: 44)
             .background(color.opacity(0.12))

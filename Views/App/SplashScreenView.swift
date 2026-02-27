@@ -26,7 +26,7 @@ struct SplashScreenView: View {
                         .frame(width: 120, height: 120)
                         
                     Text("🌳")
-                        .font(.system(size: 70))
+                        .font(DS.Font.scaled(70))
                 }
                 .shadow(color: .black.opacity(0.05), radius: 10, x: 0, y: 5)
                 .scaleEffect(logoScale)
@@ -49,7 +49,7 @@ struct SplashScreenView: View {
 
                 // Version
                 Text(L10n.t("الإصدار", "Version") + " \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "2.0")")
-                    .font(.system(size: 12))
+                    .font(DS.Font.scaled(12))
                     .foregroundColor(Color(UIColor.tertiaryLabel))
                     .opacity(versionOpacity)
                     .padding(.bottom, DS.Spacing.xxl)
@@ -77,7 +77,8 @@ struct SplashScreenView: View {
             }
 
             // Transition to app after 2.2 seconds
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.2) {
+            Task {
+                try? await Task.sleep(nanoseconds: 2_200_000_000)
                 withAnimation(.easeInOut(duration: 0.5)) {
                     isActive = true
                 }

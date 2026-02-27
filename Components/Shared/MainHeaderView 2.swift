@@ -50,7 +50,7 @@ struct MainHeaderView<TrailingContent: View>: View {
                                     Circle().stroke(Color.white.opacity(0.3), lineWidth: 1.5)
                                 )
                             Image(systemName: icon)
-                                .font(.system(size: 18, weight: .bold))
+                                .font(DS.Font.scaled(18, weight: .bold))
                                 .foregroundColor(.white)
                         }
                         .scaleEffect(isAnimating ? 1.0 : 0.8)
@@ -62,7 +62,7 @@ struct MainHeaderView<TrailingContent: View>: View {
                             .foregroundColor(.white)
                         if let customSubtitle = customSubtitle, !customSubtitle.isEmpty {
                             Text(customSubtitle)
-                                .font(.system(size: 13, weight: .medium))
+                                .font(DS.Font.scaled(13, weight: .medium))
                                 .foregroundColor(Color.white.opacity(0.85))
                         }
                     }
@@ -81,7 +81,7 @@ struct MainHeaderView<TrailingContent: View>: View {
                                     Circle().stroke(Color.white.opacity(0.3), lineWidth: 1.5)
                                 )
                             Text(String(authVM.currentUser?.fullName.first ?? "U"))
-                                .font(.system(size: 18, weight: .bold))
+                                .font(DS.Font.scaled(18, weight: .bold))
                                 .foregroundColor(.white)
                         }
                         .scaleEffect(isAnimating ? 1.0 : 0.8)
@@ -89,7 +89,7 @@ struct MainHeaderView<TrailingContent: View>: View {
                         
                         VStack(alignment: .leading, spacing: 2) {
                             Text(L10n.t("مرحباً 👋", "Hello 👋"))
-                                .font(.system(size: 13, weight: .medium))
+                                .font(DS.Font.scaled(13, weight: .medium))
                                 .foregroundColor(Color.white.opacity(0.85))
                             Text(authVM.currentUser?.firstName ?? "Member")
                                 .font(DS.Font.title3)
@@ -150,7 +150,7 @@ struct MainHeaderView<TrailingContent: View>: View {
                 .frame(width: 44, height: 44)
                 .overlay(Circle().stroke(Color.white.opacity(0.3), lineWidth: 1))
             Image(systemName: icon)
-                .font(.system(size: 18, weight: .bold))
+                .font(DS.Font.scaled(18, weight: .bold))
                 .foregroundColor(color)
         }
         .contentShape(Circle())

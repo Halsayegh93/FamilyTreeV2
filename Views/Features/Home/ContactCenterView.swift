@@ -89,7 +89,7 @@ struct ContactCenterView: View {
                         .fill(.white.opacity(0.15))
                         .frame(width: 50, height: 50)
                     Image(systemName: "envelope.open.fill")
-                        .font(.system(size: 22, weight: .bold))
+                        .font(DS.Font.scaled(22, weight: .bold))
                         .foregroundColor(.white)
                 }
             }
@@ -103,7 +103,7 @@ struct ContactCenterView: View {
             VStack(alignment: .leading, spacing: DS.Spacing.md) {
                 HStack(spacing: DS.Spacing.sm) {
                     Image(systemName: "tag.fill")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(DS.Font.scaled(12, weight: .semibold))
                         .foregroundStyle(DS.Color.gradientAccent)
                     Text(L10n.t("نوع الطلب", "Request Type"))
                         .font(DS.Font.calloutBold)
@@ -129,7 +129,7 @@ struct ContactCenterView: View {
             VStack(alignment: .leading, spacing: DS.Spacing.md) {
                 HStack(spacing: DS.Spacing.sm) {
                     Image(systemName: "text.alignright")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(DS.Font.scaled(12, weight: .semibold))
                         .foregroundStyle(DS.Color.gradientAccent)
                     Text(L10n.t("تفاصيل الرسالة", "Message Details"))
                         .font(DS.Font.calloutBold)
@@ -162,7 +162,7 @@ struct ContactCenterView: View {
             VStack(alignment: .leading, spacing: DS.Spacing.md) {
                 HStack(spacing: DS.Spacing.sm) {
                     Image(systemName: "phone.fill")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(DS.Font.scaled(12, weight: .semibold))
                         .foregroundStyle(DS.Color.gradientAccent)
                     Text(L10n.t("وسيلة التواصل (اختياري)", "Contact Method (optional)"))
                         .font(DS.Font.calloutBold)

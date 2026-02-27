@@ -23,7 +23,7 @@ struct DiwaniyasView: View {
                     ) {
                         Button(action: { showingAddRequest = true }) {
                             Image(systemName: "plus")
-                                .font(.system(size: 16, weight: .bold))
+                                .font(DS.Font.scaled(16, weight: .bold))
                                 .foregroundColor(.white)
                                 .frame(width: 44, height: 44)
                                 .background(Color.white.opacity(0.15))
@@ -94,7 +94,7 @@ struct DiwaniyasView: View {
                     .frame(width: 96, height: 96)
 
                 Image(systemName: "mappin.slash")
-                    .font(.system(size: 40, weight: .bold))
+                    .font(DS.Font.scaled(40, weight: .bold))
                     .foregroundColor(DS.Color.gridDiwaniya)
             }
 
@@ -121,7 +121,7 @@ struct DiwaniyasView: View {
                         Circle()
                             .fill(DS.Color.gridDiwaniya.opacity(0.15))
                         Image(systemName: item.imageUrl ?? "tent.fill")
-                            .font(.system(size: 16, weight: .bold))
+                            .font(DS.Font.scaled(16, weight: .bold))
                             .foregroundColor(DS.Color.gridDiwaniya)
                     }
                     .frame(width: 42, height: 42)
@@ -216,7 +216,7 @@ struct DiwaniyasView: View {
     private func compactInfoRow(icon: String, value: String, color: Color) -> some View {
         HStack(spacing: DS.Spacing.sm) {
             Image(systemName: icon)
-                .font(.system(size: 13, weight: .semibold))
+                .font(DS.Font.scaled(13, weight: .semibold))
                 .foregroundColor(color)
                 .frame(width: 20)
             Text(value)
@@ -268,7 +268,7 @@ private struct AddDiwaniyaRequestView: View {
                                 )
                                 .frame(width: 80, height: 80)
                             Image(systemName: "tent.fill")
-                                .font(.system(size: 32, weight: .bold))
+                                .font(DS.Font.scaled(32, weight: .bold))
                                 .foregroundColor(DS.Color.gridDiwaniya)
                         }
                         .padding(.top, DS.Spacing.lg)
@@ -333,7 +333,7 @@ private struct AddDiwaniyaRequestView: View {
                         // Review note
                         HStack(spacing: DS.Spacing.sm) {
                             Image(systemName: "info.circle.fill")
-                                .font(.system(size: 14))
+                                .font(DS.Font.scaled(14))
                                 .foregroundColor(DS.Color.gridDiwaniya)
                             Text(L10n.t(
                                 "سيتم إضافة الديوانية بعد الموافقة.",
@@ -417,7 +417,7 @@ private struct AddDiwaniyaRequestView: View {
                     )
                     .frame(width: 36, height: 36)
                 Image(systemName: icon)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(DS.Font.scaled(15, weight: .semibold))
                     .foregroundColor(.white)
             }
 

@@ -222,7 +222,7 @@ struct SettingsView: View {
                                         Spacer()
 
                                         Image(systemName: isArabic ? "chevron.left" : "chevron.right")
-                                            .font(.system(size: 11, weight: .semibold))
+                                            .font(DS.Font.scaled(11, weight: .semibold))
                                             .foregroundColor(DS.Color.error.opacity(0.6))
                                     }
                                     .padding(.horizontal, DS.Spacing.lg)
@@ -307,7 +307,7 @@ struct SettingsView: View {
                 .frame(width: DS.Icon.sizeSm, height: DS.Icon.sizeSm)
 
             Image(systemName: name)
-                .font(.system(size: 16, weight: .bold))
+                .font(DS.Font.scaled(16, weight: .bold))
                 .foregroundColor(.white)
         }
     }
@@ -325,7 +325,7 @@ struct SettingsView: View {
             Spacer()
 
             Image(systemName: isArabic ? "chevron.left" : "chevron.right")
-                .font(.system(size: 11, weight: .bold))
+                .font(DS.Font.scaled(11, weight: .bold))
                 .foregroundColor(.white)
                 .frame(width: 24, height: 24)
                 .background(color.opacity(0.8))
@@ -372,7 +372,7 @@ struct AboutView: View {
                             .dsGlowShadow()
 
                         Image(systemName: "tree.fill")
-                            .font(.system(size: 38, weight: .bold))
+                            .font(DS.Font.scaled(38, weight: .bold))
                             .foregroundColor(.white)
                     }
 

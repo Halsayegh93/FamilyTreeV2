@@ -7,7 +7,7 @@ struct AdminDiwaniyaRequestsView: View {
 
             VStack(spacing: DS.Spacing.lg) {
                 Image(systemName: "tent.fill")
-                    .font(.system(size: 44, weight: .bold))
+                    .font(DS.Font.scaled(44, weight: .bold))
                     .foregroundColor(DS.Color.gridDiwaniya)
 
                 Text(L10n.t("طلبات الديوانيات", "Diwaniya Requests"))

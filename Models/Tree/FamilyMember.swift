@@ -103,10 +103,10 @@ struct FamilyMember: Identifiable, Codable, Equatable {
     
     var roleName: String {
         switch role {
-        case .admin: return L10n.t("مشرف عام", "Admin")
-        case .supervisor: return L10n.t("مشرف", "Supervisor")
-        case .member: return L10n.t("عضو", "Member")
-        case .pending: return L10n.t("بانتظار الموافقة", "Pending")
+        case .admin: return "Admin"
+        case .supervisor: return "Supervisor"
+        case .member: return "Member"
+        case .pending: return "Pending"
         }
     }
 

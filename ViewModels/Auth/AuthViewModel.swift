@@ -1205,13 +1205,10 @@ class AuthViewModel: ObservableObject {
                 .execute()
             
             if let index = allMembers.firstIndex(where: { $0.id == memberId }) {
-                DispatchQueue.main.async {
-                    self.allMembers[index].role = .member
-                    self.allMembers[index].status = .active
-                    self.allMembers[index].fatherId = fatherId
-                    // إجبار الواجهة على إعادة الرسم
-                    self.objectWillChange.send()
-                }
+                allMembers[index].role = .member
+                allMembers[index].status = .active
+                allMembers[index].fatherId = fatherId
+                objectWillChange.send()
             }
 
             await notifyJoinApproval(memberId: memberId, fatherName: fatherName)
@@ -1287,11 +1284,9 @@ class AuthViewModel: ObservableObject {
                 .execute()
             
             // 4) التحديث المحلي الفوري لضمان اختفائه من الواجهة فوراً
-            DispatchQueue.main.async {
-                self.allMembers.removeAll(where: { $0.id == memberId })
-                self.currentMemberChildren.removeAll(where: { $0.id == memberId })
-                self.objectWillChange.send()
-            }
+            allMembers.removeAll(where: { $0.id == memberId })
+            currentMemberChildren.removeAll(where: { $0.id == memberId })
+            objectWillChange.send()
             
             Log.info("تم حذف العضو مع تنظيف المراجع المرتبطة بنجاح")
             

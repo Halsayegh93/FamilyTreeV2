@@ -104,7 +104,7 @@ struct AppIconPreview: View {
 
                     // أيقونة الأشخاص
                     Image(systemName: "tree.fill") // Any icon you prefer! "tree" or "leaf" suits well
-                        .font(.system(size: 200, weight: .bold))
+                        .font(DS.Font.scaled(200, weight: .bold))
                         .foregroundStyle(
                             LinearGradient(
                                 colors: [Color(hex: "FDFBF7"), Color(hex: "E2CA9E")],
@@ -255,7 +255,7 @@ struct AppIconPreviewAlt: View {
                         .frame(width: 440, height: 440)
 
                     Image(systemName: "figure.2.and.child.holdinghands")
-                        .font(.system(size: 220, weight: .heavy))
+                        .font(DS.Font.scaled(220, weight: .heavy))
                         .foregroundStyle(.white)
                         .shadow(color: Color(hex: "818CF8").opacity(0.6), radius: 40, y: 10)
                         .shadow(color: .black.opacity(0.2), radius: 20, y: 12)
@@ -337,7 +337,7 @@ struct AppIconPreviewMinimal: View {
 
                 // أيقونة عائلة صغيرة تحت الحرف
                 Image(systemName: "figure.2.and.child.holdinghands")
-                    .font(.system(size: 60, weight: .bold))
+                    .font(DS.Font.scaled(60, weight: .bold))
                     .foregroundStyle(.white.opacity(0.5))
             }
             .offset(y: -30)

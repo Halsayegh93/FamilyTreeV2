@@ -70,7 +70,7 @@ struct NotificationsCenterView: View {
 
                 // Gradient bell icon
                 Image(systemName: "bell.slash.fill")
-                    .font(.system(size: 34, weight: .bold))
+                    .font(DS.Font.scaled(34, weight: .bold))
                     .foregroundStyle(DS.Color.gradientPrimary)
             }
 
@@ -110,7 +110,7 @@ struct NotificationsCenterView: View {
                                 .overlay(Circle().stroke(DS.Color.primary.opacity(0.15), lineWidth: 1.5))
 
                             Image(systemName: iconInfo.icon)
-                                .font(.system(size: 16, weight: .bold))
+                                .font(DS.Font.scaled(16, weight: .bold))
                                 .foregroundColor(.white)
 
                             // New badge for recent notifications

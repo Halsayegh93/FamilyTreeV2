@@ -38,7 +38,7 @@ struct RegistrationView: View {
                     Button(action: { Task { await authVM.signOut() } }) {
                         HStack(spacing: DS.Spacing.xs) {
                             Image(systemName: "chevron.right")
-                                .font(.system(size: 13, weight: .bold))
+                                .font(DS.Font.scaled(13, weight: .bold))
                             Text(L10n.t("رجوع", "Back"))
                         }
                         .font(DS.Font.subheadline)
@@ -154,7 +154,7 @@ struct RegistrationView: View {
                     .frame(width: 100, height: 100)
 
                 Image(systemName: "person.badge.plus")
-                    .font(.system(size: 42, weight: .bold))
+                    .font(DS.Font.scaled(42, weight: .bold))
                     .foregroundColor(.white)
             }
             .dsGlowShadow()
@@ -250,7 +250,7 @@ struct RegistrationView: View {
                                 .fill(DS.Color.gradientPrimary)
                                 .frame(width: 24, height: 24)
                             Image(systemName: "checkmark")
-                                .font(.system(size: 11, weight: .bold))
+                                .font(DS.Font.scaled(11, weight: .bold))
                                 .foregroundColor(.white)
                         }
                         Text(L10n.t("الأب المختار: \(father.fullName)", "Selected: \(father.fullName)"))
@@ -289,7 +289,7 @@ struct RegistrationView: View {
                                             .frame(width: 36, height: 36)
 
                                         Text(String(candidate.fullName.prefix(1)))
-                                            .font(.system(size: 14, weight: .bold, design: .rounded))
+                                            .font(DS.Font.scaled(14, weight: .bold))
                                             .foregroundColor(selectedFatherId == candidate.id ? .white : DS.Color.primary)
                                     }
 
@@ -303,7 +303,7 @@ struct RegistrationView: View {
                                     if selectedFatherId == candidate.id {
                                         Image(systemName: "checkmark.circle.fill")
                                             .foregroundColor(DS.Color.success)
-                                            .font(.system(size: 18))
+                                            .font(DS.Font.scaled(18))
                                     }
                                 }
                                 .padding(.horizontal, DS.Spacing.lg)

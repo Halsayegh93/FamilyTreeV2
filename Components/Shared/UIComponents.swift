@@ -39,7 +39,7 @@ struct UIComponents {
             HStack(spacing: DS.Spacing.md) {
                 Image(systemName: icon)
                     .foregroundColor(DS.Color.primary)
-                    .font(.system(size: 16, weight: .bold))
+                    .font(DS.Font.scaled(16, weight: .bold))
                     .frame(width: Theme.ruler, height: Theme.ruler)
                     .background(DS.Color.primary.opacity(DS.Icon.opacity))
                     .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
@@ -75,7 +75,7 @@ struct UIComponents {
             HStack(spacing: DS.Spacing.md) {
                 Image(systemName: icon)
                     .foregroundColor(color)
-                    .font(.system(size: 16, weight: .bold))
+                    .font(DS.Font.scaled(16, weight: .bold))
                     .frame(width: Theme.ruler, height: Theme.ruler)
                     .background(color.opacity(DS.Icon.opacity))
                     .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
@@ -101,7 +101,7 @@ struct UIComponents {
             HStack(spacing: DS.Spacing.md) {
                 Image(systemName: icon)
                     .foregroundColor(color)
-                    .font(.system(size: 16, weight: .bold))
+                    .font(DS.Font.scaled(16, weight: .bold))
                     .frame(width: Theme.ruler, height: Theme.ruler)
                     .background(color.opacity(DS.Icon.opacity))
                     .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
@@ -109,7 +109,7 @@ struct UIComponents {
                 Text(title).font(DS.Font.calloutBold)
                 Spacer()
                 Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
-                    .font(.system(size: 13, weight: .bold))
+                    .font(DS.Font.scaled(13, weight: .bold))
                     .foregroundColor(DS.Color.textTertiary)
             }
             .padding(.horizontal, DS.Spacing.lg)
@@ -125,7 +125,7 @@ struct UIComponents {
         var body: some View {
             HStack(spacing: DS.Spacing.md) {
                 Image(systemName: icon)
-                    .font(.system(size: 15, weight: .bold))
+                    .font(DS.Font.scaled(15, weight: .bold))
                     .foregroundColor(DS.Color.primary)
                     .frame(width: 34, height: 34)
                     .background(DS.Color.primary.opacity(DS.Icon.opacity))

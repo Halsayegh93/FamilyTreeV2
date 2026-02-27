@@ -25,7 +25,7 @@ struct AdminNewsReportsView: View {
                             .fill(DS.Color.gradientPrimary)
                             .frame(width: 60, height: 60)
                         Image(systemName: "checkmark.shield")
-                            .font(.system(size: 26, weight: .semibold))
+                            .font(DS.Font.scaled(26, weight: .semibold))
                             .foregroundColor(.white)
                     }
                     Text("لا توجد بلاغات أخبار معلقة")
