@@ -5,23 +5,23 @@ import SwiftUI
 struct AppIconPreview: View {
     var body: some View {
         ZStack {
-            // Bold gradient background — 4 ألوان كلاسيكية فريدة
+            // خلفية ملكية — أزرق غامق فخم
             LinearGradient(
                 colors: [
-                    Color(hex: "0D1A14"),   // أخضر غابي غامق جداً
-                    Color(hex: "183125"),   // أخضر غابي
-                    Color(hex: "213B2E"),   // أخضر غابي أفتح قليلاً
-                    Color(hex: "13241A"),   // أخضر داكن للزوايا
+                    Color(hex: "0A1628"),   // كحلي غامق جداً
+                    Color(hex: "0E2460"),   // أزرق ملكي غامق
+                    Color(hex: "1B3A8C"),   // أزرق ملكي
+                    Color(hex: "0D1B40"),   // كحلي للزوايا
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
 
-            // دوائر ديكورية بتوهج راقي
+            // دوائر ديكورية بتوهج ذهبي
             Circle()
                 .fill(
                     RadialGradient(
-                        colors: [Color(hex: "C8A165").opacity(0.15), .clear],
+                        colors: [Color(hex: "C8962E").opacity(0.15), .clear],
                         center: .center,
                         startRadius: 0,
                         endRadius: 350
@@ -33,7 +33,7 @@ struct AppIconPreview: View {
             Circle()
                 .fill(
                     RadialGradient(
-                        colors: [Color(hex: "D4AF37").opacity(0.10), .clear],
+                        colors: [Color(hex: "E6C06A").opacity(0.10), .clear],
                         center: .center,
                         startRadius: 0,
                         endRadius: 300
@@ -45,7 +45,7 @@ struct AppIconPreview: View {
             Circle()
                 .fill(
                     RadialGradient(
-                        colors: [Color(hex: "E2CA9E").opacity(0.08), .clear],
+                        colors: [Color(hex: "C8962E").opacity(0.08), .clear],
                         center: .center,
                         startRadius: 0,
                         endRadius: 200
@@ -54,14 +54,14 @@ struct AppIconPreview: View {
                 .frame(width: 400, height: 400)
                 .offset(x: 250, y: -200)
 
-            // حلقة خارجية متوهجة
+            // حلقة خارجية ذهبية
             Circle()
                 .stroke(
                     LinearGradient(
                         colors: [
-                            Color(hex: "E2CA9E").opacity(0.2),
-                            Color(hex: "C8A165").opacity(0.10),
-                            Color(hex: "E2CA9E").opacity(0.05),
+                            Color(hex: "E6C06A").opacity(0.25),
+                            Color(hex: "C8962E").opacity(0.12),
+                            Color(hex: "E6C06A").opacity(0.06),
                         ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
@@ -102,17 +102,17 @@ struct AppIconPreview: View {
                                 )
                         )
 
-                    // أيقونة الأشخاص
-                    Image(systemName: "tree.fill") // Any icon you prefer! "tree" or "leaf" suits well
+                    // أيقونة الشجرة
+                    Image(systemName: "tree.fill")
                         .font(DS.Font.scaled(200, weight: .bold))
                         .foregroundStyle(
                             LinearGradient(
-                                colors: [Color(hex: "FDFBF7"), Color(hex: "E2CA9E")],
+                                colors: [Color(hex: "FDFBF7"), Color(hex: "E6C06A")],
                                 startPoint: .top,
                                 endPoint: .bottom
                             )
                         )
-                        .shadow(color: Color(hex: "C8A165").opacity(0.5), radius: 30, y: 8)
+                        .shadow(color: Color(hex: "C8962E").opacity(0.5), radius: 30, y: 8)
                         .shadow(color: .black.opacity(0.15), radius: 15, y: 10)
                 }
                 .offset(y: -40)
@@ -122,17 +122,17 @@ struct AppIconPreview: View {
                     Text("عائلة")
                         .font(.system(size: 48, weight: .bold, design: .serif))
                         .foregroundStyle(.white.opacity(0.85))
-                        
+
                     Text("المحمدعلي")
                         .font(.system(size: 110, weight: .heavy, design: .serif))
                         .foregroundStyle(
                             LinearGradient(
-                                colors: [Color(hex: "FDFBF7"), Color(hex: "D4AF37")],
+                                colors: [Color(hex: "FDFBF7"), Color(hex: "C8962E")],
                                 startPoint: .leading,
                                 endPoint: .trailing
                             )
                         )
-                        .shadow(color: Color(hex: "9C7A4A").opacity(0.6), radius: 20, y: 4)
+                        .shadow(color: Color(hex: "9A7321").opacity(0.6), radius: 20, y: 4)
                         .shadow(color: .black.opacity(0.3), radius: 10, y: 6)
 
                     // خط فاصل مزخرف
@@ -140,7 +140,7 @@ struct AppIconPreview: View {
                         Rectangle()
                             .fill(
                                 LinearGradient(
-                                    colors: [.clear, Color(hex: "C8A165").opacity(0.8)],
+                                    colors: [.clear, Color(hex: "C8962E").opacity(0.8)],
                                     startPoint: .leading,
                                     endPoint: .trailing
                                 )
@@ -148,21 +148,21 @@ struct AppIconPreview: View {
                             .frame(width: 120, height: 2.5)
 
                         Circle()
-                            .fill(Color(hex: "D4AF37"))
+                            .fill(Color(hex: "E6C06A"))
                             .frame(width: 8, height: 8)
 
                         Text("شجرة العائلة")
                             .font(.system(size: 34, weight: .bold, design: .serif))
-                            .foregroundStyle(Color(hex: "E2CA9E").opacity(0.85))
+                            .foregroundStyle(Color(hex: "E6C06A").opacity(0.85))
 
                         Circle()
-                            .fill(Color(hex: "D4AF37"))
+                            .fill(Color(hex: "E6C06A"))
                             .frame(width: 8, height: 8)
 
                         Rectangle()
                             .fill(
                                 LinearGradient(
-                                    colors: [Color(hex: "C8A165").opacity(0.8), .clear],
+                                    colors: [Color(hex: "C8962E").opacity(0.8), .clear],
                                     startPoint: .leading,
                                     endPoint: .trailing
                                 )
@@ -189,27 +189,27 @@ struct AppIconPreview: View {
     }
 }
 
-/// تصميم بديل — بدون subtitle، أنظف
+/// تصميم بديل — أزرق ملكي مع ذهبي
 struct AppIconPreviewAlt: View {
     var body: some View {
         ZStack {
-            // خلفية mesh-style gradient
+            // خلفية ملكية متدرجة
             LinearGradient(
                 colors: [
-                    Color(hex: "0F172A"),
-                    Color(hex: "1E3A8A"),
-                    Color(hex: "5B21B6"),
-                    Color(hex: "7C3AED"),
+                    Color(hex: "0A1628"),
+                    Color(hex: "1B3A8C"),
+                    Color(hex: "0E2460"),
+                    Color(hex: "162D6B"),
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
 
-            // توهج نيون مركزي
+            // توهج ذهبي مركزي
             Circle()
                 .fill(
                     RadialGradient(
-                        colors: [Color(hex: "2563EB").opacity(0.40), .clear],
+                        colors: [Color(hex: "C8962E").opacity(0.30), .clear],
                         center: .center,
                         startRadius: 0,
                         endRadius: 400
@@ -220,7 +220,7 @@ struct AppIconPreviewAlt: View {
             Circle()
                 .fill(
                     RadialGradient(
-                        colors: [Color(hex: "C084FC").opacity(0.15), .clear],
+                        colors: [Color(hex: "E6C06A").opacity(0.15), .clear],
                         center: .center,
                         startRadius: 0,
                         endRadius: 250
@@ -242,7 +242,6 @@ struct AppIconPreviewAlt: View {
             VStack(spacing: 30) {
                 // أيقونة العائلة
                 ZStack {
-                    // هالة خارجية
                     Circle()
                         .fill(
                             RadialGradient(
@@ -257,15 +256,21 @@ struct AppIconPreviewAlt: View {
                     Image(systemName: "figure.2.and.child.holdinghands")
                         .font(DS.Font.scaled(220, weight: .heavy))
                         .foregroundStyle(.white)
-                        .shadow(color: Color(hex: "818CF8").opacity(0.6), radius: 40, y: 10)
+                        .shadow(color: Color(hex: "C8962E").opacity(0.6), radius: 40, y: 10)
                         .shadow(color: .black.opacity(0.2), radius: 20, y: 12)
                 }
 
-                // اسم العائلة — bold
+                // اسم العائلة
                 Text("المحمدعلي")
                     .font(.system(size: 140, weight: .black, design: .serif))
-                    .foregroundStyle(.white)
-                    .shadow(color: Color(hex: "7C3AED").opacity(0.5), radius: 25, y: 5)
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [.white, Color(hex: "E6C06A")],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .shadow(color: Color(hex: "C8962E").opacity(0.5), radius: 25, y: 5)
                     .shadow(color: .black.opacity(0.15), radius: 12, y: 8)
             }
         }
@@ -274,26 +279,26 @@ struct AppIconPreviewAlt: View {
     }
 }
 
-/// تصميم ثالث — حرف م مع أيقونة صغيرة
+/// تصميم ثالث — حرف م مع أزرق ملكي وذهبي
 struct AppIconPreviewMinimal: View {
     var body: some View {
         ZStack {
-            // خلفية غامقة مع gradient
+            // خلفية ملكية
             LinearGradient(
                 colors: [
-                    Color(hex: "0F172A"),
-                    Color(hex: "1E3A8A"),
-                    Color(hex: "3730A3"),
+                    Color(hex: "0A1628"),
+                    Color(hex: "1B3A8C"),
+                    Color(hex: "162D6B"),
                 ],
                 startPoint: .top,
                 endPoint: .bottom
             )
 
-            // توهج مركزي أزرق
+            // توهج مركزي ذهبي
             Circle()
                 .fill(
                     RadialGradient(
-                        colors: [Color(hex: "2563EB").opacity(0.35), .clear],
+                        colors: [Color(hex: "C8962E").opacity(0.25), .clear],
                         center: .center,
                         startRadius: 0,
                         endRadius: 350
@@ -301,14 +306,14 @@ struct AppIconPreviewMinimal: View {
                 )
                 .frame(width: 700, height: 700)
 
-            // حلقة gradient
+            // حلقة ذهبية gradient
             Circle()
                 .stroke(
                     LinearGradient(
                         colors: [
-                            Color(hex: "818CF8").opacity(0.4),
-                            Color(hex: "2563EB").opacity(0.2),
-                            Color(hex: "C084FC").opacity(0.3),
+                            Color(hex: "E6C06A").opacity(0.4),
+                            Color(hex: "C8962E").opacity(0.2),
+                            Color(hex: "E6C06A").opacity(0.3),
                         ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
@@ -327,18 +332,18 @@ struct AppIconPreviewMinimal: View {
                     .font(.system(size: 480, weight: .black, design: .serif))
                     .foregroundStyle(
                         LinearGradient(
-                            colors: [.white, .white.opacity(0.8)],
+                            colors: [.white, Color(hex: "E6C06A").opacity(0.9)],
                             startPoint: .top,
                             endPoint: .bottom
                         )
                     )
-                    .shadow(color: Color(hex: "818CF8").opacity(0.6), radius: 30, y: 8)
+                    .shadow(color: Color(hex: "C8962E").opacity(0.6), radius: 30, y: 8)
                     .shadow(color: .black.opacity(0.2), radius: 15, y: 10)
 
                 // أيقونة عائلة صغيرة تحت الحرف
                 Image(systemName: "figure.2.and.child.holdinghands")
                     .font(DS.Font.scaled(60, weight: .bold))
-                    .foregroundStyle(.white.opacity(0.5))
+                    .foregroundStyle(Color(hex: "E6C06A").opacity(0.5))
             }
             .offset(y: -30)
         }

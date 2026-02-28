@@ -75,7 +75,7 @@ struct AdminMemberDetailSheet: View {
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: DS.Spacing.sm) {
                         // ربط العضو بالأب أولاً
-                        adminSection(title: "ربط العضو بالأب", icon: "person.2.fill", color: .orange) {
+                        adminSection(title: "ربط العضو بالأب", icon: "person.2.fill", color: DS.Color.accent) {
                             fatherLinkComponent
                         }
 

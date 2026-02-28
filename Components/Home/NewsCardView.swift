@@ -245,7 +245,7 @@ extension NewsCardView {
 
             // Interactions
             HStack(spacing: DS.Spacing.sm) {
-                actionPill(icon: "heart.fill", text: "١٢", tint: Color.red)
+                actionPill(icon: "heart.fill", text: "١٢", tint: DS.Color.likeAction)
                 actionPill(icon: "bubble.right.fill", text: "٥", tint: DS.Color.primary)
                 
                 Button(action: {}) {

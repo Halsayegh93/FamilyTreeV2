@@ -123,7 +123,7 @@ struct RegistrationView: View {
                 .offset(x: -120, y: -300)
 
             Circle()
-                .fill(Color(hex: "#6C5CE7").opacity(0.05))
+                .fill(DS.Color.neonPurple.opacity(0.05))
                 .frame(width: 200, height: 200)
                 .offset(x: 150, y: -200)
 
@@ -133,7 +133,7 @@ struct RegistrationView: View {
                 .offset(x: 160, y: 400)
 
             Circle()
-                .fill(Color(hex: "#00CEC9").opacity(0.04))
+                .fill(DS.Color.accentLight.opacity(0.04))
                 .frame(width: 120, height: 120)
                 .offset(x: -140, y: 350)
         }
@@ -203,7 +203,7 @@ struct RegistrationView: View {
 
             DSCard {
                 HStack(spacing: DS.Spacing.md) {
-                    DSIcon("calendar", color: Color(hex: "#6C5CE7"))
+                    DSIcon("calendar", color: DS.Color.neonPurple)
                     Text(L10n.t("اختر التاريخ", "Pick Date"))
                         .font(DS.Font.body)
                         .foregroundColor(DS.Color.textSecondary)
@@ -281,7 +281,7 @@ struct RegistrationView: View {
                                                 selectedFatherId == candidate.id
                                                     ? DS.Color.gradientPrimary
                                                     : LinearGradient(
-                                                        colors: [DS.Color.primary.opacity(0.15), Color(hex: "#6C5CE7").opacity(0.15)],
+                                                        colors: [DS.Color.primary.opacity(0.15), DS.Color.neonPurple.opacity(0.15)],
                                                         startPoint: .topLeading,
                                                         endPoint: .bottomTrailing
                                                     )
