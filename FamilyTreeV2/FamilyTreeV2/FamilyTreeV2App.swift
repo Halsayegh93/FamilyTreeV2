@@ -39,6 +39,12 @@ struct FamilyTreeV2App: App {
                     guard let token = note.object as? String else { return }
                     Task { await authVM.registerPushToken(token) }
                 }
+                .onReceive(NotificationCenter.default.publisher(for: .didReceivePushNotification)) { _ in
+                    Task { await authVM.fetchNotifications() }
+                }
+                .onReceive(NotificationCenter.default.publisher(for: .didTapPushNotification)) { _ in
+                    Task { await authVM.fetchNotifications() }
+                }
         }
     }
 }

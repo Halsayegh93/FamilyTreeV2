@@ -1,0 +1,453 @@
+Command line invocation:
+    /Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild -project /Users/macmini/Desktop/Xcode/FamilyTreeV2/FamilyTreeV2.xcodeproj -scheme FamilyTreeV2 -sdk iphonesimulator -destination "platform=iOS Simulator,id=099B195A-93A0-45D9-BDC9-BDEB9306C158" build
+
+Build settings from command line:
+    SDKROOT = iphonesimulator26.2
+
+Resolve Package Graph
+
+
+Resolved source packages:
+  xctest-dynamic-overlay: https://github.com/pointfreeco/xctest-dynamic-overlay @ 1.8.0
+  swift-concurrency-extras: https://github.com/pointfreeco/swift-concurrency-extras @ 1.3.2
+  swift-crypto: https://github.com/apple/swift-crypto.git @ 4.2.0
+  Supabase: https://github.com/supabase-community/supabase-swift @ 2.39.0
+  swift-asn1: https://github.com/apple/swift-asn1.git @ 1.5.1
+  swift-clocks: https://github.com/pointfreeco/swift-clocks @ 1.0.6
+  swift-http-types: https://github.com/apple/swift-http-types.git @ 1.5.1
+
+ComputePackagePrebuildTargetDependencyGraph
+
+Prepare packages
+
+CreateBuildRequest
+
+SendProjectDescription
+
+CreateBuildOperation
+
+ComputeTargetDependencyGraph
+note: Building targets in dependency order
+note: Target dependency graph (23 targets)
+    Target 'FamilyTreeV2' in project 'FamilyTreeV2'
+        ➜ Explicit dependency on target 'Supabase' in project 'Supabase'
+    Target 'Supabase' in project 'Supabase'
+        ➜ Explicit dependency on target 'Supabase' in project 'Supabase'
+        ➜ Explicit dependency on target 'Functions' in project 'Supabase'
+        ➜ Explicit dependency on target 'PostgREST' in project 'Supabase'
+        ➜ Explicit dependency on target 'Auth' in project 'Supabase'
+        ➜ Explicit dependency on target 'Realtime' in project 'Supabase'
+        ➜ Explicit dependency on target 'Storage' in project 'Supabase'
+        ➜ Explicit dependency on target 'Helpers' in project 'Supabase'
+        ➜ Explicit dependency on target 'ConcurrencyExtras' in project 'swift-concurrency-extras'
+        ➜ Explicit dependency on target 'HTTPTypes' in project 'swift-http-types'
+        ➜ Explicit dependency on target 'Clocks' in project 'swift-clocks'
+        ➜ Explicit dependency on target 'XCTestDynamicOverlay' in project 'xctest-dynamic-overlay'
+        ➜ Explicit dependency on target 'Crypto' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'IssueReporting' in project 'xctest-dynamic-overlay'
+    Target 'Supabase' in project 'Supabase'
+        ➜ Explicit dependency on target 'Helpers' in project 'Supabase'
+        ➜ Explicit dependency on target 'Auth' in project 'Supabase'
+        ➜ Explicit dependency on target 'Functions' in project 'Supabase'
+        ➜ Explicit dependency on target 'PostgREST' in project 'Supabase'
+        ➜ Explicit dependency on target 'Realtime' in project 'Supabase'
+        ➜ Explicit dependency on target 'Storage' in project 'Supabase'
+        ➜ Explicit dependency on target 'ConcurrencyExtras' in project 'swift-concurrency-extras'
+        ➜ Explicit dependency on target 'HTTPTypes' in project 'swift-http-types'
+        ➜ Explicit dependency on target 'Clocks' in project 'swift-clocks'
+        ➜ Explicit dependency on target 'XCTestDynamicOverlay' in project 'xctest-dynamic-overlay'
+        ➜ Explicit dependency on target 'Crypto' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'IssueReporting' in project 'xctest-dynamic-overlay'
+    Target 'Storage' in project 'Supabase'
+        ➜ Explicit dependency on target 'Helpers' in project 'Supabase'
+        ➜ Explicit dependency on target 'ConcurrencyExtras' in project 'swift-concurrency-extras'
+        ➜ Explicit dependency on target 'HTTPTypes' in project 'swift-http-types'
+        ➜ Explicit dependency on target 'Clocks' in project 'swift-clocks'
+        ➜ Explicit dependency on target 'XCTestDynamicOverlay' in project 'xctest-dynamic-overlay'
+    Target 'Realtime' in project 'Supabase'
+        ➜ Explicit dependency on target 'Helpers' in project 'Supabase'
+        ➜ Explicit dependency on target 'ConcurrencyExtras' in project 'swift-concurrency-extras'
+        ➜ Explicit dependency on target 'HTTPTypes' in project 'swift-http-types'
+        ➜ Explicit dependency on target 'Clocks' in project 'swift-clocks'
+        ➜ Explicit dependency on target 'XCTestDynamicOverlay' in project 'xctest-dynamic-overlay'
+        ➜ Explicit dependency on target 'IssueReporting' in project 'xctest-dynamic-overlay'
+    Target 'PostgREST' in project 'Supabase'
+        ➜ Explicit dependency on target 'Helpers' in project 'Supabase'
+        ➜ Explicit dependency on target 'ConcurrencyExtras' in project 'swift-concurrency-extras'
+        ➜ Explicit dependency on target 'HTTPTypes' in project 'swift-http-types'
+        ➜ Explicit dependency on target 'Clocks' in project 'swift-clocks'
+        ➜ Explicit dependency on target 'XCTestDynamicOverlay' in project 'xctest-dynamic-overlay'
+    Target 'Functions' in project 'Supabase'
+        ➜ Explicit dependency on target 'Helpers' in project 'Supabase'
+        ➜ Explicit dependency on target 'ConcurrencyExtras' in project 'swift-concurrency-extras'
+        ➜ Explicit dependency on target 'HTTPTypes' in project 'swift-http-types'
+        ➜ Explicit dependency on target 'Clocks' in project 'swift-clocks'
+        ➜ Explicit dependency on target 'XCTestDynamicOverlay' in project 'xctest-dynamic-overlay'
+    Target 'Auth' in project 'Supabase'
+        ➜ Explicit dependency on target 'Helpers' in project 'Supabase'
+        ➜ Explicit dependency on target 'ConcurrencyExtras' in project 'swift-concurrency-extras'
+        ➜ Explicit dependency on target 'HTTPTypes' in project 'swift-http-types'
+        ➜ Explicit dependency on target 'Clocks' in project 'swift-clocks'
+        ➜ Explicit dependency on target 'XCTestDynamicOverlay' in project 'xctest-dynamic-overlay'
+        ➜ Explicit dependency on target 'Crypto' in project 'swift-crypto'
+    Target 'Crypto' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'Crypto' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'swift-crypto_Crypto' in project 'swift-crypto'
+    Target 'Crypto' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'swift-crypto_Crypto' in project 'swift-crypto'
+    Target 'swift-crypto_Crypto' in project 'swift-crypto' (no dependencies)
+    Target 'Helpers' in project 'Supabase'
+        ➜ Explicit dependency on target 'ConcurrencyExtras' in project 'swift-concurrency-extras'
+        ➜ Explicit dependency on target 'HTTPTypes' in project 'swift-http-types'
+        ➜ Explicit dependency on target 'Clocks' in project 'swift-clocks'
+        ➜ Explicit dependency on target 'XCTestDynamicOverlay' in project 'xctest-dynamic-overlay'
+    Target 'XCTestDynamicOverlay' in project 'xctest-dynamic-overlay'
+        ➜ Explicit dependency on target 'XCTestDynamicOverlay' in project 'xctest-dynamic-overlay'
+        ➜ Explicit dependency on target 'IssueReportingPackageSupport' in project 'xctest-dynamic-overlay'
+        ➜ Explicit dependency on target 'IssueReporting' in project 'xctest-dynamic-overlay'
+    Target 'XCTestDynamicOverlay' in project 'xctest-dynamic-overlay'
+        ➜ Explicit dependency on target 'IssueReportingPackageSupport' in project 'xctest-dynamic-overlay'
+        ➜ Explicit dependency on target 'IssueReporting' in project 'xctest-dynamic-overlay'
+    Target 'Clocks' in project 'swift-clocks'
+        ➜ Explicit dependency on target 'Clocks' in project 'swift-clocks'
+        ➜ Explicit dependency on target 'ConcurrencyExtras' in project 'swift-concurrency-extras'
+        ➜ Explicit dependency on target 'IssueReporting' in project 'xctest-dynamic-overlay'
+    Target 'Clocks' in project 'swift-clocks'
+        ➜ Explicit dependency on target 'ConcurrencyExtras' in project 'swift-concurrency-extras'
+        ➜ Explicit dependency on target 'IssueReporting' in project 'xctest-dynamic-overlay'
+    Target 'IssueReporting' in project 'xctest-dynamic-overlay'
+        ➜ Explicit dependency on target 'IssueReporting' in project 'xctest-dynamic-overlay'
+        ➜ Explicit dependency on target 'IssueReportingPackageSupport' in project 'xctest-dynamic-overlay'
+    Target 'IssueReporting' in project 'xctest-dynamic-overlay'
+        ➜ Explicit dependency on target 'IssueReportingPackageSupport' in project 'xctest-dynamic-overlay'
+    Target 'IssueReportingPackageSupport' in project 'xctest-dynamic-overlay' (no dependencies)
+    Target 'HTTPTypes' in project 'swift-http-types'
+        ➜ Explicit dependency on target 'HTTPTypes' in project 'swift-http-types'
+    Target 'HTTPTypes' in project 'swift-http-types' (no dependencies)
+    Target 'ConcurrencyExtras' in project 'swift-concurrency-extras'
+        ➜ Explicit dependency on target 'ConcurrencyExtras' in project 'swift-concurrency-extras'
+    Target 'ConcurrencyExtras' in project 'swift-concurrency-extras' (no dependencies)
+
+GatherProvisioningInputs
+
+CreateBuildDescription
+
+ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc --version
+
+ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -v -E -dM -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.2.sdk -x c -c /dev/null
+
+ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/usr/bin/actool --print-asset-tag-combinations --output-format xml1 /Users/macmini/Desktop/Xcode/FamilyTreeV2/FamilyTreeV2/Assets.xcassets
+
+ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ld -version_details
+
+ReadFileContents /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/share/docc/features.json
+
+ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/usr/bin/actool --version --output-format xml1
+
+Build description signature: 42bef5fd54176c068034a84b419e364b
+Build description path: /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/XCBuildData/42bef5fd54176c068034a84b419e364b.xcbuilddata
+ClangStatCache /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang-stat-cache /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.2.sdk /Users/macmini/Library/Developer/Xcode/DerivedData/SDKStatCaches.noindex/iphonesimulator26.2-23C53-7d00a8b37fbd7999ea79df8ebc024bf0.sdkstatcache
+    cd /Users/macmini/Desktop/Xcode/FamilyTreeV2/FamilyTreeV2.xcodeproj
+    /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang-stat-cache /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.2.sdk -o /Users/macmini/Library/Developer/Xcode/DerivedData/SDKStatCaches.noindex/iphonesimulator26.2-23C53-7d00a8b37fbd7999ea79df8ebc024bf0.sdkstatcache
+
+ProcessInfoPlistFile /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/swift-crypto_Crypto.bundle/Info.plist /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/swift-crypto.build/Debug-iphonesimulator/swift-crypto_Crypto.build/empty-swift-crypto_Crypto.plist (in target 'swift-crypto_Crypto' from project 'swift-crypto')
+    cd /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/SourcePackages/checkouts/swift-crypto
+    builtin-infoPlistUtility /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/swift-crypto.build/Debug-iphonesimulator/swift-crypto_Crypto.build/empty-swift-crypto_Crypto.plist -producttype com.apple.product-type.bundle -expandbuildsettings -format binary -platform iphonesimulator -o /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/swift-crypto_Crypto.bundle/Info.plist
+
+SwiftDriver FamilyTreeV2 normal arm64 com.apple.xcode.tools.swift.compiler (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+    cd /Users/macmini/Desktop/Xcode/FamilyTreeV2
+    builtin-SwiftDriver -- /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc -module-name FamilyTreeV2 -Onone -enforce-exclusivity\=checked @/Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/FamilyTreeV2.build/Debug-iphonesimulator/FamilyTreeV2.build/Objects-normal/arm64/FamilyTreeV2.SwiftFileList -DDEBUG -default-isolation\=MainActor -enable-bare-slash-regex -enable-upcoming-feature DisableOutwardActorInference -enable-upcoming-feature InferSendableFromCaptures -enable-upcoming-feature GlobalActorIsolatedTypesUsability -enable-upcoming-feature MemberImportVisibility -enable-upcoming-feature InferIsolatedConformances -enable-upcoming-feature NonisolatedNonsendingByDefault -enable-experimental-feature DebugDescriptionMacro -sdk /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.2.sdk -target arm64-apple-ios17.6-simulator -g -module-cache-path /Users/macmini/Library/Developer/Xcode/DerivedData/ModuleCache.noindex -Xfrontend -serialize-debugging-options -enable-testing -index-store-path /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Index.noindex/DataStore -Xcc -D_LIBCPP_HARDENING_MODE\=_LIBCPP_HARDENING_MODE_DEBUG -swift-version 5 -I /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator -F /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator -emit-localized-strings -emit-localized-strings-path /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/FamilyTreeV2.build/Debug-iphonesimulator/FamilyTreeV2.build/Objects-normal/arm64 -c -j10 -enable-batch-mode -incremental -Xcc -ivfsstatcache -Xcc /Users/macmini/Library/Developer/Xcode/DerivedData/SDKStatCaches.noindex/iphonesimulator26.2-23C53-7d00a8b37fbd7999ea79df8ebc024bf0.sdkstatcache -output-file-map /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/FamilyTreeV2.build/Debug-iphonesimulator/FamilyTreeV2.build/Objects-normal/arm64/FamilyTreeV2-OutputFileMap.json -use-frontend-parseable-output -save-temps -no-color-diagnostics -explicit-module-build -module-cache-path /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules -clang-scanner-module-cache-path /Users/macmini/Library/Developer/Xcode/DerivedData/ModuleCache.noindex -sdk-module-cache-path /Users/macmini/Library/Developer/Xcode/DerivedData/ModuleCache.noindex -serialize-diagnostics -emit-dependencies -emit-module -emit-module-path /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/FamilyTreeV2.build/Debug-iphonesimulator/FamilyTreeV2.build/Objects-normal/arm64/FamilyTreeV2.swiftmodule -validate-clang-modules-once -clang-build-session-file /Users/macmini/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/Session.modulevalidation -Xcc -I/Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/FamilyTreeV2.build/Debug-iphonesimulator/FamilyTreeV2.build/swift-overrides.hmap -emit-const-values -Xfrontend -const-gather-protocols-file -Xfrontend /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/FamilyTreeV2.build/Debug-iphonesimulator/FamilyTreeV2.build/Objects-normal/arm64/FamilyTreeV2_const_extract_protocols.json -Xcc -iquote -Xcc /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/FamilyTreeV2.build/Debug-iphonesimulator/FamilyTreeV2.build/FamilyTreeV2-generated-files.hmap -Xcc -I/Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/FamilyTreeV2.build/Debug-iphonesimulator/FamilyTreeV2.build/FamilyTreeV2-own-target-headers.hmap -Xcc -I/Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/FamilyTreeV2.build/Debug-iphonesimulator/FamilyTreeV2.build/FamilyTreeV2-all-non-framework-target-headers.hmap -Xcc -ivfsoverlay -Xcc /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/FamilyTreeV2.build/Debug-iphonesimulator/FamilyTreeV2-d0c90a452dabc03f29fb3e56fad1d2b5-VFS-iphonesimulator/all-product-headers.yaml -Xcc -iquote -Xcc /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/FamilyTreeV2.build/Debug-iphonesimulator/FamilyTreeV2.build/FamilyTreeV2-project-headers.hmap -Xcc -I/Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/include -Xcc -I/Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/FamilyTreeV2.build/Debug-iphonesimulator/FamilyTreeV2.build/DerivedSources-normal/arm64 -Xcc -I/Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/FamilyTreeV2.build/Debug-iphonesimulator/FamilyTreeV2.build/DerivedSources/arm64 -Xcc -I/Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/FamilyTreeV2.build/Debug-iphonesimulator/FamilyTreeV2.build/DerivedSources -Xcc -DDEBUG\=1 -emit-objc-header -emit-objc-header-path /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/FamilyTreeV2.build/Debug-iphonesimulator/FamilyTreeV2.build/Objects-normal/arm64/FamilyTreeV2-Swift.h -working-directory /Users/macmini/Desktop/Xcode/FamilyTreeV2 -experimental-emit-module-separately -disable-cmo
+
+ProcessInfoPlistFile /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/FamilyTreeV2.app/Info.plist /Users/macmini/Desktop/Xcode/FamilyTreeV2/FamilyTreeV2/Info.plist (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+    cd /Users/macmini/Desktop/Xcode/FamilyTreeV2
+    builtin-infoPlistUtility /Users/macmini/Desktop/Xcode/FamilyTreeV2/FamilyTreeV2/Info.plist -producttype com.apple.product-type.application -genpkginfo /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/FamilyTreeV2.app/PkgInfo -expandbuildsettings -format binary -platform iphonesimulator -additionalcontentfile /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/FamilyTreeV2.build/Debug-iphonesimulator/FamilyTreeV2.build/assetcatalog_generated_info.plist -scanforprivacyfile /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/FamilyTreeV2.app/swift-crypto_Crypto.bundle -o /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/FamilyTreeV2.app/Info.plist
+
+SwiftCompile normal arm64 Compiling\ AuthViewModel.swift /Users/macmini/Desktop/Xcode/FamilyTreeV2/ViewModels/Auth/AuthViewModel.swift (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+
+SwiftCompile normal arm64 /Users/macmini/Desktop/Xcode/FamilyTreeV2/ViewModels/Auth/AuthViewModel.swift (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+    cd /Users/macmini/Desktop/Xcode/FamilyTreeV2
+    
+
+SwiftEmitModule normal arm64 Emitting\ module\ for\ FamilyTreeV2 (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+
+EmitSwiftModule normal arm64 (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+    cd /Users/macmini/Desktop/Xcode/FamilyTreeV2
+    
+
+SwiftCompile normal arm64 Compiling\ AdminMemberDetailSheet.swift /Users/macmini/Desktop/Xcode/FamilyTreeV2/Views/Features/Tree/AdminView/AdminMemberDetailSheet.swift (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+
+SwiftCompile normal arm64 /Users/macmini/Desktop/Xcode/FamilyTreeV2/Views/Features/Tree/AdminView/AdminMemberDetailSheet.swift (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+    cd /Users/macmini/Desktop/Xcode/FamilyTreeV2
+    
+/Users/macmini/Desktop/Xcode/FamilyTreeV2/Views/Features/Tree/AdminView/AdminMemberDetailSheet.swift:422:41: warning: left side of nil coalescing operator '??' has non-optional type 'Int', so the right side is never used
+            .sorted(by: { ($0.sortOrder ?? 0) < ($1.sortOrder ?? 0) })
+                           ~~~~~~~~~~~~~^~~~
+                                       
+/Users/macmini/Desktop/Xcode/FamilyTreeV2/Views/Features/Tree/AdminView/AdminMemberDetailSheet.swift:422:63: warning: left side of nil coalescing operator '??' has non-optional type 'Int', so the right side is never used
+            .sorted(by: { ($0.sortOrder ?? 0) < ($1.sortOrder ?? 0) })
+                                                 ~~~~~~~~~~~~~^~~~
+                                                             
+
+SwiftDriverJobDiscovery normal arm64 Emitting module for FamilyTreeV2 (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+
+SwiftDriver\ Compilation\ Requirements FamilyTreeV2 normal arm64 com.apple.xcode.tools.swift.compiler (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+    cd /Users/macmini/Desktop/Xcode/FamilyTreeV2
+    builtin-Swift-Compilation-Requirements -- /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc -module-name FamilyTreeV2 -Onone -enforce-exclusivity\=checked @/Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/FamilyTreeV2.build/Debug-iphonesimulator/FamilyTreeV2.build/Objects-normal/arm64/FamilyTreeV2.SwiftFileList -DDEBUG -default-isolation\=MainActor -enable-bare-slash-regex -enable-upcoming-feature DisableOutwardActorInference -enable-upcoming-feature InferSendableFromCaptures -enable-upcoming-feature GlobalActorIsolatedTypesUsability -enable-upcoming-feature MemberImportVisibility -enable-upcoming-feature InferIsolatedConformances -enable-upcoming-feature NonisolatedNonsendingByDefault -enable-experimental-feature DebugDescriptionMacro -sdk /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.2.sdk -target arm64-apple-ios17.6-simulator -g -module-cache-path /Users/macmini/Library/Developer/Xcode/DerivedData/ModuleCache.noindex -Xfrontend -serialize-debugging-options -enable-testing -index-store-path /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Index.noindex/DataStore -Xcc -D_LIBCPP_HARDENING_MODE\=_LIBCPP_HARDENING_MODE_DEBUG -swift-version 5 -I /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator -F /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator -emit-localized-strings -emit-localized-strings-path /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/FamilyTreeV2.build/Debug-iphonesimulator/FamilyTreeV2.build/Objects-normal/arm64 -c -j10 -enable-batch-mode -incremental -Xcc -ivfsstatcache -Xcc /Users/macmini/Library/Developer/Xcode/DerivedData/SDKStatCaches.noindex/iphonesimulator26.2-23C53-7d00a8b37fbd7999ea79df8ebc024bf0.sdkstatcache -output-file-map /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/FamilyTreeV2.build/Debug-iphonesimulator/FamilyTreeV2.build/Objects-normal/arm64/FamilyTreeV2-OutputFileMap.json -use-frontend-parseable-output -save-temps -no-color-diagnostics -explicit-module-build -module-cache-path /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules -clang-scanner-module-cache-path /Users/macmini/Library/Developer/Xcode/DerivedData/ModuleCache.noindex -sdk-module-cache-path /Users/macmini/Library/Developer/Xcode/DerivedData/ModuleCache.noindex -serialize-diagnostics -emit-dependencies -emit-module -emit-module-path /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/FamilyTreeV2.build/Debug-iphonesimulator/FamilyTreeV2.build/Objects-normal/arm64/FamilyTreeV2.swiftmodule -validate-clang-modules-once -clang-build-session-file /Users/macmini/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/Session.modulevalidation -Xcc -I/Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/FamilyTreeV2.build/Debug-iphonesimulator/FamilyTreeV2.build/swift-overrides.hmap -emit-const-values -Xfrontend -const-gather-protocols-file -Xfrontend /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/FamilyTreeV2.build/Debug-iphonesimulator/FamilyTreeV2.build/Objects-normal/arm64/FamilyTreeV2_const_extract_protocols.json -Xcc -iquote -Xcc /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/FamilyTreeV2.build/Debug-iphonesimulator/FamilyTreeV2.build/FamilyTreeV2-generated-files.hmap -Xcc -I/Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/FamilyTreeV2.build/Debug-iphonesimulator/FamilyTreeV2.build/FamilyTreeV2-own-target-headers.hmap -Xcc -I/Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/FamilyTreeV2.build/Debug-iphonesimulator/FamilyTreeV2.build/FamilyTreeV2-all-non-framework-target-headers.hmap -Xcc -ivfsoverlay -Xcc /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/FamilyTreeV2.build/Debug-iphonesimulator/FamilyTreeV2-d0c90a452dabc03f29fb3e56fad1d2b5-VFS-iphonesimulator/all-product-headers.yaml -Xcc -iquote -Xcc /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/FamilyTreeV2.build/Debug-iphonesimulator/FamilyTreeV2.build/FamilyTreeV2-project-headers.hmap -Xcc -I/Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/include -Xcc -I/Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/FamilyTreeV2.build/Debug-iphonesimulator/FamilyTreeV2.build/DerivedSources-normal/arm64 -Xcc -I/Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/FamilyTreeV2.build/Debug-iphonesimulator/FamilyTreeV2.build/DerivedSources/arm64 -Xcc -I/Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/FamilyTreeV2.build/Debug-iphonesimulator/FamilyTreeV2.build/DerivedSources -Xcc -DDEBUG\=1 -emit-objc-header -emit-objc-header-path /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/FamilyTreeV2.build/Debug-iphonesimulator/FamilyTreeV2.build/Objects-normal/arm64/FamilyTreeV2-Swift.h -working-directory /Users/macmini/Desktop/Xcode/FamilyTreeV2 -experimental-emit-module-separately -disable-cmo
+
+Copy /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/FamilyTreeV2.swiftmodule/arm64-apple-ios-simulator.swiftmodule /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/FamilyTreeV2.build/Debug-iphonesimulator/FamilyTreeV2.build/Objects-normal/arm64/FamilyTreeV2.swiftmodule (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+    cd /Users/macmini/Desktop/Xcode/FamilyTreeV2
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks -rename /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/FamilyTreeV2.build/Debug-iphonesimulator/FamilyTreeV2.build/Objects-normal/arm64/FamilyTreeV2.swiftmodule /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/FamilyTreeV2.swiftmodule/arm64-apple-ios-simulator.swiftmodule
+
+Copy /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/FamilyTreeV2.swiftmodule/arm64-apple-ios-simulator.abi.json /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/FamilyTreeV2.build/Debug-iphonesimulator/FamilyTreeV2.build/Objects-normal/arm64/FamilyTreeV2.abi.json (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+    cd /Users/macmini/Desktop/Xcode/FamilyTreeV2
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks -rename /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/FamilyTreeV2.build/Debug-iphonesimulator/FamilyTreeV2.build/Objects-normal/arm64/FamilyTreeV2.abi.json /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/FamilyTreeV2.swiftmodule/arm64-apple-ios-simulator.abi.json
+
+Copy /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/FamilyTreeV2.swiftmodule/Project/arm64-apple-ios-simulator.swiftsourceinfo /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/FamilyTreeV2.build/Debug-iphonesimulator/FamilyTreeV2.build/Objects-normal/arm64/FamilyTreeV2.swiftsourceinfo (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+    cd /Users/macmini/Desktop/Xcode/FamilyTreeV2
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks -rename /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/FamilyTreeV2.build/Debug-iphonesimulator/FamilyTreeV2.build/Objects-normal/arm64/FamilyTreeV2.swiftsourceinfo /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/FamilyTreeV2.swiftmodule/Project/arm64-apple-ios-simulator.swiftsourceinfo
+
+SwiftDriverJobDiscovery normal arm64 Compiling AdminMemberDetailSheet.swift (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+
+SwiftCompile normal arm64 Compiling\ MemberDetailsView.swift /Users/macmini/Desktop/Xcode/FamilyTreeV2/Views/Features/Tree/MemberDetailsView.swift (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+SwiftCompile normal arm64 /Users/macmini/Desktop/Xcode/FamilyTreeV2/Views/Features/Tree/MemberDetailsView.swift (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+    cd /Users/macmini/Desktop/Xcode/FamilyTreeV2
+    
+
+SwiftCompile normal arm64 Compiling\ AdminMembersListView.swift /Users/macmini/Desktop/Xcode/FamilyTreeV2/Views/Features/Admin/AdminMembersListView.swift (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+
+SwiftCompile normal arm64 /Users/macmini/Desktop/Xcode/FamilyTreeV2/Views/Features/Admin/AdminMembersListView.swift (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+    cd /Users/macmini/Desktop/Xcode/FamilyTreeV2
+    
+
+SwiftDriverJobDiscovery normal arm64 Compiling AdminMembersListView.swift (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+
+SwiftDriverJobDiscovery normal arm64 Compiling AuthViewModel.swift (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+
+SwiftCompile normal arm64 Compiling\ RegistrationView.swift,\ WaitingForApprovalView.swift,\ DiwaniyasView.swift /Users/macmini/Desktop/Xcode/FamilyTreeV2/Views/Features/Auth/RegistrationView.swift /Users/macmini/Desktop/Xcode/FamilyTreeV2/Views/Features/Auth/WaitingForApprovalView.swift /Users/macmini/Desktop/Xcode/FamilyTreeV2/Views/Features/Diwaniyas/DiwaniyasView.swift (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+SwiftCompile normal arm64 /Users/macmini/Desktop/Xcode/FamilyTreeV2/Views/Features/Auth/RegistrationView.swift (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+    cd /Users/macmini/Desktop/Xcode/FamilyTreeV2
+    
+
+SwiftCompile normal arm64 /Users/macmini/Desktop/Xcode/FamilyTreeV2/Views/Features/Auth/WaitingForApprovalView.swift (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+    cd /Users/macmini/Desktop/Xcode/FamilyTreeV2
+    
+
+SwiftCompile normal arm64 /Users/macmini/Desktop/Xcode/FamilyTreeV2/Views/Features/Diwaniyas/DiwaniyasView.swift (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+    cd /Users/macmini/Desktop/Xcode/FamilyTreeV2
+    
+
+SwiftCompile normal arm64 Compiling\ ContentView.swift,\ AppIconPreview.swift,\ RootView.swift,\ AddSonByAdminSheet.swift /Users/macmini/Desktop/Xcode/FamilyTreeV2/FamilyTreeV2/ContentView.swift /Users/macmini/Desktop/Xcode/FamilyTreeV2/Views/App/AppIconPreview.swift /Users/macmini/Desktop/Xcode/FamilyTreeV2/Views/App/RootView.swift /Users/macmini/Desktop/Xcode/FamilyTreeV2/Views/Features/Admin/AddSonByAdminSheet.swift (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+
+SwiftCompile normal arm64 /Users/macmini/Desktop/Xcode/FamilyTreeV2/FamilyTreeV2/ContentView.swift (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+    cd /Users/macmini/Desktop/Xcode/FamilyTreeV2
+    
+
+SwiftCompile normal arm64 /Users/macmini/Desktop/Xcode/FamilyTreeV2/Views/App/AppIconPreview.swift (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+    cd /Users/macmini/Desktop/Xcode/FamilyTreeV2
+    
+
+SwiftCompile normal arm64 /Users/macmini/Desktop/Xcode/FamilyTreeV2/Views/App/RootView.swift (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+    cd /Users/macmini/Desktop/Xcode/FamilyTreeV2
+    
+
+SwiftCompile normal arm64 /Users/macmini/Desktop/Xcode/FamilyTreeV2/Views/Features/Admin/AddSonByAdminSheet.swift (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+    cd /Users/macmini/Desktop/Xcode/FamilyTreeV2
+    
+
+SwiftCompile normal arm64 Compiling\ AdminNewsRequestsView.swift,\ AdminNotificationsView.swift,\ MainHeaderView.swift,\ AdminPendingRequestsView.swift /Users/macmini/Desktop/Xcode/FamilyTreeV2/Views/Features/Admin/AdminNewsRequestsView.swift /Users/macmini/Desktop/Xcode/FamilyTreeV2/Views/Features/Admin/AdminNotificationsView.swift /Users/macmini/Desktop/Xcode/FamilyTreeV2/Components/Shared/MainHeaderView.swift /Users/macmini/Desktop/Xcode/FamilyTreeV2/Views/Features/Admin/AdminPendingRequestsView.swift (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+SwiftCompile normal arm64 /Users/macmini/Desktop/Xcode/FamilyTreeV2/Views/Features/Admin/AdminNewsRequestsView.swift (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+    cd /Users/macmini/Desktop/Xcode/FamilyTreeV2
+    
+
+SwiftCompile normal arm64 /Users/macmini/Desktop/Xcode/FamilyTreeV2/Views/Features/Admin/AdminNotificationsView.swift (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+    cd /Users/macmini/Desktop/Xcode/FamilyTreeV2
+    
+
+SwiftCompile normal arm64 /Users/macmini/Desktop/Xcode/FamilyTreeV2/Components/Shared/MainHeaderView.swift (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+    cd /Users/macmini/Desktop/Xcode/FamilyTreeV2
+    
+
+SwiftCompile normal arm64 /Users/macmini/Desktop/Xcode/FamilyTreeV2/Views/Features/Admin/AdminPendingRequestsView.swift (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+    cd /Users/macmini/Desktop/Xcode/FamilyTreeV2
+    
+
+SwiftCompile normal arm64 Compiling\ AdminPhoneRequestsView.swift,\ AdminReportsView.swift,\ LoginView.swift /Users/macmini/Desktop/Xcode/FamilyTreeV2/Views/Features/Admin/AdminPhoneRequestsView.swift /Users/macmini/Desktop/Xcode/FamilyTreeV2/Views/Features/Admin/AdminReportsView.swift /Users/macmini/Desktop/Xcode/FamilyTreeV2/Views/Features/Auth/LoginView.swift (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+SwiftCompile normal arm64 /Users/macmini/Desktop/Xcode/FamilyTreeV2/Views/Features/Admin/AdminPhoneRequestsView.swift (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+    cd /Users/macmini/Desktop/Xcode/FamilyTreeV2
+    
+
+SwiftCompile normal arm64 /Users/macmini/Desktop/Xcode/FamilyTreeV2/Views/Features/Admin/AdminReportsView.swift (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+    cd /Users/macmini/Desktop/Xcode/FamilyTreeV2
+    
+
+SwiftCompile normal arm64 /Users/macmini/Desktop/Xcode/FamilyTreeV2/Views/Features/Auth/LoginView.swift (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+    cd /Users/macmini/Desktop/Xcode/FamilyTreeV2
+    
+
+SwiftCompile normal arm64 Compiling\ ContactCenterView.swift,\ HomeNewsView.swift,\ NotificationsCenterView.swift /Users/macmini/Desktop/Xcode/FamilyTreeV2/Views/Features/Home/ContactCenterView.swift /Users/macmini/Desktop/Xcode/FamilyTreeV2/Views/Features/Home/HomeNewsView.swift /Users/macmini/Desktop/Xcode/FamilyTreeV2/Views/Features/Home/NotificationsCenterView.swift (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+SwiftCompile normal arm64 /Users/macmini/Desktop/Xcode/FamilyTreeV2/Views/Features/Home/ContactCenterView.swift (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+    cd /Users/macmini/Desktop/Xcode/FamilyTreeV2
+    
+
+SwiftCompile normal arm64 /Users/macmini/Desktop/Xcode/FamilyTreeV2/Views/Features/Home/HomeNewsView.swift (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+    cd /Users/macmini/Desktop/Xcode/FamilyTreeV2
+    
+
+SwiftCompile normal arm64 /Users/macmini/Desktop/Xcode/FamilyTreeV2/Views/Features/Home/NotificationsCenterView.swift (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+    cd /Users/macmini/Desktop/Xcode/FamilyTreeV2
+    
+
+SwiftCompile normal arm64 Compiling\ MainContentView.swift,\ MainTabView.swift,\ FamilyTreeV2App.swift /Users/macmini/Desktop/Xcode/FamilyTreeV2/Views/Main/MainContentView.swift /Users/macmini/Desktop/Xcode/FamilyTreeV2/Views/Main/MainTabView.swift /Users/macmini/Desktop/Xcode/FamilyTreeV2/FamilyTreeV2/FamilyTreeV2App.swift (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+
+SwiftCompile normal arm64 /Users/macmini/Desktop/Xcode/FamilyTreeV2/Views/Main/MainContentView.swift (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+    cd /Users/macmini/Desktop/Xcode/FamilyTreeV2
+    
+
+SwiftCompile normal arm64 /Users/macmini/Desktop/Xcode/FamilyTreeV2/Views/Main/MainTabView.swift (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+    cd /Users/macmini/Desktop/Xcode/FamilyTreeV2
+    
+
+SwiftCompile normal arm64 /Users/macmini/Desktop/Xcode/FamilyTreeV2/FamilyTreeV2/FamilyTreeV2App.swift (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+    cd /Users/macmini/Desktop/Xcode/FamilyTreeV2
+    
+
+SwiftCompile normal arm64 Compiling\ EditProfileView.swift,\ ProfileView.swift,\ SettingsView.swift /Users/macmini/Desktop/Xcode/FamilyTreeV2/Views/Features/Profile/EditProfileView.swift /Users/macmini/Desktop/Xcode/FamilyTreeV2/Views/Features/Profile/ProfileView.swift /Users/macmini/Desktop/Xcode/FamilyTreeV2/Views/Features/Profile/SettingsView.swift (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+
+SwiftCompile normal arm64 /Users/macmini/Desktop/Xcode/FamilyTreeV2/Views/Features/Profile/EditProfileView.swift (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+    cd /Users/macmini/Desktop/Xcode/FamilyTreeV2
+    
+/Users/macmini/Desktop/Xcode/FamilyTreeV2/Views/Features/Profile/EditProfileView.swift:189:14: warning: 'onChange(of:perform:)' was deprecated in iOS 17.0: Use `onChange` with a two or zero parameter action closure instead.
+            .onChange(of: selectedItem) { _ in handleImageChange(selectedItem) }
+             ^
+
+SwiftCompile normal arm64 /Users/macmini/Desktop/Xcode/FamilyTreeV2/Views/Features/Profile/ProfileView.swift (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+    cd /Users/macmini/Desktop/Xcode/FamilyTreeV2
+    
+
+SwiftCompile normal arm64 /Users/macmini/Desktop/Xcode/FamilyTreeV2/Views/Features/Profile/SettingsView.swift (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+    cd /Users/macmini/Desktop/Xcode/FamilyTreeV2
+    
+
+SwiftCompile normal arm64 Compiling\ AdminDashboardView.swift,\ AdminDeceasedRequestsView.swift,\ AdminDiwaniyaRequestsView.swift,\ AdminNewsReportsView.swift /Users/macmini/Desktop/Xcode/FamilyTreeV2/Views/Features/Admin/AdminDashboardView.swift /Users/macmini/Desktop/Xcode/FamilyTreeV2/Views/Features/Admin/AdminDeceasedRequestsView.swift /Users/macmini/Desktop/Xcode/FamilyTreeV2/Views/Features/Admin/AdminDiwaniyaRequestsView.swift /Users/macmini/Desktop/Xcode/FamilyTreeV2/Views/Features/Admin/AdminNewsReportsView.swift (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+
+SwiftCompile normal arm64 /Users/macmini/Desktop/Xcode/FamilyTreeV2/Views/Features/Admin/AdminDashboardView.swift (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+    cd /Users/macmini/Desktop/Xcode/FamilyTreeV2
+    
+
+SwiftCompile normal arm64 /Users/macmini/Desktop/Xcode/FamilyTreeV2/Views/Features/Admin/AdminDeceasedRequestsView.swift (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+    cd /Users/macmini/Desktop/Xcode/FamilyTreeV2
+    
+
+SwiftCompile normal arm64 /Users/macmini/Desktop/Xcode/FamilyTreeV2/Views/Features/Admin/AdminDiwaniyaRequestsView.swift (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+    cd /Users/macmini/Desktop/Xcode/FamilyTreeV2
+    
+
+SwiftCompile normal arm64 /Users/macmini/Desktop/Xcode/FamilyTreeV2/Views/Features/Admin/AdminNewsReportsView.swift (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+    cd /Users/macmini/Desktop/Xcode/FamilyTreeV2
+    
+
+SwiftCompile normal arm64 Compiling\ AdminMemberControlView.swift,\ TreeView.swift,\ TreeViewPrototype.swift /Users/macmini/Desktop/Xcode/FamilyTreeV2/Views/Features/Tree/AdminView/AdminMemberControlView.swift /Users/macmini/Desktop/Xcode/FamilyTreeV2/Views/Features/Tree/TreeView.swift /Users/macmini/Desktop/Xcode/FamilyTreeV2/Views/Features/Tree/TreeViewPrototype.swift (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+
+SwiftCompile normal arm64 /Users/macmini/Desktop/Xcode/FamilyTreeV2/Views/Features/Tree/AdminView/AdminMemberControlView.swift (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+    cd /Users/macmini/Desktop/Xcode/FamilyTreeV2
+    
+
+SwiftCompile normal arm64 /Users/macmini/Desktop/Xcode/FamilyTreeV2/Views/Features/Tree/TreeView.swift (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+    cd /Users/macmini/Desktop/Xcode/FamilyTreeV2
+    
+
+SwiftCompile normal arm64 /Users/macmini/Desktop/Xcode/FamilyTreeV2/Views/Features/Tree/TreeViewPrototype.swift (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+    cd /Users/macmini/Desktop/Xcode/FamilyTreeV2
+    
+
+SwiftCompile normal arm64 Compiling\ AddChildRequestView.swift,\ AddChildSheet.swift,\ EditChildSheet.swift /Users/macmini/Desktop/Xcode/FamilyTreeV2/Views/Features/Profile/AddChildRequestView.swift /Users/macmini/Desktop/Xcode/FamilyTreeV2/Views/Features/Profile/AddChildSheet.swift /Users/macmini/Desktop/Xcode/FamilyTreeV2/Views/Features/Profile/EditChildSheet.swift (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+
+SwiftCompile normal arm64 /Users/macmini/Desktop/Xcode/FamilyTreeV2/Views/Features/Profile/AddChildRequestView.swift (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+    cd /Users/macmini/Desktop/Xcode/FamilyTreeV2
+    
+
+SwiftCompile normal arm64 /Users/macmini/Desktop/Xcode/FamilyTreeV2/Views/Features/Profile/AddChildSheet.swift (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+    cd /Users/macmini/Desktop/Xcode/FamilyTreeV2
+    
+
+SwiftCompile normal arm64 /Users/macmini/Desktop/Xcode/FamilyTreeV2/Views/Features/Profile/EditChildSheet.swift (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+    cd /Users/macmini/Desktop/Xcode/FamilyTreeV2
+    
+
+SwiftDriverJobDiscovery normal arm64 Compiling MainContentView.swift, MainTabView.swift, FamilyTreeV2App.swift (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+
+SwiftDriverJobDiscovery normal arm64 Compiling ContentView.swift, AppIconPreview.swift, RootView.swift, AddSonByAdminSheet.swift (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+
+SwiftDriverJobDiscovery normal arm64 Compiling MemberDetailsView.swift (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+
+SwiftDriverJobDiscovery normal arm64 Compiling RegistrationView.swift, WaitingForApprovalView.swift, DiwaniyasView.swift (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+
+SwiftDriverJobDiscovery normal arm64 Compiling AdminNewsRequestsView.swift, AdminNotificationsView.swift, MainHeaderView.swift, AdminPendingRequestsView.swift (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+
+SwiftDriverJobDiscovery normal arm64 Compiling AddChildRequestView.swift, AddChildSheet.swift, EditChildSheet.swift (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+
+SwiftDriverJobDiscovery normal arm64 Compiling AdminDashboardView.swift, AdminDeceasedRequestsView.swift, AdminDiwaniyaRequestsView.swift, AdminNewsReportsView.swift (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+
+SwiftDriverJobDiscovery normal arm64 Compiling AdminPhoneRequestsView.swift, AdminReportsView.swift, LoginView.swift (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+
+SwiftDriverJobDiscovery normal arm64 Compiling AdminMemberControlView.swift, TreeView.swift, TreeViewPrototype.swift (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+
+SwiftDriverJobDiscovery normal arm64 Compiling EditProfileView.swift, ProfileView.swift, SettingsView.swift (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+
+SwiftDriverJobDiscovery normal arm64 Compiling ContactCenterView.swift, HomeNewsView.swift, NotificationsCenterView.swift (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+
+SwiftDriver\ Compilation FamilyTreeV2 normal arm64 com.apple.xcode.tools.swift.compiler (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+    cd /Users/macmini/Desktop/Xcode/FamilyTreeV2
+    builtin-Swift-Compilation -- /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc -module-name FamilyTreeV2 -Onone -enforce-exclusivity\=checked @/Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/FamilyTreeV2.build/Debug-iphonesimulator/FamilyTreeV2.build/Objects-normal/arm64/FamilyTreeV2.SwiftFileList -DDEBUG -default-isolation\=MainActor -enable-bare-slash-regex -enable-upcoming-feature DisableOutwardActorInference -enable-upcoming-feature InferSendableFromCaptures -enable-upcoming-feature GlobalActorIsolatedTypesUsability -enable-upcoming-feature MemberImportVisibility -enable-upcoming-feature InferIsolatedConformances -enable-upcoming-feature NonisolatedNonsendingByDefault -enable-experimental-feature DebugDescriptionMacro -sdk /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.2.sdk -target arm64-apple-ios17.6-simulator -g -module-cache-path /Users/macmini/Library/Developer/Xcode/DerivedData/ModuleCache.noindex -Xfrontend -serialize-debugging-options -enable-testing -index-store-path /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Index.noindex/DataStore -Xcc -D_LIBCPP_HARDENING_MODE\=_LIBCPP_HARDENING_MODE_DEBUG -swift-version 5 -I /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator -F /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator -emit-localized-strings -emit-localized-strings-path /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/FamilyTreeV2.build/Debug-iphonesimulator/FamilyTreeV2.build/Objects-normal/arm64 -c -j10 -enable-batch-mode -incremental -Xcc -ivfsstatcache -Xcc /Users/macmini/Library/Developer/Xcode/DerivedData/SDKStatCaches.noindex/iphonesimulator26.2-23C53-7d00a8b37fbd7999ea79df8ebc024bf0.sdkstatcache -output-file-map /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/FamilyTreeV2.build/Debug-iphonesimulator/FamilyTreeV2.build/Objects-normal/arm64/FamilyTreeV2-OutputFileMap.json -use-frontend-parseable-output -save-temps -no-color-diagnostics -explicit-module-build -module-cache-path /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules -clang-scanner-module-cache-path /Users/macmini/Library/Developer/Xcode/DerivedData/ModuleCache.noindex -sdk-module-cache-path /Users/macmini/Library/Developer/Xcode/DerivedData/ModuleCache.noindex -serialize-diagnostics -emit-dependencies -emit-module -emit-module-path /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/FamilyTreeV2.build/Debug-iphonesimulator/FamilyTreeV2.build/Objects-normal/arm64/FamilyTreeV2.swiftmodule -validate-clang-modules-once -clang-build-session-file /Users/macmini/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/Session.modulevalidation -Xcc -I/Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/FamilyTreeV2.build/Debug-iphonesimulator/FamilyTreeV2.build/swift-overrides.hmap -emit-const-values -Xfrontend -const-gather-protocols-file -Xfrontend /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/FamilyTreeV2.build/Debug-iphonesimulator/FamilyTreeV2.build/Objects-normal/arm64/FamilyTreeV2_const_extract_protocols.json -Xcc -iquote -Xcc /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/FamilyTreeV2.build/Debug-iphonesimulator/FamilyTreeV2.build/FamilyTreeV2-generated-files.hmap -Xcc -I/Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/FamilyTreeV2.build/Debug-iphonesimulator/FamilyTreeV2.build/FamilyTreeV2-own-target-headers.hmap -Xcc -I/Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/FamilyTreeV2.build/Debug-iphonesimulator/FamilyTreeV2.build/FamilyTreeV2-all-non-framework-target-headers.hmap -Xcc -ivfsoverlay -Xcc /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/FamilyTreeV2.build/Debug-iphonesimulator/FamilyTreeV2-d0c90a452dabc03f29fb3e56fad1d2b5-VFS-iphonesimulator/all-product-headers.yaml -Xcc -iquote -Xcc /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/FamilyTreeV2.build/Debug-iphonesimulator/FamilyTreeV2.build/FamilyTreeV2-project-headers.hmap -Xcc -I/Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/include -Xcc -I/Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/FamilyTreeV2.build/Debug-iphonesimulator/FamilyTreeV2.build/DerivedSources-normal/arm64 -Xcc -I/Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/FamilyTreeV2.build/Debug-iphonesimulator/FamilyTreeV2.build/DerivedSources/arm64 -Xcc -I/Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/FamilyTreeV2.build/Debug-iphonesimulator/FamilyTreeV2.build/DerivedSources -Xcc -DDEBUG\=1 -emit-objc-header -emit-objc-header-path /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/FamilyTreeV2.build/Debug-iphonesimulator/FamilyTreeV2.build/Objects-normal/arm64/FamilyTreeV2-Swift.h -working-directory /Users/macmini/Desktop/Xcode/FamilyTreeV2 -experimental-emit-module-separately -disable-cmo
+
+Ld /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/FamilyTreeV2.app/FamilyTreeV2.debug.dylib normal (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+    cd /Users/macmini/Desktop/Xcode/FamilyTreeV2
+    /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -Xlinker -reproducible -target arm64-apple-ios17.6-simulator -dynamiclib -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.2.sdk -O0 -L/Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/EagerLinkingTBDs/Debug-iphonesimulator -L/Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator -F/Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/EagerLinkingTBDs/Debug-iphonesimulator -F/Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/PackageFrameworks -F/Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/PackageFrameworks -F/Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/PackageFrameworks -F/Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/PackageFrameworks -F/Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/PackageFrameworks -F/Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/PackageFrameworks -F/Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/PackageFrameworks -F/Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/PackageFrameworks -F/Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/PackageFrameworks -F/Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/PackageFrameworks -F/Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/PackageFrameworks -F/Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/PackageFrameworks -F/Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/PackageFrameworks -F/Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/PackageFrameworks -F/Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator -filelist /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/FamilyTreeV2.build/Debug-iphonesimulator/FamilyTreeV2.build/Objects-normal/arm64/FamilyTreeV2.LinkFileList -install_name @rpath/FamilyTreeV2.debug.dylib -Xlinker -rpath -Xlinker /usr/lib/swift -Xlinker -rpath -Xlinker /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/PackageFrameworks -Xlinker -rpath -Xlinker @executable_path/Frameworks -dead_strip -Xlinker -object_path_lto -Xlinker /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/FamilyTreeV2.build/Debug-iphonesimulator/FamilyTreeV2.build/Objects-normal/arm64/FamilyTreeV2_lto.o -rdynamic -Xlinker -no_deduplicate -Xlinker -objc_abi_version -Xlinker 2 -Xlinker -dependency_info -Xlinker /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/FamilyTreeV2.build/Debug-iphonesimulator/FamilyTreeV2.build/Objects-normal/arm64/FamilyTreeV2_dependency_info.dat -fobjc-link-runtime -L/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphonesimulator -L/usr/lib/swift -Xlinker -add_ast_path -Xlinker /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/FamilyTreeV2.build/Debug-iphonesimulator/FamilyTreeV2.build/Objects-normal/arm64/FamilyTreeV2.swiftmodule @/Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/FamilyTreeV2.build/Debug-iphonesimulator/FamilyTreeV2.build/Objects-normal/arm64/FamilyTreeV2-linker-args.resp -Wl,-no_warn_duplicate_libraries -Wl,-no_warn_duplicate_libraries -Wl,-no_warn_duplicate_libraries -Wl,-no_warn_duplicate_libraries -Wl,-no_warn_duplicate_libraries -Wl,-no_warn_duplicate_libraries -Wl,-no_warn_duplicate_libraries -Wl,-no_warn_duplicate_libraries -Wl,-no_warn_duplicate_libraries -Wl,-no_warn_duplicate_libraries -Wl,-no_warn_duplicate_libraries -Wl,-no_warn_duplicate_libraries -Wl,-no_warn_duplicate_libraries -Wl,-no_warn_duplicate_libraries -Xlinker -alias -Xlinker _main -Xlinker ___debug_main_executable_dylib_entry_point -Xlinker -no_adhoc_codesign -o /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/FamilyTreeV2.app/FamilyTreeV2.debug.dylib -Xlinker -add_ast_path -Xlinker /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/Supabase.build/Debug-iphonesimulator/Supabase.build/Objects-normal/arm64/Supabase.swiftmodule @/Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/Supabase.build/Debug-iphonesimulator/Supabase.build/Objects-normal/arm64/Supabase-linker-args.resp -Xlinker -add_ast_path -Xlinker /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/Supabase.build/Debug-iphonesimulator/Functions.build/Objects-normal/arm64/Functions.swiftmodule @/Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/Supabase.build/Debug-iphonesimulator/Functions.build/Objects-normal/arm64/Functions-linker-args.resp -Xlinker -add_ast_path -Xlinker /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/Supabase.build/Debug-iphonesimulator/PostgREST.build/Objects-normal/arm64/PostgREST.swiftmodule @/Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/Supabase.build/Debug-iphonesimulator/PostgREST.build/Objects-normal/arm64/PostgREST-linker-args.resp -Xlinker -add_ast_path -Xlinker /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/Supabase.build/Debug-iphonesimulator/Auth.build/Objects-normal/arm64/Auth.swiftmodule @/Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/Supabase.build/Debug-iphonesimulator/Auth.build/Objects-normal/arm64/Auth-linker-args.resp -Xlinker -add_ast_path -Xlinker /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/Supabase.build/Debug-iphonesimulator/Realtime.build/Objects-normal/arm64/Realtime.swiftmodule @/Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/Supabase.build/Debug-iphonesimulator/Realtime.build/Objects-normal/arm64/Realtime-linker-args.resp -Xlinker -add_ast_path -Xlinker /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/Supabase.build/Debug-iphonesimulator/Storage.build/Objects-normal/arm64/Storage.swiftmodule @/Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/Supabase.build/Debug-iphonesimulator/Storage.build/Objects-normal/arm64/Storage-linker-args.resp -Xlinker -add_ast_path -Xlinker /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/swift-concurrency-extras.build/Debug-iphonesimulator/ConcurrencyExtras.build/Objects-normal/arm64/ConcurrencyExtras.swiftmodule @/Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/swift-concurrency-extras.build/Debug-iphonesimulator/ConcurrencyExtras.build/Objects-normal/arm64/ConcurrencyExtras-linker-args.resp -Xlinker -add_ast_path -Xlinker /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/swift-http-types.build/Debug-iphonesimulator/HTTPTypes.build/Objects-normal/arm64/HTTPTypes.swiftmodule @/Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/swift-http-types.build/Debug-iphonesimulator/HTTPTypes.build/Objects-normal/arm64/HTTPTypes-linker-args.resp -Xlinker -add_ast_path -Xlinker /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/swift-clocks.build/Debug-iphonesimulator/Clocks.build/Objects-normal/arm64/Clocks.swiftmodule @/Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/swift-clocks.build/Debug-iphonesimulator/Clocks.build/Objects-normal/arm64/Clocks-linker-args.resp -Xlinker -add_ast_path -Xlinker /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/xctest-dynamic-overlay.build/Debug-iphonesimulator/IssueReporting.build/Objects-normal/arm64/IssueReporting.swiftmodule @/Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/xctest-dynamic-overlay.build/Debug-iphonesimulator/IssueReporting.build/Objects-normal/arm64/IssueReporting-linker-args.resp -Xlinker -add_ast_path -Xlinker /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/xctest-dynamic-overlay.build/Debug-iphonesimulator/IssueReportingPackageSupport.build/Objects-normal/arm64/IssueReportingPackageSupport.swiftmodule @/Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/xctest-dynamic-overlay.build/Debug-iphonesimulator/IssueReportingPackageSupport.build/Objects-normal/arm64/IssueReportingPackageSupport-linker-args.resp -Xlinker -add_ast_path -Xlinker /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/xctest-dynamic-overlay.build/Debug-iphonesimulator/XCTestDynamicOverlay.build/Objects-normal/arm64/XCTestDynamicOverlay.swiftmodule @/Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/xctest-dynamic-overlay.build/Debug-iphonesimulator/XCTestDynamicOverlay.build/Objects-normal/arm64/XCTestDynamicOverlay-linker-args.resp -Xlinker -add_ast_path -Xlinker /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/Supabase.build/Debug-iphonesimulator/Helpers.build/Objects-normal/arm64/Helpers.swiftmodule @/Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/Supabase.build/Debug-iphonesimulator/Helpers.build/Objects-normal/arm64/Helpers-linker-args.resp -Xlinker -add_ast_path -Xlinker /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/swift-crypto.build/Debug-iphonesimulator/Crypto.build/Objects-normal/arm64/Crypto.swiftmodule @/Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/swift-crypto.build/Debug-iphonesimulator/Crypto.build/Objects-normal/arm64/Crypto-linker-args.resp
+
+ConstructStubExecutorLinkFileList /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/FamilyTreeV2.build/Debug-iphonesimulator/FamilyTreeV2.build/FamilyTreeV2-ExecutorLinkFileList-normal-arm64.txt (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+    cd /Users/macmini/Desktop/Xcode/FamilyTreeV2
+    construct-stub-executor-link-file-list /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/FamilyTreeV2.app/FamilyTreeV2.debug.dylib /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/lib/libPreviewsJITStubExecutor_no_swift_entry_point.a /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/lib/libPreviewsJITStubExecutor.a --output /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/FamilyTreeV2.build/Debug-iphonesimulator/FamilyTreeV2.build/FamilyTreeV2-ExecutorLinkFileList-normal-arm64.txt
+note: Using stub executor library with Swift entry point. (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+
+Ld /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/FamilyTreeV2.app/FamilyTreeV2 normal (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+    cd /Users/macmini/Desktop/Xcode/FamilyTreeV2
+    /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -Xlinker -reproducible -target arm64-apple-ios17.6-simulator -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.2.sdk -O0 -L/Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator -F/Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/PackageFrameworks -F/Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/PackageFrameworks -F/Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/PackageFrameworks -F/Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/PackageFrameworks -F/Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/PackageFrameworks -F/Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/PackageFrameworks -F/Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/PackageFrameworks -F/Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/PackageFrameworks -F/Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/PackageFrameworks -F/Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/PackageFrameworks -F/Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/PackageFrameworks -F/Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/PackageFrameworks -F/Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/PackageFrameworks -F/Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/PackageFrameworks -F/Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator -Xlinker -rpath -Xlinker @executable_path -Xlinker -rpath -Xlinker /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/PackageFrameworks -Xlinker -rpath -Xlinker @executable_path/Frameworks -rdynamic -Xlinker -no_deduplicate -Xlinker -objc_abi_version -Xlinker 2 -e ___debug_blank_executor_main -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __debug_dylib -Xlinker /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/FamilyTreeV2.build/Debug-iphonesimulator/FamilyTreeV2.build/FamilyTreeV2-DebugDylibPath-normal-arm64.txt -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __debug_instlnm -Xlinker /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/FamilyTreeV2.build/Debug-iphonesimulator/FamilyTreeV2.build/FamilyTreeV2-DebugDylibInstallName-normal-arm64.txt -Xlinker -filelist -Xlinker /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/FamilyTreeV2.build/Debug-iphonesimulator/FamilyTreeV2.build/FamilyTreeV2-ExecutorLinkFileList-normal-arm64.txt -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __entitlements -Xlinker /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/FamilyTreeV2.build/Debug-iphonesimulator/FamilyTreeV2.build/FamilyTreeV2.app-Simulated.xcent -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __ents_der -Xlinker /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/FamilyTreeV2.build/Debug-iphonesimulator/FamilyTreeV2.build/FamilyTreeV2.app-Simulated.xcent.der /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/FamilyTreeV2.app/FamilyTreeV2.debug.dylib -Xlinker -no_adhoc_codesign -o /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/FamilyTreeV2.app/FamilyTreeV2
+
+ExtractAppIntentsMetadata (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+    cd /Users/macmini/Desktop/Xcode/FamilyTreeV2
+    /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/appintentsmetadataprocessor --toolchain-dir /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain --module-name FamilyTreeV2 --sdk-root /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.2.sdk --xcode-version 17C52 --platform-family iOS --deployment-target 17.6 --bundle-identifier Hasan.FamilyTreeV2 --output /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/FamilyTreeV2.app --target-triple arm64-apple-ios17.6-simulator --binary-file /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/FamilyTreeV2.app/FamilyTreeV2 --dependency-file /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/FamilyTreeV2.build/Debug-iphonesimulator/FamilyTreeV2.build/Objects-normal/arm64/FamilyTreeV2_dependency_info.dat --stringsdata-file /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/FamilyTreeV2.build/Debug-iphonesimulator/FamilyTreeV2.build/Objects-normal/arm64/ExtractedAppShortcutsMetadata.stringsdata --source-file-list /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/FamilyTreeV2.build/Debug-iphonesimulator/FamilyTreeV2.build/Objects-normal/arm64/FamilyTreeV2.SwiftFileList --metadata-file-list /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/FamilyTreeV2.build/Debug-iphonesimulator/FamilyTreeV2.build/FamilyTreeV2.DependencyMetadataFileList --static-metadata-file-list /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/FamilyTreeV2.build/Debug-iphonesimulator/FamilyTreeV2.build/FamilyTreeV2.DependencyStaticMetadataFileList --swift-const-vals-list /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/FamilyTreeV2.build/Debug-iphonesimulator/FamilyTreeV2.build/Objects-normal/arm64/FamilyTreeV2.SwiftConstValuesFileList --compile-time-extraction --deployment-aware-processing --validate-assistant-intents --no-app-shortcuts-localization
+2026-02-25 16:35:47.026 appintentsmetadataprocessor[24509:3477856] Starting appintentsmetadataprocessor export
+2026-02-25 16:35:47.027 appintentsmetadataprocessor[24509:3477856] warning: Metadata extraction skipped. No AppIntents.framework dependency found.
+
+CopySwiftLibs /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/FamilyTreeV2.app (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+    cd /Users/macmini/Desktop/Xcode/FamilyTreeV2
+    builtin-swiftStdLibTool --copy --verbose --sign - --scan-executable /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/FamilyTreeV2.app/FamilyTreeV2.debug.dylib --scan-folder /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/FamilyTreeV2.app/Frameworks --scan-folder /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/FamilyTreeV2.app/PlugIns --scan-folder /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/FamilyTreeV2.app/SystemExtensions --scan-folder /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/FamilyTreeV2.app/Extensions --platform iphonesimulator --toolchain /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain --destination /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/FamilyTreeV2.app/Frameworks --strip-bitcode --strip-bitcode-tool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/bitcode_strip --emit-dependency-info /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Intermediates.noindex/FamilyTreeV2.build/Debug-iphonesimulator/FamilyTreeV2.build/SwiftStdLibToolInputDependencies.dep --filter-for-swift-os
+
+CodeSign /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/FamilyTreeV2.app/FamilyTreeV2.debug.dylib (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+    cd /Users/macmini/Desktop/Xcode/FamilyTreeV2
+    
+    Signing Identity:     "Sign to Run Locally"
+    
+    /usr/bin/codesign --force --sign - --timestamp\=none --generate-entitlement-der /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/FamilyTreeV2.app/FamilyTreeV2.debug.dylib
+
+CodeSign /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/FamilyTreeV2.app/__preview.dylib (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+    cd /Users/macmini/Desktop/Xcode/FamilyTreeV2
+    
+    Signing Identity:     "Sign to Run Locally"
+    
+    /usr/bin/codesign --force --sign - --timestamp\=none --generate-entitlement-der /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/FamilyTreeV2.app/__preview.dylib
+/Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/FamilyTreeV2.app/__preview.dylib: replacing existing signature
+
+CodeSign /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/FamilyTreeV2.app (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+    cd /Users/macmini/Desktop/Xcode/FamilyTreeV2
+    
+    Signing Identity:     "Sign to Run Locally"
+    
+    /usr/bin/codesign --force --sign - --timestamp\=none --generate-entitlement-der /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/FamilyTreeV2.app
+
+Validate /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/FamilyTreeV2.app (in target 'FamilyTreeV2' from project 'FamilyTreeV2')
+    cd /Users/macmini/Desktop/Xcode/FamilyTreeV2
+    builtin-validationUtility /Users/macmini/Library/Developer/Xcode/DerivedData/FamilyTreeV2-gqgbjluvmndoynfmdrzgbvsanplp/Build/Products/Debug-iphonesimulator/FamilyTreeV2.app -shallow-bundle -infoplist-subpath Info.plist
+
+** BUILD SUCCEEDED **
+
