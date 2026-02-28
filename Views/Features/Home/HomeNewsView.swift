@@ -93,7 +93,6 @@ struct HomeNewsView: View {
                     .presentationDetents([.fraction(0.45), .medium])
                     .presentationDragIndicator(.visible)
             }
-            .sheet(isPresented: $showingNotifications) { NotificationsCenterView() }
             .sheet(isPresented: $showingContactCenter) { ContactCenterView() }
             .sheet(item: $selectedNewsForComments) { news in
                 NewsCommentsSheet(news: news)
@@ -147,14 +146,7 @@ struct HomeNewsView: View {
                                         Text(comment.content).font(DS.Font.callout)
                                     }
                                     Spacer()
-                                    Text({
-                                        let formatter = ISO8601DateFormatter()
-                                        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-                                        let date = formatter.date(from: comment.created_at) ?? Date()
-                                        let f = RelativeDateTimeFormatter()
-                                        f.locale = L10n.isArabic ? Locale(identifier: "ar") : Locale(identifier: "en_US")
-                                        return f.localizedString(for: date, relativeTo: Date())
-                                    }())
+                                    Text(relativeTimeFromISO(comment.created_at))
                                     .font(DS.Font.caption2)
                                     .foregroundColor(DS.Color.textSecondary)
                                 }
@@ -305,11 +297,28 @@ struct HomeNewsView: View {
     }
 
     // MARK: - Helpers
+    private static let relativeFormatter: RelativeDateTimeFormatter = {
+        let f = RelativeDateTimeFormatter()
+        f.unitsStyle = .full
+        return f
+    }()
+
     func getRelativeTime(for date: Date) -> String {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .full
-        formatter.locale = L10n.isArabic ? Locale(identifier: "ar") : Locale(identifier: "en_US")
-        return formatter.localizedString(for: date, relativeTo: Date())
+        Self.relativeFormatter.locale = L10n.isArabic ? Locale(identifier: "ar") : Locale(identifier: "en_US")
+        return Self.relativeFormatter.localizedString(for: date, relativeTo: Date())
+    }
+
+    private static let isoFormatter: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+
+    private func relativeTimeFromISO(_ dateString: String) -> String {
+        let date = Self.isoFormatter.date(from: dateString) ?? Date()
+        let f = RelativeDateTimeFormatter()
+        f.locale = L10n.isArabic ? Locale(identifier: "ar") : Locale(identifier: "en_US")
+        return f.localizedString(for: date, relativeTo: Date())
     }
 
     private func toggleLike(for postId: UUID) {

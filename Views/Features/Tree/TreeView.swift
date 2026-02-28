@@ -102,12 +102,17 @@ struct TreeView: View {
         if normalizedSearch.isEmpty { return [] }
         let folded = normalizedSearch.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
 
-        return cachedVisibleMembers.filter { member in
-            !(member.isDeceased ?? false) &&
-            getFullLineage(for: member, lookup: cachedMemberById)
-                .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
-                .contains(folded)
-        }.prefix(20).map { $0 }
+        var results: [FamilyMember] = []
+        for member in cachedVisibleMembers {
+            guard results.count < 15 else { break }
+            if !(member.isDeceased ?? false) &&
+                getFullLineage(for: member, lookup: cachedMemberById)
+                    .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+                    .contains(folded) {
+                results.append(member)
+            }
+        }
+        return results
     }
 
     var body: some View {
@@ -126,7 +131,7 @@ struct TreeView: View {
                                 ZStack(alignment: .center) {
                                     if let root = primaryRootMember {
                                         rootBranch(for: root)
-                                            .scaleEffect(scale * gestureZoom)
+                                            .scaleEffect(scale * gestureZoom, anchor: .top)
                                             .id(treeID)
                                             .gesture(
                                                 MagnificationGesture()
@@ -149,7 +154,7 @@ struct TreeView: View {
                             }
                             .onChange(of: scrollCounter) { _, _ in
                                 if let id = scrollTarget {
-                                    withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                                    withAnimation(.easeInOut(duration: 0.3)) {
                                         proxy.scrollTo(id, anchor: .center)
                                     }
                                 }
@@ -239,7 +244,6 @@ struct TreeView: View {
             .navigationBarHidden(true)
             .sheet(item: $selectedMember) { member in
                 MemberDetailsView(member: member)
-                    .onDisappear { searchedMemberID = nil }
                     .presentationDetents([.medium, .large])
             }
             .onAppear {
@@ -399,14 +403,14 @@ struct TreeView: View {
             ancestors.insert(pId)
             currentParentId = cachedMemberById[pId]?.fatherId
         }
-        // فتح المسار
-        withAnimation(.spring()) {
+        // فتح المسار بأنيميشن سريعة
+        withAnimation(.easeInOut(duration: 0.25)) {
             activePath = ancestors
             activePath.insert(member.id)
         }
         // الانتقال للعضو بعد بناء العقد
         Task {
-            try? await Task.sleep(nanoseconds: 500_000_000)
+            try? await Task.sleep(nanoseconds: 250_000_000)
             scrollTarget = member.id
             scrollCounter += 1
         }
@@ -424,7 +428,7 @@ struct TreeView: View {
             currentParentId = cachedMemberById[pId]?.fatherId
         }
         
-        withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
+        withAnimation(.easeInOut(duration: 0.25)) {
             activePath = ancestors
             if includeFocusedMemberInPath {
                 activePath.insert(member.id)
@@ -437,16 +441,16 @@ struct TreeView: View {
         }
         
         Task {
-            try? await Task.sleep(nanoseconds: 500_000_000)
+            try? await Task.sleep(nanoseconds: 250_000_000)
             scrollTarget = member.id
             scrollCounter += 1
         }
         
-        // Remove highlight after 4 seconds
+        // Remove highlight after 3 seconds
         if highlight {
             Task {
-                try? await Task.sleep(nanoseconds: 4_000_000_000)
-                withAnimation { searchedMemberID = nil }
+                try? await Task.sleep(nanoseconds: 3_000_000_000)
+                withAnimation(.easeOut(duration: 0.3)) { searchedMemberID = nil }
             }
         }
     }
@@ -462,7 +466,7 @@ struct TreeView: View {
                 scrollCounter += 1
             }
             if animated {
-                withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) { updates() }
+                withAnimation(.easeInOut(duration: 0.3)) { updates() }
             } else {
                 updates()
             }
@@ -768,9 +772,10 @@ struct RecursiveTreeBranch: View {
             ) {
                 selectedMember = member
             } onToggle: {
-                withAnimation(.easeInOut(duration: 0.18)) {
-                    isExpanded.toggle()
-                    if isExpanded {
+                let willExpand = !isExpanded
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    isExpanded = willExpand
+                    if willExpand {
                         activePath = ancestorIDs.union([member.id])
                     } else {
                         activePath = ancestorIDs
@@ -778,9 +783,9 @@ struct RecursiveTreeBranch: View {
                     }
                 }
                 // بعد فتح العقدة، ننتقل للعضو ليكون في النص مع أبنائه
-                if isExpanded {
+                if willExpand {
                     Task {
-                        try? await Task.sleep(nanoseconds: 300_000_000)
+                        try? await Task.sleep(nanoseconds: 200_000_000)
                         scrollTarget = member.id
                         scrollCounter += 1
                     }

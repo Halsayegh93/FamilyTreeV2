@@ -65,6 +65,7 @@ struct AddChildSheet: View {
     }
 
     private var heroHeader: some View {
+        DSCard(padding: 0) {
         VStack(spacing: DS.Spacing.md) {
             PhotosPicker(selection: $selectedImageItem, matching: .images) {
                 ZStack {
@@ -114,27 +115,12 @@ struct AddChildSheet: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, DS.Spacing.lg)
-        .background(DS.Color.surface)
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl))
-        .overlay(alignment: .top) {
-            // Gradient top accent line
-            RoundedRectangle(cornerRadius: DS.Radius.xl)
-                .fill(DS.Color.gradientPrimary)
-                .frame(height: 3)
-                .clipShape(
-                    UnevenRoundedRectangle(
-                        topLeadingRadius: DS.Radius.xl,
-                        bottomLeadingRadius: 0,
-                        bottomTrailingRadius: 0,
-                        topTrailingRadius: DS.Radius.xl
-                    )
-                )
         }
-        .dsCardShadow()
     }
 
     private var basicInfoCard: some View {
-        VStack(spacing: DS.Spacing.md) {
+        DSCard {
+            VStack(spacing: DS.Spacing.md) {
             HStack {
                 DSIcon("person.text.rectangle", color: DS.Color.primary, size: DS.Icon.sizeSm, iconSize: 14)
                 Text("البيانات الأساسية")
@@ -192,27 +178,12 @@ struct AddChildSheet: View {
                 DatePicker("تاريخ الميلاد", selection: $birthDate, in: ...Date(), displayedComponents: .date)
                     .environment(\.locale, Locale(identifier: "en_US"))
             }
+            }
         }
-        .padding(DS.Spacing.lg)
-        .background(DS.Color.surface)
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl))
-        .overlay(alignment: .top) {
-            RoundedRectangle(cornerRadius: DS.Radius.xl)
-                .fill(DS.Color.gradientPrimary)
-                .frame(height: 3)
-                .clipShape(
-                    UnevenRoundedRectangle(
-                        topLeadingRadius: DS.Radius.xl,
-                        bottomLeadingRadius: 0,
-                        bottomTrailingRadius: 0,
-                        topTrailingRadius: DS.Radius.xl
-                    )
-                )
-        }
-        .dsCardShadow()
     }
 
     private var statusCard: some View {
+        DSCard {
         VStack(spacing: DS.Spacing.sm) {
             HStack {
                 DSIcon("heart.text.square", color: DS.Color.primary, size: DS.Icon.sizeSm, iconSize: 14)
@@ -235,24 +206,8 @@ struct AddChildSheet: View {
                         .environment(\.locale, Locale(identifier: "en_US"))
                 }
             }
+            }
         }
-        .padding(DS.Spacing.lg)
-        .background(DS.Color.surface)
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl))
-        .overlay(alignment: .top) {
-            RoundedRectangle(cornerRadius: DS.Radius.xl)
-                .fill(DS.Color.gradientPrimary)
-                .frame(height: 3)
-                .clipShape(
-                    UnevenRoundedRectangle(
-                        topLeadingRadius: DS.Radius.xl,
-                        bottomLeadingRadius: 0,
-                        bottomTrailingRadius: 0,
-                        topTrailingRadius: DS.Radius.xl
-                    )
-                )
-        }
-        .dsCardShadow()
     }
 
     private var submitButton: some View {
@@ -304,7 +259,8 @@ struct AddChildSheet: View {
                 birthDate: birthDateString,
                 fatherId: member.id,
                 isDeceased: isDeceased,
-                deathDate: deathDateString
+                deathDate: deathDateString,
+                gender: nil
             )
 
             if let childId, let image = selectedUIImage {

@@ -1,5 +1,25 @@
 import Foundation
 import Supabase
+import os
+
+/// مسجل مخصص يمرر فقط التحذيرات والأخطاء ويتجاهل الرسائل الكثيرة
+private struct QuietSupabaseLogger: SupabaseLogger {
+    private let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "FamilyTreeV2",
+        category: "Supabase"
+    )
+
+    func log(message: SupabaseLogMessage) {
+        switch message.level {
+        case .warning:
+            logger.warning("\(message.description)")
+        case .error:
+            logger.error("\(message.description)")
+        default:
+            break // تجاهل verbose و debug
+        }
+    }
+}
 
 struct SupabaseConfig {
     private enum InfoKeys {
@@ -53,7 +73,8 @@ struct SupabaseConfig {
         supabaseURL: url,
         supabaseKey: key,
         options: SupabaseClientOptions(
-            auth: .init(emitLocalSessionAsInitialSession: true)
+            auth: .init(emitLocalSessionAsInitialSession: true),
+            global: .init(logger: QuietSupabaseLogger())
         )
     )
 }

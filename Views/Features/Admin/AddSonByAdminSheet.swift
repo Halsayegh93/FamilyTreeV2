@@ -7,6 +7,7 @@ struct AddSonByAdminSheet: View {
     let parent: FamilyMember // الأب الذي سيتم الربط به
 
     @State private var firstName: String = ""
+    @State private var selectedGender: String = "male"
     @State private var selectedPhoneCountry: KuwaitPhone.Country = KuwaitPhone.defaultCountry
     @State private var phoneNumber: String = ""
     @State private var hasBirthDate: Bool = false
@@ -33,20 +34,48 @@ struct AddSonByAdminSheet: View {
 
                     // 1. بيانات الابن الأساسية
                     VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                        UIComponents.SectionHeader(title: "بيانات الابن", icon: "person.badge.plus.fill")
+                        DSSectionHeader(title: "بيانات الابن", icon: "person.badge.plus.fill")
 
-                        UIComponents.UnifiedCard {
+                        DSCard(padding: 0) {
                             // Gradient top accent line
                             Rectangle()
                                 .fill(DS.Color.gradientPrimary)
                                 .frame(height: 2)
 
-                            UIComponents.UnifiedTextField(
+                            DSTextField(
                                 label: L10n.t("الاسم", "Name"),
                                 placeholder: "اسم الابن الأول",
                                 text: $firstName,
                                 icon: "person.fill"
                             )
+
+                            DSDivider()
+
+                            // اختيار الجنس
+                            HStack {
+                                Image(systemName: "person.2.fill")
+                                    .foregroundColor(.white)
+                                    .font(DS.Font.scaled(14))
+                                    .frame(width: 32, height: 32)
+                                    .background(
+                                        LinearGradient(
+                                            colors: [DS.Color.primary, DS.Color.accent],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
+                                    )
+                                    .cornerRadius(DS.Radius.sm)
+                                Text(L10n.t("الجنس", "Gender")).font(DS.Font.caption1)
+                                Spacer()
+                                Picker("", selection: $selectedGender) {
+                                    Text(L10n.t("ذكر", "Male")).tag("male")
+                                    Text(L10n.t("أنثى", "Female")).tag("female")
+                                }
+                                .pickerStyle(.segmented)
+                                .frame(width: 160)
+                            }
+                            .padding(.horizontal, DS.Spacing.md)
+                            .padding(.vertical, DS.Spacing.xs + 2)
 
                             DSDivider()
 
@@ -102,9 +131,9 @@ struct AddSonByAdminSheet: View {
 
                     // 2. الحالة الصحية (متوفى أو حي)
                     VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                        UIComponents.SectionHeader(title: "الحالة الصحية", icon: "heart.text.square.fill")
+                        DSSectionHeader(title: "الحالة الصحية", icon: "heart.text.square.fill")
 
-                        UIComponents.UnifiedCard {
+                        DSCard(padding: 0) {
                             // Gradient top accent line
                             Rectangle()
                                 .fill(DS.Color.gradientPrimary)
@@ -238,7 +267,8 @@ struct AddSonByAdminSheet: View {
                 birthDate: hasBirthDate ? formatter.string(from: birthDate) : nil,
                 fatherId: parent.id,
                 isDeceased: isDeceased,
-                deathDate: (isDeceased && hasDeathDate) ? formatter.string(from: deathDate) : nil
+                deathDate: (isDeceased && hasDeathDate) ? formatter.string(from: deathDate) : nil,
+                gender: selectedGender
             )
             dismiss()
         }

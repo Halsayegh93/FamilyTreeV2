@@ -27,17 +27,7 @@ struct AdminModeratorsView: View {
         ZStack {
             DS.Color.background.ignoresSafeArea()
 
-            Circle()
-                .fill(Color.purple.opacity(0.08))
-                .frame(width: 200, height: 200)
-                .blur(radius: 80)
-                .offset(x: 120, y: -180)
-
-            Circle()
-                .fill(Color.orange.opacity(0.06))
-                .frame(width: 160, height: 160)
-                .blur(radius: 60)
-                .offset(x: -100, y: 120)
+            DSDecorativeBackground()
 
             if moderators.isEmpty {
                 emptyState
@@ -50,7 +40,7 @@ struct AdminModeratorsView: View {
                                 moderatorRow(member: member, index: index)
                             }
                         } header: {
-                            sectionHeader(title: L10n.t("المدراء", "Admins"), icon: "shield.fill", color: .purple, count: admins.count)
+                            sectionHeader(title: L10n.t("المدراء", "Admins"), icon: "shield.fill", color: DS.Color.neonPurple, count: admins.count)
                         }
                     }
 
@@ -61,7 +51,7 @@ struct AdminModeratorsView: View {
                                 moderatorRow(member: member, index: admins.count + index)
                             }
                         } header: {
-                            sectionHeader(title: L10n.t("المشرفين", "Supervisors"), icon: "star.fill", color: .orange, count: supervisors.count)
+                            sectionHeader(title: L10n.t("المشرفين", "Supervisors"), icon: "star.fill", color: DS.Color.warning, count: supervisors.count)
                         }
                     }
                 }
@@ -156,8 +146,8 @@ struct AdminModeratorsView: View {
                     .fill(
                         LinearGradient(
                             colors: member.role == .admin
-                                ? [Color.purple.opacity(0.3), Color.purple.opacity(0.1)]
-                                : [Color.orange.opacity(0.3), Color.orange.opacity(0.1)],
+                                ? [DS.Color.neonPurple.opacity(0.3), DS.Color.neonPurple.opacity(0.1)]
+                                : [DS.Color.warning.opacity(0.3), DS.Color.warning.opacity(0.1)],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
@@ -166,7 +156,7 @@ struct AdminModeratorsView: View {
 
                 Image(systemName: member.role == .admin ? "shield.fill" : "star.fill")
                     .font(DS.Font.scaled(20, weight: .bold))
-                    .foregroundColor(member.role == .admin ? .purple : .orange)
+                    .foregroundColor(member.role == .admin ? DS.Color.neonPurple : DS.Color.warning)
             }
 
             VStack(alignment: .leading, spacing: DS.Spacing.xs) {
@@ -182,7 +172,7 @@ struct AdminModeratorsView: View {
                         .foregroundColor(.white)
                         .padding(.horizontal, DS.Spacing.sm)
                         .padding(.vertical, 2)
-                        .background(member.role == .admin ? Color.purple : Color.orange)
+                        .background(member.role == .admin ? DS.Color.neonPurple : DS.Color.warning)
                         .clipShape(Capsule())
 
                     if member.id == authVM.currentUser?.id {
@@ -236,7 +226,7 @@ struct AdminModeratorsView: View {
                     } label: {
                         Label(L10n.t("ترقية لمدير", "Promote"), systemImage: "arrow.up.circle.fill")
                     }
-                    .tint(.purple)
+                    .tint(DS.Color.neonPurple)
                 } else if member.role == .admin {
                     Button {
                         memberToChange = member
@@ -245,7 +235,7 @@ struct AdminModeratorsView: View {
                     } label: {
                         Label(L10n.t("تنزيل لمشرف", "Demote"), systemImage: "arrow.down.circle.fill")
                     }
-                    .tint(.orange)
+                    .tint(DS.Color.warning)
                 }
             }
         }
@@ -286,11 +276,11 @@ struct AdminModeratorsView: View {
         VStack(spacing: DS.Spacing.xl) {
             ZStack {
                 Circle()
-                    .fill(Color.purple.opacity(0.08))
+                    .fill(DS.Color.neonPurple.opacity(0.08))
                     .frame(width: 120, height: 120)
                 Image(systemName: "crown.fill")
                     .font(DS.Font.scaled(40, weight: .bold))
-                    .foregroundColor(.purple.opacity(0.5))
+                    .foregroundColor(DS.Color.neonPurple.opacity(0.5))
             }
             Text(L10n.t("لا يوجد مدراء أو مشرفين", "No admins or supervisors"))
                 .font(DS.Font.title3)
@@ -325,7 +315,7 @@ struct AddModeratorSheet: View {
 
     private var regularMembers: [FamilyMember] {
         authVM.allMembers
-            .filter { $0.role == .member && $0.status == .active }
+            .filter { $0.role == .member }
             .filter { member in
                 searchText.isEmpty || member.fullName.localizedCaseInsensitiveContains(searchText)
             }
@@ -408,7 +398,7 @@ struct AddModeratorSheet: View {
 
                                         Image(systemName: "plus.circle.fill")
                                             .font(DS.Font.scaled(22))
-                                            .foregroundColor(selectedRole == .admin ? .purple : .orange)
+                                            .foregroundColor(selectedRole == .admin ? DS.Color.neonPurple : DS.Color.warning)
                                     }
                                 }
                                 .listRowBackground(DS.Color.surface)

@@ -5,7 +5,7 @@ struct FamilyMember: Identifiable, Codable, Equatable {
     let id: UUID
     var firstName: String
     let fullName: String
-    let phoneNumber: String?
+    var phoneNumber: String?
     let birthDate: String?
     let deathDate: String?
     let isDeceased: Bool?
@@ -19,6 +19,7 @@ struct FamilyMember: Identifiable, Codable, Equatable {
     var status: MemberStatus?
     let avatarUrl: String?
     let isMarried: Bool?
+    let gender: String?
     let createdAt: String?
     
     init(from decoder: Decoder) throws {
@@ -56,6 +57,7 @@ struct FamilyMember: Identifiable, Codable, Equatable {
         
         self.avatarUrl = try container.decodeIfPresent(String.self, forKey: .avatarUrl)
         self.isMarried = try container.decodeIfPresent(Bool.self, forKey: .isMarried)
+        self.gender = try container.decodeIfPresent(String.self, forKey: .gender)
         self.createdAt = try container.decodeIfPresent(String.self, forKey: .createdAt)
     }
     
@@ -126,8 +128,8 @@ struct FamilyMember: Identifiable, Codable, Equatable {
         case bio = "bio_json"
         case avatarUrl = "avatar_url"
         case isMarried = "is_married"
+        case gender
         case createdAt = "created_at"
-        
     }
 }
 

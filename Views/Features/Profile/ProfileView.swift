@@ -9,6 +9,9 @@ struct ProfileView: View {
     @State private var showEditProfile = false
     @State private var showSettings = false
     @State private var showAddChild = false
+    @State private var isSendingTestPush = false
+    @State private var showTestPushAlert = false
+    @State private var testPushResult = (success: false, message: "")
 
     var user: FamilyMember? { authVM.currentUser }
 
@@ -54,6 +57,9 @@ struct ProfileView: View {
                             // Settings
                             settingsAccessCard
 
+                            // تجربة الإشعارات
+                            testPushButton
+
                             // Sign out
                             signOutButton
                         }
@@ -72,6 +78,16 @@ struct ProfileView: View {
             .navigationBarHidden(true)
             .sheet(isPresented: $showEditProfile) { if let c = user { EditProfileView(member: c) } }
             .sheet(isPresented: $showSettings) { SettingsView() }
+            .alert(
+                testPushResult.success
+                    ? L10n.t("تم الإرسال", "Sent")
+                    : L10n.t("خطأ", "Error"),
+                isPresented: $showTestPushAlert
+            ) {
+                Button(L10n.t("حسناً", "OK"), role: .cancel) {}
+            } message: {
+                Text(testPushResult.message)
+            }
             .sheet(isPresented: $showAddChild) { if let c = user { AddChildSheet(member: c) } }
             .onChange(of: showAddChild) { _, isPresented in
                 guard !isPresented, let currentUser = user else { return }
@@ -206,18 +222,25 @@ struct ProfileView: View {
         .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
     }
 
+    private static let isoDateFormatter: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+
+    private static let displayDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateStyle = .medium
+        f.timeStyle = .none
+        return f
+    }()
+
     private func formatDateOnly(_ dateString: String) -> String {
-        let isoFormatter = ISO8601DateFormatter()
-        isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        guard let date = isoFormatter.date(from: dateString) ?? ISO8601DateFormatter().date(from: dateString) else {
+        guard let date = Self.isoDateFormatter.date(from: dateString) ?? ISO8601DateFormatter().date(from: dateString) else {
             return dateString
         }
-
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .none
-        formatter.locale = LanguageManager.shared.locale
-        return formatter.string(from: date)
+        Self.displayDateFormatter.locale = LanguageManager.shared.locale
+        return Self.displayDateFormatter.string(from: date)
     }
 
     // MARK: - Children Section
@@ -304,6 +327,53 @@ struct ProfileView: View {
             }
         }
         .buttonStyle(.plain)
+        .padding(.horizontal, DS.Spacing.lg)
+    }
+
+    // MARK: - Test Push
+    private var testPushButton: some View {
+        Button {
+            isSendingTestPush = true
+            Task {
+                let result = await authVM.sendTestPush()
+                testPushResult = result
+                isSendingTestPush = false
+                showTestPushAlert = true
+            }
+        } label: {
+            DSCard {
+                HStack(spacing: DS.Spacing.md) {
+                    ZStack {
+                        Circle()
+                            .fill(Color.purple.opacity(0.12))
+                            .frame(width: 40, height: 40)
+                        if isSendingTestPush {
+                            ProgressView()
+                        } else {
+                            Image(systemName: "bell.badge.fill")
+                                .font(DS.Font.scaled(18, weight: .bold))
+                                .foregroundColor(.purple)
+                        }
+                    }
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(L10n.t("تجربة الإشعارات", "Test Notifications"))
+                            .font(DS.Font.calloutBold)
+                            .foregroundColor(DS.Color.textPrimary)
+                        Text(L10n.t("إرسال إشعار تجريبي لجهازك", "Send a test notification to your device"))
+                            .font(DS.Font.caption1)
+                            .foregroundColor(DS.Color.textSecondary)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.left")
+                        .font(DS.Font.scaled(14, weight: .bold))
+                        .foregroundColor(DS.Color.textTertiary)
+                }
+                .padding(.horizontal, DS.Spacing.lg)
+                .padding(.vertical, DS.Spacing.md)
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(isSendingTestPush)
         .padding(.horizontal, DS.Spacing.lg)
     }
 

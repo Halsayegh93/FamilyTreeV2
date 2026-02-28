@@ -10,6 +10,7 @@ struct AdminNewsReportsView: View {
     var body: some View {
         ZStack {
             DS.Color.background.ignoresSafeArea()
+            DSDecorativeBackground()
 
             if authVM.newsReportRequests.isEmpty {
                 // Empty state with gradient circles
@@ -119,45 +120,18 @@ struct AdminNewsReportsView: View {
                 }
 
                 // Action buttons
-                HStack(spacing: DS.Spacing.md) {
-                    // Reject button — styled secondary
-                    Button("رفض البلاغ") {
-                        Task { await authVM.rejectNewsReport(request: request) }
-                    }
-                    .font(DS.Font.caption1)
-                    .fontWeight(.bold)
-                    .foregroundColor(DS.Color.textSecondary)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, DS.Spacing.md)
-                    .background(DS.Color.surfaceElevated)
-                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: DS.Radius.md)
-                            .stroke(DS.Color.textTertiary.opacity(0.3), lineWidth: 1)
+                DSApproveRejectButtons(
+                    approveTitle: "اعتماد البلاغ",
+                    rejectTitle: "رفض البلاغ",
+                    isLoading: authVM.isLoading,
+                    approveGradient: LinearGradient(
+                        colors: [DS.Color.error, DS.Color.error.opacity(0.8)],
+                        startPoint: .leading, endPoint: .trailing
                     )
-
-                    // Approve button — gradient red
-                    Button {
-                        Task { await authVM.approveNewsReport(request: request) }
-                    } label: {
-                        if authVM.isLoading {
-                            ProgressView().tint(.white)
-                        } else {
-                            Text("اعتماد البلاغ")
-                                .fontWeight(.bold)
-                        }
-                    }
-                    .font(DS.Font.caption1)
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, DS.Spacing.md)
-                    .background(
-                        LinearGradient(
-                            colors: [DS.Color.error, DS.Color.error.opacity(0.8)],
-                            startPoint: .leading, endPoint: .trailing
-                        )
-                    )
-                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
+                ) {
+                    Task { await authVM.approveNewsReport(request: request) }
+                } onReject: {
+                    Task { await authVM.rejectNewsReport(request: request) }
                 }
             }
             .padding(DS.Spacing.lg)

@@ -116,7 +116,23 @@ struct MainHeaderView<TrailingContent: View>: View {
                         .buttonStyle(BounceButtonStyle())
                     }
                     Button(action: { showingNotifications = true }) {
-                        headerIconView(icon: "bell.badge.fill", color: .white)
+                        ZStack(alignment: .topTrailing) {
+                            headerIconView(
+                                icon: authVM.unreadNotificationsCount > 0 ? "bell.badge.fill" : "bell.fill",
+                                color: .white
+                            )
+                            
+                            if authVM.unreadNotificationsCount > 0 {
+                                Text(authVM.unreadNotificationsCount > 99 ? "99+" : "\(authVM.unreadNotificationsCount)")
+                                    .font(DS.Font.scaled(10, weight: .bold))
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 5)
+                                    .padding(.vertical, 2)
+                                    .background(DS.Color.error)
+                                    .clipShape(Capsule())
+                                    .offset(x: 6, y: -4)
+                            }
+                        }
                     }
                     .buttonStyle(BounceButtonStyle())
                 }

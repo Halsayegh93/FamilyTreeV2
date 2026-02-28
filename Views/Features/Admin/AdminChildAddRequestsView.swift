@@ -7,6 +7,7 @@ struct AdminChildAddRequestsView: View {
         NavigationStack {
             ZStack {
                 DS.Color.background.ignoresSafeArea()
+                DSDecorativeBackground()
 
                 if authVM.childAddRequests.isEmpty {
                     emptyState
@@ -76,39 +77,13 @@ struct AdminChildAddRequestsView: View {
                 }
 
                 // Action buttons
-                HStack(spacing: DS.Spacing.md) {
-                    // Reject — حذف الابن من الشجرة
-                    Button(L10n.t("رفض وحذف", "Reject & Delete")) {
-                        Task {
-                            await authVM.rejectChildAddRequest(request: request)
-                        }
-                    }
-                    .font(DS.Font.caption1)
-                    .fontWeight(.bold)
-                    .foregroundColor(DS.Color.error)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, DS.Spacing.md)
-                    .background(DS.Color.error.opacity(0.1))
-                    .cornerRadius(DS.Radius.md)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: DS.Radius.md)
-                            .stroke(DS.Color.error.opacity(0.2), lineWidth: 1)
-                    )
-
-                    // Approve — تأكيد الإضافة
-                    Button(L10n.t("تأكيد الإضافة", "Confirm Addition")) {
-                        Task {
-                            await authVM.acknowledgeChildAddRequest(request: request)
-                        }
-                    }
-                    .font(DS.Font.caption1)
-                    .fontWeight(.bold)
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, DS.Spacing.md)
-                    .background(DS.Color.gradientPrimary)
-                    .cornerRadius(DS.Radius.md)
-                    .dsGlowShadow()
+                DSApproveRejectButtons(
+                    approveTitle: L10n.t("تأكيد الإضافة", "Confirm Addition"),
+                    rejectTitle: L10n.t("رفض وحذف", "Reject & Delete")
+                ) {
+                    Task { await authVM.acknowledgeChildAddRequest(request: request) }
+                } onReject: {
+                    Task { await authVM.rejectChildAddRequest(request: request) }
                 }
             }
             .padding(DS.Spacing.lg)

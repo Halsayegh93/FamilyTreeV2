@@ -26,7 +26,7 @@ class DiwaniyasViewModel: ObservableObject {
             self.diwaniyas = response
         } catch {
             self.errorMessage = error.localizedDescription
-            print("Error fetching diwaniyas: \(error)")
+            Log.error("خطأ جلب الديوانيات: \(error.localizedDescription)")
         }
         isLoading = false
     }
@@ -45,7 +45,7 @@ class DiwaniyasViewModel: ObservableObject {
             self.pendingDiwaniyas = response
         } catch {
             self.errorMessage = error.localizedDescription
-            print("Error fetching pending diwaniyas: \(error)")
+            Log.error("خطأ جلب الديوانيات المعلقة: \(error.localizedDescription)")
         }
         isLoading = false
     }
@@ -76,7 +76,7 @@ class DiwaniyasViewModel: ObservableObject {
             return true
         } catch {
             self.errorMessage = error.localizedDescription
-            print("Error adding diwaniya: \(error)")
+            Log.error("خطأ إضافة ديوانية: \(error.localizedDescription)")
             isLoading = false
             return false
         }
@@ -93,7 +93,7 @@ class DiwaniyasViewModel: ObservableObject {
             await fetchDiwaniyas()
         } catch {
             self.errorMessage = error.localizedDescription
-            print("Error deleting diwaniya: \(error)")
+            Log.error("خطأ حذف ديوانية: \(error.localizedDescription)")
             isLoading = false
         }
     }
@@ -113,7 +113,7 @@ class DiwaniyasViewModel: ObservableObject {
             await fetchPendingDiwaniyas()
         } catch {
             self.errorMessage = error.localizedDescription
-            print("Error approving diwaniya: \(error)")
+            Log.error("خطأ اعتماد ديوانية: \(error.localizedDescription)")
             isLoading = false
         }
     }

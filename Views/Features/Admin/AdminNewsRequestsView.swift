@@ -6,6 +6,7 @@ struct AdminNewsRequestsView: View {
     var body: some View {
         ZStack {
             DS.Color.background.ignoresSafeArea()
+            DSDecorativeBackground()
 
             if authVM.pendingNewsRequests.isEmpty {
                 // Empty state with gradient circles
@@ -92,45 +93,18 @@ struct AdminNewsRequestsView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
 
                 // Action buttons
-                HStack(spacing: DS.Spacing.md) {
-                    // Reject button — DS.Color.error tint
-                    Button("رفض") {
-                        Task { await authVM.rejectNewsPost(postId: post.id) }
-                    }
-                    .font(DS.Font.caption1)
-                    .fontWeight(.bold)
-                    .foregroundColor(DS.Color.error)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, DS.Spacing.md)
-                    .background(DS.Color.error.opacity(0.1))
-                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: DS.Radius.md)
-                            .stroke(DS.Color.error.opacity(0.2), lineWidth: 1)
+                DSApproveRejectButtons(
+                    approveTitle: "اعتماد النشر",
+                    rejectTitle: "رفض",
+                    isLoading: authVM.isLoading,
+                    approveGradient: LinearGradient(
+                        colors: [DS.Color.success, DS.Color.success.opacity(0.8)],
+                        startPoint: .leading, endPoint: .trailing
                     )
-
-                    // Approve button — DS.Color.success gradient
-                    Button {
-                        Task { await authVM.approveNewsPost(postId: post.id) }
-                    } label: {
-                        if authVM.isLoading {
-                            ProgressView().tint(.white)
-                        } else {
-                            Text("اعتماد النشر")
-                                .fontWeight(.bold)
-                        }
-                    }
-                    .font(DS.Font.caption1)
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, DS.Spacing.md)
-                    .background(
-                        LinearGradient(
-                            colors: [DS.Color.success, DS.Color.success.opacity(0.8)],
-                            startPoint: .leading, endPoint: .trailing
-                        )
-                    )
-                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
+                ) {
+                    Task { await authVM.approveNewsPost(postId: post.id) }
+                } onReject: {
+                    Task { await authVM.rejectNewsPost(postId: post.id) }
                 }
             }
             .padding(DS.Spacing.lg)

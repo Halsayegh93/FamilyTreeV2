@@ -2,6 +2,7 @@ import SwiftUI
 
 struct HomeHeaderView: View {
     let userFullName: String
+    var unreadCount: Int = 0
     var onLogout: () -> Void
     var onNotificationTap: () -> Void
 
@@ -25,13 +26,26 @@ struct HomeHeaderView: View {
 
                 // Notifications
                 Button(action: onNotificationTap) {
-                    Image(systemName: "bell.badge.fill")
-                        .font(DS.Font.scaled(17, weight: .bold))
-                        .foregroundColor(DS.Color.primary)
-                        .frame(width: DS.Icon.size, height: DS.Icon.size)
-                        .background(DS.Color.primary.opacity(0.10))
-                        .clipShape(Circle())
-                        .overlay(Circle().stroke(DS.Color.primary.opacity(0.15), lineWidth: 1))
+                    ZStack(alignment: .topTrailing) {
+                        Image(systemName: unreadCount > 0 ? "bell.badge.fill" : "bell.fill")
+                            .font(DS.Font.scaled(17, weight: .bold))
+                            .foregroundColor(DS.Color.primary)
+                            .frame(width: DS.Icon.size, height: DS.Icon.size)
+                            .background(DS.Color.primary.opacity(0.10))
+                            .clipShape(Circle())
+                            .overlay(Circle().stroke(DS.Color.primary.opacity(0.15), lineWidth: 1))
+                        
+                        if unreadCount > 0 {
+                            Text(unreadCount > 99 ? "99+" : "\(unreadCount)")
+                                .font(DS.Font.scaled(10, weight: .bold))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 2)
+                                .background(DS.Color.error)
+                                .clipShape(Capsule())
+                                .offset(x: 6, y: -6)
+                        }
+                    }
                 }
                 .buttonStyle(DSBoldButtonStyle())
             }

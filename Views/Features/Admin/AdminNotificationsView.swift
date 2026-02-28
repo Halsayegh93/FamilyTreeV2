@@ -19,6 +19,7 @@ struct AdminNotificationsView: View {
     var body: some View {
         ZStack {
             DS.Color.background.ignoresSafeArea()
+            DSDecorativeBackground()
 
             ScrollView(showsIndicators: false) {
                 VStack(spacing: DS.Spacing.xl) {

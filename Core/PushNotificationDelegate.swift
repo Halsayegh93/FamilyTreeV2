@@ -3,6 +3,8 @@ import UserNotifications
 
 extension Notification.Name {
     static let didReceiveAPNSToken = Notification.Name("didReceiveAPNSToken")
+    static let didReceivePushNotification = Notification.Name("didReceivePushNotification")
+    static let didTapPushNotification = Notification.Name("didTapPushNotification")
 }
 
 final class PushNotificationDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
@@ -29,11 +31,24 @@ final class PushNotificationDelegate: NSObject, UIApplicationDelegate, UNUserNot
         Log.error("APNs registration failed: \(error.localizedDescription)")
     }
 
+    /// عرض الإشعار وهو داخل التطبيق (foreground)
     func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification,
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
+        // إعلام التطبيق بوصول إشعار جديد لتحديث القائمة
+        NotificationCenter.default.post(name: .didReceivePushNotification, object: notification.request.content.userInfo)
         completionHandler([.banner, .sound, .badge])
+    }
+    
+    /// عند ضغط المستخدم على الإشعار
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        NotificationCenter.default.post(name: .didTapPushNotification, object: response.notification.request.content.userInfo)
+        completionHandler()
     }
 }

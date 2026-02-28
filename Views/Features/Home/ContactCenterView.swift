@@ -21,20 +21,7 @@ struct ContactCenterView: View {
             ZStack {
                 DS.Color.background.ignoresSafeArea()
 
-                // Decorative gradient circles
-                Circle()
-                    .fill(DS.Color.gradientPrimary)
-                    .frame(width: 240, height: 240)
-                    .blur(radius: 100)
-                    .opacity(0.14)
-                    .offset(x: -140, y: -220)
-
-                Circle()
-                    .fill(DS.Color.gradientAccent)
-                    .frame(width: 180, height: 180)
-                    .blur(radius: 80)
-                    .opacity(0.10)
-                    .offset(x: 140, y: 200)
+                DSDecorativeBackground()
 
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: DS.Spacing.xl) {

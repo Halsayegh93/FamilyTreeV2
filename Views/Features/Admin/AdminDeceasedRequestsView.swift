@@ -7,6 +7,7 @@ struct AdminDeceasedRequestsView: View {
         NavigationStack {
             ZStack {
                 DS.Color.background.ignoresSafeArea()
+                DSDecorativeBackground()
 
                 if authVM.deceasedRequests.isEmpty {
                     emptyState
@@ -69,36 +70,14 @@ struct AdminDeceasedRequestsView: View {
                     Spacer()
                 }
 
-                // Action buttons — gradient approve/reject
-                HStack(spacing: DS.Spacing.md) {
-                    // Reject button
-                    Button("رفض") { /* دالة الرفض */ }
-                        .font(DS.Font.caption1)
-                        .fontWeight(.bold)
-                        .foregroundColor(DS.Color.error)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, DS.Spacing.md)
-                        .background(DS.Color.error.opacity(0.1))
-                        .cornerRadius(DS.Radius.md)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: DS.Radius.md)
-                                .stroke(DS.Color.error.opacity(0.2), lineWidth: 1)
-                        )
-
-                    // Approve button — gradient
-                    Button("موافقة وتحديث الشجرة") {
-                        Task {
-                            await authVM.approveDeceasedRequest(request: request)
-                        }
-                    }
-                    .font(DS.Font.caption1)
-                    .fontWeight(.bold)
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, DS.Spacing.md)
-                    .background(DS.Color.gradientPrimary)
-                    .cornerRadius(DS.Radius.md)
-                    .dsGlowShadow()
+                // Action buttons
+                DSApproveRejectButtons(
+                    approveTitle: "موافقة وتحديث الشجرة",
+                    rejectTitle: "رفض"
+                ) {
+                    Task { await authVM.approveDeceasedRequest(request: request) }
+                } onReject: {
+                    /* دالة الرفض */
                 }
             }
             .padding(DS.Spacing.lg)

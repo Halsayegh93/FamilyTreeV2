@@ -46,29 +46,7 @@ struct EditProfileView: View {
                 // Background with decorative circles
                 DS.Color.background.ignoresSafeArea()
 
-                GeometryReader { geo in
-                    Circle()
-                        .fill(DS.Color.gradientPrimary)
-                        .frame(width: 250, height: 250)
-                        .blur(radius: 90)
-                        .opacity(0.13)
-                        .offset(x: -80, y: -60)
-
-                    Circle()
-                        .fill(DS.Color.gradientAccent)
-                        .frame(width: 180, height: 180)
-                        .blur(radius: 70)
-                        .opacity(0.10)
-                        .offset(x: geo.size.width - 80, y: 300)
-
-                    Circle()
-                        .fill(DS.Color.gradientCool)
-                        .frame(width: 120, height: 120)
-                        .blur(radius: 50)
-                        .opacity(0.08)
-                        .offset(x: 40, y: geo.size.height - 200)
-                }
-                .ignoresSafeArea()
+                DSDecorativeBackground()
 
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: DS.Spacing.xxxl) {

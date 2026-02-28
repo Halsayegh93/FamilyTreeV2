@@ -3,13 +3,13 @@ import Combine
 
 struct LoginView: View {
     @EnvironmentObject var authVM: AuthViewModel
-    @Environment(\.colorScheme) private var colorScheme
     @FocusState private var isFieldFocused: Bool
 
     @State private var timeRemaining = 0
     @State private var logoScale: CGFloat = 0.6
     @State private var logoOpacity: CGFloat = 0
     @State private var bgRotation: Double = 0
+
     let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     private var phoneCaretOffset: CGFloat {
@@ -91,7 +91,7 @@ struct LoginView: View {
                 // فوتر
                 Text(L10n.t("تطبيق خاص لأفراد العائلة فقط", "Private app for family members only"))
                     .font(DS.Font.caption1)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(DS.Color.textSecondary)
                     .padding(.bottom, DS.Spacing.xxxl)
             }
         }
@@ -109,11 +109,12 @@ struct LoginView: View {
         .onReceive(timer) { _ in
             if timeRemaining > 0 { timeRemaining -= 1 }
         }
+
     }
 
     // MARK: - Background
     private var backgroundView: some View {
-        Color(UIColor.systemBackground).ignoresSafeArea()
+        DS.Color.background.ignoresSafeArea()
     }
 
     // MARK: - Logo — Minimal
@@ -121,7 +122,7 @@ struct LoginView: View {
         VStack(spacing: DS.Spacing.lg) {
             ZStack {
                 Circle()
-                    .fill(Color(UIColor.secondarySystemBackground))
+                    .fill(DS.Color.surface)
                     .frame(width: 100, height: 100)
 
                 Text("🌳")
@@ -132,12 +133,12 @@ struct LoginView: View {
 
             VStack(spacing: DS.Spacing.xs) {
                 Text(L10n.t("عائلة المحمد علي", "Al-Muhammad Ali Family"))
-                    .font(.system(size: 28, weight: .bold, design: .serif))
-                    .foregroundColor(.primary)
+                    .font(DS.Font.scaled(28, weight: .bold))
+                    .foregroundColor(DS.Color.textPrimary)
 
                 Text(L10n.t("مرحباً بك في تطبيق شجرة العائلة", "Welcome to the Family Tree App"))
                     .font(DS.Font.subheadline)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(DS.Color.textSecondary)
             }
         }
     }
@@ -159,12 +160,12 @@ struct LoginView: View {
                         .keyboardType(.phonePad)
                         .font(DS.Font.scaled(16, weight: .bold))
                         .multilineTextAlignment(.center)
-                        .foregroundColor(.primary)
+                        .foregroundColor(DS.Color.textPrimary)
                 }
                 .frame(width: 80)
 
                 RoundedRectangle(cornerRadius: 1)
-                    .fill(Color(UIColor.separator))
+                    .fill(DS.Color.textTertiary.opacity(0.3))
                     .frame(width: 1, height: 24)
                     .padding(.horizontal, DS.Spacing.xs)
 
@@ -172,11 +173,11 @@ struct LoginView: View {
                     if authVM.phoneNumber.isEmpty {
                         Text("رقم الهاتف المحمول")
                             .font(DS.Font.subheadline)
-                            .foregroundStyle(Color(UIColor.placeholderText))
+                            .foregroundStyle(DS.Color.textTertiary)
                     } else {
                         Text(authVM.phoneNumber)
                             .font(DS.Font.scaled(20, weight: .bold))
-                            .foregroundColor(.primary)
+                            .foregroundColor(DS.Color.textPrimary)
                             .allowsHitTesting(false)
                     }
 
@@ -197,7 +198,7 @@ struct LoginView: View {
             .environment(\.layoutDirection, .leftToRight)
             .padding(.horizontal, DS.Spacing.md)
             .frame(height: 56)
-            .background(Color(UIColor.secondarySystemBackground))
+            .background(DS.Color.surface)
             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
@@ -240,9 +241,11 @@ struct LoginView: View {
             }
             .buttonStyle(DSScaleButtonStyle())
             .disabled(isDisabled)
+
+
         }
         .padding(DS.Spacing.lg)
-        .background(Color(UIColor.systemBackground))
+        .background(DS.Color.background)
         .cornerRadius(DS.Radius.lg)
         .shadow(color: .black.opacity(0.05), radius: 15, x: 0, y: 5)
     }
@@ -259,22 +262,22 @@ struct LoginView: View {
                 // أيقونة القفل — Subtle
                 ZStack {
                     Circle()
-                        .fill(Color(UIColor.secondarySystemBackground))
+                        .fill(DS.Color.surface)
                         .frame(width: 46, height: 46)
 
                     Image(systemName: "lock.shield")
                         .font(DS.Font.scaled(20, weight: .light))
-                        .foregroundColor(.primary)
+                        .foregroundColor(DS.Color.textPrimary)
                 }
 
                 Text(L10n.t("رمز التحقق", "Verification Code"))
                     .font(DS.Font.headline)
-                    .foregroundColor(.primary)
+                    .foregroundColor(DS.Color.textPrimary)
                 
                 HStack(spacing: DS.Spacing.xs) {
                     Text(L10n.t("أرسلنا رمزاً إلى", "Code sent to"))
                         .font(DS.Font.caption1)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(DS.Color.textSecondary)
                     Text("\(authVM.dialingCode)\(authVM.phoneNumber)")
                         .font(DS.Font.scaled(14, weight: .bold))
                         .foregroundColor(DS.Color.accent)
@@ -290,7 +293,7 @@ struct LoginView: View {
                     }) {
                         Image(systemName: "pencil.circle.fill")
                             .font(DS.Font.scaled(16))
-                            .foregroundColor(.secondary)
+                            .foregroundColor(DS.Color.textSecondary)
                     }
                     .padding(.leading, DS.Spacing.xs)
                 }
@@ -300,11 +303,11 @@ struct LoginView: View {
             TextField("------", text: otpBinding)
                 .keyboardType(.numberPad)
                 .font(DS.Font.scaled(32, weight: .bold))
-                .foregroundColor(.primary)
+                .foregroundColor(DS.Color.textPrimary)
                 .multilineTextAlignment(.center)
                 .tracking(12)
                 .frame(height: 60)
-                .background(Color(UIColor.secondarySystemBackground))
+                .background(DS.Color.surface)
                 .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
@@ -344,7 +347,7 @@ struct LoginView: View {
             statusMessage
         }
         .padding(DS.Spacing.lg)
-        .background(Color(UIColor.systemBackground))
+        .background(DS.Color.background)
         .cornerRadius(DS.Radius.lg)
         .shadow(color: .black.opacity(0.05), radius: 15, x: 0, y: 5)
     }

@@ -5,8 +5,6 @@ import UIKit
 struct EditChildSheet: View {
     @EnvironmentObject var authVM: AuthViewModel
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.colorScheme) private var colorScheme
-
     let member: FamilyMember
 
     @State private var firstName: String = ""
@@ -20,20 +18,6 @@ struct EditChildSheet: View {
     @State private var selectedImageItem: PhotosPickerItem? = nil
     @State private var selectedUIImage: UIImage? = nil
     @State private var showSuccessAlert = false
-
-    private var cardBackground: Color {
-        colorScheme == .dark ? DS.Color.surface : .white
-    }
-
-    private var fieldBackground: Color {
-        colorScheme == .dark
-        ? Color.white.opacity(0.1)
-        : DS.Color.surfaceElevated
-    }
-
-    private var fieldTextColor: Color {
-        colorScheme == .dark ? .white : DS.Color.textPrimary
-    }
 
     var body: some View {
         NavigationStack {
@@ -81,6 +65,7 @@ struct EditChildSheet: View {
     }
 
     private var heroHeader: some View {
+        DSCard(padding: 0) {
         VStack(spacing: DS.Spacing.md) {
             PhotosPicker(selection: $selectedImageItem, matching: .images) {
                 ZStack {
@@ -91,7 +76,7 @@ struct EditChildSheet: View {
                         .dsGlowShadow()
 
                     Circle()
-                        .fill(cardBackground)
+                        .fill(DS.Color.surface)
                         .frame(width: 102, height: 102)
 
                     if let image = selectedUIImage {
@@ -129,26 +114,11 @@ struct EditChildSheet: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, DS.Spacing.lg)
-        .background(cardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl))
-        .overlay(alignment: .top) {
-            // Gradient top accent line
-            RoundedRectangle(cornerRadius: DS.Radius.xl)
-                .fill(DS.Color.gradientPrimary)
-                .frame(height: 3)
-                .clipShape(
-                    UnevenRoundedRectangle(
-                        topLeadingRadius: DS.Radius.xl,
-                        bottomLeadingRadius: 0,
-                        bottomTrailingRadius: 0,
-                        topTrailingRadius: DS.Radius.xl
-                    )
-                )
         }
-        .dsCardShadow()
     }
 
     private var basicInfoCard: some View {
+        DSCard {
         VStack(spacing: DS.Spacing.md) {
             HStack {
                 DSIcon("person.text.rectangle", color: DS.Color.primary, size: DS.Icon.sizeSm, iconSize: 14)
@@ -160,7 +130,7 @@ struct EditChildSheet: View {
             fieldRow(title: "الاسم الأول", icon: "person.fill") {
                 TextField("اسم الابن", text: $firstName)
                     .multilineTextAlignment(.leading)
-                    .foregroundColor(fieldTextColor)
+                    .foregroundColor(DS.Color.textPrimary)
             }
 
             fieldRow(title: "رقم الهاتف", icon: "phone.fill") {
@@ -183,14 +153,14 @@ struct EditChildSheet: View {
                         .foregroundColor(DS.Color.textSecondary)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 8)
-                        .background(fieldBackground)
+                        .background(DS.Color.surfaceElevated)
                         .cornerRadius(DS.Radius.sm)
                     }
 
                     TextField("اختياري", text: $phoneNumber)
                         .keyboardType(.phonePad)
                         .multilineTextAlignment(.leading)
-                        .foregroundColor(fieldTextColor)
+                        .foregroundColor(DS.Color.textPrimary)
                 }
                 .onChange(of: phoneNumber) { _, newValue in
                     phoneNumber = KuwaitPhone.userTypedDigits(newValue, maxDigits: selectedPhoneCountry.maxDigits)
@@ -209,27 +179,12 @@ struct EditChildSheet: View {
                 DatePicker("تاريخ الميلاد", selection: $birthDate, in: ...Date(), displayedComponents: .date)
                     .environment(\.locale, Locale(identifier: "en_US"))
             }
+            }
         }
-        .padding(DS.Spacing.lg)
-        .background(cardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl))
-        .overlay(alignment: .top) {
-            RoundedRectangle(cornerRadius: DS.Radius.xl)
-                .fill(DS.Color.gradientPrimary)
-                .frame(height: 3)
-                .clipShape(
-                    UnevenRoundedRectangle(
-                        topLeadingRadius: DS.Radius.xl,
-                        bottomLeadingRadius: 0,
-                        bottomTrailingRadius: 0,
-                        topTrailingRadius: DS.Radius.xl
-                    )
-                )
-        }
-        .dsCardShadow()
     }
 
     private var statusCard: some View {
+        DSCard {
         VStack(spacing: DS.Spacing.sm) {
             HStack {
                 DSIcon("heart.text.square", color: DS.Color.primary, size: DS.Icon.sizeSm, iconSize: 14)
@@ -252,24 +207,8 @@ struct EditChildSheet: View {
                         .environment(\.locale, Locale(identifier: "en_US"))
                 }
             }
+            }
         }
-        .padding(DS.Spacing.lg)
-        .background(cardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl))
-        .overlay(alignment: .top) {
-            RoundedRectangle(cornerRadius: DS.Radius.xl)
-                .fill(DS.Color.gradientPrimary)
-                .frame(height: 3)
-                .clipShape(
-                    UnevenRoundedRectangle(
-                        topLeadingRadius: DS.Radius.xl,
-                        bottomLeadingRadius: 0,
-                        bottomTrailingRadius: 0,
-                        topTrailingRadius: DS.Radius.xl
-                    )
-                )
-        }
-        .dsCardShadow()
     }
 
     private var submitButton: some View {
@@ -291,14 +230,14 @@ struct EditChildSheet: View {
                     .foregroundColor(DS.Color.primary)
                 Text(title)
                     .font(DS.Font.caption1)
-                    .foregroundColor(fieldTextColor)
+                    .foregroundColor(DS.Color.textPrimary)
                 Spacer()
             }
             content()
                 .font(DS.Font.body)
                 .padding(.horizontal, DS.Spacing.md)
                 .padding(.vertical, DS.Spacing.md)
-                .background(fieldBackground)
+                .background(DS.Color.surfaceElevated)
                 .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
         }
     }

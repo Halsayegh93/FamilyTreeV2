@@ -43,6 +43,10 @@ struct AdminReportsView: View {
     }
 
     var body: some View {
+        ZStack {
+            DS.Color.background.ignoresSafeArea()
+            DSDecorativeBackground()
+
         ScrollView {
             VStack(spacing: DS.Spacing.lg) {
 
@@ -204,7 +208,7 @@ struct AdminReportsView: View {
             }
             .padding(.top, DS.Spacing.md)
         }
-        .background(DS.Color.background)
+        } // ZStack
         .navigationTitle("تقارير PDF")
         .navigationBarTitleDisplayMode(.inline)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)

@@ -794,6 +794,76 @@ struct DSFloatingButton: View {
     }
 }
 
+// MARK: - Decorative Background — خلفية زخرفية موحدة
+struct DSDecorativeBackground: View {
+    var primaryGradient: LinearGradient = DS.Color.gradientPrimary
+    var accentGradient: LinearGradient = DS.Color.gradientAccent
+
+    var body: some View {
+        GeometryReader { geo in
+            Circle()
+                .fill(primaryGradient)
+                .frame(width: 240, height: 240)
+                .blur(radius: 100)
+                .opacity(0.14)
+                .offset(x: geo.size.width * 0.35, y: -220)
+
+            Circle()
+                .fill(accentGradient)
+                .frame(width: 180, height: 180)
+                .blur(radius: 80)
+                .opacity(0.10)
+                .offset(x: -geo.size.width * 0.25, y: geo.size.height * 0.4)
+        }
+        .ignoresSafeArea()
+    }
+}
+
+// MARK: - Approve / Reject Buttons — أزرار الموافقة والرفض
+struct DSApproveRejectButtons: View {
+    var approveTitle: String
+    var rejectTitle: String
+    var isLoading: Bool = false
+    var approveGradient: LinearGradient = DS.Color.gradientPrimary
+    var onApprove: () -> Void
+    var onReject: () -> Void
+
+    var body: some View {
+        HStack(spacing: DS.Spacing.md) {
+            Button(action: onReject) {
+                Text(rejectTitle)
+                    .font(DS.Font.calloutBold)
+                    .foregroundColor(DS.Color.error)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, DS.Spacing.md)
+                    .background(DS.Color.error.opacity(0.08))
+                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: DS.Radius.md)
+                            .stroke(DS.Color.error.opacity(0.3), lineWidth: 1.5)
+                    )
+            }
+
+            Button(action: onApprove) {
+                ZStack {
+                    if isLoading {
+                        ProgressView().tint(.white)
+                    } else {
+                        Text(approveTitle)
+                            .font(DS.Font.calloutBold)
+                    }
+                }
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, DS.Spacing.md)
+                .background(approveGradient)
+                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
+                .dsGlowShadow()
+            }
+        }
+    }
+}
+
 // MARK: - Bold Button Style
 struct DSBoldButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {

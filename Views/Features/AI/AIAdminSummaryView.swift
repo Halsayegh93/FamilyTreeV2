@@ -13,20 +13,7 @@ struct AIAdminSummaryView: View {
             ZStack {
                 DS.Color.background.ignoresSafeArea()
 
-                // Decorative gradient circles
-                Circle()
-                    .fill(DS.Color.gradientPrimary)
-                    .frame(width: 240, height: 240)
-                    .blur(radius: 100)
-                    .opacity(0.12)
-                    .offset(x: -140, y: -200)
-
-                Circle()
-                    .fill(DS.Color.gradientAccent)
-                    .frame(width: 180, height: 180)
-                    .blur(radius: 80)
-                    .opacity(0.08)
-                    .offset(x: 140, y: 300)
+                DSDecorativeBackground()
 
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: DS.Spacing.xl) {

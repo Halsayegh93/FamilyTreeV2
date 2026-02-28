@@ -5,19 +5,24 @@ struct AdminMembersListView: View {
     @State private var searchText = ""
     @FocusState private var isSearchFocused: Bool
 
-    // تصفية الأعضاء بناءً على البحث والترتيب الأبجدي
+    // تصفية الأعضاء بناءً على البحث بالاسم أو رقم الهاتف
     var filteredMembers: [FamilyMember] {
-        let members = authVM.allMembers.filter { $0.role != .pending } // عرض الأعضاء المفعلين فقط
+        let members = authVM.allMembers.filter { $0.role != .pending }
         if searchText.isEmpty {
             return members.sorted { $0.fullName < $1.fullName }
         } else {
-            return members.filter { $0.fullName.contains(searchText) }
+            let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+            return members.filter {
+                $0.fullName.localizedCaseInsensitiveContains(query)
+                || ($0.phoneNumber ?? "").contains(query)
+            }
         }
     }
 
     var body: some View {
         ZStack {
             DS.Color.background.ignoresSafeArea()
+            DSDecorativeBackground()
 
             VStack(spacing: 0) {
 
@@ -75,7 +80,7 @@ struct AdminMembersListView: View {
                     .foregroundColor(.white)
             }
 
-            TextField("ابحث عن اسم العضو...", text: $searchText)
+            TextField(L10n.t("ابحث بالاسم أو رقم الهاتف...", "Search by name or phone..."), text: $searchText)
                 .multilineTextAlignment(.leading)
                 .font(DS.Font.body)
                 .focused($isSearchFocused)
@@ -120,7 +125,7 @@ struct AdminMembersListView: View {
                     .foregroundColor(.white)
             }
 
-            Text("لا يوجد أعضاء بهذا الاسم")
+            Text(L10n.t("لا يوجد أعضاء بهذا البحث", "No members found"))
                 .font(DS.Font.headline)
                 .foregroundColor(DS.Color.textSecondary)
 
@@ -135,7 +140,13 @@ struct MemberAdminRow: View {
     let member: FamilyMember
 
     var body: some View {
-        NavigationLink(destination: AdminMemberDetailSheet(member: member)) {
+        ZStack(alignment: .leading) {
+            // NavigationLink مخفي لتفعيل التنقل بدون سهم افتراضي
+            NavigationLink(destination: AdminMemberDetailSheet(member: member)) {
+                EmptyView()
+            }
+            .opacity(0)
+
             HStack(spacing: 0) {
                 // Gradient left accent bar
                 RoundedRectangle(cornerRadius: DS.Radius.full)
@@ -180,6 +191,6 @@ struct MemberAdminRow: View {
             .cornerRadius(DS.Radius.xl)
             .dsCardShadow()
         }
-        .buttonStyle(.plain) // لإزالة تأثير التحديد الافتراضي للـ List
+        .buttonStyle(.plain)
     }
 }

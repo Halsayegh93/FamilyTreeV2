@@ -19,41 +19,7 @@ struct SettingsView: View {
             ZStack {
                 DS.Color.background.ignoresSafeArea()
 
-                // Decorative gradient circles
-                GeometryReader { geo in
-                    Circle()
-                        .fill(
-                            RadialGradient(
-                                colors: [DS.Color.neonBlue.opacity(0.18), DS.Color.primary.opacity(0.04)],
-                                center: .center,
-                                startRadius: 20,
-                                endRadius: 140
-                            )
-                        )
-                        .frame(width: 260, height: 260)
-                        .blur(radius: 80)
-                        .offset(x: -60, y: -40)
-
-                    Circle()
-                        .fill(
-                            RadialGradient(
-                                colors: [DS.Color.neonPurple.opacity(0.16), DS.Color.accent.opacity(0.03)],
-                                center: .center,
-                                startRadius: 10,
-                                endRadius: 120
-                            )
-                        )
-                        .frame(width: 200, height: 200)
-                        .blur(radius: 60)
-                        .offset(x: geo.size.width - 100, y: 200)
-
-                    Circle()
-                        .fill(DS.Color.neonCyan.opacity(0.06))
-                        .frame(width: 140, height: 140)
-                        .blur(radius: 50)
-                        .offset(x: geo.size.width * 0.3, y: geo.size.height * 0.7)
-                }
-                .ignoresSafeArea()
+                DSDecorativeBackground()
 
                 ScrollView {
                     VStack(spacing: DS.Spacing.xxl) {

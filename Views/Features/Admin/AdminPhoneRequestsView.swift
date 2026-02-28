@@ -6,6 +6,7 @@ struct AdminPhoneRequestsView: View {
     var body: some View {
         ZStack {
             DS.Color.background.ignoresSafeArea()
+            DSDecorativeBackground()
 
             if authVM.phoneChangeRequests.isEmpty {
                 emptyState
@@ -99,43 +100,14 @@ struct AdminPhoneRequestsView: View {
                 }
 
                 // Action buttons
-                HStack(spacing: DS.Spacing.md) {
-                    // Approve button — DSPrimaryButton gradient style
-                    Button(action: {
-                        Task { await authVM.approvePhoneChangeRequest(request: request) }
-                    }) {
-                        if authVM.isLoading {
-                            ProgressView().tint(.white)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, DS.Spacing.md)
-                        } else {
-                            Text("اعتماد الرقم")
-                                .font(DS.Font.calloutBold)
-                                .foregroundColor(.white)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, DS.Spacing.md)
-                        }
-                    }
-                    .background(DS.Color.gradientPrimary)
-                    .cornerRadius(DS.Radius.md)
-                    .dsGlowShadow()
-
-                    // Reject button — DS.Color.error border style
-                    Button(action: {
-                        Task { await authVM.rejectPhoneChangeRequest(request: request) }
-                    }) {
-                        Text("رفض")
-                            .font(DS.Font.calloutBold)
-                            .foregroundColor(DS.Color.error)
-                            .frame(width: 80)
-                            .padding(.vertical, DS.Spacing.md)
-                            .background(DS.Color.error.opacity(0.08))
-                            .cornerRadius(DS.Radius.md)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: DS.Radius.md)
-                                    .stroke(DS.Color.error.opacity(0.3), lineWidth: 1.5)
-                            )
-                    }
+                DSApproveRejectButtons(
+                    approveTitle: "اعتماد الرقم",
+                    rejectTitle: "رفض",
+                    isLoading: authVM.isLoading
+                ) {
+                    Task { await authVM.approvePhoneChangeRequest(request: request) }
+                } onReject: {
+                    Task { await authVM.rejectPhoneChangeRequest(request: request) }
                 }
             }
             .padding(DS.Spacing.lg)

@@ -14,20 +14,7 @@ struct AIChatView: View {
             ZStack {
                 DS.Color.background.ignoresSafeArea()
 
-                // Decorative gradient circles
-                Circle()
-                    .fill(DS.Color.gradientPrimary)
-                    .frame(width: 220, height: 220)
-                    .blur(radius: 90)
-                    .opacity(0.10)
-                    .offset(x: -130, y: -250)
-
-                Circle()
-                    .fill(DS.Color.gradientAccent)
-                    .frame(width: 160, height: 160)
-                    .blur(radius: 70)
-                    .opacity(0.08)
-                    .offset(x: 140, y: 200)
+                DSDecorativeBackground()
 
                 VStack(spacing: 0) {
                     // Chat messages

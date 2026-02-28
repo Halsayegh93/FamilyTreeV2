@@ -4,10 +4,24 @@ struct AdminDashboardView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @Binding var selectedTab: Int
     @State private var showingNotifications = false
+    @State private var testPushResult: String?
+    @State private var showTestPushAlert = false
+    @State private var isSendingTestPush = false
     @Environment(\.dismiss) var dismiss
 
     // Admin theme accent (purple #6C5CE7)
     private let adminAccent = DS.Color.gridTree
+
+    // MARK: - Cached badge counts
+    private var pendingCount: Int {
+        authVM.allMembers.filter { $0.role == .pending }.count
+    }
+    private var inactiveCount: Int {
+        authVM.allMembers.filter { $0.role != .pending && ($0.status == nil || $0.status == .pending) && $0.isDeceased != true }.count
+    }
+    private var moderatorCount: Int {
+        authVM.allMembers.filter { $0.role == .admin || $0.role == .supervisor }.count
+    }
 
     var body: some View {
         NavigationStack {
@@ -50,7 +64,17 @@ struct AdminDashboardView: View {
 
                                 DSCard {
                                     NavigationLink(destination: AdminPendingRequestsView()) {
-                                        DSActionRow(title: L10n.t("طلبات انضمام جديدة", "New Join Requests"), subtitle: L10n.t("مراجعة هويات المنضمين الجدد", "Review new member identities"), icon: "person.badge.plus", color: DS.Color.info, badge: authVM.allMembers.filter { $0.role == .pending }.count)
+                                        DSActionRow(title: L10n.t("طلبات انضمام جديدة", "New Join Requests"), subtitle: L10n.t("مراجعة هويات المنضمين الجدد", "Review new member identities"), icon: "person.badge.plus", color: DS.Color.info, badge: pendingCount)
+                                    }
+                                    DSDivider()
+                                    NavigationLink(destination: AdminActivateAccountsView()) {
+                                        DSActionRow(
+                                            title: L10n.t("حسابات غير مفعلة", "Inactive Accounts"),
+                                            subtitle: L10n.t("تفعيل حسابات الأعضاء المعلقة", "Activate pending member accounts"),
+                                            icon: "person.badge.clock",
+                                            color: DS.Color.warning,
+                                            badge: inactiveCount
+                                        )
                                     }
                                     DSDivider()
                                     NavigationLink(destination: AdminNewsRequestsView()) {
@@ -85,6 +109,10 @@ struct AdminDashboardView: View {
                                 )
 
                                 DSCard {
+                                    NavigationLink(destination: AdminRegisterMemberView()) {
+                                        DSActionRow(title: L10n.t("تسجيل عضو جديد", "Register New Member"), subtitle: L10n.t("إضافة عضو جديد مباشرة للشجرة", "Add a new member directly to the tree"), icon: "person.badge.plus", color: DS.Color.primary)
+                                    }
+                                    DSDivider()
                                     NavigationLink(destination: AdminNotificationsView()) {
                                         DSActionRow(title: L10n.t("إرسال إشعارات", "Send Notifications"), subtitle: L10n.t("إرسال إشعار عام أو مخصص", "Send a general or targeted notification"), icon: "bell.badge.fill", color: DS.Color.warning)
                                     }
@@ -95,6 +123,52 @@ struct AdminDashboardView: View {
                                     DSDivider()
                                     NavigationLink(destination: AdminReportsView()) {
                                         DSActionRow(title: L10n.t("تقارير PDF", "PDF Reports"), subtitle: L10n.t("تقرير الأرقام والأعمار للأعضاء", "Member numbers and ages report"), icon: "doc.text.fill", color: DS.Color.info)
+                                    }
+                                    DSDivider()
+                                    Button {
+                                        isSendingTestPush = true
+                                        Task {
+                                            let result = await authVM.sendTestPush()
+                                            testPushResult = result.message
+                                            isSendingTestPush = false
+                                            showTestPushAlert = true
+                                        }
+                                    } label: {
+                                        DSActionRow(
+                                            title: L10n.t("تجربة الإشعارات", "Test Notifications"),
+                                            subtitle: L10n.t("إرسال إشعار تجريبي لجهازك", "Send a test push to your device"),
+                                            icon: "bell.and.waves.left.and.right",
+                                            color: DS.Color.success
+                                        )
+                                        .overlay(alignment: .leading) {
+                                            if isSendingTestPush {
+                                                ProgressView()
+                                                    .padding(.leading, DS.Spacing.lg)
+                                            }
+                                        }
+                                    }
+                                    .disabled(isSendingTestPush)
+                                }
+                                .dsCardShadow()
+                                .padding(.horizontal, DS.Spacing.lg)
+                            }
+
+                            // المدراء والمشرفين
+                            VStack(alignment: .leading, spacing: DS.Spacing.md) {
+                                adminSectionHeader(
+                                    title: L10n.t("المدراء والمشرفين", "Admins & Supervisors"),
+                                    icon: "crown.fill"
+                                )
+
+                                DSCard {
+                                    NavigationLink(destination: AdminModeratorsView()) {
+                                        DSActionRow(
+                                            title: L10n.t("المدراء والمشرفين", "Admins & Supervisors"),
+                                            subtitle: L10n.t("عرض قائمة المدراء والمشرفين", "View admins and supervisors list"),
+                                            icon: "crown.fill",
+                                            color: DS.Color.neonPurple,
+                                            badge: moderatorCount
+                                        )
                                     }
                                 }
                                 .dsCardShadow()
@@ -108,6 +182,11 @@ struct AdminDashboardView: View {
             }
         }
         .navigationBarHidden(true)
+        }
+        .alert(L10n.t("تجربة الإشعارات", "Test Notifications"), isPresented: $showTestPushAlert) {
+            Button(L10n.t("حسناً", "OK"), role: .cancel) {}
+        } message: {
+            Text(testPushResult ?? "")
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .onAppear {
@@ -124,39 +203,7 @@ struct AdminDashboardView: View {
 
     // MARK: - Decorative Background
     private var decorativeBackground: some View {
-        GeometryReader { geo in
-            ZStack {
-                Circle()
-                    .fill(
-                        RadialGradient(
-                            colors: [adminAccent.opacity(0.08), adminAccent.opacity(0.01)],
-                            center: .center,
-                            startRadius: 20,
-                            endRadius: 160
-                        )
-                    )
-                    .frame(width: 300, height: 300)
-                    .offset(x: geo.size.width * 0.6, y: geo.size.height * 0.15)
-
-                Circle()
-                    .fill(
-                        RadialGradient(
-                            colors: [DS.Color.info.opacity(0.07), DS.Color.info.opacity(0.01)],
-                            center: .center,
-                            startRadius: 10,
-                            endRadius: 120
-                        )
-                    )
-                    .frame(width: 220, height: 220)
-                    .offset(x: -geo.size.width * 0.3, y: geo.size.height * 0.5)
-
-                Circle()
-                    .fill(DS.Color.accent.opacity(0.05))
-                    .frame(width: 160, height: 160)
-                    .offset(x: geo.size.width * 0.4, y: geo.size.height * 0.75)
-            }
-        }
-        .ignoresSafeArea()
+        DSDecorativeBackground()
     }
 
     // MARK: - Bold Section Header
@@ -204,7 +251,7 @@ struct AdminDashboardView: View {
             // Pending Members
             adminColorfulStatCard(
                 title: L10n.t("انتظار", "Pending"),
-                value: "\(authVM.allMembers.filter { $0.role == .pending }.count)",
+                value: "\(pendingCount)",
                 icon: "clock.fill",
                 color: DS.Color.warning
             )

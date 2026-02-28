@@ -89,6 +89,7 @@ class AuthViewModel: ObservableObject {
     @Published var currentMemberChildren: [FamilyMember] = []
     @Published var status: AuthStatus = .checking // ابدأ دائماً بالفحص 👈
     @Published var deceasedRequests: [AdminRequest] = []
+    @Published var childAddRequests: [AdminRequest] = []
     @Published var phoneChangeRequests: [PhoneChangeRequest] = []
     @Published var newsReportRequests: [AdminRequest] = []
     @Published var notifications: [AppNotification] = []
@@ -126,13 +127,14 @@ class AuthViewModel: ObservableObject {
     var canModerate: Bool {
         currentUser?.role == .admin || currentUser?.role == .supervisor
     }
+
     
     var canAutoPublishNews: Bool {
         canModerate
     }
     
     var unreadNotificationsCount: Int {
-        notifications.count
+        notifications.filter { !$0.read }.count
     }
 
     var trialDaysRemaining: Int? {
@@ -353,6 +355,51 @@ class AuthViewModel: ObservableObject {
                 )
         } catch {
             Log.warning("تعذر إرسال Push خارجي للمدير: \(error.localizedDescription)")
+        }
+    }
+    
+    /// إرسال push حقيقي لأعضاء محددين أو للجميع عبر Edge Function
+    private func sendPushToMembers(title: String, body: String, kind: String = "general", targetMemberIds: [UUID]? = nil) async {
+        do {
+            var payload: [String: AnyEncodable] = [
+                "title": AnyEncodable(title),
+                "body": AnyEncodable(body),
+                "kind": AnyEncodable(kind)
+            ]
+            if let ids = targetMemberIds, !ids.isEmpty {
+                payload["member_ids"] = AnyEncodable(ids.map { $0.uuidString })
+            }
+            
+            try await supabase.functions
+                .invoke(
+                    "push-notify",
+                    options: FunctionInvokeOptions(body: payload)
+                )
+        } catch {
+            Log.warning("تعذر إرسال Push للأعضاء: \(error.localizedDescription)")
+        }
+    }
+    
+    /// إرسال إشعار تجريبي push للمستخدم الحالي
+    func sendTestPush() async -> (success: Bool, message: String) {
+        guard let userId = currentUser?.id else {
+            return (false, "لا يوجد مستخدم مسجل")
+        }
+        do {
+            let payload: [String: AnyEncodable] = [
+                "title": AnyEncodable("إشعار تجريبي 🔔"),
+                "body": AnyEncodable("هذا إشعار تجريبي للتأكد من عمل الإشعارات الخارجية."),
+                "kind": AnyEncodable("test"),
+                "member_ids": AnyEncodable([userId.uuidString])
+            ]
+            try await supabase.functions
+                .invoke(
+                    "push-notify",
+                    options: FunctionInvokeOptions(body: payload)
+                )
+            return (true, "تم إرسال الإشعار التجريبي بنجاح")
+        } catch {
+            return (false, "فشل الإرسال: \(error.localizedDescription)")
         }
     }
     
@@ -610,7 +657,9 @@ class AuthViewModel: ObservableObject {
     
     func checkUserProfile() async {
         guard let user = try? await supabase.auth.session.user else {
+            #if DEBUG
             print("🔴 [AUTH] No session found → unauthenticated")
+            #endif
             await MainActor.run {
                 self.status = .unauthenticated
                 self.trialStartedAt = nil
@@ -620,7 +669,9 @@ class AuthViewModel: ObservableObject {
         }
 
         let normalizedSessionPhone = user.phone ?? self.phoneNumber
+        #if DEBUG
         print("🔵 [AUTH] Session found. UUID: \(user.id), Phone: \(normalizedSessionPhone)")
+        #endif
 
         // المحاولة 1: البحث بـ auth.uid مباشرة
         do {
@@ -630,26 +681,25 @@ class AuthViewModel: ObservableObject {
                 .eq("id", value: user.id)
                 .execute()
 
-            print("🔵 [AUTH] Query by UUID response size: \(response.data.count) bytes")
             let members = try JSONDecoder().decode([FamilyMember].self, from: response.data)
-            print("🔵 [AUTH] Decoded \(members.count) profiles by UUID")
 
             if let profile = members.first {
+                #if DEBUG
                 print("🟢 [AUTH] Found profile by UUID: \(profile.fullName), role: \(profile.role)")
+                #endif
                 await applyAuthenticatedProfile(profile, normalizedPhone: normalizedSessionPhone)
                 if let token = pushToken { await registerPushToken(token) }
                 return
-            } else {
-                print("🟡 [AUTH] No profile found by UUID \(user.id)")
             }
         } catch {
-            print("🔴 [AUTH] Decode error by UUID: \(error)")
+            Log.error("خطأ في جلب البروفايل بـ UUID: \(error.localizedDescription)")
         }
 
         // المحاولة 2: البحث بالرقم
-        print("🔵 [AUTH] Trying phone search: \(normalizedSessionPhone)")
         if let phoneProfile = await findProfileByPhone(normalizedSessionPhone) {
+            #if DEBUG
             print("🟢 [AUTH] Found profile by phone: \(phoneProfile.fullName)")
+            #endif
             await applyAuthenticatedProfile(phoneProfile, normalizedPhone: normalizedSessionPhone)
             if let token = pushToken { await registerPushToken(token) }
             return
@@ -657,15 +707,16 @@ class AuthViewModel: ObservableObject {
 
         // المحاولة 3: البحث بالرقم المحلي
         let local8 = KuwaitPhone.localEightDigits(normalizedSessionPhone)
-        print("🔵 [AUTH] Trying local 8-digit: \(local8)")
         if local8.count == 8, let directPhoneProfile = await findProfileByPhone(local8) {
+            #if DEBUG
             print("🟢 [AUTH] Found profile by local phone: \(directPhoneProfile.fullName)")
+            #endif
             await applyAuthenticatedProfile(directPhoneProfile, normalizedPhone: local8)
             if let token = pushToken { await registerPushToken(token) }
             return
         }
 
-        print("🔴 [AUTH] NO PROFILE FOUND → authenticatedNoProfile. Phone: \(normalizedSessionPhone), UUID: \(user.id)")
+        Log.warning("لم يتم العثور على بروفايل. Phone: \(normalizedSessionPhone), UUID: \(user.id)")
         await MainActor.run {
             self.status = .authenticatedNoProfile
             self.trialStartedAt = nil
@@ -765,6 +816,46 @@ class AuthViewModel: ObservableObject {
     
     // MARK: - إدارة الأعضاء (Member Management)
     
+    // MARK: - تسجيل عضو جديد من الإدارة (بدون حساب مصادقة)
+    func adminAddMember(
+        fullName: String,
+        firstName: String,
+        birthDate: String?,
+        gender: String?,
+        phoneNumber: String?
+    ) async -> Bool {
+        self.isLoading = true
+        let newId = UUID()
+
+        var memberData: [String: AnyEncodable] = [
+            "id": AnyEncodable(newId.uuidString),
+            "full_name": AnyEncodable(fullName),
+            "first_name": AnyEncodable(firstName),
+            "birth_date": AnyEncodable(birthDate ?? Optional<String>.none),
+            "gender": AnyEncodable(gender ?? Optional<String>.none),
+            "phone_number": AnyEncodable(phoneNumber ?? ""),
+            "role": AnyEncodable("member"),
+            "status": AnyEncodable("active"),
+            "is_deceased": AnyEncodable(false),
+            "is_married": AnyEncodable(false),
+            "is_hidden_from_tree": AnyEncodable(false),
+            "sort_order": AnyEncodable(0),
+            "father_id": AnyEncodable(Optional<String>.none)
+        ]
+        _ = memberData // silence unused warning
+
+        do {
+            try await supabase.from("profiles").insert(memberData).execute()
+            await fetchAllMembers()
+            self.isLoading = false
+            return true
+        } catch {
+            Log.error("فشل إضافة عضو من الإدارة: \(error.localizedDescription)")
+            self.isLoading = false
+            return false
+        }
+    }
+
     // إضافة ابن جديد مع ترتيب تلقائي
     func addChild(
         firstNameOnly: String,
@@ -772,7 +863,8 @@ class AuthViewModel: ObservableObject {
         birthDate: String?,
         fatherId: UUID,
         isDeceased: Bool,
-        deathDate: String?
+        deathDate: String?,
+        gender: String?
     ) async -> UUID? {
         self.isLoading = true
         
@@ -826,7 +918,8 @@ class AuthViewModel: ObservableObject {
             "phone_number": AnyEncodable(storedPhone),
             "is_deceased": AnyEncodable(isDeceased),
             "is_married": AnyEncodable(false),
-            "sort_order": AnyEncodable(currentMemberChildren.count)
+            "sort_order": AnyEncodable(currentMemberChildren.count),
+            "gender": AnyEncodable(gender ?? Optional<String>.none)
         ]
         
         // إلحاق تاريخ الوفاة إذا كان الشخص متوفى
@@ -856,7 +949,12 @@ class AuthViewModel: ObservableObject {
                 
                 await sendExternalAdminPush(
                     title: "إضافة ابن جديد",
-                    body: "تمت إضافة ابن جديد بواسطة \(father.firstName).",
+                    body: "تمت إضافة ابن جديد.",
+                    kind: "child_add"
+                )
+                await notifyAdmins(
+                    title: "إضافة ابن جديد",
+                    body: "تمت إضافة ابن جديد.",
                     kind: "child_add"
                 )
             } catch {
@@ -1132,6 +1230,11 @@ class AuthViewModel: ObservableObject {
                     kind: "gallery_add"
                 )
             }
+            await notifyAdmins(
+                title: "إضافة صورة جديدة",
+                body: "تمت إضافة صورة جديدة.",
+                kind: "gallery_add"
+            )
             
             self.isLoading = false
             return inserted.first
@@ -1176,6 +1279,32 @@ class AuthViewModel: ObservableObject {
     
     // MARK: - وظائف لوحة الإدارة (Admin Actions) ✅
     
+    /// تفعيل حساب عضو (تغيير status إلى active)
+    func activateAccount(memberId: UUID) async {
+        guard canModerate else { return }
+        do {
+            try await supabase
+                .from("profiles")
+                .update(["status": AnyEncodable("active")])
+                .eq("id", value: memberId.uuidString)
+                .execute()
+            
+            if let index = allMembers.firstIndex(where: { $0.id == memberId }) {
+                allMembers[index].status = .active
+                objectWillChange.send()
+            }
+            
+            let memberName = getSafeMemberName(for: memberId)
+            await notifyAdmins(
+                title: "تفعيل حساب",
+                body: "تم تفعيل حساب \(memberName).",
+                kind: "admin"
+            )
+        } catch {
+            Log.error("فشل تفعيل الحساب: \(error.localizedDescription)")
+        }
+    }
+    
     /// قبول عضو جديد وتفعيل حسابه مع ربط الأب
     func approveMember(memberId: UUID, fatherId: UUID?) async {
         self.isLoading = true
@@ -1195,12 +1324,12 @@ class AuthViewModel: ObservableObject {
                 .eq("id", value: memberId.uuidString)
                 .execute()
             
-            // تحديث أي طلب انضمام معلق لهذا العضو إلى approved
+            // تحديث أي طلب ربط/انضمام معلق لهذا العضو إلى approved
             _ = try? await supabase
                 .from("admin_requests")
                 .update(["status": AnyEncodable("approved")])
                 .eq("member_id", value: memberId.uuidString)
-                .eq("request_type", value: "join_request")
+                .in("request_type", values: ["join_request", "link_request"])
                 .eq("status", value: "pending")
                 .execute()
             
@@ -1231,9 +1360,11 @@ class AuthViewModel: ObservableObject {
             body = "تم قبول طلب انضمامك بنجاح."
         }
         
+        let title = "تم اعتماد العضوية"
+        
         let payload: [String: AnyEncodable] = [
             "target_member_id": AnyEncodable(memberId.uuidString),
-            "title": AnyEncodable("تم اعتماد العضوية"),
+            "title": AnyEncodable(title),
             "body": AnyEncodable(body),
             "kind": AnyEncodable("join_approved"),
             "created_by": AnyEncodable(creator.uuidString)
@@ -1241,6 +1372,15 @@ class AuthViewModel: ObservableObject {
         
         do {
             try await supabase.from("notifications").insert(payload).execute()
+            // إرسال push حقيقي للعضو
+            await sendPushToMembers(title: title, body: body, kind: "join_approved", targetMemberIds: [memberId])
+            // إشعار المدراء والمشرفين بانضمام عضو جديد
+            let memberName = getSafeMemberName(for: memberId)
+            await notifyAdmins(
+                title: "انضمام عضو جديد",
+                body: "تم انضمام \(memberName) للعائلة.",
+                kind: "join_approved"
+            )
         } catch {
             if isMissingNotificationsTableError(error) {
                 notificationsFeatureAvailable = false
@@ -1249,6 +1389,37 @@ class AuthViewModel: ObservableObject {
             }
         }
     }
+    /// جلب معرفات الأعضاء المتطابقين من طلب الربط
+    func fetchMatchedMemberIds(for memberId: UUID) async -> [UUID] {
+        do {
+            struct AdminRequest: Decodable {
+                let details: String?
+            }
+            let results: [AdminRequest] = try await supabase
+                .from("admin_requests")
+                .select("details")
+                .eq("member_id", value: memberId.uuidString)
+                .eq("request_type", value: "link_request")
+                .eq("status", value: "pending")
+                .limit(1)
+                .execute()
+                .value
+            
+            guard let details = results.first?.details,
+                  let range = details.range(of: "matched_ids:") else {
+                return []
+            }
+            
+            let idsString = String(details[range.upperBound...])
+            return idsString
+                .split(separator: ",")
+                .compactMap { UUID(uuidString: String($0)) }
+        } catch {
+            Log.warning("فشل جلب بيانات المطابقة: \(error.localizedDescription)")
+            return []
+        }
+    }
+
     /// رفض طلب انضمام أو حذف عضو نهائياً
     func rejectOrDeleteMember(memberId: UUID) async {
         guard currentUser?.role == .admin else {
@@ -1284,9 +1455,16 @@ class AuthViewModel: ObservableObject {
                 .execute()
             
             // 4) التحديث المحلي الفوري لضمان اختفائه من الواجهة فوراً
+            let deletedName = allMembers.first(where: { $0.id == memberId })?.firstName ?? "عضو"
             allMembers.removeAll(where: { $0.id == memberId })
             currentMemberChildren.removeAll(where: { $0.id == memberId })
             objectWillChange.send()
+            
+            await notifyAdmins(
+                title: "حذف عضو",
+                body: "تم حذف \(deletedName) من الشجرة.",
+                kind: "admin"
+            )
             
             Log.info("تم حذف العضو مع تنظيف المراجع المرتبطة بنجاح")
             
@@ -1385,7 +1563,7 @@ class AuthViewModel: ObservableObject {
     }
     // داخل AuthViewModel.swift
     
-    func registerNewUser(firstName: String, familyName: String, birthDate: Date) async {
+    func registerNewUser(firstName: String, familyName: String, birthDate: Date, gender: String) async {
         self.isLoading = true
         guard let user = try? await supabase.auth.session.user else { return }
         
@@ -1404,6 +1582,9 @@ class AuthViewModel: ObservableObject {
         let cleanFamilyName = familyName.trimmingCharacters(in: .whitespacesAndNewlines)
         let fullName = "\(cleanFirstName) \(cleanFamilyName)"
         
+        // بحث تلقائي عن مطابقات في الشجرة بالاسم الكامل أو أجزاء منه
+        let matchedMemberIds = await searchForNameMatches(fullName: fullName, firstName: cleanFirstName)
+        
         let profileData: [String: AnyEncodable] = [
             "id": AnyEncodable(user.id),
             "full_name": AnyEncodable(fullName),
@@ -1417,22 +1598,30 @@ class AuthViewModel: ObservableObject {
             "is_married": AnyEncodable(false),
             "is_hidden_from_tree": AnyEncodable(false),
             "sort_order": AnyEncodable(0),
+            "gender": AnyEncodable(gender),
             "created_at": AnyEncodable(ISO8601DateFormatter().string(from: Date()))
         ]
         
         do {
-            // نستخدم upsert هنا لحل مشكلة التكرار ✅
             try await supabase
                 .from("profiles")
-                .upsert(profileData) // تحديث البيانات إذا كان السجل موجوداً مسبقاً
+                .upsert(profileData)
                 .execute()
+            
+            // بناء تفاصيل الطلب مع المطابقات المحتملة
+            let matchInfo: String
+            if matchedMemberIds.isEmpty {
+                matchInfo = "طلب انضمام جديد — لا توجد مطابقات بالاسم في الشجرة"
+            } else {
+                matchInfo = "طلب ربط — وُجدت \(matchedMemberIds.count) مطابقة محتملة|matched_ids:\(matchedMemberIds.joined(separator: ","))"
+            }
             
             let joinRequestData: [String: AnyEncodable] = [
                 "member_id": AnyEncodable(user.id.uuidString),
                 "requester_id": AnyEncodable(user.id.uuidString),
-                "request_type": AnyEncodable("join_request"),
+                "request_type": AnyEncodable("link_request"),
                 "status": AnyEncodable("pending"),
-                "details": AnyEncodable("طلب انضمام جديد للتطبيق")
+                "details": AnyEncodable(matchInfo)
             ]
             
             _ = try? await supabase
@@ -1440,15 +1629,27 @@ class AuthViewModel: ObservableObject {
                 .insert(joinRequestData)
                 .execute()
             
+            // إشعار المدير مع عدد المطابقات
+            let pushBody: String
+            if matchedMemberIds.isEmpty {
+                pushBody = "طلب ربط جديد من \(cleanFirstName) — لا توجد مطابقات بالشجرة."
+            } else {
+                pushBody = "طلب ربط جديد من \(cleanFirstName) — \(matchedMemberIds.count) مطابقة محتملة."
+            }
+            
             await sendExternalAdminPush(
-                title: "طلب انضمام جديد",
-                body: "تم إرسال طلب انضمام جديد للتطبيق.",
-                kind: "join_request"
+                title: "طلب ربط عضو جديد",
+                body: pushBody,
+                kind: "link_request"
+            )
+            await notifyAdmins(
+                title: "طلب ربط عضو جديد",
+                body: pushBody,
+                kind: "link_request"
             )
             
-            Log.info("تم تحديث بيانات البروفايل بنجاح")
+            Log.info("تم تسجيل العضو وإرسال طلب الربط بنجاح")
 
-            // نجلب البروفايل المنشأ ونضبط currentUser ✅
             if let createdProfile = await loadProfile(by: user.id) {
                 await applyAuthenticatedProfile(createdProfile, normalizedPhone: KuwaitPhone.localEightDigits(normalizedPhone))
             } else {
@@ -1461,6 +1662,45 @@ class AuthViewModel: ObservableObject {
             Log.error("خطأ في التسجيل: \(error.localizedDescription)")
         }
         self.isLoading = false
+    }
+    
+    /// بحث عن مطابقات الاسم في الشجرة — يُرجع قائمة بمعرفات الأعضاء المتطابقين
+    private func searchForNameMatches(fullName: String, firstName: String) async -> [String] {
+        do {
+            // بحث بالاسم الكامل (تطابق جزئي)
+            let fullNameResults: [FamilyMember] = try await supabase
+                .from("profiles")
+                .select()
+                .ilike("full_name", pattern: "%\(fullName)%")
+                .neq("status", value: "pending")
+                .limit(10)
+                .execute()
+                .value
+            
+            if !fullNameResults.isEmpty {
+                return fullNameResults.map { $0.id.uuidString }
+            }
+            
+            // بحث بالاسم الأول فقط كـ fallback
+            let parts = fullName.split(whereSeparator: \.isWhitespace).map(String.init)
+            if parts.count >= 2 {
+                let firstTwo = "\(parts[0]) \(parts[1])"
+                let partialResults: [FamilyMember] = try await supabase
+                    .from("profiles")
+                    .select()
+                    .ilike("full_name", pattern: "%\(firstTwo)%")
+                    .neq("status", value: "pending")
+                    .limit(10)
+                    .execute()
+                    .value
+                return partialResults.map { $0.id.uuidString }
+            }
+            
+            return []
+        } catch {
+            Log.warning("فشل البحث عن مطابقات الاسم: \(error.localizedDescription)")
+            return []
+        }
     }
     // MARK: - وظائف الإدارة
     func updateMemberName(memberId: UUID, fullName: String) async {
@@ -1505,6 +1745,14 @@ class AuthViewModel: ObservableObject {
             
             // 2. تحديث البيانات محلياً لكي تظهر التغييرات فوراً في الشجرة
             await fetchAllMembers()
+            
+            let memberName = allMembers.first(where: { $0.id == memberId })?.firstName ?? "عضو"
+            let roleName = newRole == .admin ? "مدير" : (newRole == .supervisor ? "مشرف" : "عضو")
+            await notifyAdmins(
+                title: "تغيير رتبة",
+                body: "تم تغيير رتبة \(memberName) إلى \(roleName).",
+                kind: "admin"
+            )
             
             Log.info("تم تحديث رتبة العضو بنجاح إلى: \(newRole.rawValue)")
             
@@ -1582,6 +1830,11 @@ class AuthViewModel: ObservableObject {
                 body: "تم إرسال طلب تأكيد حالة وفاة جديد.",
                 kind: "deceased_report"
             )
+            await notifyAdmins(
+                title: "طلب تأكيد وفاة",
+                body: "تم إرسال طلب تأكيد حالة وفاة جديد.",
+                kind: "deceased_report"
+            )
             
             Log.info("تم إرسال طلب تأكيد الوفاة للإدارة بنجاح")
         } catch {
@@ -1629,12 +1882,100 @@ class AuthViewModel: ObservableObject {
             await fetchDeceasedRequests()
             await fetchAllMembers()
             
+            let memberName = allMembers.first(where: { $0.id == request.memberId })?.firstName ?? "عضو"
+            await notifyAdmins(
+                title: "تأكيد وفاة",
+                body: "تم تأكيد وفاة \(memberName).",
+                kind: "deceased_report"
+            )
+            
             Log.info("تم قبول الطلب وتحديث الشجرة بنجاح")
         } catch {
             Log.error("فشل في تنفيذ عملية الموافقة: \(error)")
         }
         self.isLoading = false
     }
+
+    // MARK: - طلبات إضافة الأبناء (Child Add Requests)
+
+    func fetchChildAddRequests() async {
+        do {
+            let requests: [AdminRequest] = try await supabase
+                .from("admin_requests")
+                .select("*, member:profiles!member_id(*)")
+                .eq("request_type", value: "child_add")
+                .eq("status", value: "pending")
+                .execute()
+                .value
+
+            await MainActor.run {
+                self.childAddRequests = requests
+            }
+        } catch {
+            Log.error("فشل جلب طلبات إضافة الأبناء: \(error)")
+        }
+    }
+
+    func rejectChildAddRequest(request: AdminRequest) async {
+        self.isLoading = true
+        do {
+            // حذف الابن المضاف من جدول profiles إذا كان موجوداً
+            if let childId = request.newValue {
+                try await supabase
+                    .from("profiles")
+                    .delete()
+                    .eq("id", value: childId)
+                    .execute()
+            }
+
+            // تحديث حالة الطلب إلى مرفوض
+            try await supabase
+                .from("admin_requests")
+                .update(["status": AnyEncodable("rejected")])
+                .eq("id", value: request.id.uuidString)
+                .execute()
+
+            await fetchChildAddRequests()
+            await fetchAllMembers()
+
+            await notifyAdmins(
+                title: "رفض إضافة ابن",
+                body: "تم رفض طلب إضافة ابن جديد.",
+                kind: "child_add"
+            )
+            
+            Log.info("تم رفض طلب إضافة الابن وحذفه من الشجرة")
+        } catch {
+            Log.error("فشل رفض طلب إضافة الابن: \(error)")
+        }
+        self.isLoading = false
+    }
+
+    func acknowledgeChildAddRequest(request: AdminRequest) async {
+        self.isLoading = true
+        do {
+            // تحديث حالة الطلب إلى مقبول
+            try await supabase
+                .from("admin_requests")
+                .update(["status": AnyEncodable("approved")])
+                .eq("id", value: request.id.uuidString)
+                .execute()
+
+            await fetchChildAddRequests()
+
+            await notifyAdmins(
+                title: "قبول إضافة ابن",
+                body: "تم قبول طلب إضافة ابن جديد.",
+                kind: "child_add"
+            )
+            
+            Log.info("تم تأكيد طلب إضافة الابن بنجاح")
+        } catch {
+            Log.error("فشل تأكيد طلب إضافة الابن: \(error)")
+        }
+        self.isLoading = false
+    }
+
     func adminAddSon(firstName: String, parent: FamilyMember?) async {
         await MainActor.run { self.isLoading = true }
         
@@ -1877,6 +2218,11 @@ class AuthViewModel: ObservableObject {
                 body: "تم إرسال طلب تغيير رقم جوال جديد.",
                 kind: "phone_change"
             )
+            await notifyAdmins(
+                title: "طلب تغيير رقم جوال",
+                body: "تم إرسال طلب تغيير رقم جوال.",
+                kind: "phone_change"
+            )
             
             Log.info("تم إرسال طلب تغيير الرقم للإدارة: \(normalizedPhone)")
         } catch {
@@ -1929,6 +2275,13 @@ class AuthViewModel: ObservableObject {
             
             await fetchPhoneChangeRequests()
             await fetchAllMembers()
+            
+            let memberName = allMembers.first(where: { $0.id == request.memberId })?.firstName ?? "عضو"
+            await notifyAdmins(
+                title: "اعتماد تغيير رقم",
+                body: "تم اعتماد تغيير رقم جوال \(memberName).",
+                kind: "phone_change"
+            )
         } catch {
             Log.error("خطأ اعتماد تغيير الرقم: \(error.localizedDescription)")
         }
@@ -1948,6 +2301,12 @@ class AuthViewModel: ObservableObject {
                 .execute()
             
             await fetchPhoneChangeRequests()
+            
+            await notifyAdmins(
+                title: "رفض تغيير رقم",
+                body: "تم رفض طلب تغيير رقم جوال.",
+                kind: "phone_change"
+            )
         } catch {
             Log.error("خطأ رفض تغيير الرقم: \(error.localizedDescription)")
         }
@@ -2269,7 +2628,37 @@ class AuthViewModel: ObservableObject {
         }
     }
     
-    func sendNotification(title: String, body: String, targetMemberIds: [UUID]?) async {
+    func markNotificationAsRead(id: UUID) async {
+        do {
+            try await supabase
+                .from("notifications")
+                .update(["is_read": AnyEncodable(true)])
+                .eq("id", value: id.uuidString)
+                .execute()
+            
+            await fetchNotifications()
+        } catch {
+            Log.error("خطأ تحديث حالة الإشعار: \(error.localizedDescription)")
+        }
+    }
+    
+    func markAllNotificationsAsRead() async {
+        guard let userId = currentUser?.id else { return }
+        do {
+            try await supabase
+                .from("notifications")
+                .update(["is_read": AnyEncodable(true)])
+                .or("target_member_id.is.null,target_member_id.eq.\(userId.uuidString)")
+                .eq("is_read", value: false)
+                .execute()
+            
+            await fetchNotifications()
+        } catch {
+            Log.error("خطأ تعليم كل الإشعارات كمقروءة: \(error.localizedDescription)")
+        }
+    }
+    
+    func sendNotification(title: String, body: String, targetMemberIds: [UUID]?, sendPush: Bool = true) async {
         guard canModerate, let creator = currentUser?.id else { return }
         guard notificationsFeatureAvailable else { return }
         await MainActor.run { self.isLoading = true }
@@ -2297,6 +2686,23 @@ class AuthViewModel: ObservableObject {
                 try await supabase.from("notifications").insert(payload).execute()
             }
             
+            // إرسال push حقيقي للأعضاء المستهدفين
+            if sendPush {
+                await sendPushToMembers(
+                    title: title,
+                    body: body,
+                    kind: "admin",
+                    targetMemberIds: targetMemberIds
+                )
+            }
+            
+            // إشعار المدراء الآخرين بإرسال إشعار إداري
+            await notifyAdmins(
+                title: "إشعار إداري",
+                body: "تم إرسال إشعار: \(title)",
+                kind: "admin"
+            )
+            
             await fetchNotifications()
         } catch {
             if isMissingNotificationsTableError(error) {
@@ -2307,6 +2713,47 @@ class AuthViewModel: ObservableObject {
         }
         
         await MainActor.run { self.isLoading = false }
+    }
+    
+    /// إرسال إشعار في مركز الإشعارات للمدراء والمشرفين فقط من أي حساب
+    /// اسم المنشئ يُعرض تلقائياً في الواجهة عبر حقل created_by
+    private func notifyAdmins(title: String, body: String, kind: String) async {
+        let creatorId = currentUser?.id
+        guard notificationsFeatureAvailable else { return }
+        
+        do {
+            // جلب المدراء والمشرفين مباشرة من قاعدة البيانات
+            struct ProfileId: Decodable { let id: UUID }
+            let admins: [ProfileId] = try await supabase
+                .from("profiles")
+                .select("id")
+                .in("role", values: ["admin", "supervisor"])
+                .execute()
+                .value
+            
+            let adminIds = admins
+                .map { $0.id }
+                .filter { $0 != creatorId } // لا نرسل إشعار للمرسل نفسه
+            
+            guard !adminIds.isEmpty else { return }
+            
+            for adminId in adminIds {
+                let payload: [String: AnyEncodable] = [
+                    "target_member_id": AnyEncodable(adminId.uuidString),
+                    "title": AnyEncodable(title),
+                    "body": AnyEncodable(body),
+                    "kind": AnyEncodable(kind),
+                    "created_by": AnyEncodable(creatorId?.uuidString)
+                ]
+                try await supabase.from("notifications").insert(payload).execute()
+            }
+        } catch {
+            if isMissingNotificationsTableError(error) {
+                notificationsFeatureAvailable = false
+            } else {
+                Log.warning("تعذر إرسال إشعار للمدراء: \(error.localizedDescription)")
+            }
+        }
     }
     
     func uploadNewsImage(image: UIImage, for authorId: UUID) async -> String? {
@@ -2415,6 +2862,19 @@ class AuthViewModel: ObservableObject {
                 await sendExternalAdminPush(
                     title: "خبر جديد بانتظار المراجعة",
                     body: "قام عضو بإضافة خبر جديد ويحتاج موافقة الإدارة.",
+                    kind: "news_add"
+                )
+                await notifyAdmins(
+                    title: "خبر جديد بانتظار المراجعة",
+                    body: "تمت إضافة خبر جديد ويحتاج موافقة.",
+                    kind: "news_add"
+                )
+            }
+            // إشعار المدراء والمشرفين عند نشر خبر جديد
+            if shouldAutoApprove {
+                await notifyAdmins(
+                    title: "خبر جديد",
+                    body: "تم نشر خبر جديد.",
                     kind: "news_add"
                 )
             }
@@ -2557,6 +3017,12 @@ class AuthViewModel: ObservableObject {
             
             await fetchPendingNewsRequests()
             await fetchNews()
+            // إشعار المدراء والمشرفين بوجود خبر جديد معتمد
+            await notifyAdmins(
+                title: "خبر جديد",
+                body: "تم نشر خبر جديد في الأخبار.",
+                kind: "news_add"
+            )
         } catch {
             if isMissingNewsApprovalColumnError(error) {
                 newsApprovalFeatureAvailable = false
@@ -2581,6 +3047,12 @@ class AuthViewModel: ObservableObject {
             
             await fetchPendingNewsRequests()
             await fetchNews()
+            
+            await notifyAdmins(
+                title: "رفض خبر",
+                body: "تم رفض خبر بانتظار المراجعة.",
+                kind: "news_add"
+            )
         } catch {
             Log.error("خطأ رفض الخبر: \(error.localizedDescription)")
         }
@@ -2603,6 +3075,12 @@ class AuthViewModel: ObservableObject {
             if canModerate {
                 await fetchPendingNewsRequests()
             }
+            
+            await notifyAdmins(
+                title: "حذف خبر",
+                body: "تم حذف خبر منشور.",
+                kind: "news_add"
+            )
         } catch {
             Log.error("خطأ حذف الخبر: \(error.localizedDescription)")
         }
@@ -2631,6 +3109,11 @@ class AuthViewModel: ObservableObject {
                 .execute()
             
             await sendExternalAdminPush(
+                title: "بلاغ جديد على خبر",
+                body: "وصل بلاغ جديد ويحتاج مراجعة الإدارة.",
+                kind: "news_report"
+            )
+            await notifyAdmins(
                 title: "بلاغ جديد على خبر",
                 body: "وصل بلاغ جديد ويحتاج مراجعة الإدارة.",
                 kind: "news_report"
@@ -2717,7 +3200,12 @@ class AuthViewModel: ObservableObject {
 
             await sendExternalAdminPush(
                 title: "رسالة تواصل جديدة",
-                body: "وصلت رسالة \(category) جديدة من \(user.firstName).",
+                body: "وصلت رسالة \(category) جديدة.",
+                kind: "contact_message"
+            )
+            await notifyAdmins(
+                title: "رسالة تواصل جديدة",
+                body: "وصلت رسالة \(category) جديدة.",
                 kind: "contact_message"
             )
 
