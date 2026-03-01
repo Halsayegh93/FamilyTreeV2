@@ -26,7 +26,7 @@ struct TreeView: View {
     @State private var isSearchFocused = false
     @State private var searchedMemberID: UUID? = nil
 
-    @State private var scale: CGFloat = 1.0
+    @State private var scale: CGFloat = 0.8
     @State private var treeID = UUID()
     @State private var currentAnchor: UnitPoint = .center
     @GestureState private var gestureZoom: CGFloat = 1.0
@@ -45,19 +45,18 @@ struct TreeView: View {
         cachedVisibleMembers.count > 90
     }
 
-    private var preferredBaseScale: CGFloat {
+    /// الحد الأقصى لعدد العقد المرسومة في وقت واحد لتجنب التهنيق
+    private var maxRenderedNodes: Int {
         let count = cachedVisibleMembers.count
-        if count > 140 { return 0.7 }
-        if count > 100 { return 0.78 }
-        if count > 70 { return 0.88 }
-        if count > 40 { return 0.98 }
-        return 1.14
+        if count > 5000 { return 50 }
+        if count > 2000 { return 80 }
+        if count > 500 { return 120 }
+        return 200
     }
 
-    private func preferredScaleForCurrentExpansion() -> CGFloat {
-        let expansionPenalty = min(CGFloat(activePath.count) * 0.03, 0.22)
-        return max(0.45, preferredBaseScale - expansionPenalty)
-    }
+    private var preferredBaseScale: CGFloat { 0.8 }
+
+    private func preferredScaleForCurrentExpansion() -> CGFloat { 0.8 }
 
     private var currentZoomPercentText: String {
         let zoom = Int((scale * gestureZoom * 100).rounded())
@@ -491,7 +490,7 @@ struct TreeView: View {
                         .background(Color.gray.opacity(0.2))
 
                     // زر تكبير
-                    Button(action: { withAnimation(.easeInOut(duration: 0.3)) { scale = min(scale + 0.15, 3.0) } }) {
+                    Button(action: { withAnimation(.easeInOut(duration: 0.3)) { scale = min(scale + 0.10, 3.0) } }) {
                         Image(systemName: "plus")
                             .font(DS.Font.scaled(16, weight: .bold))
                             .foregroundColor(DS.Color.primary)
@@ -519,7 +518,7 @@ struct TreeView: View {
                         .background(Color.gray.opacity(0.2))
 
                     // زر تصغير
-                    Button(action: { withAnimation(.easeInOut(duration: 0.3)) { scale = max(scale - 0.15, 0.4) } }) {
+                    Button(action: { withAnimation(.easeInOut(duration: 0.3)) { scale = max(scale - 0.10, 0.4) } }) {
                         Image(systemName: "minus")
                             .font(DS.Font.scaled(16, weight: .bold))
                             .foregroundColor(DS.Color.primary)
@@ -555,7 +554,9 @@ struct TreeView: View {
             level: 0,
             viewMode: viewMode,
             lightweightFullTree: lightweightFullTree,
-            currentLocationMemberID: currentLocationMemberID
+            currentLocationMemberID: currentLocationMemberID,
+            renderedCount: .constant(0),
+            maxRendered: maxRenderedNodes
         )
     }
 
@@ -604,99 +605,18 @@ private struct BoldTreeBackground: View {
         ZStack {
             baseColor
 
-            // دوائر زخرفية أكبر وأجرأ
-            GeometryReader { geo in
-                Circle()
-                    .fill(
-                        RadialGradient(
-                            colors: [
-                                DS.Color.primary.opacity(colorScheme == .dark ? 0.10 : 0.08),
-                                Color.clear
-                            ],
-                            center: .center,
-                            startRadius: 10,
-                            endRadius: 240
-                        )
-                    )
-                    .frame(width: 480, height: 480)
-                    .offset(x: -100, y: -100)
+            // تدرج خفيف بدون GeometryReader
+            LinearGradient(
+                colors: [
+                    DS.Color.primary.opacity(colorScheme == .dark ? 0.06 : 0.04),
+                    Color.clear
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
 
-                Circle()
-                    .fill(
-                        RadialGradient(
-                            colors: [
-                                DS.Color.accent.opacity(colorScheme == .dark ? 0.08 : 0.06),
-                                Color.clear
-                            ],
-                            center: .center,
-                            startRadius: 10,
-                            endRadius: 280
-                        )
-                    )
-                    .frame(width: 560, height: 560)
-                    .offset(x: geo.size.width - 200, y: geo.size.height - 200)
-
-                Circle()
-                    .fill(
-                        RadialGradient(
-                            colors: [
-                                DS.Color.primary.opacity(colorScheme == .dark ? 0.05 : 0.04),
-                                Color.clear
-                            ],
-                            center: .center,
-                            startRadius: 10,
-                            endRadius: 200
-                        )
-                    )
-                    .frame(width: 400, height: 400)
-                    .offset(x: geo.size.width * 0.3, y: geo.size.height * 0.4)
-
-                Circle()
-                    .fill(
-                        RadialGradient(
-                            colors: [
-                                DS.Color.accent.opacity(colorScheme == .dark ? 0.03 : 0.025),
-                                Color.clear
-                            ],
-                            center: .center,
-                            startRadius: 10,
-                            endRadius: 150
-                        )
-                    )
-                    .frame(width: 300, height: 300)
-                    .offset(x: geo.size.width * 0.7, y: geo.size.height * 0.15)
-            }
-
-            // شبكة خطوط — أكثر وضوحاً
-            Canvas { context, size in
-                let spacing: CGFloat = colorScheme == .dark ? 36 : 34
-                var highlight = Path()
-                var shadow = Path()
-
-                var x: CGFloat = 0
-                while x <= size.width + spacing {
-                    highlight.move(to: CGPoint(x: x, y: 0))
-                    highlight.addLine(to: CGPoint(x: x, y: size.height))
-                    shadow.move(to: CGPoint(x: x + 1, y: 0))
-                    shadow.addLine(to: CGPoint(x: x + 1, y: size.height))
-                    x += spacing
-                }
-
-                var y: CGFloat = 0
-                while y <= size.height + spacing {
-                    highlight.move(to: CGPoint(x: 0, y: y))
-                    highlight.addLine(to: CGPoint(x: size.width, y: y))
-                    shadow.move(to: CGPoint(x: 0, y: y + 1))
-                    shadow.addLine(to: CGPoint(x: size.width, y: y + 1))
-                    y += spacing
-                }
-
-                let hOpacity = colorScheme == .dark ? 0.025 : 0.05
-                let sOpacity = colorScheme == .dark ? 0.05 : 0.03
-
-                context.stroke(highlight, with: .color(.white.opacity(hOpacity)), lineWidth: 0.6)
-                context.stroke(shadow, with: .color(.black.opacity(sOpacity)), lineWidth: 0.6)
-            }
+            // شبكة خطوط بسيطة (خفيفة على الأداء)
+            Color.clear
         }
     }
 }
@@ -717,10 +637,12 @@ struct RecursiveTreeBranch: View {
     var viewMode: TreeDisplayMode
     let lightweightFullTree: Bool
     let currentLocationMemberID: UUID?
+    @Binding var renderedCount: Int
+    let maxRendered: Int
 
     @State private var isExpanded: Bool
 
-    init(member: FamilyMember, childrenByFatherId: [UUID: [FamilyMember]], ancestorIDs: Set<UUID>, activePath: Binding<Set<UUID>>, searchedMemberID: Binding<UUID?>, selectedMember: Binding<FamilyMember?>, scrollTarget: Binding<UUID?>, scrollAnchor: Binding<UnitPoint>, scrollCounter: Binding<Int>, level: Int, viewMode: TreeDisplayMode, lightweightFullTree: Bool, currentLocationMemberID: UUID?) {
+    init(member: FamilyMember, childrenByFatherId: [UUID: [FamilyMember]], ancestorIDs: Set<UUID>, activePath: Binding<Set<UUID>>, searchedMemberID: Binding<UUID?>, selectedMember: Binding<FamilyMember?>, scrollTarget: Binding<UUID?>, scrollAnchor: Binding<UnitPoint>, scrollCounter: Binding<Int>, level: Int, viewMode: TreeDisplayMode, lightweightFullTree: Bool, currentLocationMemberID: UUID?, renderedCount: Binding<Int>, maxRendered: Int) {
         self.member = member
         self.childrenByFatherId = childrenByFatherId
         self.ancestorIDs = ancestorIDs
@@ -734,6 +656,8 @@ struct RecursiveTreeBranch: View {
         self.viewMode = viewMode
         self.lightweightFullTree = lightweightFullTree
         self.currentLocationMemberID = currentLocationMemberID
+        self._renderedCount = renderedCount
+        self.maxRendered = maxRendered
         self._isExpanded = State(initialValue: level == 0)
     }
 
@@ -745,6 +669,7 @@ struct RecursiveTreeBranch: View {
             return allChildren
         }
 
+        // إذا فيه فرع مفتوح، نعرض بس الفرع المفتوح
         if let focusedChild = allChildren.first(where: { activePath.contains($0.id) }) {
             return [focusedChild]
         }
@@ -782,7 +707,6 @@ struct RecursiveTreeBranch: View {
                         searchedMemberID = nil
                     }
                 }
-                // بعد فتح العقدة، ننتقل للعضو ليكون في النص مع أبنائه
                 if willExpand {
                     Task {
                         try? await Task.sleep(nanoseconds: 200_000_000)
@@ -791,10 +715,12 @@ struct RecursiveTreeBranch: View {
                     }
                 }
             }.id(member.id)
+            .onAppear { renderedCount += 1 }
 
+            // ما نعرض الأبناء إلا إذا العقدة مفتوحة فعلياً (expanded أو في المسار النشط)
             let isPathOpen = viewMode == .fullTree || activePath.contains(member.id) || isExpanded
 
-            if isPathOpen {
+            if isPathOpen && renderedCount < maxRendered {
                 let childrenToDisplay = self.visibleChildren
 
                 if !childrenToDisplay.isEmpty {
@@ -803,7 +729,6 @@ struct RecursiveTreeBranch: View {
                     let connectorHeight: CGFloat = viewMode == .fullTree ? 12 : 16
 
                     VStack(spacing: verticalSpacing) {
-                        // خط الربط العمودي من الأب
                         Rectangle()
                             .fill(connectorColor)
                             .frame(width: 2, height: connectorHeight)
@@ -830,7 +755,9 @@ struct RecursiveTreeBranch: View {
                                         level: level + 1,
                                         viewMode: viewMode,
                                         lightweightFullTree: lightweightFullTree,
-                                        currentLocationMemberID: currentLocationMemberID
+                                        currentLocationMemberID: currentLocationMemberID,
+                                        renderedCount: $renderedCount,
+                                        maxRendered: maxRendered
                                     )
                                 }
                             }
@@ -1071,7 +998,17 @@ struct TreeMemberNode: View {
                             .offset(y: -16)
                     }
                 }
-                .onAppear { shouldLoadImage = true }
+                .onAppear {
+                    // تأخير تحميل الصور حسب المستوى لتحسين الأداء
+                    if level <= 1 {
+                        shouldLoadImage = true
+                    } else {
+                        Task {
+                            try? await Task.sleep(nanoseconds: UInt64(level) * 200_000_000)
+                            shouldLoadImage = true
+                        }
+                    }
+                }
 
                 Button(action: onToggle) {
                     VStack(spacing: 4) {

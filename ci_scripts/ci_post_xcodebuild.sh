@@ -35,5 +35,18 @@ if [ -n "$CI_ARCHIVE_PATH" ] && [ -d "$CI_ARCHIVE_PATH" ]; then
     fi
 fi
 
+# --------------------------------------------------
+# 3. Count Swift source files
+# --------------------------------------------------
+echo ""
+SWIFT_COUNT=$(find "$CI_PRIMARY_REPOSITORY_PATH/FamilyTreeV2" -name "*.swift" -not -name "* 2*" -type f 2>/dev/null | wc -l | tr -d ' ')
+echo "Swift source files: $SWIFT_COUNT"
+
+# --------------------------------------------------
+# 4. Build duration note
+# --------------------------------------------------
+echo ""
+echo "Branch: ${CI_BRANCH:-unknown}"
+echo "Commit: ${CI_COMMIT:-unknown}"
 echo ""
 echo "Post-build complete."

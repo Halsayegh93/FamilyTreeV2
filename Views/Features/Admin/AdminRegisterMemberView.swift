@@ -5,26 +5,18 @@ struct AdminRegisterMemberView: View {
     @Environment(\.dismiss) var dismiss
 
     @State private var fullName: String = ""
+    @State private var familyName: String = ""
     @State private var selectedGender: String = "male"
     @State private var hasBirthDate: Bool = false
     @State private var birthDate: Date = Calendar.current.date(byAdding: .year, value: -20, to: Date()) ?? Date()
     @State private var phoneNumber: String = ""
     @State private var selectedPhoneCountry: KuwaitPhone.Country = KuwaitPhone.defaultCountry
-    @State private var showingAlert = false
     @State private var showingSuccess = false
 
     // Animation states
     @State private var headerScale: CGFloat = 0.8
     @State private var headerOpacity: CGFloat = 0
     @State private var cardsAppeared = false
-
-    /// عدد أجزاء الاسم المدخل
-    private var nameParts: [String] {
-        fullName
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .split(whereSeparator: \.isWhitespace)
-            .map(String.init)
-    }
 
     var body: some View {
         ZStack {
@@ -35,20 +27,20 @@ struct AdminRegisterMemberView: View {
 
             VStack(spacing: 0) {
                 ScrollView(showsIndicators: false) {
-                    VStack(spacing: DS.Spacing.xxxl) {
+                    VStack(spacing: DS.Spacing.xl) {
                         // Header with gradient icon
                         headerSection
                             .scaleEffect(headerScale)
                             .opacity(headerOpacity)
 
-                        VStack(spacing: DS.Spacing.xl) {
+                        VStack(spacing: DS.Spacing.md) {
                             // Full name field (5-part)
                             nameFieldSection
                                 .opacity(cardsAppeared ? 1 : 0)
                                 .offset(y: cardsAppeared ? 0 : 20)
 
-                            // Name parts counter hint + family name
-                            namePartsHint
+                            // Family name field
+                            familyNameSection
                                 .opacity(cardsAppeared ? 1 : 0)
                                 .offset(y: cardsAppeared ? 0 : 25)
 
@@ -80,11 +72,6 @@ struct AdminRegisterMemberView: View {
         .navigationTitle(L10n.t("تسجيل عضو جديد", "Register New Member"))
         .navigationBarTitleDisplayMode(.inline)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-        .alert(L10n.t("الاسم غير مكتمل", "Incomplete Name"), isPresented: $showingAlert) {
-            Button(L10n.t("حسناً", "OK"), role: .cancel) { }
-        } message: {
-            Text(L10n.t("يرجى كتابة الاسم الخماسي كاملاً (الاسم الأول، اسم الأب، اسم الجد، اسم الجد الثاني، اسم العائلة).", "Please enter your full 5-part name (first, father, grandfather, great-grandfather, family name)."))
-        }
         .alert(L10n.t("تم التسجيل", "Registered"), isPresented: $showingSuccess) {
             Button(L10n.t("حسناً", "OK"), role: .cancel) { dismiss() }
         } message: {
@@ -128,118 +115,98 @@ struct AdminRegisterMemberView: View {
                 .foregroundColor(DS.Color.textSecondary)
                 .multilineTextAlignment(.center)
         }
-        .padding(.top, DS.Spacing.xl)
+        .padding(.top, DS.Spacing.md)
     }
 
     // MARK: - Name Field Section
     private var nameFieldSection: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            DSSectionHeader(title: L10n.t("الاسم الخماسي الكامل", "Full 5-Part Name"), icon: "person.fill")
-                .font(DS.Font.title3)
+        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+            DSSectionHeader(title: L10n.t("الاسم الخماسي", "Full Name (5 parts)"), icon: "person.fill")
 
             DSCard {
-                HStack(spacing: DS.Spacing.md) {
+                HStack(spacing: DS.Spacing.sm) {
                     DSIcon("person.fill", color: DS.Color.primary)
-                    TextField(L10n.t("الاسم الأول + الأب + الجد + الجد الثاني + العائلة", "First Father Grand-Father Great-Grand Family"), text: $fullName)
+                    TextField(L10n.t("مثال: حسن أحمد علي محمد السالم", "e.g. John Edward James Smith Jr"), text: $fullName)
                         .font(DS.Font.body)
-                        .multilineTextAlignment(L10n.isArabic ? .leading : .trailing)
                 }
-                .padding(.horizontal, DS.Spacing.lg)
-                .padding(.vertical, DS.Spacing.md)
+                .padding(.horizontal, DS.Spacing.md)
+                .padding(.vertical, DS.Spacing.sm)
             }
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.xl)
-                    .stroke(DS.Color.gradientPrimary, lineWidth: 1)
-                    .opacity(0.3)
-            )
         }
     }
 
-    // MARK: - Name Parts Hint
-    private var namePartsHint: some View {
-        VStack(spacing: DS.Spacing.sm) {
-            HStack(spacing: DS.Spacing.sm) {
-                let count = nameParts.count
-                let isComplete = count >= 5
+    // MARK: - Family Name Section
+    private var familyNameSection: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+            DSSectionHeader(title: L10n.t("اسم العائلة", "Family Name"), icon: "person.2.fill")
 
-                Image(systemName: isComplete ? "checkmark.circle.fill" : "info.circle.fill")
-                    .font(DS.Font.scaled(14))
-                    .foregroundColor(isComplete ? DS.Color.success : DS.Color.warning)
-
-                Text(L10n.t(
-                    "عدد أجزاء الاسم: \(count) من 5",
-                    "Name parts: \(count) of 5"
-                ))
-                .font(DS.Font.caption1)
-                .foregroundColor(isComplete ? DS.Color.success : DS.Color.warning)
-
-                Spacer()
-
-                if isComplete {
-                    Text(L10n.t("مكتمل", "Complete"))
-                        .font(DS.Font.caption2)
-                        .foregroundColor(DS.Color.success)
-                        .padding(.horizontal, DS.Spacing.sm)
-                        .padding(.vertical, 2)
-                        .background(DS.Color.success.opacity(0.1))
-                        .cornerRadius(DS.Radius.sm)
-                }
-            }
-
-            // عرض اسم العائلة
-            if nameParts.count >= 5 {
+            DSCard {
                 HStack(spacing: DS.Spacing.sm) {
-                    DSIcon("house.fill", color: DS.Color.neonPurple, size: 14)
-                    Text(L10n.t("اسم العائلة:", "Family Name:"))
-                        .font(DS.Font.caption1)
-                        .foregroundColor(DS.Color.textSecondary)
-                    Text(nameParts.last ?? "")
-                        .font(DS.Font.caption1)
-                        .fontWeight(.semibold)
-                        .foregroundColor(DS.Color.textPrimary)
-                    Spacer()
+                    DSIcon("person.2.fill", color: DS.Color.accent)
+                    TextField(L10n.t("مثال: آل محمد علي", "e.g. Al-Mohammad Ali"), text: $familyName)
+                        .font(DS.Font.body)
                 }
+                .padding(.horizontal, DS.Spacing.md)
+                .padding(.vertical, DS.Spacing.sm)
             }
         }
-        .padding(.horizontal, DS.Spacing.sm)
     }
 
     // MARK: - Gender Section
     private var genderSection: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            DSSectionHeader(title: L10n.t("الجنس", "Gender"), icon: "person.2.fill")
-                .font(DS.Font.title3)
+        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+            DSSectionHeader(title: L10n.t("الجنس", "Gender"), icon: "figure.dress.line.vertical.figure")
 
             DSCard {
-                HStack(spacing: DS.Spacing.md) {
-                    DSIcon("person.2.fill", color: DS.Color.neonCyan)
+                HStack(spacing: DS.Spacing.sm) {
+                    DSIcon("figure.dress.line.vertical.figure", color: DS.Color.neonPurple)
 
-                    Picker("", selection: $selectedGender) {
-                        Text(L10n.t("ذكر", "Male")).tag("male")
-                        Text(L10n.t("أنثى", "Female")).tag("female")
+                    Text(L10n.t("الجنس", "Gender"))
+                        .font(DS.Font.body)
+                        .foregroundColor(DS.Color.textSecondary)
+
+                    Spacer()
+
+                    Menu {
+                        Button {
+                            selectedGender = "male"
+                        } label: {
+                            Label(L10n.t("ذكر", "Male"), systemImage: selectedGender == "male" ? "checkmark" : "")
+                        }
+                        Button {
+                            selectedGender = "female"
+                        } label: {
+                            Label(L10n.t("أنثى", "Female"), systemImage: selectedGender == "female" ? "checkmark" : "")
+                        }
+                    } label: {
+                        HStack(spacing: DS.Spacing.xs) {
+                            Text(selectedGender == "male" ? L10n.t("ذكر", "Male") : L10n.t("أنثى", "Female"))
+                                .font(DS.Font.body)
+                                .foregroundColor(DS.Color.textPrimary)
+                            Image(systemName: "chevron.up.chevron.down")
+                                .font(DS.Font.caption1)
+                                .foregroundColor(DS.Color.textTertiary)
+                        }
+                        .padding(.horizontal, DS.Spacing.md)
+                        .padding(.vertical, DS.Spacing.xs)
+                        .background(DS.Color.surface)
+                        .cornerRadius(DS.Radius.sm)
                     }
-                    .pickerStyle(.segmented)
                 }
-                .padding(.horizontal, DS.Spacing.lg)
-                .padding(.vertical, DS.Spacing.md)
+                .padding(.horizontal, DS.Spacing.md)
+                .padding(.vertical, DS.Spacing.sm)
             }
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.xl)
-                    .stroke(DS.Color.gradientAccent, lineWidth: 1)
-                    .opacity(0.3)
-            )
         }
     }
 
     // MARK: - Birth Date Section
     private var birthDateSection: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
             DSSectionHeader(title: L10n.t("تاريخ الميلاد", "Birth Date"), icon: "calendar")
-                .font(DS.Font.title3)
 
             DSCard {
                 VStack(spacing: 0) {
-                    HStack(spacing: DS.Spacing.md) {
+                    HStack(spacing: DS.Spacing.sm) {
                         DSIcon("calendar.badge.checkmark", color: DS.Color.primary)
                         Text(L10n.t("تاريخ الميلاد متوفر", "Birth date available"))
                             .font(DS.Font.body)
@@ -249,12 +216,12 @@ struct AdminRegisterMemberView: View {
                             .labelsHidden()
                             .tint(DS.Color.primary)
                     }
-                    .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.vertical, DS.Spacing.md)
+                    .padding(.horizontal, DS.Spacing.md)
+                    .padding(.vertical, DS.Spacing.sm)
 
                     if hasBirthDate {
                         DSDivider()
-                        HStack(spacing: DS.Spacing.md) {
+                        HStack(spacing: DS.Spacing.sm) {
                             DSIcon("calendar", color: DS.Color.neonPurple)
                             Text(L10n.t("اختر التاريخ", "Pick Date"))
                                 .font(DS.Font.body)
@@ -264,24 +231,18 @@ struct AdminRegisterMemberView: View {
                                 .labelsHidden()
                                 .environment(\.locale, Locale(identifier: "en_US"))
                         }
-                        .padding(.horizontal, DS.Spacing.lg)
-                        .padding(.vertical, DS.Spacing.md)
+                        .padding(.horizontal, DS.Spacing.md)
+                        .padding(.vertical, DS.Spacing.sm)
                     }
                 }
             }
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.xl)
-                    .stroke(DS.Color.gradientAccent, lineWidth: 1)
-                    .opacity(0.3)
-            )
         }
     }
 
     // MARK: - Phone Section
     private var phoneSection: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
             DSSectionHeader(title: L10n.t("رقم الهاتف (اختياري)", "Phone Number (Optional)"), icon: "phone.fill")
-                .font(DS.Font.title3)
 
             DSCard {
                 HStack(spacing: DS.Spacing.sm) {
@@ -311,8 +272,8 @@ struct AdminRegisterMemberView: View {
                         .keyboardType(.phonePad)
                         .multilineTextAlignment(.leading)
                 }
-                .padding(.horizontal, DS.Spacing.lg)
-                .padding(.vertical, DS.Spacing.md)
+                .padding(.horizontal, DS.Spacing.md)
+                .padding(.vertical, DS.Spacing.sm)
                 .onChange(of: phoneNumber) { _, newValue in
                     phoneNumber = KuwaitPhone.userTypedDigits(newValue, maxDigits: selectedPhoneCountry.maxDigits)
                 }
@@ -321,18 +282,15 @@ struct AdminRegisterMemberView: View {
                 }
                 .environment(\.layoutDirection, .leftToRight)
             }
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.xl)
-                    .stroke(DS.Color.gradientPrimary, lineWidth: 1)
-                    .opacity(0.3)
-            )
         }
     }
 
     // MARK: - Submit Button
     private var submitButton: some View {
-        VStack(spacing: DS.Spacing.md) {
-            let isDisabled = nameParts.count < 5 || authVM.isLoading
+        VStack(spacing: DS.Spacing.sm) {
+            let trimmedFull = fullName.trimmingCharacters(in: .whitespacesAndNewlines)
+            let trimmedFamily = familyName.trimmingCharacters(in: .whitespacesAndNewlines)
+            let isDisabled = trimmedFull.isEmpty || trimmedFamily.isEmpty || authVM.isLoading
             DSPrimaryButton(
                 L10n.t("إضافة العضو", "Add Member"),
                 icon: "person.badge.plus",
@@ -340,38 +298,34 @@ struct AdminRegisterMemberView: View {
                 useGradient: !isDisabled,
                 color: isDisabled ? .gray : DS.Color.primary
             ) {
-                if nameParts.count < 5 {
-                    showingAlert = true
-                } else {
-                    let formatter = DateFormatter()
-                    formatter.dateFormat = "yyyy-MM-dd"
-                    formatter.locale = Locale(identifier: "en_US")
+                let formatter = DateFormatter()
+                formatter.dateFormat = "yyyy-MM-dd"
+                formatter.locale = Locale(identifier: "en_US")
 
-                    let first = nameParts[0]
-                    let full = nameParts.joined(separator: " ")
-                    let birthStr = hasBirthDate ? formatter.string(from: birthDate) : nil
-                    let storedPhone = KuwaitPhone.normalizedForStorage(
-                        country: selectedPhoneCountry,
-                        rawLocalDigits: phoneNumber
+                let parts = trimmedFull.split(whereSeparator: \.isWhitespace).map(String.init)
+                let first = parts.first ?? trimmedFull
+                let birthStr = hasBirthDate ? formatter.string(from: birthDate) : nil
+                let storedPhone = KuwaitPhone.normalizedForStorage(
+                    country: selectedPhoneCountry,
+                    rawLocalDigits: phoneNumber
+                )
+
+                Task {
+                    let success = await authVM.adminAddMember(
+                        fullName: trimmedFull,
+                        firstName: first,
+                        birthDate: birthStr,
+                        gender: selectedGender,
+                        phoneNumber: storedPhone
                     )
-
-                    Task {
-                        let success = await authVM.adminAddMember(
-                            fullName: full,
-                            firstName: first,
-                            birthDate: birthStr,
-                            gender: selectedGender,
-                            phoneNumber: storedPhone
-                        )
-                        if success {
-                            showingSuccess = true
-                        }
+                    if success {
+                        showingSuccess = true
                     }
                 }
             }
             .disabled(isDisabled)
             .padding(.horizontal, DS.Spacing.lg)
-            .padding(.bottom, DS.Spacing.xxxl)
+            .padding(.bottom, DS.Spacing.xxl)
         }
     }
 }

@@ -4,10 +4,11 @@ struct RegistrationView: View {
     @EnvironmentObject var authVM: AuthViewModel
 
     @State private var fullName: String = ""
+    @State private var familyName: String = ""
     @State private var birthDate: Date = Calendar.current.date(byAdding: .year, value: -20, to: Date()) ?? Date()
     @State private var searchText = ""
     @State private var selectedFatherId: UUID?
-    @State private var showingAlert = false
+    @State private var selectedGender: String = "male"
 
     // Animation states
     @State private var headerScale: CGFloat = 0.8
@@ -50,22 +51,32 @@ struct RegistrationView: View {
                 .background(.ultraThinMaterial)
 
                 ScrollView(showsIndicators: false) {
-                    VStack(spacing: DS.Spacing.xxxl) {
+                    VStack(spacing: DS.Spacing.xl) {
                         // Header with gradient icon
                         headerSection
                             .scaleEffect(headerScale)
                             .opacity(headerOpacity)
 
-                        VStack(spacing: DS.Spacing.xl) {
+                        VStack(spacing: DS.Spacing.md) {
                             // Full name field
                             nameFieldSection
                                 .opacity(cardsAppeared ? 1 : 0)
                                 .offset(y: cardsAppeared ? 0 : 20)
 
+                            // Family name field
+                            familyNameSection
+                                .opacity(cardsAppeared ? 1 : 0)
+                                .offset(y: cardsAppeared ? 0 : 25)
+
                             // Birth date field
                             birthDateSection
                                 .opacity(cardsAppeared ? 1 : 0)
                                 .offset(y: cardsAppeared ? 0 : 30)
+
+                            // Gender selection
+                            genderSection
+                                .opacity(cardsAppeared ? 1 : 0)
+                                .offset(y: cardsAppeared ? 0 : 35)
 
                             // Father selection
                             fatherSelectionSection
@@ -84,11 +95,6 @@ struct RegistrationView: View {
         }
         .navigationBarHidden(true)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-        .alert(L10n.t("الاسم غير مكتمل", "Incomplete Name"), isPresented: $showingAlert) {
-            Button(L10n.t("حسناً", "OK"), role: .cancel) { }
-        } message: {
-            Text(L10n.t("يرجى كتابة الاسم الرباعي لضمان ربطك بالشجرة بشكل صحيح.", "Please enter your full name to be linked correctly in the family tree."))
-        }
         .onAppear {
             Task { await authVM.fetchAllMembers() }
             withAnimation(.spring(response: 0.8, dampingFraction: 0.6).delay(0.2)) {
@@ -168,41 +174,50 @@ struct RegistrationView: View {
                 .foregroundColor(DS.Color.textSecondary)
                 .multilineTextAlignment(.center)
         }
-        .padding(.top, DS.Spacing.xl)
+        .padding(.top, DS.Spacing.md)
     }
 
     // MARK: - Name Field Section
     private var nameFieldSection: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            DSSectionHeader(title: L10n.t("الاسم الرباعي الكامل", "Full Name"), icon: "person.fill")
-                .font(DS.Font.title3)
+        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+            DSSectionHeader(title: L10n.t("الاسم الخماسي", "Full Name (5 parts)"), icon: "person.fill")
 
             DSCard {
-                HStack(spacing: DS.Spacing.md) {
+                HStack(spacing: DS.Spacing.sm) {
                     DSIcon("person.fill", color: DS.Color.primary)
-                    TextField(L10n.t("مثال: حسن أحمد السالم...", "e.g. John Edward Smith..."), text: $fullName)
+                    TextField(L10n.t("مثال: حسن أحمد علي محمد السالم", "e.g. John Edward James Smith Jr"), text: $fullName)
                         .font(DS.Font.body)
-                        .multilineTextAlignment(L10n.isArabic ? .leading : .trailing)
                 }
-                .padding(.horizontal, DS.Spacing.lg)
-                .padding(.vertical, DS.Spacing.md)
+                .padding(.horizontal, DS.Spacing.md)
+                .padding(.vertical, DS.Spacing.sm)
             }
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.xl)
-                    .stroke(DS.Color.gradientPrimary, lineWidth: 1)
-                    .opacity(0.3)
-            )
+        }
+    }
+
+    // MARK: - Family Name Section
+    private var familyNameSection: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+            DSSectionHeader(title: L10n.t("اسم العائلة", "Family Name"), icon: "person.2.fill")
+
+            DSCard {
+                HStack(spacing: DS.Spacing.sm) {
+                    DSIcon("person.2.fill", color: DS.Color.accent)
+                    TextField(L10n.t("مثال: آل محمد علي", "e.g. Al-Mohammad Ali"), text: $familyName)
+                        .font(DS.Font.body)
+                }
+                .padding(.horizontal, DS.Spacing.md)
+                .padding(.vertical, DS.Spacing.sm)
+            }
         }
     }
 
     // MARK: - Birth Date Section
     private var birthDateSection: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
             DSSectionHeader(title: L10n.t("تاريخ الميلاد", "Birth Date"), icon: "calendar")
-                .font(DS.Font.title3)
 
             DSCard {
-                HStack(spacing: DS.Spacing.md) {
+                HStack(spacing: DS.Spacing.sm) {
                     DSIcon("calendar", color: DS.Color.neonPurple)
                     Text(L10n.t("اختر التاريخ", "Pick Date"))
                         .font(DS.Font.body)
@@ -212,33 +227,73 @@ struct RegistrationView: View {
                         .labelsHidden()
                         .environment(\.locale, Locale(identifier: "en_US"))
                 }
-                .padding(.horizontal, DS.Spacing.lg)
-                .padding(.vertical, DS.Spacing.md)
+                .padding(.horizontal, DS.Spacing.md)
+                .padding(.vertical, DS.Spacing.sm)
             }
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.xl)
-                    .stroke(DS.Color.gradientAccent, lineWidth: 1)
-                    .opacity(0.3)
-            )
+        }
+    }
+
+    // MARK: - Gender Section
+    private var genderSection: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+            DSSectionHeader(title: L10n.t("الجنس", "Gender"), icon: "figure.dress.line.vertical.figure")
+
+            DSCard {
+                HStack(spacing: DS.Spacing.sm) {
+                    DSIcon("figure.dress.line.vertical.figure", color: DS.Color.neonPurple)
+
+                    Text(L10n.t("الجنس", "Gender"))
+                        .font(DS.Font.body)
+                        .foregroundColor(DS.Color.textSecondary)
+
+                    Spacer()
+
+                    Menu {
+                        Button {
+                            selectedGender = "male"
+                        } label: {
+                            Label(L10n.t("ذكر", "Male"), systemImage: selectedGender == "male" ? "checkmark" : "")
+                        }
+                        Button {
+                            selectedGender = "female"
+                        } label: {
+                            Label(L10n.t("أنثى", "Female"), systemImage: selectedGender == "female" ? "checkmark" : "")
+                        }
+                    } label: {
+                        HStack(spacing: DS.Spacing.xs) {
+                            Text(selectedGender == "male" ? L10n.t("ذكر", "Male") : L10n.t("أنثى", "Female"))
+                                .font(DS.Font.body)
+                                .foregroundColor(DS.Color.textPrimary)
+                            Image(systemName: "chevron.up.chevron.down")
+                                .font(DS.Font.caption1)
+                                .foregroundColor(DS.Color.textTertiary)
+                        }
+                        .padding(.horizontal, DS.Spacing.md)
+                        .padding(.vertical, DS.Spacing.xs)
+                        .background(DS.Color.surface)
+                        .cornerRadius(DS.Radius.sm)
+                    }
+                }
+                .padding(.horizontal, DS.Spacing.md)
+                .padding(.vertical, DS.Spacing.sm)
+            }
         }
     }
 
     // MARK: - Father Selection Section
     private var fatherSelectionSection: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
             DSSectionHeader(title: L10n.t("اختيار الأب من الشجرة", "Select Father from Tree"), icon: "person.2.fill")
-                .font(DS.Font.title3)
 
             DSCard {
                 // Search field
-                HStack(spacing: DS.Spacing.md) {
+                HStack(spacing: DS.Spacing.sm) {
                     DSIcon("magnifyingglass", color: DS.Color.primary)
                     TextField(L10n.t("ابحث عن اسم الأب...", "Search father's name..."), text: $searchText)
                         .font(DS.Font.body)
-                        .multilineTextAlignment(L10n.isArabic ? .leading : .trailing)
                 }
-                .padding(.horizontal, DS.Spacing.lg)
-                .padding(.vertical, DS.Spacing.md)
+                .padding(.horizontal, DS.Spacing.md)
+                .padding(.vertical, DS.Spacing.sm)
 
                 if let fatherId = selectedFatherId,
                    let father = authVM.allMembers.first(where: { $0.id == fatherId }) {
@@ -322,18 +377,13 @@ struct RegistrationView: View {
                     .frame(maxHeight: 200)
                 }
             }
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.xl)
-                    .stroke(DS.Color.gradientPrimary, lineWidth: 1)
-                    .opacity(0.3)
-            )
         }
     }
 
     // MARK: - Submit Button
     private var submitButton: some View {
-        VStack(spacing: DS.Spacing.md) {
-            let isDisabled = fullName.count < 5 || authVM.isLoading
+        VStack(spacing: DS.Spacing.sm) {
+            let isDisabled = fullName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || familyName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || authVM.isLoading
             DSPrimaryButton(
                 L10n.t("إرسال طلب الانضمام", "Submit Join Request"),
                 icon: "paperplane.fill",
@@ -341,34 +391,20 @@ struct RegistrationView: View {
                 useGradient: !isDisabled,
                 color: isDisabled ? .gray : DS.Color.primary
             ) {
-                if fullName.count < 10 {
-                    showingAlert = true
-                } else {
-                    let parts = splitName(fullName)
-                    Task {
-                        await authVM.registerNewUser(
-                            firstName: parts.firstName,
-                            familyName: parts.familyName,
-                            birthDate: birthDate
-                        )
-                    }
+                let trimmedFull = fullName.trimmingCharacters(in: .whitespacesAndNewlines)
+                let trimmedFamily = familyName.trimmingCharacters(in: .whitespacesAndNewlines)
+                Task {
+                    await authVM.registerNewUser(
+                        firstName: trimmedFull,
+                        familyName: trimmedFamily,
+                        birthDate: birthDate,
+                        gender: selectedGender
+                    )
                 }
             }
             .disabled(isDisabled)
             .padding(.horizontal, DS.Spacing.lg)
-            .padding(.bottom, DS.Spacing.xxxl)
+            .padding(.bottom, DS.Spacing.xxl)
         }
-    }
-
-    private func splitName(_ value: String) -> (firstName: String, familyName: String) {
-        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        let comps = trimmed.split(whereSeparator: \.isWhitespace).map(String.init)
-
-        guard let first = comps.first else {
-            return ("", "")
-        }
-
-        let family = comps.dropFirst().joined(separator: " ")
-        return (first, family)
     }
 }

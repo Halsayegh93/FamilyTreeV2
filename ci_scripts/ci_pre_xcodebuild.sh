@@ -22,12 +22,18 @@ REQUIRED_FILES=(
     "FamilyTreeV2.xcodeproj/project.pbxproj"
     "FamilyTreeV2/FamilyTreeV2/FamilyTreeV2App.swift"
     "Core/SupabaseConfig.swift"
+    "Components/Shared/DesignSystem.swift"
+    "ViewModels/Auth/AuthViewModel.swift"
+    "Models/Tree/FamilyMember.swift"
 )
 
 MISSING=0
 for file in "${REQUIRED_FILES[@]}"; do
-    if [ ! -f "$CI_PRIMARY_REPOSITORY_PATH/$file" ]; then
-        echo "WARNING: Missing file — $file"
+    FULL_PATH="$CI_PRIMARY_REPOSITORY_PATH/$file"
+    if [ -f "$FULL_PATH" ]; then
+        echo "  OK: $file"
+    else
+        echo "  MISSING: $file"
         MISSING=$((MISSING + 1))
     fi
 done
@@ -38,4 +44,25 @@ else
     echo "All required files present."
 fi
 
+# --------------------------------------------------
+# 2. Check for duplicate files (common issue)
+# --------------------------------------------------
+echo ""
+echo "Checking for duplicate files..."
+DUPES=$(find "$CI_PRIMARY_REPOSITORY_PATH/FamilyTreeV2" -name "* 2.*" -type f 2>/dev/null | wc -l | tr -d ' ')
+if [ "$DUPES" -gt 0 ]; then
+    echo "WARNING: Found $DUPES duplicate files (with ' 2' suffix). These may cause build errors."
+    find "$CI_PRIMARY_REPOSITORY_PATH/FamilyTreeV2" -name "* 2.*" -type f 2>/dev/null
+else
+    echo "No duplicate files found."
+fi
+
+# --------------------------------------------------
+# 3. Disk space check
+# --------------------------------------------------
+echo ""
+echo "Disk space available:"
+df -h / | tail -1 | awk '{print "  " $4 " free"}'
+
+echo ""
 echo "Pre-build checks complete."
