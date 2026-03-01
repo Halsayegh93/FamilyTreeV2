@@ -42,7 +42,7 @@ struct HomeNewsView: View {
                                                 postId: news.id,
                                                 authorName: news.author_name,
                                                 role: news.author_role,
-                                                roleColor: news.role_color == "purple" ? .purple : (news.role_color == "orange" ? .orange : DS.Color.primary),
+                                                roleColor: news.role_color == "purple" ? DS.Color.adminRole : (news.role_color == "orange" ? DS.Color.supervisorRole : DS.Color.primary),
                                                 time: getRelativeTime(for: news.timestamp),
                                                 type: news.type,
                                                 content: news.content,
@@ -370,10 +370,10 @@ struct HomeNewsCardView: View {
 
     private func colorForType(_ type: String) -> Color {
         switch type {
-        case "وفاة": return .gray
-        case "زواج": return .pink
-        case "مولود": return .mint
-        case "تصويت": return .orange
+        case "وفاة": return DS.Color.newsDeath
+        case "زواج": return DS.Color.newsWedding
+        case "مولود": return DS.Color.newsBirth
+        case "تصويت": return DS.Color.newsVote
         default: return DS.Color.primary
         }
     }
@@ -667,10 +667,10 @@ struct AddNewsView: View {
 
     private func colorForType(_ type: String) -> Color {
         switch type {
-        case "وفاة": return .gray
-        case "زواج": return .pink
-        case "مولود": return .mint
-        case "تصويت": return .orange
+        case "وفاة": return DS.Color.newsDeath
+        case "زواج": return DS.Color.newsWedding
+        case "مولود": return DS.Color.newsBirth
+        case "تصويت": return DS.Color.newsVote
         default: return DS.Color.primary
         }
     }
@@ -876,10 +876,10 @@ struct EditNewsView: View {
 
     private func colorForType(_ type: String) -> Color {
         switch type {
-        case "وفاة": return .gray
-        case "زواج": return .pink
-        case "مولود": return .mint
-        case "تصويت": return .orange
+        case "وفاة": return DS.Color.newsDeath
+        case "زواج": return DS.Color.newsWedding
+        case "مولود": return DS.Color.newsBirth
+        case "تصويت": return DS.Color.newsVote
         default: return DS.Color.primary
         }
     }

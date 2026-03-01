@@ -729,7 +729,7 @@ struct GalleryPhotoViewer: View {
                 Button(role: .destructive, action: onDelete) {
                     Image(systemName: "trash.circle.fill")
                         .font(DS.Font.scaled(30))
-                        .foregroundStyle(.red, .black.opacity(0.35))
+                        .foregroundStyle(DS.Color.error, .black.opacity(0.35))
                 }
             }
             .padding(.horizontal, 20)

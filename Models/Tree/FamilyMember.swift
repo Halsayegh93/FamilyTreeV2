@@ -72,10 +72,10 @@ struct FamilyMember: Identifiable, Codable, Equatable {
         // نضع التعريف هنا لكي يعمل كود authVM.currentUser?.role.color ✅
         var color: Color {
             switch self {
-            case .admin: return .purple
-            case .supervisor: return .orange
-            case .member: return .blue
-            case .pending: return .gray
+            case .admin: return DS.Color.adminRole
+            case .supervisor: return DS.Color.supervisorRole
+            case .member: return DS.Color.memberRole
+            case .pending: return DS.Color.pendingRole
             }
         }
     }

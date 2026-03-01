@@ -1,26 +1,26 @@
 import SwiftUI
 
 // MARK: - Design Tokens — المحمدعلي Family App
-// Theme: Elegant & Classic | Colors: Warm Gold + Deep Forest Green | Light & Dark Mode
+// Theme: Royal & Modern | Colors: Royal Blue + Gold | Light & Dark Mode
 enum DS {
 
     // MARK: Colors
     enum Color {
-        // Brand — Modern Ocean Blue + Slate
-        static let primary       = SwiftUI.Color(hex: "#2B7A9F") // Ocean Blue
-        static let primaryDark   = SwiftUI.Color(hex: "#1E5474") // Deep Ocean
-        static let primaryLight  = SwiftUI.Color(hex: "#78ACC3") // Light Ocean
-        static let accent        = SwiftUI.Color(hex: "#516F80") // Slate Blue
-        static let accentDark    = SwiftUI.Color(hex: "#344B59") // Dark Slate
-        static let accentLight   = SwiftUI.Color(hex: "#8A9EA9") // Light Slate
+        // Brand — Royal Blue + Gold
+        static let primary       = SwiftUI.Color(hex: "#1B3A8C") // Royal Blue
+        static let primaryDark   = SwiftUI.Color(hex: "#0E2460") // Deep Navy
+        static let primaryLight  = SwiftUI.Color(hex: "#4F74C9") // Light Royal
+        static let accent        = SwiftUI.Color(hex: "#C8962E") // Rich Gold
+        static let accentDark    = SwiftUI.Color(hex: "#9A7321") // Deep Gold
+        static let accentLight   = SwiftUI.Color(hex: "#E6C06A") // Soft Gold
 
-        // Classic Accents — ألوان عصرية هادئة
-        static let neonBlue     = SwiftUI.Color(hex: "#5D8AA8") // Air Force Blue
-        static let neonPurple   = SwiftUI.Color(hex: "#89A6B1") // Soft Blue Grey
-        static let neonCyan     = SwiftUI.Color(hex: "#A3C4D3") // Powder Blue
-        static let neonPink     = SwiftUI.Color(hex: "#D3AEB1") // Soft Rose
+        // Supporting Accents — ألوان مساندة فخمة
+        static let neonBlue     = SwiftUI.Color(hex: "#3B5FBF") // Sapphire
+        static let neonPurple   = SwiftUI.Color(hex: "#7B68AE") // Amethyst
+        static let neonCyan     = SwiftUI.Color(hex: "#E8D5A3") // Champagne Gold
+        static let neonPink     = SwiftUI.Color(hex: "#D4A38C") // Rose Gold
 
-        // Gradients — تدرجات أوشن وسليت
+        // Gradients — تدرجات ملكية
         static let gradientPrimary = LinearGradient(
             colors: [primaryLight, primary, primaryDark],
             startPoint: .topLeading, endPoint: .bottomTrailing
@@ -30,32 +30,40 @@ enum DS {
             startPoint: .topLeading, endPoint: .bottomTrailing
         )
         static let gradientWarm = LinearGradient(
-            colors: [SwiftUI.Color(hex: "#D3AEB1"), SwiftUI.Color(hex: "#B88A8D")],
+            colors: [accentLight, accent],
             startPoint: .leading, endPoint: .trailing
         )
         static let gradientCool = LinearGradient(
-            colors: [neonCyan, primaryLight],
+            colors: [SwiftUI.Color(hex: "#D4E4F7"), primaryLight],
             startPoint: .leading, endPoint: .trailing
         )
         static let gradientDark = LinearGradient(
-            colors: [SwiftUI.Color(hex: "#2E2E2E"), SwiftUI.Color(hex: "#1A1A1A"), SwiftUI.Color(hex: "#0D0D0D")],
+            colors: [SwiftUI.Color(hex: "#1A1A2E"), SwiftUI.Color(hex: "#0F0F1A"), SwiftUI.Color(hex: "#060610")],
             startPoint: .top, endPoint: .bottom
         )
         static let gradientAuth = LinearGradient(
-            colors: [SwiftUI.Color(hex: "#11181C"), primaryDark, accentDark, SwiftUI.Color(hex: "#050B0D")],
+            colors: [SwiftUI.Color(hex: "#0A1628"), primaryDark, SwiftUI.Color(hex: "#1A1235"), SwiftUI.Color(hex: "#050A18")],
             startPoint: .topLeading, endPoint: .bottomTrailing
         )
         static let gradientFire = LinearGradient(
-            colors: [SwiftUI.Color(hex: "#A0522D"), SwiftUI.Color(hex: "#8B4513")], // Kept warm for error states
+            colors: [SwiftUI.Color(hex: "#B85C1E"), SwiftUI.Color(hex: "#8B3A13")],
             startPoint: .topLeading, endPoint: .bottomTrailing
         )
         static let gradientOcean = LinearGradient(
-            colors: [primary, accentDark],
+            colors: [primary, SwiftUI.Color(hex: "#162D6B")],
             startPoint: .topLeading, endPoint: .bottomTrailing
         )
         static let gradientNeon = LinearGradient(
             colors: [primaryLight, neonBlue],
             startPoint: .leading, endPoint: .trailing
+        )
+        static let gradientRoyal = LinearGradient(
+            colors: [primaryDark, primary, accentDark],
+            startPoint: .topLeading, endPoint: .bottomTrailing
+        )
+        static let gradientGold = LinearGradient(
+            colors: [accentLight, accent, accentDark],
+            startPoint: .topLeading, endPoint: .bottomTrailing
         )
 
         // Surfaces
@@ -68,40 +76,56 @@ enum DS {
         static let textSecondary = SwiftUI.Color.secondary
         static let textTertiary  = SwiftUI.Color(.tertiaryLabel)
         static let textOnPrimary = SwiftUI.Color.white
+        static let textGold      = SwiftUI.Color(hex: "#C8962E")
 
-        // Semantic — ألوان أقوى وأكثر رسمية
-        static let success = SwiftUI.Color(hex: "#2F5C3E") // Deep green success
-        static let warning = SwiftUI.Color(hex: "#B88E33") // Dull gold warning
-        static let error   = SwiftUI.Color(hex: "#8C2A2A") // Classic dark red
-        static let info    = SwiftUI.Color(hex: "#496885") // Slate blue
+        // Semantic
+        static let success = SwiftUI.Color(hex: "#1B7A42") // Emerald Green
+        static let warning = SwiftUI.Color(hex: "#D4960A") // Golden Warning
+        static let error   = SwiftUI.Color(hex: "#B5302A") // Crimson Red
+        static let info    = SwiftUI.Color(hex: "#2E5CAD") // Royal Info
 
-        // Role Colors
+        // Role Colors — ألوان الأدوار
         static func role(_ roleColor: SwiftUI.Color) -> SwiftUI.Color { roleColor }
+        static let adminRole      = SwiftUI.Color(hex: "#7B68AE") // Amethyst Purple
+        static let supervisorRole = SwiftUI.Color(hex: "#C8962E") // Gold
+        static let memberRole     = SwiftUI.Color(hex: "#1B3A8C") // Royal Blue
+        static let pendingRole    = SwiftUI.Color.gray
+
+        // News Type Colors — ألوان أنواع الأخبار
+        static let newsWedding  = SwiftUI.Color(hex: "#D4A38C") // Rose Gold
+        static let newsBirth    = SwiftUI.Color(hex: "#4AADA8") // Teal
+        static let newsDeath    = SwiftUI.Color(hex: "#8A8A8E") // Muted Gray
+        static let newsVote     = SwiftUI.Color(hex: "#C8962E") // Gold
+
+        // Status Colors
+        static let deceased         = SwiftUI.Color(hex: "#8A8A8E")
+        static let currentLocation  = SwiftUI.Color(hex: "#34C759") // Active Green
+        static let likeAction       = SwiftUI.Color(hex: "#E8425A") // Like Red
 
         // Quick Access Grid Colors
-        static let gridTree      = SwiftUI.Color(hex: "#344B59") // Dark Slate
-        static let gridAlerts    = SwiftUI.Color(hex: "#8C2A2A") // Red
-        static let gridDiwaniya  = SwiftUI.Color(hex: "#2B7A9F") // Ocean Blue
-        static let gridContact   = SwiftUI.Color(hex: "#516F80") // Slate Blue
+        static let gridTree      = SwiftUI.Color(hex: "#0E2460") // Deep Navy
+        static let gridAlerts    = SwiftUI.Color(hex: "#B5302A") // Crimson
+        static let gridDiwaniya  = SwiftUI.Color(hex: "#1B3A8C") // Royal Blue
+        static let gridContact   = SwiftUI.Color(hex: "#C8962E") // Gold
     }
 
-    // MARK: Typography — خطوط عصرية ونظيفة (Rounded) مع دعم Dynamic Type
+    // MARK: Typography — خطوط حديثة ونظيفة مع دعم Dynamic Type
     enum Font {
-        static let hero        = SwiftUI.Font.system(.largeTitle, design: .rounded).weight(.bold)
-        static let largeTitle  = SwiftUI.Font.system(.largeTitle, design: .rounded).weight(.bold)
-        static let title1      = SwiftUI.Font.system(.title, design: .rounded).weight(.bold)
-        static let title2      = SwiftUI.Font.system(.title2, design: .rounded).weight(.bold)
-        static let title3      = SwiftUI.Font.system(.title3, design: .rounded).weight(.semibold)
-        static let headline    = SwiftUI.Font.system(.headline, design: .rounded).weight(.bold)
-        static let body        = SwiftUI.Font.system(.body, design: .rounded)
-        static let bodyBold    = SwiftUI.Font.system(.body, design: .rounded).weight(.semibold)
-        static let callout     = SwiftUI.Font.system(.callout, design: .rounded)
-        static let calloutBold = SwiftUI.Font.system(.callout, design: .rounded).weight(.bold)
-        static let subheadline = SwiftUI.Font.system(.subheadline, design: .rounded)
-        static let footnote    = SwiftUI.Font.system(.footnote, design: .rounded)
-        static let caption1    = SwiftUI.Font.system(.caption, design: .rounded)
-        static let caption2    = SwiftUI.Font.system(.caption2, design: .rounded)
-        
+        static let hero        = SwiftUI.Font.system(.largeTitle, design: .default).weight(.black)
+        static let largeTitle  = SwiftUI.Font.system(.largeTitle, design: .default).weight(.bold)
+        static let title1      = SwiftUI.Font.system(.title, design: .default).weight(.bold)
+        static let title2      = SwiftUI.Font.system(.title2, design: .default).weight(.bold)
+        static let title3      = SwiftUI.Font.system(.title3, design: .default).weight(.semibold)
+        static let headline    = SwiftUI.Font.system(.headline, design: .default).weight(.bold)
+        static let body        = SwiftUI.Font.system(.body, design: .default)
+        static let bodyBold    = SwiftUI.Font.system(.body, design: .default).weight(.semibold)
+        static let callout     = SwiftUI.Font.system(.callout, design: .default)
+        static let calloutBold = SwiftUI.Font.system(.callout, design: .default).weight(.bold)
+        static let subheadline = SwiftUI.Font.system(.subheadline, design: .default)
+        static let footnote    = SwiftUI.Font.system(.footnote, design: .default)
+        static let caption1    = SwiftUI.Font.system(.caption, design: .default)
+        static let caption2    = SwiftUI.Font.system(.caption2, design: .default)
+
         /// خط مرن يدعم Dynamic Type - يُستخدم بدل .system(size:weight:)
         static func scaled(_ size: CGFloat, weight: SwiftUI.Font.Weight = .regular) -> SwiftUI.Font {
             let style: SwiftUI.Font.TextStyle
@@ -119,7 +143,7 @@ enum DS {
             case 28...35: style = .title
             default: style = .largeTitle
             }
-            return SwiftUI.Font.system(style, design: .rounded).weight(weight)
+            return SwiftUI.Font.system(style, design: .default).weight(weight)
         }
     }
 
@@ -135,14 +159,14 @@ enum DS {
         static let xxxxl: CGFloat = 40
     }
 
-    // MARK: Radius - حواف أقل حدة تناسب الطابع الكلاسيكي
+    // MARK: Radius — حواف حديثة ناعمة
     enum Radius {
-        static let sm:   CGFloat = 6
-        static let md:   CGFloat = 10
-        static let lg:   CGFloat = 14
-        static let xl:   CGFloat = 18
-        static let xxl:  CGFloat = 22
-        static let xxxl: CGFloat = 26
+        static let sm:   CGFloat = 8
+        static let md:   CGFloat = 12
+        static let lg:   CGFloat = 16
+        static let xl:   CGFloat = 20
+        static let xxl:  CGFloat = 24
+        static let xxxl: CGFloat = 28
         static let full: CGFloat = 999
     }
 
@@ -154,13 +178,13 @@ enum DS {
         static let opacity: CGFloat = 0.15
     }
 
-    // MARK: Shadow — ظلال كلاسيكية راقية (غير متوهجة جداً)
+    // MARK: Shadow — ظلال عصرية أنيقة
     enum Shadow {
-        static let card     = ShadowStyle(color: .black.opacity(0.06), radius: 10, x: 0, y: 3)
-        static let subtle   = ShadowStyle(color: .black.opacity(0.03), radius: 5, x: 0, y: 2)
-        static let glow     = ShadowStyle(color: SwiftUI.Color(hex: "#C8A165").opacity(0.15), radius: 12, x: 0, y: 4)
-        static let glowAccent = ShadowStyle(color: SwiftUI.Color(hex: "#213B2E").opacity(0.12), radius: 10, x: 0, y: 4)
-        static let neon     = ShadowStyle(color: SwiftUI.Color(hex: "#D4AF37").opacity(0.15), radius: 12, x: 0, y: 3)
+        static let card     = ShadowStyle(color: .black.opacity(0.08), radius: 16, x: 0, y: 4)
+        static let subtle   = ShadowStyle(color: .black.opacity(0.04), radius: 8, x: 0, y: 2)
+        static let glow     = ShadowStyle(color: SwiftUI.Color(hex: "#1B3A8C").opacity(0.18), radius: 16, x: 0, y: 6)
+        static let glowAccent = ShadowStyle(color: SwiftUI.Color(hex: "#C8962E").opacity(0.15), radius: 14, x: 0, y: 5)
+        static let neon     = ShadowStyle(color: SwiftUI.Color(hex: "#C8962E").opacity(0.20), radius: 16, x: 0, y: 4)
         static let none     = ShadowStyle(color: .clear, radius: 0, x: 0, y: 0)
     }
 
@@ -171,14 +195,14 @@ enum DS {
         let y: CGFloat
     }
 
-    // MARK: Animation — أنيميشن ديناميكية
+    // MARK: Animation — أنيميشن حديثة وسلسة
     enum Anim {
-        static let bouncy    = Animation.spring(response: 0.35, dampingFraction: 0.6, blendDuration: 0)
-        static let snappy    = Animation.spring(response: 0.3, dampingFraction: 0.7, blendDuration: 0)
-        static let smooth    = Animation.spring(response: 0.5, dampingFraction: 0.8, blendDuration: 0)
+        static let bouncy    = Animation.spring(response: 0.4, dampingFraction: 0.65, blendDuration: 0)
+        static let snappy    = Animation.spring(response: 0.28, dampingFraction: 0.72, blendDuration: 0)
+        static let smooth    = Animation.spring(response: 0.5, dampingFraction: 0.85, blendDuration: 0)
         static let elastic   = Animation.spring(response: 0.45, dampingFraction: 0.55, blendDuration: 0)
-        static let quick     = Animation.easeOut(duration: 0.2)
-        static let medium    = Animation.easeInOut(duration: 0.35)
+        static let quick     = Animation.easeOut(duration: 0.18)
+        static let medium    = Animation.easeInOut(duration: 0.32)
     }
 }
 

@@ -27,10 +27,10 @@ struct AppIconPreview: View {
         ZStack {
             LinearGradient(
                 colors: [
-                    Color(hex: "0D1A14"),   // أخضر غابي غامق جداً
-                    Color(hex: "183125"),   // أخضر غابي
-                    Color(hex: "213B2E"),   // أخضر غابي أفتح قليلاً
-                    Color(hex: "13241A"),   // أخضر داكن للزوايا
+                    Color(hex: "0A1628"),   // كحلي غامق جداً
+                    Color(hex: "0E2460"),   // أزرق ملكي غامق
+                    Color(hex: "1B3A8C"),   // أزرق ملكي
+                    Color(hex: "0D1B40"),   // كحلي للزوايا
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
@@ -39,7 +39,7 @@ struct AppIconPreview: View {
             Circle()
                 .fill(
                     RadialGradient(
-                        colors: [Color(hex: "C8A165").opacity(0.15), .clear],
+                        colors: [Color(hex: "C8962E").opacity(0.15), .clear],
                         center: .center,
                         startRadius: 0,
                         endRadius: 350
@@ -51,7 +51,7 @@ struct AppIconPreview: View {
             Circle()
                 .fill(
                     RadialGradient(
-                        colors: [Color(hex: "D4AF37").opacity(0.10), .clear],
+                        colors: [Color(hex: "E6C06A").opacity(0.10), .clear],
                         center: .center,
                         startRadius: 0,
                         endRadius: 300
@@ -63,7 +63,7 @@ struct AppIconPreview: View {
             Circle()
                 .fill(
                     RadialGradient(
-                        colors: [Color(hex: "E2CA9E").opacity(0.08), .clear],
+                        colors: [Color(hex: "C8962E").opacity(0.08), .clear],
                         center: .center,
                         startRadius: 0,
                         endRadius: 200
@@ -76,9 +76,9 @@ struct AppIconPreview: View {
                 .stroke(
                     LinearGradient(
                         colors: [
-                            Color(hex: "E2CA9E").opacity(0.2),
-                            Color(hex: "C8A165").opacity(0.10),
-                            Color(hex: "E2CA9E").opacity(0.05),
+                            Color(hex: "E6C06A").opacity(0.25),
+                            Color(hex: "C8962E").opacity(0.12),
+                            Color(hex: "E6C06A").opacity(0.06),
                         ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
@@ -119,12 +119,12 @@ struct AppIconPreview: View {
                         .font(.system(size: 200, weight: .bold))
                         .foregroundStyle(
                             LinearGradient(
-                                colors: [Color(hex: "FDFBF7"), Color(hex: "E2CA9E")],
+                                colors: [Color(hex: "FDFBF7"), Color(hex: "E6C06A")],
                                 startPoint: .top,
                                 endPoint: .bottom
                             )
                         )
-                        .shadow(color: Color(hex: "C8A165").opacity(0.5), radius: 30, y: 8)
+                        .shadow(color: Color(hex: "C8962E").opacity(0.5), radius: 30, y: 8)
                         .shadow(color: .black.opacity(0.15), radius: 15, y: 10)
                 }
                 .offset(y: -40)
@@ -133,24 +133,24 @@ struct AppIconPreview: View {
                     Text("عائلة")
                         .font(.system(size: 48, weight: .bold, design: .serif))
                         .foregroundStyle(.white.opacity(0.85))
-                        
+
                     Text("المحمدعلي")
                         .font(.system(size: 110, weight: .heavy, design: .serif))
                         .foregroundStyle(
                             LinearGradient(
-                                colors: [Color(hex: "FDFBF7"), Color(hex: "D4AF37")],
+                                colors: [Color(hex: "FDFBF7"), Color(hex: "C8962E")],
                                 startPoint: .leading,
                                 endPoint: .trailing
                             )
                         )
-                        .shadow(color: Color(hex: "9C7A4A").opacity(0.6), radius: 20, y: 4)
+                        .shadow(color: Color(hex: "9A7321").opacity(0.6), radius: 20, y: 4)
                         .shadow(color: .black.opacity(0.3), radius: 10, y: 6)
 
                     HStack(spacing: 12) {
                         Rectangle()
                             .fill(
                                 LinearGradient(
-                                    colors: [.clear, Color(hex: "C8A165").opacity(0.8)],
+                                    colors: [.clear, Color(hex: "C8962E").opacity(0.8)],
                                     startPoint: .leading,
                                     endPoint: .trailing
                                 )
@@ -158,21 +158,21 @@ struct AppIconPreview: View {
                             .frame(width: 120, height: 2.5)
 
                         Circle()
-                            .fill(Color(hex: "D4AF37"))
+                            .fill(Color(hex: "E6C06A"))
                             .frame(width: 8, height: 8)
 
                         Text("شجرة العائلة")
                             .font(.system(size: 34, weight: .bold, design: .serif))
-                            .foregroundStyle(Color(hex: "E2CA9E").opacity(0.85))
+                            .foregroundStyle(Color(hex: "E6C06A").opacity(0.85))
 
                         Circle()
-                            .fill(Color(hex: "D4AF37"))
+                            .fill(Color(hex: "E6C06A"))
                             .frame(width: 8, height: 8)
 
                         Rectangle()
                             .fill(
                                 LinearGradient(
-                                    colors: [Color(hex: "C8A165").opacity(0.8), .clear],
+                                    colors: [Color(hex: "C8962E").opacity(0.8), .clear],
                                     startPoint: .leading,
                                     endPoint: .trailing
                                 )

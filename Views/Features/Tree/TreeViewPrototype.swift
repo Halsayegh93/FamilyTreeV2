@@ -40,10 +40,10 @@ enum ProtoRole {
 
     var color: Color {
         switch self {
-        case .admin:      return .purple
-        case .supervisor: return .orange
-        case .member:     return .blue
-        case .pending:    return .gray
+        case .admin:      return DS.Color.adminRole
+        case .supervisor: return DS.Color.supervisorRole
+        case .member:     return DS.Color.memberRole
+        case .pending:    return DS.Color.pendingRole
         }
     }
 
@@ -246,7 +246,7 @@ struct VariantA_Branch: View {
             if isExpanded && !children.isEmpty {
                 VStack(spacing: 8) {
                     Rectangle()
-                        .fill(Color.blue.opacity(0.35))
+                        .fill(DS.Color.primary.opacity(0.35))
                         .frame(width: 1.5, height: 16)
 
                     // Chunk children into rows of 3
@@ -302,7 +302,7 @@ struct VariantA_Node: View {
                                 .foregroundColor(.white)
                                 .padding(.horizontal, 4)
                                 .padding(.vertical, 2)
-                                .background(Color.red.opacity(0.85))
+                                .background(DS.Color.deceased.opacity(0.85))
                                 .clipShape(Capsule())
                                 .padding(.bottom, 4)
                         }
@@ -328,7 +328,7 @@ struct VariantA_Node: View {
                     if hasChildren {
                         ZStack {
                             Circle()
-                                .fill(Color.blue)
+                                .fill(DS.Color.primary)
                                 .frame(width: 26, height: 26)
                                 .overlay(Circle().stroke(Color.white.opacity(0.9), lineWidth: 2))
                                 .shadow(color: .black.opacity(0.2), radius: 2, y: 1)
@@ -458,7 +458,7 @@ struct VariantB_CardBranch: View {
                                 if member.isDeceased {
                                     Text(lifeSpan)
                                         .font(DS.Font.scaled(11, weight: .medium))
-                                        .foregroundColor(.red.opacity(0.8))
+                                        .foregroundColor(DS.Color.deceased.opacity(0.8))
                                 }
                             }
                         }
@@ -478,11 +478,11 @@ struct VariantB_CardBranch: View {
                                         .foregroundColor(.secondary)
                                     Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
                                         .font(DS.Font.scaled(12, weight: .bold))
-                                        .foregroundColor(.blue)
+                                        .foregroundColor(DS.Color.primary)
                                 }
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 6)
-                                .background(Color.blue.opacity(0.08))
+                                .background(DS.Color.primary.opacity(0.08))
                                 .clipShape(Capsule())
                             }
                             .buttonStyle(.plain)
@@ -586,7 +586,7 @@ struct VariantC_Row: View {
                             if member.isDeceased, let b = member.birthYear, let d = member.deathYear {
                                 Text("\(b)–\(d)")
                                     .font(DS.Font.scaled(10, weight: .medium))
-                                    .foregroundColor(.red.opacity(0.7))
+                                    .foregroundColor(DS.Color.deceased.opacity(0.7))
                             }
                         }
 
@@ -686,11 +686,11 @@ struct ProtoMemberDetailSheet: View {
             VStack(spacing: 0) {
                 if member.isDeceased {
                     DetailInfoRow(icon: "heart.slash.fill", label: "الوفاة",
-                                  value: member.deathYear ?? "—", color: .red)
+                                  value: member.deathYear ?? "—", color: DS.Color.deceased)
                     Divider().padding(.leading, 52)
                 }
                 if let b = member.birthYear {
-                    DetailInfoRow(icon: "calendar", label: "الميلاد", value: b, color: .blue)
+                    DetailInfoRow(icon: "calendar", label: "الميلاد", value: b, color: DS.Color.primary)
                 }
                 DetailInfoRow(icon: "person.2.fill", label: "الدور",
                               value: member.role.label, color: member.role.color)

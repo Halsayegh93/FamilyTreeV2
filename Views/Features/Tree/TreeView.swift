@@ -872,14 +872,14 @@ struct TreeMemberNode: View {
         return DS.Color.primary
     }
 
-    // لون الإطار — بنفسجي للمدير، برتقالي للمشرف، لون التطبيق فاتح للباقي
+    // لون الإطار — حسب الدور
     private var borderColor: Color {
         if member.isDeceased == true {
-            return Color.gray.opacity(0.5)
+            return DS.Color.deceased.opacity(0.5)
         }
         switch member.role {
-        case .admin: return .purple.opacity(0.6)
-        case .supervisor: return .orange.opacity(0.6)
+        case .admin: return DS.Color.adminRole.opacity(0.6)
+        case .supervisor: return DS.Color.supervisorRole.opacity(0.6)
         default: return DS.Color.primary.opacity(0.5)
         }
     }
@@ -922,10 +922,10 @@ struct TreeMemberNode: View {
                     .overlay {
                         if isCurrentLocationMember {
                             Capsule()
-                                .stroke(Color(red: 0.56, green: 0.95, blue: 0.66), lineWidth: 2.8)
+                                .stroke(DS.Color.currentLocation, lineWidth: 2.8)
                                 .scaleEffect(isPulsing ? 1.3 : 1.0)
                                 .opacity(isPulsing ? 0.0 : 0.9)
-                                .shadow(color: Color(red: 0.56, green: 0.95, blue: 0.66).opacity(0.45), radius: 7)
+                                .shadow(color: DS.Color.currentLocation.opacity(0.45), radius: 7)
                                 .animation(Animation.easeOut(duration: 1.5).repeatForever(autoreverses: false), value: isPulsing)
                                 .onAppear { isPulsing = true }
                         }
@@ -952,11 +952,11 @@ struct TreeMemberNode: View {
                     .overlay {
                         if isCurrentLocationMember {
                             Circle()
-                                .stroke(Color(red: 0.56, green: 0.95, blue: 0.66), lineWidth: 4.2)
+                                .stroke(DS.Color.currentLocation, lineWidth: 4.2)
                                 .frame(width: 64, height: 64)
                                 .scaleEffect(isPulsing ? 1.4 : 1.0)
                                 .opacity(isPulsing ? 0.0 : 0.9)
-                                .shadow(color: Color(red: 0.56, green: 0.95, blue: 0.66).opacity(0.5), radius: 10)
+                                .shadow(color: DS.Color.currentLocation.opacity(0.5), radius: 10)
                                 .animation(Animation.easeOut(duration: 1.5).repeatForever(autoreverses: false), value: isPulsing)
                                 .onAppear { isPulsing = true }
                         }
@@ -968,7 +968,7 @@ struct TreeMemberNode: View {
                                 .foregroundColor(.black.opacity(0.85))
                                 .padding(.horizontal, 7)
                                 .padding(.vertical, 2)
-                                .background(Color(red: 0.56, green: 0.95, blue: 0.66))
+                                .background(DS.Color.currentLocation)
                                 .clipShape(Capsule())
                                 .offset(y: -14)
                         }
@@ -1049,11 +1049,11 @@ struct TreeMemberNode: View {
                     // وميض الموقع — overlay لا يأثر على الـ layout
                     if isCurrentLocationMember {
                         Circle()
-                            .stroke(Color(red: 0.56, green: 0.95, blue: 0.66), lineWidth: 4.2)
+                            .stroke(DS.Color.currentLocation, lineWidth: 4.2)
                             .frame(width: interactiveNodeSize + 10, height: interactiveNodeSize + 10)
                             .scaleEffect(isPulsing ? 1.35 : 1.0)
                             .opacity(isPulsing ? 0.0 : 0.9)
-                            .shadow(color: Color(red: 0.56, green: 0.95, blue: 0.66).opacity(0.5), radius: 12)
+                            .shadow(color: DS.Color.currentLocation.opacity(0.5), radius: 12)
                             .animation(Animation.easeOut(duration: 1.5).repeatForever(autoreverses: false), value: isPulsing)
                             .onAppear { isPulsing = true }
                     }
@@ -1066,7 +1066,7 @@ struct TreeMemberNode: View {
                             .foregroundColor(.black.opacity(0.85))
                             .padding(.horizontal, 8)
                             .padding(.vertical, 3)
-                            .background(Color(red: 0.56, green: 0.95, blue: 0.66))
+                            .background(DS.Color.currentLocation)
                             .clipShape(Capsule())
                             .offset(y: -16)
                     }
