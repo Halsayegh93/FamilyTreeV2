@@ -1,0 +1,5 @@
+/* English localization for Info.plist permission descriptions */
+
+"NSPhotoLibraryUsageDescription" = "The app needs access to your photo library to select profile pictures and news images.";
+"NSCameraUsageDescription" = "The app needs access to your camera to take profile photos.";
+"CFBundleDisplayName" = "Family Tree";
