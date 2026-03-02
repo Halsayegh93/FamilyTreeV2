@@ -966,14 +966,16 @@ class AuthViewModel: ObservableObject {
                     .insert(requestData)
                     .execute()
                 
+                let requesterName = currentUser?.firstName ?? "عضو"
+                let childAddBody = "تمت إضافة ابن جديد: \(firstNameOnly)\nالأب: \(father.firstName)\nبواسطة: \(requesterName)"
                 await sendExternalAdminPush(
                     title: "إضافة ابن جديد",
-                    body: "تمت إضافة ابن جديد.",
+                    body: childAddBody,
                     kind: "child_add"
                 )
                 await notifyAdmins(
                     title: "إضافة ابن جديد",
-                    body: "تمت إضافة ابن جديد.",
+                    body: childAddBody,
                     kind: "child_add"
                 )
             } catch {
@@ -1241,16 +1243,18 @@ class AuthViewModel: ObservableObject {
                 .execute()
                 .value
             
+            let galleryMemberName = currentUser?.firstName ?? "عضو"
+            let galleryBody = "قام \(galleryMemberName) بإضافة صورة جديدة في معرض الصور."
             if currentUser?.role == .member {
                 await sendExternalAdminPush(
                     title: "إضافة صورة جديدة",
-                    body: "قام عضو بإضافة صورة جديدة في الحساب.",
+                    body: galleryBody,
                     kind: "gallery_add"
                 )
             }
             await notifyAdmins(
                 title: "إضافة صورة جديدة",
-                body: "تمت إضافة صورة جديدة.",
+                body: galleryBody,
                 kind: "gallery_add"
             )
             
@@ -1884,14 +1888,17 @@ class AuthViewModel: ObservableObject {
                 .insert(requestData)
                 .execute()
             
+            let deceasedMemberName = allMembers.first(where: { $0.id == memberId })?.firstName ?? "عضو"
+            let requesterDeceasedName = currentUser?.firstName ?? "عضو"
+            let deceasedBody = "طلب تأكيد وفاة: \(deceasedMemberName)\nتاريخ الوفاة: \(dateString)\nبواسطة: \(requesterDeceasedName)"
             await sendExternalAdminPush(
                 title: "طلب تأكيد وفاة",
-                body: "تم إرسال طلب تأكيد حالة وفاة جديد.",
+                body: deceasedBody,
                 kind: "deceased_report"
             )
             await notifyAdmins(
                 title: "طلب تأكيد وفاة",
-                body: "تم إرسال طلب تأكيد حالة وفاة جديد.",
+                body: deceasedBody,
                 kind: "deceased_report"
             )
             
@@ -1997,9 +2004,11 @@ class AuthViewModel: ObservableObject {
             await fetchChildAddRequests()
             await fetchAllMembers()
 
+            let rejectChildDetails = request.details ?? "طلب إضافة ابن"
+            let rejectByName = currentUser?.firstName ?? "مدير"
             await notifyAdmins(
                 title: "رفض إضافة ابن",
-                body: "تم رفض طلب إضافة ابن جديد.",
+                body: "\(rejectChildDetails)\nتم الرفض بواسطة: \(rejectByName)",
                 kind: "child_add"
             )
             
@@ -2022,9 +2031,11 @@ class AuthViewModel: ObservableObject {
 
             await fetchChildAddRequests()
 
+            let approveChildDetails = request.details ?? "طلب إضافة ابن"
+            let approveByName = currentUser?.firstName ?? "مدير"
             await notifyAdmins(
                 title: "قبول إضافة ابن",
-                body: "تم قبول طلب إضافة ابن جديد.",
+                body: "\(approveChildDetails)\nتم القبول بواسطة: \(approveByName)",
                 kind: "child_add"
             )
             
@@ -2272,14 +2283,16 @@ class AuthViewModel: ObservableObject {
                 .insert(requestData)
                 .execute()
             
+            let phoneRequesterName = currentUser?.firstName ?? "عضو"
+            let phoneChangeBody = "طلب تغيير رقم جوال\nالعضو: \(phoneRequesterName)\nالرقم الجديد: \(KuwaitPhone.display(normalizedPhone))"
             await sendExternalAdminPush(
                 title: "طلب تغيير رقم جوال",
-                body: "تم إرسال طلب تغيير رقم جوال جديد.",
+                body: phoneChangeBody,
                 kind: "phone_change"
             )
             await notifyAdmins(
                 title: "طلب تغيير رقم جوال",
-                body: "تم إرسال طلب تغيير رقم جوال.",
+                body: phoneChangeBody,
                 kind: "phone_change"
             )
             
@@ -2361,9 +2374,10 @@ class AuthViewModel: ObservableObject {
             
             await fetchPhoneChangeRequests()
             
+            let rejectPhoneMemberName = allMembers.first(where: { $0.id == request.memberId })?.firstName ?? "عضو"
             await notifyAdmins(
                 title: "رفض تغيير رقم",
-                body: "تم رفض طلب تغيير رقم جوال.",
+                body: "تم رفض طلب تغيير رقم جوال \(rejectPhoneMemberName).",
                 kind: "phone_change"
             )
         } catch {
