@@ -337,7 +337,7 @@ class AuthViewModel: ObservableObject {
 
             try await supabase
                 .from("device_tokens")
-                .upsert(payload)
+                .upsert(payload, onConflict: "token")
                 .execute()
         } catch {
             Log.error("خطأ حفظ Push Token: \(error.localizedDescription)")
