@@ -13,6 +13,7 @@ struct FamilyMember: Identifiable, Codable, Equatable {
     var fatherId: UUID?
     var photoURL: String?
     let isPhoneHidden: Bool?
+    let isBirthDateHidden: Bool?
     var isHiddenFromTree: Bool
     var sortOrder: Int
     var bio: [BioStation]?
@@ -42,6 +43,7 @@ struct FamilyMember: Identifiable, Codable, Equatable {
         self.fatherId = try container.decodeIfPresent(UUID.self, forKey: .fatherId)
         self.photoURL = try container.decodeIfPresent(String.self, forKey: .photoURL)
         self.isPhoneHidden = try container.decodeIfPresent(Bool.self, forKey: .isPhoneHidden)
+        self.isBirthDateHidden = try container.decodeIfPresent(Bool.self, forKey: .isBirthDateHidden)
         
         self.isHiddenFromTree = try container.decodeIfPresent(Bool.self, forKey: .isHiddenFromTree) ?? false
         self.sortOrder = try container.decodeIfPresent(Int.self, forKey: .sortOrder) ?? 0
@@ -123,6 +125,7 @@ struct FamilyMember: Identifiable, Codable, Equatable {
         case fatherId = "father_id"
         case photoURL = "photo_url"
         case isPhoneHidden = "is_phone_hidden"
+        case isBirthDateHidden = "is_birth_date_hidden"
         case isHiddenFromTree = "is_hidden_from_tree"
         case sortOrder = "sort_order"
         case bio = "bio_json"

@@ -7,27 +7,17 @@ struct MemberDetailsView: View {
 
     let member: FamilyMember
     @State private var showAdminControl = false
-    @State private var showImagePicker = false
-    @State private var selectedImageItem: PhotosPickerItem? = nil
-    @State private var localPreviewImage: UIImage? = nil
     @State private var showAvatarPicker = false
     @State private var selectedAvatarItem: PhotosPickerItem? = nil
     @State private var localAvatarPreviewImage: UIImage? = nil
     @State private var avatarURL: String? = nil
-    @State private var galleryPhotoURL: String? = nil
-    @State private var showDeleteGalleryPhotoAlert = false
+
     @State private var showDeleteAvatarAlert = false
     @State private var selectedTab = 0 // 0: البيانات، 1: الصور
     @State private var avatarPreviewScale: CGFloat = 1.0
     @State private var lastAvatarPreviewScale: CGFloat = 1.0
     @State private var pendingCropImage: UIImage? = nil
-    @State private var cropTarget: CropTarget = .avatar
     @State private var fullScreenMode: FullScreenMode? = nil
-    
-    private enum CropTarget {
-        case avatar
-        case gallery
-    }
     
     private enum FullScreenMode: Identifiable {
         case avatarPreview
@@ -55,24 +45,10 @@ struct MemberDetailsView: View {
             ZStack {
                 DS.Color.background.ignoresSafeArea()
 
-                // Decorative gradient circles
-                GeometryReader { geo in
-                    Circle()
-                        .fill(DS.Color.primary.opacity(0.08))
-                        .frame(width: 260, height: 260)
-                        .blur(radius: 60)
-                        .offset(x: -80, y: -60)
-
-                    Circle()
-                        .fill(DS.Color.accent.opacity(0.08))
-                        .frame(width: 200, height: 200)
-                        .blur(radius: 50)
-                        .offset(x: geo.size.width - 120, y: geo.size.height - 200)
-                }
-                .ignoresSafeArea()
+                DSDecorativeBackground()
 
                 ScrollView(showsIndicators: false) {
-                    VStack(spacing: DS.Spacing.lg) {
+                    VStack(spacing: DS.Spacing.xxl) {
 
                         if member.isDeleted {
                             // عرض رسالة للعضو المحذوف
@@ -108,11 +84,7 @@ struct MemberDetailsView: View {
             .navigationBarHidden(true)
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
             .onAppear {
-                galleryPhotoURL = member.photoURL
                 avatarURL = member.avatarUrl
-            }
-            .onChange(of: selectedImageItem) { _, newValue in
-                handleImageChange(newValue)
             }
             .onChange(of: selectedAvatarItem) { _, newValue in
                 handleAvatarImageChange(newValue)
@@ -121,7 +93,6 @@ struct MemberDetailsView: View {
                 AdminMemberDetailSheet(member: member)
             }
         }
-        .photosPicker(isPresented: $showImagePicker, selection: $selectedImageItem, matching: .images)
         .photosPicker(isPresented: $showAvatarPicker, selection: $selectedAvatarItem, matching: .images)
         .fullScreenCover(item: $fullScreenMode) { mode in
             switch mode {
@@ -130,14 +101,6 @@ struct MemberDetailsView: View {
             case .cropper:
                 cropperView
             }
-        }
-        .alert(L10n.t("حذف الصورة", "Delete Photo"), isPresented: $showDeleteGalleryPhotoAlert) {
-            Button(L10n.t("حذف", "Delete"), role: .destructive) {
-                Task { await deleteGalleryPhoto() }
-            }
-            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { }
-        } message: {
-            Text(L10n.t("هل تريد حذف صورة المعرض لهذا العضو؟", "Delete gallery photo for this member?"))
         }
         .alert(L10n.t("حذف صورة البروفايل", "Delete Profile Photo"), isPresented: $showDeleteAvatarAlert) {
             Button(L10n.t("حذف", "Delete"), role: .destructive) {
@@ -157,7 +120,10 @@ struct MemberDetailsView: View {
 
             HStack(spacing: DS.Spacing.md) {
                 if let birth = member.birthDate, !birth.isEmpty {
-                    modernCompactCard(icon: "calendar", title: L10n.t("الميلاد", "Birth"), value: birth, color: DS.Color.primary)
+                    let shouldHideBirth = (member.isBirthDateHidden == true) && (member.id != authVM.currentUser?.id) && !isAdminOrSupervisor
+                    if !shouldHideBirth {
+                        modernCompactCard(icon: "calendar", title: L10n.t("الميلاد", "Birth"), value: birth, color: DS.Color.primary)
+                    }
                 }
 
                 if member.isDeceased == true {
@@ -179,104 +145,39 @@ struct MemberDetailsView: View {
 
     // MARK: - قسم الصور المحدث
     private var photosTab: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.lg) {
-            HStack {
-                Text(L10n.t("المعرض والوثائق", "Gallery & Documents"))
-                    .font(DS.Font.calloutBold)
-                Spacer()
-            }
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            DSSectionHeader(
+                title: L10n.t("المعرض", "Gallery"),
+                icon: "photo.on.rectangle.angled"
+            )
             .padding(.horizontal)
 
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: DS.Spacing.md) {
+            DSCard(padding: 0) {
+                NavigationLink(destination: PersonalGalleryView(member: member, isEditable: isAdminOrSupervisor)) {
+                    HStack(spacing: DS.Spacing.md) {
+                        DSIcon("photo.on.rectangle.angled", color: DS.Color.neonBlue)
 
-                // زر إضافة صورة
-                if isAdminOrSupervisor {
-                    Button(action: { showImagePicker = true }) {
-                        ZStack {
-                            RoundedRectangle(cornerRadius: DS.Radius.xl)
-                                .fill(DS.Color.surface)
-                                .aspectRatio(1, contentMode: .fit)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: DS.Radius.xl)
-                                        .strokeBorder(
-                                            LinearGradient(
-                                                colors: [DS.Color.primary, DS.Color.accent],
-                                                startPoint: .topLeading,
-                                                endPoint: .bottomTrailing
-                                            ),
-                                            lineWidth: 2
-                                        )
-                                )
-
-                            VStack(spacing: DS.Spacing.xs) {
-                                Image(systemName: "plus")
-                                    .font(DS.Font.scaled(22, weight: .bold))
-                                    .foregroundStyle(DS.Color.gradientPrimary)
-                                Text(L10n.t("إضافة صورة", "Add Photo"))
-                                    .font(DS.Font.caption1)
-                                    .foregroundColor(DS.Color.primary)
-                            }
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(L10n.t("معرض الصور الشخصي", "Personal Gallery"))
+                                .font(DS.Font.calloutBold)
+                                .foregroundColor(DS.Color.textPrimary)
+                            Text(L10n.t("عرض صور العضو", "View member photos"))
+                                .font(DS.Font.caption1)
+                                .foregroundColor(DS.Color.textSecondary)
                         }
-                        .dsCardShadow()
+
+                        Spacer()
+
+                        Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
+                            .font(DS.Font.scaled(13, weight: .bold))
+                            .foregroundColor(DS.Color.textTertiary)
                     }
+                    .padding(.horizontal, DS.Spacing.lg)
+                    .padding(.vertical, DS.Spacing.md)
                 }
-
-                // عرض الصور الحالية
-                if let uiImage = localPreviewImage {
-                    imageTile(
-                        content: AnyView(
-                            Image(uiImage: uiImage)
-                                .resizable()
-                                .scaledToFill()
-                        ),
-                        title: L10n.t("الصورة الجديدة", "New Photo")
-                    )
-                }
-
-                if let urlStr = galleryPhotoURL ?? member.photoURL, let url = URL(string: urlStr) {
-                    imageTile(
-                        content: AnyView(
-                            AsyncImage(url: url) { phase in
-                                if let image = phase.image {
-                                    image.resizable().scaledToFill()
-                                } else {
-                                    ZStack {
-                                        DS.Color.surface
-                                        ProgressView().tint(DS.Color.primary)
-                                    }
-                                }
-                            }
-                        ),
-                        title: L10n.t("صورة المعرض", "Gallery Photo")
-                    )
-                }
+                .buttonStyle(DSBoldButtonStyle())
             }
             .padding(.horizontal)
-
-            if let _ = galleryPhotoURL ?? member.photoURL, isAdminOrSupervisor {
-                HStack {
-                    Button(role: .destructive) {
-                        showDeleteGalleryPhotoAlert = true
-                    } label: {
-                        Label(L10n.t("حذف صورة المعرض", "Delete Gallery Photo"), systemImage: "trash")
-                            .font(DS.Font.subheadline)
-                    }
-                    .buttonStyle(.bordered)
-                    .tint(DS.Color.error)
-                    Spacer()
-                }
-                .padding(.horizontal)
-            }
-
-            if (galleryPhotoURL ?? member.photoURL) == nil && localPreviewImage == nil {
-                emptyState(text: L10n.t("لا توجد صور حالياً", "No photos yet"), icon: "photo.on.rectangle")
-                    .padding(.top, DS.Spacing.md)
-            }
-
-            if !isAdminOrSupervisor {
-                emptyState(text: L10n.t("المعرض سيتم تحديثه قريباً", "Gallery coming soon"), icon: "sparkles")
-                    .padding(.top, DS.Spacing.xl)
-            }
         }
     }
 
@@ -411,11 +312,7 @@ struct MemberDetailsView: View {
                 image: img,
                 cropShape: .square,
                 onCrop: { cropped in
-                    if cropTarget == .avatar {
-                        confirmAvatarCrop(cropped)
-                    } else {
-                        confirmGalleryCrop(cropped)
-                    }
+                    confirmAvatarCrop(cropped)
                 },
                 onCancel: { fullScreenMode = nil }
             )
@@ -500,105 +397,22 @@ struct MemberDetailsView: View {
     }
 
     private func modernCompactCard(icon: String, title: String, value: String, color: Color) -> some View {
-        VStack(spacing: DS.Spacing.xs) {
-            Image(systemName: icon)
-                .font(DS.Font.scaled(13))
-                .foregroundColor(color)
-                .frame(width: 28, height: 28)
-                .background(color.opacity(0.10))
-                .clipShape(Circle())
-            VStack(spacing: 2) {
-                Text(value)
-                    .font(DS.Font.subheadline)
-                    .foregroundColor(DS.Color.textPrimary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-                Text(title)
-                    .font(DS.Font.caption2)
-                    .foregroundColor(DS.Color.textSecondary)
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, DS.Spacing.md)
-        .glassCard(radius: DS.Radius.lg)
-    }
-
-    private func emptyState(text: String, icon: String) -> some View {
-        VStack(spacing: DS.Spacing.md) {
-            ZStack {
-                Circle()
-                    .fill(DS.Color.primary.opacity(0.06))
-                    .frame(width: 80, height: 80)
-                Circle()
-                    .fill(DS.Color.accent.opacity(0.06))
-                    .frame(width: 56, height: 56)
-                Image(systemName: icon)
-                    .font(DS.Font.scaled(28))
-                    .foregroundStyle(DS.Color.gradientPrimary)
-            }
-            Text(text)
-                .font(DS.Font.subheadline)
-                .foregroundColor(DS.Color.textSecondary)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, DS.Spacing.xxxxl)
-    }
-
-    private func imageTile(content: AnyView, title: String) -> some View {
-        ZStack(alignment: .bottomTrailing) {
-            RoundedRectangle(cornerRadius: DS.Radius.xl)
-                .fill(DS.Color.surface)
-                .aspectRatio(1, contentMode: .fit)
-                .overlay(content.clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl)))
-                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl))
-
-            Text(title)
-                .font(DS.Font.scaled(9, weight: .bold))
-                .foregroundColor(.white)
-                .padding(.horizontal, DS.Spacing.xs + 2)
-                .padding(.vertical, 3)
-                .background(DS.Color.gradientPrimary)
-                .clipShape(Capsule())
-                .padding(DS.Spacing.xs + 2)
-        }
-        .dsCardShadow()
-    }
-
-    private func handleImageChange(_ item: PhotosPickerItem?) {
-        Task {
-            guard let data = try? await item?.loadTransferable(type: Data.self) else { return }
-            let resized = await downsampleInBackground(data)
-            guard let resized else { return }
-            pendingCropImage = resized
-            cropTarget = .gallery
-            try? await Task.sleep(nanoseconds: 400_000_000)
-            fullScreenMode = .cropper
-        }
-    }
-    
-    private func confirmGalleryCrop(_ croppedImage: UIImage) {
-        fullScreenMode = nil
-        withAnimation(.easeInOut(duration: 0.2)) {
-            self.localPreviewImage = croppedImage
-        }
-        Task {
-            let uploadedURL = await authVM.uploadMemberGalleryPhoto(image: croppedImage, for: member.id)
-            await MainActor.run {
-                if let uploadedURL {
-                    self.galleryPhotoURL = uploadedURL
+        DSCard(padding: 0) {
+            VStack(spacing: DS.Spacing.xs) {
+                DSIcon(icon, color: color)
+                VStack(spacing: 2) {
+                    Text(value)
+                        .font(DS.Font.subheadline)
+                        .foregroundColor(DS.Color.textPrimary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                    Text(title)
+                        .font(DS.Font.caption2)
+                        .foregroundColor(DS.Color.textSecondary)
                 }
             }
-        }
-    }
-
-    private func deleteGalleryPhoto() async {
-        let success = await authVM.deleteMemberGalleryPhoto(for: member.id)
-        guard success else { return }
-        await MainActor.run {
-            withAnimation(.easeInOut(duration: 0.2)) {
-                self.galleryPhotoURL = nil
-                self.localPreviewImage = nil
-            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, DS.Spacing.md)
         }
     }
 
@@ -608,7 +422,6 @@ struct MemberDetailsView: View {
             let resized = await downsampleInBackground(data)
             guard let resized else { return }
             pendingCropImage = resized
-            cropTarget = .avatar
             try? await Task.sleep(nanoseconds: 400_000_000)
             fullScreenMode = .cropper
         }

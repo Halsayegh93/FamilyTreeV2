@@ -9,9 +9,7 @@ struct ProfileView: View {
     @State private var showEditProfile = false
     @State private var showSettings = false
     @State private var showAddChild = false
-    @State private var isSendingTestPush = false
-    @State private var showTestPushAlert = false
-    @State private var testPushResult = (success: false, message: "")
+    @State private var editingChild: FamilyMember? = nil
 
     var user: FamilyMember? { authVM.currentUser }
 
@@ -20,14 +18,15 @@ struct ProfileView: View {
             ZStack {
                 DS.Color.background.ignoresSafeArea()
 
+                DSDecorativeBackground()
+
                 if let currentUser = user {
                     VStack(spacing: 0) {
                         MainHeaderView(
                             selectedTab: $selectedTab,
                             showingNotifications: $showingNotifications,
                             title: L10n.t("حسابي", "My Profile"),
-                            icon: "person.fill",
-                            hasDropShadow: false
+                            icon: "person.fill"
                         ) {
                             Button(action: { showEditProfile = true }) {
                                 Image(systemName: "pencil")
@@ -40,30 +39,23 @@ struct ProfileView: View {
                             }
                             .buttonStyle(BounceButtonStyle())
                         }
-                        .zIndex(2)
 
                         ScrollView(showsIndicators: false) {
-                            VStack(spacing: DS.Spacing.lg) {
+                            VStack(spacing: DS.Spacing.md) {
                                 // Profile Header
                                 profileHeader(user: currentUser)
-                                    .padding(.top, DS.Spacing.xl) // Move the picture down slightly
+                                    .padding(.top, DS.Spacing.md)
 
-                            // Personal Info section (previously hidden elements)
-                            personalInfoSection(user: currentUser)
+                                // Personal Info section
+                                personalInfoSection(user: currentUser)
 
-                            // Children section
-                            serverSonsSection
+                                // Children section
+                                serverSonsSection
 
-                            // Settings
-                            settingsAccessCard
-
-                            // تجربة الإشعارات
-                            testPushButton
-
-                            // Sign out
-                            signOutButton
-                        }
-                        .padding(.bottom, DS.Spacing.xxxl)
+                                // General: Gallery, Privacy, Settings, Sign Out
+                                generalSection(user: currentUser)
+                            }
+                            .padding(.bottom, DS.Spacing.xxl)
                         } // closes ScrollView
                         .onAppear {
                             Task {
@@ -78,21 +70,17 @@ struct ProfileView: View {
             .navigationBarHidden(true)
             .sheet(isPresented: $showEditProfile) { if let c = user { EditProfileView(member: c) } }
             .sheet(isPresented: $showSettings) { SettingsView() }
-            .alert(
-                testPushResult.success
-                    ? L10n.t("تم الإرسال", "Sent")
-                    : L10n.t("خطأ", "Error"),
-                isPresented: $showTestPushAlert
-            ) {
-                Button(L10n.t("حسناً", "OK"), role: .cancel) {}
-            } message: {
-                Text(testPushResult.message)
-            }
             .sheet(isPresented: $showAddChild) { if let c = user { AddChildSheet(member: c) } }
+            .sheet(item: $editingChild) { child in EditChildSheet(member: child) }
             .onChange(of: showAddChild) { _, isPresented in
                 guard !isPresented, let currentUser = user else { return }
                 Task { await authVM.fetchChildren(for: currentUser.id) }
             }
+            .onChange(of: editingChild) { _, newValue in
+                guard newValue == nil, let currentUser = user else { return }
+                Task { await authVM.fetchChildren(for: currentUser.id) }
+            }
+
         }
         .environment(\.layoutDirection, langManager.layoutDirection)
     }
@@ -104,20 +92,20 @@ struct ProfileView: View {
             ZStack {
                 Circle()
                     .fill(DS.Color.surface)
-                    .frame(width: 110, height: 110)
+                    .frame(width: 130, height: 130)
                     .shadow(color: .black.opacity(0.1), radius: 8, y: 4)
 
                 if let urlStr = user.avatarUrl, let url = URL(string: urlStr) {
                     AsyncImage(url: url) { img in img.resizable().scaledToFill() }
                     placeholder: { ProgressView() }
-                    .frame(width: 100, height: 100).clipShape(Circle())
+                    .frame(width: 120, height: 120).clipShape(Circle())
                 } else {
                     Circle()
                         .fill(DS.Color.background)
-                        .frame(width: 100, height: 100)
+                        .frame(width: 120, height: 120)
                         .overlay(
                             Text(String(user.firstName.first ?? "P"))
-                                .font(DS.Font.scaled(40, weight: .bold))
+                                .font(DS.Font.scaled(48, weight: .bold))
                                 .foregroundColor(DS.Color.primary)
                         )
                 }
@@ -126,100 +114,142 @@ struct ProfileView: View {
             // User Info
             VStack(spacing: DS.Spacing.xs) {
                 Text(user.fullName.isEmpty ? L10n.t("غير معروف", "Unknown") : user.fullName)
-                    .font(DS.Font.title2)
+                    .font(DS.Font.title3)
                     .foregroundColor(DS.Color.textPrimary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, DS.Spacing.lg)
 
                 DSRoleBadge(title: user.roleName, color: user.roleColor)
             }
-            .padding(.bottom, DS.Spacing.md)
+            .padding(.bottom, DS.Spacing.xs)
         }
     }
 
-    // MARK: - Personal Info Section (Hidden Elements Revealed)
+    // MARK: - Personal Info Section
     private func personalInfoSection(user: FamilyMember) -> some View {
-        DSCard {
-            VStack(spacing: 0) {
-                HStack {
-                    DSIcon("info.circle.fill", color: DS.Color.primary, iconSize: 13)
-                    Text(L10n.t("المعلومات الشخصية", "Personal Info"))
-                        .font(DS.Font.headline)
-                    Spacer()
-                    Button(action: { showEditProfile = true }) {
-                        Image(systemName: "pencil")
-                            .font(DS.Font.scaled(14, weight: .bold))
-                            .foregroundColor(.white)
-                            .padding(DS.Spacing.xs + 2)
-                            .background(DS.Color.gradientPrimary)
-                            .clipShape(Circle())
-                            .dsGlowShadow()
+        VStack(alignment: .leading, spacing: 0) {
+            let infoItems = buildInfoItems(user: user)
+            let columns = [GridItem(.flexible()), GridItem(.flexible())]
+
+            DSCard(padding: 0) {
+                DSSectionHeader(
+                    title: L10n.t("المعلومات الشخصية", "Personal Info"),
+                    icon: "info.circle.fill"
+                )
+
+                LazyVGrid(columns: columns, spacing: DS.Spacing.md) {
+                    ForEach(infoItems, id: \.title) { item in
+                        infoGridCell(icon: item.icon, color: item.color, title: item.title, value: item.value)
                     }
                 }
-                .padding(.horizontal, DS.Spacing.lg)
-                .padding(.vertical, DS.Spacing.md)
+                .padding(DS.Spacing.md)
 
                 DSDivider()
 
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: DS.Spacing.sm) {
-                    gridItem(
-                        title: L10n.t("رقم الهاتف", "Phone Number"),
-                        value: user.phoneNumber?.isEmpty == false ? user.phoneNumber! : L10n.t("غير محدد", "Not specified"),
-                        icon: "phone.fill"
-                    )
-                    
-                    if let birth = user.birthDate, !birth.isEmpty {
-                        gridItem(
-                            title: L10n.t("تاريخ الميلاد", "Birth Date"),
-                            value: birth,
-                            icon: "calendar"
-                        )
-                    }
+                Button(action: { showEditProfile = true }) {
+                    HStack(spacing: DS.Spacing.md) {
+                        DSIcon("pencil", color: DS.Color.primary)
 
-                    if let married = user.isMarried {
-                        gridItem(
-                            title: L10n.t("الحالة الاجتماعية", "Marital Status"),
-                            value: married ? L10n.t("متزوج", "Married") : L10n.t("أعزب", "Single"),
-                            icon: "heart.fill"
-                        )
-                    }
+                        Text(L10n.t("تعديل البيانات", "Edit Info"))
+                            .font(DS.Font.calloutBold)
+                            .foregroundColor(DS.Color.primary)
 
-                    if let created = user.createdAt, !created.isEmpty {
-                        gridItem(
-                            title: L10n.t("تاريخ الانضمام", "Join Date"),
-                            value: formatDateOnly(created),
-                            icon: "clock.fill"
-                        )
+                        Spacer()
+
+                        Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
+                            .font(DS.Font.scaled(11, weight: .bold))
+                            .foregroundColor(DS.Color.textTertiary)
+                            .frame(width: 26, height: 26)
+                            .background(DS.Color.textTertiary.opacity(0.1))
+                            .clipShape(Circle())
                     }
+                    .padding(.horizontal, DS.Spacing.lg)
+                    .padding(.vertical, DS.Spacing.md)
                 }
-                .padding(.horizontal, DS.Spacing.lg)
-                .padding(.vertical, DS.Spacing.md)
+                .buttonStyle(DSBoldButtonStyle())
             }
         }
         .padding(.horizontal, DS.Spacing.lg)
     }
 
-    private func gridItem(title: String, value: String, icon: String) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 6) {
-                Image(systemName: icon)
-                    .font(DS.Font.scaled(12))
-                    .foregroundColor(DS.Color.primary)
+    private struct InfoItem {
+        let icon: String
+        let color: Color
+        let title: String
+        let value: String
+    }
+
+    private func buildInfoItems(user: FamilyMember) -> [InfoItem] {
+        var items: [InfoItem] = []
+
+        items.append(InfoItem(
+            icon: "phone.fill",
+            color: DS.Color.success,
+            title: L10n.t("الهاتف", "Phone"),
+            value: user.phoneNumber?.isEmpty == false ? KuwaitPhone.display(user.phoneNumber!) : L10n.t("غير محدد", "N/A")
+        ))
+
+        if let birth = user.birthDate, !birth.isEmpty {
+            items.append(InfoItem(
+                icon: "calendar",
+                color: DS.Color.primary,
+                title: L10n.t("تاريخ الميلاد", "Birthday"),
+                value: birth
+            ))
+        }
+
+        if let married = user.isMarried {
+            items.append(InfoItem(
+                icon: "heart.fill",
+                color: DS.Color.neonPink,
+                title: L10n.t("الحالة الاجتماعية", "Status"),
+                value: married ? L10n.t("متزوج", "Married") : L10n.t("أعزب", "Single")
+            ))
+        }
+
+        if let created = user.createdAt, !created.isEmpty {
+            items.append(InfoItem(
+                icon: "clock.fill",
+                color: DS.Color.info,
+                title: L10n.t("تاريخ الانضمام", "Joined"),
+                value: formatDateOnly(created)
+            ))
+        }
+
+        return items
+    }
+
+    private func infoGridCell(icon: String, color: Color, title: String, value: String) -> some View {
+        HStack(spacing: DS.Spacing.sm) {
+            Image(systemName: icon)
+                .font(DS.Font.scaled(16, weight: .bold))
+                .foregroundColor(color)
+                .frame(width: 36, height: 36)
+                .background(color.opacity(0.12))
+                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 2) {
                 Text(title)
+                    .font(DS.Font.caption2)
+                    .foregroundColor(DS.Color.textTertiary)
+                    .lineLimit(1)
+
+                Text(value)
                     .font(DS.Font.caption1)
-                    .foregroundColor(DS.Color.textSecondary)
+                    .fontWeight(.bold)
+                    .foregroundColor(DS.Color.textPrimary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
             }
-            Text(value)
-                .font(DS.Font.subheadline)
-                .fontWeight(.bold)
-                .foregroundColor(DS.Color.textPrimary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(DS.Spacing.md)
-        .background(DS.Color.primary.opacity(0.05))
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
+        .padding(DS.Spacing.sm)
+        .background(DS.Color.surface)
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                .stroke(color.opacity(0.15), lineWidth: 1)
+        )
     }
 
     private static let isoDateFormatter: ISO8601DateFormatter = {
@@ -245,32 +275,31 @@ struct ProfileView: View {
 
     // MARK: - Children Section
     private var serverSonsSection: some View {
-        DSCard {
-            VStack(spacing: 0) {
-                HStack {
-                    DSIcon("person.2.fill", color: DS.Color.primary, iconSize: 13)
-                    Text(L10n.t("الأبناء", "Children"))
-                        .font(DS.Font.headline)
-                    Spacer()
-                    Button(action: { showAddChild = true }) {
-                        Image(systemName: "plus")
-                            .font(DS.Font.scaled(16, weight: .bold))
+        VStack(alignment: .leading, spacing: 0) {
+            DSCard(padding: 0) {
+                HStack(spacing: DS.Spacing.sm) {
+                    DSSectionHeader(
+                        title: L10n.t("الأبناء", "Children"),
+                        icon: "person.2.fill"
+                    )
+
+                    if !authVM.currentMemberChildren.isEmpty {
+                        Text("\(authVM.currentMemberChildren.count)")
+                            .font(DS.Font.caption1)
+                            .fontWeight(.bold)
                             .foregroundColor(.white)
-                            .frame(width: 36, height: 36)
-                            .background(DS.Color.gradientPrimary)
+                            .frame(width: 26, height: 26)
+                            .background(DS.Color.primary)
                             .clipShape(Circle())
                     }
-                    .buttonStyle(BounceButtonStyle())
-                }
-                .padding(.horizontal, DS.Spacing.lg)
-                .padding(.vertical, DS.Spacing.md)
 
-                DSDivider()
+                    Spacer()
+                }
 
                 if authVM.currentMemberChildren.isEmpty {
                     VStack(spacing: DS.Spacing.sm) {
                         Image(systemName: "person.2.slash")
-                            .font(DS.Font.scaled(22))
+                            .font(DS.Font.scaled(32))
                             .foregroundColor(DS.Color.textTertiary)
                         Text(L10n.t("لا يوجد أبناء مضافين حالياً", "No children added yet"))
                             .font(DS.Font.callout)
@@ -279,125 +308,190 @@ struct ProfileView: View {
                     .frame(maxWidth: .infinity)
                     .padding(DS.Spacing.xl)
                 } else {
-                    ForEach(authVM.currentMemberChildren) { son in
-                        NavigationLink(destination: EditChildSheet(member: son)) {
-                            HStack(spacing: DS.Spacing.md) {
-                                ZStack {
-                                    Circle()
-                                        .fill(DS.Color.primary.opacity(0.10))
-                                        .frame(width: 30, height: 30)
-                                    Text(String(son.firstName.first ?? "A"))
-                                        .font(DS.Font.scaled(13, weight: .bold))
-                                        .foregroundColor(DS.Color.primary)
-                                }
-                                Text(son.firstName.isEmpty ? L10n.t("الاسم", "Name") : son.firstName)
-                                    .font(DS.Font.subheadline)
-                                    .foregroundColor(DS.Color.textPrimary)
-                                Spacer()
-                                Image(systemName: "pencil")
-                                    .font(DS.Font.scaled(12, weight: .bold))
-                                    .foregroundColor(.white)
-                                    .frame(width: 24, height: 24)
-                                    .background(DS.Color.gradientPrimary)
-                                    .clipShape(Circle())
+                    let columns = [GridItem(.flexible()), GridItem(.flexible())]
+                    LazyVGrid(columns: columns, spacing: DS.Spacing.md) {
+                        ForEach(authVM.currentMemberChildren) { son in
+                            Button {
+                                editingChild = son
+                            } label: {
+                                childGridCell(son: son)
                             }
-                            .padding(.horizontal, DS.Spacing.lg)
-                            .padding(.vertical, DS.Spacing.sm)
+                            .buttonStyle(PlainButtonStyle())
                         }
-                        .buttonStyle(PlainButtonStyle())
-
-                        if son.id != authVM.currentMemberChildren.last?.id { DSDivider() }
                     }
+                    .padding(DS.Spacing.md)
                 }
-            }
-        }
-        .padding(.horizontal, DS.Spacing.lg)
-    }
 
-    // MARK: - Settings
-    private var settingsAccessCard: some View {
-        Button(action: { showSettings = true }) {
-            DSCard {
-                DSActionRow(
-                    title: L10n.t("الإعدادات", "Settings"),
-                    subtitle: L10n.t("التنبيهات، المظهر، اللغة", "Notifications, appearance, language"),
-                    icon: "gearshape.fill",
-                    color: DS.Color.warning
-                )
-            }
-        }
-        .buttonStyle(.plain)
-        .padding(.horizontal, DS.Spacing.lg)
-    }
+                DSDivider()
 
-    // MARK: - Test Push
-    private var testPushButton: some View {
-        Button {
-            isSendingTestPush = true
-            Task {
-                let result = await authVM.sendTestPush()
-                testPushResult = result
-                isSendingTestPush = false
-                showTestPushAlert = true
-            }
-        } label: {
-            DSCard {
-                HStack(spacing: DS.Spacing.md) {
-                    ZStack {
-                        Circle()
-                            .fill(Color.purple.opacity(0.12))
-                            .frame(width: 40, height: 40)
-                        if isSendingTestPush {
-                            ProgressView()
-                        } else {
-                            Image(systemName: "bell.badge.fill")
-                                .font(DS.Font.scaled(18, weight: .bold))
-                                .foregroundColor(.purple)
-                        }
-                    }
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(L10n.t("تجربة الإشعارات", "Test Notifications"))
+                Button(action: { showAddChild = true }) {
+                    HStack(spacing: DS.Spacing.md) {
+                        DSIcon("plus", color: DS.Color.success)
+
+                        Text(L10n.t("إضافة ابن", "Add Child"))
                             .font(DS.Font.calloutBold)
-                            .foregroundColor(DS.Color.textPrimary)
-                        Text(L10n.t("إرسال إشعار تجريبي لجهازك", "Send a test notification to your device"))
-                            .font(DS.Font.caption1)
-                            .foregroundColor(DS.Color.textSecondary)
+                            .foregroundColor(DS.Color.success)
+
+                        Spacer()
+
+                        Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
+                            .font(DS.Font.scaled(11, weight: .bold))
+                            .foregroundColor(DS.Color.textTertiary)
+                            .frame(width: 26, height: 26)
+                            .background(DS.Color.textTertiary.opacity(0.1))
+                            .clipShape(Circle())
                     }
-                    Spacer()
-                    Image(systemName: "chevron.left")
-                        .font(DS.Font.scaled(14, weight: .bold))
-                        .foregroundColor(DS.Color.textTertiary)
+                    .padding(.horizontal, DS.Spacing.lg)
+                    .padding(.vertical, DS.Spacing.md)
                 }
-                .padding(.horizontal, DS.Spacing.lg)
-                .padding(.vertical, DS.Spacing.md)
+                .buttonStyle(DSBoldButtonStyle())
             }
         }
-        .buttonStyle(.plain)
-        .disabled(isSendingTestPush)
         .padding(.horizontal, DS.Spacing.lg)
     }
 
-    // MARK: - Sign Out
-    private var signOutButton: some View {
-        Button(action: { Task { await authVM.signOut() } }) {
-            HStack(spacing: DS.Spacing.sm) {
-                Image(systemName: "power")
-                    .font(DS.Font.scaled(16, weight: .bold))
-                Text(L10n.t("تسجيل الخروج", "Sign Out"))
-                    .font(DS.Font.headline)
+    private func childGridCell(son: FamilyMember) -> some View {
+        let isDeceased = son.isDeceased ?? false
+        let iconName = isDeceased ? "person.fill.xmark" : "person.fill"
+        let iconColor = isDeceased ? DS.Color.error : DS.Color.primary
+
+        return HStack(spacing: DS.Spacing.sm) {
+            Image(systemName: iconName)
+                .font(DS.Font.scaled(16, weight: .bold))
+                .foregroundColor(iconColor)
+                .frame(width: 36, height: 36)
+                .background(iconColor.opacity(0.12))
+                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(son.firstName.isEmpty ? L10n.t("الاسم", "Name") : son.firstName)
+                    .font(DS.Font.caption1)
+                    .fontWeight(.bold)
+                    .foregroundColor(DS.Color.textPrimary)
+                    .lineLimit(1)
+
+                if let birth = son.birthDate, !birth.isEmpty {
+                    Text(birth)
+                        .font(DS.Font.caption2)
+                        .foregroundColor(DS.Color.textSecondary)
+                        .lineLimit(1)
+                }
             }
-            .foregroundColor(DS.Color.error)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, DS.Spacing.md)
-            .background(DS.Color.error.opacity(0.10))
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.lg)
-                    .stroke(DS.Color.error.opacity(0.25), lineWidth: 1.5)
-            )
-            .cornerRadius(DS.Radius.lg)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(DS.Spacing.sm)
+        .background(DS.Color.surface)
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                .stroke(iconColor.opacity(0.15), lineWidth: 1)
+        )
+    }
+
+    // MARK: - General Section (Gallery, Privacy, Settings, Sign Out)
+    private func generalSection(user: FamilyMember) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            DSCard(padding: 0) {
+                DSSectionHeader(
+                    title: L10n.t("اعدادات التطبيق", "App Settings"),
+                    icon: "gearshape.2.fill"
+                )
+                VStack(spacing: 0) {
+                    // Gallery Row
+                    NavigationLink(destination: PersonalGalleryView(member: user, isEditable: true)) {
+                        HStack(spacing: DS.Spacing.md) {
+                            DSIcon("photo.on.rectangle.angled", color: DS.Color.neonBlue)
+
+                            Text(L10n.t("معرض الصور الشخصي", "Personal Gallery"))
+                                .font(DS.Font.calloutBold)
+                                .foregroundColor(DS.Color.textPrimary)
+
+                            Spacer()
+
+                            Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
+                                .font(DS.Font.scaled(11, weight: .bold))
+                                .foregroundColor(DS.Color.textTertiary)
+                                .frame(width: 26, height: 26)
+                                .background(DS.Color.textTertiary.opacity(0.1))
+                                .clipShape(Circle())
+                        }
+                        .padding(.horizontal, DS.Spacing.lg)
+                        .padding(.vertical, DS.Spacing.md)
+                    }
+                    .buttonStyle(DSBoldButtonStyle())
+
+                    DSDivider()
+
+                    // Privacy Row
+                    NavigationLink(destination: PrivacySettingsView()) {
+                        HStack(spacing: DS.Spacing.md) {
+                            DSIcon("lock.shield.fill", color: DS.Color.neonPurple)
+
+                            Text(L10n.t("الخصوصية", "Privacy"))
+                                .font(DS.Font.calloutBold)
+                                .foregroundColor(DS.Color.textPrimary)
+
+                            Spacer()
+
+                            Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
+                                .font(DS.Font.scaled(11, weight: .bold))
+                                .foregroundColor(DS.Color.textTertiary)
+                                .frame(width: 26, height: 26)
+                                .background(DS.Color.textTertiary.opacity(0.1))
+                                .clipShape(Circle())
+                        }
+                        .padding(.horizontal, DS.Spacing.lg)
+                        .padding(.vertical, DS.Spacing.md)
+                    }
+                    .buttonStyle(DSBoldButtonStyle())
+
+                    DSDivider()
+
+                    // Settings Row
+                    Button(action: { showSettings = true }) {
+                        HStack(spacing: DS.Spacing.md) {
+                            DSIcon("gearshape.fill", color: DS.Color.warning)
+
+                            Text(L10n.t("الإعدادات", "Settings"))
+                                .font(DS.Font.calloutBold)
+                                .foregroundColor(DS.Color.textPrimary)
+
+                            Spacer()
+
+                            Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
+                                .font(DS.Font.scaled(11, weight: .bold))
+                                .foregroundColor(DS.Color.textTertiary)
+                                .frame(width: 26, height: 26)
+                                .background(DS.Color.textTertiary.opacity(0.1))
+                                .clipShape(Circle())
+                        }
+                        .padding(.horizontal, DS.Spacing.lg)
+                        .padding(.vertical, DS.Spacing.md)
+                    }
+                    .buttonStyle(DSBoldButtonStyle())
+
+                    DSDivider()
+
+                    // Sign Out Row
+                    Button(action: { Task { await authVM.signOut() } }) {
+                        HStack(spacing: DS.Spacing.md) {
+                            DSIcon("rectangle.portrait.and.arrow.right", color: DS.Color.error)
+
+                            Text(L10n.t("تسجيل الخروج", "Sign Out"))
+                                .font(DS.Font.calloutBold)
+                                .foregroundColor(DS.Color.error)
+
+                            Spacer()
+                        }
+                        .padding(.horizontal, DS.Spacing.lg)
+                        .padding(.vertical, DS.Spacing.md)
+                    }
+                    .buttonStyle(DSBoldButtonStyle())
+                }
+            }
         }
         .padding(.horizontal, DS.Spacing.lg)
-        .padding(.bottom, DS.Spacing.xxl)
+        .padding(.bottom, DS.Spacing.lg)
     }
 }
 

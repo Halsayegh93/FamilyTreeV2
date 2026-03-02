@@ -320,9 +320,13 @@ class AuthViewModel: ObservableObject {
     func registerPushToken(_ token: String) async {
         let cleanToken = token.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleanToken.isEmpty else { return }
-        
+
         await MainActor.run { self.pushToken = cleanToken }
-        
+
+        // لا ترسل التوكن للسيرفر إذا الإشعارات مغلقة
+        let notificationsEnabled = UserDefaults.standard.object(forKey: "notificationsEnabled") as? Bool ?? true
+        guard notificationsEnabled else { return }
+
         guard let memberId = currentUser?.id else { return }
         do {
             let payload: [String: AnyEncodable] = [
@@ -330,13 +334,29 @@ class AuthViewModel: ObservableObject {
                 "token": AnyEncodable(cleanToken),
                 "platform": AnyEncodable("ios")
             ]
-            
+
             try await supabase
                 .from("device_tokens")
                 .upsert(payload)
                 .execute()
         } catch {
             Log.error("خطأ حفظ Push Token: \(error.localizedDescription)")
+        }
+    }
+
+    func unregisterPushToken() async {
+        guard let memberId = currentUser?.id else { return }
+        guard let token = pushToken, !token.isEmpty else { return }
+        do {
+            try await supabase
+                .from("device_tokens")
+                .delete()
+                .eq("member_id", value: memberId.uuidString)
+                .eq("token", value: token)
+                .execute()
+            Log.info("تم إلغاء تسجيل التوكن للإشعارات")
+        } catch {
+            Log.error("خطأ إلغاء تسجيل Push Token: \(error.localizedDescription)")
         }
     }
     
@@ -399,7 +419,7 @@ class AuthViewModel: ObservableObject {
                 )
             return (true, "تم إرسال الإشعار التجريبي بنجاح")
         } catch {
-            return (false, "فشل الإرسال: \(error.localizedDescription)")
+            return (false, error.localizedDescription)
         }
     }
     
@@ -832,7 +852,6 @@ class AuthViewModel: ObservableObject {
             "full_name": AnyEncodable(fullName),
             "first_name": AnyEncodable(firstName),
             "birth_date": AnyEncodable(birthDate ?? Optional<String>.none),
-            "gender": AnyEncodable(gender ?? Optional<String>.none),
             "phone_number": AnyEncodable(phoneNumber ?? ""),
             "role": AnyEncodable("member"),
             "status": AnyEncodable("active"),
@@ -919,7 +938,7 @@ class AuthViewModel: ObservableObject {
             "is_deceased": AnyEncodable(isDeceased),
             "is_married": AnyEncodable(false),
             "sort_order": AnyEncodable(currentMemberChildren.count),
-            "gender": AnyEncodable(gender ?? Optional<String>.none)
+            "status": AnyEncodable("active")
         ]
         
         // إلحاق تاريخ الوفاة إذا كان الشخص متوفى
@@ -969,9 +988,8 @@ class AuthViewModel: ObservableObject {
             self.isLoading = false
             return newId
         } catch {
-            // طباعة الخطأ مع البيانات المرسلة للتأكد
-            Log.error("خطأ السيرفر: \(error.localizedDescription)")
-            Log.error("البيانات التي حاولت إرسالها: \(cleanedBirthDate ?? "nil")")
+            Log.error("خطأ إضافة الابن: \(error)")
+            Log.error("تفاصيل: name=\(firstNameOnly), fatherId=\(fatherId), birthDate=\(cleanedBirthDate ?? "nil")")
         }
         self.isLoading = false
         return nil
@@ -1247,12 +1265,16 @@ class AuthViewModel: ObservableObject {
     
     func deleteMemberGalleryPhotoMulti(photoId: UUID, photoURL: String) async -> Bool {
         self.isLoading = true
+        Log.info("بدء حذف صورة المعرض: id=\(photoId), url=\(photoURL)")
         
         do {
             if let path = storagePath(fromPublicURL: photoURL, bucket: "gallery") {
+                Log.info("حذف من التخزين: \(path)")
                 _ = try? await supabase.storage
                     .from("gallery")
                     .remove(paths: [path])
+            } else {
+                Log.warning("لم يتم العثور على مسار التخزين للصورة")
             }
             
             try await supabase
@@ -1261,10 +1283,11 @@ class AuthViewModel: ObservableObject {
                 .eq("id", value: photoId.uuidString)
                 .execute()
             
+            Log.info("تم حذف سجل الصورة من قاعدة البيانات")
             self.isLoading = false
             return true
         } catch {
-            Log.error("خطأ حذف صورة المعرض المتعدد: \(error.localizedDescription)")
+            Log.error("خطأ حذف صورة المعرض المتعدد: \(error)")
             self.isLoading = false
             return false
         }
@@ -1532,6 +1555,43 @@ class AuthViewModel: ObservableObject {
         }
         self.isLoading = false
     }
+
+    /// تحديث إخفاء رقم الهاتف فقط
+    func updatePhoneHidden(_ isHidden: Bool) async {
+        guard let userId = currentUser?.id else { return }
+        do {
+            try await supabase
+                .from("profiles")
+                .update(["is_phone_hidden": AnyEncodable(isHidden)])
+                .eq("id", value: userId.uuidString)
+                .execute()
+            await fetchAllMembers()
+            if let updated = allMembers.first(where: { $0.id == userId }) {
+                self.currentUser = updated
+            }
+        } catch {
+            Log.error("خطأ تحديث إخفاء الرقم: \(error.localizedDescription)")
+        }
+    }
+
+    /// تحديث إخفاء تاريخ الميلاد
+    func updateBirthDateHidden(_ isHidden: Bool) async {
+        guard let userId = currentUser?.id else { return }
+        do {
+            try await supabase
+                .from("profiles")
+                .update(["is_birth_date_hidden": AnyEncodable(isHidden)])
+                .eq("id", value: userId.uuidString)
+                .execute()
+            await fetchAllMembers()
+            if let updated = allMembers.first(where: { $0.id == userId }) {
+                self.currentUser = updated
+            }
+        } catch {
+            Log.error("خطأ تحديث إخفاء تاريخ الميلاد: \(error.localizedDescription)")
+        }
+    }
+
     // تحديث ترتيب الأبناء بالسحب والإفلات
     func moveChild(from source: IndexSet, to destination: Int) {
         currentMemberChildren.move(fromOffsets: source, toOffset: destination)
@@ -1598,7 +1658,6 @@ class AuthViewModel: ObservableObject {
             "is_married": AnyEncodable(false),
             "is_hidden_from_tree": AnyEncodable(false),
             "sort_order": AnyEncodable(0),
-            "gender": AnyEncodable(gender),
             "created_at": AnyEncodable(ISO8601DateFormatter().string(from: Date()))
         ]
         

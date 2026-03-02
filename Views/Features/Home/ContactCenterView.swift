@@ -24,7 +24,7 @@ struct ContactCenterView: View {
                 DSDecorativeBackground()
 
                 ScrollView(showsIndicators: false) {
-                    VStack(spacing: DS.Spacing.xl) {
+                    VStack(spacing: DS.Spacing.xxl) {
                         headerCard
                         categorySection
                         messageSection
@@ -86,90 +86,76 @@ struct ContactCenterView: View {
 
     // MARK: - Category Section
     private var categorySection: some View {
-        DSCard(padding: 0) {
-            VStack(alignment: .leading, spacing: DS.Spacing.md) {
-                HStack(spacing: DS.Spacing.sm) {
-                    Image(systemName: "tag.fill")
-                        .font(DS.Font.scaled(12, weight: .semibold))
-                        .foregroundStyle(DS.Color.gradientAccent)
-                    Text(L10n.t("نوع الطلب", "Request Type"))
-                        .font(DS.Font.calloutBold)
-                        .foregroundColor(DS.Color.textSecondary)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            DSSectionHeader(title: L10n.t("نوع الطلب", "Request Type"), icon: "tag.fill")
 
-                Picker(L10n.t("نوع الطلب", "Request Type"), selection: $selectedCategory) {
-                    ForEach(categories, id: \.self) { type in
-                        Text(type).tag(type)
+            DSCard(padding: 0) {
+                VStack(spacing: 0) {
+                    
+
+                    Picker(L10n.t("نوع الطلب", "Request Type"), selection: $selectedCategory) {
+                        ForEach(categories, id: \.self) { type in
+                            Text(type).tag(type)
+                        }
                     }
+                    .pickerStyle(.segmented)
+                    .tint(DS.Color.primary)
+                    .padding(DS.Spacing.lg)
                 }
-                .pickerStyle(.segmented)
-                .tint(DS.Color.primary)
             }
-            .padding(DS.Spacing.lg)
         }
     }
 
     // MARK: - Message Section
     private var messageSection: some View {
-        DSCard(padding: 0) {
-            VStack(alignment: .leading, spacing: DS.Spacing.md) {
-                HStack(spacing: DS.Spacing.sm) {
-                    Image(systemName: "text.alignright")
-                        .font(DS.Font.scaled(12, weight: .semibold))
-                        .foregroundStyle(DS.Color.gradientAccent)
-                    Text(L10n.t("تفاصيل الرسالة", "Message Details"))
-                        .font(DS.Font.calloutBold)
-                        .foregroundColor(DS.Color.textSecondary)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            DSSectionHeader(title: L10n.t("تفاصيل الرسالة", "Message Details"), icon: "text.alignright")
 
-                TextEditor(text: $message)
-                    .frame(minHeight: 140)
-                    .padding(DS.Spacing.sm)
-                    .background(DS.Color.surfaceElevated)
-                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
-                    .overlay(alignment: .topTrailing) {
-                        if message.isEmpty {
-                            Text(L10n.t("اكتب رسالتك هنا...", "Write your message here..."))
-                                .font(DS.Font.body)
-                                .foregroundColor(DS.Color.textTertiary)
-                                .padding(.top, DS.Spacing.lg)
-                                .padding(.trailing, DS.Spacing.lg)
+            DSCard(padding: 0) {
+                VStack(spacing: 0) {
+                    
+
+                    TextEditor(text: $message)
+                        .frame(minHeight: 140)
+                        .padding(DS.Spacing.sm)
+                        .background(DS.Color.surfaceElevated)
+                        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
+                        .overlay(alignment: .topTrailing) {
+                            if message.isEmpty {
+                                Text(L10n.t("اكتب رسالتك هنا...", "Write your message here..."))
+                                    .font(DS.Font.body)
+                                    .foregroundColor(DS.Color.textTertiary)
+                                    .padding(.top, DS.Spacing.lg)
+                                    .padding(.trailing, DS.Spacing.lg)
+                            }
                         }
-                    }
+                        .padding(DS.Spacing.lg)
+                }
             }
-            .padding(DS.Spacing.lg)
         }
     }
 
     // MARK: - Contact Section
     private var contactSection: some View {
-        DSCard(padding: 0) {
-            VStack(alignment: .leading, spacing: DS.Spacing.md) {
-                HStack(spacing: DS.Spacing.sm) {
-                    Image(systemName: "phone.fill")
-                        .font(DS.Font.scaled(12, weight: .semibold))
-                        .foregroundStyle(DS.Color.gradientAccent)
-                    Text(L10n.t("وسيلة التواصل (اختياري)", "Contact Method (optional)"))
-                        .font(DS.Font.calloutBold)
-                        .foregroundColor(DS.Color.textSecondary)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            DSSectionHeader(title: L10n.t("وسيلة التواصل (اختياري)", "Contact Method (optional)"), icon: "phone.fill")
 
-                TextField(L10n.t("رقم هاتف أو بريد إلكتروني", "Phone or email"), text: $preferredContact)
-                    .font(DS.Font.body)
-                    .padding(DS.Spacing.md)
-                    .background(DS.Color.surfaceElevated)
-                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: DS.Radius.md)
-                            .stroke(DS.Color.primary.opacity(0.15), lineWidth: 1)
-                    )
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
+            DSCard(padding: 0) {
+                VStack(spacing: 0) {
+                    TextField(L10n.t("رقم هاتف أو بريد إلكتروني", "Phone or email"), text: $preferredContact)
+                        .font(DS.Font.body)
+                        .padding(DS.Spacing.md)
+                        .background(DS.Color.surfaceElevated)
+                        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: DS.Radius.md)
+                                .stroke(DS.Color.primary.opacity(0.15), lineWidth: 1)
+                        )
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .padding(DS.Spacing.lg)
+                }
             }
-            .padding(DS.Spacing.lg)
         }
     }
 

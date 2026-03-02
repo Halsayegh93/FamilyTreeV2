@@ -6,7 +6,6 @@ struct SettingsView: View {
 
     @ObservedObject var langManager = LanguageManager.shared
     @AppStorage("appearanceMode") private var appearanceMode: String = "system"
-    @AppStorage("notificationsEnabled") private var notificationsEnabled: Bool = true
     @State private var showDeleteConfirmation = false
     @State private var showAbout = false
     @State private var showTerms = false
@@ -33,20 +32,15 @@ struct SettingsView: View {
 
                             DSCard(padding: 0) {
                                 // Gradient accent line at top
-                                DS.Color.gradientPrimary
-                                    .frame(height: 4)
-                                    .cornerRadius(DS.Radius.full)
-                                    .padding(.horizontal, DS.Spacing.xl)
-                                    .padding(.top, DS.Spacing.xs)
+                                
 
                                 // Appearance Row
-                                HStack(spacing: DS.Spacing.lg) {
-                                    settingIcon("circle.lefthalf.filled", color: DS.Color.gridTree)
+                                HStack(spacing: DS.Spacing.md) {
+                                    DSIcon("circle.lefthalf.filled", color: DS.Color.gridTree)
 
-                                    VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                                    VStack(alignment: .leading, spacing: 2) {
                                         Text(t("مظهر التطبيق", "Appearance"))
                                             .font(DS.Font.calloutBold)
-                                            .fontWeight(.black)
                                         Text(appearanceLabel)
                                             .font(DS.Font.caption1)
                                             .foregroundColor(DS.Color.textSecondary)
@@ -67,38 +61,13 @@ struct SettingsView: View {
 
                                 DSDivider()
 
-                                // Notifications Row
-                                HStack(spacing: DS.Spacing.lg) {
-                                    settingIcon("bell.badge.fill", color: DS.Color.success)
-
-                                    VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                                        Text(t("الإشعارات", "Notifications"))
-                                            .font(DS.Font.calloutBold)
-                                            .fontWeight(.black)
-                                        Text(notificationsEnabled ? t("مفعلة", "Enabled") : t("متوقفة", "Disabled"))
-                                            .font(DS.Font.caption1)
-                                            .foregroundColor(DS.Color.textSecondary)
-                                    }
-
-                                    Spacer()
-
-                                    Toggle("", isOn: $notificationsEnabled)
-                                        .labelsHidden()
-                                        .tint(DS.Color.success)
-                                }
-                                .padding(.horizontal, DS.Spacing.lg)
-                                .padding(.vertical, DS.Spacing.md)
-
-                                DSDivider()
-
                                 // Language Row
-                                HStack(spacing: DS.Spacing.lg) {
-                                    settingIcon("character.bubble.fill", color: DS.Color.primary)
+                                HStack(spacing: DS.Spacing.md) {
+                                    DSIcon("character.bubble.fill", color: DS.Color.primary)
 
-                                    VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                                    VStack(alignment: .leading, spacing: 2) {
                                         Text(t("لغة التطبيق", "App Language"))
                                             .font(DS.Font.calloutBold)
-                                            .fontWeight(.black)
                                         Text(t("العربية", "Arabic") + " / " + t("الإنجليزية", "English"))
                                             .font(DS.Font.caption1)
                                             .foregroundColor(DS.Color.textSecondary)
@@ -127,13 +96,6 @@ struct SettingsView: View {
                             )
 
                             DSCard(padding: 0) {
-                                // Gradient accent line at top
-                                DS.Color.gradientAccent
-                                    .frame(height: 4)
-                                    .cornerRadius(DS.Radius.full)
-                                    .padding(.horizontal, DS.Spacing.xl)
-                                    .padding(.top, DS.Spacing.xs)
-
                                 Button(action: { showAbout = true }) {
                                     settingActionRow(
                                         title: t("عن التطبيق", "About FamilyTree"),
@@ -165,20 +127,13 @@ struct SettingsView: View {
                             )
 
                             DSCard(padding: 0) {
-                                DS.Color.error
-                                    .frame(height: 4)
-                                    .cornerRadius(DS.Radius.full)
-                                    .padding(.horizontal, DS.Spacing.xl)
-                                    .padding(.top, DS.Spacing.xs)
-
                                 Button(action: { showDeleteConfirmation = true }) {
-                                    HStack(spacing: DS.Spacing.lg) {
-                                        settingIcon("trash.fill", color: DS.Color.error)
+                                    HStack(spacing: DS.Spacing.md) {
+                                        DSIcon("trash.fill", color: DS.Color.error)
 
-                                        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                                        VStack(alignment: .leading, spacing: 2) {
                                             Text(t("حذف الحساب", "Delete Account"))
                                                 .font(DS.Font.calloutBold)
-                                                .fontWeight(.black)
                                                 .foregroundColor(DS.Color.error)
                                             Text(t("حذف جميع بياناتك نهائياً", "Permanently delete all your data"))
                                                 .font(DS.Font.caption1)
@@ -188,8 +143,8 @@ struct SettingsView: View {
                                         Spacer()
 
                                         Image(systemName: isArabic ? "chevron.left" : "chevron.right")
-                                            .font(DS.Font.scaled(11, weight: .semibold))
-                                            .foregroundColor(DS.Color.error.opacity(0.6))
+                                            .font(DS.Font.scaled(13, weight: .bold))
+                                            .foregroundColor(DS.Color.textTertiary)
                                     }
                                     .padding(.horizontal, DS.Spacing.lg)
                                     .padding(.vertical, DS.Spacing.md)
@@ -217,7 +172,6 @@ struct SettingsView: View {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button(t("إغلاق", "Close")) { dismiss() }
                         .font(DS.Font.calloutBold)
-                        .fontWeight(.black)
                         .foregroundColor(DS.Color.primary)
                 }
             }
@@ -259,43 +213,20 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: - Gradient-filled circle icon
-    private func settingIcon(_ name: String, color: Color) -> some View {
-        ZStack {
-            Circle()
-                .fill(
-                    LinearGradient(
-                        colors: [color, color.opacity(0.7)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .frame(width: DS.Icon.sizeSm, height: DS.Icon.sizeSm)
-
-            Image(systemName: name)
-                .font(DS.Font.scaled(16, weight: .bold))
-                .foregroundColor(.white)
-        }
-    }
-
-    // MARK: - Action Row with DSIcon style
+    // MARK: - Action Row
     private func settingActionRow(title: String, icon: String, color: Color) -> some View {
-        HStack(spacing: DS.Spacing.lg) {
-            settingIcon(icon, color: color)
+        HStack(spacing: DS.Spacing.md) {
+            DSIcon(icon, color: color)
 
             Text(title)
                 .font(DS.Font.calloutBold)
-                .fontWeight(.black)
                 .foregroundColor(DS.Color.textPrimary)
 
             Spacer()
 
             Image(systemName: isArabic ? "chevron.left" : "chevron.right")
-                .font(DS.Font.scaled(11, weight: .bold))
-                .foregroundColor(.white)
-                .frame(width: 24, height: 24)
-                .background(color.opacity(0.8))
-                .clipShape(Circle())
+                .font(DS.Font.scaled(13, weight: .bold))
+                .foregroundColor(DS.Color.textTertiary)
         }
         .padding(.horizontal, DS.Spacing.lg)
         .padding(.vertical, DS.Spacing.md)

@@ -22,16 +22,7 @@ struct EditProfileView: View {
     @State private var localPreviewImage: UIImage? = nil
     @State private var showPhotoPicker: Bool = false
 
-    // Gallery photos states
-    @State private var galleryPhotos: [MemberGalleryPhoto] = []
-    @State private var selectedGalleryItems: [PhotosPickerItem] = []
-    @State private var showGalleryPicker: Bool = false
-    @State private var selectedPreviewPhoto: MemberGalleryPhoto? = nil
-    @State private var showGalleryViewer = false
-    @State private var pendingDeletePhoto: MemberGalleryPhoto? = nil
-    @State private var isViewingLegacyPhoto = false
-    @State private var legacyGalleryPhotoURL: String? = nil
-    @State private var showDeleteLegacyPhotoAlert = false
+
 
     private var editScreenTitle: String {
         if member.id == authVM.currentUser?.id {
@@ -54,51 +45,38 @@ struct EditProfileView: View {
                         // 1. قسم الصورة الشخصية (تصميم دائري مع ظل فخم)
                         imagePickerHeader
 
-                        VStack(spacing: DS.Spacing.xl) {
-                            // 2. بطاقة المعلومات الأساسية
-                            modernSection(title: L10n.t("المعلومات الشخصية", "Personal Info"), icon: "person.text.rectangle") {
+                        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                            DSSectionHeader(
+                                title: L10n.t("المعلومات الشخصية", "Personal Info"),
+                                icon: "person.text.rectangle"
+                            )
+
+                            DSCard(padding: 0) {
                                 VStack(spacing: 0) {
+                                    
+
                                     modernTextField(label: L10n.t("الاسم الكامل", "Full Name"), text: $fullName, icon: "person.fill", placeholder: L10n.t("أدخل الاسم الرباعي", "Enter full name"))
-                                    customDivider
+                                    DSDivider()
                                     modernPhoneField
-                                        
-                                    if member.id == authVM.currentUser?.id {
-                                        customDivider
-                                        HStack {
-                                            ZStack {
-                                                Circle().fill(DS.Color.primary.opacity(0.1))
-                                                    .frame(width: 32, height: 32)
-                                                Image(systemName: "eye.slash.fill")
-                                                    .font(DS.Font.scaled(12, weight: .semibold))
-                                                    .foregroundColor(DS.Color.primary)
-                                            }
-                                            Toggle(L10n.t("إخفاء رقم الهاتف عن الآخرين", "Hide phone number from others"), isOn: $isPhoneHidden)
-                                                .font(DS.Font.caption1)
-                                                .foregroundColor(DS.Color.textSecondary)
-                                                .tint(DS.Color.primary)
-                                        }
-                                        .padding(.horizontal, DS.Spacing.lg)
-                                        .padding(.vertical, DS.Spacing.sm)
-                                    }
-                                    customDivider
+
+                                    DSDivider()
                                     modernDatePicker(label: L10n.t("تاريخ الميلاد", "Birth Date"), selection: $birthDate, icon: "calendar")
                                 }
                             }
                         }
-                        .padding(.horizontal, DS.Spacing.xl)
+                        .padding(.horizontal, DS.Spacing.lg)
 
                         // 3. حالة الزواج والوفاة
-                        VStack(spacing: DS.Spacing.xl) {
-                            modernSection(title: L10n.t("الحالة الاجتماعية", "Status"), icon: "heart.text.square") {
+                        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                            DSSectionHeader(
+                                title: L10n.t("الحالة الاجتماعية", "Status"),
+                                icon: "heart.text.square"
+                            )
+
+                            DSCard(padding: 0) {
                                 VStack(spacing: 0) {
-                                    HStack {
-                                        ZStack {
-                                            Circle().fill(DS.Color.primary.opacity(0.1))
-                                                .frame(width: 32, height: 32)
-                                            Image(systemName: "heart.fill")
-                                                .font(DS.Font.scaled(12, weight: .semibold))
-                                                .foregroundColor(DS.Color.primary)
-                                        }
+                                    HStack(spacing: DS.Spacing.md) {
+                                        DSIcon("heart.fill", color: DS.Color.neonPink)
                                         Toggle(L10n.t("متزوج", "Married"), isOn: $isMarried)
                                             .font(DS.Font.callout)
                                             .foregroundColor(DS.Color.textPrimary)
@@ -107,40 +85,13 @@ struct EditProfileView: View {
                                     .padding(.horizontal, DS.Spacing.lg)
                                     .padding(.vertical, DS.Spacing.sm)
 
-                                    customDivider
 
-                                    HStack {
-                                        ZStack {
-                                            Circle().fill(Color.gray.opacity(0.1))
-                                                .frame(width: 32, height: 32)
-                                            Image(systemName: "leaf.fill")
-                                                .font(DS.Font.scaled(12, weight: .semibold))
-                                                .foregroundColor(.gray)
-                                        }
-                                        Toggle(L10n.t("متوفى", "Deceased"), isOn: $isDeceased)
-                                            .font(DS.Font.callout)
-                                            .foregroundColor(DS.Color.textPrimary)
-                                            .tint(.gray)
-                                    }
-                                    .padding(.horizontal, DS.Spacing.lg)
-                                    .padding(.vertical, DS.Spacing.sm)
-
-                                    if isDeceased {
-                                        customDivider
-                                        modernDatePicker(label: L10n.t("تاريخ الوفاة", "Death Date"), selection: $deathDate, icon: "calendar.badge.clock")
-                                    }
                                 }
                             }
                         }
-                        .padding(.horizontal, DS.Spacing.xl)
+                        .padding(.horizontal, DS.Spacing.lg)
 
-                        // 4. قسم صور المعرض
-                        if member.id == authVM.currentUser?.id {
-                            galleryPhotosSection
-                                .padding(.horizontal, DS.Spacing.xl)
-                        }
-
-                        // 5. زر الحفظ (تصميم عائم)
+                        // 4. زر الحفظ (تصميم عائم)
                         saveButton
 
                     }
@@ -158,47 +109,9 @@ struct EditProfileView: View {
             }
             .onAppear {
                 setupData()
-                Task { await refreshGalleryPhotos() }
             }
             .photosPicker(isPresented: $showPhotoPicker, selection: $selectedItem, matching: .images)
             .onChange(of: selectedItem) { _ in handleImageChange(selectedItem) }
-            .photosPicker(isPresented: $showGalleryPicker, selection: $selectedGalleryItems, maxSelectionCount: 10, matching: .images)
-            .onChange(of: selectedGalleryItems) { _, newItems in handleGalleryImagesChange(newItems) }
-            .alert(L10n.t("حذف الصورة", "Delete Photo"), isPresented: Binding(
-                get: { pendingDeletePhoto != nil },
-                set: { if !$0 { pendingDeletePhoto = nil } }
-            )) {
-                Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { pendingDeletePhoto = nil }
-                Button(L10n.t("حذف", "Delete"), role: .destructive) {
-                    Task { await deleteGalleryPhoto(pendingDeletePhoto) }
-                }
-            } message: {
-                Text(L10n.t("هل تريد حذف هذه الصورة من المعرض؟", "Delete this photo from gallery?"))
-            }
-            .alert(L10n.t("حذف الصورة", "Delete Photo"), isPresented: $showDeleteLegacyPhotoAlert) {
-                Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
-                Button(L10n.t("حذف", "Delete"), role: .destructive) {
-                    Task { await deleteLegacyGalleryPhoto() }
-                }
-            } message: {
-                Text(L10n.t("هل تريد حذف الصورة القديمة من المعرض؟", "Delete legacy photo from gallery?"))
-            }
-            .fullScreenCover(isPresented: $showGalleryViewer) {
-                if let selectedPreviewPhoto {
-                    GalleryPhotoViewer(
-                        photoURL: selectedPreviewPhoto.photoURL,
-                        onClose: { showGalleryViewer = false },
-                        onDelete: {
-                            if isViewingLegacyPhoto {
-                                showDeleteLegacyPhotoAlert = true
-                            } else {
-                                pendingDeletePhoto = selectedPreviewPhoto
-                            }
-                            showGalleryViewer = false
-                        }
-                    )
-                }
-            }
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
@@ -268,41 +181,14 @@ struct EditProfileView: View {
         }
     }
 
-    private func modernSection<Content: View>(title: String, icon: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            HStack(spacing: DS.Spacing.sm) {
-                Image(systemName: icon)
-                    .font(DS.Font.scaled(14, weight: .semibold))
-                    .foregroundColor(DS.Color.primary)
-                Text(title)
-                    .font(DS.Font.subheadline)
-                    .fontWeight(.bold)
-                    .foregroundColor(DS.Color.textSecondary)
-                Spacer()
-            }
-            .padding(.horizontal, DS.Spacing.xs)
-
-            VStack(spacing: 0) {
-                content()
-            }
-            .glassCard()
-        }
-    }
-
     private func modernTextField(label: String, text: Binding<String>, icon: String, placeholder: String) -> some View {
         HStack(spacing: DS.Spacing.md) {
-            ZStack {
-                Circle().fill(DS.Color.primary.opacity(0.1))
-                    .frame(width: 32, height: 32)
-                Image(systemName: icon)
-                    .font(DS.Font.scaled(12, weight: .semibold))
-                    .foregroundColor(DS.Color.primary)
-            }
-            
+            DSIcon(icon, color: DS.Color.primary)
+
             VStack(alignment: .leading, spacing: 2) {
                 Text(label)
-                    .font(DS.Font.caption2)
-                    .foregroundColor(DS.Color.textTertiary)
+                    .font(DS.Font.caption1)
+                    .foregroundColor(DS.Color.textSecondary)
                 TextField(placeholder, text: text)
                     .font(DS.Font.callout)
                     .foregroundColor(DS.Color.textPrimary)
@@ -315,13 +201,7 @@ struct EditProfileView: View {
 
     private var modernPhoneField: some View {
         HStack(spacing: DS.Spacing.md) {
-            ZStack {
-                Circle().fill(DS.Color.primary.opacity(0.1))
-                    .frame(width: 32, height: 32)
-                Image(systemName: "phone.fill")
-                    .font(DS.Font.scaled(12, weight: .semibold))
-                    .foregroundColor(DS.Color.primary)
-            }
+            DSIcon("phone.fill", color: DS.Color.success)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(L10n.t("رقم الجوال", "Phone Number"))
@@ -372,16 +252,10 @@ struct EditProfileView: View {
     }
 
     private func modernDatePicker(label: String, selection: Binding<Date>, icon: String) -> some View {
-        HStack {
-            ZStack {
-                Circle().fill(DS.Color.primary.opacity(0.1))
-                    .frame(width: 32, height: 32)
-                Image(systemName: icon)
-                    .font(DS.Font.scaled(12, weight: .semibold))
-                    .foregroundColor(DS.Color.primary)
-            }
+        HStack(spacing: DS.Spacing.md) {
+            DSIcon(icon, color: DS.Color.info)
             Text(label)
-                .font(DS.Font.callout)
+                .font(DS.Font.calloutBold)
                 .foregroundColor(DS.Color.textPrimary)
             Spacer()
             DatePicker("", selection: selection, in: ...Date(), displayedComponents: .date).labelsHidden()
@@ -392,45 +266,15 @@ struct EditProfileView: View {
 
     private var saveButton: some View {
         let newStoredPhone = KuwaitPhone.normalizedForStorage(country: selectedPhoneCountry, rawLocalDigits: phoneNumber)
-        let oldStoredPhone = KuwaitPhone.normalizeForStorageFromInput(member.phoneNumber) ?? ""
-        let isPhoneChanged = (newStoredPhone?.isEmpty == false) && ((newStoredPhone ?? "") != oldStoredPhone)
-        let isDeceasedChanged = (isDeceased && !(member.isDeceased ?? false))
-        let needsApproval = isPhoneChanged || isDeceasedChanged
         let isPhoneValid = phoneNumber.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || newStoredPhone != nil
 
-        return Button(action: saveChangesAction) {
-            HStack(spacing: DS.Spacing.sm) {
-                if authVM.isLoading {
-                    ProgressView().tint(.white)
-                } else {
-                    Text(L10n.t("حفظ التغييرات", "Save Changes"))
-                }
-            }
-            .font(DS.Font.headline)
-            .foregroundColor(.white)
-            .frame(maxWidth: .infinity)
-            .frame(height: 54)
-            .background(
-                Group {
-                    if fullName.isEmpty {
-                        LinearGradient(colors: [Color.gray, Color.gray.opacity(0.7)], startPoint: .leading, endPoint: .trailing)
-                    } else if needsApproval {
-                        LinearGradient(colors: [DS.Color.warning, DS.Color.warning.opacity(0.8)], startPoint: .leading, endPoint: .trailing)
-                    } else {
-                        DS.Color.gradientPrimary
-                    }
-                }
-            )
-            .cornerRadius(DS.Radius.lg)
-            .dsGlowShadow()
-        }
+        return DSPrimaryButton(
+            L10n.t("حفظ التغييرات", "Save Changes"),
+            isLoading: authVM.isLoading,
+            action: saveChangesAction
+        )
         .disabled(fullName.isEmpty || authVM.isLoading || !isPhoneValid)
-        .padding(.horizontal, DS.Spacing.xl)
-    }
-
-    private var customDivider: some View {
-        DSDivider()
-            .padding(.leading, DS.Spacing.xxxl)
+        .padding(.horizontal, DS.Spacing.lg)
     }
 
     // MARK: - Logic (الوظائف)
@@ -490,187 +334,6 @@ struct EditProfileView: View {
         }
     }
 
-    // MARK: - Gallery Photos Section
-    private var galleryPhotosSection: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            HStack(spacing: DS.Spacing.sm) {
-                Image(systemName: "photo.on.rectangle.angled")
-                    .font(DS.Font.scaled(14, weight: .semibold))
-                    .foregroundColor(DS.Color.primary)
-                Text(L10n.t("صور المعرض", "Gallery Photos"))
-                    .font(DS.Font.subheadline)
-                    .fontWeight(.bold)
-                    .foregroundColor(DS.Color.textSecondary)
-                Spacer()
-            }
-            .padding(.horizontal, DS.Spacing.xs)
-
-            VStack(spacing: 0) {
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: DS.Spacing.md) {
-                    Button(action: { showGalleryPicker = true }) {
-                        ZStack {
-                            RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                                .fill(DS.Color.surface)
-                                .aspectRatio(1, contentMode: .fit)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                                        .stroke(Color.gray.opacity(0.2), style: StrokeStyle(lineWidth: 1.5, dash: [4]))
-                                )
-                            VStack(spacing: DS.Spacing.sm) {
-                                Image(systemName: "photo.badge.plus")
-                                    .font(DS.Font.scaled(20))
-                                    .foregroundColor(DS.Color.primary)
-                            }
-                        }
-                    }
-                    .buttonStyle(.plain)
-
-                    ForEach(galleryPhotos) { photo in
-                        ZStack(alignment: .topTrailing) {
-                            Button {
-                                isViewingLegacyPhoto = false
-                                selectedPreviewPhoto = photo
-                                showGalleryViewer = true
-                            } label: {
-                                AsyncImage(url: URL(string: photo.photoURL)) { phase in
-                                    if let image = phase.image {
-                                        image
-                                            .resizable()
-                                            .scaledToFill()
-                                            .frame(minWidth: 0, maxWidth: .infinity)
-                                            .aspectRatio(1, contentMode: .fill)
-                                            .clipped()
-                                    } else {
-                                        ZStack { DS.Color.surface; ProgressView() }
-                                            .frame(minWidth: 0, maxWidth: .infinity)
-                                            .aspectRatio(1, contentMode: .fill)
-                                    }
-                                }
-                                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
-                            }
-                            .buttonStyle(.plain)
-                            
-                            // Inline Easy Delete Button
-                            Button {
-                                pendingDeletePhoto = photo
-                            } label: {
-                                Image(systemName: "minus.circle.fill")
-                                    .font(DS.Font.scaled(20))
-                                    .symbolRenderingMode(.palette)
-                                    .foregroundStyle(.white, DS.Color.error)
-                                    .background(Circle().fill(.white).frame(width: 18, height: 18))
-                                    .padding(6)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-
-                    if galleryPhotos.isEmpty, let legacyURL = legacyGalleryPhotoURL {
-                        ZStack(alignment: .topTrailing) {
-                            Button {
-                                if let legacyPhoto = legacyPreviewPhoto(url: legacyURL) {
-                                    isViewingLegacyPhoto = true
-                                    selectedPreviewPhoto = legacyPhoto
-                                    showGalleryViewer = true
-                                }
-                            } label: {
-                                AsyncImage(url: URL(string: legacyURL)) { phase in
-                                    if let image = phase.image {
-                                        image
-                                            .resizable()
-                                            .scaledToFill()
-                                            .frame(minWidth: 0, maxWidth: .infinity)
-                                            .aspectRatio(1, contentMode: .fill)
-                                            .clipped()
-                                    } else {
-                                        ZStack { DS.Color.surface; ProgressView() }
-                                            .frame(minWidth: 0, maxWidth: .infinity)
-                                            .aspectRatio(1, contentMode: .fill)
-                                    }
-                                }
-                                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
-                            }
-                            .buttonStyle(.plain)
-                            
-                            // Inline Easy Delete Button (Legacy)
-                            Button {
-                                showDeleteLegacyPhotoAlert = true
-                            } label: {
-                                Image(systemName: "minus.circle.fill")
-                                    .font(DS.Font.scaled(20))
-                                    .symbolRenderingMode(.palette)
-                                    .foregroundStyle(.white, DS.Color.error)
-                                    .background(Circle().fill(.white).frame(width: 18, height: 18))
-                                    .padding(6)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                }
-                .padding(DS.Spacing.lg)
-
-                if galleryPhotos.isEmpty, legacyGalleryPhotoURL == nil {
-                    Text(L10n.t("لا توجد صور حالياً", "No photos yet"))
-                        .font(DS.Font.caption1)
-                        .foregroundColor(DS.Color.textSecondary)
-                        .frame(maxWidth: .infinity, alignment: .center)
-                        .padding(.bottom, DS.Spacing.lg)
-                }
-            }
-            .glassCard()
-        }
-    }
-
-    // MARK: - Gallery Logic
-    private func handleGalleryImagesChange(_ items: [PhotosPickerItem]) {
-        Task {
-            guard !items.isEmpty else { return }
-            for item in items {
-                guard let data = try? await item.loadTransferable(type: Data.self),
-                      let uiImg = UIImage(data: data) else { continue }
-                _ = await authVM.uploadMemberGalleryPhotoMulti(image: uiImg, for: member.id)
-            }
-            await MainActor.run { self.selectedGalleryItems = [] }
-            await refreshGalleryPhotos()
-        }
-    }
-
-    private func deleteGalleryPhoto(_ photo: MemberGalleryPhoto?) async {
-        guard let photo else { return }
-        let success = await authVM.deleteMemberGalleryPhotoMulti(photoId: photo.id, photoURL: photo.photoURL)
-        guard success else { return }
-        await MainActor.run {
-            self.pendingDeletePhoto = nil
-            if self.selectedPreviewPhoto?.id == photo.id { self.selectedPreviewPhoto = nil }
-        }
-        await refreshGalleryPhotos()
-    }
-
-    private func refreshGalleryPhotos() async {
-        let photos = await authVM.fetchMemberGalleryPhotos(for: member.id)
-        await MainActor.run {
-            self.galleryPhotos = photos
-            self.legacyGalleryPhotoURL = photos.isEmpty ? member.photoURL : nil
-        }
-    }
-
-    private func deleteLegacyGalleryPhoto() async {
-        let success = await authVM.deleteMemberGalleryPhoto(for: member.id)
-        guard success else { return }
-        await MainActor.run {
-            self.showDeleteLegacyPhotoAlert = false
-            self.legacyGalleryPhotoURL = nil
-            if self.isViewingLegacyPhoto {
-                self.selectedPreviewPhoto = nil
-                self.isViewingLegacyPhoto = false
-            }
-        }
-    }
-
-    private func legacyPreviewPhoto(url: String) -> MemberGalleryPhoto? {
-        guard !url.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
-        return MemberGalleryPhoto(id: UUID(), memberId: member.id, photoURL: url, createdAt: nil)
-    }
 }
 
 struct GalleryPhotoViewer: View {
@@ -679,10 +342,14 @@ struct GalleryPhotoViewer: View {
     let onDelete: () -> Void
 
     @State private var zoomScale: CGFloat = 1
+    @State private var lastZoomScale: CGFloat = 1
+    @State private var offset: CGSize = .zero
+    @State private var lastOffset: CGSize = .zero
 
     var body: some View {
         ZStack(alignment: .top) {
             Color.black.ignoresSafeArea()
+                .onTapGesture { onClose() }
 
             if let url = URL(string: photoURL) {
                 AsyncImage(url: url) { phase in
@@ -691,18 +358,50 @@ struct GalleryPhotoViewer: View {
                             .resizable()
                             .scaledToFit()
                             .scaleEffect(zoomScale)
+                            .offset(offset)
                             .gesture(
-                                MagnificationGesture()
-                                    .onChanged { value in
-                                        zoomScale = min(max(value, 1), 4)
-                                    }
-                                    .onEnded { _ in
-                                        if zoomScale < 1 { zoomScale = 1 }
-                                    }
+                                SimultaneousGesture(
+                                    MagnifyGesture()
+                                        .onChanged { value in
+                                            let newScale = lastZoomScale * value.magnification
+                                            zoomScale = min(max(newScale, 1), 4)
+                                        }
+                                        .onEnded { _ in
+                                            lastZoomScale = zoomScale
+                                            if zoomScale <= 1 {
+                                                withAnimation(.easeOut(duration: 0.2)) {
+                                                    zoomScale = 1
+                                                    lastZoomScale = 1
+                                                    offset = .zero
+                                                    lastOffset = .zero
+                                                }
+                                            }
+                                        },
+                                    DragGesture()
+                                        .onChanged { value in
+                                            if zoomScale > 1 {
+                                                offset = CGSize(
+                                                    width: lastOffset.width + value.translation.width,
+                                                    height: lastOffset.height + value.translation.height
+                                                )
+                                            }
+                                        }
+                                        .onEnded { _ in
+                                            lastOffset = offset
+                                        }
+                                )
                             )
                             .onTapGesture(count: 2) {
                                 withAnimation(.easeInOut(duration: 0.2)) {
-                                    zoomScale = zoomScale > 1 ? 1 : 2
+                                    if zoomScale > 1 {
+                                        zoomScale = 1
+                                        lastZoomScale = 1
+                                        offset = .zero
+                                        lastOffset = .zero
+                                    } else {
+                                        zoomScale = 2
+                                        lastZoomScale = 2
+                                    }
                                 }
                             }
                     } else if phase.error != nil {

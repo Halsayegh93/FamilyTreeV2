@@ -658,26 +658,32 @@ struct DSSectionHeader: View {
 
     var body: some View {
         HStack(spacing: DS.Spacing.sm) {
-            if let icon {
-                Image(systemName: icon)
-                    .font(DS.Font.scaled(15, weight: .bold))
-                    .foregroundColor(DS.Color.primary)
+            HStack(spacing: DS.Spacing.xs) {
+                if let icon {
+                    Image(systemName: icon)
+                        .font(DS.Font.scaled(13, weight: .bold))
+                        .foregroundColor(DS.Color.primary)
+                }
+                Text(title)
+                    .font(DS.Font.calloutBold)
+                    .foregroundColor(DS.Color.textSecondary)
+
+                if let trailing {
+                    Text(trailing)
+                        .font(DS.Font.caption1)
+                        .foregroundColor(DS.Color.primary)
+                        .fontWeight(.bold)
+                }
             }
-            Text(title)
-                .font(DS.Font.footnote)
-                .fontWeight(.bold)
-                .foregroundColor(DS.Color.textSecondary)
-                .textCase(.uppercase)
+            .padding(.horizontal, DS.Spacing.lg)
+            .padding(.vertical, DS.Spacing.sm)
+            .background(DS.Color.primary.opacity(0.08))
+            .clipShape(Capsule())
+
             Spacer()
-            if let trailing {
-                Text(trailing)
-                    .font(DS.Font.caption1)
-                    .foregroundColor(DS.Color.primary)
-                    .fontWeight(.bold)
-            }
         }
         .padding(.horizontal, DS.Spacing.lg)
-        .padding(.top, DS.Spacing.xl)
+        .padding(.top, DS.Spacing.sm)
         .padding(.bottom, DS.Spacing.xs)
     }
 }
@@ -840,6 +846,57 @@ struct DSDecorativeBackground: View {
                 .offset(x: -geo.size.width * 0.25, y: geo.size.height * 0.4)
         }
         .ignoresSafeArea()
+    }
+}
+
+// MARK: - Setting Icon — أيقونة الإعدادات
+struct DSSettingIcon: View {
+    var name: String
+    var color: Color
+    var size: CGFloat = DS.Icon.sizeSm
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(
+                    LinearGradient(
+                        colors: [color, color.opacity(0.7)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .frame(width: size, height: size)
+
+            Image(systemName: name)
+                .font(DS.Font.scaled(size * 0.42, weight: .bold))
+                .foregroundColor(.white)
+        }
+    }
+}
+
+// MARK: - Card Accent Line — خط زخرفي فوق البطاقة
+struct DSCardAccentLine<S: ShapeStyle>: View {
+    var style: S
+
+    init(gradient: LinearGradient) where S == LinearGradient {
+        self.style = gradient
+    }
+
+    init(color: Color) where S == Color {
+        self.style = color
+    }
+
+    init() where S == LinearGradient {
+        self.style = DS.Color.gradientPrimary
+    }
+
+    var body: some View {
+        Rectangle()
+            .fill(style)
+            .frame(height: 4)
+            .cornerRadius(DS.Radius.full)
+            .padding(.horizontal, DS.Spacing.xl)
+            .padding(.top, DS.Spacing.xs)
     }
 }
 

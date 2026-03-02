@@ -14,6 +14,8 @@ struct DiwaniyasView: View {
             ZStack {
                 DS.Color.background.ignoresSafeArea()
 
+                DSDecorativeBackground()
+
                 VStack(spacing: 0) {
                     MainHeaderView(
                         selectedTab: $selectedTab,
@@ -117,14 +119,7 @@ struct DiwaniyasView: View {
             VStack(spacing: 0) {
                 // Card header
                 HStack(spacing: DS.Spacing.md) {
-                    ZStack {
-                        Circle()
-                            .fill(DS.Color.gridDiwaniya.opacity(0.15))
-                        Image(systemName: item.imageUrl ?? "tent.fill")
-                            .font(DS.Font.scaled(16, weight: .bold))
-                            .foregroundColor(DS.Color.gridDiwaniya)
-                    }
-                    .frame(width: 42, height: 42)
+                    DSSettingIcon(name: item.imageUrl ?? "tent.fill", color: DS.Color.gridDiwaniya)
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(item.title)
@@ -253,8 +248,10 @@ private struct AddDiwaniyaRequestView: View {
             ZStack {
                 DS.Color.background.ignoresSafeArea()
 
+                DSDecorativeBackground()
+
                 ScrollView(showsIndicators: false) {
-                    VStack(spacing: DS.Spacing.xl) {
+                    VStack(spacing: DS.Spacing.xxl) {
 
                         // Header icon
                         ZStack {
@@ -274,14 +271,14 @@ private struct AddDiwaniyaRequestView: View {
                         .padding(.top, DS.Spacing.lg)
 
                         // Basic info section
-                        DSCard(padding: 0) {
-                            VStack(spacing: 0) {
-                                DSSectionHeader(
-                                    title: L10n.t("بيانات الديوانية", "DIWANIYA INFO"),
-                                    icon: "info.circle.fill"
-                                )
-                                .padding(.bottom, DS.Spacing.sm)
+                        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                            DSSectionHeader(
+                                title: L10n.t("بيانات الديوانية", "DIWANIYA INFO"),
+                                icon: "info.circle.fill"
+                            )
 
+                            DSCard(padding: 0) {
+                                VStack(spacing: 0) {
                                 formField(
                                     icon: "building.columns.fill",
                                     iconColors: [DS.Color.gridDiwaniya, DS.Color.primary],
@@ -328,6 +325,7 @@ private struct AddDiwaniyaRequestView: View {
                                 )
                             }
                             .padding(.bottom, DS.Spacing.md)
+                            }
                         }
 
                         // Review note
@@ -405,21 +403,7 @@ private struct AddDiwaniyaRequestView: View {
         keyboard: UIKeyboardType = .default
     ) -> some View {
         HStack(spacing: DS.Spacing.md) {
-            // Gradient icon circle
-            ZStack {
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: iconColors,
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 36, height: 36)
-                Image(systemName: icon)
-                    .font(DS.Font.scaled(15, weight: .semibold))
-                    .foregroundColor(.white)
-            }
+            DSSettingIcon(name: icon, color: iconColors.first ?? DS.Color.primary, size: 36)
 
             TextField(placeholder, text: text)
                 .font(DS.Font.body)

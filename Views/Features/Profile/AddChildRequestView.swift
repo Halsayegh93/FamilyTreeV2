@@ -25,15 +25,12 @@ struct AddChildRequestView: View {
             ZStack {
                 DS.Color.background.ignoresSafeArea()
 
+                DSDecorativeBackground()
+
                 ScrollView(showsIndicators: false) {
-                    VStack(spacing: DS.Spacing.lg) {
-                        // بيانات الابن
+                    VStack(spacing: DS.Spacing.xxl) {
                         basicInfoCard
-
-                        // الحالة
                         statusCard
-
-                        // Submit
                         submitButton
                     }
                     .padding(.horizontal, DS.Spacing.lg)
@@ -41,7 +38,7 @@ struct AddChildRequestView: View {
                     .padding(.bottom, DS.Spacing.xxl)
                 }
             }
-            .navigationTitle("إضافة ابن")
+            .navigationTitle(L10n.t("إضافة ابن", "Add Child"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -61,157 +58,186 @@ struct AddChildRequestView: View {
                 }
             }
         }
-        .alert("تمت الإضافة", isPresented: $showSuccessAlert) {
-            Button("موافق") { dismiss() }
+        .alert(L10n.t("تمت الإضافة", "Added Successfully"), isPresented: $showSuccessAlert) {
+            Button(L10n.t("موافق", "OK")) { dismiss() }
         } message: {
-            Text("تمت إضافة الابن بنجاح.")
+            Text(L10n.t("تمت إضافة الابن بنجاح.", "Child added successfully."))
         }
     }
 
     private var basicInfoCard: some View {
-        DSCard {
-        VStack(spacing: DS.Spacing.md) {
-            HStack {
-                DSIcon("person.text.rectangle", color: DS.Color.primary, size: DS.Icon.sizeSm, iconSize: 14)
-                Text("بيانات الابن")
-                    .font(DS.Font.calloutBold)
-                Spacer()
-            }
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            DSSectionHeader(
+                title: L10n.t("بيانات الابن", "Child Info"),
+                icon: "person.text.rectangle"
+            )
 
-            fieldRow(title: "الاسم الأول", icon: "person.fill") {
-                TextField("الاسم الأول", text: $firstName)
-                    .multilineTextAlignment(.leading)
-            }
+            DSCard(padding: 0) {
+                VStack(spacing: 0) {
+                    
 
-            fieldRow(title: "رقم الهاتف", icon: "phone.fill") {
-                HStack(spacing: DS.Spacing.sm) {
-                    Menu {
-                        ForEach(KuwaitPhone.supportedCountries) { country in
-                            Button {
-                                selectedPhoneCountry = country
-                            } label: {
-                                Text("\(country.flag) \(country.nameArabic) \(country.dialingCode)")
+                    HStack(spacing: DS.Spacing.md) {
+                        DSIcon("person.fill", color: DS.Color.primary)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(L10n.t("الاسم الأول", "First Name"))
+                                .font(DS.Font.caption1)
+                                .foregroundColor(DS.Color.textSecondary)
+                            TextField(L10n.t("الاسم الأول", "First Name"), text: $firstName)
+                                .font(DS.Font.callout)
+                                .foregroundColor(DS.Color.textPrimary)
+                        }
+                        Spacer()
+                    }
+                    .padding(.horizontal, DS.Spacing.lg)
+                    .padding(.vertical, DS.Spacing.md)
+
+                    DSDivider()
+
+                    HStack(spacing: DS.Spacing.md) {
+                        DSIcon("phone.fill", color: DS.Color.success)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(L10n.t("رقم الهاتف", "Phone Number"))
+                                .font(DS.Font.caption1)
+                                .foregroundColor(DS.Color.textSecondary)
+                            HStack(spacing: DS.Spacing.sm) {
+                                Menu {
+                                    ForEach(KuwaitPhone.supportedCountries) { country in
+                                        Button {
+                                            selectedPhoneCountry = country
+                                        } label: {
+                                            Text("\(country.flag) \(country.nameArabic) \(country.dialingCode)")
+                                        }
+                                    }
+                                } label: {
+                                    HStack(spacing: 6) {
+                                        Text(selectedPhoneCountry.flag)
+                                        Text(selectedPhoneCountry.dialingCode).font(DS.Font.callout)
+                                        Image(systemName: "chevron.down")
+                                            .font(DS.Font.scaled(10, weight: .semibold))
+                                    }
+                                    .foregroundColor(DS.Color.textSecondary)
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 6)
+                                    .background(DS.Color.surface)
+                                    .cornerRadius(DS.Radius.sm)
+                                }
+
+                                TextField(L10n.t("رقم الهاتف (اختياري)", "Phone (optional)"), text: $phoneNumber)
+                                    .keyboardType(.phonePad)
+                            }
+                            .onChange(of: phoneNumber) { _, newValue in
+                                phoneNumber = KuwaitPhone.userTypedDigits(newValue, maxDigits: selectedPhoneCountry.maxDigits)
+                            }
+                            .onChange(of: selectedPhoneCountry) { _, newCountry in
+                                phoneNumber = KuwaitPhone.userTypedDigits(phoneNumber, maxDigits: newCountry.maxDigits)
+                            }
+                            .environment(\.layoutDirection, .leftToRight)
+                        }
+                        Spacer()
+                    }
+                    .padding(.horizontal, DS.Spacing.lg)
+                    .padding(.vertical, DS.Spacing.md)
+
+                    DSDivider()
+
+                    // Photo picker row
+                    PhotosPicker(selection: $selectedImageItem, matching: .images) {
+                        HStack(spacing: DS.Spacing.md) {
+                            DSIcon("photo", color: DS.Color.neonPurple)
+                            Text(L10n.t("الصورة الشخصية (اختياري)", "Profile Photo (optional)"))
+                                .font(DS.Font.calloutBold)
+                                .foregroundColor(DS.Color.textPrimary)
+                            Spacer()
+                            if selectedUIImage != nil {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundColor(DS.Color.success)
                             }
                         }
-                    } label: {
-                        HStack(spacing: 6) {
-                            Text(selectedPhoneCountry.flag)
-                            Text(selectedPhoneCountry.dialingCode).font(DS.Font.callout)
-                            Image(systemName: "chevron.down")
-                                .font(DS.Font.scaled(10, weight: .semibold))
+                        .padding(.horizontal, DS.Spacing.lg)
+                        .padding(.vertical, DS.Spacing.md)
+                    }
+                    .buttonStyle(.plain)
+
+                    DSDivider()
+
+                    HStack(spacing: DS.Spacing.md) {
+                        DSIcon("calendar", color: DS.Color.info)
+                        Toggle(L10n.t("تاريخ الميلاد معروف", "Birth date known"), isOn: $hasBirthDate)
+                            .font(DS.Font.callout)
+                            .tint(DS.Color.primary)
+                    }
+                    .padding(.horizontal, DS.Spacing.lg)
+                    .padding(.vertical, DS.Spacing.sm)
+
+                    if hasBirthDate {
+                        DSDivider()
+                        HStack(spacing: DS.Spacing.md) {
+                            DSIcon("calendar.badge.clock", color: DS.Color.info)
+                            DatePicker(L10n.t("تاريخ الميلاد", "Birth Date"), selection: $birthDate, in: ...Date(), displayedComponents: .date)
+                                .environment(\.locale, Locale(identifier: "en_US"))
                         }
-                        .foregroundColor(DS.Color.textSecondary)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 8)
-                        .background(DS.Color.surface)
-                        .cornerRadius(DS.Radius.sm)
-                    }
-
-                    TextField("رقم الهاتف (اختياري)", text: $phoneNumber)
-                        .keyboardType(.phonePad)
-                        .multilineTextAlignment(.leading)
-                }
-                .onChange(of: phoneNumber) { _, newValue in
-                    phoneNumber = KuwaitPhone.userTypedDigits(newValue, maxDigits: selectedPhoneCountry.maxDigits)
-                }
-                .onChange(of: selectedPhoneCountry) { _, newCountry in
-                    phoneNumber = KuwaitPhone.userTypedDigits(phoneNumber, maxDigits: newCountry.maxDigits)
-                }
-                .environment(\.layoutDirection, .leftToRight)
-            }
-
-            // Photo picker row
-            PhotosPicker(selection: $selectedImageItem, matching: .images) {
-                HStack {
-                    DSIcon("photo", color: DS.Color.primary, size: DS.Icon.sizeSm, iconSize: 14)
-                    Text("الصورة الشخصية (اختياري)")
-                        .font(DS.Font.callout)
-                        .foregroundColor(DS.Color.textPrimary)
-                    Spacer()
-                    if selectedUIImage != nil {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundColor(DS.Color.success)
-                    } else {
-                        Image(systemName: "photo")
-                            .foregroundColor(DS.Color.textSecondary)
+                        .padding(.horizontal, DS.Spacing.lg)
+                        .padding(.vertical, DS.Spacing.sm)
                     }
                 }
-                .padding(.horizontal, DS.Spacing.md)
-                .padding(.vertical, DS.Spacing.md)
-                .background(DS.Color.surfaceElevated)
-                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
-            }
-            .buttonStyle(.plain)
-
-            Toggle("تاريخ الميلاد معروف", isOn: $hasBirthDate)
-                .font(DS.Font.callout)
-                .tint(DS.Color.primary)
-
-            if hasBirthDate {
-                DatePicker("تاريخ الميلاد", selection: $birthDate, in: ...Date(), displayedComponents: .date)
-                    .environment(\.locale, Locale(identifier: "en_US"))
-            }
             }
         }
     }
 
     private var statusCard: some View {
-        DSCard {
-        VStack(spacing: DS.Spacing.sm) {
-            HStack {
-                DSIcon("heart.text.square", color: DS.Color.primary, size: DS.Icon.sizeSm, iconSize: 14)
-                Text("الحالة")
-                    .font(DS.Font.calloutBold)
-                Spacer()
-            }
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            DSSectionHeader(
+                title: L10n.t("الحالة", "Status"),
+                icon: "heart.text.square"
+            )
 
-            Toggle("متوفى", isOn: $isDeceased)
-                .font(DS.Font.callout)
-                .tint(DS.Color.primary)
+            DSCard(padding: 0) {
+                VStack(spacing: 0) {
+                    HStack(spacing: DS.Spacing.md) {
+                        DSIcon("leaf.fill", color: .gray)
+                        Toggle(L10n.t("متوفى", "Deceased"), isOn: $isDeceased)
+                            .font(DS.Font.callout)
+                            .tint(.gray)
+                    }
+                    .padding(.horizontal, DS.Spacing.lg)
+                    .padding(.vertical, DS.Spacing.sm)
 
-            if isDeceased {
-                Toggle("تاريخ الوفاة معروف", isOn: $hasDeathDate)
-                    .font(DS.Font.callout)
-                    .tint(DS.Color.primary)
+                    if isDeceased {
+                        DSDivider()
+                        HStack(spacing: DS.Spacing.md) {
+                            DSIcon("calendar.badge.clock", color: DS.Color.info)
+                            Toggle(L10n.t("تاريخ الوفاة معروف", "Death date known"), isOn: $hasDeathDate)
+                                .font(DS.Font.callout)
+                                .tint(DS.Color.primary)
+                        }
+                        .padding(.horizontal, DS.Spacing.lg)
+                        .padding(.vertical, DS.Spacing.sm)
 
-                if hasDeathDate {
-                    DatePicker("تاريخ الوفاة", selection: $deathDate, in: ...Date(), displayedComponents: .date)
-                        .environment(\.locale, Locale(identifier: "en_US"))
+                        if hasDeathDate {
+                            DSDivider()
+                            HStack(spacing: DS.Spacing.md) {
+                                DSIcon("calendar", color: DS.Color.error)
+                                DatePicker(L10n.t("تاريخ الوفاة", "Death Date"), selection: $deathDate, in: ...Date(), displayedComponents: .date)
+                                    .environment(\.locale, Locale(identifier: "en_US"))
+                            }
+                            .padding(.horizontal, DS.Spacing.lg)
+                            .padding(.vertical, DS.Spacing.sm)
+                        }
+                    }
                 }
-            }
             }
         }
     }
 
     private var submitButton: some View {
         DSPrimaryButton(
-            "إضافة الابن",
+            L10n.t("إضافة الابن", "Add Child"),
             icon: "checkmark.circle.fill",
             isLoading: authVM.isLoading,
             action: saveChild
         )
         .opacity(firstName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.5 : 1.0)
         .disabled(firstName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || authVM.isLoading)
-    }
-
-    private func fieldRow<Content: View>(title: String, icon: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            HStack(spacing: DS.Spacing.sm) {
-                Image(systemName: icon)
-                    .font(DS.Font.scaled(12))
-                    .foregroundColor(DS.Color.primary)
-                Text(title)
-                    .font(DS.Font.caption1)
-                    .foregroundColor(DS.Color.textSecondary)
-                Spacer()
-            }
-            content()
-                .font(DS.Font.body)
-                .padding(.horizontal, DS.Spacing.md)
-                .padding(.vertical, DS.Spacing.md)
-                .background(DS.Color.surfaceElevated)
-                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
-        }
     }
 
     private func saveChild() {
