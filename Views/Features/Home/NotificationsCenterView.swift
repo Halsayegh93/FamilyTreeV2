@@ -156,7 +156,7 @@ struct NotificationsCenterView: View {
                         // Body — full text
                         DSCard(padding: 0) {
                             VStack(alignment: .leading, spacing: DS.Spacing.md) {
-                                Text(cleanBody(notification.body))
+                                Text(notification.body)
                                     .font(DS.Font.body)
                                     .foregroundColor(DS.Color.textPrimary)
                                     .multilineTextAlignment(.leading)
@@ -515,11 +515,10 @@ struct NotificationsCenterView: View {
                             .clipShape(Capsule())
                     }
                     
-                    // Body (بدون سطر "بواسطة:" لأنه يظهر منفصل)
-                    Text(cleanBody(item.body))
+                    // Body — كل التفاصيل
+                    Text(item.body)
                         .font(DS.Font.subheadline)
                         .foregroundColor(isUnread ? DS.Color.textPrimary : DS.Color.textTertiary)
-                        .lineLimit(2)
                         .multilineTextAlignment(.leading)
                     
                     // Created by (للمدراء والمشرفين فقط)
