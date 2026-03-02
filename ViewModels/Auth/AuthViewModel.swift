@@ -2665,10 +2665,16 @@ class AuthViewModel: ObservableObject {
         }
         
         do {
+            // المدراء يشوفون الإشعارات الموجهة لهم + البث العام (notifyAdmins)
+            // الأعضاء العاديون يشوفون فقط الإشعارات الموجهة لهم شخصياً
+            let filter = canModerate
+                ? "target_member_id.is.null,target_member_id.eq.\(userId.uuidString)"
+                : "target_member_id.eq.\(userId.uuidString)"
+            
             let response: [AppNotification] = try await supabase
                 .from("notifications")
                 .select()
-                .or("target_member_id.is.null,target_member_id.eq.\(userId.uuidString)")
+                .or(filter)
                 .order("created_at", ascending: false)
                 .execute()
                 .value
@@ -2717,11 +2723,14 @@ class AuthViewModel: ObservableObject {
     
     func markAllNotificationsAsRead() async {
         guard let userId = currentUser?.id else { return }
+        let filter = canModerate
+            ? "target_member_id.is.null,target_member_id.eq.\(userId.uuidString)"
+            : "target_member_id.eq.\(userId.uuidString)"
         do {
             try await supabase
                 .from("notifications")
                 .update(["is_read": AnyEncodable(true)])
-                .or("target_member_id.is.null,target_member_id.eq.\(userId.uuidString)")
+                .or(filter)
                 .eq("is_read", value: false)
                 .execute()
             
@@ -2788,38 +2797,21 @@ class AuthViewModel: ObservableObject {
         await MainActor.run { self.isLoading = false }
     }
     
-    /// إرسال إشعار في مركز الإشعارات للمدراء والمشرفين فقط من أي حساب
-    /// اسم المنشئ يُعرض تلقائياً في الواجهة عبر حقل created_by
+    /// إرسال إشعار واحد في مركز الإشعارات (broadcast) يراه المدراء والمشرفون
+    /// target_member_id = NULL يعني broadcast — الـ RLS يتكفل بإظهاره للمدراء فقط
     private func notifyAdmins(title: String, body: String, kind: String) async {
         let creatorId = currentUser?.id
         guard notificationsFeatureAvailable else { return }
         
         do {
-            // جلب المدراء والمشرفين مباشرة من قاعدة البيانات
-            struct ProfileId: Decodable { let id: UUID }
-            let admins: [ProfileId] = try await supabase
-                .from("profiles")
-                .select("id")
-                .in("role", values: ["admin", "supervisor"])
-                .execute()
-                .value
-            
-            let adminIds = admins
-                .map { $0.id }
-                .filter { $0 != creatorId } // لا نرسل إشعار للمرسل نفسه
-            
-            guard !adminIds.isEmpty else { return }
-            
-            for adminId in adminIds {
-                let payload: [String: AnyEncodable] = [
-                    "target_member_id": AnyEncodable(adminId.uuidString),
-                    "title": AnyEncodable(title),
-                    "body": AnyEncodable(body),
-                    "kind": AnyEncodable(kind),
-                    "created_by": AnyEncodable(creatorId?.uuidString)
-                ]
-                try await supabase.from("notifications").insert(payload).execute()
-            }
+            let payload: [String: AnyEncodable] = [
+                "target_member_id": AnyEncodable(Optional<String>.none),
+                "title": AnyEncodable(title),
+                "body": AnyEncodable(body),
+                "kind": AnyEncodable(kind),
+                "created_by": AnyEncodable(creatorId?.uuidString)
+            ]
+            try await supabase.from("notifications").insert(payload).execute()
         } catch {
             if isMissingNotificationsTableError(error) {
                 notificationsFeatureAvailable = false
