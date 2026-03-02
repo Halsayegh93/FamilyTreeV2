@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct AdminMemberDetailSheet: View {
     @EnvironmentObject var authVM: AuthViewModel
@@ -25,6 +26,7 @@ struct AdminMemberDetailSheet: View {
     // حالات ترتيب الأبناء
     @State private var localChildren: [FamilyMember] = []
     @State private var isSortMode = false
+    @State private var draggedChild: FamilyMember?
 
     @State private var showAddSonSheet = false
     @State private var showFatherPicker = false
@@ -359,17 +361,47 @@ struct AdminMemberDetailSheet: View {
                 }
 
                 if localChildren.isEmpty {
-                    VStack(spacing: DS.Spacing.xs) {
+                    VStack(spacing: DS.Spacing.sm) {
                         Image(systemName: "person.2.slash")
                             .font(DS.Font.scaled(24))
                             .foregroundColor(DS.Color.textTertiary)
                         Text(L10n.t("لا يوجد أبناء حالياً", "No children yet"))
                             .font(DS.Font.caption1)
                             .foregroundColor(DS.Color.textSecondary)
+
+                        Button { showAddSonSheet = true } label: {
+                            HStack(spacing: DS.Spacing.xs) {
+                                Image(systemName: "plus.circle.fill")
+                                    .font(DS.Font.scaled(14, weight: .bold))
+                                Text(L10n.t("إضافة ابن", "Add Child"))
+                                    .font(DS.Font.caption1)
+                                    .fontWeight(.bold)
+                            }
+                            .foregroundColor(DS.Color.success)
+                            .padding(.horizontal, DS.Spacing.lg)
+                            .padding(.vertical, DS.Spacing.sm)
+                            .background(DS.Color.success.opacity(0.1))
+                            .clipShape(Capsule())
+                            .overlay(
+                                Capsule()
+                                    .strokeBorder(DS.Color.success.opacity(0.3), lineWidth: 1)
+                            )
+                        }
+                        .buttonStyle(DSBoldButtonStyle())
                     }
                     .frame(maxWidth: .infinity)
                     .padding(DS.Spacing.md)
+                } else if isSortMode {
+                    // Drag & drop reorder mode — vertical list
+                    VStack(spacing: DS.Spacing.xs) {
+                        ForEach(localChildren, id: \.id) { child in
+                            childSortRow(child: child)
+                        }
+                    }
+                    .padding(.horizontal, DS.Spacing.md)
+                    .padding(.bottom, DS.Spacing.md)
                 } else {
+                    // Normal grid mode
                     let columns = [GridItem(.flexible()), GridItem(.flexible())]
                     LazyVGrid(columns: columns, spacing: DS.Spacing.sm) {
                         ForEach(localChildren, id: \.id) { child in
@@ -431,51 +463,83 @@ struct AdminMemberDetailSheet: View {
         .padding(.horizontal, DS.Spacing.lg)
     }
 
+    // MARK: - Sort Row (Drag & Drop)
+    private func childSortRow(child: FamilyMember) -> some View {
+        let isChildDeceased = child.isDeceased ?? false
+        let iconName = isChildDeceased ? "person.fill.xmark" : "person.fill"
+        let iconColor = isChildDeceased ? DS.Color.error : DS.Color.primary
+
+        return HStack(spacing: DS.Spacing.sm) {
+            Image(systemName: "line.3.horizontal")
+                .font(DS.Font.scaled(14, weight: .bold))
+                .foregroundColor(DS.Color.textTertiary)
+
+            Image(systemName: iconName)
+                .font(DS.Font.scaled(13, weight: .bold))
+                .foregroundColor(iconColor)
+                .frame(width: 28, height: 28)
+                .background(iconColor.opacity(0.12))
+                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(child.firstName)
+                    .font(DS.Font.callout)
+                    .fontWeight(.bold)
+                    .foregroundColor(DS.Color.textPrimary)
+                    .lineLimit(1)
+
+                if let birth = child.birthDate, !birth.isEmpty {
+                    Text(birth)
+                        .font(DS.Font.caption2)
+                        .foregroundColor(DS.Color.textSecondary)
+                        .lineLimit(1)
+                }
+            }
+
+            Spacer()
+
+            if let idx = localChildren.firstIndex(where: { $0.id == child.id }) {
+                Text("\(idx + 1)")
+                    .font(DS.Font.caption2)
+                    .fontWeight(.bold)
+                    .foregroundColor(DS.Color.primary)
+                    .frame(width: 24, height: 24)
+                    .background(DS.Color.primary.opacity(0.1))
+                    .clipShape(Circle())
+            }
+        }
+        .padding(.horizontal, DS.Spacing.md)
+        .padding(.vertical, DS.Spacing.sm)
+        .background(
+            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                .fill(draggedChild?.id == child.id ? DS.Color.primary.opacity(0.08) : DS.Color.surface)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                .stroke(DS.Color.primary.opacity(0.2), lineWidth: 1)
+        )
+        .onDrag {
+            draggedChild = child
+            return NSItemProvider(object: child.id.uuidString as NSString)
+        }
+        .onDrop(of: [.text], delegate: ChildDropDelegate(
+            child: child,
+            localChildren: $localChildren,
+            draggedChild: $draggedChild
+        ))
+    }
+
+    // MARK: - Grid Cell (Normal Mode)
     private func childGridCell(child: FamilyMember) -> some View {
         let isChildDeceased = child.isDeceased ?? false
         let iconName = isChildDeceased ? "person.fill.xmark" : "person.fill"
         let iconColor = isChildDeceased ? DS.Color.error : DS.Color.primary
-        let childIndex = localChildren.firstIndex(where: { $0.id == child.id })
 
         return ZStack(alignment: .topTrailing) {
             Button {
-                if !isSortMode {
-                    childToEdit = child
-                }
+                childToEdit = child
             } label: {
                 HStack(spacing: DS.Spacing.xs) {
-                    if isSortMode {
-                        // Sort arrows
-                        VStack(spacing: 2) {
-                            Button {
-                                if let i = childIndex, i > 0 {
-                                    withAnimation(DS.Anim.snappy) {
-                                        localChildren.swapAt(i, i - 1)
-                                    }
-                                }
-                            } label: {
-                                Image(systemName: "chevron.up")
-                                    .font(DS.Font.scaled(9, weight: .bold))
-                                    .foregroundColor(childIndex == 0 ? DS.Color.textTertiary.opacity(0.3) : DS.Color.primary)
-                            }
-                            .disabled(childIndex == 0)
-
-                            Button {
-                                if let i = childIndex, i < localChildren.count - 1 {
-                                    withAnimation(DS.Anim.snappy) {
-                                        localChildren.swapAt(i, i + 1)
-                                    }
-                                }
-                            } label: {
-                                Image(systemName: "chevron.down")
-                                    .font(DS.Font.scaled(9, weight: .bold))
-                                    .foregroundColor(childIndex == localChildren.count - 1 ? DS.Color.textTertiary.opacity(0.3) : DS.Color.primary)
-                            }
-                            .disabled(childIndex == localChildren.count - 1)
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                    }
-
                     Image(systemName: iconName)
                         .font(DS.Font.scaled(13, weight: .bold))
                         .foregroundColor(iconColor)
@@ -498,12 +562,10 @@ struct AdminMemberDetailSheet: View {
                         }
                     }
 
-                    if !isSortMode {
-                        Spacer()
-                        Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
-                            .font(DS.Font.scaled(9, weight: .bold))
-                            .foregroundColor(DS.Color.textTertiary)
-                    }
+                    Spacer()
+                    Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
+                        .font(DS.Font.scaled(9, weight: .bold))
+                        .foregroundColor(DS.Color.textTertiary)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(DS.Spacing.xs + 2)
@@ -511,26 +573,23 @@ struct AdminMemberDetailSheet: View {
                 .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                        .stroke(isSortMode ? DS.Color.primary.opacity(0.3) : iconColor.opacity(0.15), lineWidth: 1)
+                        .stroke(iconColor.opacity(0.15), lineWidth: 1)
                 )
             }
             .buttonStyle(DSBoldButtonStyle())
-            .disabled(isSortMode)
 
             // Delete button
-            if !isSortMode {
-                Button {
-                    childToDelete = child
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(DS.Font.scaled(16))
-                        .foregroundColor(DS.Color.error.opacity(0.7))
-                        .background(DS.Color.surface)
-                        .clipShape(Circle())
-                }
-                .buttonStyle(PlainButtonStyle())
-                .offset(x: 6, y: -6)
+            Button {
+                childToDelete = child
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(DS.Font.scaled(16))
+                    .foregroundColor(DS.Color.error.opacity(0.7))
+                    .background(DS.Color.surface)
+                    .clipShape(Circle())
             }
+            .buttonStyle(PlainButtonStyle())
+            .offset(x: 6, y: -6)
         }
     }
 
@@ -743,29 +802,76 @@ struct AdminMemberDetailSheet: View {
         let capturedFullName = finalFullName
         let vm = authVM
 
+        // Detect what actually changed — only update modified fields
+        let nameChanged = capturedFullName != member.fullName
+        let roleChanged = capturedRole != member.role
+        let phoneChanged: Bool = {
+            let original = KuwaitPhone.detectCountryAndLocal(member.phoneNumber)
+            return capturedPhoneCountry.id != original.country.id || capturedPhone != original.localDigits
+        }()
+        let fatherChanged = capturedFatherId != member.fatherId
+        let datesChanged: Bool = {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "yyyy-MM-dd"
+            let origBirth = member.birthDate.flatMap { formatter.date(from: $0) }
+            let origDeceased = member.isDeceased ?? false
+            let origDeath = member.deathDate.flatMap { formatter.date(from: $0) }
+            if capturedIsDeceased != origDeceased { return true }
+            if (capturedBirthDate == nil) != (origBirth == nil) { return true }
+            if let cb = capturedBirthDate, let ob = origBirth,
+               formatter.string(from: cb) != formatter.string(from: ob) { return true }
+            if (capturedDeathDate == nil) != (origDeath == nil) { return true }
+            if let cd = capturedDeathDate, let od = origDeath,
+               formatter.string(from: cd) != formatter.string(from: od) { return true }
+            return false
+        }()
+        let childrenOrderChanged: Bool = {
+            let originalChildren = vm.allMembers
+                .filter { $0.fatherId == capturedMemberId }
+                .sorted(by: { ($0.sortOrder ?? 0) < ($1.sortOrder ?? 0) })
+            if capturedChildren.count != originalChildren.count { return true }
+            for (i, child) in capturedChildren.enumerated() {
+                if child.id != originalChildren[i].id { return true }
+            }
+            return false
+        }()
+
+        // If nothing changed, just dismiss
+        guard nameChanged || roleChanged || phoneChanged || fatherChanged || datesChanged || childrenOrderChanged else {
+            dismiss()
+            return
+        }
+
         // Dismiss immediately for snappy UX
         dismiss()
 
-        // Fire-and-forget: all updates run in background
+        // Fire-and-forget: only update fields that actually changed
         Task {
-            await vm.updateMemberName(memberId: capturedMemberId, fullName: capturedFullName)
-            if capturedIsAdmin {
+            if nameChanged {
+                await vm.updateMemberName(memberId: capturedMemberId, fullName: capturedFullName)
+            }
+            if capturedIsAdmin && roleChanged {
                 await vm.updateMemberRole(memberId: capturedMemberId, newRole: capturedRole)
             }
-            await vm.updateMemberPhone(
-                memberId: capturedMemberId,
-                country: capturedPhoneCountry,
-                localPhone: capturedPhone
-            )
-            await vm.updateMemberFather(memberId: capturedMemberId, fatherId: capturedFatherId)
-            await vm.updateMemberHealthAndBirth(
-                memberId: capturedMemberId,
-                birthDate: capturedBirthDate,
-                isDeceased: capturedIsDeceased,
-                deathDate: capturedDeathDate
-            )
-
-            if !capturedChildren.isEmpty {
+            if phoneChanged {
+                await vm.updateMemberPhone(
+                    memberId: capturedMemberId,
+                    country: capturedPhoneCountry,
+                    localPhone: capturedPhone
+                )
+            }
+            if fatherChanged {
+                await vm.updateMemberFather(memberId: capturedMemberId, fatherId: capturedFatherId)
+            }
+            if datesChanged {
+                await vm.updateMemberHealthAndBirth(
+                    memberId: capturedMemberId,
+                    birthDate: capturedBirthDate,
+                    isDeceased: capturedIsDeceased,
+                    deathDate: capturedDeathDate
+                )
+            }
+            if childrenOrderChanged && !capturedChildren.isEmpty {
                 var updatedChildren = capturedChildren
                 for i in 0..<updatedChildren.count {
                     updatedChildren[i].sortOrder = i
@@ -912,5 +1018,31 @@ struct FatherPickerSheet: View {
             .tint(DS.Color.primary)
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         }
+    }
+}
+
+// MARK: - Drag & Drop Delegate for Children Reorder
+struct ChildDropDelegate: DropDelegate {
+    let child: FamilyMember
+    @Binding var localChildren: [FamilyMember]
+    @Binding var draggedChild: FamilyMember?
+
+    func performDrop(info: DropInfo) -> Bool {
+        draggedChild = nil
+        return true
+    }
+
+    func dropEntered(info: DropInfo) {
+        guard let dragged = draggedChild, dragged.id != child.id else { return }
+        guard let fromIndex = localChildren.firstIndex(where: { $0.id == dragged.id }),
+              let toIndex = localChildren.firstIndex(where: { $0.id == child.id }) else { return }
+
+        withAnimation(DS.Anim.snappy) {
+            localChildren.move(fromOffsets: IndexSet(integer: fromIndex), toOffset: toIndex > fromIndex ? toIndex + 1 : toIndex)
+        }
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        DropProposal(operation: .move)
     }
 }

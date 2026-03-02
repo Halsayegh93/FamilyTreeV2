@@ -7,292 +7,330 @@ struct MemberDetailsView: View {
 
     let member: FamilyMember
     @State private var showAdminControl = false
-    @State private var showAvatarPicker = false
-    @State private var selectedAvatarItem: PhotosPickerItem? = nil
-    @State private var localAvatarPreviewImage: UIImage? = nil
-    @State private var avatarURL: String? = nil
-
-    @State private var showDeleteAvatarAlert = false
-    @State private var selectedTab = 0 // 0: البيانات، 1: الصور
     @State private var avatarPreviewScale: CGFloat = 1.0
     @State private var lastAvatarPreviewScale: CGFloat = 1.0
+    @State private var showAvatarPreview = false
+
+    // تعديل صورة الغلاف
+    @State private var showCoverPicker = false
+    @State private var selectedCoverItem: PhotosPickerItem? = nil
+    @State private var localCoverPreview: UIImage? = nil
     @State private var pendingCropImage: UIImage? = nil
-    @State private var fullScreenMode: FullScreenMode? = nil
-    
-    private enum FullScreenMode: Identifiable {
-        case avatarPreview
-        case cropper
-        
-        var id: Int {
-            switch self {
-            case .avatarPreview: return 0
-            case .cropper: return 1
-            }
-        }
-    }
+    @State private var showCropper = false
 
     var isAdminOrSupervisor: Bool {
         let role = authVM.currentUser?.role
         return role == .admin || role == .supervisor
     }
 
-    var isManager: Bool {
-        authVM.currentUser?.role == .admin
-    }
-
-    private let photoHeight: CGFloat = 380
+    private let heroHeight: CGFloat = 320
 
     var body: some View {
         NavigationStack {
             ZStack(alignment: .top) {
                 DS.Color.background.ignoresSafeArea()
 
-                // الصورة الثابتة خلف المحتوى مع تدريج
-                if !member.isDeleted {
-                    GeometryReader { geo in
-                        let minY = geo.frame(in: .global).minY
-                        avatarContent
-                            .frame(width: geo.size.width, height: minY > 0 ? photoHeight + minY : photoHeight)
-                            .clipped()
-                            .overlay(
-                                LinearGradient(
-                                    colors: [
-                                        Color.black.opacity(0.3),
-                                        Color.black.opacity(0.05),
-                                        .clear,
-                                        Color.black.opacity(0.15),
-                                        Color.black.opacity(0.5)
-                                    ],
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                )
-                            )
-                            .offset(y: minY > 0 ? -minY : 0)
-                    }
-                    .frame(height: photoHeight)
-                    .allowsHitTesting(false)
-                }
+                if member.isDeleted {
+                    // عرض رسالة للعضو المحذوف
+                    deletedMemberView
+                } else {
+                    ScrollView(showsIndicators: false) {
+                        VStack(spacing: 0) {
+                            // صورة هيرو
+                            heroPhotoSection
 
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: 0) {
-                        if member.isDeleted {
-                            // عرض رسالة للعضو المحذوف
-                            VStack(spacing: DS.Spacing.xxl) {
-                                Spacer(minLength: 80)
-                                ZStack {
-                                    Circle()
-                                        .fill(Color.gray.opacity(0.15))
-                                        .frame(width: 100, height: 100)
-                                    Image(systemName: "person.slash.fill")
-                                        .font(DS.Font.scaled(36))
-                                        .foregroundColor(.gray)
-                                }
-                                Text(L10n.t("هذا العضو حذف حسابه", "This member deleted their account"))
-                                    .font(DS.Font.headline)
-                                    .foregroundColor(DS.Color.textSecondary)
-                                Text(L10n.t("البيانات الشخصية لم تعد متوفرة", "Personal data is no longer available"))
-                                    .font(DS.Font.caption1)
-                                    .foregroundColor(DS.Color.textTertiary)
-                                Spacer()
-                            }
-                            .frame(maxWidth: .infinity)
-                        } else {
-                            // مساحة شفافة بحجم الصورة - الضغط يفتح معاينة الصورة
-                            Color.clear
-                                .frame(height: photoHeight - 100)
-                                .contentShape(Rectangle())
-                                .onTapGesture {
-                                    fullScreenMode = .avatarPreview
-                                }
+                            // أفاتار + اسم + بادجات
+                            profileInfoSection
 
-                            // الاسم والبادج فوق الصورة
-                            nameOverlaySection
-                                .padding(.bottom, DS.Spacing.lg)
+                            // كبسولات المعلومات
+                            statsRow
+                                .padding(.top, DS.Spacing.sm)
 
-                            // بطاقات البيانات عائمة فوق الصورة
-                            infoCardsRow
-                                .padding(.horizontal)
-                                .padding(.bottom, DS.Spacing.md)
+                            // قسم السيرة
+                            bioTimelineSection
 
-                            // تدرج للانتقال من الصورة للخلفية
-                            LinearGradient(
-                                colors: [.clear, DS.Color.background.opacity(0.7), DS.Color.background],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                            .frame(height: 50)
+                            // قسم المعرض
+                            gallerySection
 
-                            // المعرض على خلفية صلبة
-                            VStack(spacing: DS.Spacing.md) {
-                                photosTab
-                                Spacer(minLength: 40)
-                            }
-                            .background(DS.Color.background)
+                            Spacer(minLength: 60)
                         }
                     }
-                }
 
-                // أزرار فوق الصورة (تعديل + إغلاق)
-                if !member.isDeleted {
-                    floatingButtons
+                    // أزرار عائمة فوق الصورة
+                    floatingNavButtons
                 }
             }
             .navigationBarHidden(true)
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-            .onAppear {
-                avatarURL = member.avatarUrl
-            }
-            .onChange(of: selectedAvatarItem) { _, newValue in
-                handleAvatarImageChange(newValue)
-            }
             .sheet(isPresented: $showAdminControl) {
                 AdminMemberDetailSheet(member: member)
             }
         }
-        .photosPicker(isPresented: $showAvatarPicker, selection: $selectedAvatarItem, matching: .images)
-        .fullScreenCover(item: $fullScreenMode) { mode in
-            switch mode {
-            case .avatarPreview:
-                avatarPreviewOverlay
-            case .cropper:
-                cropperView
-            }
+        .fullScreenCover(isPresented: $showAvatarPreview) {
+            avatarPreviewOverlay
         }
-        .alert(L10n.t("حذف صورة البروفايل", "Delete Profile Photo"), isPresented: $showDeleteAvatarAlert) {
-            Button(L10n.t("حذف", "Delete"), role: .destructive) {
-                Task { await deleteAvatarPhoto() }
-            }
-            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { }
-        } message: {
-            Text(L10n.t("هل تريد حذف صورة البروفايل لهذا العضو؟", "Delete profile photo for this member?"))
+        .fullScreenCover(isPresented: $showCropper) {
+            cropperView
+        }
+        .photosPicker(isPresented: $showCoverPicker, selection: $selectedCoverItem, matching: .images)
+        .onChange(of: selectedCoverItem) { _, newValue in
+            handleCoverImageChange(newValue)
         }
     }
 
-    // MARK: - الاسم والبادج العائمة
+    // MARK: - عضو محذوف
 
-    private var nameOverlaySection: some View {
+    private var deletedMemberView: some View {
+        VStack(spacing: DS.Spacing.xxl) {
+            Spacer(minLength: 80)
+            ZStack {
+                Circle()
+                    .fill(Color.gray.opacity(0.15))
+                    .frame(width: 100, height: 100)
+                Image(systemName: "person.slash.fill")
+                    .font(DS.Font.scaled(36))
+                    .foregroundColor(.gray)
+            }
+            Text(L10n.t("هذا العضو حذف حسابه", "This member deleted their account"))
+                .font(DS.Font.headline)
+                .foregroundColor(DS.Color.textSecondary)
+            Text(L10n.t("البيانات الشخصية لم تعد متوفرة", "Personal data is no longer available"))
+                .font(DS.Font.caption1)
+                .foregroundColor(DS.Color.textTertiary)
+            Spacer()
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    // MARK: - صورة هيرو
+
+    private var heroPhotoSection: some View {
+        ZStack(alignment: .bottom) {
+            avatarContent
+                .frame(height: heroHeight)
+                .frame(maxWidth: .infinity)
+                .clipped()
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    showAvatarPreview = true
+                }
+
+            // تدريج من فوق للـ status bar
+            VStack {
+                LinearGradient(
+                    colors: [Color.black.opacity(0.45), Color.black.opacity(0.1), .clear],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(height: 110)
+                Spacer()
+            }
+            .allowsHitTesting(false)
+
+            // تدريج من تحت للانتقال للمحتوى
+            LinearGradient(
+                colors: [.clear, DS.Color.background.opacity(0.6), DS.Color.background],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(height: 100)
+            .allowsHitTesting(false)
+
+        
+        }
+        .frame(height: heroHeight)
+    }
+
+    // MARK: - اسم + بادجات + زر تعديل الغلاف
+
+    private var profileInfoSection: some View {
         VStack(spacing: DS.Spacing.sm) {
+            // الاسم الكامل
             Text(member.fullName)
-                .font(DS.Font.scaled(18, weight: .bold))
-                .foregroundColor(.white)
+                .font(DS.Font.title2)
+                .foregroundColor(DS.Color.textPrimary)
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
-                .padding(.horizontal, DS.Spacing.xl)
-                .padding(.vertical, DS.Spacing.sm + 2)
-                .background(.ultraThinMaterial)
-                .clipShape(Capsule())
-                .shadow(color: .black.opacity(0.2), radius: 8, y: 4)
+                .padding(.horizontal, DS.Spacing.xxl)
 
+            // بادجات الرتبة + متوفى
             HStack(spacing: DS.Spacing.sm) {
-                Text(member.roleName)
-                    .font(DS.Font.scaled(11, weight: .heavy))
-                    .padding(.horizontal, DS.Spacing.md).padding(.vertical, 5)
-                    .background(.ultraThinMaterial)
-                    .foregroundColor(member.isDeceased == true ? .gray : .white)
-                    .clipShape(Capsule())
+                DSRoleBadge(
+                    title: member.roleName,
+                    color: member.isDeceased == true ? .gray : member.roleColor
+                )
 
-                if isManager {
-                    Button {
-                        showAvatarPicker = true
-                    } label: {
-                        Image(systemName: "camera.fill")
-                            .font(DS.Font.scaled(12, weight: .bold))
-                            .foregroundColor(.white)
-                            .padding(8)
-                            .background(DS.Color.gradientPrimary)
-                            .clipShape(Circle())
-                    }
+                if member.isDeceased == true {
+                    Text(L10n.t("رحمه الله", "Rest in peace"))
+                        .font(DS.Font.scaled(11, weight: .bold))
+                        .foregroundColor(.gray)
+                        .padding(.horizontal, DS.Spacing.sm)
+                        .padding(.vertical, DS.Spacing.xs)
+                        .background(.gray.opacity(0.12))
+                        .clipShape(Capsule())
+                }
+            }
 
-                    if avatarURL != nil || localAvatarPreviewImage != nil || member.avatarUrl != nil {
-                        Button(role: .destructive) {
-                            showDeleteAvatarAlert = true
-                        } label: {
-                            Image(systemName: "trash")
-                                .font(DS.Font.scaled(11, weight: .bold))
-                                .foregroundColor(.white)
-                                .padding(8)
-                                .background(DS.Color.error)
-                                .clipShape(Circle())
+            // زر تعديل الغلاف
+            Button { showCoverPicker = true } label: {
+                HStack(spacing: DS.Spacing.xs) {
+                    Image(systemName: "camera.fill")
+                        .font(DS.Font.scaled(12, weight: .bold))
+                    Text(L10n.t("تعديل الغلاف", "Edit Cover"))
+                        .font(DS.Font.scaled(12, weight: .semibold))
+                }
+                .foregroundColor(DS.Color.primary)
+                .padding(.horizontal, DS.Spacing.lg)
+                .padding(.vertical, DS.Spacing.sm)
+                .background(DS.Color.primary.opacity(0.08))
+                .clipShape(Capsule())
+                .overlay(Capsule().stroke(DS.Color.primary.opacity(0.15), lineWidth: 1))
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.bottom, DS.Spacing.sm)
+    }
+
+    // MARK: - كبسولات المعلومات
+
+    private var statsRow: some View {
+        HStack(spacing: DS.Spacing.md) {
+            // كبسولة الميلاد
+            if let birth = member.birthDate, !birth.isEmpty {
+                let shouldHide = (member.isBirthDateHidden == true)
+                    && (member.id != authVM.currentUser?.id)
+                    && !isAdminOrSupervisor
+                infoPill(
+                    icon: "calendar",
+                    title: L10n.t("الميلاد", "Birth"),
+                    value: shouldHide ? L10n.t("مخفي", "Hidden") : birth,
+                    color: shouldHide ? .gray : DS.Color.primary
+                )
+            }
+
+            // كبسولة الهاتف — للأحياء فقط
+            if member.isDeceased != true,
+               let phone = member.phoneNumber, !phone.isEmpty {
+                let shouldHide = (member.isPhoneHidden == true)
+                    && (member.id != authVM.currentUser?.id)
+                    && !isAdminOrSupervisor
+                infoPill(
+                    icon: "phone.fill",
+                    title: L10n.t("الهاتف", "Phone"),
+                    value: shouldHide ? L10n.t("مخفي", "Hidden") : KuwaitPhone.display(phone),
+                    color: shouldHide ? .gray : DS.Color.success
+                )
+            }
+
+            // كبسولة الوفاة — للمتوفين
+            if member.isDeceased == true {
+                let deathValue = (member.deathDate?.isEmpty == false)
+                    ? (member.deathDate ?? L10n.t("رحمه الله", "Rest in peace"))
+                    : L10n.t("رحمه الله", "Rest in peace")
+                infoPill(
+                    icon: "heart.fill",
+                    title: L10n.t("الوفاة", "Death"),
+                    value: deathValue,
+                    color: .gray
+                )
+            }
+        }
+        .padding(.horizontal, DS.Spacing.lg)
+    }
+
+    private func infoPill(icon: String, title: String, value: String, color: Color) -> some View {
+        HStack(spacing: DS.Spacing.sm) {
+            Image(systemName: icon)
+                .font(DS.Font.scaled(14, weight: .bold))
+                .foregroundColor(color)
+                .frame(width: 28, height: 28)
+                .background(color.opacity(0.12))
+                .clipShape(Circle())
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title)
+                    .font(DS.Font.caption2)
+                    .foregroundColor(DS.Color.textTertiary)
+                Text(value)
+                    .font(DS.Font.scaled(13, weight: .semibold))
+                    .foregroundColor(DS.Color.textPrimary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
+        }
+        .padding(.horizontal, DS.Spacing.md)
+        .padding(.vertical, DS.Spacing.sm)
+        .background(color.opacity(0.06))
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                .stroke(color.opacity(0.12), lineWidth: 1)
+        )
+    }
+
+    // MARK: - تايملاين السيرة
+
+    @ViewBuilder
+    private var bioTimelineSection: some View {
+        if let bioStations = member.bio, !bioStations.isEmpty {
+            VStack(alignment: .leading, spacing: 0) {
+                DSSectionHeader(
+                    title: L10n.t("السيرة", "Biography"),
+                    icon: "book.fill",
+                    iconColor: DS.Color.primary
+                )
+                .padding(.horizontal, DS.Spacing.lg)
+                .padding(.bottom, DS.Spacing.sm)
+
+                VStack(spacing: 0) {
+                    ForEach(Array(bioStations.enumerated()), id: \.element.id) { index, station in
+                        HStack(alignment: .top, spacing: DS.Spacing.md) {
+                            // خط + نقطة التايملاين
+                            VStack(spacing: 0) {
+                                Circle()
+                                    .fill(DS.Color.primary)
+                                    .frame(width: 10, height: 10)
+                                if index < bioStations.count - 1 {
+                                    Rectangle()
+                                        .fill(DS.Color.primary.opacity(0.2))
+                                        .frame(width: 2)
+                                        .frame(maxHeight: .infinity)
+                                }
+                            }
+                            .frame(width: 10)
+
+                            // محتوى المحطة
+                            VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                                if let year = station.year, !year.isEmpty {
+                                    Text(year)
+                                        .font(DS.Font.caption1)
+                                        .foregroundColor(DS.Color.primary)
+                                        .fontWeight(.bold)
+                                }
+                                Text(station.title)
+                                    .font(DS.Font.calloutBold)
+                                    .foregroundColor(DS.Color.textPrimary)
+                                if !station.details.isEmpty {
+                                    Text(station.details)
+                                        .font(DS.Font.caption1)
+                                        .foregroundColor(DS.Color.textSecondary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                            }
+                            .padding(.bottom, DS.Spacing.lg)
                         }
                     }
                 }
+                .padding(.horizontal, DS.Spacing.xxl)
             }
+            .padding(.top, DS.Spacing.lg)
         }
     }
 
-    // MARK: - أزرار عائمة فوق الصورة
+    // MARK: - قسم المعرض
 
-    private var floatingButtons: some View {
-        VStack {
-            HStack {
-                // زر التعديل
-                if isAdminOrSupervisor, !member.isDeleted {
-                    Button { showAdminControl = true } label: {
-                        Image(systemName: "pencil")
-                            .font(DS.Font.scaled(14, weight: .bold))
-                            .foregroundColor(.white)
-                            .padding(10)
-                            .background(.ultraThinMaterial)
-                            .clipShape(Circle())
-                            .shadow(color: .black.opacity(0.3), radius: 4, y: 2)
-                    }
-                }
-
-                Spacer()
-
-                // زر الإغلاق
-                Button { dismiss() } label: {
-                    Image(systemName: "xmark")
-                        .font(DS.Font.scaled(12, weight: .bold))
-                        .foregroundColor(.white)
-                        .padding(10)
-                        .background(.ultraThinMaterial)
-                        .clipShape(Circle())
-                        .shadow(color: .black.opacity(0.3), radius: 4, y: 2)
-                }
-            }
-            .padding(.horizontal, DS.Spacing.lg)
-            .padding(.top, 54)
-
-            Spacer()
-        }
-    }
-
-    // MARK: - بطاقات البيانات
-
-    private var infoCardsRow: some View {
-        HStack(spacing: DS.Spacing.md) {
-            if let birth = member.birthDate, !birth.isEmpty {
-                let shouldHideBirth = (member.isBirthDateHidden == true) && (member.id != authVM.currentUser?.id) && !isAdminOrSupervisor
-                if shouldHideBirth {
-                    modernCompactCard(icon: "calendar", title: L10n.t("الميلاد", "Birth"), value: L10n.t("مخفي", "Hidden"), color: .gray)
-                } else {
-                    modernCompactCard(icon: "calendar", title: L10n.t("الميلاد", "Birth"), value: birth, color: DS.Color.primary)
-                }
-            }
-
-            if member.isDeceased == true {
-                let deathValue = (member.deathDate?.isEmpty == false) ? (member.deathDate ?? L10n.t("رحمه الله", "Rest in peace")) : L10n.t("رحمه الله", "Rest in peace")
-                modernCompactCard(icon: "heart.fill", title: L10n.t("الوفاة", "Death"), value: deathValue, color: .gray)
-            } else if let phone = member.phoneNumber, !phone.isEmpty {
-                let shouldHidePhone = (member.isPhoneHidden == true) && (member.id != authVM.currentUser?.id) && !isAdminOrSupervisor
-                if !shouldHidePhone {
-                    modernCompactCard(icon: "phone.fill", title: L10n.t("الهاتف", "Phone"), value: KuwaitPhone.display(phone), color: DS.Color.success)
-                } else {
-                    modernCompactCard(icon: "phone.fill", title: L10n.t("الهاتف", "Phone"), value: L10n.t("مخفي", "Hidden"), color: .gray)
-                }
-            }
-        }
-    }
-
-    // MARK: - قسم الصور المحدث
-    private var photosTab: some View {
+    private var gallerySection: some View {
         DSCard(padding: 0) {
-            DSSectionHeader(
-                title: L10n.t("المعرض", "Gallery"),
-                icon: "photo.on.rectangle.angled"
-            )
-
             NavigationLink(destination: PersonalGalleryView(member: member, isEditable: isAdminOrSupervisor)) {
                 HStack(spacing: DS.Spacing.md) {
                     DSIcon("photo.on.rectangle.angled", color: DS.Color.neonBlue)
@@ -316,39 +354,67 @@ struct MemberDetailsView: View {
                         .clipShape(Circle())
                 }
                 .padding(.horizontal, DS.Spacing.lg)
-                .padding(.vertical, DS.Spacing.md)
+                .padding(.vertical, DS.Spacing.lg)
             }
             .buttonStyle(DSBoldButtonStyle())
         }
-        .padding(.horizontal)
+        .padding(.horizontal, DS.Spacing.lg)
+        .padding(.top, DS.Spacing.lg)
+    }
+
+    // MARK: - أزرار عائمة
+
+    private var floatingNavButtons: some View {
+        VStack {
+            HStack {
+                // زر التعديل
+                if isAdminOrSupervisor, !member.isDeleted {
+                    Button { showAdminControl = true } label: {
+                        Image(systemName: "pencil")
+                            .font(DS.Font.scaled(14, weight: .bold))
+                            .foregroundColor(.white)
+                            .frame(width: 40, height: 40)
+                            .background(.ultraThinMaterial)
+                            .clipShape(Circle())
+                            .shadow(color: .black.opacity(0.2), radius: 6, y: 2)
+                    }
+                }
+
+                Spacer()
+
+                // زر الإغلاق
+                Button { dismiss() } label: {
+                    Image(systemName: "xmark")
+                        .font(DS.Font.scaled(12, weight: .bold))
+                        .foregroundColor(.white)
+                        .frame(width: 40, height: 40)
+                        .background(.ultraThinMaterial)
+                        .clipShape(Circle())
+                        .shadow(color: .black.opacity(0.2), radius: 6, y: 2)
+                }
+            }
+            .padding(.horizontal, DS.Spacing.lg)
+            .padding(.top, DS.Spacing.sm)
+
+            Spacer()
+        }
+        .ignoresSafeArea(.container, edges: .top)
+        .padding(.top, DS.Spacing.xxxxl)
     }
 
     // MARK: - المكونات الفرعية
 
-    @ViewBuilder
-    private var cropperView: some View {
-        if let img = pendingCropImage {
-            ImageCropperView(
-                image: img,
-                cropShape: .square,
-                onCrop: { cropped in
-                    confirmAvatarCrop(cropped)
-                },
-                onCancel: { fullScreenMode = nil }
-            )
-        } else {
-            Color.black.ignoresSafeArea()
-                .onAppear { fullScreenMode = nil }
-        }
-    }
-
     private var avatarContent: some View {
         ZStack {
-            if let localAvatarPreviewImage {
-                Image(uiImage: localAvatarPreviewImage)
+            if let localCoverPreview {
+                Image(uiImage: localCoverPreview)
                     .resizable()
                     .scaledToFill()
-            } else if let url = avatarURL ?? member.avatarUrl, let imageUrl = URL(string: url) {
+            } else if let url = member.coverUrl, let imageUrl = URL(string: url) {
+                AsyncImage(url: imageUrl) { img in
+                    img.resizable().scaledToFill()
+                } placeholder: { ProgressView().tint(DS.Color.primary) }
+            } else if let url = member.avatarUrl, let imageUrl = URL(string: url) {
                 AsyncImage(url: imageUrl) { img in
                     img.resizable().scaledToFill()
                 } placeholder: { ProgressView().tint(DS.Color.primary) }
@@ -400,13 +466,13 @@ struct MemberDetailsView: View {
             .onTapGesture {
                 avatarPreviewScale = 1
                 lastAvatarPreviewScale = 1
-                fullScreenMode = nil
+                showAvatarPreview = false
             }
 
             Button {
                 avatarPreviewScale = 1
                 lastAvatarPreviewScale = 1
-                fullScreenMode = nil
+                showAvatarPreview = false
             } label: {
                 Image(systemName: "xmark.circle.fill")
                     .font(DS.Font.scaled(30))
@@ -417,44 +483,43 @@ struct MemberDetailsView: View {
         }
     }
 
-    private func modernCompactCard(icon: String, title: String, value: String, color: Color) -> some View {
-        DSCard(padding: 0) {
-            VStack(spacing: DS.Spacing.xs) {
-                DSIcon(icon, color: color)
-                VStack(spacing: 2) {
-                    Text(value)
-                        .font(DS.Font.subheadline)
-                        .foregroundColor(DS.Color.textPrimary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-                    Text(title)
-                        .font(DS.Font.caption2)
-                        .foregroundColor(DS.Color.textSecondary)
-                }
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, DS.Spacing.md)
+    // MARK: - تعديل صورة الغلاف
+
+    @ViewBuilder
+    private var cropperView: some View {
+        if let img = pendingCropImage {
+            ImageCropperView(
+                image: img,
+                cropShape: .square,
+                onCrop: { cropped in
+                    confirmCoverCrop(cropped)
+                },
+                onCancel: { showCropper = false }
+            )
+        } else {
+            Color.black.ignoresSafeArea()
+                .onAppear { showCropper = false }
         }
     }
 
-    private func handleAvatarImageChange(_ item: PhotosPickerItem?) {
+    private func handleCoverImageChange(_ item: PhotosPickerItem?) {
         Task {
             guard let data = try? await item?.loadTransferable(type: Data.self) else { return }
             let resized = await downsampleInBackground(data)
             guard let resized else { return }
             pendingCropImage = resized
             try? await Task.sleep(nanoseconds: 400_000_000)
-            fullScreenMode = .cropper
+            showCropper = true
         }
     }
-    
-    private func confirmAvatarCrop(_ croppedImage: UIImage) {
-        fullScreenMode = nil
+
+    private func confirmCoverCrop(_ croppedImage: UIImage) {
+        showCropper = false
         withAnimation(.easeInOut(duration: 0.2)) {
-            self.localAvatarPreviewImage = croppedImage
+            self.localCoverPreview = croppedImage
         }
         Task {
-            await authVM.uploadAvatar(image: croppedImage, for: member.id)
+            await authVM.uploadCover(image: croppedImage, for: member.id)
         }
     }
 
@@ -477,16 +542,6 @@ struct MemberDetailsView: View {
                 }
                 let result = UIImage(cgImage: cgImage)
                 continuation.resume(returning: result)
-            }
-        }
-    }
-    
-    private func deleteAvatarPhoto() async {
-        await authVM.deleteAvatar(for: member.id)
-        await MainActor.run {
-            withAnimation(.easeInOut(duration: 0.2)) {
-                self.avatarURL = nil
-                self.localAvatarPreviewImage = nil
             }
         }
     }

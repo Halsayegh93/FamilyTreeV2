@@ -54,24 +54,38 @@ class DiwaniyasViewModel: ObservableObject {
         isLoading = true
         errorMessage = nil
         do {
-            let newDiwaniya = Diwaniya(
-                id: UUID(),
-                ownerId: ownerId,
-                ownerName: ownerName,
-                title: title,
-                scheduleText: scheduleText,
-                contactPhone: contactPhone,
-                mapsUrl: mapsUrl,
-                imageUrl: nil,
-                address: address,
-                approvalStatus: "pending",
-                approvedBy: nil
-            )
-            
+            struct InsertData: Codable {
+                let id: UUID
+                let owner_id: UUID
+                let owner_name: String
+                let title: String
+                let schedule_text: String?
+                let contact_phone: String?
+                let maps_url: String?
+                let approval_status: String
+            }
+            let newId = UUID()
             try await supabase
                 .from("diwaniyas")
-                .insert(newDiwaniya)
+                .insert(InsertData(
+                    id: newId,
+                    owner_id: ownerId,
+                    owner_name: ownerName,
+                    title: title,
+                    schedule_text: scheduleText,
+                    contact_phone: contactPhone,
+                    maps_url: mapsUrl,
+                    approval_status: "pending"
+                ))
                 .execute()
+            
+            // Update optional columns that may not exist yet
+            if let address, !address.isEmpty {
+                do {
+                    struct AddrUpdate: Codable { let address: String }
+                    try await supabase.from("diwaniyas").update(AddrUpdate(address: address)).eq("id", value: newId.uuidString).execute()
+                } catch { Log.warning("address column not available: \(error.localizedDescription)") }
+            }
             
             isLoading = false
             return true
@@ -119,6 +133,56 @@ class DiwaniyasViewModel: ObservableObject {
         }
     }
     
+    func updateDiwaniya(id: UUID, title: String, ownerName: String, scheduleText: String?, contactPhone: String?, mapsUrl: String?, address: String?, isClosed: Bool) async -> Bool {
+        isLoading = true
+        errorMessage = nil
+        do {
+            struct UpdateData: Codable {
+                let title: String
+                let owner_name: String
+                let schedule_text: String?
+                let contact_phone: String?
+                let maps_url: String?
+            }
+            try await supabase
+                .from("diwaniyas")
+                .update(UpdateData(
+                    title: title,
+                    owner_name: ownerName,
+                    schedule_text: scheduleText,
+                    contact_phone: contactPhone,
+                    maps_url: mapsUrl
+                ))
+                .eq("id", value: id.uuidString)
+                .execute()
+            
+            // Update optional columns that may not exist yet
+            do {
+                struct ExtraUpdate: Codable { let address: String?; let is_closed: Bool }
+                try await supabase.from("diwaniyas").update(ExtraUpdate(address: address, is_closed: isClosed)).eq("id", value: id.uuidString).execute()
+            } catch {
+                // Try each separately
+                do {
+                    struct AddrUpdate: Codable { let address: String? }
+                    try await supabase.from("diwaniyas").update(AddrUpdate(address: address)).eq("id", value: id.uuidString).execute()
+                } catch { Log.warning("address column not available: \(error.localizedDescription)") }
+                do {
+                    struct ClosedUpdate: Codable { let is_closed: Bool }
+                    try await supabase.from("diwaniyas").update(ClosedUpdate(is_closed: isClosed)).eq("id", value: id.uuidString).execute()
+                } catch { Log.warning("is_closed column not available: \(error.localizedDescription)") }
+            }
+            
+            await fetchDiwaniyas()
+            isLoading = false
+            return true
+        } catch {
+            self.errorMessage = error.localizedDescription
+            Log.error("خطأ تحديث ديوانية: \(error.localizedDescription)")
+            isLoading = false
+            return false
+        }
+    }
+
     func rejectDiwaniya(id: UUID) async {
         await deleteDiwaniya(id: id)
         await fetchPendingDiwaniyas()

@@ -19,6 +19,7 @@ struct FamilyMember: Identifiable, Codable, Equatable {
     var bio: [BioStation]?
     var status: MemberStatus?
     let avatarUrl: String?
+    let coverUrl: String?
     let isMarried: Bool?
     let gender: String?
     let createdAt: String?
@@ -41,6 +42,7 @@ struct FamilyMember: Identifiable, Codable, Equatable {
         bio: [BioStation]? = nil,
         status: MemberStatus? = .active,
         avatarUrl: String? = nil,
+        coverUrl: String? = nil,
         isMarried: Bool? = nil,
         gender: String? = nil,
         createdAt: String? = nil
@@ -62,6 +64,7 @@ struct FamilyMember: Identifiable, Codable, Equatable {
         self.bio = bio
         self.status = status
         self.avatarUrl = avatarUrl
+        self.coverUrl = coverUrl
         self.isMarried = isMarried
         self.gender = gender
         self.createdAt = createdAt
@@ -102,6 +105,7 @@ struct FamilyMember: Identifiable, Codable, Equatable {
         }
         
         self.avatarUrl = try container.decodeIfPresent(String.self, forKey: .avatarUrl)
+        self.coverUrl = try container.decodeIfPresent(String.self, forKey: .coverUrl)
         self.isMarried = try container.decodeIfPresent(Bool.self, forKey: .isMarried)
         self.gender = try container.decodeIfPresent(String.self, forKey: .gender)
         self.createdAt = try container.decodeIfPresent(String.self, forKey: .createdAt)
@@ -174,6 +178,7 @@ struct FamilyMember: Identifiable, Codable, Equatable {
         case sortOrder = "sort_order"
         case bio = "bio_json"
         case avatarUrl = "avatar_url"
+        case coverUrl = "cover_url"
         case isMarried = "is_married"
         case gender
         case createdAt = "created_at"

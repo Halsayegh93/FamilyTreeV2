@@ -941,6 +941,11 @@ class AuthViewModel: ObservableObject {
             "status": AnyEncodable("active")
         ]
         
+        // إلحاق الجنس إذا كان محدداً
+        if let gender, !gender.isEmpty {
+            newChild["gender"] = AnyEncodable(gender)
+        }
+        
         // إلحاق تاريخ الوفاة إذا كان الشخص متوفى
         if isDeceased, let dDate = cleanedDeathDate {
             newChild["death_date"] = AnyEncodable(dDate)
@@ -1126,6 +1131,96 @@ class AuthViewModel: ObservableObject {
             
         } catch {
             Log.error("خطأ في حذف الصورة: \(error.localizedDescription)")
+        }
+        self.isLoading = false
+    }
+    
+    // MARK: - صورة الغلاف (Cover) منفصلة عن الصورة الشخصية (Avatar)
+    
+    func uploadCover(image: UIImage, for memberId: UUID) async {
+        self.isLoading = true
+        
+        guard let imageData = image.jpegData(compressionQuality: 0.5) else {
+            self.isLoading = false
+            return
+        }
+        
+        let safeName = getSafeMemberName(for: memberId)
+        let fileName = "cover_\(safeName).jpg"
+        
+        do {
+            try await supabase.storage
+                .from("avatars")
+                .upload(
+                    fileName,
+                    data: imageData,
+                    options: FileOptions(contentType: "image/jpeg", upsert: true)
+                )
+            
+            let publicUrl = try supabase.storage
+                .from("avatars")
+                .getPublicURL(path: fileName)
+            
+            let urlString = publicUrl.absoluteString
+            
+            try await supabase
+                .from("profiles")
+                .update(["cover_url": AnyEncodable(urlString)])
+                .eq("id", value: memberId.uuidString)
+                .execute()
+            
+            await fetchAllMembers()
+            if memberId == currentUser?.id {
+                await checkUserProfile()
+            }
+            
+            Log.info("تم رفع صورة الغلاف بنجاح: \(urlString)")
+            
+        } catch {
+            Log.error("خطأ في رفع صورة الغلاف: \(error.localizedDescription)")
+        }
+        self.isLoading = false
+    }
+    
+    func deleteCover(for memberId: UUID) async {
+        self.isLoading = true
+        do {
+            let cachedCoverURL =
+                allMembers.first(where: { $0.id == memberId })?.coverUrl ??
+                (currentUser?.id == memberId ? currentUser?.coverUrl : nil)
+            
+            let safeName = getSafeMemberName(for: memberId)
+            var candidatePaths: [String] = ["cover_\(safeName).jpg"]
+            if let cachedCoverURL,
+               let parsedPath = storagePath(fromPublicURL: cachedCoverURL, bucket: "avatars"),
+               !parsedPath.isEmpty,
+               !candidatePaths.contains(parsedPath) {
+                candidatePaths.append(parsedPath)
+            }
+            
+            _ = try? await supabase.storage
+                .from("avatars")
+                .remove(paths: candidatePaths)
+            
+            let updateData: [String: AnyEncodable] = [
+                "cover_url": AnyEncodable(Optional<String>.none)
+            ]
+            
+            try await supabase
+                .from("profiles")
+                .update(updateData)
+                .eq("id", value: memberId.uuidString)
+                .execute()
+            
+            await fetchAllMembers()
+            if memberId == currentUser?.id {
+                await checkUserProfile()
+            }
+            
+            Log.info("تم حذف صورة الغلاف بنجاح")
+            
+        } catch {
+            Log.error("خطأ في حذف صورة الغلاف: \(error.localizedDescription)")
         }
         self.isLoading = false
     }
@@ -2242,7 +2337,8 @@ class AuthViewModel: ObservableObject {
         phoneNumber: String,
         birthDate: String?,
         isDeceased: Bool,
-        deathDate: String?
+        deathDate: String?,
+        gender: String?
     ) async {
         await MainActor.run { self.isLoading = true }
         
@@ -2261,6 +2357,10 @@ class AuthViewModel: ObservableObject {
             "birth_date": AnyEncodable(birthDate ?? Optional<String>.none),
             "is_deceased": AnyEncodable(isDeceased)
         ]
+        
+        if let gender, !gender.isEmpty {
+            payload["gender"] = AnyEncodable(gender)
+        }
         
         if isDeceased {
             payload["death_date"] = AnyEncodable(deathDate ?? Optional<String>.none)
@@ -2874,6 +2974,7 @@ class AuthViewModel: ObservableObject {
             return nil
         }
     }
+
 
     func submitNewsPollVote(postId: UUID, optionIndex: Int) async {
         guard let memberId = currentUser?.id else { return }

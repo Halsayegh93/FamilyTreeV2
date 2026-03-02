@@ -15,6 +15,7 @@ struct HomeNewsView: View {
     @State private var showNewNewsAlert = false
     @State private var newNewsCount = 0
     @State private var showComingSoonAlert = false
+    @State private var selectedMemberForDetails: FamilyMember? = nil
 
     var body: some View {
         NavigationStack {
@@ -25,56 +26,14 @@ struct HomeNewsView: View {
                     MainHeaderView(selectedTab: $selectedTab, showingNotifications: $showingNotifications)
 
                     ScrollView(showsIndicators: false) {
-                        VStack(spacing: DS.Spacing.xxxl) {
+                        VStack(spacing: DS.Spacing.xl) {
                             // الوصول السريع
-                            quickActionsGrid
+                            quickActionsSection
 
                             // أخبار العائلة
-                            VStack(alignment: .leading, spacing: DS.Spacing.md) {
-                                sectionTitle(L10n.t("أخبار العائلة", "Family News"))
-
-                                if authVM.allNews.isEmpty {
-                                    emptyNewsView
-                                } else {
-                                    LazyVStack(spacing: DS.Spacing.lg) {
-                                        ForEach(authVM.allNews) { news in
-                                            HomeNewsCardView(
-                                                postId: news.id,
-                                                authorName: news.author_name,
-                                                role: news.author_role,
-                                                roleColor: news.role_color == "purple" ? DS.Color.adminRole : (news.role_color == "orange" ? DS.Color.supervisorRole : DS.Color.primary),
-                                                time: getRelativeTime(for: news.timestamp),
-                                                type: news.type,
-                                                content: news.content,
-                                                imageUrl: news.image_url,
-                                                imageUrls: news.mediaURLs,
-                                                pollQuestion: news.poll_question,
-                                                pollOptions: news.poll_options ?? [],
-                                                pollVotes: authVM.pollVotesByPost[news.id] ?? [:],
-                                                selectedPollOption: authVM.userVoteByPost[news.id],
-                                                approvalStatus: news.approval_status,
-                                                commentCount: authVM.commentsCountByPost[news.id] ?? 0,
-                                                likeCount: authVM.likesCountByPost[news.id] ?? 0,
-                                                isLiked: authVM.likedPosts.contains(news.id),
-                                                onCommentTap: { selectedNewsForComments = news },
-                                                onLikeTap: { toggleLike(for: news.id) },
-                                                onVoteTap: { optionIndex in
-                                                    Task { await authVM.submitNewsPollVote(postId: news.id, optionIndex: optionIndex) }
-                                                },
-                                                canDelete: authVM.currentUser?.role == .admin || authVM.currentUser?.role == .supervisor,
-                                                canReport: authVM.currentUser?.role == .member,
-                                                canEdit: authVM.currentUser?.role != .pending,
-                                                onDeleteTap: { postToDelete = news },
-                                                onReportTap: { postToReport = news },
-                                                onEditTap: { postToEdit = news }
-                                            )
-                                        }
-                                    }
-                                    .padding(.horizontal, DS.Spacing.lg)
-                                }
-                            }
+                            newsFeedSection
                         }
-                        .padding(.top, DS.Spacing.lg)
+                        .padding(.top, DS.Spacing.md)
                         .padding(.bottom, 120)
                     }
                     .refreshable { await refreshNews(notifyIfNew: true) }
@@ -90,7 +49,7 @@ struct HomeNewsView: View {
             }
             .sheet(isPresented: $showingAddNews) {
                 AddNewsView()
-                    .presentationDetents([.fraction(0.45), .medium])
+                    .presentationDetents([.medium, .large])
                     .presentationDragIndicator(.visible)
             }
             .sheet(isPresented: $showingContactCenter) { ContactCenterView() }
@@ -128,6 +87,13 @@ struct HomeNewsView: View {
             .alert(L10n.t("قريباً", "Coming Soon"), isPresented: $showComingSoonAlert) {
                 Button(L10n.t("حسناً", "OK"), role: .cancel) {}
             } message: { Text(L10n.t("هذه الواجهة ستكون متوفرة قريباً.", "This screen will be available soon.")) }
+            .sheet(item: $selectedMemberForDetails) { member in
+                NavigationStack {
+                    MemberDetailsView(member: member)
+                }
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+            }
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
@@ -210,90 +176,196 @@ struct HomeNewsView: View {
 
 
 
-    // MARK: - Quick Actions — Glass cards
-    private var quickActionsGrid: some View {
-        LazyVGrid(
-            columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())],
-            spacing: DS.Spacing.md
-        ) {
-            quickActionCard(icon: "calendar",                          title: L10n.t("المناسبات", "Events"),              color: DS.Color.gridTree)      { showComingSoonAlert = true }
-            quickActionCard(icon: "briefcase.fill",                    title: L10n.t("المشاريع العائلية", "Family Projects"), color: DS.Color.success)       { showComingSoonAlert = true }
-            quickActionCard(icon: "photo.on.rectangle.angled.fill",    title: L10n.t("معرض الصور", "Photo Gallery"),      color: DS.Color.gridDiwaniya)  { showComingSoonAlert = true }
-            quickActionCard(icon: "bubble.left.and.bubble.right.fill", title: L10n.t("تواصل", "Contact"),        color: DS.Color.gridContact)   { showingContactCenter = true }
+    // MARK: - Quick Actions Section
+    private var quickActionsSection: some View {
+        HStack(spacing: DS.Spacing.md) {
+            quickActionItem(icon: "calendar", title: L10n.t("المناسبات", "Events"), color: DS.Color.gridTree) { showComingSoonAlert = true }
+            quickActionItem(icon: "briefcase.fill", title: L10n.t("المشاريع", "Projects"), color: DS.Color.success) { showComingSoonAlert = true }
+            quickActionItem(icon: "photo.on.rectangle.angled.fill", title: L10n.t("الصور", "Photos"), color: DS.Color.gridDiwaniya) { showComingSoonAlert = true }
+            quickActionItem(icon: "bubble.left.and.bubble.right.fill", title: L10n.t("تواصل", "Contact"), color: DS.Color.gridContact) { showingContactCenter = true }
         }
         .padding(.horizontal, DS.Spacing.lg)
     }
 
-    private func quickActionCard(icon: String, title: String, color: Color, action: @escaping () -> Void) -> some View {
+    private func quickActionItem(icon: String, title: String, color: Color, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             VStack(spacing: DS.Spacing.xs) {
                 Image(systemName: icon)
-                    .font(DS.Font.scaled(24, weight: .semibold))
+                    .font(DS.Font.scaled(20, weight: .semibold))
                     .foregroundColor(color)
-                    .frame(width: 60, height: 60)
-                    .background(color.opacity(0.12))
-                    .clipShape(Circle())
-                    .overlay(Circle().stroke(color.opacity(0.2), lineWidth: 1))
-                
+                    .frame(width: 52, height: 52)
+                    .background(color.opacity(0.1))
+                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                            .stroke(color.opacity(0.15), lineWidth: 1)
+                    )
+
                 Text(title)
-                    .font(DS.Font.caption1)
+                    .font(DS.Font.caption2)
                     .fontWeight(.medium)
-                    .foregroundColor(DS.Color.textPrimary)
+                    .foregroundColor(DS.Color.textSecondary)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.8)
             }
         }
         .buttonStyle(DSBoldButtonStyle())
         .frame(maxWidth: .infinity)
     }
 
-    private func sectionTitle(_ text: String) -> some View {
-        Text(text)
-            .font(DS.Font.title2)
-            .frame(maxWidth: .infinity, alignment: .leading)
+    // MARK: - News Feed Section
+    private var newsFeedSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Section header — كرت زجاجي
+            HStack(spacing: DS.Spacing.md) {
+                Image(systemName: "newspaper.fill")
+                    .font(DS.Font.scaled(16, weight: .semibold))
+                    .foregroundColor(DS.Color.primary)
+
+                Text(L10n.t("أخبار العائلة", "Family News"))
+                    .font(DS.Font.calloutBold)
+                    .foregroundColor(DS.Color.textPrimary)
+
+                Spacer()
+
+                if !authVM.allNews.isEmpty {
+                    Text("\(authVM.allNews.count)")
+                        .font(DS.Font.caption1)
+                        .fontWeight(.bold)
+                        .foregroundColor(DS.Color.primary)
+                        .frame(minWidth: 26, minHeight: 26)
+                        .background(DS.Color.primary.opacity(0.1))
+                        .clipShape(Circle())
+                }
+
+                if authVM.currentUser?.role != .pending {
+                    Button(action: { showingAddNews = true }) {
+                        HStack(spacing: DS.Spacing.xs) {
+                            Image(systemName: "plus")
+                                .font(DS.Font.scaled(12, weight: .bold))
+                            Text(L10n.t("أضف خبر", "Add Post"))
+                                .font(DS.Font.caption2)
+                                .fontWeight(.bold)
+                        }
+                        .foregroundColor(.white)
+                        .padding(.horizontal, DS.Spacing.md)
+                        .padding(.vertical, DS.Spacing.sm)
+                        .background(DS.Color.gradientPrimary)
+                        .clipShape(Capsule())
+                    }
+                    .buttonStyle(DSBoldButtonStyle())
+                }
+            }
             .padding(.horizontal, DS.Spacing.lg)
+            .padding(.vertical, DS.Spacing.md)
+            .background(
+                RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
+                    .fill(DS.Color.surfaceElevated)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
+                            .stroke(DS.Color.textTertiary.opacity(0.25), lineWidth: 0.75)
+                    )
+            )
+            .shadow(color: Color.black.opacity(0.08), radius: 12, x: 0, y: 4)
+            .padding(.horizontal, DS.Spacing.md)
+
+            if authVM.allNews.isEmpty {
+                emptyNewsView
+            } else {
+                newsListView
+            }
+        }
+    }
+
+    private var newsListView: some View {
+        LazyVStack(spacing: DS.Spacing.lg) {
+            ForEach(authVM.allNews) { news in
+                newsCard(for: news)
+            }
+        }
+        .padding(.horizontal, DS.Spacing.md)
+        .padding(.top, DS.Spacing.sm)
+    }
+
+    private func newsCard(for news: NewsPost) -> some View {
+        HomeNewsCardView(
+            postId: news.id,
+            authorName: news.author_name,
+            authorId: news.author_id,
+            role: news.author_role,
+            roleColor: news.role_color == "purple" ? DS.Color.adminRole : (news.role_color == "orange" ? DS.Color.supervisorRole : DS.Color.primary),
+            time: getRelativeTime(for: news.timestamp),
+            type: news.type,
+            content: news.content,
+            imageUrl: news.image_url,
+            imageUrls: news.mediaURLs,
+            pollQuestion: news.poll_question,
+            pollOptions: news.poll_options ?? [],
+            pollVotes: authVM.pollVotesByPost[news.id] ?? [:],
+            selectedPollOption: authVM.userVoteByPost[news.id],
+            approvalStatus: news.approval_status,
+            commentCount: authVM.commentsCountByPost[news.id] ?? 0,
+            likeCount: authVM.likesCountByPost[news.id] ?? 0,
+            isLiked: authVM.likedPosts.contains(news.id),
+            onCommentTap: { selectedNewsForComments = news },
+            onLikeTap: { toggleLike(for: news.id) },
+            onVoteTap: { optionIndex in
+                Task { await authVM.submitNewsPollVote(postId: news.id, optionIndex: optionIndex) }
+            },
+            canDelete: authVM.currentUser?.role == .admin || authVM.currentUser?.role == .supervisor,
+            canReport: authVM.currentUser?.role == .member,
+            canEdit: authVM.currentUser?.role != .pending,
+            onDeleteTap: { postToDelete = news },
+            onReportTap: { postToReport = news },
+            onEditTap: { postToEdit = news },
+            onMemberTap: { member in selectedMemberForDetails = member }
+        )
     }
 
     // MARK: - Floating Buttons
     private var floatingButtons: some View {
-        VStack {
-            Spacer()
-            HStack {
-                Spacer()
-
-                // Add News FAB
-                if authVM.currentUser?.role != .pending {
-                    Button(action: {
-                        showingAddNews = true
-                    }) {
-                        Image(systemName: "plus")
-                            .font(DS.Font.scaled(20, weight: .bold))
-                            .foregroundColor(.white)
-                            .frame(width: 56, height: 56)
-                            .background(DS.Color.gradientPrimary)
-                            .clipShape(Circle())
-                            .overlay(Circle().stroke(Color.white.opacity(0.3), lineWidth: 0.7))
-                            .dsGlowShadow()
-                    }
-                    .buttonStyle(DSBoldButtonStyle())
-                    .padding(.trailing, DS.Spacing.xl)
-                }
-            }
-            .padding(.bottom, 20)
-        }
+        EmptyView()
     }
 
     // MARK: - Empty State
     private var emptyNewsView: some View {
-        VStack(spacing: DS.Spacing.md) {
-            Image(systemName: "newspaper")
-                .font(DS.Font.scaled(44))
-                .foregroundColor(DS.Color.textTertiary)
-            Text(L10n.t("لا توجد أخبار حديثة", "No recent news"))
-                .font(DS.Font.callout)
-                .foregroundColor(DS.Color.textSecondary)
+        DSCard(padding: 0) {
+            VStack(spacing: DS.Spacing.md) {
+                Image(systemName: "newspaper")
+                    .font(DS.Font.scaled(40))
+                    .foregroundColor(DS.Color.textTertiary)
+
+                Text(L10n.t("لا توجد أخبار حديثة", "No recent news"))
+                    .font(DS.Font.callout)
+                    .foregroundColor(DS.Color.textSecondary)
+
+                if authVM.currentUser?.role != .pending {
+                    Button(action: { showingAddNews = true }) {
+                        HStack(spacing: DS.Spacing.xs) {
+                            Image(systemName: "plus.circle.fill")
+                                .font(DS.Font.scaled(14, weight: .bold))
+                            Text(L10n.t("أضف أول خبر", "Add First Post"))
+                                .font(DS.Font.caption1)
+                                .fontWeight(.bold)
+                        }
+                        .foregroundColor(DS.Color.primary)
+                        .padding(.horizontal, DS.Spacing.lg)
+                        .padding(.vertical, DS.Spacing.sm)
+                        .background(DS.Color.primary.opacity(0.1))
+                        .clipShape(Capsule())
+                        .overlay(
+                            Capsule()
+                                .strokeBorder(DS.Color.primary.opacity(0.25), lineWidth: 1)
+                        )
+                    }
+                    .buttonStyle(DSBoldButtonStyle())
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, DS.Spacing.xxxl)
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 60)
+        .padding(.horizontal, DS.Spacing.lg)
+        .padding(.top, DS.Spacing.sm)
     }
 
     // MARK: - Helpers
@@ -329,6 +401,9 @@ struct HomeNewsView: View {
     private func refreshNews(notifyIfNew: Bool) async {
         let previousIDs = Set(authVM.allNews.map(\.id))
         await authVM.fetchNews()
+        if authVM.allMembers.isEmpty {
+            await authVM.fetchAllMembers()
+        }
         guard notifyIfNew, !previousIDs.isEmpty else { return }
         let count = Set(authVM.allNews.map(\.id)).subtracting(previousIDs).count
         if count > 0 { newNewsCount = count; showNewNewsAlert = true }
@@ -341,8 +416,10 @@ extension HomeNewsView {
 
 // MARK: - كرت الخبر — Glass card styling
 struct HomeNewsCardView: View {
+    @EnvironmentObject var authVM: AuthViewModel
     let postId: UUID
     let authorName: String
+    let authorId: UUID?
     let role: String
     let roleColor: Color
     let time: String
@@ -367,6 +444,7 @@ struct HomeNewsCardView: View {
     let onDeleteTap: () -> Void
     let onReportTap: () -> Void
     let onEditTap: () -> Void
+    let onMemberTap: (FamilyMember) -> Void
 
     private func colorForType(_ type: String) -> Color {
         switch type {
@@ -378,31 +456,115 @@ struct HomeNewsCardView: View {
         }
     }
 
+    private func displayNameForType(_ type: String) -> String {
+        switch type {
+        case "خبر": return L10n.t("خبر", "News")
+        case "زواج": return L10n.t("زواج", "Wedding")
+        case "مولود": return L10n.t("مولود", "Newborn")
+        case "وفاة": return L10n.t("وفاة", "Obituary")
+        case "تصويت": return L10n.t("تصويت", "Poll")
+        default: return type
+        }
+    }
+
+    private var authorMember: FamilyMember? {
+        guard let authorId else { return nil }
+        return authVM.allMembers.first(where: { $0.id == authorId })
+    }
+
+    private var shortDisplayName: String {
+        let parts = authorName.split(separator: " ")
+        guard parts.count > 4 else { return authorName }
+        // الأول + الثاني + الثالث + الرابع + العائلة (الأخير)
+        return "\(parts[0]) \(parts[1]) \(parts[2]) \(parts[3]) \(parts[parts.count - 1])"
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // هيدر الكرت
-            HStack(alignment: .center, spacing: DS.Spacing.md) {
-                ZStack {
-                    Circle()
-                        .fill(DS.Color.gradientPrimary)
-                        .frame(width: 44, height: 44)
-                    Text(String(authorName.first ?? "A"))
-                        .font(DS.Font.scaled(18, weight: .bold))
-                        .foregroundColor(.white)
-                }
+            HStack(alignment: .center, spacing: DS.Spacing.sm) {
+                Button {
+                    if let member = authorMember {
+                        onMemberTap(member)
+                    }
+                } label: {
+                    HStack(spacing: DS.Spacing.sm) {
+                        ZStack {
+                            if let urlStr = authorMember?.avatarUrl, let url = URL(string: urlStr) {
+                                AsyncImage(url: url) { img in
+                                    img.resizable().scaledToFill()
+                                } placeholder: {
+                                    Circle()
+                                        .fill(
+                                            LinearGradient(
+                                                colors: [colorForType(type), colorForType(type).opacity(0.7)],
+                                                startPoint: .topLeading,
+                                                endPoint: .bottomTrailing
+                                            )
+                                        )
+                                        .overlay(
+                                            Text(String(authorName.first ?? "A"))
+                                                .font(DS.Font.scaled(15, weight: .bold))
+                                                .foregroundColor(.white)
+                                        )
+                                }
+                                .frame(width: 38, height: 38)
+                                .clipShape(Circle())
+                            } else {
+                                Circle()
+                                    .fill(
+                                        LinearGradient(
+                                            colors: [colorForType(type), colorForType(type).opacity(0.7)],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
+                                    )
+                                    .frame(width: 38, height: 38)
+                                Text(String(authorName.first ?? "A"))
+                                    .font(DS.Font.scaled(15, weight: .bold))
+                                    .foregroundColor(.white)
+                            }
+                        }
+                        .frame(width: 38, height: 38)
+                        .clipShape(Circle())
+                        .overlay(
+                            Circle()
+                                .stroke(DS.Color.textTertiary.opacity(0.3), lineWidth: 1)
+                        )
+                        .shadow(color: colorForType(type).opacity(0.3), radius: 6, x: 0, y: 3)
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(authorName)
-                        .font(DS.Font.headline)
-                        .foregroundColor(DS.Color.textPrimary)
-                        .lineLimit(1)
-                    
-                    Text(L10n.t("نُشر \(time)", "Posted \(time)"))
-                        .font(DS.Font.caption2)
-                        .foregroundColor(DS.Color.textSecondary)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(shortDisplayName)
+                                .font(DS.Font.calloutBold)
+                                .foregroundColor(DS.Color.textPrimary)
+                                .lineLimit(1)
+                            
+                            Text(displayNameForType(type))
+                                .font(DS.Font.caption2)
+                                .fontWeight(.semibold)
+                                .foregroundColor(colorForType(type))
+                                .padding(.horizontal, DS.Spacing.sm)
+                                .padding(.vertical, 2)
+                                .background(colorForType(type).opacity(0.12))
+                                .clipShape(Capsule())
+                        }
+                    }
                 }
+                .buttonStyle(.plain)
 
                 Spacer()
+
+                if approvalStatus == "pending" {
+                    Text(L10n.t("مراجعة", "Review"))
+                        .font(DS.Font.caption2)
+                        .fontWeight(.semibold)
+                        .foregroundColor(DS.Color.warning)
+                        .padding(.horizontal, DS.Spacing.sm)
+                        .padding(.vertical, 4)
+                        .background(.ultraThinMaterial)
+                        .clipShape(Capsule())
+                        .overlay(Capsule().stroke(DS.Color.warning.opacity(0.3), lineWidth: 1))
+                }
 
                 if canDelete || canReport || canEdit {
                     Menu {
@@ -417,64 +579,82 @@ struct HomeNewsCardView: View {
                         }
                     } label: {
                         Image(systemName: "ellipsis")
-                            .font(DS.Font.scaled(16, weight: .bold))
-                            .foregroundColor(DS.Color.textPrimary)
-                            .frame(width: 32, height: 32)
-                            .background(Color.gray.opacity(0.1))
+                            .font(DS.Font.scaled(14, weight: .semibold))
+                            .foregroundColor(DS.Color.textSecondary)
+                            .frame(width: 30, height: 30)
+                            .background(.ultraThinMaterial)
                             .clipShape(Circle())
+                            .overlay(Circle().stroke(DS.Color.textTertiary.opacity(0.3), lineWidth: 0.75))
                     }
                 }
             }
             .padding(.horizontal, DS.Spacing.lg)
             .padding(.top, DS.Spacing.lg)
             .padding(.bottom, DS.Spacing.md)
-            
+
             // المحتوى
             if !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 Text(content)
                     .font(DS.Font.body)
                     .foregroundColor(DS.Color.textPrimary.opacity(0.95))
                     .multilineTextAlignment(.leading)
-                    .lineSpacing(6)
+                    .lineSpacing(5)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, DS.Spacing.lg)
                     .padding(.bottom, DS.Spacing.md)
             }
 
-            // منطقة الميديا (صور/فيديو) - ممتدة للأطراف
+            // منطقة الميديا (صور)
             if !imageUrls.isEmpty {
                 TabView {
                     ForEach(Array(imageUrls.enumerated()), id: \.offset) { _, urlStr in
                         if let encodedStr = urlStr.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
                            let url = URL(string: encodedStr) {
                             AsyncImage(url: url) { img in
-                                img.resizable().scaledToFill()
+                                img.resizable().scaledToFit()
+                                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
                             } placeholder: { 
                                 ZStack {
                                     Color.gray.opacity(0.05)
                                     ProgressView().tint(DS.Color.primary) 
                                 }
+                                .frame(height: 200)
+                                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
                             }
                         }
                     }
                 }
-                .frame(height: 280)
+                .frame(height: 300)
                 .tabViewStyle(.page(indexDisplayMode: imageUrls.count > 1 ? .automatic : .never))
-                .clipped()
+                .padding(.horizontal, DS.Spacing.md)
             } else if let urlStr = imageUrl,
                       let encodedStr = urlStr.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
                       let url = URL(string: encodedStr) {
-                AsyncImage(url: url) { img in
-                    img.resizable().scaledToFill()
-                } placeholder: { 
-                    ZStack {
-                        Color.gray.opacity(0.05)
-                        ProgressView().tint(DS.Color.primary) 
+                AsyncImage(url: url) { phase in
+                    if let img = phase.image {
+                        img.resizable()
+                            .scaledToFit()
+                            .frame(maxWidth: .infinity)
+                            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+                    } else if phase.error != nil {
+                        ZStack {
+                            Color.gray.opacity(0.05)
+                            Image(systemName: "photo")
+                                .foregroundColor(DS.Color.textTertiary)
+                        }
+                        .frame(height: 200)
+                        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+                    } else {
+                        ZStack {
+                            Color.gray.opacity(0.05)
+                            ProgressView().tint(DS.Color.primary)
+                        }
+                        .frame(height: 200)
+                        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
                     }
                 }
-                .frame(height: 280)
                 .frame(maxWidth: .infinity)
-                .clipped()
+                .padding(.horizontal, DS.Spacing.md)
             }
 
             // التصويت
@@ -484,37 +664,60 @@ struct HomeNewsCardView: View {
                     .padding(.top, DS.Spacing.md)
             }
 
+            // فاصل زجاجي
             Rectangle()
-                .fill(Color.gray.opacity(0.15))
-                .frame(height: 1)
-                .padding(.top, !imageUrls.isEmpty || imageUrl != nil ? DS.Spacing.md : 0)
+                .fill(DS.Color.textTertiary.opacity(0.2))
+                .frame(height: 0.5)
+                .padding(.horizontal, DS.Spacing.lg)
+                .padding(.top, DS.Spacing.md)
 
             // شريط الإجراءات
             actionBar
                 .padding(.horizontal, DS.Spacing.lg)
                 .padding(.vertical, DS.Spacing.md)
         }
-        .background(DS.Color.surfaceElevated)
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
-                .stroke(Color.gray.opacity(0.12), lineWidth: 1)
+        .background(
+            ZStack {
+                RoundedRectangle(cornerRadius: DS.Radius.xxl, style: .continuous)
+                    .fill(.thickMaterial)
+
+                LinearGradient(
+                    colors: [Color.white.opacity(0.15), Color.white.opacity(0.0)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xxl, style: .continuous))
+            }
         )
-        .shadow(color: Color.black.opacity(0.06), radius: 10, x: 0, y: 4)
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xxl, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Radius.xxl, style: .continuous)
+                .stroke(
+                    LinearGradient(
+                        colors: [Color.white.opacity(0.35), Color.white.opacity(0.08)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 0.75
+                )
+        )
+        .shadow(color: Color.black.opacity(0.10), radius: 16, x: 0, y: 8)
+        .shadow(color: colorForType(type).opacity(0.12), radius: 20, x: 0, y: 10)
     }
 
     private var pollSection: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             if let q = pollQuestion, !q.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 Text(q).font(DS.Font.calloutBold)
+                    .foregroundColor(DS.Color.textPrimary)
             }
             ForEach(Array(pollOptions.enumerated()), id: \.offset) { index, option in
                 let isSelected = selectedPollOption == index
                 Button(action: { onVoteTap(index) }) {
                     HStack(spacing: DS.Spacing.sm) {
                         Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                            .foregroundColor(isSelected ? DS.Color.primary : DS.Color.textSecondary)
-                            .font(DS.Font.scaled(18))
+                            .foregroundStyle(isSelected ? DS.Color.gradientPrimary : LinearGradient(colors: [DS.Color.textSecondary], startPoint: .top, endPoint: .bottom))
+                            .font(DS.Font.scaled(20))
                         Text(option).font(DS.Font.callout)
                             .foregroundColor(DS.Color.textPrimary)
                         Spacer()
@@ -523,17 +726,26 @@ struct HomeNewsCardView: View {
                             .fontWeight(.bold)
                             .foregroundColor(isSelected ? .white : DS.Color.textSecondary)
                             .padding(.horizontal, DS.Spacing.sm)
-                            .padding(.vertical, 2)
-                            .background(isSelected ? DS.Color.primary : Color.clear)
+                            .padding(.vertical, 3)
+                            .background(isSelected ? DS.Color.primary : Color.white.opacity(0.15))
                             .clipShape(Capsule())
                     }
                     .padding(.horizontal, DS.Spacing.md)
                     .padding(.vertical, DS.Spacing.md)
-                    .background(isSelected ? DS.Color.primary.opacity(0.10) : DS.Color.surface)
+                    .background(
+                        ZStack {
+                            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                                .fill(.ultraThinMaterial)
+                            if isSelected {
+                                DS.Color.primary.opacity(0.12)
+                                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+                            }
+                        }
+                    )
                     .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
                     .overlay(
                         RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                            .stroke(isSelected ? DS.Color.primary.opacity(0.3) : Color.gray.opacity(0.2), lineWidth: 1)
+                            .stroke(isSelected ? DS.Color.primary.opacity(0.4) : Color.white.opacity(0.3), lineWidth: 1)
                     )
                 }
                 .buttonStyle(.plain)
@@ -542,107 +754,71 @@ struct HomeNewsCardView: View {
     }
 
     private var actionBar: some View {
-        let pillHeight: CGFloat = 32
+        HStack(spacing: DS.Spacing.sm) {
+            // Like
+            Button(action: onLikeTap) {
+                HStack(spacing: DS.Spacing.xs) {
+                    Image(systemName: isLiked ? "heart.fill" : "heart")
+                        .font(DS.Font.scaled(15, weight: .medium))
+                        .foregroundColor(isLiked ? DS.Color.error : DS.Color.textSecondary)
+                        .symbolEffect(.bounce, value: isLiked)
 
-        return HStack(spacing: DS.Spacing.md) {
-            HStack(spacing: DS.Spacing.sm) {
-                if approvalStatus == "pending" {
-                    Text(L10n.t("مراجعة", "Review"))
-                        .font(DS.Font.caption1)
-                        .fontWeight(.semibold)
-                        .foregroundColor(DS.Color.warning)
-                        .padding(.horizontal, DS.Spacing.sm)
-                        .padding(.vertical, 6)
-                        .background(DS.Color.warning.opacity(0.12))
-                        .clipShape(Capsule())
-                        .overlay(
-                            Capsule()
-                                .stroke(DS.Color.warning.opacity(0.25), lineWidth: 1)
-                        )
-                        .frame(height: pillHeight)
-                }
-
-                Text(type)
-                    .font(DS.Font.caption1)
-                    .fontWeight(.semibold)
-                    .foregroundColor(colorForType(type))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-                    .padding(.horizontal, DS.Spacing.sm)
-                    .padding(.vertical, 6)
-                    .background(colorForType(type).opacity(0.12))
-                    .clipShape(Capsule())
-                    .overlay(
-                        Capsule()
-                            .stroke(colorForType(type).opacity(0.25), lineWidth: 1)
-                    )
-                    .frame(height: pillHeight)
-            }
-
-            Spacer(minLength: 0)
-
-            HStack(spacing: DS.Spacing.sm) {
-                // Like Button
-                Button(action: onLikeTap) {
-                    HStack(spacing: DS.Spacing.xs) {
-                        Image(systemName: isLiked ? "heart.fill" : "heart")
-                            .font(DS.Font.scaled(14, weight: isLiked ? .bold : .medium))
-                            .foregroundColor(isLiked ? DS.Color.error : DS.Color.textSecondary)
-                            .symbolEffect(.bounce, value: isLiked)
-
+                    if likeCount > 0 {
                         Text("\(likeCount)")
                             .font(DS.Font.caption1)
                             .fontWeight(.semibold)
                             .foregroundColor(isLiked ? DS.Color.error : DS.Color.textSecondary)
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 1)
-                            .background((isLiked ? DS.Color.error : DS.Color.textSecondary).opacity(0.14))
-                            .clipShape(Capsule())
                     }
-                    .padding(.horizontal, DS.Spacing.sm)
-                    .padding(.vertical, 6)
-                    .background(isLiked ? DS.Color.error.opacity(0.12) : Color.white.opacity(0.3))
-                    .clipShape(Capsule())
-                    .overlay(Capsule().stroke(isLiked ? DS.Color.error.opacity(0.3) : Color.gray.opacity(0.15), lineWidth: 1))
-                    .frame(height: pillHeight)
                 }
-                .buttonStyle(.plain)
+                .padding(.horizontal, DS.Spacing.md)
+                .padding(.vertical, 7)
+                .background(
+                    ZStack {
+                        Capsule().fill(.ultraThinMaterial)
+                        if isLiked { DS.Color.error.opacity(0.10) }
+                    }
+                )
+                .clipShape(Capsule())
+                .overlay(Capsule().stroke(DS.Color.textTertiary.opacity(0.25), lineWidth: 0.75))
+            }
+            .buttonStyle(.plain)
 
-                // Comment Button
-                Button(action: onCommentTap) {
-                    HStack(spacing: DS.Spacing.xs) {
-                        Text(L10n.t("تعليق", "Comment"))
+            // Comment
+            Button(action: onCommentTap) {
+                HStack(spacing: DS.Spacing.xs) {
+                    Image(systemName: "bubble.right")
+                        .font(DS.Font.scaled(15, weight: .medium))
+                        .foregroundColor(DS.Color.textSecondary)
+
+                    if commentCount > 0 {
+                        Text("\(commentCount)")
                             .font(DS.Font.caption1)
                             .fontWeight(.semibold)
-                            .foregroundColor(DS.Color.primary)
-
-                        if commentCount > 0 {
-                            Text("\(commentCount)")
-                                .font(DS.Font.caption1)
-                                .fontWeight(.semibold)
-                                .foregroundColor(DS.Color.primary)
-                                .padding(.horizontal, 5)
-                                .padding(.vertical, 1)
-                                .background(DS.Color.primary.opacity(0.14))
-                                .clipShape(Capsule())
-                        }
-
-                        Image(systemName: "text.bubble.fill")
-                            .font(DS.Font.scaled(14, weight: .medium))
-                            .foregroundColor(DS.Color.primary)
+                            .foregroundColor(DS.Color.textSecondary)
                     }
-                    .padding(.horizontal, DS.Spacing.sm)
-                    .padding(.vertical, 6)
-                    .background(DS.Color.primary.opacity(0.10))
-                    .clipShape(Capsule())
-                    .overlay(Capsule().stroke(DS.Color.primary.opacity(0.22), lineWidth: 1))
-                    .frame(height: pillHeight)
                 }
-                .buttonStyle(.plain)
+                .padding(.horizontal, DS.Spacing.md)
+                .padding(.vertical, 7)
+                .background(
+                    Capsule().fill(.ultraThinMaterial)
+                )
+                .clipShape(Capsule())
+                .overlay(Capsule().stroke(DS.Color.textTertiary.opacity(0.25), lineWidth: 0.75))
             }
+            .buttonStyle(.plain)
+
+            Spacer()
+
+            // Time
+            HStack(spacing: DS.Spacing.xs) {
+                Image(systemName: "clock")
+                    .font(DS.Font.scaled(11))
+                Text(time)
+                    .font(DS.Font.caption2)
+            }
+            .foregroundColor(DS.Color.textTertiary)
         }
         .environment(\.layoutDirection, .leftToRight)
-        .padding(.top, 2)
     }
 }
 
@@ -654,7 +830,7 @@ struct AddNewsView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @Environment(\.dismiss) var dismiss
     @State private var content = ""
-    @State private var selectedType = "تنبيه"
+    @State private var selectedType = "خبر"
     @State private var selectedPhotoItems: [PhotosPickerItem] = []
     @State private var selectedImages: [UIImage] = []
     @State private var pollQuestion = ""
@@ -663,7 +839,7 @@ struct AddNewsView: View {
     @State private var pollOption3 = ""
     @State private var pollOption4 = ""
     @State private var showPostErrorAlert = false
-    let types = ["زواج", "مولود", "تنبيه", "وفاة", "تصويت"]
+    let types = ["خبر", "زواج", "مولود", "وفاة", "تصويت"]
 
     private func colorForType(_ type: String) -> Color {
         switch type {
@@ -672,6 +848,27 @@ struct AddNewsView: View {
         case "مولود": return DS.Color.newsBirth
         case "تصويت": return DS.Color.newsVote
         default: return DS.Color.primary
+        }
+    }
+
+    private func iconForType(_ type: String) -> String {
+        switch type {
+        case "وفاة": return "heart.slash.fill"
+        case "زواج": return "heart.fill"
+        case "مولود": return "figure.child"
+        case "تصويت": return "chart.bar.fill"
+        default: return "newspaper.fill"
+        }
+    }
+
+    private func displayNameForType(_ type: String) -> String {
+        switch type {
+        case "خبر": return L10n.t("خبر", "News")
+        case "زواج": return L10n.t("زواج", "Wedding")
+        case "مولود": return L10n.t("مولود", "Newborn")
+        case "وفاة": return L10n.t("وفاة", "Obituary")
+        case "تصويت": return L10n.t("تصويت", "Poll")
+        default: return type
         }
     }
 
@@ -692,115 +889,29 @@ struct AddNewsView: View {
     var body: some View {
         NavigationStack {
             ScrollView(showsIndicators: false) {
-                VStack(spacing: DS.Spacing.md) {
-                    HStack(spacing: DS.Spacing.xs) {
-                        ForEach(types, id: \.self) { type in
-                            let isSelected = selectedType == type
-                            let typeColor = colorForType(type)
+                VStack(spacing: DS.Spacing.lg) {
+                    addNewsTypeSelector
+                    addNewsContentSection
+                    addNewsPhotosSection
 
-                            Button(action: { selectedType = type }) {
-                                Text(type)
-                                    .font(DS.Font.caption1)
-                                    .fontWeight(.bold)
-                                    .foregroundColor(isSelected ? .white : typeColor)
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 8)
-                                    .background(isSelected ? typeColor : typeColor.opacity(0.12))
-                                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous)
-                                            .stroke(typeColor.opacity(0.25), lineWidth: 1)
-                                    )
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-
-                    // Text box (updated)
-                    TextEditor(text: $content)
-                        .frame(minHeight: 120, maxHeight: 150)
-                        .padding(DS.Spacing.sm)
-                        .background(DS.Color.surface.opacity(0.55))
-                        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                                .stroke(DS.Color.primary.opacity(0.10), lineWidth: 1)
-                        )
-                        .overlay(alignment: .topTrailing) {
-                            if content.isEmpty {
-                                Text(L10n.t("اكتب الخبر هنا...", "Write your post here..."))
-                                    .font(DS.Font.body)
-                                    .foregroundColor(DS.Color.textTertiary)
-                                    .padding(.top, DS.Spacing.md)
-                                    .padding(.trailing, DS.Spacing.md)
-                            }
-                        }
-
-                    // Photos
-                    PhotosPicker(selection: $selectedPhotoItems, maxSelectionCount: 5, matching: .images) {
-                        HStack(spacing: DS.Spacing.sm) {
-                            Image(systemName: "photo.on.rectangle.angled")
-                            Text(L10n.t("إضافة صور (اختياري)", "Add Photos (optional)"))
-                        }
-                        .font(DS.Font.calloutBold)
-                        .foregroundColor(DS.Color.primary)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, DS.Spacing.md)
-                        .background(DS.Color.primary.opacity(0.08))
-                        .cornerRadius(DS.Radius.md)
-                    }
-
-                    if !selectedImages.isEmpty {
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: DS.Spacing.sm) {
-                                ForEach(Array(selectedImages.enumerated()), id: \.offset) { _, image in
-                                    Image(uiImage: image)
-                                        .resizable()
-                                        .scaledToFill()
-                                        .frame(width: 76, height: 76)
-                                        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm))
-                                }
-                            }
-                        }
-                    }
-
-                    // Poll
                     if selectedType == "تصويت" {
-                        VStack(spacing: DS.Spacing.sm) {
-                            TextField(L10n.t("سؤال التصويت (اختياري)", "Poll question (optional)"), text: $pollQuestion)
-                                .textFieldStyle(.roundedBorder)
-                            TextField(L10n.t("الخيار الأول", "Option 1"), text: $pollOption1)
-                                .textFieldStyle(.roundedBorder)
-                            TextField(L10n.t("الخيار الثاني", "Option 2"), text: $pollOption2)
-                                .textFieldStyle(.roundedBorder)
-                            TextField(L10n.t("الخيار الثالث (اختياري)", "Option 3 (optional)"), text: $pollOption3)
-                                .textFieldStyle(.roundedBorder)
-                            TextField(L10n.t("الخيار الرابع (اختياري)", "Option 4 (optional)"), text: $pollOption4)
-                                .textFieldStyle(.roundedBorder)
-                        }
+                        addNewsPollSection
                     }
 
-                    DSPrimaryButton(
-                        authVM.canAutoPublishNews ? L10n.t("نشر", "Publish") : L10n.t("إرسال", "Submit"),
-                        icon: "paperplane.fill",
-                        isLoading: authVM.isLoading,
-                        useGradient: canSubmit,
-                        color: canSubmit ? DS.Color.primary : .gray
-                    ) {
-                        Task { await submitNews() }
-                    }
-                    .disabled(!canSubmit)
-                    .opacity(canSubmit ? 1.0 : 0.6)
+                    addNewsSubmitSection
                 }
-                .padding(DS.Spacing.lg)
+                .padding(.horizontal, DS.Spacing.lg)
+                .padding(.top, DS.Spacing.sm)
+                .padding(.bottom, DS.Spacing.xxxl)
             }
-            .navigationTitle(L10n.t("إضافة خبر", "Add News"))
+            .background(.ultraThinMaterial)
+            .navigationTitle(L10n.t("خبر جديد", "New Post"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
+                ToolbarItem(placement: .topBarTrailing) {
                     Button(L10n.t("إلغاء", "Cancel")) { dismiss() }
-                        .font(DS.Font.calloutBold)
-                        .foregroundColor(DS.Color.error)
+                        .font(DS.Font.caption1)
+                        .foregroundColor(DS.Color.textSecondary)
                 }
             }
             .alert(L10n.t("تعذر النشر", "Post Failed"), isPresented: $showPostErrorAlert) {
@@ -811,6 +922,220 @@ struct AddNewsView: View {
             }
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         }
+    }
+
+    // MARK: - Type Selector
+    private var addNewsTypeSelector: some View {
+        DSCard(padding: 0) {
+            DSSectionHeader(
+                title: L10n.t("نوع الخبر", "Post Type"),
+                icon: "tag.fill",
+                iconColor: DS.Color.primary
+            )
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: DS.Spacing.sm) {
+                    ForEach(types, id: \.self) { type in
+                        let isSelected = selectedType == type
+                        let typeColor = colorForType(type)
+
+                        Button(action: {
+                            withAnimation(DS.Anim.snappy) { selectedType = type }
+                        }) {
+                            HStack(spacing: DS.Spacing.xs) {
+                                Image(systemName: iconForType(type))
+                                    .font(DS.Font.scaled(12, weight: .bold))
+                                Text(displayNameForType(type))
+                                    .font(DS.Font.caption1)
+                                    .fontWeight(.bold)
+                            }
+                            .foregroundColor(isSelected ? .white : typeColor)
+                            .padding(.horizontal, DS.Spacing.md)
+                            .padding(.vertical, DS.Spacing.sm)
+                            .background(isSelected ? typeColor : typeColor.opacity(0.1))
+                            .clipShape(Capsule())
+                            .overlay(
+                                Capsule()
+                                    .stroke(typeColor.opacity(isSelected ? 0 : 0.25), lineWidth: 1)
+                            )
+                        }
+                        .buttonStyle(DSBoldButtonStyle())
+                    }
+                }
+                .padding(.horizontal, DS.Spacing.md)
+                .padding(.bottom, DS.Spacing.md)
+            }
+        }
+    }
+
+    // MARK: - Content Section
+    private var addNewsContentSection: some View {
+        DSCard(padding: 0) {
+            DSSectionHeader(
+                title: L10n.t("محتوى الخبر", "Post Content"),
+                icon: "text.alignright",
+                iconColor: DS.Color.accent
+            )
+
+            ZStack(alignment: .topTrailing) {
+                TextEditor(text: $content)
+                    .frame(minHeight: 60, maxHeight: .infinity)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .scrollContentBackground(.hidden)
+                    .font(DS.Font.callout)
+                    .foregroundColor(DS.Color.textPrimary)
+                    .padding(DS.Spacing.sm)
+
+                if content.isEmpty {
+                    Text(L10n.t("اكتب الخبر هنا...", "Write your post here..."))
+                        .font(DS.Font.callout)
+                        .foregroundColor(DS.Color.textTertiary)
+                        .padding(.top, DS.Spacing.md)
+                        .padding(.trailing, DS.Spacing.md)
+                        .allowsHitTesting(false)
+                }
+            }
+        }
+    }
+
+    // MARK: - Photos Section
+    private var addNewsPhotosSection: some View {
+        DSCard(padding: 0) {
+            DSSectionHeader(
+                title: L10n.t("الصور", "Photos"),
+                icon: "photo.fill",
+                trailing: selectedImages.isEmpty ? nil : "\(selectedImages.count)",
+                iconColor: DS.Color.info
+            )
+
+            PhotosPicker(selection: $selectedPhotoItems, maxSelectionCount: 5, matching: .images) {
+                HStack(spacing: DS.Spacing.sm) {
+                    Image(systemName: "photo.on.rectangle.angled")
+                        .font(DS.Font.scaled(18, weight: .semibold))
+                    Text(L10n.t("اختر صور (اختياري)", "Choose Photos (optional)"))
+                        .font(DS.Font.callout)
+                        .fontWeight(.medium)
+                }
+                .foregroundColor(DS.Color.primary)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, DS.Spacing.md)
+                .background(DS.Color.primary.opacity(0.06))
+                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                        .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [6]))
+                        .foregroundColor(DS.Color.primary.opacity(0.2))
+                )
+            }
+            .padding(.horizontal, DS.Spacing.md)
+            .padding(.bottom, selectedImages.isEmpty ? DS.Spacing.md : DS.Spacing.sm)
+
+            if !selectedImages.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: DS.Spacing.sm) {
+                        ForEach(Array(selectedImages.enumerated()), id: \.offset) { idx, image in
+                            addNewsImageThumb(image: image, index: idx)
+                        }
+                    }
+                    .padding(.horizontal, DS.Spacing.md)
+                }
+                .padding(.bottom, DS.Spacing.md)
+            }
+        }
+    }
+
+    // MARK: - Poll Section
+    private var addNewsPollSection: some View {
+        DSCard(padding: 0) {
+            DSSectionHeader(
+                title: L10n.t("خيارات التصويت", "Poll Options"),
+                icon: "chart.bar.fill",
+                iconColor: DS.Color.newsVote
+            )
+
+            VStack(spacing: DS.Spacing.sm) {
+                pollField(placeholder: L10n.t("سؤال التصويت (اختياري)", "Poll question (optional)"), text: $pollQuestion, icon: "questionmark.circle")
+                pollField(placeholder: L10n.t("الخيار الأول", "Option 1"), text: $pollOption1, icon: "1.circle.fill")
+                pollField(placeholder: L10n.t("الخيار الثاني", "Option 2"), text: $pollOption2, icon: "2.circle.fill")
+                pollField(placeholder: L10n.t("الخيار الثالث (اختياري)", "Option 3 (optional)"), text: $pollOption3, icon: "3.circle.fill")
+                pollField(placeholder: L10n.t("الخيار الرابع (اختياري)", "Option 4 (optional)"), text: $pollOption4, icon: "4.circle.fill")
+            }
+            .padding(.horizontal, DS.Spacing.md)
+            .padding(.bottom, DS.Spacing.md)
+        }
+    }
+
+    // MARK: - Submit Section
+    private var addNewsSubmitSection: some View {
+        VStack(spacing: DS.Spacing.sm) {
+            DSPrimaryButton(
+                authVM.canAutoPublishNews ? L10n.t("نشر الخبر", "Publish Post") : L10n.t("إرسال للمراجعة", "Submit for Review"),
+                icon: "paperplane.fill",
+                isLoading: authVM.isLoading,
+                useGradient: canSubmit,
+                color: canSubmit ? DS.Color.primary : .gray
+            ) {
+                Task { await submitNews() }
+            }
+            .disabled(!canSubmit)
+            .opacity(canSubmit ? 1.0 : 0.6)
+
+            if !authVM.canAutoPublishNews {
+                HStack(spacing: DS.Spacing.xs) {
+                    Image(systemName: "info.circle.fill")
+                        .font(DS.Font.scaled(12))
+                    Text(L10n.t("سيتم مراجعة الخبر من الإدارة قبل النشر.", "Your post will be reviewed by admin before publishing."))
+                        .font(DS.Font.caption2)
+                }
+                .foregroundColor(DS.Color.textTertiary)
+                .frame(maxWidth: .infinity, alignment: .center)
+            }
+        }
+    }
+
+    private func addNewsImageThumb(image: UIImage, index: Int) -> some View {
+        ZStack(alignment: .topTrailing) {
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFill()
+                .frame(width: 80, height: 80)
+                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+
+            Button {
+                withAnimation {
+                        let i: Int = index
+                        selectedImages.remove(at: i)
+                    }
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(DS.Font.scaled(16))
+                    .foregroundColor(.white)
+                    .background(Color.black.opacity(0.5))
+                    .clipShape(Circle())
+            }
+            .offset(x: 4, y: -4)
+        }
+    }
+
+    private func pollField(placeholder: String, text: Binding<String>, icon: String) -> some View {
+        HStack(spacing: DS.Spacing.sm) {
+            Image(systemName: icon)
+                .font(DS.Font.scaled(14, weight: .medium))
+                .foregroundColor(DS.Color.newsVote)
+                .frame(width: 24)
+
+            TextField(placeholder, text: text)
+                .font(DS.Font.callout)
+                .foregroundColor(DS.Color.textPrimary)
+        }
+        .padding(.horizontal, DS.Spacing.md)
+        .padding(.vertical, DS.Spacing.sm)
+        .background(DS.Color.surface)
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                .stroke(DS.Color.textTertiary.opacity(0.15), lineWidth: 1)
+        )
     }
 
     private func handleSelectedImages(_ items: [PhotosPickerItem]) {
@@ -830,6 +1155,7 @@ struct AddNewsView: View {
         for image in selectedImages {
             if let url = await authVM.uploadNewsImage(image: image, for: authorId) { uploadedURLs.append(url) }
         }
+
         let question = pollQuestion.trimmingCharacters(in: .whitespacesAndNewlines)
         let isPosted = await authVM.postNews(
             content: content.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -858,7 +1184,7 @@ struct EditNewsView: View {
     @State private var pollOption3: String
     @State private var pollOption4: String
     @State private var showEditErrorAlert = false
-    let types = ["زواج", "مولود", "تنبيه", "وفاة", "تصويت"]
+    let types = ["خبر", "زواج", "مولود", "وفاة", "تصويت"]
 
     init(news: NewsPost) {
         self.news = news
@@ -881,6 +1207,17 @@ struct EditNewsView: View {
         case "مولود": return DS.Color.newsBirth
         case "تصويت": return DS.Color.newsVote
         default: return DS.Color.primary
+        }
+    }
+
+    private func displayNameForType(_ type: String) -> String {
+        switch type {
+        case "خبر": return L10n.t("خبر", "News")
+        case "زواج": return L10n.t("زواج", "Wedding")
+        case "مولود": return L10n.t("مولود", "Newborn")
+        case "وفاة": return L10n.t("وفاة", "Obituary")
+        case "تصويت": return L10n.t("تصويت", "Poll")
+        default: return type
         }
     }
 
@@ -908,7 +1245,7 @@ struct EditNewsView: View {
                             let typeColor = colorForType(type)
 
                             Button(action: { selectedType = type }) {
-                                Text(type)
+                                Text(displayNameForType(type))
                                     .font(DS.Font.caption1)
                                     .fontWeight(.bold)
                                     .foregroundColor(isSelected ? .white : typeColor)

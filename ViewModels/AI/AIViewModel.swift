@@ -12,6 +12,11 @@ class AIViewModel: ObservableObject {
     @Published var chatInput: String = ""
     @Published var isChatLoading: Bool = false
 
+    // MARK: - Bio Generation State
+    @Published var generatedBioStations: [FamilyMember.BioStation] = []
+    @Published var isBioLoading: Bool = false
+    @Published var bioError: String?
+
     // MARK: - News Generation State
     @Published var generatedNewsContent: String = ""
     @Published var generatedNewsType: String = "خبر"
@@ -98,10 +103,45 @@ class AIViewModel: ObservableObject {
                 "تعذر الاتصال بالمساعد الذكي",
                 "Could not connect to AI assistant"
             )
-            Log.error("Chat error: \(error.localizedDescription)")
+            print("❌ AI Chat Error: \(error.localizedDescription)")
         }
 
         isChatLoading = false
+    }
+
+    // MARK: - Generate Bio
+
+    func generateBio(for memberId: UUID) async {
+        isBioLoading = true
+        bioError = nil
+        generatedBioStations = []
+
+        let payload: [String: AnyEncodable] = [
+            "action": AnyEncodable("generate_bio"),
+            "user_id": AnyEncodable(userId),
+            "member_id": AnyEncodable(memberId.uuidString)
+        ]
+
+        do {
+            let data = try await invokeAI(payload: payload)
+            let result = try JSONDecoder().decode(AIBioResponse.self, from: data)
+            if result.ok, let stations = result.bio_stations, !stations.isEmpty {
+                generatedBioStations = stations.map { dto in
+                    FamilyMember.BioStation(
+                        year: dto.year,
+                        title: dto.title,
+                        details: dto.details
+                    )
+                }
+            } else {
+                bioError = result.message ?? L10n.t("تعذر إنشاء السيرة", "Could not generate bio")
+            }
+        } catch {
+            bioError = L10n.t("خطأ في إنشاء السيرة", "Error generating bio")
+            print("❌ AI Bio Error: \(error.localizedDescription)")
+        }
+
+        isBioLoading = false
     }
 
     // MARK: - Generate News
@@ -129,7 +169,7 @@ class AIViewModel: ObservableObject {
             }
         } catch {
             newsError = L10n.t("خطأ في إنشاء الخبر", "Error generating news")
-            Log.error("News generation error: \(error.localizedDescription)")
+            print("❌ AI News Error: \(error.localizedDescription)")
         }
 
         isNewsLoading = false
@@ -158,7 +198,7 @@ class AIViewModel: ObservableObject {
             }
         } catch {
             adminError = L10n.t("خطأ في جلب الملخص الإداري", "Error fetching admin summary")
-            Log.error("Admin summary error: \(error.localizedDescription)")
+            print("❌ AI Admin Error: \(error.localizedDescription)")
         }
 
         isAdminLoading = false
@@ -186,7 +226,7 @@ class AIViewModel: ObservableObject {
             }
         } catch {
             treeAnalysisError = L10n.t("خطأ في تحليل الشجرة", "Error analyzing tree")
-            Log.error("Tree analysis error: \(error.localizedDescription)")
+            print("❌ AI Tree Analysis Error: \(error.localizedDescription)")
         }
 
         isTreeAnalysisLoading = false

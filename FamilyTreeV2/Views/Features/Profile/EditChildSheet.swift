@@ -12,6 +12,7 @@ struct EditChildSheet: View {
     @State private var selectedPhoneCountry: KuwaitPhone.Country = KuwaitPhone.defaultCountry
     @State private var phoneNumber: String = ""
     @State private var birthDate: Date = Date()
+    @State private var selectedGender: String = "male"
     @State private var isDeceased: Bool = false
     @State private var deathDate: Date = Date()
     @State private var selectedImageItem: PhotosPickerItem? = nil
@@ -147,12 +148,32 @@ struct EditChildSheet: View {
                     HStack(spacing: DS.Spacing.md) {
                         DSIcon("person.2.fill", color: DS.Color.accent)
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(L10n.t("اسم العائلة (اختياري)", "Family Name (optional)"))
+                            Text(L10n.t("اسم العائلة", "Family Name"))
                                 .font(DS.Font.caption1)
                                 .foregroundColor(DS.Color.textSecondary)
                             TextField(L10n.t("اسم العائلة", "Family name"), text: $familyName)
                                 .font(DS.Font.callout)
                                 .foregroundColor(DS.Color.textPrimary)
+                        }
+                        Spacer()
+                    }
+                    .padding(.horizontal, DS.Spacing.lg)
+                    .padding(.vertical, DS.Spacing.md)
+
+                    DSDivider()
+
+                    // Gender picker
+                    HStack(spacing: DS.Spacing.md) {
+                        DSIcon(selectedGender == "female" ? "figure.stand.dress" : "person.fill", color: selectedGender == "female" ? DS.Color.neonPink : DS.Color.primary)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(L10n.t("الجنس", "Gender"))
+                                .font(DS.Font.caption1)
+                                .foregroundColor(DS.Color.textSecondary)
+                            Picker("", selection: $selectedGender) {
+                                Text(L10n.t("ذكر", "Male")).tag("male")
+                                Text(L10n.t("أنثى", "Female")).tag("female")
+                            }
+                            .pickerStyle(.segmented)
                         }
                         Spacer()
                     }
@@ -252,12 +273,13 @@ struct EditChildSheet: View {
             isLoading: authVM.isLoading,
             action: saveChanges
         )
-        .opacity(firstName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.5 : 1.0)
-        .disabled(firstName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || authVM.isLoading)
+        .opacity(firstName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || familyName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.5 : 1.0)
+        .disabled(firstName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || familyName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || authVM.isLoading)
     }
 
     private func setupData() {
         firstName = member.firstName
+        selectedGender = member.gender ?? "male"
         let detectedPhone = KuwaitPhone.detectCountryAndLocal(member.phoneNumber)
         selectedPhoneCountry = detectedPhone.country
         phoneNumber = detectedPhone.localDigits
@@ -294,7 +316,8 @@ struct EditChildSheet: View {
                 ) ?? "",
                 birthDate: birthDateString,
                 isDeceased: isDeceased,
-                deathDate: deathDateString
+                deathDate: deathDateString,
+                gender: selectedGender
             )
 
             if let image = selectedUIImage {

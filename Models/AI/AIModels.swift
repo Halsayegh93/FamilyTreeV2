@@ -21,6 +21,19 @@ struct AIResponse: Decodable {
     let action: String?
 }
 
+struct AIBioResponse: Decodable {
+    let ok: Bool
+    let reply: String?
+    let bio_stations: [BioStationDTO]?
+    let message: String?
+
+    struct BioStationDTO: Decodable {
+        let year: String?
+        let title: String
+        let details: String
+    }
+}
+
 struct AINewsResponse: Decodable {
     let ok: Bool
     let reply: String?

@@ -3,189 +3,155 @@ import SwiftUI
 /// Preview لتصميم أيقونة التطبيق - شغّلها في Preview وخذ screenshot
 /// الحجم: 1024x1024 للـ App Store
 struct AppIconPreview: View {
+    // ألوان التصميم — Ocean Blue
+    private let oceanBlue = Color(hex: "2B7A9F")
+    private let oceanDark = Color(hex: "1E5474")
+    private let oceanLight = Color(hex: "78ACC3")
+    private let cyanSoft = Color(hex: "A3C4D3")
+
     var body: some View {
         ZStack {
-            // خلفية ملكية — أزرق غامق فخم
+            // خلفية Ocean Blue متدرجة
             LinearGradient(
                 colors: [
-                    Color(hex: "0A1628"),   // كحلي غامق جداً
-                    Color(hex: "0E2460"),   // أزرق ملكي غامق
-                    Color(hex: "1B3A8C"),   // أزرق ملكي
-                    Color(hex: "0D1B40"),   // كحلي للزوايا
+                    Color(hex: "0A2A3C"),
+                    Color(hex: "0F3650"),
+                    Color(hex: "164560"),
+                    Color(hex: "0D2E42"),
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
 
-            // دوائر ديكورية بتوهج ذهبي
+            // توهج أزرق مركزي علوي (خلف الشجرة)
             Circle()
                 .fill(
                     RadialGradient(
-                        colors: [Color(hex: "C8962E").opacity(0.15), .clear],
+                        colors: [oceanBlue.opacity(0.25), .clear],
                         center: .center,
                         startRadius: 0,
-                        endRadius: 350
+                        endRadius: 380
                     )
                 )
-                .frame(width: 700, height: 700)
-                .offset(x: -250, y: -300)
+                .frame(width: 760, height: 760)
+                .offset(y: -80)
 
+            // توهج سماوي خفيف
             Circle()
                 .fill(
                     RadialGradient(
-                        colors: [Color(hex: "E6C06A").opacity(0.10), .clear],
+                        colors: [cyanSoft.opacity(0.12), .clear],
                         center: .center,
                         startRadius: 0,
-                        endRadius: 300
+                        endRadius: 250
                     )
                 )
-                .frame(width: 600, height: 600)
-                .offset(x: 300, y: 350)
+                .frame(width: 500, height: 500)
+                .offset(x: -150, y: -200)
 
-            Circle()
-                .fill(
-                    RadialGradient(
-                        colors: [Color(hex: "C8962E").opacity(0.08), .clear],
-                        center: .center,
-                        startRadius: 0,
-                        endRadius: 200
-                    )
-                )
-                .frame(width: 400, height: 400)
-                .offset(x: 250, y: -200)
-
-            // حلقة خارجية ذهبية
+            // حلقة دائرية خارجية رفيعة
             Circle()
                 .stroke(
                     LinearGradient(
-                        colors: [
-                            Color(hex: "E6C06A").opacity(0.25),
-                            Color(hex: "C8962E").opacity(0.12),
-                            Color(hex: "E6C06A").opacity(0.06),
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
+                        colors: [oceanLight.opacity(0.12), oceanBlue.opacity(0.06)],
+                        startPoint: .top,
+                        endPoint: .bottom
                     ),
-                    lineWidth: 3
+                    lineWidth: 1.5
                 )
-                .frame(width: 820, height: 820)
+                .frame(width: 860, height: 860)
 
-            // المحتوى الرئيسي
-            VStack(spacing: 0) {
-                // أيقونة العائلة مع توهج
-                ZStack {
-                    // توهج خلفي
-                    Circle()
-                        .fill(
-                            RadialGradient(
-                                colors: [.white.opacity(0.18), .clear],
-                                center: .center,
-                                startRadius: 0,
-                                endRadius: 260
-                            )
-                        )
-                        .frame(width: 520, height: 520)
-
-                    // دائرة زجاجية
-                    Circle()
-                        .fill(.white.opacity(0.08))
-                        .frame(width: 420, height: 420)
-                        .overlay(
-                            Circle()
-                                .stroke(
-                                    LinearGradient(
-                                        colors: [.white.opacity(0.3), .white.opacity(0.05)],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    ),
-                                    lineWidth: 2
-                                )
-                        )
-
-                    // أيقونة الشجرة
-                    Image(systemName: "tree.fill")
-                        .font(DS.Font.scaled(200, weight: .bold))
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [Color(hex: "FDFBF7"), Color(hex: "E6C06A")],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
-                        .shadow(color: Color(hex: "C8962E").opacity(0.5), radius: 30, y: 8)
-                        .shadow(color: .black.opacity(0.15), radius: 15, y: 10)
-                }
-                .offset(y: -40)
-
-                // اسم العائلة
-                VStack(spacing: 8) {
-                    Text("عائلة")
-                        .font(.system(size: 48, weight: .bold, design: .serif))
-                        .foregroundStyle(.white.opacity(0.85))
-
-                    Text("المحمدعلي")
-                        .font(.system(size: 110, weight: .heavy, design: .serif))
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [Color(hex: "FDFBF7"), Color(hex: "C8962E")],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                        .shadow(color: Color(hex: "9A7321").opacity(0.6), radius: 20, y: 4)
-                        .shadow(color: .black.opacity(0.3), radius: 10, y: 6)
-
-                    // خط فاصل مزخرف
-                    HStack(spacing: 12) {
-                        Rectangle()
-                            .fill(
-                                LinearGradient(
-                                    colors: [.clear, Color(hex: "C8962E").opacity(0.8)],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                            .frame(width: 120, height: 2.5)
-
-                        Circle()
-                            .fill(Color(hex: "E6C06A"))
-                            .frame(width: 8, height: 8)
-
-                        Text("شجرة العائلة")
-                            .font(.system(size: 34, weight: .bold, design: .serif))
-                            .foregroundStyle(Color(hex: "E6C06A").opacity(0.85))
-
-                        Circle()
-                            .fill(Color(hex: "E6C06A"))
-                            .frame(width: 8, height: 8)
-
-                        Rectangle()
-                            .fill(
-                                LinearGradient(
-                                    colors: [Color(hex: "C8962E").opacity(0.8), .clear],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                            .frame(width: 120, height: 2.5)
-                    }
-                }
-                .offset(y: -10)
-            }
-
-            // نجوم صغيرة ديكورية
-            ForEach(0..<8, id: \.self) { i in
+            // === رمز الشجرة الكبير ===
+            ZStack {
+                // توهج خلفي للشجرة
                 Circle()
-                    .fill(.white.opacity(Double.random(in: 0.15...0.45)))
-                    .frame(width: CGFloat.random(in: 4...10), height: CGFloat.random(in: 4...10))
-                    .offset(
-                        x: CGFloat([-380, 350, -300, 400, -420, 280, -200, 380][i]),
-                        y: CGFloat([-350, -280, 380, 300, 100, -400, -420, 180][i])
+                    .fill(
+                        RadialGradient(
+                            colors: [oceanLight.opacity(0.15), .clear],
+                            center: .center,
+                            startRadius: 0,
+                            endRadius: 300
+                        )
                     )
+                    .frame(width: 600, height: 600)
+
+                // أيقونة الشجرة
+                Image(systemName: "tree.fill")
+                    .font(.system(size: 420, weight: .regular))
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [
+                                .white,
+                                oceanLight,
+                                oceanBlue,
+                                oceanDark,
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .shadow(color: oceanBlue.opacity(0.6), radius: 40, y: 10)
+                    .shadow(color: .black.opacity(0.2), radius: 20, y: 15)
+            }
+            .offset(y: -30)
+
+            // اسم العائلة تحت الشجرة
+            Text("المحمدعلي")
+                .font(.system(size: 110, weight: .heavy, design: .serif))
+                .foregroundStyle(
+                    LinearGradient(
+                        colors: [.white, oceanLight],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .shadow(color: oceanBlue.opacity(0.5), radius: 20, y: 4)
+                .shadow(color: .black.opacity(0.3), radius: 10, y: 6)
+                .offset(y: 360)
+
+            // نقاط ديكورية صغيرة حول الشجرة
+            ForEach(0..<8, id: \.self) { i in
+                let positions: [(x: CGFloat, y: CGFloat)] = [
+                    (-320, -300), (320, -280), (-380, 50), (380, 80),
+                    (-280, 300), (300, 320), (-150, -380), (180, 380)
+                ]
+                let sizes: [CGFloat] = [6, 5, 8, 5, 7, 6, 4, 5]
+                let opacities: [Double] = [0.4, 0.25, 0.35, 0.2, 0.3, 0.25, 0.45, 0.2]
+
+                Circle()
+                    .fill(oceanLight.opacity(opacities[i]))
+                    .frame(width: sizes[i], height: sizes[i])
+                    .offset(x: positions[i].x, y: positions[i].y)
             }
         }
         .frame(width: 1024, height: 1024)
         .clipShape(RoundedRectangle(cornerRadius: 224))
+    }
+}
+
+/// شكل سداسي منتظم
+struct RegularPolygon: Shape {
+    let sides: Int
+
+    func path(in rect: CGRect) -> Path {
+        let center = CGPoint(x: rect.midX, y: rect.midY)
+        let radius = min(rect.width, rect.height) / 2
+        var path = Path()
+
+        for i in 0..<sides {
+            let angle = (Double(i) / Double(sides)) * 2 * .pi - .pi / 2
+            let point = CGPoint(
+                x: center.x + CGFloat(cos(angle)) * radius,
+                y: center.y + CGFloat(sin(angle)) * radius
+            )
+            if i == 0 {
+                path.move(to: point)
+            } else {
+                path.addLine(to: point)
+            }
+        }
+        path.closeSubpath()
+        return path
     }
 }
 

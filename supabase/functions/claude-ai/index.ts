@@ -135,7 +135,7 @@ async function handleChat(payload: AIRequest) {
     .select(
       "id, full_name, first_name, father_id, birth_date, death_date, is_deceased, role, is_married, bio_json, created_at"
     )
-    .in("status", ["active", "pending"]);
+    .eq("status", "active");
 
   if (error)
     return json(500, { ok: false, message: `DB error: ${error.message}` });
@@ -372,7 +372,7 @@ async function handleAnalyzeTree(payload: AIRequest) {
     .select(
       "id, full_name, first_name, father_id, birth_date, death_date, is_deceased, is_married, role, created_at"
     )
-    .in("status", ["active", "pending"]);
+    .eq("status", "active");
 
   if (error)
     return json(500, { ok: false, message: `DB error: ${error.message}` });
