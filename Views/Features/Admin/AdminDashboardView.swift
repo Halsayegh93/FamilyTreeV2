@@ -56,13 +56,13 @@ struct AdminDashboardView: View {
                                 .padding(.top, DS.Spacing.md)
 
                             // طلبات المراجعة
-                            VStack(alignment: .leading, spacing: DS.Spacing.md) {
-                                adminSectionHeader(
+                            DSCard(padding: 0) {
+                                DSSectionHeader(
                                     title: L10n.t("طلبات تنتظر المراجعة", "Pending Requests"),
-                                    icon: "exclamationmark.shield.fill"
+                                    icon: "exclamationmark.shield.fill",
+                                    iconColor: DS.Color.error
                                 )
 
-                                DSCard {
                                     NavigationLink(destination: AdminPendingRequestsView()) {
                                         DSActionRow(title: L10n.t("طلبات انضمام جديدة", "New Join Requests"), subtitle: L10n.t("مراجعة هويات المنضمين الجدد", "Review new member identities"), icon: "person.badge.plus", color: DS.Color.info, badge: pendingCount)
                                     }
@@ -97,18 +97,16 @@ struct AdminDashboardView: View {
                                         DSActionRow(title: L10n.t("تأكيد حالات الوفاة", "Confirm Deceased"), subtitle: L10n.t("تحديثات حالة أعضاء الشجرة", "Update family tree member status"), icon: "bolt.heart.fill", color: DS.Color.error, badge: authVM.deceasedRequests.count)
                                     }
                                 }
-                                .dsCardShadow()
-                                .padding(.horizontal, DS.Spacing.lg)
-                            }
+                            .padding(.horizontal, DS.Spacing.lg)
 
                             // النظام والشجرة
-                            VStack(alignment: .leading, spacing: DS.Spacing.md) {
-                                adminSectionHeader(
+                            DSCard(padding: 0) {
+                                DSSectionHeader(
                                     title: L10n.t("النظام والشجرة", "System & Tree"),
-                                    icon: "gearshape.2.fill"
+                                    icon: "gearshape.2.fill",
+                                    iconColor: DS.Color.primary
                                 )
 
-                                DSCard {
                                     NavigationLink(destination: AdminRegisterMemberView()) {
                                         DSActionRow(title: L10n.t("تسجيل عضو جديد", "Register New Member"), subtitle: L10n.t("إضافة عضو جديد مباشرة للشجرة", "Add a new member directly to the tree"), icon: "person.badge.plus", color: DS.Color.primary)
                                     }
@@ -149,18 +147,16 @@ struct AdminDashboardView: View {
                                     }
                                     .disabled(isSendingTestPush)
                                 }
-                                .dsCardShadow()
-                                .padding(.horizontal, DS.Spacing.lg)
-                            }
+                            .padding(.horizontal, DS.Spacing.lg)
 
                             // المدراء والمشرفين
-                            VStack(alignment: .leading, spacing: DS.Spacing.md) {
-                                adminSectionHeader(
+                            DSCard(padding: 0) {
+                                DSSectionHeader(
                                     title: L10n.t("المدراء والمشرفين", "Admins & Supervisors"),
-                                    icon: "crown.fill"
+                                    icon: "crown.fill",
+                                    iconColor: DS.Color.neonPurple
                                 )
 
-                                DSCard {
                                     NavigationLink(destination: AdminModeratorsView()) {
                                         DSActionRow(
                                             title: L10n.t("المدراء والمشرفين", "Admins & Supervisors"),
@@ -171,9 +167,7 @@ struct AdminDashboardView: View {
                                         )
                                     }
                                 }
-                                .dsCardShadow()
-                                .padding(.horizontal, DS.Spacing.lg)
-                            }
+                            .padding(.horizontal, DS.Spacing.lg)
 
                             Spacer(minLength: DS.Spacing.xxxl)
                         }
@@ -206,36 +200,7 @@ struct AdminDashboardView: View {
         DSDecorativeBackground()
     }
 
-    // MARK: - Bold Section Header
-    private func adminSectionHeader(title: String, icon: String) -> some View {
-        HStack(spacing: DS.Spacing.sm) {
-            Image(systemName: icon)
-                .font(DS.Font.scaled(16, weight: .black))
-                .foregroundColor(adminAccent)
 
-            Text(title)
-                .font(DS.Font.headline)
-                .fontWeight(.black)
-                .foregroundColor(DS.Color.textPrimary)
-
-            Spacer()
-
-            // Decorative accent line
-            RoundedRectangle(cornerRadius: 2)
-                .fill(
-                    LinearGradient(
-                        colors: [adminAccent.opacity(0.5), adminAccent.opacity(0.0)],
-                        startPoint: L10n.isArabic ? .trailing : .leading,
-                        endPoint: .leading
-                    )
-                )
-                .frame(height: 2)
-                .frame(maxWidth: 60)
-        }
-        .padding(.horizontal, DS.Spacing.lg)
-        .padding(.top, DS.Spacing.xl)
-        .padding(.bottom, DS.Spacing.xs)
-    }
 
     // MARK: - إحصائيات (Colorful Stat Cards)
     private var adminStatsGrid: some View {

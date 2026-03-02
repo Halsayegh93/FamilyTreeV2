@@ -22,7 +22,51 @@ struct FamilyMember: Identifiable, Codable, Equatable {
     let isMarried: Bool?
     let gender: String?
     let createdAt: String?
-    
+
+    init(
+        id: UUID = UUID(),
+        firstName: String,
+        fullName: String,
+        phoneNumber: String? = nil,
+        birthDate: String? = nil,
+        deathDate: String? = nil,
+        isDeceased: Bool? = nil,
+        role: UserRole = .member,
+        fatherId: UUID? = nil,
+        photoURL: String? = nil,
+        isPhoneHidden: Bool? = nil,
+        isBirthDateHidden: Bool? = nil,
+        isHiddenFromTree: Bool = false,
+        sortOrder: Int = 0,
+        bio: [BioStation]? = nil,
+        status: MemberStatus? = .active,
+        avatarUrl: String? = nil,
+        isMarried: Bool? = nil,
+        gender: String? = nil,
+        createdAt: String? = nil
+    ) {
+        self.id = id
+        self.firstName = firstName
+        self.fullName = fullName
+        self.phoneNumber = phoneNumber
+        self.birthDate = birthDate
+        self.deathDate = deathDate
+        self.isDeceased = isDeceased
+        self.role = role
+        self.fatherId = fatherId
+        self.photoURL = photoURL
+        self.isPhoneHidden = isPhoneHidden
+        self.isBirthDateHidden = isBirthDateHidden
+        self.isHiddenFromTree = isHiddenFromTree
+        self.sortOrder = sortOrder
+        self.bio = bio
+        self.status = status
+        self.avatarUrl = avatarUrl
+        self.isMarried = isMarried
+        self.gender = gender
+        self.createdAt = createdAt
+    }
+
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()

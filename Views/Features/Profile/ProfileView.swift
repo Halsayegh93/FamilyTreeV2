@@ -119,7 +119,13 @@ struct ProfileView: View {
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, DS.Spacing.lg)
 
-                DSRoleBadge(title: user.roleName, color: user.roleColor)
+                Text(user.roleName)
+                    .font(DS.Font.scaled(11, weight: .semibold))
+                    .foregroundColor(user.roleColor)
+                    .padding(.horizontal, DS.Spacing.sm)
+                    .padding(.vertical, 3)
+                    .background(user.roleColor.opacity(0.10))
+                    .clipShape(Capsule())
             }
             .padding(.bottom, DS.Spacing.xs)
         }
@@ -134,7 +140,8 @@ struct ProfileView: View {
             DSCard(padding: 0) {
                 DSSectionHeader(
                     title: L10n.t("المعلومات الشخصية", "Personal Info"),
-                    icon: "info.circle.fill"
+                    icon: "info.circle.fill",
+                    iconColor: DS.Color.primary
                 )
 
                 LazyVGrid(columns: columns, spacing: DS.Spacing.md) {
@@ -277,74 +284,55 @@ struct ProfileView: View {
     private var serverSonsSection: some View {
         VStack(alignment: .leading, spacing: 0) {
             DSCard(padding: 0) {
-                HStack(spacing: DS.Spacing.sm) {
-                    DSSectionHeader(
-                        title: L10n.t("الأبناء", "Children"),
-                        icon: "person.2.fill"
-                    )
+                DSSectionHeader(
+                    title: L10n.t("الأبناء", "Children"),
+                    icon: "person.2.fill",
+                    trailing: authVM.currentMemberChildren.isEmpty ? nil : "\(authVM.currentMemberChildren.count)",
+                    iconColor: DS.Color.success
+                )
 
-                    if !authVM.currentMemberChildren.isEmpty {
-                        Text("\(authVM.currentMemberChildren.count)")
-                            .font(DS.Font.caption1)
-                            .fontWeight(.bold)
-                            .foregroundColor(.white)
-                            .frame(width: 26, height: 26)
-                            .background(DS.Color.primary)
-                            .clipShape(Circle())
-                    }
-
-                    Spacer()
-                }
-
-                if authVM.currentMemberChildren.isEmpty {
-                    VStack(spacing: DS.Spacing.sm) {
-                        Image(systemName: "person.2.slash")
-                            .font(DS.Font.scaled(32))
-                            .foregroundColor(DS.Color.textTertiary)
-                        Text(L10n.t("لا يوجد أبناء مضافين حالياً", "No children added yet"))
-                            .font(DS.Font.callout)
-                            .foregroundColor(DS.Color.textSecondary)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(DS.Spacing.xl)
-                } else {
-                    let columns = [GridItem(.flexible()), GridItem(.flexible())]
-                    LazyVGrid(columns: columns, spacing: DS.Spacing.md) {
-                        ForEach(authVM.currentMemberChildren) { son in
-                            Button {
-                                editingChild = son
-                            } label: {
-                                childGridCell(son: son)
-                            }
-                            .buttonStyle(PlainButtonStyle())
+                let columns = [GridItem(.flexible()), GridItem(.flexible())]
+                LazyVGrid(columns: columns, spacing: DS.Spacing.md) {
+                    ForEach(authVM.currentMemberChildren) { son in
+                        Button {
+                            editingChild = son
+                        } label: {
+                            childGridCell(son: son)
                         }
+                        .buttonStyle(PlainButtonStyle())
                     }
-                    .padding(DS.Spacing.md)
-                }
 
-                DSDivider()
+                    // Add child as last grid cell
+                    Button {
+                        showAddChild = true
+                    } label: {
+                        HStack(spacing: DS.Spacing.sm) {
+                            Image(systemName: "plus")
+                                .font(DS.Font.scaled(16, weight: .bold))
+                                .foregroundColor(DS.Color.success)
+                                .frame(width: 36, height: 36)
+                                .background(DS.Color.success.opacity(0.12))
+                                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
 
-                Button(action: { showAddChild = true }) {
-                    HStack(spacing: DS.Spacing.md) {
-                        DSIcon("plus", color: DS.Color.success)
-
-                        Text(L10n.t("إضافة ابن", "Add Child"))
-                            .font(DS.Font.calloutBold)
-                            .foregroundColor(DS.Color.success)
-
-                        Spacer()
-
-                        Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
-                            .font(DS.Font.scaled(11, weight: .bold))
-                            .foregroundColor(DS.Color.textTertiary)
-                            .frame(width: 26, height: 26)
-                            .background(DS.Color.textTertiary.opacity(0.1))
-                            .clipShape(Circle())
+                            Text(L10n.t("إضافة ابن", "Add Child"))
+                                .font(DS.Font.caption1)
+                                .fontWeight(.bold)
+                                .foregroundColor(DS.Color.success)
+                                .lineLimit(1)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(DS.Spacing.sm)
+                        .background(DS.Color.surface)
+                        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                                .stroke(DS.Color.success.opacity(0.3), lineWidth: 1)
+                                .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [5]))
+                        )
                     }
-                    .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.vertical, DS.Spacing.md)
+                    .buttonStyle(PlainButtonStyle())
                 }
-                .buttonStyle(DSBoldButtonStyle())
+                .padding(DS.Spacing.md)
             }
         }
         .padding(.horizontal, DS.Spacing.lg)
@@ -394,7 +382,8 @@ struct ProfileView: View {
             DSCard(padding: 0) {
                 DSSectionHeader(
                     title: L10n.t("اعدادات التطبيق", "App Settings"),
-                    icon: "gearshape.2.fill"
+                    icon: "gearshape.2.fill",
+                    iconColor: DS.Color.warning
                 )
                 VStack(spacing: 0) {
                     // Gallery Row

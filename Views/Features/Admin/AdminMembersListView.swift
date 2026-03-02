@@ -3,9 +3,7 @@ import SwiftUI
 struct AdminMembersListView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @State private var searchText = ""
-    @FocusState private var isSearchFocused: Bool
 
-    // تصفية الأعضاء بناءً على البحث بالاسم أو رقم الهاتف
     var filteredMembers: [FamilyMember] {
         let members = authVM.allMembers.filter { $0.role != .pending }
         if searchText.isEmpty {
@@ -24,173 +22,202 @@ struct AdminMembersListView: View {
             DS.Color.background.ignoresSafeArea()
             DSDecorativeBackground()
 
-            VStack(spacing: 0) {
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: DS.Spacing.md) {
 
-                // 1. شريط البحث المودرن
-                searchBar
+                    // MARK: - Stats
+                    statsSection
+                        .padding(.top, DS.Spacing.md)
 
-                // 2. إحصائية سريعة
-                HStack {
-                    Spacer()
-                    HStack(spacing: DS.Spacing.xs) {
-                        Text("\(filteredMembers.count)")
-                            .font(DS.Font.caption1)
-                            .fontWeight(.bold)
-                            .foregroundColor(DS.Color.primary)
-                        Text("عضو في الشجرة")
-                            .font(DS.Font.caption1)
-                            .foregroundColor(DS.Color.textSecondary)
-                    }
-                    .padding(.horizontal, DS.Spacing.xl)
+                    // MARK: - Members
+                    membersSection
                 }
-                .padding(.bottom, DS.Spacing.sm)
-
-                // 3. قائمة الأعضاء
-                if filteredMembers.isEmpty {
-                    emptyState
-                } else {
-                    List {
-                        ForEach(filteredMembers) { member in
-                            MemberAdminRow(member: member)
-                                .listRowBackground(Color.clear)
-                                .listRowSeparator(.hidden)
-                                .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
-                        }
-                    }
-                    .listStyle(.plain)
-                }
+                .padding(.bottom, DS.Spacing.xxxl)
             }
         }
-        .navigationTitle("إدارة أعضاء العائلة")
+        .navigationTitle(L10n.t("سجل الأعضاء", "Member Registry"))
         .navigationBarTitleDisplayMode(.inline)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
 
-    // MARK: - المكونات الفرعية
+    // MARK: - Stats Section
+    private var statsSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            DSCard(padding: 0) {
+                DSSectionHeader(
+                    title: L10n.t("إحصائيات", "Statistics"),
+                    icon: "chart.bar.fill",
+                    iconColor: DS.Color.primary
+                )
 
-    private var searchBar: some View {
-        HStack(spacing: DS.Spacing.md) {
-            // Gradient icon circle
-            ZStack {
-                Circle()
-                    .fill(DS.Color.gradientPrimary)
-                    .frame(width: 36, height: 36)
-                Image(systemName: "magnifyingglass")
-                    .font(DS.Font.scaled(14, weight: .semibold))
-                    .foregroundColor(.white)
+                let columns = [GridItem(.flexible()), GridItem(.flexible())]
+                LazyVGrid(columns: columns, spacing: DS.Spacing.md) {
+                    statCell(
+                        icon: "person.2.fill",
+                        color: DS.Color.primary,
+                        title: L10n.t("إجمالي الأعضاء", "Total Members"),
+                        value: "\(authVM.allMembers.filter { $0.role != .pending }.count)"
+                    )
+                    statCell(
+                        icon: "line.3.horizontal.decrease.circle.fill",
+                        color: DS.Color.info,
+                        title: L10n.t("نتائج البحث", "Search Results"),
+                        value: "\(filteredMembers.count)"
+                    )
+                    statCell(
+                        icon: "shield.fill",
+                        color: DS.Color.warning,
+                        title: L10n.t("مدراء ومشرفين", "Admins & Supervisors"),
+                        value: "\(authVM.allMembers.filter { $0.role == .admin || $0.role == .supervisor }.count)"
+                    )
+                    statCell(
+                        icon: "person.fill.checkmark",
+                        color: DS.Color.success,
+                        title: L10n.t("أعضاء فعالين", "Active Members"),
+                        value: "\(authVM.allMembers.filter { $0.status == .active }.count)"
+                    )
+                }
+                .padding(DS.Spacing.md)
             }
+        }
+        .padding(.horizontal, DS.Spacing.lg)
+    }
 
-            TextField(L10n.t("ابحث بالاسم أو رقم الهاتف...", "Search by name or phone..."), text: $searchText)
-                .multilineTextAlignment(.leading)
-                .font(DS.Font.body)
-                .focused($isSearchFocused)
+    private func statCell(icon: String, color: Color, title: String, value: String) -> some View {
+        HStack(spacing: DS.Spacing.sm) {
+            Image(systemName: icon)
+                .font(DS.Font.scaled(16, weight: .bold))
+                .foregroundColor(color)
+                .frame(width: 36, height: 36)
+                .background(color.opacity(0.12))
+                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
 
-            if !searchText.isEmpty {
-                Button(action: { searchText = "" }) {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundColor(DS.Color.textTertiary)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(DS.Font.caption2)
+                    .foregroundColor(DS.Color.textTertiary)
+                    .lineLimit(1)
+
+                Text(value)
+                    .font(DS.Font.caption1)
+                    .fontWeight(.bold)
+                    .foregroundColor(DS.Color.textPrimary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(DS.Spacing.sm)
+        .background(DS.Color.surface)
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                .stroke(color.opacity(0.15), lineWidth: 1)
+        )
+    }
+
+    // MARK: - Members Section
+    private var membersSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            DSCard(padding: 0) {
+                DSSectionHeader(
+                    title: L10n.t("الأعضاء", "Members"),
+                    icon: "person.3.sequence.fill",
+                    trailing: "\(filteredMembers.count)",
+                    iconColor: DS.Color.success
+                )
+
+                // Search bar
+                HStack(spacing: DS.Spacing.md) {
+                    DSIcon("magnifyingglass", color: DS.Color.primary)
+
+                    TextField(L10n.t("ابحث بالاسم أو رقم الهاتف...", "Search by name or phone..."), text: $searchText)
+                        .font(DS.Font.body)
+                        .multilineTextAlignment(.leading)
+
+                    if !searchText.isEmpty {
+                        Button(action: { searchText = "" }) {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundColor(DS.Color.textTertiary)
+                        }
+                    }
+                }
+                .padding(.horizontal, DS.Spacing.lg)
+                .padding(.vertical, DS.Spacing.sm)
+
+                DSDivider()
+
+                // Members list
+                if filteredMembers.isEmpty {
+                    VStack(spacing: DS.Spacing.sm) {
+                        Image(systemName: "person.fill.questionmark")
+                            .font(DS.Font.scaled(32))
+                            .foregroundColor(DS.Color.textTertiary)
+                        Text(L10n.t("لا يوجد أعضاء بهذا البحث", "No members found"))
+                            .font(DS.Font.callout)
+                            .foregroundColor(DS.Color.textSecondary)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, DS.Spacing.xl)
+                } else {
+                    LazyVStack(spacing: 0) {
+                        ForEach(filteredMembers) { member in
+                            NavigationLink(destination: AdminMemberDetailSheet(member: member)) {
+                                memberRow(member: member)
+                            }
+                            .buttonStyle(DSBoldButtonStyle())
+
+                            if member.id != filteredMembers.last?.id {
+                                DSDivider()
+                            }
+                        }
+                    }
                 }
             }
         }
-        .padding(DS.Spacing.md)
-        .background(DS.Color.surface)
-        .cornerRadius(DS.Radius.lg)
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.Radius.lg)
-                .stroke(isSearchFocused ? DS.Color.primary : Color.clear, lineWidth: 2)
-        )
-        .dsCardShadow()
+        .padding(.horizontal, DS.Spacing.lg)
+    }
+
+    private func memberRow(member: FamilyMember) -> some View {
+        HStack(spacing: DS.Spacing.md) {
+            // Avatar
+            ZStack {
+                Circle()
+                    .fill(member.roleColor.opacity(0.12))
+                    .frame(width: 42, height: 42)
+
+                Text(String(member.fullName.prefix(1)))
+                    .font(DS.Font.scaled(18, weight: .bold))
+                    .foregroundColor(member.roleColor)
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(member.fullName)
+                    .font(DS.Font.calloutBold)
+                    .foregroundColor(DS.Color.textPrimary)
+
+                HStack(spacing: DS.Spacing.sm) {
+                    DSRoleBadge(title: member.roleName, color: member.roleColor)
+
+                    if let phone = member.phoneNumber, !phone.isEmpty {
+                        Text(KuwaitPhone.display(phone))
+                            .font(DS.Font.caption1)
+                            .foregroundColor(DS.Color.textSecondary)
+                            .lineLimit(1)
+                    }
+                }
+            }
+
+            Spacer()
+
+            Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
+                .font(DS.Font.scaled(11, weight: .bold))
+                .foregroundColor(DS.Color.textTertiary)
+                .frame(width: 26, height: 26)
+                .background(DS.Color.textTertiary.opacity(0.1))
+                .clipShape(Circle())
+        }
         .padding(.horizontal, DS.Spacing.lg)
         .padding(.vertical, DS.Spacing.md)
-        .animation(.easeInOut(duration: 0.2), value: isSearchFocused)
-    }
-
-    private var emptyState: some View {
-        VStack(spacing: DS.Spacing.lg) {
-            Spacer()
-
-            ZStack {
-                // Layered gradient circles
-                Circle()
-                    .fill(DS.Color.gridTree.opacity(0.08))
-                    .frame(width: 120, height: 120)
-                Circle()
-                    .fill(DS.Color.gridTree.opacity(0.12))
-                    .frame(width: 88, height: 88)
-                Circle()
-                    .fill(DS.Color.gradientPrimary)
-                    .frame(width: 60, height: 60)
-                Image(systemName: "person.fill.questionmark")
-                    .font(DS.Font.scaled(26, weight: .semibold))
-                    .foregroundColor(.white)
-            }
-
-            Text(L10n.t("لا يوجد أعضاء بهذا البحث", "No members found"))
-                .font(DS.Font.headline)
-                .foregroundColor(DS.Color.textSecondary)
-
-            Spacer()
-        }
-    }
-}
-
-// MARK: - بطاقة العضو الإدارية (Component)
-
-struct MemberAdminRow: View {
-    let member: FamilyMember
-
-    var body: some View {
-        ZStack(alignment: .leading) {
-            // NavigationLink مخفي لتفعيل التنقل بدون سهم افتراضي
-            NavigationLink(destination: AdminMemberDetailSheet(member: member)) {
-                EmptyView()
-            }
-            .opacity(0)
-
-            HStack(spacing: 0) {
-                // Gradient left accent bar
-                RoundedRectangle(cornerRadius: DS.Radius.full)
-                    .fill(DS.Color.gradientPrimary)
-                    .frame(width: 4, height: 50)
-                    .padding(.trailing, DS.Spacing.md)
-
-                // الصورة الرمزية أو الحرف الأول — gradient avatar circle
-                ZStack {
-                    Circle()
-                        .fill(DS.Color.gradientPrimary)
-                        .frame(width: 50, height: 50)
-
-                    Text(member.fullName.prefix(1))
-                        .font(DS.Font.headline)
-                        .foregroundColor(.white)
-                }
-                .padding(.trailing, DS.Spacing.md)
-
-                // معلومات العضو
-                VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                    Text(member.fullName)
-                        .font(DS.Font.calloutBold)
-                        .foregroundColor(DS.Color.textPrimary)
-
-                    // وسم الرتبة (Badge)
-                    DSRoleBadge(title: member.roleName, color: member.roleColor)
-                }
-
-                Spacer()
-
-                // أيقونة توضح إمكانية الدخول للتعديل
-                Image(systemName: "chevron.left")
-                    .font(DS.Font.scaled(11, weight: .bold))
-                    .foregroundColor(.white)
-                    .frame(width: 26, height: 26)
-                    .background(DS.Color.primary.opacity(0.7))
-                    .clipShape(Circle())
-            }
-            .padding(DS.Spacing.lg)
-            .background(DS.Color.surface)
-            .cornerRadius(DS.Radius.xl)
-            .dsCardShadow()
-        }
-        .buttonStyle(.plain)
     }
 }

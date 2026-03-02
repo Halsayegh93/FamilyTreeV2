@@ -120,120 +120,112 @@ struct AdminRegisterMemberView: View {
 
     // MARK: - Name Field Section
     private var nameFieldSection: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+        DSCard(padding: 0) {
             DSSectionHeader(title: L10n.t("الاسم الخماسي", "Full Name (5 parts)"), icon: "person.fill")
 
-            DSCard {
-                HStack(spacing: DS.Spacing.sm) {
-                    DSIcon("person.fill", color: DS.Color.primary)
-                    TextField(L10n.t("مثال: حسن أحمد علي محمد السالم", "e.g. John Edward James Smith Jr"), text: $fullName)
-                        .font(DS.Font.body)
-                }
-                .padding(.horizontal, DS.Spacing.md)
-                .padding(.vertical, DS.Spacing.sm)
+            HStack(spacing: DS.Spacing.sm) {
+                DSIcon("person.fill", color: DS.Color.primary)
+                TextField(L10n.t("مثال: حسن أحمد علي محمد السالم", "e.g. John Edward James Smith Jr"), text: $fullName)
+                    .font(DS.Font.body)
             }
+            .padding(.horizontal, DS.Spacing.md)
+            .padding(.vertical, DS.Spacing.sm)
         }
     }
 
     // MARK: - Family Name Section
     private var familyNameSection: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+        DSCard(padding: 0) {
             DSSectionHeader(title: L10n.t("اسم العائلة", "Family Name"), icon: "person.2.fill")
 
-            DSCard {
-                HStack(spacing: DS.Spacing.sm) {
-                    DSIcon("person.2.fill", color: DS.Color.accent)
-                    TextField(L10n.t("مثال: آل محمد علي", "e.g. Al-Mohammad Ali"), text: $familyName)
-                        .font(DS.Font.body)
-                }
-                .padding(.horizontal, DS.Spacing.md)
-                .padding(.vertical, DS.Spacing.sm)
+            HStack(spacing: DS.Spacing.sm) {
+                DSIcon("person.2.fill", color: DS.Color.accent)
+                TextField(L10n.t("مثال: آل محمد علي", "e.g. Al-Mohammad Ali"), text: $familyName)
+                    .font(DS.Font.body)
             }
+            .padding(.horizontal, DS.Spacing.md)
+            .padding(.vertical, DS.Spacing.sm)
         }
     }
 
     // MARK: - Gender Section
     private var genderSection: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+        DSCard(padding: 0) {
             DSSectionHeader(title: L10n.t("الجنس", "Gender"), icon: "figure.dress.line.vertical.figure")
 
-            DSCard {
-                HStack(spacing: DS.Spacing.sm) {
-                    DSIcon("figure.dress.line.vertical.figure", color: DS.Color.neonPurple)
+            HStack(spacing: DS.Spacing.sm) {
+                DSIcon("figure.dress.line.vertical.figure", color: DS.Color.neonPurple)
 
-                    Text(L10n.t("الجنس", "Gender"))
-                        .font(DS.Font.body)
-                        .foregroundColor(DS.Color.textSecondary)
+                Text(L10n.t("الجنس", "Gender"))
+                    .font(DS.Font.body)
+                    .foregroundColor(DS.Color.textSecondary)
 
-                    Spacer()
+                Spacer()
 
-                    Menu {
-                        Button {
-                            selectedGender = "male"
-                        } label: {
-                            Label(L10n.t("ذكر", "Male"), systemImage: selectedGender == "male" ? "checkmark" : "")
-                        }
-                        Button {
-                            selectedGender = "female"
-                        } label: {
-                            Label(L10n.t("أنثى", "Female"), systemImage: selectedGender == "female" ? "checkmark" : "")
-                        }
+                Menu {
+                    Button {
+                        selectedGender = "male"
                     } label: {
-                        HStack(spacing: DS.Spacing.xs) {
-                            Text(selectedGender == "male" ? L10n.t("ذكر", "Male") : L10n.t("أنثى", "Female"))
-                                .font(DS.Font.body)
-                                .foregroundColor(DS.Color.textPrimary)
-                            Image(systemName: "chevron.up.chevron.down")
-                                .font(DS.Font.caption1)
-                                .foregroundColor(DS.Color.textTertiary)
-                        }
-                        .padding(.horizontal, DS.Spacing.md)
-                        .padding(.vertical, DS.Spacing.xs)
-                        .background(DS.Color.surface)
-                        .cornerRadius(DS.Radius.sm)
+                        Label(L10n.t("ذكر", "Male"), systemImage: selectedGender == "male" ? "checkmark" : "")
                     }
+                    Button {
+                        selectedGender = "female"
+                    } label: {
+                        Label(L10n.t("أنثى", "Female"), systemImage: selectedGender == "female" ? "checkmark" : "")
+                    }
+                } label: {
+                    HStack(spacing: DS.Spacing.xs) {
+                        Text(selectedGender == "male" ? L10n.t("ذكر", "Male") : L10n.t("أنثى", "Female"))
+                            .font(DS.Font.body)
+                            .foregroundColor(DS.Color.textPrimary)
+                        Image(systemName: "chevron.up.chevron.down")
+                            .font(DS.Font.caption1)
+                            .foregroundColor(DS.Color.textTertiary)
+                    }
+                    .padding(.horizontal, DS.Spacing.md)
+                    .padding(.vertical, DS.Spacing.xs)
+                    .background(DS.Color.surface)
+                    .cornerRadius(DS.Radius.sm)
                 }
-                .padding(.horizontal, DS.Spacing.md)
-                .padding(.vertical, DS.Spacing.sm)
             }
+            .padding(.horizontal, DS.Spacing.md)
+            .padding(.vertical, DS.Spacing.sm)
         }
     }
 
     // MARK: - Birth Date Section
     private var birthDateSection: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+        DSCard(padding: 0) {
             DSSectionHeader(title: L10n.t("تاريخ الميلاد", "Birth Date"), icon: "calendar")
 
-            DSCard {
-                VStack(spacing: 0) {
+            VStack(spacing: 0) {
+                HStack(spacing: DS.Spacing.sm) {
+                    DSIcon("calendar.badge.checkmark", color: DS.Color.primary)
+                    Text(L10n.t("تاريخ الميلاد متوفر", "Birth date available"))
+                        .font(DS.Font.body)
+                        .foregroundColor(DS.Color.textSecondary)
+                    Spacer()
+                    Toggle("", isOn: $hasBirthDate.animation())
+                        .labelsHidden()
+                        .tint(DS.Color.primary)
+                }
+                .padding(.horizontal, DS.Spacing.md)
+                .padding(.vertical, DS.Spacing.sm)
+
+                if hasBirthDate {
+                    DSDivider()
                     HStack(spacing: DS.Spacing.sm) {
-                        DSIcon("calendar.badge.checkmark", color: DS.Color.primary)
-                        Text(L10n.t("تاريخ الميلاد متوفر", "Birth date available"))
+                        DSIcon("calendar", color: DS.Color.neonPurple)
+                        Text(L10n.t("اختر التاريخ", "Pick Date"))
                             .font(DS.Font.body)
                             .foregroundColor(DS.Color.textSecondary)
                         Spacer()
-                        Toggle("", isOn: $hasBirthDate.animation())
+                        DatePicker("", selection: $birthDate, in: ...Date(), displayedComponents: .date)
                             .labelsHidden()
-                            .tint(DS.Color.primary)
+                            .environment(\.locale, Locale(identifier: "en_US"))
                     }
                     .padding(.horizontal, DS.Spacing.md)
                     .padding(.vertical, DS.Spacing.sm)
-
-                    if hasBirthDate {
-                        DSDivider()
-                        HStack(spacing: DS.Spacing.sm) {
-                            DSIcon("calendar", color: DS.Color.neonPurple)
-                            Text(L10n.t("اختر التاريخ", "Pick Date"))
-                                .font(DS.Font.body)
-                                .foregroundColor(DS.Color.textSecondary)
-                            Spacer()
-                            DatePicker("", selection: $birthDate, in: ...Date(), displayedComponents: .date)
-                                .labelsHidden()
-                                .environment(\.locale, Locale(identifier: "en_US"))
-                        }
-                        .padding(.horizontal, DS.Spacing.md)
-                        .padding(.vertical, DS.Spacing.sm)
-                    }
                 }
             }
         }
@@ -241,47 +233,45 @@ struct AdminRegisterMemberView: View {
 
     // MARK: - Phone Section
     private var phoneSection: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+        DSCard(padding: 0) {
             DSSectionHeader(title: L10n.t("رقم الهاتف (اختياري)", "Phone Number (Optional)"), icon: "phone.fill")
 
-            DSCard {
-                HStack(spacing: DS.Spacing.sm) {
-                    Menu {
-                        ForEach(KuwaitPhone.supportedCountries) { country in
-                            Button {
-                                selectedPhoneCountry = country
-                            } label: {
-                                Text("\(country.flag) \(country.nameArabic) \(country.dialingCode)")
-                            }
+            HStack(spacing: DS.Spacing.sm) {
+                Menu {
+                    ForEach(KuwaitPhone.supportedCountries) { country in
+                        Button {
+                            selectedPhoneCountry = country
+                        } label: {
+                            Text("\(country.flag) \(country.nameArabic) \(country.dialingCode)")
                         }
-                    } label: {
-                        HStack(spacing: 6) {
-                            Text(selectedPhoneCountry.flag)
-                            Text(selectedPhoneCountry.dialingCode).font(DS.Font.caption1)
-                            Image(systemName: "chevron.down")
-                                .font(DS.Font.scaled(10, weight: .semibold))
-                        }
-                        .foregroundColor(DS.Color.textSecondary)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 8)
-                        .background(DS.Color.surface)
-                        .cornerRadius(DS.Radius.sm)
                     }
+                } label: {
+                    HStack(spacing: 6) {
+                        Text(selectedPhoneCountry.flag)
+                        Text(selectedPhoneCountry.dialingCode).font(DS.Font.caption1)
+                        Image(systemName: "chevron.down")
+                            .font(DS.Font.scaled(10, weight: .semibold))
+                    }
+                    .foregroundColor(DS.Color.textSecondary)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
+                    .background(DS.Color.surface)
+                    .cornerRadius(DS.Radius.sm)
+                }
 
-                    TextField(L10n.t("رقم الهاتف", "Phone Number"), text: $phoneNumber)
-                        .keyboardType(.phonePad)
-                        .multilineTextAlignment(.leading)
-                }
-                .padding(.horizontal, DS.Spacing.md)
-                .padding(.vertical, DS.Spacing.sm)
-                .onChange(of: phoneNumber) { _, newValue in
-                    phoneNumber = KuwaitPhone.userTypedDigits(newValue, maxDigits: selectedPhoneCountry.maxDigits)
-                }
-                .onChange(of: selectedPhoneCountry) { _, newCountry in
-                    phoneNumber = KuwaitPhone.userTypedDigits(phoneNumber, maxDigits: newCountry.maxDigits)
-                }
-                .environment(\.layoutDirection, .leftToRight)
+                TextField(L10n.t("رقم الهاتف", "Phone Number"), text: $phoneNumber)
+                    .keyboardType(.phonePad)
+                    .multilineTextAlignment(.leading)
             }
+            .padding(.horizontal, DS.Spacing.md)
+            .padding(.vertical, DS.Spacing.sm)
+            .onChange(of: phoneNumber) { _, newValue in
+                phoneNumber = KuwaitPhone.userTypedDigits(newValue, maxDigits: selectedPhoneCountry.maxDigits)
+            }
+            .onChange(of: selectedPhoneCountry) { _, newCountry in
+                phoneNumber = KuwaitPhone.userTypedDigits(phoneNumber, maxDigits: newCountry.maxDigits)
+            }
+            .environment(\.layoutDirection, .leftToRight)
         }
     }
 

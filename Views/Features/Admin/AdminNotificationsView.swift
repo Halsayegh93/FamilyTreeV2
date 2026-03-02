@@ -25,10 +25,9 @@ struct AdminNotificationsView: View {
                 VStack(spacing: DS.Spacing.xl) {
 
                     // Notification content section
-                    VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                    DSCard(padding: 0) {
                         DSSectionHeader(title: "محتوى الإشعار", icon: "bell.badge")
 
-                        DSCard {
                             VStack(spacing: 0) {
                                 HStack(spacing: DS.Spacing.md) {
                                     Image(systemName: "textformat")
@@ -66,13 +65,11 @@ struct AdminNotificationsView: View {
                             }
                         }
                         .padding(.horizontal, DS.Spacing.lg)
-                    }
 
                     // Targeting section
-                    VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                    DSCard(padding: 0) {
                         DSSectionHeader(title: "الاستهداف", icon: "target")
 
-                        DSCard {
                             VStack(spacing: 0) {
                                 HStack(spacing: DS.Spacing.md) {
                                     Image(systemName: "person.3.fill")
@@ -136,7 +133,6 @@ struct AdminNotificationsView: View {
                             }
                         }
                         .padding(.horizontal, DS.Spacing.lg)
-                    }
 
                     // Send button
                     DSPrimaryButton(

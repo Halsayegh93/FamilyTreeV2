@@ -40,16 +40,41 @@ struct MemberDetailsView: View {
         authVM.currentUser?.role == .admin
     }
 
+    private let photoHeight: CGFloat = 380
+
     var body: some View {
         NavigationStack {
-            ZStack {
+            ZStack(alignment: .top) {
                 DS.Color.background.ignoresSafeArea()
 
-                DSDecorativeBackground()
+                // الصورة الثابتة خلف المحتوى مع تدريج
+                if !member.isDeleted {
+                    GeometryReader { geo in
+                        let minY = geo.frame(in: .global).minY
+                        avatarContent
+                            .frame(width: geo.size.width, height: minY > 0 ? photoHeight + minY : photoHeight)
+                            .clipped()
+                            .overlay(
+                                LinearGradient(
+                                    colors: [
+                                        Color.black.opacity(0.3),
+                                        Color.black.opacity(0.05),
+                                        .clear,
+                                        Color.black.opacity(0.15),
+                                        Color.black.opacity(0.5)
+                                    ],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
+                            .offset(y: minY > 0 ? -minY : 0)
+                    }
+                    .frame(height: photoHeight)
+                    .allowsHitTesting(false)
+                }
 
                 ScrollView(showsIndicators: false) {
-                    VStack(spacing: DS.Spacing.xxl) {
-
+                    VStack(spacing: 0) {
                         if member.isDeleted {
                             // عرض رسالة للعضو المحذوف
                             VStack(spacing: DS.Spacing.xxl) {
@@ -72,13 +97,44 @@ struct MemberDetailsView: View {
                             }
                             .frame(maxWidth: .infinity)
                         } else {
-                            personalInfoTab
+                            // مساحة شفافة بحجم الصورة - الضغط يفتح معاينة الصورة
+                            Color.clear
+                                .frame(height: photoHeight - 100)
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    fullScreenMode = .avatarPreview
+                                }
 
-                            photosTab
+                            // الاسم والبادج فوق الصورة
+                            nameOverlaySection
+                                .padding(.bottom, DS.Spacing.lg)
+
+                            // بطاقات البيانات عائمة فوق الصورة
+                            infoCardsRow
+                                .padding(.horizontal)
+                                .padding(.bottom, DS.Spacing.md)
+
+                            // تدرج للانتقال من الصورة للخلفية
+                            LinearGradient(
+                                colors: [.clear, DS.Color.background.opacity(0.7), DS.Color.background],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                            .frame(height: 50)
+
+                            // المعرض على خلفية صلبة
+                            VStack(spacing: DS.Spacing.md) {
+                                photosTab
+                                Spacer(minLength: 40)
+                            }
+                            .background(DS.Color.background)
                         }
-
-                        Spacer(minLength: 20)
                     }
+                }
+
+                // أزرار فوق الصورة (تعديل + إغلاق)
+                if !member.isDeleted {
+                    floatingButtons
                 }
             }
             .navigationBarHidden(true)
@@ -112,121 +168,68 @@ struct MemberDetailsView: View {
         }
     }
 
-    // MARK: - التبويبات
+    // MARK: - الاسم والبادج العائمة
 
-    private var personalInfoTab: some View {
-        VStack(spacing: DS.Spacing.md) {
-            headerSection
+    private var nameOverlaySection: some View {
+        VStack(spacing: DS.Spacing.sm) {
+            Text(member.fullName)
+                .font(DS.Font.scaled(18, weight: .bold))
+                .foregroundColor(.white)
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+                .padding(.horizontal, DS.Spacing.xl)
+                .padding(.vertical, DS.Spacing.sm + 2)
+                .background(.ultraThinMaterial)
+                .clipShape(Capsule())
+                .shadow(color: .black.opacity(0.2), radius: 8, y: 4)
 
-            HStack(spacing: DS.Spacing.md) {
-                if let birth = member.birthDate, !birth.isEmpty {
-                    let shouldHideBirth = (member.isBirthDateHidden == true) && (member.id != authVM.currentUser?.id) && !isAdminOrSupervisor
-                    if !shouldHideBirth {
-                        modernCompactCard(icon: "calendar", title: L10n.t("الميلاد", "Birth"), value: birth, color: DS.Color.primary)
-                    }
-                }
+            HStack(spacing: DS.Spacing.sm) {
+                Text(member.roleName)
+                    .font(DS.Font.scaled(11, weight: .heavy))
+                    .padding(.horizontal, DS.Spacing.md).padding(.vertical, 5)
+                    .background(.ultraThinMaterial)
+                    .foregroundColor(member.isDeceased == true ? .gray : .white)
+                    .clipShape(Capsule())
 
-                if member.isDeceased == true {
-                    let deathValue = (member.deathDate?.isEmpty == false) ? (member.deathDate ?? L10n.t("رحمه الله", "Rest in peace")) : L10n.t("رحمه الله", "Rest in peace")
-                    modernCompactCard(icon: "heart.fill", title: L10n.t("الوفاة", "Death"), value: deathValue, color: .gray)
-                } else if let phone = member.phoneNumber, !phone.isEmpty {
-                    let shouldHidePhone = (member.isPhoneHidden == true) && (member.id != authVM.currentUser?.id) && !isAdminOrSupervisor // optionally allow admin to view
-                    if !shouldHidePhone {
-                        modernCompactCard(icon: "phone.fill", title: L10n.t("الهاتف", "Phone"), value: KuwaitPhone.display(phone), color: DS.Color.success)
-                    } else {
-                        modernCompactCard(icon: "phone.fill", title: L10n.t("الهاتف", "Phone"), value: L10n.t("مخفي", "Hidden"), color: .gray)
-                    }
-                }
-            }
-            .padding(.horizontal)
-            .padding(.top, DS.Spacing.xxxxl)
-        }
-    }
-
-    // MARK: - قسم الصور المحدث
-    private var photosTab: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            DSSectionHeader(
-                title: L10n.t("المعرض", "Gallery"),
-                icon: "photo.on.rectangle.angled"
-            )
-            .padding(.horizontal)
-
-            DSCard(padding: 0) {
-                NavigationLink(destination: PersonalGalleryView(member: member, isEditable: isAdminOrSupervisor)) {
-                    HStack(spacing: DS.Spacing.md) {
-                        DSIcon("photo.on.rectangle.angled", color: DS.Color.neonBlue)
-
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(L10n.t("معرض الصور الشخصي", "Personal Gallery"))
-                                .font(DS.Font.calloutBold)
-                                .foregroundColor(DS.Color.textPrimary)
-                            Text(L10n.t("عرض صور العضو", "View member photos"))
-                                .font(DS.Font.caption1)
-                                .foregroundColor(DS.Color.textSecondary)
-                        }
-
-                        Spacer()
-
-                        Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
-                            .font(DS.Font.scaled(13, weight: .bold))
-                            .foregroundColor(DS.Color.textTertiary)
-                    }
-                    .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.vertical, DS.Spacing.md)
-                }
-                .buttonStyle(DSBoldButtonStyle())
-            }
-            .padding(.horizontal)
-        }
-    }
-
-    // MARK: - المكونات الفرعية
-
-    private var headerSection: some View {
-        ZStack(alignment: .bottom) {
-            // صورة هيدر كبيرة بدون فراغ علوي
-            Button {
-                fullScreenMode = .avatarPreview
-            } label: {
-                GeometryReader { geo in
-                    avatarContent
-                        .frame(width: geo.size.width, height: 280)
-                        .clipped()
-                        .overlay(
-                            LinearGradient(
-                                colors: [Color.black.opacity(0.15), .clear, .clear, DS.Color.background.opacity(0.5), DS.Color.background],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
-                }
-                .frame(height: 280)
-            }
-            .buttonStyle(.plain)
-
-            // أزرار فوق الصورة
-            VStack {
-                HStack {
-                    // زر التعديل
-                    if isAdminOrSupervisor, !member.isDeleted {
-                        Button { showAdminControl = true } label: {
-                            Image(systemName: "pencil")
-                                .font(DS.Font.scaled(14, weight: .bold))
-                                .foregroundColor(.white)
-                                .padding(10)
-                                .background(.ultraThinMaterial)
-                                .clipShape(Circle())
-                                .shadow(color: .black.opacity(0.3), radius: 4, y: 2)
-                        }
-                    }
-
-                    Spacer()
-
-                    // زر الإغلاق
-                    Button { dismiss() } label: {
-                        Image(systemName: "xmark")
+                if isManager {
+                    Button {
+                        showAvatarPicker = true
+                    } label: {
+                        Image(systemName: "camera.fill")
                             .font(DS.Font.scaled(12, weight: .bold))
+                            .foregroundColor(.white)
+                            .padding(8)
+                            .background(DS.Color.gradientPrimary)
+                            .clipShape(Circle())
+                    }
+
+                    if avatarURL != nil || localAvatarPreviewImage != nil || member.avatarUrl != nil {
+                        Button(role: .destructive) {
+                            showDeleteAvatarAlert = true
+                        } label: {
+                            Image(systemName: "trash")
+                                .font(DS.Font.scaled(11, weight: .bold))
+                                .foregroundColor(.white)
+                                .padding(8)
+                                .background(DS.Color.error)
+                                .clipShape(Circle())
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - أزرار عائمة فوق الصورة
+
+    private var floatingButtons: some View {
+        VStack {
+            HStack {
+                // زر التعديل
+                if isAdminOrSupervisor, !member.isDeleted {
+                    Button { showAdminControl = true } label: {
+                        Image(systemName: "pencil")
+                            .font(DS.Font.scaled(14, weight: .bold))
                             .foregroundColor(.white)
                             .padding(10)
                             .background(.ultraThinMaterial)
@@ -234,76 +237,93 @@ struct MemberDetailsView: View {
                             .shadow(color: .black.opacity(0.3), radius: 4, y: 2)
                     }
                 }
-                .padding(.horizontal, DS.Spacing.lg)
-                .padding(.top, 54)
 
                 Spacer()
-            }
-            .frame(height: 280)
 
-            // الاسم في كبسولة زجاجية
-            VStack(spacing: DS.Spacing.sm) {
-                Text(member.fullName)
-                    .font(DS.Font.scaled(18, weight: .bold))
-                    .foregroundColor(DS.Color.textPrimary)
-                    .multilineTextAlignment(.center)
-                    .lineLimit(2)
-                    .padding(.horizontal, DS.Spacing.xl)
-                    .padding(.vertical, DS.Spacing.sm + 2)
-                    .background(.ultraThinMaterial)
-                    .clipShape(Capsule())
-                    .shadow(color: .black.opacity(0.1), radius: 8, y: 4)
-
-                HStack(spacing: DS.Spacing.sm) {
-                    Text(member.roleName)
-                        .font(DS.Font.scaled(11, weight: .heavy))
-                        .padding(.horizontal, DS.Spacing.md).padding(.vertical, 5)
-                        .background(
-                            Group {
-                                if member.isDeceased == true {
-                                    Color.gray.opacity(0.1)
-                                } else {
-                                    LinearGradient(
-                                        colors: [DS.Color.primary.opacity(0.12), DS.Color.accent.opacity(0.12)],
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    )
-                                }
-                            }
-                        )
-                        .foregroundColor(member.isDeceased == true ? .gray : DS.Color.primary)
-                        .clipShape(Capsule())
-
-                    if isManager {
-                        Button {
-                            showAvatarPicker = true
-                        } label: {
-                            Image(systemName: "camera.fill")
-                                .font(DS.Font.scaled(12, weight: .bold))
-                                .foregroundColor(.white)
-                                .padding(8)
-                                .background(DS.Color.gradientPrimary)
-                                .clipShape(Circle())
-                        }
-
-                        if avatarURL != nil || localAvatarPreviewImage != nil || member.avatarUrl != nil {
-                            Button(role: .destructive) {
-                                showDeleteAvatarAlert = true
-                            } label: {
-                                Image(systemName: "trash")
-                                    .font(DS.Font.scaled(11, weight: .bold))
-                                    .foregroundColor(.white)
-                                    .padding(8)
-                                    .background(DS.Color.error)
-                                    .clipShape(Circle())
-                            }
-                        }
-                    }
+                // زر الإغلاق
+                Button { dismiss() } label: {
+                    Image(systemName: "xmark")
+                        .font(DS.Font.scaled(12, weight: .bold))
+                        .foregroundColor(.white)
+                        .padding(10)
+                        .background(.ultraThinMaterial)
+                        .clipShape(Circle())
+                        .shadow(color: .black.opacity(0.3), radius: 4, y: 2)
                 }
             }
-            .offset(y: 36)
+            .padding(.horizontal, DS.Spacing.lg)
+            .padding(.top, 54)
+
+            Spacer()
         }
     }
+
+    // MARK: - بطاقات البيانات
+
+    private var infoCardsRow: some View {
+        HStack(spacing: DS.Spacing.md) {
+            if let birth = member.birthDate, !birth.isEmpty {
+                let shouldHideBirth = (member.isBirthDateHidden == true) && (member.id != authVM.currentUser?.id) && !isAdminOrSupervisor
+                if shouldHideBirth {
+                    modernCompactCard(icon: "calendar", title: L10n.t("الميلاد", "Birth"), value: L10n.t("مخفي", "Hidden"), color: .gray)
+                } else {
+                    modernCompactCard(icon: "calendar", title: L10n.t("الميلاد", "Birth"), value: birth, color: DS.Color.primary)
+                }
+            }
+
+            if member.isDeceased == true {
+                let deathValue = (member.deathDate?.isEmpty == false) ? (member.deathDate ?? L10n.t("رحمه الله", "Rest in peace")) : L10n.t("رحمه الله", "Rest in peace")
+                modernCompactCard(icon: "heart.fill", title: L10n.t("الوفاة", "Death"), value: deathValue, color: .gray)
+            } else if let phone = member.phoneNumber, !phone.isEmpty {
+                let shouldHidePhone = (member.isPhoneHidden == true) && (member.id != authVM.currentUser?.id) && !isAdminOrSupervisor
+                if !shouldHidePhone {
+                    modernCompactCard(icon: "phone.fill", title: L10n.t("الهاتف", "Phone"), value: KuwaitPhone.display(phone), color: DS.Color.success)
+                } else {
+                    modernCompactCard(icon: "phone.fill", title: L10n.t("الهاتف", "Phone"), value: L10n.t("مخفي", "Hidden"), color: .gray)
+                }
+            }
+        }
+    }
+
+    // MARK: - قسم الصور المحدث
+    private var photosTab: some View {
+        DSCard(padding: 0) {
+            DSSectionHeader(
+                title: L10n.t("المعرض", "Gallery"),
+                icon: "photo.on.rectangle.angled"
+            )
+
+            NavigationLink(destination: PersonalGalleryView(member: member, isEditable: isAdminOrSupervisor)) {
+                HStack(spacing: DS.Spacing.md) {
+                    DSIcon("photo.on.rectangle.angled", color: DS.Color.neonBlue)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(L10n.t("معرض الصور الشخصي", "Personal Gallery"))
+                            .font(DS.Font.calloutBold)
+                            .foregroundColor(DS.Color.textPrimary)
+                        Text(L10n.t("عرض صور العضو", "View member photos"))
+                            .font(DS.Font.caption1)
+                            .foregroundColor(DS.Color.textSecondary)
+                    }
+
+                    Spacer()
+
+                    Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
+                        .font(DS.Font.scaled(11, weight: .bold))
+                        .foregroundColor(DS.Color.textTertiary)
+                        .frame(width: 26, height: 26)
+                        .background(DS.Color.textTertiary.opacity(0.1))
+                        .clipShape(Circle())
+                }
+                .padding(.horizontal, DS.Spacing.lg)
+                .padding(.vertical, DS.Spacing.md)
+            }
+            .buttonStyle(DSBoldButtonStyle())
+        }
+        .padding(.horizontal)
+    }
+
+    // MARK: - المكونات الفرعية
 
     @ViewBuilder
     private var cropperView: some View {
@@ -333,15 +353,16 @@ struct MemberDetailsView: View {
                     img.resizable().scaledToFill()
                 } placeholder: { ProgressView().tint(DS.Color.primary) }
             } else {
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [DS.Color.primary.opacity(0.15), DS.Color.accent.opacity(0.08)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .overlay(Image(systemName: "person.fill").font(DS.Font.scaled(35)).foregroundColor(DS.Color.primary))
+                LinearGradient(
+                    colors: [DS.Color.primary.opacity(0.15), DS.Color.accent.opacity(0.08)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .overlay(
+                    Image(systemName: "person.fill")
+                        .font(DS.Font.scaled(50))
+                        .foregroundColor(DS.Color.primary.opacity(0.4))
+                )
             }
         }
     }

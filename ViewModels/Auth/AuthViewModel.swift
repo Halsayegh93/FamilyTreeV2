@@ -937,7 +937,7 @@ class AuthViewModel: ObservableObject {
             "phone_number": AnyEncodable(storedPhone),
             "is_deceased": AnyEncodable(isDeceased),
             "is_married": AnyEncodable(false),
-            "sort_order": AnyEncodable(currentMemberChildren.count),
+            "sort_order": AnyEncodable(allMembers.filter { $0.fatherId == fatherId }.count),
             "status": AnyEncodable("active")
         ]
         
@@ -948,6 +948,32 @@ class AuthViewModel: ObservableObject {
         
         do {
             try await supabase.from("profiles").insert(newChild).execute()
+            
+            // إضافة فورية للقائمة المحلية لتحديث الواجهة بدون انتظار
+            let optimisticChild = FamilyMember(
+                id: newId,
+                firstName: firstNameOnly,
+                fullName: finalFullName,
+                phoneNumber: storedPhone,
+                birthDate: cleanedBirthDate,
+                deathDate: isDeceased ? cleanedDeathDate : nil,
+                isDeceased: isDeceased,
+                role: .member,
+                fatherId: fatherId,
+                photoURL: nil,
+                isPhoneHidden: false,
+                isHiddenFromTree: false,
+                sortOrder: allMembers.filter { $0.fatherId == fatherId }.count,
+                bio: nil,
+                status: .active,
+                avatarUrl: nil,
+                isMarried: false,
+                gender: gender,
+                createdAt: nil
+            )
+            await MainActor.run {
+                self.allMembers.append(optimisticChild)
+            }
             
             // تسجيل طلب إداري معلوماتي لإشعار الإدارة بإضافة ابن جديد
             let requester = currentUser?.id ?? fatherId
@@ -1503,7 +1529,7 @@ class AuthViewModel: ObservableObject {
     func updateMemberData(
         memberId: UUID,
         fullName: String,
-        phoneNumber: String, // 1. أضفنا البارامتر هنا ✅
+        phoneNumber: String,
         birthDate: Date,
         isMarried: Bool,
         isDeceased: Bool,

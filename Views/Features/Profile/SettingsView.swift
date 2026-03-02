@@ -24,15 +24,11 @@ struct SettingsView: View {
                     VStack(spacing: DS.Spacing.xxl) {
 
                         // MARK: - App Preferences Section
-                        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                            DSSectionHeader(
-                                title: t("تفضيلات التطبيق", "App Preferences"),
-                                icon: "gearshape.2.fill"
-                            )
-
                             DSCard(padding: 0) {
-                                // Gradient accent line at top
-                                
+                                DSSectionHeader(
+                                    title: t("تفضيلات التطبيق", "App Preferences"),
+                                    icon: "gearshape.2.fill"
+                                )
 
                                 // Appearance Row
                                 HStack(spacing: DS.Spacing.md) {
@@ -68,7 +64,7 @@ struct SettingsView: View {
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(t("لغة التطبيق", "App Language"))
                                             .font(DS.Font.calloutBold)
-                                        Text(t("العربية", "Arabic") + " / " + t("الإنجليزية", "English"))
+                                        Text(languageLabel)
                                             .font(DS.Font.caption1)
                                             .foregroundColor(DS.Color.textSecondary)
                                     }
@@ -79,23 +75,21 @@ struct SettingsView: View {
                                         Text(t("الإنجليزية", "English")).tag("en")
                                         Text("العربية").tag("ar")
                                     }
-                                    .pickerStyle(.segmented)
-                                    .frame(width: 160)
+                                    .pickerStyle(.menu)
+                                    .tint(DS.Color.primary)
                                 }
                                 .padding(.horizontal, DS.Spacing.lg)
                                 .padding(.vertical, DS.Spacing.md)
                             }
-                        }
                         .padding(.horizontal, DS.Spacing.lg)
 
                         // MARK: - Information Section
-                        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                            DSSectionHeader(
-                                title: t("معلومات", "Information"),
-                                icon: "info.circle.fill"
-                            )
-
                             DSCard(padding: 0) {
+                                DSSectionHeader(
+                                    title: t("معلومات", "Information"),
+                                    icon: "info.circle.fill"
+                                )
+
                                 Button(action: { showAbout = true }) {
                                     settingActionRow(
                                         title: t("عن التطبيق", "About FamilyTree"),
@@ -116,17 +110,16 @@ struct SettingsView: View {
                                 }
                                 .buttonStyle(DSBoldButtonStyle())
                             }
-                        }
                         .padding(.horizontal, DS.Spacing.lg)
 
                         // MARK: - Danger Zone (Delete Account)
-                        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                            DSSectionHeader(
-                                title: t("منطقة الخطر", "Danger Zone"),
-                                icon: "exclamationmark.triangle.fill"
-                            )
-
                             DSCard(padding: 0) {
+                                DSSectionHeader(
+                                    title: t("منطقة الخطر", "Danger Zone"),
+                                    icon: "exclamationmark.triangle.fill",
+                                    iconColor: DS.Color.error
+                                )
+
                                 Button(action: { showDeleteConfirmation = true }) {
                                     HStack(spacing: DS.Spacing.md) {
                                         DSIcon("trash.fill", color: DS.Color.error)
@@ -151,7 +144,6 @@ struct SettingsView: View {
                                 }
                                 .buttonStyle(DSBoldButtonStyle())
                             }
-                        }
                         .padding(.horizontal, DS.Spacing.lg)
 
                         // Version text (dynamic from Bundle)
@@ -231,6 +223,10 @@ struct SettingsView: View {
         .padding(.horizontal, DS.Spacing.lg)
         .padding(.vertical, DS.Spacing.md)
         .contentShape(Rectangle())
+    }
+
+    private var languageLabel: String {
+        langManager.selectedLanguage == "ar" ? "العربية" : "English"
     }
 
     private var appearanceLabel: String {

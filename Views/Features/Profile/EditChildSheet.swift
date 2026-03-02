@@ -65,24 +65,15 @@ struct EditChildSheet: View {
     }
 
     private var heroHeader: some View {
-        DSCard(padding: 0) {
-            VStack(spacing: DS.Spacing.md) {
-                PhotosPicker(selection: $selectedImageItem, matching: .images) {
+        VStack(spacing: DS.Spacing.md) {
+            PhotosPicker(selection: $selectedImageItem, matching: .images) {
+                ZStack(alignment: .bottomTrailing) {
                     ZStack {
-                        Circle()
-                            .fill(DS.Color.gradientPrimary)
-                            .frame(width: 112, height: 112)
-                            .dsGlowShadow()
-
-                        Circle()
-                            .fill(DS.Color.surface)
-                            .frame(width: 102, height: 102)
-
                         if let image = selectedUIImage {
                             Image(uiImage: image)
                                 .resizable()
                                 .scaledToFill()
-                                .frame(width: 96, height: 96)
+                                .frame(width: 80, height: 80)
                                 .clipShape(Circle())
                         } else if let urlStr = member.avatarUrl, let url = URL(string: urlStr) {
                             AsyncImage(url: url) { image in
@@ -90,39 +81,49 @@ struct EditChildSheet: View {
                             } placeholder: {
                                 ProgressView()
                             }
-                            .frame(width: 96, height: 96)
+                            .frame(width: 80, height: 80)
                             .clipShape(Circle())
                         } else {
-                            ZStack {
-                                Circle()
-                                    .fill(DS.Color.gradientPrimary)
-                                    .frame(width: 50, height: 50)
-                                Image(systemName: "camera.fill")
-                                    .font(DS.Font.scaled(20, weight: .bold))
-                                    .foregroundColor(.white)
-                            }
+                            Circle().fill(DS.Color.surface)
+                                .frame(width: 80, height: 80)
+                                .overlay(
+                                    Image(systemName: "person.fill")
+                                        .font(DS.Font.scaled(30))
+                                        .foregroundColor(DS.Color.textTertiary)
+                                )
                         }
                     }
-                }
-                .buttonStyle(.plain)
+                    .frame(width: 80, height: 80)
+                    .clipShape(Circle())
+                    .overlay(Circle().stroke(DS.Color.primary.opacity(0.3), lineWidth: 2))
 
-                Text(L10n.t("تغيير الصورة الشخصية (اختياري)", "Change Photo (optional)"))
-                    .font(DS.Font.caption1)
-                    .foregroundColor(DS.Color.textSecondary)
+                    ZStack {
+                        Circle()
+                            .fill(DS.Color.gradientPrimary)
+                            .frame(width: 28, height: 28)
+                        Image(systemName: "camera.fill")
+                            .font(DS.Font.scaled(12, weight: .semibold))
+                            .foregroundColor(.white)
+                    }
+                    .overlay(Circle().stroke(DS.Color.surface, lineWidth: 2))
+                    .languageHorizontalOffset(8, y: 8)
+                }
             }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, DS.Spacing.lg)
+            .buttonStyle(.plain)
+
+            Text(L10n.t("تغيير الصورة الشخصية (اختياري)", "Change Photo (optional)"))
+                .font(DS.Font.caption1)
+                .foregroundColor(DS.Color.textSecondary)
         }
     }
 
     private var basicInfoCard: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+        DSCard(padding: 0) {
             DSSectionHeader(
                 title: L10n.t("البيانات الأساسية", "Basic Info"),
                 icon: "person.text.rectangle"
             )
 
-            DSCard(padding: 0) {
                 VStack(spacing: 0) {
                     // Name field
                     HStack(spacing: DS.Spacing.md) {
@@ -242,7 +243,6 @@ struct EditChildSheet: View {
                     }
                 }
             }
-        }
     }
 
     private var submitButton: some View {

@@ -24,11 +24,13 @@ struct AdminMemberDetailSheet: View {
 
     // حالات ترتيب الأبناء
     @State private var localChildren: [FamilyMember] = []
-    @State private var editMode: EditMode = .inactive
+    @State private var isSortMode = false
 
     @State private var showAddSonSheet = false
     @State private var showFatherPicker = false
     @State private var showDeleteConfirmation = false
+    @State private var childToDelete: FamilyMember?
+    @State private var childToEdit: FamilyMember?
 
     private var canManageAccessPermissions: Bool {
         authVM.currentUser?.role == .admin
@@ -71,51 +73,58 @@ struct AdminMemberDetailSheet: View {
         NavigationStack {
             ZStack {
                 DS.Color.background.ignoresSafeArea()
+                DSDecorativeBackground()
 
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: DS.Spacing.sm) {
-                        // ربط العضو بالأب أولاً
-                        adminSection(title: "ربط العضو بالأب", icon: "person.2.fill", color: DS.Color.accent) {
-                            fatherLinkComponent
-                        }
 
-                        compactMemberHeader
+                        // Profile header
+                        memberHeader
+                            .padding(.top, DS.Spacing.sm)
 
-                        adminSection(title: L10n.t("تفعيل الهاتف", "Phone"), icon: "phone.fill", color: DS.Color.success) {
-                            phoneInput
-                        }
+                        // Basic info section
+                        basicInfoSection
 
-                        // قسم الأبناء المحدث
+                        // Father link section
+                        fatherSection
+
+                        // Phone section
+                        phoneSection
+
+                        // Children section
                         childrenSection
 
-                        adminSection(title: L10n.t("تاريخ الميلاد", "Birth Date"), icon: "calendar", color: DS.Color.primary.opacity(0.8)) {
-                            birthDateInput
-                        }
+                        // Birth date & health section
+                        datesSection
 
-                        adminSection(title: L10n.t("الحالة الصحية", "Health Status"), icon: "heart.text.square.fill", color: DS.Color.error) {
-                            deceasedStatusInput
-                        }
-
+                        // Role section
                         if canManageAccessPermissions {
-                            adminSection(title: "صلاحيات الوصول", icon: "shield.fill", color: DS.Color.accent) {
-                                rolePicker
-                            }
+                            roleSection
                         }
 
-                        footerButtons
-
-                        Spacer(minLength: 8)
+                        // Delete button (admin only)
+                        if canManageAccessPermissions {
+                            deleteSection
+                        }
                     }
-                    .padding(.top, DS.Spacing.xs)
+                    .padding(.bottom, DS.Spacing.xxxl)
                 }
             }
-            .navigationTitle("إدارة السجل")
+            .navigationTitle(L10n.t("إدارة السجل", "Member Admin"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(action: saveAction) {
+                        Text(L10n.t("حفظ", "Save"))
+                            .font(DS.Font.caption1)
+                            .fontWeight(.bold)
+                            .foregroundColor(DS.Color.primary)
+                    }
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(L10n.t("إغلاق", "Close")) { dismiss() }
                         .font(DS.Font.caption1)
-                        .foregroundColor(DS.Color.primary)
+                        .foregroundColor(DS.Color.textSecondary)
                 }
             }
             .sheet(isPresented: $showFatherPicker) {
@@ -124,8 +133,14 @@ struct AdminMemberDetailSheet: View {
             .sheet(isPresented: $showAddSonSheet) {
                 AddSonByAdminSheet(parent: member)
             }
+            .sheet(item: $childToEdit) { child in
+                AddSonByAdminSheet(parent: member, editingChild: child)
+            }
             .onAppear { setupLocalChildren() }
-            .alert("حذف نهائي", isPresented: $showDeleteConfirmation) {
+            .onChange(of: authVM.allMembers) { _, _ in
+                setupLocalChildren()
+            }
+            .alert(L10n.t("حذف نهائي", "Permanent Delete"), isPresented: $showDeleteConfirmation) {
                 Button(L10n.t("حذف", "Delete"), role: .destructive) {
                     Task {
                         guard canManageAccessPermissions else { return }
@@ -139,370 +154,560 @@ struct AdminMemberDetailSheet: View {
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
 
-    // MARK: - المكونات الفرعية
+    // MARK: - Member Header (Avatar + Name + Role)
+    private var memberHeader: some View {
+        VStack(spacing: DS.Spacing.xs) {
+            ZStack {
+                Circle()
+                    .fill(DS.Color.surface)
+                    .frame(width: 70, height: 70)
+                    .shadow(color: .black.opacity(0.08), radius: 6, y: 3)
 
-    private var fullNameInput: some View {
-        HStack {
-            TextField(L10n.t("الاسم الكامل", "Full Name"), text: $fullName)
-                .multilineTextAlignment(.leading)
-                .font(DS.Font.body)
-        }
-        .padding(.horizontal, DS.Spacing.md)
-        .padding(.vertical, DS.Spacing.md)
-        .background(DS.Color.surfaceElevated.opacity(0.5))
-        .cornerRadius(DS.Radius.md)
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.Radius.md)
-                .stroke(DS.Color.primary.opacity(0.15), lineWidth: 1)
-        )
-    }
-
-    private var familyNameInput: some View {
-        HStack {
-            TextField(L10n.t("اسم العائلة", "Family Name"), text: $familyName)
-                .multilineTextAlignment(.leading)
-                .font(DS.Font.body)
-        }
-        .padding(.horizontal, DS.Spacing.md)
-        .padding(.vertical, DS.Spacing.md)
-        .background(DS.Color.surfaceElevated.opacity(0.5))
-        .cornerRadius(DS.Radius.md)
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.Radius.md)
-                .stroke(DS.Color.primary.opacity(0.15), lineWidth: 1)
-        )
-    }
-
-    private var birthDateInput: some View {
-        VStack(spacing: DS.Spacing.sm) {
-            Toggle(isOn: $hasBirthDate.animation()) {
-                HStack {
-                    Text(L10n.t("تاريخ الميلاد متوفر", "Birth date available")).font(DS.Font.caption1)
-                    Spacer()
-                }
-            }
-            .tint(DS.Color.primary)
-
-            if hasBirthDate {
-                DSDivider()
-                HStack {
-                    DatePicker("", selection: $birthDate, in: ...Date(), displayedComponents: .date)
-                        .labelsHidden()
-                        .environment(\.locale, Locale(identifier: "en_US"))
-                    Spacer()
-                    Text(L10n.t("اختر التاريخ", "Pick Date")).font(DS.Font.caption1).foregroundColor(DS.Color.textSecondary)
-                }
-            }
-        }
-        .padding(.vertical, DS.Spacing.xs)
-    }
-
-    private var deceasedStatusInput: some View {
-        VStack(spacing: DS.Spacing.sm) {
-            Toggle(isOn: $isDeceased.animation()) {
-                HStack {
-                    Text(L10n.t("متوفي", "Deceased")).font(DS.Font.caption1)
-                    Spacer()
-                }
-            }
-            .tint(DS.Color.error)
-
-            if isDeceased {
-                DSDivider()
-                Toggle(isOn: $hasDeathDate.animation()) {
-                    HStack {
-                        Text(L10n.t("تاريخ الوفاة متوفر", "Death date available")).font(DS.Font.caption1)
-                        Spacer()
-                    }
-                }
-                .tint(DS.Color.error)
-
-                if hasDeathDate {
-                    HStack {
-                        DatePicker("", selection: $deathDate, in: ...Date(), displayedComponents: .date)
-                            .labelsHidden()
-                            .environment(\.locale, Locale(identifier: "en_US"))
-                        Spacer()
-                        Text("تاريخ الوفاة").font(DS.Font.caption1).foregroundColor(DS.Color.textSecondary)
-                    }
-                }
-            }
-        }
-        .padding(.vertical, DS.Spacing.xs)
-    }
-
-    // MARK: - قسم الأبناء مع الترتيب اليدوي الصحيح
-    private var childrenSection: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            HStack {
-                Text(L10n.t("قائمة الأبناء (\(localChildren.count))", "Children (\(localChildren.count))"))
-                    .font(DS.Font.caption1)
-                    .fontWeight(.bold)
-                    .foregroundColor(DS.Color.textSecondary)
-
-                Spacer()
-
-                // زر الترتيب
-                Button(action: {
-                    withAnimation {
-                        editMode = (editMode == .active) ? .inactive : .active
-                    }
-                }) {
-                    HStack(spacing: DS.Spacing.xs) {
-                        Image(systemName: editMode == .active ? "checkmark" : "arrow.up.arrow.down")
-                        Text(editMode == .active ? L10n.t("حفظ", "Save") : L10n.t("ترتيب", "Sort"))
-                    }
-                    .font(DS.Font.caption1)
-                    .fontWeight(.bold)
-                    .foregroundColor(.white)
-                    .padding(.horizontal, DS.Spacing.md).padding(.vertical, DS.Spacing.xs + 2)
-                    .background(
-                        editMode == .active
-                            ? LinearGradient(colors: [DS.Color.success, DS.Color.success], startPoint: .leading, endPoint: .trailing)
-                            : DS.Color.gradientPrimary
-                    )
-                    .cornerRadius(DS.Radius.sm)
-                }
-
-                // زر الإضافة
-                Button(action: { showAddSonSheet = true }) {
-                    HStack(spacing: DS.Spacing.xs) {
-                        Image(systemName: "plus")
-                        Text(L10n.t("إضافة", "Add"))
-                    }
-                    .font(DS.Font.caption1)
-                    .fontWeight(.bold)
-                    .foregroundColor(.white)
-                    .padding(.horizontal, DS.Spacing.md).padding(.vertical, DS.Spacing.xs + 2)
-                    .background(DS.Color.gradientPrimary)
-                    .cornerRadius(DS.Radius.sm)
-                }
-            }
-            .padding(.horizontal, DS.Spacing.lg)
-
-            // القائمة القابلة للسحب
-            VStack(spacing: 0) {
-                if localChildren.isEmpty {
-                    Text("لا يوجد أبناء حالياً")
-                        .font(DS.Font.caption1)
-                        .foregroundColor(DS.Color.textSecondary)
-                        .padding()
-                        .frame(maxWidth: .infinity)
+                if let urlStr = member.avatarUrl, let url = URL(string: urlStr) {
+                    AsyncImage(url: url) { img in img.resizable().scaledToFill() }
+                    placeholder: { ProgressView() }
+                    .frame(width: 62, height: 62).clipShape(Circle())
                 } else {
-                    List {
-                        ForEach(localChildren, id: \.id) { child in
-                            HStack {
-                                Text(child.firstName)
-                                    .font(DS.Font.caption1)
-
-                                Spacer()
-                            }
-                            .listRowBackground(DS.Color.surface)
-                        }
-                        .onMove(perform: moveChild)
-                    }
-                    .listStyle(.plain)
-                    .frame(height: CGFloat(min(localChildren.count * 38, 260)))
-                    .environment(\.editMode, $editMode)
-                }
-            }
-            .background(DS.Color.surface)
-            .cornerRadius(DS.Radius.lg)
-            .dsCardShadow()
-            .padding(.horizontal, DS.Spacing.md)
-        }
-    }
-
-    private var compactMemberHeader: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-            HStack(spacing: DS.Spacing.xs + 2) {
-                Image(systemName: "person.text.rectangle")
-                    .foregroundColor(.white)
-                    .font(DS.Font.scaled(10))
-                    .frame(width: 20, height: 20)
-                    .background(
-                        LinearGradient(
-                            colors: [DS.Color.primary, DS.Color.accent],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
+                    Circle()
+                        .fill(DS.Color.background)
+                        .frame(width: 62, height: 62)
+                        .overlay(
+                            Text(String(member.fullName.prefix(1)))
+                                .font(DS.Font.scaled(26, weight: .bold))
+                                .foregroundColor(DS.Color.primary)
                         )
-                    )
-                    .clipShape(Circle())
-                Text(L10n.t("البيانات الأساسية", "Basic Information"))
-                    .font(DS.Font.caption1)
-                    .fontWeight(.bold)
-                    .foregroundColor(DS.Color.textSecondary)
-                Spacer()
-            }
-            .padding(.horizontal, DS.Spacing.lg)
-
-            DSCard(padding: DS.Spacing.sm) {
-                VStack(alignment: .leading, spacing: DS.Spacing.xs + 2) {
-                    HStack(spacing: DS.Spacing.sm) {
-                        Circle()
-                            .fill(DS.Color.gradientPrimary)
-                            .frame(width: 36, height: 36)
-                            .overlay(
-                                Text(fullName.prefix(1))
-                                    .font(DS.Font.caption1)
-                                    .foregroundColor(.white)
-                            )
-                            .dsGlowShadow()
-                            .offset(x: 1)
-
-                        VStack(alignment: .trailing, spacing: 1) {
-                            Text(fullName)
-                                .font(DS.Font.caption1)
-                            Text("تعديل البيانات والصلاحيات")
-                                .font(DS.Font.scaled(10))
-                                .foregroundColor(DS.Color.textSecondary)
-                        }
-                        Spacer()
-                    }
-
-                    fullNameInput
-                    familyNameInput
                 }
             }
-            .padding(.horizontal, DS.Spacing.md)
-        }
-    }
 
-    private var fatherLinkComponent: some View {
-        HStack {
-            Button(action: { showFatherPicker = true }) {
-                Text("تغيير")
-                    .font(DS.Font.caption1)
-                    .fontWeight(.bold)
-                    .foregroundColor(DS.Color.primary)
-            }
-            Spacer()
-            if let fId = selectedFatherId, let father = authVM.allMembers.first(where: { $0.id == fId }) {
-                Text(father.fullName).font(DS.Font.caption1).fontWeight(.bold)
-            } else {
-                Text("رأس شجرة (غير مرتبط)").font(DS.Font.caption1).foregroundColor(DS.Color.textSecondary)
+            VStack(spacing: 2) {
+                Text(member.fullName)
+                    .font(DS.Font.headline)
+                    .foregroundColor(DS.Color.textPrimary)
+                    .multilineTextAlignment(.center)
+
+                DSRoleBadge(title: member.roleName, color: member.roleColor)
             }
         }
-        .padding(.horizontal, DS.Spacing.sm)
-        .padding(.vertical, DS.Spacing.xs + 2)
-        .background(DS.Color.surfaceElevated.opacity(0.5))
-        .cornerRadius(DS.Radius.md)
     }
 
-    private var phoneInput: some View {
-        HStack {
-            Menu {
-                ForEach(KuwaitPhone.supportedCountries) { country in
-                    Button {
-                        selectedPhoneCountry = country
-                    } label: {
-                        Text("\(country.flag) \(country.nameArabic) \(country.dialingCode)")
-                    }
-                }
-            } label: {
-                HStack(spacing: 6) {
-                    Text(selectedPhoneCountry.flag)
-                    Text(selectedPhoneCountry.dialingCode)
-                        .font(DS.Font.caption1)
-                    Image(systemName: "chevron.down")
-                        .font(DS.Font.scaled(10, weight: .semibold))
-                }
-                .foregroundColor(DS.Color.textSecondary)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 8)
-                .background(DS.Color.surface)
-                .cornerRadius(DS.Radius.sm)
-            }
+    // MARK: - Basic Info Section
+    private var basicInfoSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            DSCard(padding: 0) {
+                DSSectionHeader(
+                    title: L10n.t("البيانات الأساسية", "Basic Information"),
+                    icon: "person.text.rectangle.fill",
+                    iconColor: DS.Color.primary
+                )
 
-            TextField(L10n.t("رقم الهاتف", "Phone Number"), text: $phoneNumber)
-                .keyboardType(.numberPad)
-                .multilineTextAlignment(.leading)
-                .font(DS.Font.caption1)
-        }
-        .onChange(of: phoneNumber) { _, newValue in
-            phoneNumber = KuwaitPhone.userTypedDigits(newValue, maxDigits: selectedPhoneCountry.maxDigits)
-        }
-        .onChange(of: selectedPhoneCountry) { _, newCountry in
-            phoneNumber = KuwaitPhone.userTypedDigits(phoneNumber, maxDigits: newCountry.maxDigits)
-        }
-        .environment(\.layoutDirection, .leftToRight)
-        .padding(.horizontal, DS.Spacing.sm)
-        .padding(.vertical, DS.Spacing.xs + 2)
-        .background(DS.Color.surfaceElevated.opacity(0.5))
-        .cornerRadius(DS.Radius.md)
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.Radius.md)
-                .stroke(DS.Color.primary.opacity(0.15), lineWidth: 1)
-        )
-    }
+                formField(
+                    icon: "person.fill",
+                    color: DS.Color.primary,
+                    placeholder: L10n.t("الاسم الكامل", "Full Name"),
+                    text: $fullName
+                )
 
-    private var rolePicker: some View {
-        Picker("الرتبة", selection: $selectedRole) {
-            Text(L10n.t("الإدارة", "Admin")).tag(FamilyMember.UserRole.admin)
-            Text(L10n.t("مشرف", "Supervisor")).tag(FamilyMember.UserRole.supervisor)
-            Text(L10n.t("عضو", "Member")).tag(FamilyMember.UserRole.member)
-        }
-        .pickerStyle(.segmented)
-        .tint(DS.Color.primary)
-    }
+                DSDivider()
 
-    private var footerButtons: some View {
-        VStack(spacing: DS.Spacing.sm) {
-            DSPrimaryButton(
-                L10n.t("حفظ التغييرات", "Save Changes"),
-                isLoading: authVM.isLoading,
-                action: saveAction
-            )
-
-            if canManageAccessPermissions {
-                Button("حذف السجل") { showDeleteConfirmation = true }
-                    .font(DS.Font.caption1)
-                    .fontWeight(.bold)
-                    .foregroundColor(DS.Color.error)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 44)
-                    .background(DS.Color.error.opacity(0.06))
-                    .cornerRadius(DS.Radius.md)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: DS.Radius.md)
-                            .stroke(DS.Color.error.opacity(0.2), lineWidth: 1)
-                    )
+                formField(
+                    icon: "person.2.fill",
+                    color: DS.Color.accent,
+                    placeholder: L10n.t("اسم العائلة", "Family Name"),
+                    text: $familyName
+                )
             }
         }
         .padding(.horizontal, DS.Spacing.lg)
-        .padding(.top, DS.Spacing.xs)
     }
 
-    private func adminSection<Content: View>(title: String, icon: String, color: Color, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-            HStack(spacing: DS.Spacing.xs + 2) {
-                Image(systemName: icon)
-                    .foregroundColor(.white)
-                    .font(DS.Font.scaled(10))
-                    .frame(width: 20, height: 20)
-                    .background(
-                        LinearGradient(
-                            colors: [DS.Color.primary, DS.Color.accent],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
+    // MARK: - Father Section
+    private var fatherSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            DSCard(padding: 0) {
+                DSSectionHeader(
+                    title: L10n.t("ربط العضو بالأب", "Parent Link"),
+                    icon: "link",
+                    iconColor: DS.Color.accent
+                )
+
+                Button(action: { showFatherPicker = true }) {
+                    HStack(spacing: DS.Spacing.sm) {
+                        DSIcon("person.line.dotted.person.fill", color: DS.Color.accent, size: iconSm, iconSize: iconFontSm)
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(L10n.t("الأب في الشجرة", "Father in Tree"))
+                                .font(DS.Font.caption2)
+                                .foregroundColor(DS.Color.textTertiary)
+
+                            if let fId = selectedFatherId, let father = authVM.allMembers.first(where: { $0.id == fId }) {
+                                Text(father.fullName)
+                                    .font(DS.Font.calloutBold)
+                                    .foregroundColor(DS.Color.textPrimary)
+                            } else {
+                                Text(L10n.t("رأس شجرة (غير مرتبط)", "Tree root (unlinked)"))
+                                    .font(DS.Font.callout)
+                                    .foregroundColor(DS.Color.textSecondary)
+                            }
+                        }
+
+                        Spacer()
+
+                        Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
+                            .font(DS.Font.scaled(11, weight: .bold))
+                            .foregroundColor(DS.Color.textTertiary)
+                            .frame(width: 24, height: 24)
+                            .background(DS.Color.textTertiary.opacity(0.1))
+                            .clipShape(Circle())
+                    }
+                    .padding(.horizontal, DS.Spacing.md)
+                    .padding(.vertical, DS.Spacing.sm)
+                }
+                .buttonStyle(DSBoldButtonStyle())
+            }
+        }
+        .padding(.horizontal, DS.Spacing.lg)
+    }
+
+    // MARK: - Phone Section
+    private var phoneSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            DSCard(padding: 0) {
+                DSSectionHeader(
+                    title: L10n.t("رقم الهاتف", "Phone Number"),
+                    icon: "phone.fill",
+                    iconColor: DS.Color.success
+                )
+
+                HStack(spacing: DS.Spacing.sm) {
+                    Menu {
+                        ForEach(KuwaitPhone.supportedCountries) { country in
+                            Button {
+                                selectedPhoneCountry = country
+                            } label: {
+                                Text("\(country.flag) \(country.nameArabic) \(country.dialingCode)")
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text(selectedPhoneCountry.flag)
+                            Text(selectedPhoneCountry.dialingCode)
+                                .font(DS.Font.caption1)
+                            Image(systemName: "chevron.down")
+                                .font(DS.Font.scaled(9, weight: .semibold))
+                        }
+                        .foregroundColor(DS.Color.textSecondary)
+                        .padding(.horizontal, DS.Spacing.sm)
+                        .padding(.vertical, DS.Spacing.xs)
+                        .background(DS.Color.surfaceElevated.opacity(0.5))
+                        .clipShape(Capsule())
+                    }
+
+                    TextField(L10n.t("رقم الهاتف", "Phone Number"), text: $phoneNumber)
+                        .keyboardType(.numberPad)
+                        .multilineTextAlignment(.leading)
+                        .font(DS.Font.callout)
+
+                    DSIcon("phone.fill", color: DS.Color.success, size: iconSm, iconSize: iconFontSm)
+                }
+                .padding(.horizontal, DS.Spacing.md)
+                .padding(.vertical, DS.Spacing.sm)
+                .environment(\.layoutDirection, .leftToRight)
+                .onChange(of: phoneNumber) { _, newValue in
+                    phoneNumber = KuwaitPhone.userTypedDigits(newValue, maxDigits: selectedPhoneCountry.maxDigits)
+                }
+                .onChange(of: selectedPhoneCountry) { _, newCountry in
+                    phoneNumber = KuwaitPhone.userTypedDigits(phoneNumber, maxDigits: newCountry.maxDigits)
+                }
+            }
+        }
+        .padding(.horizontal, DS.Spacing.lg)
+    }
+
+    // MARK: - Children Section
+    private var childrenSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            DSCard(padding: 0) {
+                // Header with sort button
+                HStack {
+                    DSSectionHeader(
+                        title: L10n.t("الأبناء", "Children"),
+                        icon: "person.2.fill",
+                        trailing: localChildren.isEmpty ? nil : "\(localChildren.count)",
+                        iconColor: DS.Color.success
                     )
-                    .clipShape(Circle())
-                Text(title)
-                    .font(DS.Font.caption1)
-                    .fontWeight(.bold)
-                    .foregroundColor(DS.Color.textSecondary)
+
+                    if !localChildren.isEmpty {
+                        Spacer()
+
+                        Button {
+                            withAnimation(DS.Anim.snappy) { isSortMode.toggle() }
+                        } label: {
+                            HStack(spacing: DS.Spacing.xs) {
+                                Image(systemName: isSortMode ? "checkmark" : "arrow.up.arrow.down")
+                                Text(isSortMode ? L10n.t("تم", "Done") : L10n.t("ترتيب", "Sort"))
+                            }
+                            .font(DS.Font.caption2)
+                            .fontWeight(.bold)
+                            .foregroundColor(isSortMode ? DS.Color.success : DS.Color.primary)
+                            .padding(.horizontal, DS.Spacing.sm)
+                            .padding(.vertical, DS.Spacing.xs)
+                            .background((isSortMode ? DS.Color.success : DS.Color.primary).opacity(0.1))
+                            .clipShape(Capsule())
+                        }
+                        .padding(.trailing, DS.Spacing.md)
+                    }
+                }
+
+                if localChildren.isEmpty {
+                    VStack(spacing: DS.Spacing.xs) {
+                        Image(systemName: "person.2.slash")
+                            .font(DS.Font.scaled(24))
+                            .foregroundColor(DS.Color.textTertiary)
+                        Text(L10n.t("لا يوجد أبناء حالياً", "No children yet"))
+                            .font(DS.Font.caption1)
+                            .foregroundColor(DS.Color.textSecondary)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(DS.Spacing.md)
+                } else {
+                    let columns = [GridItem(.flexible()), GridItem(.flexible())]
+                    LazyVGrid(columns: columns, spacing: DS.Spacing.sm) {
+                        ForEach(localChildren, id: \.id) { child in
+                            childGridCell(child: child)
+                        }
+
+                        // Add child as last grid cell
+                        Button { showAddSonSheet = true } label: {
+                            HStack(spacing: DS.Spacing.xs) {
+                                Image(systemName: "plus")
+                                    .font(DS.Font.scaled(13, weight: .bold))
+                                    .foregroundColor(DS.Color.success)
+                                    .frame(width: 28, height: 28)
+                                    .background(DS.Color.success.opacity(0.12))
+                                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
+
+                                Text(L10n.t("إضافة", "Add"))
+                                    .font(DS.Font.caption2)
+                                    .fontWeight(.bold)
+                                    .foregroundColor(DS.Color.success)
+                                    .lineLimit(1)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(DS.Spacing.xs + 2)
+                            .background(DS.Color.surface)
+                            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                                    .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [5]))
+                                    .foregroundColor(DS.Color.success.opacity(0.3))
+                            )
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    }
+                    .padding(.horizontal, DS.Spacing.md)
+                    .padding(.bottom, DS.Spacing.md)
+                }
+            }
+            .alert(L10n.t("حذف الابن", "Delete Child"), isPresented: Binding(
+                get: { childToDelete != nil },
+                set: { if !$0 { childToDelete = nil } }
+            )) {
+                Button(L10n.t("حذف", "Delete"), role: .destructive) {
+                    if let child = childToDelete {
+                        Task {
+                            await authVM.rejectOrDeleteMember(memberId: child.id)
+                            localChildren.removeAll { $0.id == child.id }
+                            childToDelete = nil
+                        }
+                    }
+                }
+                Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { childToDelete = nil }
+            } message: {
+                if let child = childToDelete {
+                    Text(L10n.t("هل أنت متأكد من حذف \(child.firstName)؟", "Are you sure you want to delete \(child.firstName)?"))
+                }
+            }
+        }
+        .padding(.horizontal, DS.Spacing.lg)
+    }
+
+    private func childGridCell(child: FamilyMember) -> some View {
+        let isChildDeceased = child.isDeceased ?? false
+        let iconName = isChildDeceased ? "person.fill.xmark" : "person.fill"
+        let iconColor = isChildDeceased ? DS.Color.error : DS.Color.primary
+        let childIndex = localChildren.firstIndex(where: { $0.id == child.id })
+
+        return ZStack(alignment: .topTrailing) {
+            Button {
+                if !isSortMode {
+                    childToEdit = child
+                }
+            } label: {
+                HStack(spacing: DS.Spacing.xs) {
+                    if isSortMode {
+                        // Sort arrows
+                        VStack(spacing: 2) {
+                            Button {
+                                if let i = childIndex, i > 0 {
+                                    withAnimation(DS.Anim.snappy) {
+                                        localChildren.swapAt(i, i - 1)
+                                    }
+                                }
+                            } label: {
+                                Image(systemName: "chevron.up")
+                                    .font(DS.Font.scaled(9, weight: .bold))
+                                    .foregroundColor(childIndex == 0 ? DS.Color.textTertiary.opacity(0.3) : DS.Color.primary)
+                            }
+                            .disabled(childIndex == 0)
+
+                            Button {
+                                if let i = childIndex, i < localChildren.count - 1 {
+                                    withAnimation(DS.Anim.snappy) {
+                                        localChildren.swapAt(i, i + 1)
+                                    }
+                                }
+                            } label: {
+                                Image(systemName: "chevron.down")
+                                    .font(DS.Font.scaled(9, weight: .bold))
+                                    .foregroundColor(childIndex == localChildren.count - 1 ? DS.Color.textTertiary.opacity(0.3) : DS.Color.primary)
+                            }
+                            .disabled(childIndex == localChildren.count - 1)
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    }
+
+                    Image(systemName: iconName)
+                        .font(DS.Font.scaled(13, weight: .bold))
+                        .foregroundColor(iconColor)
+                        .frame(width: 28, height: 28)
+                        .background(iconColor.opacity(0.12))
+                        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
+
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(child.firstName)
+                            .font(DS.Font.caption1)
+                            .fontWeight(.bold)
+                            .foregroundColor(DS.Color.textPrimary)
+                            .lineLimit(1)
+
+                        if let birth = child.birthDate, !birth.isEmpty {
+                            Text(birth)
+                                .font(DS.Font.caption2)
+                                .foregroundColor(DS.Color.textSecondary)
+                                .lineLimit(1)
+                        }
+                    }
+
+                    if !isSortMode {
+                        Spacer()
+                        Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
+                            .font(DS.Font.scaled(9, weight: .bold))
+                            .foregroundColor(DS.Color.textTertiary)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(DS.Spacing.xs + 2)
+                .background(DS.Color.surface)
+                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                        .stroke(isSortMode ? DS.Color.primary.opacity(0.3) : iconColor.opacity(0.15), lineWidth: 1)
+                )
+            }
+            .buttonStyle(DSBoldButtonStyle())
+            .disabled(isSortMode)
+
+            // Delete button
+            if !isSortMode {
+                Button {
+                    childToDelete = child
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(DS.Font.scaled(16))
+                        .foregroundColor(DS.Color.error.opacity(0.7))
+                        .background(DS.Color.surface)
+                        .clipShape(Circle())
+                }
+                .buttonStyle(PlainButtonStyle())
+                .offset(x: 6, y: -6)
+            }
+        }
+    }
+
+    // MARK: - Dates Section (Birth + Deceased)
+    private var datesSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            DSCard(padding: 0) {
+                DSSectionHeader(
+                    title: L10n.t("التواريخ والحالة", "Dates & Status"),
+                    icon: "calendar",
+                    iconColor: DS.Color.warning
+                )
+
+                // Birth date toggle
+                HStack(spacing: DS.Spacing.sm) {
+                    DSIcon("calendar", color: DS.Color.primary, size: iconSm, iconSize: iconFontSm)
+
+                    Text(L10n.t("تاريخ الميلاد متوفر", "Birth date available"))
+                        .font(DS.Font.callout)
+                        .foregroundColor(DS.Color.textPrimary)
+
+                    Spacer()
+
+                    Toggle("", isOn: $hasBirthDate.animation())
+                        .labelsHidden()
+                        .tint(DS.Color.primary)
+                }
+                .padding(.horizontal, DS.Spacing.md)
+                .padding(.vertical, DS.Spacing.sm)
+
+                if hasBirthDate {
+                    DSDivider()
+                    HStack(spacing: DS.Spacing.sm) {
+                        DSIcon("calendar.badge.clock", color: DS.Color.info, size: iconSm, iconSize: iconFontSm)
+
+                        DatePicker("", selection: $birthDate, in: ...Date(), displayedComponents: .date)
+                            .labelsHidden()
+                            .environment(\.locale, Locale(identifier: "en_US"))
+
+                        Spacer()
+
+                        Text(L10n.t("اختر التاريخ", "Pick Date"))
+                            .font(DS.Font.caption1)
+                            .foregroundColor(DS.Color.textSecondary)
+                    }
+                    .padding(.horizontal, DS.Spacing.md)
+                    .padding(.vertical, DS.Spacing.sm)
+                }
+
+                DSDivider()
+
+                // Deceased toggle
+                HStack(spacing: DS.Spacing.sm) {
+                    DSIcon("heart.text.square.fill", color: DS.Color.error, size: iconSm, iconSize: iconFontSm)
+
+                    Text(L10n.t("متوفي", "Deceased"))
+                        .font(DS.Font.callout)
+                        .foregroundColor(DS.Color.textPrimary)
+
+                    Spacer()
+
+                    Toggle("", isOn: $isDeceased.animation())
+                        .labelsHidden()
+                        .tint(DS.Color.error)
+                }
+                .padding(.horizontal, DS.Spacing.md)
+                .padding(.vertical, DS.Spacing.sm)
+
+                if isDeceased {
+                    DSDivider()
+
+                    HStack(spacing: DS.Spacing.sm) {
+                        DSIcon("calendar.badge.minus", color: DS.Color.error, size: iconSm, iconSize: iconFontSm)
+
+                        Text(L10n.t("تاريخ الوفاة متوفر", "Death date available"))
+                            .font(DS.Font.callout)
+                            .foregroundColor(DS.Color.textPrimary)
+
+                        Spacer()
+
+                        Toggle("", isOn: $hasDeathDate.animation())
+                            .labelsHidden()
+                            .tint(DS.Color.error)
+                    }
+                    .padding(.horizontal, DS.Spacing.md)
+                    .padding(.vertical, DS.Spacing.sm)
+
+                    if hasDeathDate {
+                        DSDivider()
+                        HStack(spacing: DS.Spacing.sm) {
+                            DSIcon("calendar.badge.exclamationmark", color: DS.Color.error, size: iconSm, iconSize: iconFontSm)
+
+                            DatePicker("", selection: $deathDate, in: ...Date(), displayedComponents: .date)
+                                .labelsHidden()
+                                .environment(\.locale, Locale(identifier: "en_US"))
+
+                            Spacer()
+
+                            Text(L10n.t("تاريخ الوفاة", "Death Date"))
+                                .font(DS.Font.caption1)
+                                .foregroundColor(DS.Color.textSecondary)
+                        }
+                        .padding(.horizontal, DS.Spacing.md)
+                        .padding(.vertical, DS.Spacing.sm)
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, DS.Spacing.lg)
+    }
+
+    // MARK: - Role Section
+    private var roleSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            DSCard(padding: 0) {
+                DSSectionHeader(
+                    title: L10n.t("صلاحيات الوصول", "Access Permissions"),
+                    icon: "shield.fill",
+                    iconColor: DS.Color.neonPurple
+                )
+
+                Picker("", selection: $selectedRole) {
+                    Text(L10n.t("الإدارة", "Admin")).tag(FamilyMember.UserRole.admin)
+                    Text(L10n.t("مشرف", "Supervisor")).tag(FamilyMember.UserRole.supervisor)
+                    Text(L10n.t("عضو", "Member")).tag(FamilyMember.UserRole.member)
+                }
+                .pickerStyle(.segmented)
+                .tint(DS.Color.primary)
+                .padding(.horizontal, DS.Spacing.md)
+                .padding(.vertical, DS.Spacing.sm)
+            }
+        }
+        .padding(.horizontal, DS.Spacing.lg)
+    }
+
+    // MARK: - Delete Section
+    private var deleteSection: some View {
+        Button {
+            showDeleteConfirmation = true
+        } label: {
+            HStack(spacing: DS.Spacing.sm) {
+                DSIcon("trash", color: DS.Color.error, size: iconSm, iconSize: iconFontSm)
+
+                Text(L10n.t("حذف السجل", "Delete Record"))
+                    .font(DS.Font.calloutBold)
+                    .foregroundColor(DS.Color.error)
+
                 Spacer()
             }
-            .padding(.horizontal, DS.Spacing.lg)
-
-            DSCard(padding: DS.Spacing.sm) {
-                VStack { content() }
-                    .padding(.horizontal, DS.Spacing.xs)
-                    .padding(.vertical, DS.Spacing.xs)
-            }
             .padding(.horizontal, DS.Spacing.md)
+            .padding(.vertical, DS.Spacing.sm)
+            .background(DS.Color.error.opacity(0.06))
+            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                    .stroke(DS.Color.error.opacity(0.2), lineWidth: 1)
+            )
         }
+        .buttonStyle(DSBoldButtonStyle())
+        .padding(.horizontal, DS.Spacing.lg)
+    }
+
+    // MARK: - Helpers
+    private let iconSm: CGFloat = 30
+    private let iconFontSm: CGFloat = 13
+
+    private func formField(icon: String, color: Color, placeholder: String, text: Binding<String>) -> some View {
+        HStack(spacing: DS.Spacing.sm) {
+            DSIcon(icon, color: color, size: iconSm, iconSize: iconFontSm)
+
+            TextField(placeholder, text: text)
+                .font(DS.Font.callout)
+                .foregroundColor(DS.Color.textPrimary)
+                .multilineTextAlignment(.leading)
+        }
+        .padding(.horizontal, DS.Spacing.md)
+        .padding(.vertical, DS.Spacing.sm)
     }
 
     private func setupLocalChildren() {
@@ -511,60 +716,62 @@ struct AdminMemberDetailSheet: View {
             .sorted(by: { ($0.sortOrder ?? 0) < ($1.sortOrder ?? 0) })
     }
 
-    // دالة التحريك وتحديث الترتيب محلياً
-    private func moveChild(from source: IndexSet, to destination: Int) {
-        localChildren.move(fromOffsets: source, toOffset: destination)
-    }
-
     private func saveAction() {
+        // Capture all values before dismiss
+        let capturedMemberId = member.id
+        let capturedIsAdmin = canManageAccessPermissions
+        let capturedRole = selectedRole
+        let capturedPhoneCountry = selectedPhoneCountry
+        let capturedPhone = phoneNumber
+        let capturedFatherId = selectedFatherId
+        let capturedBirthDate = hasBirthDate ? birthDate : nil
+        let capturedIsDeceased = isDeceased
+        let capturedDeathDate = (isDeceased && hasDeathDate) ? deathDate : nil
+        let capturedChildren = localChildren
+
+        let cleanFamily = familyName.trimmingCharacters(in: .whitespacesAndNewlines)
+        var finalFullName = fullName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !cleanFamily.isEmpty && !finalFullName.hasSuffix(cleanFamily) {
+            let parts = finalFullName.split(whereSeparator: \.isWhitespace).map(String.init)
+            if parts.count > 1 {
+                let nameWithoutLast = parts.dropLast().joined(separator: " ")
+                finalFullName = nameWithoutLast + " " + cleanFamily
+            } else {
+                finalFullName = finalFullName + " " + cleanFamily
+            }
+        }
+        let capturedFullName = finalFullName
+        let vm = authVM
+
+        // Dismiss immediately for snappy UX
+        dismiss()
+
+        // Fire-and-forget: all updates run in background
         Task {
-            let finalBirthDate = hasBirthDate ? birthDate : nil
-            let finalDeathDate = (isDeceased && hasDeathDate) ? deathDate : nil
-
-            // إضافة اسم العائلة في نهاية الاسم الكامل إذا لم يكن موجود
-            let cleanFamily = familyName.trimmingCharacters(in: .whitespacesAndNewlines)
-            var finalFullName = fullName.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !cleanFamily.isEmpty && !finalFullName.hasSuffix(cleanFamily) {
-                // إزالة اسم العائلة القديم إن وُجد ثم إضافة الجديد
-                let parts = finalFullName.split(whereSeparator: \.isWhitespace).map(String.init)
-                // نعتبر الاسم الكامل بدون آخر كلمة + اسم العائلة الجديد
-                if parts.count > 1 {
-                    let nameWithoutLast = parts.dropLast().joined(separator: " ")
-                    finalFullName = nameWithoutLast + " " + cleanFamily
-                } else {
-                    finalFullName = finalFullName + " " + cleanFamily
-                }
+            await vm.updateMemberName(memberId: capturedMemberId, fullName: capturedFullName)
+            if capturedIsAdmin {
+                await vm.updateMemberRole(memberId: capturedMemberId, newRole: capturedRole)
             }
-
-            await authVM.updateMemberName(memberId: member.id, fullName: finalFullName)
-            if canManageAccessPermissions {
-                await authVM.updateMemberRole(memberId: member.id, newRole: selectedRole)
-            }
-            await authVM.updateMemberPhone(
-                memberId: member.id,
-                country: selectedPhoneCountry,
-                localPhone: phoneNumber
+            await vm.updateMemberPhone(
+                memberId: capturedMemberId,
+                country: capturedPhoneCountry,
+                localPhone: capturedPhone
             )
-            await authVM.updateMemberFather(memberId: member.id, fatherId: selectedFatherId)
-
-            await authVM.updateMemberHealthAndBirth(
-                memberId: member.id,
-                birthDate: finalBirthDate,
-                isDeceased: isDeceased,
-                deathDate: finalDeathDate
+            await vm.updateMemberFather(memberId: capturedMemberId, fatherId: capturedFatherId)
+            await vm.updateMemberHealthAndBirth(
+                memberId: capturedMemberId,
+                birthDate: capturedBirthDate,
+                isDeceased: capturedIsDeceased,
+                deathDate: capturedDeathDate
             )
 
-            // تحديث أرقام الترتيب (sortOrder) قبل الإرسال للقاعدة
-            if !localChildren.isEmpty {
-                var updatedChildren = localChildren
+            if !capturedChildren.isEmpty {
+                var updatedChildren = capturedChildren
                 for i in 0..<updatedChildren.count {
                     updatedChildren[i].sortOrder = i
                 }
-
-                await authVM.updateChildrenOrder(for: member.id, newOrder: updatedChildren)
+                await vm.updateChildrenOrder(for: capturedMemberId, newOrder: updatedChildren)
             }
-
-            dismiss()
         }
     }
 }
@@ -577,33 +784,131 @@ struct FatherPickerSheet: View {
     @State private var searchText = ""
 
     var filteredMembers: [FamilyMember] {
-        if searchText.isEmpty { return authVM.allMembers.sorted { $0.fullName < $1.fullName } }
-        return authVM.allMembers.filter { $0.fullName.contains(searchText) }
+        let sorted = authVM.allMembers.sorted { $0.fullName < $1.fullName }
+        if searchText.isEmpty { return sorted }
+        return sorted.filter { $0.fullName.localizedCaseInsensitiveContains(searchText) }
     }
 
     var body: some View {
         NavigationStack {
-            List(filteredMembers) { m in
-                Button {
-                    selectedId = m.id
-                    dismiss()
-                } label: {
-                    HStack {
-                        if selectedId == m.id {
-                            Image(systemName: "checkmark.circle.fill")
-                                .foregroundStyle(DS.Color.gradientPrimary)
+            ZStack {
+                DS.Color.background.ignoresSafeArea()
+
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: DS.Spacing.sm) {
+                        // خيار إزالة الربط (رأس شجرة)
+                        DSCard(padding: 0) {
+                            Button {
+                                selectedId = nil
+                                dismiss()
+                            } label: {
+                                HStack(spacing: DS.Spacing.sm) {
+                                    Image(systemName: "person.crop.circle.badge.minus")
+                                        .font(DS.Font.scaled(15, weight: .bold))
+                                        .foregroundColor(DS.Color.warning)
+                                        .frame(width: 30, height: 30)
+                                        .background(DS.Color.warning.opacity(0.12))
+                                        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
+
+                                    Text(L10n.t("رأس شجرة (بدون أب)", "Tree root (no father)"))
+                                        .font(DS.Font.calloutBold)
+                                        .foregroundColor(DS.Color.textPrimary)
+
+                                    Spacer()
+
+                                    if selectedId == nil {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .font(DS.Font.scaled(18))
+                                            .foregroundStyle(DS.Color.gradientPrimary)
+                                    }
+                                }
+                                .padding(.horizontal, DS.Spacing.md)
+                                .padding(.vertical, DS.Spacing.sm)
+                            }
+                            .buttonStyle(DSBoldButtonStyle())
                         }
-                        Spacer()
-                        VStack(alignment: .leading) {
-                            Text(m.fullName).font(DS.Font.caption1)
-                            Text(m.roleName).font(DS.Font.caption1).foregroundColor(DS.Color.textSecondary)
+                        .padding(.horizontal, DS.Spacing.lg)
+
+                        // قائمة الأعضاء
+                        DSCard(padding: 0) {
+                            DSSectionHeader(
+                                title: L10n.t("اختر الأب", "Choose Father"),
+                                icon: "person.2.fill",
+                                trailing: "\(filteredMembers.count)",
+                                iconColor: DS.Color.accent
+                            )
+
+                            LazyVStack(spacing: 0) {
+                                ForEach(filteredMembers) { m in
+                                    Button {
+                                        selectedId = m.id
+                                        dismiss()
+                                    } label: {
+                                        HStack(spacing: DS.Spacing.sm) {
+                                            // Avatar
+                                            ZStack {
+                                                Circle()
+                                                    .fill(DS.Color.surface)
+                                                    .frame(width: 34, height: 34)
+
+                                                if let urlStr = m.avatarUrl, let url = URL(string: urlStr) {
+                                                    AsyncImage(url: url) { img in img.resizable().scaledToFill() }
+                                                    placeholder: { ProgressView() }
+                                                    .frame(width: 30, height: 30).clipShape(Circle())
+                                                } else {
+                                                    Text(String(m.fullName.prefix(1)))
+                                                        .font(DS.Font.scaled(13, weight: .bold))
+                                                        .foregroundColor(DS.Color.primary)
+                                                }
+                                            }
+
+                                            VStack(alignment: .leading, spacing: 1) {
+                                                Text(m.fullName)
+                                                    .font(DS.Font.callout)
+                                                    .fontWeight(.medium)
+                                                    .foregroundColor(DS.Color.textPrimary)
+                                                    .lineLimit(1)
+
+                                                Text(m.roleName)
+                                                    .font(DS.Font.caption2)
+                                                    .foregroundColor(DS.Color.textSecondary)
+                                            }
+
+                                            Spacer()
+
+                                            if selectedId == m.id {
+                                                Image(systemName: "checkmark.circle.fill")
+                                                    .font(DS.Font.scaled(18))
+                                                    .foregroundStyle(DS.Color.gradientPrimary)
+                                            }
+                                        }
+                                        .padding(.horizontal, DS.Spacing.md)
+                                        .padding(.vertical, DS.Spacing.sm)
+                                    }
+                                    .buttonStyle(DSBoldButtonStyle())
+
+                                    if m.id != filteredMembers.last?.id {
+                                        DSDivider()
+                                    }
+                                }
+                            }
                         }
+                        .padding(.horizontal, DS.Spacing.lg)
                     }
+                    .padding(.top, DS.Spacing.sm)
+                    .padding(.bottom, DS.Spacing.xxxl)
                 }
             }
-            .listStyle(.insetGrouped)
-            .navigationTitle("اختر الأب")
-            .searchable(text: $searchText, prompt: "ابحث عن اسم...")
+            .navigationTitle(L10n.t("اختر الأب", "Choose Father"))
+            .navigationBarTitleDisplayMode(.inline)
+            .searchable(text: $searchText, prompt: L10n.t("ابحث عن اسم...", "Search name..."))
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(L10n.t("إغلاق", "Close")) { dismiss() }
+                        .font(DS.Font.caption1)
+                        .foregroundColor(DS.Color.textSecondary)
+                }
+            }
             .tint(DS.Color.primary)
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         }

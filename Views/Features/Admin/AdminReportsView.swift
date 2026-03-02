@@ -4,16 +4,52 @@ import UIKit
 struct AdminReportsView: View {
     @EnvironmentObject var authVM: AuthViewModel
 
+    // Age filter
+    @State private var ageFilterMode: AgeFilterMode = .all
     @State private var minAge: Int = 0
     @State private var maxAge: Int = 100
+
+    // Search & selection
     @State private var searchText: String = ""
     @State private var selectedMemberIds: Set<UUID> = []
 
+    // PDF
     @State private var isGenerating = false
     @State private var shareItems: [Any] = []
     @State private var showShareSheet = false
     @State private var showErrorAlert = false
     @State private var errorMessage = ""
+
+    enum AgeFilterMode: String, CaseIterable {
+        case all
+        case children     // 0-17
+        case youth        // 18-30
+        case adults       // 31-50
+        case seniors      // 51+
+        case custom
+
+        var label: (ar: String, en: String) {
+            switch self {
+            case .all:      return ("الكل", "All")
+            case .children: return ("أطفال (٠-١٧)", "Children (0-17)")
+            case .youth:    return ("شباب (١٨-٣٠)", "Youth (18-30)")
+            case .adults:   return ("بالغين (٣١-٥٠)", "Adults (31-50)")
+            case .seniors:  return ("كبار (٥١+)", "Seniors (51+)")
+            case .custom:   return ("مخصص", "Custom")
+            }
+        }
+
+        var range: (min: Int, max: Int)? {
+            switch self {
+            case .all:      return nil
+            case .children: return (0, 17)
+            case .youth:    return (18, 30)
+            case .adults:   return (31, 50)
+            case .seniors:  return (51, 120)
+            case .custom:   return nil
+            }
+        }
+    }
 
     private var activeMembers: [FamilyMember] {
         authVM.allMembers.filter { $0.role != .pending }
@@ -31,9 +67,26 @@ struct AdminReportsView: View {
             }
         }
 
+        // If "All" mode, return everyone (including those without birthdate)
+        if ageFilterMode == .all {
+            return byText.sorted { $0.fullName < $1.fullName }
+        }
+
+        let effectiveMin: Int
+        let effectiveMax: Int
+        if ageFilterMode == .custom {
+            effectiveMin = minAge
+            effectiveMax = maxAge
+        } else if let range = ageFilterMode.range {
+            effectiveMin = range.min
+            effectiveMax = range.max
+        } else {
+            return byText.sorted { $0.fullName < $1.fullName }
+        }
+
         return byText.filter { member in
             guard let age = ageForMember(member) else { return false }
-            return age >= minAge && age <= maxAge
+            return age >= effectiveMin && age <= effectiveMax
         }
         .sorted { $0.fullName < $1.fullName }
     }
@@ -47,169 +100,26 @@ struct AdminReportsView: View {
             DS.Color.background.ignoresSafeArea()
             DSDecorativeBackground()
 
-        ScrollView {
-            VStack(spacing: DS.Spacing.lg) {
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: DS.Spacing.md) {
 
-                // MARK: - Age Filter Section
-                DSSectionHeader(title: "تصفية حسب العمر", icon: "slider.horizontal.3")
+                    // MARK: - Stats Summary
+                    statsSection
+                        .padding(.top, DS.Spacing.md)
 
-                DSCard {
-                    VStack(spacing: DS.Spacing.md) {
-                        Stepper("العمر الأدنى: \(minAge)", value: $minAge, in: 0...120)
-                            .font(DS.Font.callout)
-                            .tint(DS.Color.primary)
-                            .onChange(of: minAge) { _, newValue in
-                                if newValue > maxAge { maxAge = newValue }
-                            }
+                    // MARK: - Age Filter
+                    ageFilterSection
 
-                        DSDivider()
+                    // MARK: - Members
+                    membersSection
 
-                        Stepper("العمر الأعلى: \(maxAge)", value: $maxAge, in: 0...120)
-                            .font(DS.Font.callout)
-                            .tint(DS.Color.primary)
-                            .onChange(of: maxAge) { _, newValue in
-                                if newValue < minAge { minAge = newValue }
-                            }
-                    }
-                    .padding(DS.Spacing.lg)
+                    // MARK: - Generate PDF
+                    generateReportSection
                 }
-                .padding(.horizontal, DS.Spacing.lg)
-
-                // MARK: - Search & Select Section
-                DSSectionHeader(title: "بحث واختيار الأعضاء", icon: "person.2.fill")
-
-                DSCard {
-                    VStack(spacing: DS.Spacing.md) {
-                        // Search field
-                        HStack(spacing: DS.Spacing.md) {
-                            ZStack {
-                                Circle()
-                                    .fill(DS.Color.gradientPrimary)
-                                    .frame(width: 32, height: 32)
-                                Image(systemName: "magnifyingglass")
-                                    .font(DS.Font.scaled(12, weight: .semibold))
-                                    .foregroundColor(.white)
-                            }
-
-                            TextField("ابحث بالاسم...", text: $searchText)
-                                .font(DS.Font.body)
-                                .multilineTextAlignment(.leading)
-                        }
-                        .padding(DS.Spacing.md)
-                        .background(DS.Color.surfaceElevated)
-                        .cornerRadius(DS.Radius.md)
-
-                        if filteredMembers.isEmpty {
-                            Text("لا يوجد أعضاء ضمن العمر المحدد.")
-                                .foregroundColor(DS.Color.textSecondary)
-                                .font(DS.Font.callout)
-                                .frame(maxWidth: .infinity, alignment: .center)
-                                .padding(.vertical, DS.Spacing.md)
-                        } else {
-                            // Select all / Deselect buttons
-                            HStack(spacing: DS.Spacing.md) {
-                                Button {
-                                    selectedMemberIds = Set(filteredMembers.map(\.id))
-                                } label: {
-                                    HStack(spacing: DS.Spacing.xs) {
-                                        Image(systemName: "checkmark.circle.fill")
-                                            .font(DS.Font.scaled(12))
-                                        Text("تحديد الكل (\(filteredMembers.count))")
-                                            .font(DS.Font.caption1)
-                                    }
-                                    .foregroundColor(DS.Color.primary)
-                                    .padding(.horizontal, DS.Spacing.md)
-                                    .padding(.vertical, DS.Spacing.sm)
-                                    .background(DS.Color.primary.opacity(0.1))
-                                    .cornerRadius(DS.Radius.full)
-                                }
-
-                                Button {
-                                    selectedMemberIds.removeAll()
-                                } label: {
-                                    HStack(spacing: DS.Spacing.xs) {
-                                        Image(systemName: "xmark.circle.fill")
-                                            .font(DS.Font.scaled(12))
-                                        Text("إلغاء التحديد")
-                                            .font(DS.Font.caption1)
-                                    }
-                                    .foregroundColor(DS.Color.error)
-                                    .padding(.horizontal, DS.Spacing.md)
-                                    .padding(.vertical, DS.Spacing.sm)
-                                    .background(DS.Color.error.opacity(0.1))
-                                    .cornerRadius(DS.Radius.full)
-                                }
-
-                                Spacer()
-                            }
-
-                            DSDivider()
-
-                            // Members list
-                            ForEach(filteredMembers) { member in
-                                Button {
-                                    if selectedMemberIds.contains(member.id) {
-                                        selectedMemberIds.remove(member.id)
-                                    } else {
-                                        selectedMemberIds.insert(member.id)
-                                    }
-                                } label: {
-                                    HStack(spacing: DS.Spacing.md) {
-                                        Image(systemName: selectedMemberIds.contains(member.id) ? "checkmark.circle.fill" : "circle")
-                                            .font(DS.Font.scaled(20))
-                                            .foregroundStyle(
-                                                selectedMemberIds.contains(member.id)
-                                                    ? AnyShapeStyle(DS.Color.gradientPrimary)
-                                                    : AnyShapeStyle(DS.Color.textTertiary)
-                                            )
-
-                                        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                                            Text(member.fullName)
-                                                .font(DS.Font.calloutBold)
-                                                .foregroundColor(DS.Color.textPrimary)
-                                            Text("العمر: \(ageForMember(member) ?? 0) • الهاتف: \(phoneDisplay(member.phoneNumber))")
-                                                .font(DS.Font.caption1)
-                                                .foregroundColor(DS.Color.textSecondary)
-                                        }
-
-                                        Spacer()
-                                    }
-                                    .padding(.vertical, DS.Spacing.sm)
-                                }
-                            }
-                        }
-                    }
-                    .padding(DS.Spacing.lg)
-                }
-                .padding(.horizontal, DS.Spacing.lg)
-
-                // MARK: - Generate PDF Section
-                DSSectionHeader(title: "إنشاء التقرير", icon: "doc.richtext.fill")
-
-                VStack(spacing: DS.Spacing.sm) {
-                    DSPrimaryButton(
-                        "إنشاء تقرير PDF",
-                        icon: "doc.richtext.fill",
-                        isLoading: isGenerating
-                    ) {
-                        Task { await generatePDF() }
-                    }
-                    .disabled(isGenerating || filteredMembers.isEmpty)
-                    .opacity((isGenerating || filteredMembers.isEmpty) ? 0.6 : 1.0)
-
-                    Text("إذا لم تحدد أعضاء، سيتم إنشاء التقرير لكل الأعضاء ضمن العمر المحدد.")
-                        .font(DS.Font.caption1)
-                        .foregroundColor(DS.Color.textTertiary)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, DS.Spacing.lg)
-                }
-                .padding(.horizontal, DS.Spacing.lg)
                 .padding(.bottom, DS.Spacing.xxxl)
             }
-            .padding(.top, DS.Spacing.md)
         }
-        } // ZStack
-        .navigationTitle("تقارير PDF")
+        .navigationTitle(L10n.t("التقارير", "Reports"))
         .navigationBarTitleDisplayMode(.inline)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .onAppear {
@@ -218,10 +128,339 @@ struct AdminReportsView: View {
         .sheet(isPresented: $showShareSheet) {
             ActivityView(items: shareItems)
         }
-        .alert("تعذر إنشاء التقرير", isPresented: $showErrorAlert) {
-            Button("موافق", role: .cancel) {}
+        .alert(L10n.t("تعذر إنشاء التقرير", "Failed to generate report"), isPresented: $showErrorAlert) {
+            Button(L10n.t("موافق", "OK"), role: .cancel) {}
         } message: {
             Text(errorMessage)
+        }
+    }
+
+    // MARK: - Stats Section
+    private var statsSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            DSCard(padding: 0) {
+                DSSectionHeader(
+                    title: L10n.t("إحصائيات", "Statistics"),
+                    icon: "chart.bar.fill",
+                    iconColor: DS.Color.primary
+                )
+
+                let columns = [GridItem(.flexible()), GridItem(.flexible())]
+                LazyVGrid(columns: columns, spacing: DS.Spacing.md) {
+                    statCell(
+                        icon: "person.2.fill",
+                        color: DS.Color.primary,
+                        title: L10n.t("إجمالي الأعضاء", "Total Members"),
+                        value: "\(activeMembers.count)"
+                    )
+                    statCell(
+                        icon: "line.3.horizontal.decrease.circle.fill",
+                        color: DS.Color.info,
+                        title: L10n.t("نتائج التصفية", "Filtered"),
+                        value: "\(filteredMembers.count)"
+                    )
+                    statCell(
+                        icon: "checkmark.circle.fill",
+                        color: DS.Color.success,
+                        title: L10n.t("محدد", "Selected"),
+                        value: "\(selectedMemberIds.count)"
+                    )
+                    statCell(
+                        icon: "calendar",
+                        color: DS.Color.warning,
+                        title: L10n.t("الفئة العمرية", "Age Group"),
+                        value: L10n.t(ageFilterMode.label.ar, ageFilterMode.label.en)
+                    )
+                }
+                .padding(DS.Spacing.md)
+            }
+        }
+        .padding(.horizontal, DS.Spacing.lg)
+    }
+
+    private func statCell(icon: String, color: Color, title: String, value: String) -> some View {
+        HStack(spacing: DS.Spacing.sm) {
+            Image(systemName: icon)
+                .font(DS.Font.scaled(16, weight: .bold))
+                .foregroundColor(color)
+                .frame(width: 36, height: 36)
+                .background(color.opacity(0.12))
+                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(DS.Font.caption2)
+                    .foregroundColor(DS.Color.textTertiary)
+                    .lineLimit(1)
+
+                Text(value)
+                    .font(DS.Font.caption1)
+                    .fontWeight(.bold)
+                    .foregroundColor(DS.Color.textPrimary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(DS.Spacing.sm)
+        .background(DS.Color.surface)
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                .stroke(color.opacity(0.15), lineWidth: 1)
+        )
+    }
+
+    // MARK: - Age Filter Section
+    private var ageFilterSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            DSCard(padding: 0) {
+                DSSectionHeader(
+                    title: L10n.t("تصفية حسب العمر", "Filter by Age"),
+                    icon: "slider.horizontal.3",
+                    iconColor: DS.Color.warning
+                )
+
+                // Quick filter chips
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: DS.Spacing.sm) {
+                        ForEach(AgeFilterMode.allCases, id: \.self) { mode in
+                            Button {
+                                withAnimation(DS.Anim.snappy) { ageFilterMode = mode }
+                                if let range = mode.range {
+                                    minAge = range.min
+                                    maxAge = range.max
+                                }
+                            } label: {
+                                Text(L10n.t(mode.label.ar, mode.label.en))
+                                    .font(DS.Font.caption1)
+                                    .fontWeight(.bold)
+                                    .padding(.horizontal, DS.Spacing.md)
+                                    .padding(.vertical, DS.Spacing.sm)
+                                    .foregroundColor(ageFilterMode == mode ? .white : DS.Color.primary)
+                                    .background(ageFilterMode == mode ? DS.Color.gradientPrimary : LinearGradient(colors: [DS.Color.primary.opacity(0.1)], startPoint: .leading, endPoint: .trailing))
+                                    .clipShape(Capsule())
+                            }
+                        }
+                    }
+                    .padding(.horizontal, DS.Spacing.lg)
+                    .padding(.vertical, DS.Spacing.md)
+                }
+
+                // Custom range steppers
+                if ageFilterMode == .custom {
+                    DSDivider()
+                    VStack(spacing: DS.Spacing.md) {
+                        Stepper(L10n.t("العمر الأدنى: \(minAge)", "Min Age: \(minAge)"), value: $minAge, in: 0...120)
+                            .font(DS.Font.callout)
+                            .tint(DS.Color.primary)
+                            .onChange(of: minAge) { _, newValue in
+                                if newValue > maxAge { maxAge = newValue }
+                            }
+
+                        DSDivider()
+
+                        Stepper(L10n.t("العمر الأعلى: \(maxAge)", "Max Age: \(maxAge)"), value: $maxAge, in: 0...120)
+                            .font(DS.Font.callout)
+                            .tint(DS.Color.primary)
+                            .onChange(of: maxAge) { _, newValue in
+                                if newValue < minAge { minAge = newValue }
+                            }
+                    }
+                    .padding(.horizontal, DS.Spacing.lg)
+                    .padding(.bottom, DS.Spacing.md)
+                }
+            }
+        }
+        .padding(.horizontal, DS.Spacing.lg)
+    }
+
+    // MARK: - Members Section
+    private var membersSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            DSCard(padding: 0) {
+                DSSectionHeader(
+                    title: L10n.t("الأعضاء", "Members"),
+                    icon: "person.2.fill",
+                    trailing: "\(filteredMembers.count)",
+                    iconColor: DS.Color.success
+                )
+
+                // Search
+                HStack(spacing: DS.Spacing.md) {
+                    DSIcon("magnifyingglass", color: DS.Color.primary)
+
+                    TextField(L10n.t("ابحث بالاسم...", "Search by name..."), text: $searchText)
+                        .font(DS.Font.body)
+                        .multilineTextAlignment(.leading)
+                }
+                .padding(.horizontal, DS.Spacing.lg)
+                .padding(.vertical, DS.Spacing.sm)
+
+                DSDivider()
+
+                // Select/Deselect buttons
+                HStack(spacing: DS.Spacing.sm) {
+                    Button {
+                        selectedMemberIds = Set(filteredMembers.map(\.id))
+                    } label: {
+                        HStack(spacing: DS.Spacing.xs) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(DS.Font.scaled(11))
+                            Text(L10n.t("تحديد الكل", "Select All"))
+                                .font(DS.Font.caption2)
+                                .fontWeight(.bold)
+                        }
+                        .foregroundColor(DS.Color.primary)
+                        .padding(.horizontal, DS.Spacing.md)
+                        .padding(.vertical, DS.Spacing.xs)
+                        .background(DS.Color.primary.opacity(0.1))
+                        .clipShape(Capsule())
+                    }
+
+                    Button {
+                        selectedMemberIds.removeAll()
+                    } label: {
+                        HStack(spacing: DS.Spacing.xs) {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(DS.Font.scaled(11))
+                            Text(L10n.t("إلغاء التحديد", "Deselect"))
+                                .font(DS.Font.caption2)
+                                .fontWeight(.bold)
+                        }
+                        .foregroundColor(DS.Color.error)
+                        .padding(.horizontal, DS.Spacing.md)
+                        .padding(.vertical, DS.Spacing.xs)
+                        .background(DS.Color.error.opacity(0.1))
+                        .clipShape(Capsule())
+                    }
+
+                    Spacer()
+                }
+                .padding(.horizontal, DS.Spacing.lg)
+                .padding(.vertical, DS.Spacing.sm)
+
+                DSDivider()
+
+                // Members list
+                if filteredMembers.isEmpty {
+                    VStack(spacing: DS.Spacing.sm) {
+                        Image(systemName: "person.2.slash")
+                            .font(DS.Font.scaled(32))
+                            .foregroundColor(DS.Color.textTertiary)
+                        Text(L10n.t("لا يوجد أعضاء", "No members found"))
+                            .font(DS.Font.callout)
+                            .foregroundColor(DS.Color.textSecondary)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, DS.Spacing.xl)
+                } else {
+                    membersListView
+                }
+            }
+        }
+        .padding(.horizontal, DS.Spacing.lg)
+    }
+
+    // MARK: - Generate Report Section
+    private var generateReportSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            DSCard(padding: 0) {
+                DSSectionHeader(
+                    title: L10n.t("إنشاء التقرير", "Generate Report"),
+                    icon: "doc.richtext.fill",
+                    iconColor: DS.Color.info
+                )
+
+                VStack(spacing: DS.Spacing.sm) {
+                    DSPrimaryButton(
+                        L10n.t("إنشاء تقرير PDF", "Generate PDF Report"),
+                        icon: "doc.richtext.fill",
+                        isLoading: isGenerating
+                    ) {
+                        Task { await generatePDF() }
+                    }
+                    .disabled(isGenerating || filteredMembers.isEmpty)
+                    .opacity((isGenerating || filteredMembers.isEmpty) ? 0.6 : 1.0)
+
+                    Text(L10n.t(
+                        "إذا لم تحدد أعضاء، سيتم إنشاء التقرير لكل الأعضاء المعروضين.",
+                        "If none selected, report includes all displayed members."
+                    ))
+                    .font(DS.Font.caption1)
+                    .foregroundColor(DS.Color.textTertiary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, DS.Spacing.lg)
+                }
+                .padding(DS.Spacing.lg)
+            }
+        }
+        .padding(.horizontal, DS.Spacing.lg)
+    }
+
+    // MARK: - Members List
+    private var membersListView: some View {
+        LazyVStack(spacing: 0) {
+            ForEach(filteredMembers) { member in
+                Button {
+                    toggleSelection(member.id)
+                } label: {
+                    memberRow(member: member)
+                }
+                .buttonStyle(PlainButtonStyle())
+            }
+        }
+    }
+
+    private func memberRow(member: FamilyMember) -> some View {
+        HStack(spacing: DS.Spacing.md) {
+            Image(systemName: selectedMemberIds.contains(member.id) ? "checkmark.circle.fill" : "circle")
+                .font(DS.Font.scaled(20))
+                .foregroundStyle(
+                    selectedMemberIds.contains(member.id)
+                        ? AnyShapeStyle(DS.Color.gradientPrimary)
+                        : AnyShapeStyle(DS.Color.textTertiary)
+                )
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(member.fullName)
+                    .font(DS.Font.calloutBold)
+                    .foregroundColor(DS.Color.textPrimary)
+
+                HStack(spacing: DS.Spacing.sm) {
+                    if let age = ageForMember(member) {
+                        HStack(spacing: 2) {
+                            Image(systemName: "calendar")
+                                .font(DS.Font.scaled(10))
+                            Text(L10n.t("\(age)", "\(age)"))
+                        }
+                    }
+
+                    if let phone = member.phoneNumber, !phone.isEmpty {
+                        HStack(spacing: 2) {
+                            Image(systemName: "phone.fill")
+                                .font(DS.Font.scaled(10))
+                            Text(KuwaitPhone.display(phone))
+                        }
+                    }
+                }
+                .font(DS.Font.caption1)
+                .foregroundColor(DS.Color.textSecondary)
+            }
+
+            Spacer()
+        }
+        .padding(.horizontal, DS.Spacing.lg)
+        .padding(.vertical, DS.Spacing.sm)
+    }
+
+    // MARK: - Helpers
+
+    private func toggleSelection(_ id: UUID) {
+        if selectedMemberIds.contains(id) {
+            selectedMemberIds.remove(id)
+        } else {
+            selectedMemberIds.insert(id)
         }
     }
 
@@ -232,17 +471,20 @@ struct AdminReportsView: View {
         guard !sourceMembers.isEmpty else {
             await MainActor.run {
                 isGenerating = false
-                errorMessage = "لا يوجد أعضاء لإنشاء التقرير."
+                errorMessage = L10n.t("لا يوجد أعضاء لإنشاء التقرير.", "No members to generate report.")
                 showErrorAlert = true
             }
             return
         }
 
+        let effectiveMin = ageFilterMode == .custom ? minAge : (ageFilterMode.range?.min ?? 0)
+        let effectiveMax = ageFilterMode == .custom ? maxAge : (ageFilterMode.range?.max ?? 120)
+
         do {
             let reportData = try MembersPDFBuilder.makePhoneAndAgeReport(
                 members: sourceMembers,
-                minAge: minAge,
-                maxAge: maxAge,
+                minAge: effectiveMin,
+                maxAge: effectiveMax,
                 generatedAt: Date(),
                 ageResolver: { ageForMember($0) }
             )
@@ -290,7 +532,7 @@ struct AdminReportsView: View {
         guard let phone, !phone.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return "—"
         }
-        return phone
+        return KuwaitPhone.display(phone)
     }
 }
 

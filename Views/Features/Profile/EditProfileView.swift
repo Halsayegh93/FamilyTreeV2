@@ -16,7 +16,6 @@ struct EditProfileView: View {
     @State private var isDeceased: Bool = false
     @State private var deathDate: Date = Date()
     @State private var isPhoneHidden: Bool = false
-
     // متغيرات الصورة
     @State private var selectedItem: PhotosPickerItem? = nil
     @State private var localPreviewImage: UIImage? = nil
@@ -45,16 +44,13 @@ struct EditProfileView: View {
                         // 1. قسم الصورة الشخصية (تصميم دائري مع ظل فخم)
                         imagePickerHeader
 
-                        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                        DSCard(padding: 0) {
                             DSSectionHeader(
                                 title: L10n.t("المعلومات الشخصية", "Personal Info"),
                                 icon: "person.text.rectangle"
                             )
 
-                            DSCard(padding: 0) {
                                 VStack(spacing: 0) {
-                                    
-
                                     modernTextField(label: L10n.t("الاسم الكامل", "Full Name"), text: $fullName, icon: "person.fill", placeholder: L10n.t("أدخل الاسم الرباعي", "Enter full name"))
                                     DSDivider()
                                     modernPhoneField
@@ -62,19 +58,17 @@ struct EditProfileView: View {
                                     DSDivider()
                                     modernDatePicker(label: L10n.t("تاريخ الميلاد", "Birth Date"), selection: $birthDate, icon: "calendar")
                                 }
-                            }
                         }
                         .padding(.horizontal, DS.Spacing.lg)
 
                         // 3. حالة الزواج والوفاة
-                        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                        DSCard(padding: 0) {
                             DSSectionHeader(
                                 title: L10n.t("الحالة الاجتماعية", "Status"),
-                                icon: "heart.text.square"
+                                icon: "heart.text.square",
+                                iconColor: DS.Color.neonPink
                             )
 
-                            DSCard(padding: 0) {
-                                VStack(spacing: 0) {
                                     HStack(spacing: DS.Spacing.md) {
                                         DSIcon("heart.fill", color: DS.Color.neonPink)
                                         Toggle(L10n.t("متزوج", "Married"), isOn: $isMarried)
@@ -84,10 +78,6 @@ struct EditProfileView: View {
                                     }
                                     .padding(.horizontal, DS.Spacing.lg)
                                     .padding(.vertical, DS.Spacing.sm)
-
-
-                                }
-                            }
                         }
                         .padding(.horizontal, DS.Spacing.lg)
 
@@ -153,12 +143,10 @@ struct EditProfileView: View {
                     }
                     .frame(width: 80, height: 80)
                     .clipShape(Circle())
-                    // Gradient ring around avatar
                     .overlay(
                         Circle()
-                            .stroke(DS.Color.gradientPrimary, lineWidth: 3)
+                            .stroke(DS.Color.primary.opacity(0.3), lineWidth: 2)
                     )
-                    .dsGlowShadow()
 
                     // Camera button with gradient background
                     ZStack {
@@ -315,10 +303,10 @@ struct EditProfileView: View {
             await authVM.updateMemberData(
                 memberId: member.id,
                 fullName: fullName,
-                phoneNumber: member.phoneNumber ?? "", // نرسل الرقم القديم لأنه لم يتغير أو تم طلب تغييره
+                phoneNumber: member.phoneNumber ?? "",
                 birthDate: birthDate,
                 isMarried: isMarried,
-                isDeceased: member.isDeceased ?? false, // نرسل الحالة القديمة لأنها لم تتغير أو تم طلبها
+                isDeceased: member.isDeceased ?? false,
                 deathDate: member.isDeceased ?? false ? deathDate : nil,
                 isPhoneHidden: isPhoneHidden
             )
