@@ -28,7 +28,7 @@ struct NewsCardView: View {
 
             // 3. Cover Image (Below Text)
             coverImageView
-                .cornerRadius(DS.Radius.xl) // Rounded inner image for aesthetics
+                .cornerRadius(DS.Radius.xl)
                 .padding(.top, DS.Spacing.xs)
 
             // 4. Poll Options
@@ -160,8 +160,19 @@ extension NewsCardView {
         }
     }
 
+    private func displayNameForType(_ type: String) -> String {
+        switch type {
+        case "خبر": return L10n.t("خبر", "News")
+        case "زواج": return L10n.t("زواج", "Wedding")
+        case "مولود": return L10n.t("مولود", "Newborn")
+        case "وفاة": return L10n.t("وفاة", "Obituary")
+        case "تصويت": return L10n.t("تصويت", "Poll")
+        default: return type
+        }
+    }
+
     private var badgeView: some View {
-        Text(type)
+        Text(displayNameForType(type))
             .font(DS.Font.caption1)
             .fontWeight(.bold)
             .padding(.horizontal, DS.Spacing.md)
@@ -294,8 +305,11 @@ extension NewsCardView {
 
     private var tagColor: Color {
         switch type {
-        case "تنبيه", "Urgent": return DS.Color.error
+        case "تنبيه", "خبر", "News", "Urgent": return DS.Color.primary
         case "مناسبة", "Event": return DS.Color.success
+        case "زواج", "Wedding": return DS.Color.success
+        case "مولود", "Newborn": return DS.Color.success
+        case "وفاة", "Obituary": return DS.Color.error
         case "تصويت", "Poll": return DS.Color.warning
         default: return DS.Color.primary
         }

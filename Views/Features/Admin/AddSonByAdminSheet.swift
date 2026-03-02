@@ -357,7 +357,8 @@ struct AddSonByAdminSheet: View {
                     phoneNumber: capturedPhone,
                     birthDate: capturedBirthDate,
                     isDeceased: capturedIsDeceased,
-                    deathDate: capturedDeathDate
+                    deathDate: capturedDeathDate,
+                    gender: capturedGender
                 )
             }
         } else {

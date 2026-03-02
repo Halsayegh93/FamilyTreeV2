@@ -340,8 +340,12 @@ struct ProfileView: View {
 
     private func childGridCell(son: FamilyMember) -> some View {
         let isDeceased = son.isDeceased ?? false
-        let iconName = isDeceased ? "person.fill.xmark" : "person.fill"
-        let iconColor = isDeceased ? DS.Color.error : DS.Color.primary
+        let isFemale = son.gender?.lowercased() == "female"
+        let iconName: String = {
+            if isDeceased { return "person.fill.xmark" }
+            return isFemale ? "figure.stand.dress" : "person.fill"
+        }()
+        let iconColor = isDeceased ? DS.Color.error : (isFemale ? DS.Color.neonPink : DS.Color.primary)
 
         return HStack(spacing: DS.Spacing.sm) {
             Image(systemName: iconName)
