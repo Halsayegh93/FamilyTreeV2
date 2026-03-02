@@ -6,6 +6,7 @@ struct NotificationsCenterView: View {
     @State private var appeared = false
     @State private var isSelecting = false
     @State private var selectedIds: Set<UUID> = []
+    @State private var selectedNotification: AppNotification? = nil
 
     private static let relativeDateFormatter: RelativeDateTimeFormatter = {
         let f = RelativeDateTimeFormatter()
@@ -103,6 +104,128 @@ struct NotificationsCenterView: View {
                 Task { await authVM.fetchNotifications() }
                 withAnimation(DS.Anim.smooth.delay(0.15)) {
                     appeared = true
+                }
+            }
+        }
+        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+        .sheet(item: $selectedNotification) { notification in
+            notificationDetailSheet(notification)
+        }
+    }
+
+    // MARK: - Notification Detail Sheet
+    private func notificationDetailSheet(_ notification: AppNotification) -> some View {
+        let iconInfo = notificationIcon(for: notification.kind)
+
+        return NavigationStack {
+            ZStack {
+                DS.Color.background.ignoresSafeArea()
+
+                ScrollView {
+                    VStack(spacing: DS.Spacing.xl) {
+                        // Icon
+                        ZStack {
+                            Circle()
+                                .fill(iconInfo.gradient)
+                                .frame(width: 72, height: 72)
+
+                            Image(systemName: iconInfo.icon)
+                                .font(DS.Font.scaled(28, weight: .bold))
+                                .foregroundColor(.white)
+                        }
+                        .padding(.top, DS.Spacing.xl)
+
+                        // Kind badge
+                        Text(kindLabel(for: notification.kind))
+                            .font(DS.Font.caption1)
+                            .fontWeight(.bold)
+                            .foregroundColor(iconInfo.color)
+                            .padding(.horizontal, DS.Spacing.md)
+                            .padding(.vertical, DS.Spacing.xs)
+                            .background(iconInfo.color.opacity(0.12))
+                            .clipShape(Capsule())
+
+                        // Title
+                        Text(notification.title)
+                            .font(DS.Font.title3)
+                            .fontWeight(.bold)
+                            .foregroundColor(DS.Color.textPrimary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, DS.Spacing.lg)
+
+                        // Body — full text
+                        DSCard(padding: 0) {
+                            VStack(alignment: .leading, spacing: DS.Spacing.md) {
+                                Text(cleanBody(notification.body))
+                                    .font(DS.Font.body)
+                                    .foregroundColor(DS.Color.textPrimary)
+                                    .multilineTextAlignment(.leading)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            .padding(DS.Spacing.lg)
+                        }
+                        .padding(.horizontal, DS.Spacing.lg)
+
+                        // Created by
+                        if let creatorName = createdByName(for: notification) {
+                            HStack(spacing: DS.Spacing.sm) {
+                                DSIcon("person.fill", color: DS.Color.warning)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(L10n.t("بواسطة", "By"))
+                                        .font(DS.Font.caption1)
+                                        .foregroundColor(DS.Color.textSecondary)
+                                    Text(creatorName)
+                                        .font(DS.Font.calloutBold)
+                                        .foregroundColor(DS.Color.textPrimary)
+                                }
+                                Spacer()
+                            }
+                            .padding(.horizontal, DS.Spacing.lg)
+                        }
+
+                        // Time
+                        HStack(spacing: DS.Spacing.sm) {
+                            DSIcon("clock", color: DS.Color.textTertiary)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(L10n.t("الوقت", "Time"))
+                                    .font(DS.Font.caption1)
+                                    .foregroundColor(DS.Color.textSecondary)
+                                Text(relativeTime(notification.createdDate))
+                                    .font(DS.Font.calloutBold)
+                                    .foregroundColor(DS.Color.textPrimary)
+                            }
+                            Spacer()
+                        }
+                        .padding(.horizontal, DS.Spacing.lg)
+
+                        Spacer()
+                    }
+                }
+            }
+            .navigationTitle(L10n.t("تفاصيل الإشعار", "Notification Details"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        selectedNotification = nil
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(DS.Font.scaled(22, weight: .medium))
+                            .foregroundStyle(DS.Color.textTertiary)
+                            .symbolRenderingMode(.hierarchical)
+                    }
+                }
+
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(role: .destructive) {
+                        let id = notification.id
+                        selectedNotification = nil
+                        Task { await authVM.deleteNotification(id: id) }
+                    } label: {
+                        Image(systemName: "trash")
+                            .font(DS.Font.scaled(16, weight: .medium))
+                            .foregroundStyle(DS.Color.error)
+                    }
                 }
             }
         }
@@ -332,8 +455,9 @@ struct NotificationsCenterView: View {
                         selectedIds.insert(item.id)
                     }
                 }
-            } else if isUnread {
-                withAnimation(DS.Anim.snappy) {
+            } else {
+                selectedNotification = item
+                if isUnread {
                     Task { await authVM.markNotificationAsRead(id: item.id) }
                 }
             }
