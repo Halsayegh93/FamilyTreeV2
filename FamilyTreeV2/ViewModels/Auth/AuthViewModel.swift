@@ -2357,30 +2357,39 @@ class AuthViewModel: ObservableObject {
             "birth_date": AnyEncodable(birthDate ?? Optional<String>.none),
             "is_deceased": AnyEncodable(isDeceased)
         ]
-        
-        if let gender, !gender.isEmpty {
-            payload["gender"] = AnyEncodable(gender)
-        }
-        
+
         if isDeceased {
             payload["death_date"] = AnyEncodable(deathDate ?? Optional<String>.none)
         } else {
             payload["death_date"] = AnyEncodable(Optional<String>.none)
         }
-        
+
         do {
             try await supabase
                 .from("profiles")
                 .update(payload)
                 .eq("id", value: member.id.uuidString)
                 .execute()
-            
-            await fetchAllMembers()
-            if let fatherId = member.fatherId {
-                await fetchChildren(for: fatherId)
-            }
         } catch {
             Log.error("خطأ تعديل بيانات الابن: \(error.localizedDescription)")
+        }
+
+        // تحديث الجنس بشكل منفصل (العمود قد لا يكون موجود)
+        if let gender, !gender.isEmpty {
+            do {
+                try await supabase
+                    .from("profiles")
+                    .update(["gender": AnyEncodable(gender)])
+                    .eq("id", value: member.id.uuidString)
+                    .execute()
+            } catch {
+                Log.warning("عمود gender غير متوفر: \(error.localizedDescription)")
+            }
+        }
+
+        await fetchAllMembers()
+        if let fatherId = member.fatherId {
+            await fetchChildren(for: fatherId)
         }
         
         await MainActor.run { self.isLoading = false }

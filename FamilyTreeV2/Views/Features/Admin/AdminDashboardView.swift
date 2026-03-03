@@ -2,6 +2,7 @@ import SwiftUI
 
 struct AdminDashboardView: View {
     @EnvironmentObject var authVM: AuthViewModel
+    @StateObject private var diwaniyaVM = DiwaniyasViewModel()
     @Binding var selectedTab: Int
     @State private var showingNotifications = false
     @State private var testPushResult: String?
@@ -90,7 +91,7 @@ struct AdminDashboardView: View {
                                     }
                                     DSDivider()
                                     NavigationLink(destination: AdminDiwaniyaRequestsView()) {
-                                        DSActionRow(title: L10n.t("طلبات الديوانيات", "Diwaniya Requests"), subtitle: L10n.t("مراجعة واعتماد ديوانيات الأعضاء", "Review and approve member diwaniyas"), icon: "tent.fill", color: DS.Color.gridDiwaniya)
+                                        DSActionRow(title: L10n.t("طلبات الديوانيات", "Diwaniya Requests"), subtitle: L10n.t("مراجعة واعتماد ديوانيات الأعضاء", "Review and approve member diwaniyas"), icon: "tent.fill", color: DS.Color.gridDiwaniya, badge: diwaniyaVM.pendingDiwaniyas.count)
                                     }
                                     DSDivider()
                                     NavigationLink(destination: AdminDeceasedRequestsView()) {
@@ -190,6 +191,7 @@ struct AdminDashboardView: View {
                 await authVM.fetchPendingNewsRequests()
                 await authVM.fetchNewsReportRequests()
                 await authVM.fetchPhoneChangeRequests()
+                await diwaniyaVM.fetchPendingDiwaniyas()
             }
         }
     }

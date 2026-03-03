@@ -4,7 +4,7 @@ import SwiftUI
 struct FamilyMember: Identifiable, Codable, Equatable {
     let id: UUID
     var firstName: String
-    let fullName: String
+    var fullName: String
     var phoneNumber: String?
     let birthDate: String?
     let deathDate: String?

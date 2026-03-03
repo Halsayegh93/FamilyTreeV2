@@ -270,15 +270,18 @@ struct EditChildSheet: View {
         DSPrimaryButton(
             L10n.t("حفظ التعديلات", "Save Changes"),
             icon: "checkmark.circle.fill",
-            isLoading: authVM.isLoading,
+            isLoading: isSaving,
             action: saveChanges
         )
         .opacity(firstName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || familyName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.5 : 1.0)
-        .disabled(firstName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || familyName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || authVM.isLoading)
+        .disabled(firstName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || familyName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSaving)
     }
 
     private func setupData() {
         firstName = member.firstName
+        // استخراج اسم العائلة من الاسم الكامل (آخر كلمة)
+        let nameParts = member.fullName.trimmingCharacters(in: .whitespacesAndNewlines).split(whereSeparator: \.isWhitespace).map(String.init)
+        familyName = nameParts.count > 1 ? (nameParts.last ?? "") : ""
         selectedGender = member.gender ?? "male"
         let detectedPhone = KuwaitPhone.detectCountryAndLocal(member.phoneNumber)
         selectedPhoneCountry = detectedPhone.country
@@ -298,7 +301,11 @@ struct EditChildSheet: View {
         }
     }
 
+    @State private var isSaving = false
+
     private func saveChanges() {
+        guard !isSaving else { return }
+        isSaving = true
         Task {
             let formatter = DateFormatter()
             formatter.dateFormat = "yyyy-MM-dd"
@@ -307,9 +314,27 @@ struct EditChildSheet: View {
             let birthDateString: String? = formatter.string(from: birthDate)
             let deathDateString: String? = isDeceased ? formatter.string(from: deathDate) : nil
 
+            let cleanFirst = firstName.trimmingCharacters(in: .whitespacesAndNewlines)
+            let cleanFamily = familyName.trimmingCharacters(in: .whitespacesAndNewlines)
+
+            // بناء الاسم الكامل الجديد
+            let originalParts = member.fullName.split(whereSeparator: \.isWhitespace).map(String.init)
+            var finalFullName: String
+            if originalParts.count > 2 {
+                let middleParts = originalParts.dropFirst().dropLast().joined(separator: " ")
+                finalFullName = cleanFamily.isEmpty ? "\(cleanFirst) \(middleParts)" : "\(cleanFirst) \(middleParts) \(cleanFamily)"
+            } else {
+                finalFullName = cleanFamily.isEmpty ? cleanFirst : "\(cleanFirst) \(cleanFamily)"
+            }
+
+            // إنشاء نسخة معدلة من العضو بالاسم الجديد عشان updateChildData يستخدمه
+            var updatedMember = member
+            updatedMember.fullName = finalFullName
+            updatedMember.firstName = cleanFirst
+
             await authVM.updateChildData(
-                member: member,
-                firstName: firstName.trimmingCharacters(in: .whitespacesAndNewlines),
+                member: updatedMember,
+                firstName: cleanFirst,
                 phoneNumber: KuwaitPhone.normalizedForStorage(
                     country: selectedPhoneCountry,
                     rawLocalDigits: phoneNumber
@@ -324,9 +349,8 @@ struct EditChildSheet: View {
                 await authVM.uploadAvatar(image: image, for: member.id)
             }
 
-            if !authVM.isLoading {
-                showSuccessAlert = true
-            }
+            isSaving = false
+            showSuccessAlert = true
         }
     }
 }

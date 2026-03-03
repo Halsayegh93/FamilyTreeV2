@@ -117,11 +117,17 @@ struct AdminMemberDetailSheet: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button(action: saveAction) {
-                        Text(L10n.t("حفظ", "Save"))
-                            .font(DS.Font.caption1)
-                            .fontWeight(.bold)
-                            .foregroundColor(DS.Color.primary)
+                        if isSaving {
+                            ProgressView()
+                                .tint(DS.Color.primary)
+                        } else {
+                            Text(L10n.t("حفظ", "Save"))
+                                .font(DS.Font.caption1)
+                                .fontWeight(.bold)
+                                .foregroundColor(DS.Color.primary)
+                        }
                     }
+                    .disabled(isSaving)
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(L10n.t("إغلاق", "Close")) { dismiss() }
@@ -775,8 +781,11 @@ struct AdminMemberDetailSheet: View {
             .sorted(by: { ($0.sortOrder ?? 0) < ($1.sortOrder ?? 0) })
     }
 
+    @State private var isSaving = false
+
     private func saveAction() {
-        // Capture all values before dismiss
+        guard !isSaving else { return }
+
         let capturedMemberId = member.id
         let capturedIsAdmin = canManageAccessPermissions
         let capturedRole = selectedRole
@@ -800,9 +809,8 @@ struct AdminMemberDetailSheet: View {
             }
         }
         let capturedFullName = finalFullName
-        let vm = authVM
 
-        // Detect what actually changed — only update modified fields
+        // Detect what actually changed
         let nameChanged = capturedFullName != member.fullName
         let roleChanged = capturedRole != member.role
         let phoneChanged: Bool = {
@@ -826,7 +834,7 @@ struct AdminMemberDetailSheet: View {
             return false
         }()
         let childrenOrderChanged: Bool = {
-            let originalChildren = vm.allMembers
+            let originalChildren = authVM.allMembers
                 .filter { $0.fatherId == capturedMemberId }
                 .sorted(by: { ($0.sortOrder ?? 0) < ($1.sortOrder ?? 0) })
             if capturedChildren.count != originalChildren.count { return true }
@@ -842,29 +850,27 @@ struct AdminMemberDetailSheet: View {
             return
         }
 
-        // Dismiss immediately for snappy UX
-        dismiss()
-
-        // Fire-and-forget: only update fields that actually changed
+        // Save then dismiss after completion
+        isSaving = true
         Task {
             if nameChanged {
-                await vm.updateMemberName(memberId: capturedMemberId, fullName: capturedFullName)
+                await authVM.updateMemberName(memberId: capturedMemberId, fullName: capturedFullName)
             }
             if capturedIsAdmin && roleChanged {
-                await vm.updateMemberRole(memberId: capturedMemberId, newRole: capturedRole)
+                await authVM.updateMemberRole(memberId: capturedMemberId, newRole: capturedRole)
             }
             if phoneChanged {
-                await vm.updateMemberPhone(
+                await authVM.updateMemberPhone(
                     memberId: capturedMemberId,
                     country: capturedPhoneCountry,
                     localPhone: capturedPhone
                 )
             }
             if fatherChanged {
-                await vm.updateMemberFather(memberId: capturedMemberId, fatherId: capturedFatherId)
+                await authVM.updateMemberFather(memberId: capturedMemberId, fatherId: capturedFatherId)
             }
             if datesChanged {
-                await vm.updateMemberHealthAndBirth(
+                await authVM.updateMemberHealthAndBirth(
                     memberId: capturedMemberId,
                     birthDate: capturedBirthDate,
                     isDeceased: capturedIsDeceased,
@@ -876,8 +882,10 @@ struct AdminMemberDetailSheet: View {
                 for i in 0..<updatedChildren.count {
                     updatedChildren[i].sortOrder = i
                 }
-                await vm.updateChildrenOrder(for: capturedMemberId, newOrder: updatedChildren)
+                await authVM.updateChildrenOrder(for: capturedMemberId, newOrder: updatedChildren)
             }
+            isSaving = false
+            dismiss()
         }
     }
 }
