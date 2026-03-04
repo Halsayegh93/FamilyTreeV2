@@ -89,31 +89,20 @@ extension NewsCardView {
     @ViewBuilder
     private var coverImageView: some View {
         if let imgStr = imageUrl, let url = URL(string: imgStr) {
-            AsyncImage(url: url) { phase in
-                if let image = phase.image {
-                    image
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                        .frame(height: 240)
-                        .frame(maxWidth: .infinity)
-                        .clipped()
-                } else if phase.error != nil {
-                    ZStack {
-                        DS.Color.surfaceElevated.opacity(0.5)
-                        Image(systemName: "photo.fill")
-                            .font(.largeTitle)
-                            .foregroundColor(DS.Color.textTertiary.opacity(0.5))
-                    }
+            CachedAsyncImage(url: url) { image in
+                image
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
                     .frame(height: 240)
                     .frame(maxWidth: .infinity)
-                } else {
-                    ZStack {
-                        DS.Color.surfaceElevated.opacity(0.5)
-                        ProgressView()
-                    }
-                    .frame(height: 240)
-                    .frame(maxWidth: .infinity)
+                    .clipped()
+            } placeholder: {
+                ZStack {
+                    DS.Color.surfaceElevated.opacity(0.5)
+                    ProgressView()
                 }
+                .frame(height: 240)
+                .frame(maxWidth: .infinity)
             }
         }
     }

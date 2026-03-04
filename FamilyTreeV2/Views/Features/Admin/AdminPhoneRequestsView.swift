@@ -24,9 +24,7 @@ struct AdminPhoneRequestsView: View {
         .navigationTitle(L10n.t("طلبات تغيير الجوال", "Phone Change Requests"))
         .navigationBarTitleDisplayMode(.inline)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-        .onAppear {
-            Task { await authVM.fetchPhoneChangeRequests() }
-        }
+        .task { await authVM.fetchPhoneChangeRequests() }
     }
 
     private func phoneRequestCard(request: PhoneChangeRequest) -> some View {
@@ -59,7 +57,7 @@ struct AdminPhoneRequestsView: View {
                 HStack(spacing: DS.Spacing.xl) {
                     // New phone — DS.Color.success styled
                     VStack(alignment: .center, spacing: DS.Spacing.xs) {
-                        Text("الرقم الجديد")
+                        Text(L10n.t("الرقم الجديد", "New Number"))
                             .font(DS.Font.caption2)
                             .foregroundColor(DS.Color.success)
                         Text(newPhone)
@@ -82,7 +80,7 @@ struct AdminPhoneRequestsView: View {
 
                     // Current phone — DS.Color.textSecondary styled
                     VStack(alignment: .center, spacing: DS.Spacing.xs) {
-                        Text("الرقم الحالي")
+                        Text(L10n.t("الرقم الحالي", "Current Number"))
                             .font(DS.Font.caption2)
                             .foregroundColor(DS.Color.textSecondary)
                         Text(currentPhone)
@@ -101,8 +99,8 @@ struct AdminPhoneRequestsView: View {
 
                 // Action buttons
                 DSApproveRejectButtons(
-                    approveTitle: "اعتماد الرقم",
-                    rejectTitle: "رفض",
+                    approveTitle: L10n.t("اعتماد الرقم", "Approve Number"),
+                    rejectTitle: L10n.t("رفض", "Reject"),
                     isLoading: authVM.isLoading
                 ) {
                     Task { await authVM.approvePhoneChangeRequest(request: request) }
@@ -130,7 +128,7 @@ struct AdminPhoneRequestsView: View {
                     .font(DS.Font.scaled(26, weight: .semibold))
                     .foregroundColor(.white)
             }
-            Text("لا توجد طلبات معلقة")
+            Text(L10n.t("لا توجد طلبات معلقة", "No pending requests"))
                 .font(DS.Font.headline)
                 .foregroundColor(DS.Color.textSecondary)
         }

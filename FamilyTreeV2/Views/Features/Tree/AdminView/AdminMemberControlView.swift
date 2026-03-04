@@ -19,6 +19,8 @@ struct AdminMemberControlView: View {
     @State private var localAvatarPreviewImage: UIImage? = nil
     @State private var showDeleteAvatarAlert = false
     @State private var avatarURL: String? = nil
+    @State private var errorMessage = ""
+    @State private var showErrorAlert = false
 
     init(member: FamilyMember) {
         self.member = member
@@ -103,7 +105,7 @@ struct AdminMemberControlView: View {
                                                 .frame(width: 28, height: 28)
                                                 .background(DS.Color.gradientPrimary)
                                                 .clipShape(Circle())
-                                            Text("تغيير صورة البروفايل")
+                                            Text(L10n.t("تغيير صورة البروفايل", "Change Profile Photo"))
                                                 .font(DS.Font.calloutBold)
                                                 .foregroundColor(DS.Color.primary)
                                         }
@@ -115,7 +117,7 @@ struct AdminMemberControlView: View {
                                         Button(role: .destructive) {
                                             showDeleteAvatarAlert = true
                                         } label: {
-                                            Label("حذف صورة البروفايل", systemImage: "trash")
+                                            Label(L10n.t("حذف صورة البروفايل", "Delete Profile Photo"), systemImage: "trash")
                                                 .font(DS.Font.calloutBold)
                                                 .foregroundColor(DS.Color.error)
                                                 .frame(maxWidth: .infinity)
@@ -144,6 +146,11 @@ struct AdminMemberControlView: View {
                                         TextField(L10n.t("الاسم الكامل", "Full Name"), text: $fullName)
                                             .font(DS.Font.body)
                                             .multilineTextAlignment(.leading)
+                                            .onChange(of: fullName) {
+                                                if fullName.count > 100 {
+                                                    fullName = String(fullName.prefix(100))
+                                                }
+                                            }
                                     }
                                     .padding(.horizontal, DS.Spacing.lg)
                                     .padding(.vertical, DS.Spacing.md)
@@ -158,7 +165,7 @@ struct AdminMemberControlView: View {
                                             .background(DS.Color.gradientPrimary)
                                             .cornerRadius(DS.Radius.sm)
 
-                                        DatePicker(L10n.t("تاريخ الميلاد", "Birth Date"), selection: $birthDate, displayedComponents: .date)
+                                        DatePicker(L10n.t("تاريخ الميلاد", "Birth Date"), selection: $birthDate, in: ...Date(), displayedComponents: .date)
                                             .font(DS.Font.body)
                                     }
                                     .padding(.horizontal, DS.Spacing.lg)
@@ -174,7 +181,7 @@ struct AdminMemberControlView: View {
                                             .background(DS.Color.gradientPrimary)
                                             .cornerRadius(DS.Radius.sm)
 
-                                        Toggle("متزوج", isOn: $isMarried)
+                                        Toggle(L10n.t("متزوج", "Married"), isOn: $isMarried)
                                             .font(DS.Font.body)
                                             .tint(DS.Color.primary)
                                     }
@@ -187,7 +194,7 @@ struct AdminMemberControlView: View {
 
                         // Status section
                         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                            DSSectionHeader(title: "الحالة", icon: "heart.text.square")
+                            DSSectionHeader(title: L10n.t("الحالة", "Status"), icon: "heart.text.square")
 
                             DSCard {
                                 VStack(spacing: 0) {
@@ -217,10 +224,10 @@ struct AdminMemberControlView: View {
                                                 .background(DS.Color.gradientPrimary)
                                                 .cornerRadius(DS.Radius.sm)
 
-                                            DatePicker("تاريخ الوفاة", selection: Binding(
+                                            DatePicker(L10n.t("تاريخ الوفاة", "Date of Death"), selection: Binding(
                                                 get: { deathDate ?? Date() },
                                                 set: { deathDate = $0 }
-                                            ), displayedComponents: .date)
+                                            ), in: ...Date(), displayedComponents: .date)
                                             .font(DS.Font.body)
                                         }
                                         .padding(.horizontal, DS.Spacing.lg)
@@ -233,10 +240,11 @@ struct AdminMemberControlView: View {
 
                         // Save button
                         DSPrimaryButton(
-                            "حفظ التعديلات",
+                            L10n.t("حفظ التعديلات", "Save Changes"),
                             isLoading: authVM.isLoading
                         ) {
                             Task {
+                                let previousName = authVM.allMembers.first(where: { $0.id == member.id })?.fullName
                                 await authVM.updateMemberData(
                                     memberId: member.id,
                                     fullName: fullName,
@@ -247,7 +255,15 @@ struct AdminMemberControlView: View {
                                     deathDate: deathDate,
                                     isPhoneHidden: member.isPhoneHidden ?? false
                                 )
-                                dismiss()
+                                // Check if update succeeded by verifying data changed
+                                let updatedMember = authVM.allMembers.first(where: { $0.id == member.id })
+                                if updatedMember?.fullName == previousName && fullName != previousName {
+                                    errorMessage = L10n.t("حدث خطأ أثناء حفظ التعديلات. حاول مرة أخرى.", "An error occurred while saving changes. Please try again.")
+                                    showErrorAlert = true
+                                    Log.error("updateMemberData failed silently for member \(member.id)")
+                                } else {
+                                    dismiss()
+                                }
                             }
                         }
                         .disabled(authVM.isLoading)
@@ -255,7 +271,7 @@ struct AdminMemberControlView: View {
 
                         // Delete button
                         Button(role: .destructive, action: { showDeleteAlert = true }) {
-                            Text("حذف العضو نهائياً")
+                            Text(L10n.t("حذف العضو نهائياً", "Delete Member Permanently"))
                                 .font(DS.Font.calloutBold)
                                 .foregroundColor(DS.Color.error)
                                 .frame(maxWidth: .infinity)
@@ -274,29 +290,36 @@ struct AdminMemberControlView: View {
                     .padding(.top, DS.Spacing.lg)
                 }
             }
-            .navigationTitle("تعديل بيانات العضو")
+            .navigationTitle(L10n.t("تعديل بيانات العضو", "Edit Member Details"))
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button(L10n.t("إلغاء", "Cancel")) { dismiss() }
                         .foregroundColor(DS.Color.primary)
                 }
             }
-            .alert("تأكيد الحذف", isPresented: $showDeleteAlert) {
+            .alert(L10n.t("تأكيد الحذف", "Confirm Deletion"), isPresented: $showDeleteAlert) {
                 Button(L10n.t("حذف", "Delete"), role: .destructive) {
                     Task {
                         await authVM.rejectOrDeleteMember(memberId: member.id)
-                        dismiss()
+                        // Check if deletion succeeded
+                        if authVM.allMembers.contains(where: { $0.id == member.id }) {
+                            errorMessage = L10n.t("حدث خطأ أثناء حذف العضو. حاول مرة أخرى.", "An error occurred while deleting the member. Please try again.")
+                            showErrorAlert = true
+                            Log.error("rejectOrDeleteMember failed silently for member \(member.id)")
+                        } else {
+                            dismiss()
+                        }
                     }
                 }
                 Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { }
             } message: {
-                Text("هل أنت متأكد من حذف \(member.fullName)؟ لا يمكن التراجع عن هذا الإجراء.")
+                Text(L10n.t("هل أنت متأكد من حذف \(member.fullName)؟ لا يمكن التراجع عن هذا الإجراء.", "Are you sure you want to delete \(member.fullName)? This action cannot be undone."))
             }
             .photosPicker(isPresented: $showAvatarPicker, selection: $selectedAvatarItem, matching: .images)
             .onChange(of: selectedAvatarItem) { _, newItem in
                 handleAvatarImageChange(newItem)
             }
-            .alert("حذف صورة البروفايل", isPresented: $showDeleteAvatarAlert) {
+            .alert(L10n.t("حذف صورة البروفايل", "Delete Profile Photo"), isPresented: $showDeleteAvatarAlert) {
                 Button(L10n.t("حذف", "Delete"), role: .destructive) {
                     Task {
                         await authVM.deleteAvatar(for: member.id)
@@ -308,7 +331,7 @@ struct AdminMemberControlView: View {
                 }
                 Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { }
             } message: {
-                Text("هل تريد حذف صورة البروفايل لهذا العضو؟")
+                Text(L10n.t("هل تريد حذف صورة البروفايل لهذا العضو؟", "Do you want to delete this member's profile photo?"))
             }
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)

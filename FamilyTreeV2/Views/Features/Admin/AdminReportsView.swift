@@ -122,9 +122,7 @@ struct AdminReportsView: View {
         .navigationTitle(L10n.t("التقارير", "Reports"))
         .navigationBarTitleDisplayMode(.inline)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-        .onAppear {
-            Task { await authVM.fetchAllMembers() }
-        }
+        .task { await authVM.fetchAllMembers() }
         .sheet(isPresented: $showShareSheet) {
             ActivityView(items: shareItems)
         }
@@ -503,7 +501,7 @@ struct AdminReportsView: View {
         } catch {
             await MainActor.run {
                 isGenerating = false
-                errorMessage = error.localizedDescription
+                errorMessage = L10n.t("فشل إنشاء التقرير. حاول مرة أخرى.", "Failed to generate report. Please try again.")
                 showErrorAlert = true
             }
         }

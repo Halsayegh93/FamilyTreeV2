@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UserNotifications
 
 @main
 struct FamilyTreeV2App: App {
@@ -35,6 +36,9 @@ struct FamilyTreeV2App: App {
                 .offset(x: langManager.selectedLanguage == "ar" ? 1 : -1, y: 0)
                 .preferredColorScheme(preferredScheme)
                 .id(langManager.selectedLanguage)
+                .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
+                    Task { try? await UNUserNotificationCenter.current().setBadgeCount(0) }
+                }
                 .onReceive(NotificationCenter.default.publisher(for: .didReceiveAPNSToken)) { note in
                     guard let token = note.object as? String else { return }
                     Task { await authVM.registerPushToken(token) }

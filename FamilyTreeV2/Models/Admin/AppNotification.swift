@@ -22,9 +22,17 @@ struct AppNotification: Identifiable, Codable {
         isRead ?? false
     }
     
-    var createdDate: Date {
+    func withRead(_ value: Bool) -> AppNotification {
+        AppNotification(id: id, targetMemberId: targetMemberId, title: title, body: body, kind: kind, createdBy: createdBy, createdAt: createdAt, isRead: value)
+    }
+    
+    private static let isoFormatter: ISO8601DateFormatter = {
         let f = ISO8601DateFormatter()
         f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return f.date(from: createdAt) ?? Date()
+        return f
+    }()
+
+    var createdDate: Date {
+        Self.isoFormatter.date(from: createdAt) ?? Date()
     }
 }

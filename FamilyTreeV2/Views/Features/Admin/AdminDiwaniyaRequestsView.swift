@@ -61,9 +61,7 @@ struct AdminDiwaniyaRequestsView: View {
         .navigationTitle(L10n.t("طلبات الديوانيات", "Diwaniya Requests"))
         .navigationBarTitleDisplayMode(.inline)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-        .onAppear {
-            Task { await diwaniyaVM.fetchPendingDiwaniyas() }
-        }
+        .task { await diwaniyaVM.fetchPendingDiwaniyas() }
     }
 
     // MARK: - Empty State

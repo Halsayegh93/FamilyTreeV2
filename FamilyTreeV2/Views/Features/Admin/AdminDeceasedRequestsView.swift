@@ -22,11 +22,9 @@ struct AdminDeceasedRequestsView: View {
                     }
                 }
             }
-            .navigationTitle("طلبات تأكيد الوفاة")
+            .navigationTitle(L10n.t("طلبات تأكيد الوفاة", "Deceased Confirmation Requests"))
             .navigationBarTitleDisplayMode(.inline)
-            .onAppear {
-                Task { await authVM.fetchDeceasedRequests() } // جلب البيانات عند الفتح
-            }
+            .task { await authVM.fetchDeceasedRequests() } // جلب البيانات عند الفتح
         }
     }
 
@@ -60,10 +58,10 @@ struct AdminDeceasedRequestsView: View {
 
                     VStack(alignment: .leading, spacing: DS.Spacing.xs) {
                         // عرض اسم الشخص من البيانات القادمة من السيرفر
-                        Text("طلب لـ: \(request.member?.fullName ?? "عضو جديد")")
+                        Text(L10n.t("طلب لـ: \(request.member?.fullName ?? "عضو جديد")", "Request for: \(request.member?.fullName ?? "New Member")"))
                             .font(DS.Font.calloutBold)
                             .foregroundColor(DS.Color.textPrimary)
-                        Text(request.details ?? "لا توجد تفاصيل إضافية")
+                        Text(request.details ?? L10n.t("لا توجد تفاصيل إضافية", "No additional details"))
                             .font(DS.Font.caption1)
                             .foregroundColor(DS.Color.textSecondary)
                     }
@@ -72,12 +70,13 @@ struct AdminDeceasedRequestsView: View {
 
                 // Action buttons
                 DSApproveRejectButtons(
-                    approveTitle: "موافقة وتحديث الشجرة",
-                    rejectTitle: "رفض"
+                    approveTitle: L10n.t("موافقة وتحديث الشجرة", "Approve & Update Tree"),
+                    rejectTitle: L10n.t("رفض", "Reject"),
+                    isLoading: authVM.isLoading
                 ) {
                     Task { await authVM.approveDeceasedRequest(request: request) }
                 } onReject: {
-                    /* دالة الرفض */
+                    Task { await authVM.rejectDeceasedRequest(request: request) }
                 }
             }
             .padding(DS.Spacing.lg)
@@ -100,7 +99,7 @@ struct AdminDeceasedRequestsView: View {
                     .font(DS.Font.scaled(26, weight: .semibold))
                     .foregroundColor(.white)
             }
-            Text("لا توجد طلبات حالياً")
+            Text(L10n.t("لا توجد طلبات حالياً", "No requests at the moment"))
                 .font(DS.Font.headline)
                 .foregroundColor(DS.Color.textSecondary)
         }

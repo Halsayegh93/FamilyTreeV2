@@ -28,11 +28,11 @@ struct ApprovalSheet: View {
                     }
                     .dsGlowShadow()
 
-                    Text("ربط بالشجرة")
+                    Text(L10n.t("ربط بالشجرة", "Link to Tree"))
                         .font(DS.Font.caption1)
                         .foregroundColor(DS.Color.textSecondary)
 
-                    Text(member.fullName ?? "—")
+                    Text(member.fullName)
                         .font(DS.Font.title3)
                         .foregroundColor(DS.Color.textPrimary)
                 }
@@ -44,7 +44,7 @@ struct ApprovalSheet: View {
 
                 // خانة البحث عن الأب
                 VStack(alignment: .leading, spacing: DS.Spacing.md) {
-                    Text("ابحث عن اسم الأب في العائلة:")
+                    Text(L10n.t("ابحث عن اسم الأب في العائلة:", "Search for the father's name:"))
                         .font(DS.Font.headline)
                         .foregroundColor(DS.Color.textPrimary)
 
@@ -59,11 +59,13 @@ struct ApprovalSheet: View {
                                 .foregroundColor(.white)
                         }
 
-                        TextField("اكتب الاسم الخماسي للأب...", text: $searchText)
+                        TextField(L10n.t("اكتب الاسم الخماسي للأب...", "Type the father's full name..."), text: $searchText)
                             .multilineTextAlignment(.leading)
                             .font(DS.Font.body)
                             .focused($isSearchFocused)
-                            .onChange(of: searchText) { _ in
+                            .task(id: searchText) {
+                                try? await Task.sleep(nanoseconds: 400_000_000)
+                                guard !Task.isCancelled else { return }
                                 searchForFather()
                             }
                     }
@@ -93,10 +95,10 @@ struct ApprovalSheet: View {
                         Spacer()
 
                         VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                            Text(father.fullName ?? "—")
+                            Text(father.fullName)
                                 .font(DS.Font.calloutBold)
                                 .foregroundColor(DS.Color.textPrimary)
-                            Text("رقم الهاتف: \(KuwaitPhone.display(father.phoneNumber))")
+                            Text(L10n.t("رقم الهاتف: \(KuwaitPhone.display(father.phoneNumber))", "Phone: \(KuwaitPhone.display(father.phoneNumber))"))
                                 .font(DS.Font.caption2)
                                 .foregroundColor(DS.Color.textSecondary)
                         }
@@ -110,7 +112,7 @@ struct ApprovalSheet: View {
 
                 // زر التأكيد النهائي — DSPrimaryButton gradient
                 DSPrimaryButton(
-                    "تأكيد الانضمام والربط بالأب",
+                    L10n.t("تأكيد الانضمام والربط بالأب", "Confirm & Link to Father"),
                     icon: "checkmark.circle.fill",
                     isLoading: isLoading
                 ) {
@@ -121,7 +123,7 @@ struct ApprovalSheet: View {
                 .padding(.horizontal, DS.Spacing.xs)
             }
             .padding(DS.Spacing.lg)
-            .navigationTitle("إجراءات الموافقة")
+            .navigationTitle(L10n.t("إجراءات الموافقة", "Approval Actions"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
@@ -147,7 +149,7 @@ struct ApprovalSheet: View {
                     let response: [FamilyMember] = try await SupabaseConfig.client
                         .from("profiles")
                         .select()
-                        .ilike("full_name", value: "%\(searchText)%") // التعديل هنا
+                        .ilike("full_name", pattern: "%\(searchText)%")
                         .eq("status", value: "active")
                         .limit(10)
                         .execute()

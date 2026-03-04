@@ -1,5 +1,5 @@
 import SwiftUI
-import MapKit
+
 
 // MARK: - DiwaniyasView
 struct DiwaniyasView: View {
@@ -91,11 +91,7 @@ struct DiwaniyasView: View {
                     "Are you sure you want to delete \"\(diwaniyaToDelete?.title ?? "")\"?"
                 ))
             }
-            .onAppear {
-                Task {
-                    await viewModel.fetchDiwaniyas()
-                }
-            }
+            .task { await viewModel.fetchDiwaniyas() }
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         }
     }
@@ -144,111 +140,111 @@ struct DiwaniyasView: View {
 
     // MARK: - Diwaniya Card
     private func diwaniyaCard(for item: Diwaniya) -> some View {
-        DSCard(padding: 0) {
+        let isClosed = item.isClosed == true
+        let cardColor = isClosed ? DS.Color.textTertiary : DS.Color.gridDiwaniya
+        
+        return DSCard(padding: 0) {
             VStack(spacing: 0) {
-                // Card header with owner info
+                // شريط علوي ملون
                 HStack(spacing: DS.Spacing.md) {
-                    DSIcon(item.imageUrl ?? "map.fill", color: item.isClosed == true ? DS.Color.textTertiary : DS.Color.gridDiwaniya)
+                    // أيقونة بتدرج
+                    ZStack {
+                        Circle()
+                            .fill(
+                                LinearGradient(
+                                    colors: isClosed
+                                        ? [DS.Color.textTertiary.opacity(0.3), DS.Color.textTertiary.opacity(0.1)]
+                                        : [DS.Color.gridDiwaniya.opacity(0.2), DS.Color.primary.opacity(0.1)],
+                                    startPoint: .topLeading, endPoint: .bottomTrailing
+                                )
+                            )
+                            .frame(width: 48, height: 48)
+                        Image(systemName: item.imageUrl ?? "map.fill")
+                            .font(DS.Font.scaled(20, weight: .bold))
+                            .foregroundColor(cardColor)
+                    }
 
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: 3) {
                         HStack(spacing: DS.Spacing.sm) {
                             Text(item.title)
-                                .font(DS.Font.calloutBold)
-                                .foregroundColor(item.isClosed == true ? DS.Color.textTertiary : DS.Color.textPrimary)
+                                .font(DS.Font.headline)
+                                .foregroundColor(isClosed ? DS.Color.textTertiary : DS.Color.textPrimary)
 
-                            if item.isClosed == true {
-                                Text(L10n.t("مغلقة", "Closed"))
-                                    .font(DS.Font.caption2)
-                                    .fontWeight(.bold)
-                                    .foregroundColor(.white)
-                                    .padding(.horizontal, DS.Spacing.sm)
-                                    .padding(.vertical, 2)
-                                    .background(DS.Color.error.opacity(0.8))
-                                    .clipShape(Capsule())
+                            if isClosed {
+                                HStack(spacing: 3) {
+                                    Image(systemName: "lock.fill")
+                                        .font(.system(size: 8))
+                                    Text(L10n.t("مغلقة", "Closed"))
+                                        .font(DS.Font.scaled(10, weight: .bold))
+                                }
+                                .foregroundColor(.white)
+                                .padding(.horizontal, DS.Spacing.sm)
+                                .padding(.vertical, 3)
+                                .background(DS.Color.error.opacity(0.8))
+                                .clipShape(Capsule())
                             }
                         }
-                        Text(item.ownerName)
-                            .font(DS.Font.caption1)
-                            .foregroundColor(DS.Color.textSecondary)
+                        HStack(spacing: DS.Spacing.xs) {
+                            Image(systemName: "person.fill")
+                                .font(.system(size: 10))
+                                .foregroundColor(DS.Color.textTertiary)
+                            Text(item.ownerName)
+                                .font(DS.Font.caption1)
+                                .foregroundColor(DS.Color.textSecondary)
+                        }
                     }
 
                     Spacer()
 
                     if authVM.currentUser?.role == .admin || authVM.currentUser?.id == item.ownerId {
-                        HStack(spacing: DS.Spacing.sm) {
-                            Button {
-                                diwaniyaToEdit = item
-                            } label: {
-                                Image(systemName: "pencil")
-                                    .font(DS.Font.scaled(14, weight: .semibold))
-                                    .foregroundColor(DS.Color.primary)
-                                    .frame(width: 32, height: 32)
-                                    .background(DS.Color.primary.opacity(0.1))
-                                    .clipShape(Circle())
+                        Menu {
+                            Button(action: { diwaniyaToEdit = item }) {
+                                Label(L10n.t("تعديل", "Edit"), systemImage: "pencil")
                             }
-                            .buttonStyle(PlainButtonStyle())
-
-                            Button {
-                                diwaniyaToDelete = item
-                            } label: {
-                                Image(systemName: "trash")
-                                    .font(DS.Font.scaled(14, weight: .semibold))
-                                    .foregroundColor(DS.Color.error)
-                                    .frame(width: 32, height: 32)
-                                    .background(DS.Color.error.opacity(0.1))
-                                    .clipShape(Circle())
+                            Button(role: .destructive, action: { diwaniyaToDelete = item }) {
+                                Label(L10n.t("حذف", "Delete"), systemImage: "trash")
                             }
-                            .buttonStyle(PlainButtonStyle())
+                        } label: {
+                            Image(systemName: "ellipsis")
+                                .font(DS.Font.scaled(16, weight: .bold))
+                                .foregroundColor(DS.Color.textSecondary)
+                                .frame(width: 36, height: 36)
+                                .background(DS.Color.textTertiary.opacity(0.08))
+                                .clipShape(Circle())
                         }
                     }
                 }
                 .padding(.horizontal, DS.Spacing.lg)
                 .padding(.vertical, DS.Spacing.md)
 
-                // Info rows
-                if let schedule = item.scheduleText, !schedule.isEmpty {
+                // معلومات مدمجة في شبكة
+                let infoItems = buildDiwaniyaInfoItems(item)
+                if !infoItems.isEmpty {
                     DSDivider()
-                    HStack(spacing: DS.Spacing.md) {
-                        DSIcon("clock.fill", color: DS.Color.warning)
-                        Text(schedule)
-                            .font(DS.Font.callout)
-                            .foregroundColor(DS.Color.textPrimary)
-                            .lineLimit(1)
-                        Spacer()
+                    VStack(spacing: 0) {
+                        ForEach(Array(infoItems.enumerated()), id: \.offset) { index, info in
+                            HStack(spacing: DS.Spacing.md) {
+                                Image(systemName: info.icon)
+                                    .font(DS.Font.scaled(13, weight: .semibold))
+                                    .foregroundColor(info.color)
+                                    .frame(width: 20)
+                                Text(info.text)
+                                    .font(DS.Font.callout)
+                                    .foregroundColor(DS.Color.textPrimary)
+                                    .lineLimit(2)
+                                Spacer()
+                            }
+                            .padding(.horizontal, DS.Spacing.lg)
+                            .padding(.vertical, DS.Spacing.sm)
+                            
+                            if index < infoItems.count - 1 {
+                                Divider().padding(.horizontal, DS.Spacing.xxxl)
+                            }
+                        }
                     }
-                    .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.vertical, DS.Spacing.sm)
                 }
 
-                if let addr = item.address, !addr.isEmpty {
-                    DSDivider()
-                    HStack(spacing: DS.Spacing.md) {
-                        DSIcon("mappin.and.ellipse", color: DS.Color.accent)
-                        Text(addr)
-                            .font(DS.Font.callout)
-                            .foregroundColor(DS.Color.textPrimary)
-                            .lineLimit(2)
-                        Spacer()
-                    }
-                    .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.vertical, DS.Spacing.sm)
-                }
-
-                if let phone = item.contactPhone, !phone.isEmpty {
-                    DSDivider()
-                    HStack(spacing: DS.Spacing.md) {
-                        DSIcon("phone.fill", color: DS.Color.success)
-                        Text(KuwaitPhone.display(phone))
-                            .font(DS.Font.callout)
-                            .foregroundColor(DS.Color.textPrimary)
-                            .lineLimit(1)
-                        Spacer()
-                    }
-                    .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.vertical, DS.Spacing.sm)
-                }
-
-                // Action buttons
+                // أزرار الإجراءات
                 let hasLocation = item.mapsUrl?.isEmpty == false
                 let hasPhone = item.contactPhone?.isEmpty == false
                 if hasLocation || hasPhone {
@@ -264,11 +260,11 @@ struct DiwaniyasView: View {
                                 .fontWeight(.bold)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, DS.Spacing.sm + 4)
-                                .foregroundColor(DS.Color.primary)
-                                .background(DS.Color.primary.opacity(0.08))
+                                .foregroundColor(.white)
+                                .background(DS.Color.gradientPrimary)
                                 .clipShape(Capsule())
-                                .overlay(Capsule().stroke(DS.Color.primary.opacity(0.3), lineWidth: 1))
                             }
+                            .buttonStyle(DSBoldButtonStyle())
                         }
 
                         if let phone = item.contactPhone, !phone.isEmpty, let callURL = KuwaitPhone.telURL(phone) {
@@ -286,6 +282,7 @@ struct DiwaniyasView: View {
                                 .clipShape(Capsule())
                                 .overlay(Capsule().stroke(DS.Color.success.opacity(0.3), lineWidth: 1))
                             }
+                            .buttonStyle(DSBoldButtonStyle())
                         }
                     }
                     .padding(.horizontal, DS.Spacing.lg)
@@ -293,6 +290,26 @@ struct DiwaniyasView: View {
                 }
             }
         }
+    }
+    
+    private struct DiwaniyaInfoItem {
+        let icon: String
+        let color: Color
+        let text: String
+    }
+    
+    private func buildDiwaniyaInfoItems(_ item: Diwaniya) -> [DiwaniyaInfoItem] {
+        var items: [DiwaniyaInfoItem] = []
+        if let schedule = item.scheduleText, !schedule.isEmpty {
+            items.append(DiwaniyaInfoItem(icon: "clock.fill", color: DS.Color.warning, text: schedule))
+        }
+        if let addr = item.address, !addr.isEmpty {
+            items.append(DiwaniyaInfoItem(icon: "mappin.and.ellipse", color: DS.Color.accent, text: addr))
+        }
+        if let phone = item.contactPhone, !phone.isEmpty {
+            items.append(DiwaniyaInfoItem(icon: "phone.fill", color: DS.Color.success, text: KuwaitPhone.display(phone)))
+        }
+        return items
     }
 }
 
@@ -376,6 +393,11 @@ private struct AddDiwaniyaRequestView: View {
                                     placeholder: L10n.t("اسم الديوانية", "Diwaniya Name"),
                                     text: $name
                                 )
+                                .onChange(of: name) {
+                                    if name.count > 100 {
+                                        name = String(name.prefix(100))
+                                    }
+                                }
 
                                 DSDivider()
 
@@ -385,6 +407,11 @@ private struct AddDiwaniyaRequestView: View {
                                     placeholder: L10n.t("صاحب الديوانية", "Diwaniya Owner"),
                                     text: $ownerName
                                 )
+                                .onChange(of: ownerName) {
+                                    if ownerName.count > 100 {
+                                        ownerName = String(ownerName.prefix(100))
+                                    }
+                                }
 
                                 DSDivider()
 

@@ -214,6 +214,11 @@ struct AdminMemberDetailSheet: View {
                     placeholder: L10n.t("الاسم الكامل", "Full Name"),
                     text: $fullName
                 )
+                .onChange(of: fullName) {
+                    if fullName.count > 100 {
+                        fullName = String(fullName.prefix(100))
+                    }
+                }
 
                 DSDivider()
 
@@ -223,6 +228,11 @@ struct AdminMemberDetailSheet: View {
                     placeholder: L10n.t("اسم العائلة", "Family Name"),
                     text: $familyName
                 )
+                .onChange(of: familyName) {
+                    if familyName.count > 50 {
+                        familyName = String(familyName.prefix(50))
+                    }
+                }
             }
         }
         .padding(.horizontal, DS.Spacing.lg)
@@ -619,12 +629,13 @@ struct AdminMemberDetailSheet: View {
 
                     Spacer()
 
-                    Toggle("", isOn: $hasBirthDate.animation())
+                    Toggle("", isOn: $hasBirthDate)
                         .labelsHidden()
                         .tint(DS.Color.primary)
                 }
                 .padding(.horizontal, DS.Spacing.md)
                 .padding(.vertical, DS.Spacing.sm)
+                .animation(.default, value: hasBirthDate)
 
                 if hasBirthDate {
                     DSDivider()
@@ -657,12 +668,13 @@ struct AdminMemberDetailSheet: View {
 
                     Spacer()
 
-                    Toggle("", isOn: $isDeceased.animation())
+                    Toggle("", isOn: $isDeceased)
                         .labelsHidden()
                         .tint(DS.Color.error)
                 }
                 .padding(.horizontal, DS.Spacing.md)
                 .padding(.vertical, DS.Spacing.sm)
+                .animation(.default, value: isDeceased)
 
                 if isDeceased {
                     DSDivider()
@@ -676,12 +688,13 @@ struct AdminMemberDetailSheet: View {
 
                         Spacer()
 
-                        Toggle("", isOn: $hasDeathDate.animation())
+                        Toggle("", isOn: $hasDeathDate)
                             .labelsHidden()
                             .tint(DS.Color.error)
                     }
                     .padding(.horizontal, DS.Spacing.md)
                     .padding(.vertical, DS.Spacing.sm)
+                    .animation(.default, value: hasDeathDate)
 
                     if hasDeathDate {
                         DSDivider()
@@ -778,7 +791,7 @@ struct AdminMemberDetailSheet: View {
     private func setupLocalChildren() {
         localChildren = authVM.allMembers
             .filter { $0.fatherId == member.id }
-            .sorted(by: { ($0.sortOrder ?? 0) < ($1.sortOrder ?? 0) })
+            .sorted(by: { $0.sortOrder < $1.sortOrder })
     }
 
     @State private var isSaving = false
@@ -836,7 +849,7 @@ struct AdminMemberDetailSheet: View {
         let childrenOrderChanged: Bool = {
             let originalChildren = authVM.allMembers
                 .filter { $0.fatherId == capturedMemberId }
-                .sorted(by: { ($0.sortOrder ?? 0) < ($1.sortOrder ?? 0) })
+                .sorted(by: { $0.sortOrder < $1.sortOrder })
             if capturedChildren.count != originalChildren.count { return true }
             for (i, child) in capturedChildren.enumerated() {
                 if child.id != originalChildren[i].id { return true }

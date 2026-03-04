@@ -135,6 +135,11 @@ struct AddSonByAdminSheet: View {
                         .font(DS.Font.callout)
                         .foregroundColor(DS.Color.textPrimary)
                         .multilineTextAlignment(.leading)
+                        .onChange(of: firstName) {
+                            if firstName.count > 50 {
+                                firstName = String(firstName.prefix(50))
+                            }
+                        }
                 }
                 .padding(.horizontal, DS.Spacing.md)
                 .padding(.vertical, DS.Spacing.sm)
@@ -240,12 +245,13 @@ struct AddSonByAdminSheet: View {
 
                     Spacer()
 
-                    Toggle("", isOn: $hasBirthDate.animation())
+                    Toggle("", isOn: $hasBirthDate)
                         .labelsHidden()
                         .tint(DS.Color.primary)
                 }
                 .padding(.horizontal, DS.Spacing.md)
                 .padding(.vertical, DS.Spacing.sm)
+                .animation(.default, value: hasBirthDate)
 
                 if hasBirthDate {
                     DSDivider()
@@ -278,12 +284,13 @@ struct AddSonByAdminSheet: View {
 
                     Spacer()
 
-                    Toggle("", isOn: $isDeceased.animation())
+                    Toggle("", isOn: $isDeceased)
                         .labelsHidden()
                         .tint(DS.Color.error)
                 }
                 .padding(.horizontal, DS.Spacing.md)
                 .padding(.vertical, DS.Spacing.sm)
+                .animation(.default, value: isDeceased)
 
                 if isDeceased {
                     DSDivider()
@@ -297,12 +304,13 @@ struct AddSonByAdminSheet: View {
 
                         Spacer()
 
-                        Toggle("", isOn: $hasDeathDate.animation())
+                        Toggle("", isOn: $hasDeathDate)
                             .labelsHidden()
                             .tint(DS.Color.error)
                     }
                     .padding(.horizontal, DS.Spacing.md)
                     .padding(.vertical, DS.Spacing.sm)
+                    .animation(.default, value: hasDeathDate)
 
                     if hasDeathDate {
                         DSDivider()
@@ -372,7 +380,8 @@ struct AddSonByAdminSheet: View {
                     fatherId: capturedParentId,
                     isDeceased: capturedIsDeceased,
                     deathDate: capturedDeathDate,
-                    gender: capturedGender
+                    gender: capturedGender,
+                    silent: true
                 )
             }
         }

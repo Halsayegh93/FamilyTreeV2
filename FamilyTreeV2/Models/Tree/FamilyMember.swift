@@ -14,6 +14,7 @@ struct FamilyMember: Identifiable, Codable, Equatable {
     var photoURL: String?
     let isPhoneHidden: Bool?
     let isBirthDateHidden: Bool?
+    let badgeEnabled: Bool?
     var isHiddenFromTree: Bool
     var sortOrder: Int
     var bio: [BioStation]?
@@ -37,6 +38,7 @@ struct FamilyMember: Identifiable, Codable, Equatable {
         photoURL: String? = nil,
         isPhoneHidden: Bool? = nil,
         isBirthDateHidden: Bool? = nil,
+        badgeEnabled: Bool? = nil,
         isHiddenFromTree: Bool = false,
         sortOrder: Int = 0,
         bio: [BioStation]? = nil,
@@ -59,6 +61,7 @@ struct FamilyMember: Identifiable, Codable, Equatable {
         self.photoURL = photoURL
         self.isPhoneHidden = isPhoneHidden
         self.isBirthDateHidden = isBirthDateHidden
+        self.badgeEnabled = badgeEnabled
         self.isHiddenFromTree = isHiddenFromTree
         self.sortOrder = sortOrder
         self.bio = bio
@@ -91,6 +94,7 @@ struct FamilyMember: Identifiable, Codable, Equatable {
         self.photoURL = try container.decodeIfPresent(String.self, forKey: .photoURL)
         self.isPhoneHidden = try container.decodeIfPresent(Bool.self, forKey: .isPhoneHidden)
         self.isBirthDateHidden = try container.decodeIfPresent(Bool.self, forKey: .isBirthDateHidden)
+        self.badgeEnabled = try container.decodeIfPresent(Bool.self, forKey: .badgeEnabled)
         
         self.isHiddenFromTree = try container.decodeIfPresent(Bool.self, forKey: .isHiddenFromTree) ?? false
         self.sortOrder = try container.decodeIfPresent(Int.self, forKey: .sortOrder) ?? 0
@@ -155,10 +159,10 @@ struct FamilyMember: Identifiable, Codable, Equatable {
     
     var roleName: String {
         switch role {
-        case .admin: return "Admin"
-        case .supervisor: return "Supervisor"
-        case .member: return "Member"
-        case .pending: return "Pending"
+        case .admin: return L10n.t("مشرف عام", "Admin")
+        case .supervisor: return L10n.t("مشرف", "Supervisor")
+        case .member: return L10n.t("عضو", "Member")
+        case .pending: return L10n.t("معلق", "Pending")
         }
     }
 
@@ -174,6 +178,7 @@ struct FamilyMember: Identifiable, Codable, Equatable {
         case photoURL = "photo_url"
         case isPhoneHidden = "is_phone_hidden"
         case isBirthDateHidden = "is_birth_date_hidden"
+        case badgeEnabled = "badge_enabled"
         case isHiddenFromTree = "is_hidden_from_tree"
         case sortOrder = "sort_order"
         case bio = "bio_json"

@@ -25,7 +25,7 @@ class DiwaniyasViewModel: ObservableObject {
             
             self.diwaniyas = response
         } catch {
-            self.errorMessage = error.localizedDescription
+            self.errorMessage = L10n.t("تعذر تحميل الديوانيات. حاول مرة أخرى.", "Failed to load diwaniyas. Please try again.")
             Log.error("خطأ جلب الديوانيات: \(error.localizedDescription)")
         }
         isLoading = false
@@ -44,7 +44,7 @@ class DiwaniyasViewModel: ObservableObject {
             
             self.pendingDiwaniyas = response
         } catch {
-            self.errorMessage = error.localizedDescription
+            self.errorMessage = L10n.t("تعذر تحميل الطلبات المعلقة. حاول مرة أخرى.", "Failed to load pending requests. Please try again.")
             Log.error("خطأ جلب الديوانيات المعلقة: \(error.localizedDescription)")
         }
         isLoading = false
@@ -90,7 +90,7 @@ class DiwaniyasViewModel: ObservableObject {
             isLoading = false
             return true
         } catch {
-            self.errorMessage = error.localizedDescription
+            self.errorMessage = L10n.t("فشل إضافة الديوانية. حاول مرة أخرى.", "Failed to add diwaniya. Please try again.")
             Log.error("خطأ إضافة ديوانية: \(error.localizedDescription)")
             isLoading = false
             return false
@@ -107,7 +107,7 @@ class DiwaniyasViewModel: ObservableObject {
                 .execute()
             await fetchDiwaniyas()
         } catch {
-            self.errorMessage = error.localizedDescription
+            self.errorMessage = L10n.t("فشل حذف الديوانية. حاول مرة أخرى.", "Failed to delete diwaniya. Please try again.")
             Log.error("خطأ حذف ديوانية: \(error.localizedDescription)")
             isLoading = false
         }
@@ -127,7 +127,7 @@ class DiwaniyasViewModel: ObservableObject {
                 .execute()
             await fetchPendingDiwaniyas()
         } catch {
-            self.errorMessage = error.localizedDescription
+            self.errorMessage = L10n.t("فشل اعتماد الديوانية. حاول مرة أخرى.", "Failed to approve diwaniya. Please try again.")
             Log.error("خطأ اعتماد ديوانية: \(error.localizedDescription)")
             isLoading = false
         }
@@ -176,7 +176,7 @@ class DiwaniyasViewModel: ObservableObject {
             isLoading = false
             return true
         } catch {
-            self.errorMessage = error.localizedDescription
+            self.errorMessage = L10n.t("فشل تحديث الديوانية. حاول مرة أخرى.", "Failed to update diwaniya. Please try again.")
             Log.error("خطأ تحديث ديوانية: \(error.localizedDescription)")
             isLoading = false
             return false

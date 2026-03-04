@@ -14,8 +14,9 @@ struct HomeNewsView: View {
     @State private var showingContactCenter = false
     @State private var showNewNewsAlert = false
     @State private var newNewsCount = 0
-    @State private var showComingSoonAlert = false
     @State private var selectedMemberForDetails: FamilyMember? = nil
+    @State private var lastRefreshDate: Date? = nil
+    @State private var showingPhotoAlbums = false
 
     var body: some View {
         NavigationStack {
@@ -36,14 +37,13 @@ struct HomeNewsView: View {
                         .padding(.top, DS.Spacing.md)
                         .padding(.bottom, 120)
                     }
-                    .refreshable { await refreshNews(notifyIfNew: true) }
+                    .refreshable { await refreshNews(notifyIfNew: true, force: true) }
                 }
 
-                // FAB + AI Button
-                floatingButtons
+
             }
             .navigationBarHidden(true)
-            .onAppear { Task { await refreshNews(notifyIfNew: false) } }
+            .task { await refreshNews(notifyIfNew: false) }
             .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
                 Task { await refreshNews(notifyIfNew: true) }
             }
@@ -53,6 +53,8 @@ struct HomeNewsView: View {
                     .presentationDragIndicator(.visible)
             }
             .sheet(isPresented: $showingContactCenter) { ContactCenterView() }
+
+            .sheet(isPresented: $showingPhotoAlbums) { FamilyPhotoAlbumsView() }
             .sheet(item: $selectedNewsForComments) { news in
                 NewsCommentsSheet(news: news)
             }
@@ -84,9 +86,7 @@ struct HomeNewsView: View {
             .alert(L10n.t("تنبيه الأخبار", "News Alert"), isPresented: $showNewNewsAlert) {
                 Button(L10n.t("حسناً", "OK"), role: .cancel) {}
             } message: { Text(L10n.t("تمت إضافة \(newNewsCount) خبر جديد.", "\(newNewsCount) new post(s) added.")) }
-            .alert(L10n.t("قريباً", "Coming Soon"), isPresented: $showComingSoonAlert) {
-                Button(L10n.t("حسناً", "OK"), role: .cancel) {}
-            } message: { Text(L10n.t("هذه الواجهة ستكون متوفرة قريباً.", "This screen will be available soon.")) }
+
             .sheet(item: $selectedMemberForDetails) { member in
                 NavigationStack {
                     MemberDetailsView(member: member)
@@ -179,9 +179,7 @@ struct HomeNewsView: View {
     // MARK: - Quick Actions Section
     private var quickActionsSection: some View {
         HStack(spacing: DS.Spacing.md) {
-            quickActionItem(icon: "calendar", title: L10n.t("المناسبات", "Events"), color: DS.Color.gridTree) { showComingSoonAlert = true }
-            quickActionItem(icon: "briefcase.fill", title: L10n.t("المشاريع", "Projects"), color: DS.Color.success) { showComingSoonAlert = true }
-            quickActionItem(icon: "photo.on.rectangle.angled.fill", title: L10n.t("الصور", "Photos"), color: DS.Color.gridDiwaniya) { showComingSoonAlert = true }
+            quickActionItem(icon: "photo.on.rectangle.angled.fill", title: L10n.t("الصور", "Photos"), color: DS.Color.gridDiwaniya) { showingPhotoAlbums = true }
             quickActionItem(icon: "bubble.left.and.bubble.right.fill", title: L10n.t("تواصل", "Contact"), color: DS.Color.gridContact) { showingContactCenter = true }
         }
         .padding(.horizontal, DS.Spacing.lg)
@@ -240,33 +238,28 @@ struct HomeNewsView: View {
 
                 if authVM.currentUser?.role != .pending {
                     Button(action: { showingAddNews = true }) {
-                        HStack(spacing: DS.Spacing.xs) {
-                            Image(systemName: "plus")
-                                .font(DS.Font.scaled(12, weight: .bold))
-                            Text(L10n.t("أضف خبر", "Add Post"))
-                                .font(DS.Font.caption2)
-                                .fontWeight(.bold)
-                        }
-                        .foregroundColor(.white)
-                        .padding(.horizontal, DS.Spacing.md)
-                        .padding(.vertical, DS.Spacing.sm)
-                        .background(DS.Color.gradientPrimary)
-                        .clipShape(Capsule())
+                        Image(systemName: "plus")
+                            .font(DS.Font.scaled(14, weight: .bold))
+                            .foregroundColor(.white)
+                            .frame(width: 30, height: 30)
+                            .background(DS.Color.gradientPrimary)
+                            .clipShape(Circle())
                     }
                     .buttonStyle(DSBoldButtonStyle())
+                    .accessibilityLabel(L10n.t("إضافة خبر جديد", "Add new post"))
                 }
             }
             .padding(.horizontal, DS.Spacing.lg)
             .padding(.vertical, DS.Spacing.md)
             .background(
                 RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
-                    .fill(DS.Color.surfaceElevated)
+                    .fill(.ultraThinMaterial)
                     .overlay(
                         RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
-                            .stroke(DS.Color.textTertiary.opacity(0.25), lineWidth: 0.75)
+                            .stroke(Color.white.opacity(0.2), lineWidth: 0.75)
                     )
             )
-            .shadow(color: Color.black.opacity(0.08), radius: 12, x: 0, y: 4)
+            .shadow(color: Color.black.opacity(0.06), radius: 10, x: 0, y: 3)
             .padding(.horizontal, DS.Spacing.md)
 
             if authVM.allNews.isEmpty {
@@ -322,10 +315,7 @@ struct HomeNewsView: View {
         )
     }
 
-    // MARK: - Floating Buttons
-    private var floatingButtons: some View {
-        EmptyView()
-    }
+
 
     // MARK: - Empty State
     private var emptyNewsView: some View {
@@ -388,9 +378,7 @@ struct HomeNewsView: View {
 
     private func relativeTimeFromISO(_ dateString: String) -> String {
         let date = Self.isoFormatter.date(from: dateString) ?? Date()
-        let f = RelativeDateTimeFormatter()
-        f.locale = L10n.isArabic ? Locale(identifier: "ar") : Locale(identifier: "en_US")
-        return f.localizedString(for: date, relativeTo: Date())
+        return getRelativeTime(for: date)
     }
 
     private func toggleLike(for postId: UUID) {
@@ -398,12 +386,22 @@ struct HomeNewsView: View {
     }
 
     @MainActor
-    private func refreshNews(notifyIfNew: Bool) async {
+    private func refreshNews(notifyIfNew: Bool, force: Bool = false) async {
+        // تجنب التحديث المتكرر خلال 10 ثواني
+        if !force, let last = lastRefreshDate, Date().timeIntervalSince(last) < 10 { return }
+        lastRefreshDate = Date()
+        
         let previousIDs = Set(authVM.allNews.map(\.id))
-        await authVM.fetchNews()
+        
+        // تحميل الأخبار والأعضاء بالتوازي إذا لزم
         if authVM.allMembers.isEmpty {
-            await authVM.fetchAllMembers()
+            async let news: () = authVM.fetchNews(force: true)
+            async let members: () = authVM.fetchAllMembers(force: true)
+            _ = await (news, members)
+        } else {
+            await authVM.fetchNews(force: true)
         }
+        
         guard notifyIfNew, !previousIDs.isEmpty else { return }
         let count = Set(authVM.allNews.map(\.id)).subtracting(previousIDs).count
         if count > 0 { newNewsCount = count; showNewNewsAlert = true }
@@ -491,7 +489,7 @@ struct HomeNewsCardView: View {
                     HStack(spacing: DS.Spacing.sm) {
                         ZStack {
                             if let urlStr = authorMember?.avatarUrl, let url = URL(string: urlStr) {
-                                AsyncImage(url: url) { img in
+                                CachedAsyncImage(url: url) { img in
                                     img.resizable().scaledToFill()
                                 } placeholder: {
                                     Circle()
@@ -610,7 +608,7 @@ struct HomeNewsCardView: View {
                     ForEach(Array(imageUrls.enumerated()), id: \.offset) { _, urlStr in
                         if let encodedStr = urlStr.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
                            let url = URL(string: encodedStr) {
-                            AsyncImage(url: url) { img in
+                            CachedAsyncImage(url: url) { img in
                                 img.resizable().scaledToFit()
                                     .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
                             } placeholder: { 
@@ -630,28 +628,18 @@ struct HomeNewsCardView: View {
             } else if let urlStr = imageUrl,
                       let encodedStr = urlStr.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
                       let url = URL(string: encodedStr) {
-                AsyncImage(url: url) { phase in
-                    if let img = phase.image {
-                        img.resizable()
-                            .scaledToFit()
-                            .frame(maxWidth: .infinity)
-                            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
-                    } else if phase.error != nil {
-                        ZStack {
-                            Color.gray.opacity(0.05)
-                            Image(systemName: "photo")
-                                .foregroundColor(DS.Color.textTertiary)
-                        }
-                        .frame(height: 200)
+                CachedAsyncImage(url: url) { img in
+                    img.resizable()
+                        .scaledToFit()
+                        .frame(maxWidth: .infinity)
                         .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
-                    } else {
-                        ZStack {
-                            Color.gray.opacity(0.05)
-                            ProgressView().tint(DS.Color.primary)
-                        }
-                        .frame(height: 200)
-                        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+                } placeholder: {
+                    ZStack {
+                        Color.gray.opacity(0.05)
+                        ProgressView().tint(DS.Color.primary)
                     }
+                    .frame(height: 200)
+                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.horizontal, DS.Spacing.md)
@@ -1290,7 +1278,7 @@ struct EditNewsView: View {
                             HStack(spacing: DS.Spacing.sm) {
                                 ForEach(Array(existingImageURLs.enumerated()), id: \.offset) { index, url in
                                     ZStack(alignment: .topTrailing) {
-                                        AsyncImage(url: URL(string: url)) { image in
+                                        CachedAsyncImage(url: URL(string: url)) { image in
                                             image.resizable().scaledToFill()
                                         } placeholder: {
                                             RoundedRectangle(cornerRadius: DS.Radius.sm)

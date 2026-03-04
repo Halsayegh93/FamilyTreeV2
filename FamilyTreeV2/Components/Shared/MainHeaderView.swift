@@ -114,6 +114,7 @@ struct MainHeaderView<TrailingContent: View>: View {
                             headerIconView(icon: "shield.fill", color: .white)
                         }
                         .buttonStyle(BounceButtonStyle())
+                        .accessibilityLabel(L10n.t("لوحة الإدارة", "Admin Dashboard"))
                     }
                     Button(action: { showingNotifications = true }) {
                         ZStack(alignment: .topTrailing) {
@@ -135,6 +136,9 @@ struct MainHeaderView<TrailingContent: View>: View {
                         }
                     }
                     .buttonStyle(BounceButtonStyle())
+                    .accessibilityLabel(authVM.unreadNotificationsCount > 0
+                        ? L10n.t("\(authVM.unreadNotificationsCount) إشعار غير مقروء", "\(authVM.unreadNotificationsCount) unread notifications")
+                        : L10n.t("الإشعارات", "Notifications"))
                 }
             }
             .scaleEffect(isAnimating ? 1.0 : 0.5)

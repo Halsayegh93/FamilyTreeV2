@@ -5,9 +5,9 @@ struct AdminDashboardView: View {
     @StateObject private var diwaniyaVM = DiwaniyasViewModel()
     @Binding var selectedTab: Int
     @State private var showingNotifications = false
-    @State private var testPushResult: String?
-    @State private var showTestPushAlert = false
-    @State private var isSendingTestPush = false
+    @State private var isSendingWeeklyDigest = false
+    @State private var edgeFunctionResult: String?
+    @State private var showEdgeFunctionAlert = false
     @Environment(\.dismiss) var dismiss
 
     // Admin theme accent (purple #6C5CE7)
@@ -97,6 +97,10 @@ struct AdminDashboardView: View {
                                     NavigationLink(destination: AdminDeceasedRequestsView()) {
                                         DSActionRow(title: L10n.t("تأكيد حالات الوفاة", "Confirm Deceased"), subtitle: L10n.t("تحديثات حالة أعضاء الشجرة", "Update family tree member status"), icon: "bolt.heart.fill", color: DS.Color.error, badge: authVM.deceasedRequests.count)
                                     }
+                                    DSDivider()
+                                    NavigationLink(destination: AdminChildAddRequestsView()) {
+                                        DSActionRow(title: L10n.t("طلبات إضافة الأبناء", "Child Add Requests"), subtitle: L10n.t("مراجعة طلبات إضافة أبناء جدد", "Review new child addition requests"), icon: "person.badge.plus", color: DS.Color.success, badge: authVM.childAddRequests.count)
+                                    }
                                 }
                             .padding(.horizontal, DS.Spacing.lg)
 
@@ -124,29 +128,33 @@ struct AdminDashboardView: View {
                                         DSActionRow(title: L10n.t("تقارير PDF", "PDF Reports"), subtitle: L10n.t("تقرير الأرقام والأعمار للأعضاء", "Member numbers and ages report"), icon: "doc.text.fill", color: DS.Color.info)
                                     }
                                     DSDivider()
+                                    NavigationLink(destination: FamilyDirectoryView()) {
+                                        DSActionRow(title: L10n.t("دليل أفراد العائلة", "Family Directory"), subtitle: L10n.t("بحث وتصفية بيانات جميع الأعضاء", "Search and filter all member data"), icon: "person.text.rectangle", color: DS.Color.success)
+                                    }
+                                    DSDivider()
                                     Button {
-                                        isSendingTestPush = true
+                                        isSendingWeeklyDigest = true
                                         Task {
-                                            let result = await authVM.sendTestPush()
-                                            testPushResult = result.message
-                                            isSendingTestPush = false
-                                            showTestPushAlert = true
+                                            let result = await authVM.triggerWeeklyDigest()
+                                            edgeFunctionResult = result.message
+                                            isSendingWeeklyDigest = false
+                                            showEdgeFunctionAlert = true
                                         }
                                     } label: {
                                         DSActionRow(
-                                            title: L10n.t("تجربة الإشعارات", "Test Notifications"),
-                                            subtitle: L10n.t("إرسال إشعار تجريبي لجهازك", "Send a test push to your device"),
-                                            icon: "bell.and.waves.left.and.right",
-                                            color: DS.Color.success
+                                            title: L10n.t("الملخص الأسبوعي", "Weekly Digest"),
+                                            subtitle: L10n.t("إرسال ملخص الأسبوع لجميع الأعضاء", "Send weekly summary to all members"),
+                                            icon: "doc.text.magnifyingglass",
+                                            color: DS.Color.info
                                         )
                                         .overlay(alignment: .leading) {
-                                            if isSendingTestPush {
+                                            if isSendingWeeklyDigest {
                                                 ProgressView()
                                                     .padding(.leading, DS.Spacing.lg)
                                             }
                                         }
                                     }
-                                    .disabled(isSendingTestPush)
+                                    .disabled(isSendingWeeklyDigest)
                                 }
                             .padding(.horizontal, DS.Spacing.lg)
 
@@ -176,23 +184,24 @@ struct AdminDashboardView: View {
                 }
             }
         }
-        .navigationBarHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
         }
-        .alert(L10n.t("تجربة الإشعارات", "Test Notifications"), isPresented: $showTestPushAlert) {
+        .alert(L10n.t("نتيجة العملية", "Result"), isPresented: $showEdgeFunctionAlert) {
             Button(L10n.t("حسناً", "OK"), role: .cancel) {}
         } message: {
-            Text(testPushResult ?? "")
+            Text(edgeFunctionResult ?? "")
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-        .onAppear {
-            Task {
-                await authVM.fetchAllMembers()
-                await authVM.fetchDeceasedRequests()
-                await authVM.fetchPendingNewsRequests()
-                await authVM.fetchNewsReportRequests()
-                await authVM.fetchPhoneChangeRequests()
-                await diwaniyaVM.fetchPendingDiwaniyas()
-            }
+        .task {
+            // تحميل البيانات بالتوازي لتسريع الأداء
+            async let members: () = authVM.fetchAllMembers()
+            async let deceased: () = authVM.fetchDeceasedRequests()
+            async let pendingNews: () = authVM.fetchPendingNewsRequests()
+            async let newsReports: () = authVM.fetchNewsReportRequests()
+            async let phoneChanges: () = authVM.fetchPhoneChangeRequests()
+            async let childAdds: () = authVM.fetchChildAddRequests()
+            async let diwaniyas: () = diwaniyaVM.fetchPendingDiwaniyas()
+            _ = await (members, deceased, pendingNews, newsReports, phoneChanges, childAdds, diwaniyas)
         }
     }
 
@@ -344,34 +353,3 @@ struct AdminDashboardView: View {
     }
 }
 
-// MARK: - Rounded Shape Helper
-private struct RoundedShape: Shape {
-    var corners: UIRectCorner
-    var radius: CGFloat
-
-    func path(in rect: CGRect) -> Path {
-        let path = UIBezierPath(
-            roundedRect: rect,
-            byRoundingCorners: corners,
-            cornerRadii: CGSize(width: radius, height: radius)
-        )
-        return Path(path.cgPath)
-    }
-}
-
-// MARK: - AdminStatCard & AdminMenuRow (Backwards compatibility)
-struct AdminStatCard: View {
-    let title: String; let value: String; let icon: String; let color: Color
-    var body: some View {
-        DSStatCard(title: title, value: value, icon: icon, color: color)
-    }
-}
-
-struct AdminMenuRow: View {
-    let title: String; let subtitle: String; let icon: String; let color: Color
-    var count: Int = 0
-
-    var body: some View {
-        DSActionRow(title: title, subtitle: subtitle, icon: icon, color: color, badge: count > 0 ? count : nil)
-    }
-}

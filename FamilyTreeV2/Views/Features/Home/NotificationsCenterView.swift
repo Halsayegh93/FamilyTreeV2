@@ -7,6 +7,7 @@ struct NotificationsCenterView: View {
     @State private var isSelecting = false
     @State private var selectedIds: Set<UUID> = []
     @State private var selectedNotification: AppNotification? = nil
+    @State private var filterKind: String? = nil
 
     private static let relativeDateFormatter: RelativeDateTimeFormatter = {
         let f = RelativeDateTimeFormatter()
@@ -31,6 +32,12 @@ struct NotificationsCenterView: View {
                         emptyState
                             .frame(maxHeight: .infinity)
                     } else {
+                        // فلاتر نوع الإشعار
+                        notificationFilterChips
+                        
+                        // ملخص سريع
+                        notificationSummaryBar
+                        
                         notificationsList
                     }
 
@@ -100,8 +107,8 @@ struct NotificationsCenterView: View {
                     }
                 }
             }
+            .task { await authVM.fetchNotifications() }
             .onAppear {
-                Task { await authVM.fetchNotifications() }
                 withAnimation(DS.Anim.smooth.delay(0.15)) {
                     appeared = true
                 }
@@ -244,15 +251,12 @@ struct NotificationsCenterView: View {
 
             // زر حذف المحدد
             Button {
-                Task {
-                    for id in selectedIds {
-                        await authVM.deleteNotification(id: id)
-                    }
-                    withAnimation(DS.Anim.snappy) {
-                        selectedIds.removeAll()
-                        isSelecting = false
-                    }
+                let ids = selectedIds
+                withAnimation(DS.Anim.snappy) {
+                    selectedIds.removeAll()
+                    isSelecting = false
                 }
+                Task { await authVM.deleteNotifications(ids: ids) }
             } label: {
                 HStack(spacing: DS.Spacing.xs) {
                     Image(systemName: "trash.fill")
@@ -271,15 +275,12 @@ struct NotificationsCenterView: View {
 
             // زر جعل المحدد مقروء
             Button {
-                Task {
-                    for id in selectedIds {
-                        await authVM.markNotificationAsRead(id: id)
-                    }
-                    withAnimation(DS.Anim.snappy) {
-                        selectedIds.removeAll()
-                        isSelecting = false
-                    }
+                let ids = selectedIds
+                withAnimation(DS.Anim.snappy) {
+                    selectedIds.removeAll()
+                    isSelecting = false
                 }
+                Task { await authVM.markNotificationsAsRead(ids: ids) }
             } label: {
                 HStack(spacing: DS.Spacing.xs) {
                     Image(systemName: "envelope.open.fill")
@@ -302,6 +303,111 @@ struct NotificationsCenterView: View {
         .transition(.move(edge: .bottom).combined(with: .opacity))
     }
 
+    // MARK: - Kind Grouping (دمج الأنواع المتشابهة)
+    private func kindGroup(for kind: String) -> String {
+        switch kind {
+        case "news", "news_add": return "news"
+        case "admin", "admin_request": return "admin"
+        case "approval", "join_approved": return "approval"
+        default: return kind
+        }
+    }
+    
+    // MARK: - Filtered Notifications
+    private var filteredNotifications: [AppNotification] {
+        guard let kind = filterKind else { return authVM.notifications }
+        return authVM.notifications.filter { kindGroup(for: $0.kind) == kind }
+    }
+    
+    // MARK: - إحصائية سريعة
+    private var notificationSummaryBar: some View {
+        let unreadCount = authVM.notifications.filter { !$0.read }.count
+        return Group {
+            if unreadCount > 0 {
+                HStack(spacing: DS.Spacing.sm) {
+                    Circle()
+                        .fill(DS.Color.error)
+                        .frame(width: 8, height: 8)
+                    Text("\(unreadCount) " + L10n.t("غير مقروء", "unread"))
+                        .font(DS.Font.scaled(12, weight: .semibold))
+                        .foregroundColor(DS.Color.textSecondary)
+                    
+                    Spacer()
+                    
+                    // زر جعل الكل مقروء
+                    Button {
+                        Task { await authVM.markAllNotificationsAsRead() }
+                    } label: {
+                        HStack(spacing: DS.Spacing.xs) {
+                            Image(systemName: "envelope.open.fill")
+                                .font(DS.Font.scaled(11, weight: .semibold))
+                            Text(L10n.t("قراءة الكل", "Read All"))
+                                .font(DS.Font.scaled(11, weight: .bold))
+                        }
+                        .foregroundColor(DS.Color.primary)
+                        .padding(.horizontal, DS.Spacing.md)
+                        .padding(.vertical, DS.Spacing.xs + 2)
+                        .background(DS.Color.primary.opacity(0.08))
+                        .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, DS.Spacing.lg)
+                .padding(.vertical, DS.Spacing.sm)
+            }
+        }
+    }
+    
+    // MARK: - فلاتر الإشعارات
+    private var notificationFilterChips: some View {
+        let groupedKinds = Array(Set(authVM.notifications.map { kindGroup(for: $0.kind) })).sorted()
+        return Group {
+            if groupedKinds.count > 1 {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: DS.Spacing.sm) {
+                        // زر الكل
+                        filterChip(label: L10n.t("الكل", "All"), kind: nil, count: authVM.notifications.count)
+                        
+                        ForEach(groupedKinds, id: \.self) { group in
+                            let count = authVM.notifications.filter { kindGroup(for: $0.kind) == group }.count
+                            filterChip(label: kindLabel(for: group), kind: group, count: count)
+                        }
+                    }
+                    .padding(.horizontal, DS.Spacing.lg)
+                    .padding(.vertical, DS.Spacing.sm)
+                }
+            }
+        }
+    }
+    
+    private func filterChip(label: String, kind: String?, count: Int) -> some View {
+        let isActive = filterKind == kind
+        let iconInfo: (icon: String, gradient: LinearGradient, color: Color) = kind.map { notificationIcon(for: $0) } ?? ("bell.fill", DS.Color.gradientPrimary, DS.Color.primary)
+        
+        return Button {
+            withAnimation(DS.Anim.snappy) { filterKind = kind }
+        } label: {
+            HStack(spacing: DS.Spacing.xs) {
+                Image(systemName: iconInfo.icon)
+                    .font(DS.Font.scaled(10, weight: .semibold))
+                Text(label)
+                    .font(DS.Font.scaled(11, weight: .semibold))
+                Text("\(count)")
+                    .font(DS.Font.scaled(10, weight: .black))
+                    .foregroundColor(isActive ? .white.opacity(0.8) : DS.Color.textTertiary)
+            }
+            .foregroundColor(isActive ? .white : DS.Color.textSecondary)
+            .padding(.horizontal, DS.Spacing.md)
+            .padding(.vertical, DS.Spacing.sm)
+            .background(
+                Capsule()
+                    .fill(isActive ? iconInfo.color : DS.Color.surface)
+            )
+            .overlay(Capsule().stroke(isActive ? iconInfo.color : Color.gray.opacity(0.12), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+    }
+    
     // MARK: - Empty State
     private var emptyState: some View {
         VStack(spacing: DS.Spacing.xl) {
@@ -344,9 +450,9 @@ struct NotificationsCenterView: View {
         switch kind {
         case "approval", "join_approved":
             return ("checkmark.circle.fill", DS.Color.gradientCool, DS.Color.success)
-        case "news":
+        case "news", "news_add":
             return ("newspaper.fill", DS.Color.gradientPrimary, DS.Color.primary)
-        case "admin":
+        case "admin", "admin_request":
             return ("shield.fill", DS.Color.gradientAccent, DS.Color.accent)
         case "deceased_report":
             return ("heart.fill", DS.Color.gradientWarm, DS.Color.neonPink)
@@ -358,6 +464,12 @@ struct NotificationsCenterView: View {
             return ("exclamationmark.triangle.fill", DS.Color.gradientFire, DS.Color.warning)
         case "contact_message":
             return ("envelope.fill", DS.Color.gradientOcean, DS.Color.primary)
+        case "link_request":
+            return ("link.circle.fill", DS.Color.gradientCool, DS.Color.info)
+        case "gallery_add":
+            return ("photo.fill", DS.Color.gradientNeon, DS.Color.neonCyan)
+        case "weekly_digest":
+            return ("list.clipboard.fill", DS.Color.gradientOcean, DS.Color.primaryDark)
         default:
             return ("bell.fill", DS.Color.gradientPrimary, DS.Color.primary)
         }
@@ -396,48 +508,97 @@ struct NotificationsCenterView: View {
     private func kindLabel(for kind: String) -> String {
         switch kind {
         case "approval", "join_approved": return L10n.t("عضوية", "Membership")
-        case "news": return L10n.t("أخبار", "News")
-        case "admin": return L10n.t("إدارة", "Admin")
+        case "news", "news_add": return L10n.t("أخبار", "News")
+        case "admin", "admin_request": return L10n.t("إدارة", "Admin")
         case "deceased_report": return L10n.t("وفاة", "Deceased")
-        case "child_add": return L10n.t("إضافة", "Addition")
+        case "child_add": return L10n.t("إضافة ابن", "Child Add")
         case "phone_change": return L10n.t("تغيير رقم", "Phone Change")
-        case "news_report": return L10n.t("بلاغ", "Report")
+        case "news_report": return L10n.t("بلاغ خبر", "News Report")
         case "contact_message": return L10n.t("تواصل", "Contact")
+        case "link_request": return L10n.t("طلب ربط", "Link Request")
+        case "gallery_add": return L10n.t("معرض صور", "Gallery")
+        case "weekly_digest": return L10n.t("ملخص أسبوعي", "Weekly Digest")
         default: return L10n.t("عام", "General")
         }
     }
 
+    // MARK: - Date Section Helper
+    private func dateSection(for date: Date) -> String {
+        let calendar = Calendar.current
+        if calendar.isDateInToday(date) {
+            return L10n.t("اليوم", "Today")
+        } else if calendar.isDateInYesterday(date) {
+            return L10n.t("أمس", "Yesterday")
+        } else if let weekAgo = calendar.date(byAdding: .day, value: -7, to: Date()),
+                  date >= weekAgo {
+            return L10n.t("هذا الأسبوع", "This Week")
+        } else {
+            return L10n.t("أقدم", "Older")
+        }
+    }
+    
+    private var groupedNotifications: [(String, [AppNotification])] {
+        let sorted = filteredNotifications.sorted { $0.createdDate > $1.createdDate }
+        let grouped = Dictionary(grouping: sorted) { dateSection(for: $0.createdDate) }
+        let order = [
+            L10n.t("اليوم", "Today"),
+            L10n.t("أمس", "Yesterday"),
+            L10n.t("هذا الأسبوع", "This Week"),
+            L10n.t("أقدم", "Older")
+        ]
+        return order.compactMap { section in
+            guard let items = grouped[section], !items.isEmpty else { return nil }
+            return (section, items)
+        }
+    }
+    
     // MARK: - Notifications List
     private var notificationsList: some View {
         List {
-            ForEach(Array(authVM.notifications.enumerated()), id: \.element.id) { index, item in
-                let iconInfo = notificationIcon(for: item.kind)
-                let isUnread = !item.read
+            ForEach(groupedNotifications, id: \.0) { section, items in
+                Section {
+                    ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                        let iconInfo = notificationIcon(for: item.kind)
+                        let isUnread = !item.read
 
-                notificationRow(item: item, iconInfo: iconInfo, isUnread: isUnread)
-                    .opacity(appeared ? 1 : 0)
-                    .offset(y: appeared ? 0 : 20)
-                    .animation(DS.Anim.smooth.delay(Double(index) * 0.04), value: appeared)
-                    .listRowInsets(EdgeInsets(top: DS.Spacing.xs, leading: DS.Spacing.lg, bottom: DS.Spacing.xs, trailing: DS.Spacing.lg))
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
-                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                        Button(role: .destructive) {
-                            Task { await authVM.deleteNotification(id: item.id) }
-                        } label: {
-                            Label(L10n.t("حذف", "Delete"), systemImage: "trash")
-                        }
-                    }
-                    .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                        if isUnread {
-                            Button {
-                                Task { await authVM.markNotificationAsRead(id: item.id) }
-                            } label: {
-                                Label(L10n.t("مقروء", "Read"), systemImage: "envelope.open")
+                        notificationRow(item: item, iconInfo: iconInfo, isUnread: isUnread)
+                            .opacity(appeared ? 1 : 0)
+                            .offset(y: appeared ? 0 : 20)
+                            .animation(DS.Anim.smooth.delay(Double(index) * 0.04), value: appeared)
+                            .listRowInsets(EdgeInsets(top: DS.Spacing.xs, leading: DS.Spacing.lg, bottom: DS.Spacing.xs, trailing: DS.Spacing.lg))
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
+                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                Button(role: .destructive) {
+                                    Task { await authVM.deleteNotification(id: item.id) }
+                                } label: {
+                                    Label(L10n.t("حذف", "Delete"), systemImage: "trash")
+                                }
                             }
-                            .tint(DS.Color.primary)
-                        }
+                            .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                                if isUnread {
+                                    Button {
+                                        Task { await authVM.markNotificationAsRead(id: item.id) }
+                                    } label: {
+                                        Label(L10n.t("مقروء", "Read"), systemImage: "envelope.open")
+                                    }
+                                    .tint(DS.Color.primary)
+                                }
+                            }
                     }
+                } header: {
+                    HStack(spacing: DS.Spacing.sm) {
+                        Text(section)
+                            .font(DS.Font.scaled(13, weight: .bold))
+                            .foregroundColor(DS.Color.textSecondary)
+                        
+                        Rectangle()
+                            .fill(DS.Color.textTertiary.opacity(0.2))
+                            .frame(height: 1)
+                    }
+                    .padding(.vertical, DS.Spacing.xs)
+                    .listRowInsets(EdgeInsets(top: 0, leading: DS.Spacing.lg, bottom: 0, trailing: DS.Spacing.lg))
+                }
             }
         }
         .listStyle(.plain)

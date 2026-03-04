@@ -8,7 +8,7 @@ struct SplashScreenView: View {
     @State private var titleOpacity: Double = 0
     @State private var subtitleOpacity: Double = 0
     @State private var versionOpacity: Double = 0
-    @State private var bubbleScale: CGFloat = 0.3
+
 
     var body: some View {
         ZStack {
@@ -60,7 +60,6 @@ struct SplashScreenView: View {
             withAnimation(.easeOut(duration: 0.8)) {
                 logoScale = 1.0
                 logoOpacity = 1.0
-                bubbleScale = 1.0
             }
 
             withAnimation(.easeOut(duration: 0.7).delay(0.3)) {

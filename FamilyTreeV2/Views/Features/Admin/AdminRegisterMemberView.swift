@@ -127,6 +127,11 @@ struct AdminRegisterMemberView: View {
                 DSIcon("person.fill", color: DS.Color.primary)
                 TextField(L10n.t("مثال: حسن أحمد علي محمد السالم", "e.g. John Edward James Smith Jr"), text: $fullName)
                     .font(DS.Font.body)
+                    .onChange(of: fullName) {
+                        if fullName.count > 100 {
+                            fullName = String(fullName.prefix(100))
+                        }
+                    }
             }
             .padding(.horizontal, DS.Spacing.md)
             .padding(.vertical, DS.Spacing.sm)
@@ -142,6 +147,11 @@ struct AdminRegisterMemberView: View {
                 DSIcon("person.2.fill", color: DS.Color.accent)
                 TextField(L10n.t("مثال: آل محمد علي", "e.g. Al-Mohammad Ali"), text: $familyName)
                     .font(DS.Font.body)
+                    .onChange(of: familyName) {
+                        if familyName.count > 50 {
+                            familyName = String(familyName.prefix(50))
+                        }
+                    }
             }
             .padding(.horizontal, DS.Spacing.md)
             .padding(.vertical, DS.Spacing.sm)
@@ -205,12 +215,13 @@ struct AdminRegisterMemberView: View {
                         .font(DS.Font.body)
                         .foregroundColor(DS.Color.textSecondary)
                     Spacer()
-                    Toggle("", isOn: $hasBirthDate.animation())
+                    Toggle("", isOn: $hasBirthDate)
                         .labelsHidden()
                         .tint(DS.Color.primary)
                 }
                 .padding(.horizontal, DS.Spacing.md)
                 .padding(.vertical, DS.Spacing.sm)
+                .animation(.default, value: hasBirthDate)
 
                 if hasBirthDate {
                     DSDivider()

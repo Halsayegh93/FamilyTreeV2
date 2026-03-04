@@ -1,5 +1,4 @@
 import SwiftUI
-import Combine
 
 struct LoginView: View {
     @EnvironmentObject var authVM: AuthViewModel
@@ -8,9 +7,9 @@ struct LoginView: View {
     @State private var timeRemaining = 0
     @State private var logoScale: CGFloat = 0.6
     @State private var logoOpacity: CGFloat = 0
-    @State private var bgRotation: Double = 0
 
-    let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+
+
 
     private var phoneCaretOffset: CGFloat {
         CGFloat(min(authVM.phoneNumber.count, 15)) * 15.5
@@ -102,12 +101,12 @@ struct LoginView: View {
                 logoScale = 1.0
                 logoOpacity = 1.0
             }
-            withAnimation(.linear(duration: 20).repeatForever(autoreverses: false)) {
-                bgRotation = 360
-            }
+
         }
-        .onReceive(timer) { _ in
-            if timeRemaining > 0 { timeRemaining -= 1 }
+        .task(id: timeRemaining) {
+            guard timeRemaining > 0 else { return }
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            if !Task.isCancelled { timeRemaining -= 1 }
         }
 
     }

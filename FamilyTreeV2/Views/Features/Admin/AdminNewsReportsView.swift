@@ -29,7 +29,7 @@ struct AdminNewsReportsView: View {
                             .font(DS.Font.scaled(26, weight: .semibold))
                             .foregroundColor(.white)
                     }
-                    Text("لا توجد بلاغات أخبار معلقة")
+                    Text(L10n.t("لا توجد بلاغات أخبار معلقة", "No pending news reports"))
                         .font(DS.Font.headline)
                         .foregroundColor(DS.Color.textSecondary)
                 }
@@ -44,14 +44,13 @@ struct AdminNewsReportsView: View {
                 }
             }
         }
-        .navigationTitle("بلاغات الأخبار")
+        .navigationTitle(L10n.t("بلاغات الأخبار", "News Reports"))
         .navigationBarTitleDisplayMode(.inline)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-        .onAppear {
-            Task {
-                await authVM.fetchNewsReportRequests()
-                await authVM.fetchNews()
-            }
+        .task {
+            async let reports: () = authVM.fetchNewsReportRequests()
+            async let news: () = authVM.fetchNews()
+            _ = await (reports, news)
         }
     }
 
@@ -70,7 +69,7 @@ struct AdminNewsReportsView: View {
                 // Header: badge + member info
                 HStack {
                     // Gradient-tinted capsule badge
-                    Text("بلاغ")
+                    Text(L10n.t("بلاغ", "Report"))
                         .font(DS.Font.caption2)
                         .fontWeight(.bold)
                         .foregroundColor(DS.Color.error)
@@ -87,7 +86,7 @@ struct AdminNewsReportsView: View {
                     Spacer()
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(request.member?.fullName ?? "عضو")
+                        Text(request.member?.fullName ?? L10n.t("عضو", "Member"))
                             .font(DS.Font.calloutBold)
                             .foregroundColor(DS.Color.textPrimary)
                         Text(request.createdAt?.prefix(10) ?? "—")
@@ -97,7 +96,7 @@ struct AdminNewsReportsView: View {
                 }
 
                 // Details text
-                Text(request.details ?? "بلاغ بدون تفاصيل")
+                Text(request.details ?? L10n.t("بلاغ بدون تفاصيل", "Report without details"))
                     .font(DS.Font.callout)
                     .foregroundColor(DS.Color.textPrimary)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -105,7 +104,7 @@ struct AdminNewsReportsView: View {
                 // Reported post preview
                 if let post = reportedPost {
                     VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                        Text("الخبر المبلغ عنه")
+                        Text(L10n.t("الخبر المبلغ عنه", "Reported Post"))
                             .font(DS.Font.caption1)
                             .foregroundColor(DS.Color.textSecondary)
                         Text(post.content)
@@ -121,8 +120,8 @@ struct AdminNewsReportsView: View {
 
                 // Action buttons
                 DSApproveRejectButtons(
-                    approveTitle: "اعتماد البلاغ",
-                    rejectTitle: "رفض البلاغ",
+                    approveTitle: L10n.t("اعتماد البلاغ", "Approve Report"),
+                    rejectTitle: L10n.t("رفض البلاغ", "Reject Report"),
                     isLoading: authVM.isLoading,
                     approveGradient: LinearGradient(
                         colors: [DS.Color.error, DS.Color.error.opacity(0.8)],

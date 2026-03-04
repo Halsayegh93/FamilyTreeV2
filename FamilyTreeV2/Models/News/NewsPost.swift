@@ -18,18 +18,21 @@ struct NewsPost: Identifiable, Codable {
     var approved_at: String?
     
     // ✅ الإضافة السحرية: متغير يحول النص إلى تاريخ تلقائياً ليقرأه كود الواجهة
+    private static let isoWithFraction: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+    private static let isoWithout: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime]
+        return f
+    }()
+
     var timestamp: Date {
-        let formatter = ISO8601DateFormatter()
-        // دعم التنسيق القياسي مع أجزاء الثانية (شائع في Supabase/Firebase)
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        
-        if let date = formatter.date(from: created_at) {
-            return date
-        }
-        
-        // محاولة بديلة بدون أجزاء الثانية (للأمان)
-        formatter.formatOptions = [.withInternetDateTime]
-        return formatter.date(from: created_at) ?? Date()
+        Self.isoWithFraction.date(from: created_at)
+            ?? Self.isoWithout.date(from: created_at)
+            ?? Date()
     }
 
     // ربط مسميات سويفت بمسميات قاعدة البيانات (Snake Case)

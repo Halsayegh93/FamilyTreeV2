@@ -2,6 +2,7 @@ import Foundation
 import Supabase
 import SwiftUI
 import Combine
+import UserNotifications
 
 private struct OTPFallbackRequest: Encodable {
     let phone: String
@@ -87,6 +88,16 @@ class AuthViewModel: ObservableObject {
     @Published var currentUser: FamilyMember? = nil
     @Published var allMembers: [FamilyMember] = []
     @Published var currentMemberChildren: [FamilyMember] = []
+    
+    // Fetch throttle timestamps
+    private var lastMembersFetchDate: Date?
+    private var lastNewsFetchDate: Date?
+    private var lastNotificationsFetchDate: Date?
+    private var lastDeceasedFetchDate: Date?
+    private var lastChildAddFetchDate: Date?
+    private var lastPhoneChangeFetchDate: Date?
+    private var lastNewsReportFetchDate: Date?
+    private var lastPendingNewsFetchDate: Date?
     @Published var status: AuthStatus = .checking // ابدأ دائماً بالفحص 👈
     @Published var deceasedRequests: [AdminRequest] = []
     @Published var childAddRequests: [AdminRequest] = []
@@ -305,23 +316,23 @@ class AuthViewModel: ObservableObject {
         let text = "\(error) \(error.localizedDescription)".lowercased()
         
         if text.contains("429") || text.contains("rate") {
-            return "تم تجاوز عدد المحاولات. انتظر قليلًا ثم أعد المحاولة."
+            return L10n.t("تم تجاوز عدد المحاولات. انتظر قليلًا ثم أعد المحاولة.", "Too many attempts. Please wait a moment and try again.")
         }
         if text.contains("network") || text.contains("timed out") {
-            return "تعذر الاتصال بالخادم. تأكد من الإنترنت ثم أعد المحاولة."
+            return L10n.t("تعذر الاتصال بالخادم. تأكد من الإنترنت ثم أعد المحاولة.", "Unable to connect to the server. Check your internet and try again.")
         }
         if text.contains("sms") || text.contains("provider") {
-            return "تعذر إرسال رمز التحقق عبر الرسائل حاليًا. حاول مجددًا بعد دقيقة."
+            return L10n.t("تعذر إرسال رمز التحقق عبر الرسائل حاليًا. حاول مجددًا بعد دقيقة.", "Unable to send verification code via SMS right now. Try again in a minute.")
         }
         
-        return "تعذر إرسال رمز التحقق حاليًا. حاول مرة أخرى."
+        return L10n.t("تعذر إرسال رمز التحقق حاليًا. حاول مرة أخرى.", "Unable to send verification code right now. Please try again.")
     }
     
     func registerPushToken(_ token: String) async {
         let cleanToken = token.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleanToken.isEmpty else { return }
 
-        await MainActor.run { self.pushToken = cleanToken }
+        self.pushToken = cleanToken
 
         // لا ترسل التوكن للسيرفر إذا الإشعارات مغلقة
         let notificationsEnabled = UserDefaults.standard.object(forKey: "notificationsEnabled") as? Bool ?? true
@@ -400,32 +411,29 @@ class AuthViewModel: ObservableObject {
         }
     }
     
-    /// إرسال إشعار تجريبي push للمستخدم الحالي
-    func sendTestPush() async -> (success: Bool, message: String) {
-        guard let userId = currentUser?.id else {
-            return (false, "لا يوجد مستخدم مسجل")
-        }
+    /// تشغيل الملخص الأسبوعي يدوياً (للمدير)
+    func triggerWeeklyDigest() async -> (success: Bool, message: String) {
         do {
-            let payload: [String: AnyEncodable] = [
-                "title": AnyEncodable("إشعار تجريبي 🔔"),
-                "body": AnyEncodable("هذا إشعار تجريبي للتأكد من عمل الإشعارات الخارجية."),
-                "kind": AnyEncodable("test"),
-                "member_ids": AnyEncodable([userId.uuidString])
-            ]
-            try await supabase.functions
-                .invoke(
-                    "push-notify",
-                    options: FunctionInvokeOptions(body: payload)
-                )
-            return (true, "تم إرسال الإشعار التجريبي بنجاح")
+            let response: Data = try await supabase.functions.invoke(
+                "weekly-digest",
+                options: FunctionInvokeOptions(method: .post)
+            ) { data, _ in data }
+
+            if let json = try? JSONSerialization.jsonObject(with: response) as? [String: Any],
+               let ok = json["ok"] as? Bool, ok {
+                let notified = json["notified"] as? Int ?? 0
+                return (true, L10n.t("تم إرسال الملخص الأسبوعي لـ \(notified) عضو", "Weekly digest sent to \(notified) members"))
+            }
+            return (false, L10n.t("فشل إرسال الملخص", "Failed to send digest"))
         } catch {
+            Log.error("Weekly digest error: \(error.localizedDescription)")
             return (false, error.localizedDescription)
         }
     }
-    
+
     private func triggerOTPFallback(phone: String, channels: [OTPDeliveryChannel]) async -> (success: Bool, message: String) {
         guard let endpoint = SupabaseConfig.otpFallbackURL else {
-            return (false, "لم يتم تفعيل القناة البديلة في إعدادات التطبيق.")
+            return (false, L10n.t("لم يتم تفعيل القناة البديلة في إعدادات التطبيق.", "Fallback channel is not enabled in app settings."))
         }
         
         var request = URLRequest(url: endpoint)
@@ -445,51 +453,45 @@ class AuthViewModel: ObservableObject {
             request.httpBody = try JSONEncoder().encode(payload)
             let (data, response) = try await URLSession.shared.data(for: request)
             guard let httpResponse = response as? HTTPURLResponse else {
-                return (false, "فشل القناة البديلة: استجابة غير صالحة.")
+                return (false, L10n.t("فشل القناة البديلة: استجابة غير صالحة.", "Fallback channel failed: invalid response."))
             }
             
             guard (200...299).contains(httpResponse.statusCode) else {
-                return (false, "فشل القناة البديلة: رمز \(httpResponse.statusCode).")
+                return (false, L10n.t("فشل القناة البديلة: رمز \(httpResponse.statusCode).", "Fallback channel failed: code \(httpResponse.statusCode)."))
             }
             
             let decoded = try? JSONDecoder().decode(OTPFallbackResponse.self, from: data)
             let accepted = decoded?.accepted ?? true
             if accepted {
-                return (true, decoded?.message ?? "تم إرسال الرمز عبر قناة بديلة.")
+                return (true, decoded?.message ?? L10n.t("تم إرسال الرمز عبر قناة بديلة.", "Code sent via fallback channel."))
             } else {
-                return (false, decoded?.message ?? "تم رفض طلب القناة البديلة.")
+                return (false, decoded?.message ?? L10n.t("تم رفض طلب القناة البديلة.", "Fallback channel request was rejected."))
             }
         } catch {
-            return (false, "فشل القناة البديلة: \(error.localizedDescription)")
+            return (false, L10n.t("فشل القناة البديلة: \(error.localizedDescription)", "Fallback channel failed: \(error.localizedDescription)"))
         }
     }
-    
+
     func sendOTP() async {
         let cleanPhone = normalizePhoneDigits(phoneNumber)
         let cleanDialingCode = normalizeDialingCode(dialingCode)
         guard cleanPhone.count >= 6 else {
-            await MainActor.run {
-                self.otpErrorMessage = "رقم الهاتف غير صالح."
-                self.otpStatusMessage = ""
-            }
+            self.otpErrorMessage = L10n.t("رقم الهاتف غير صالح.", "Invalid phone number.")
+            self.otpStatusMessage = ""
             return
         }
-        
+
         guard let finalPhone = toE164(dialingCode: cleanDialingCode, localDigits: cleanPhone) else {
-            await MainActor.run {
-                self.otpErrorMessage = "تعذر تكوين رقم دولي صالح."
-                self.otpStatusMessage = ""
-            }
+            self.otpErrorMessage = L10n.t("تعذر تكوين رقم دولي صالح.", "Unable to form a valid international number.")
+            self.otpStatusMessage = ""
             return
         }
-        
-        await MainActor.run {
-            self.phoneNumber = cleanPhone
-            self.dialingCode = cleanDialingCode
-            self.isLoading = true
-            self.otpErrorMessage = nil
-            self.otpStatusMessage = "جاري إرسال رمز التحقق..."
-        }
+
+        self.phoneNumber = cleanPhone
+        self.dialingCode = cleanDialingCode
+        self.isLoading = true
+        self.otpErrorMessage = nil
+        self.otpStatusMessage = L10n.t("جاري إرسال رمز التحقق...", "Sending verification code...")
 
         let maxAttempts = 2
         var lastError: Error?
@@ -501,14 +503,12 @@ class AuthViewModel: ObservableObject {
                     shouldCreateUser: true
                 )
                 
-                    await MainActor.run {
-                        withAnimation(.spring()) {
-                            self.isOtpSent = true
-                        }
-                        self.otpErrorMessage = nil
-                        self.otpStatusMessage = "تم إرسال الرمز عبر SMS إلى \(finalPhone)"
+                    withAnimation(.spring()) {
+                        self.isOtpSent = true
                     }
-                    await MainActor.run { self.isLoading = false }
+                    self.otpErrorMessage = nil
+                    self.otpStatusMessage = L10n.t("تم إرسال الرمز عبر SMS إلى \(finalPhone)", "Code sent via SMS to \(finalPhone)")
+                    self.isLoading = false
                     return
             } catch {
                 lastError = error
@@ -523,17 +523,15 @@ class AuthViewModel: ObservableObject {
             }
         }
         
-        await MainActor.run {
-            self.otpStatusMessage = ""
-            self.otpErrorMessage = userFacingOTPError(lastError ?? NSError(domain: "otp", code: -1))
-            self.isLoading = false
-        }
+        self.otpStatusMessage = ""
+        self.otpErrorMessage = userFacingOTPError(lastError ?? NSError(domain: "otp", code: -1))
+        self.isLoading = false
     }
     
     func verifyOTP() async {
         let cleanCode = otpCode.trimmingCharacters(in: .whitespacesAndNewlines)
         guard cleanCode.count == 6 else {
-            await MainActor.run { self.otpErrorMessage = "رمز التحقق يجب أن يكون 6 أرقام." }
+            self.otpErrorMessage = L10n.t("رمز التحقق يجب أن يكون 6 أرقام.", "Verification code must be 6 digits.")
             return
         }
         
@@ -541,15 +539,13 @@ class AuthViewModel: ObservableObject {
         let cleanDialingCode = normalizeDialingCode(dialingCode)
         guard cleanPhone.count >= 6,
               let finalPhone = toE164(dialingCode: cleanDialingCode, localDigits: cleanPhone) else {
-            await MainActor.run { self.otpErrorMessage = "رقم الهاتف غير صالح." }
+            self.otpErrorMessage = L10n.t("رقم الهاتف غير صالح.", "Invalid phone number.")
             return
         }
-        
-        await MainActor.run {
-            self.isLoading = true
-            self.otpErrorMessage = nil
-        }
-        
+
+        self.isLoading = true
+        self.otpErrorMessage = nil
+
         do {
             // التحقق من الرمز عن طريق سوبابيس
             try await supabase.auth.verifyOTP(
@@ -565,10 +561,10 @@ class AuthViewModel: ObservableObject {
             
         } catch {
             Log.error("فشل التحقق: \(error.localizedDescription)")
-            await MainActor.run { self.otpErrorMessage = "الرمز غير صحيح أو منتهي. أعد طلب رمز جديد." }
+            self.otpErrorMessage = L10n.t("الرمز غير صحيح أو منتهي. أعد طلب رمز جديد.", "Invalid or expired code. Please request a new one.")
         }
         
-        await MainActor.run { self.isLoading = false }
+        self.isLoading = false
 
     }
     
@@ -655,43 +651,35 @@ class AuthViewModel: ObservableObject {
     }
     
     private func applyAuthenticatedProfile(_ profile: FamilyMember, normalizedPhone: String?) async {
-        await MainActor.run {
-            let access = self.resolveAuthAccess(for: profile)
-            self.currentUser = profile
-            self.status = access.status
-            self.trialStartedAt = access.trialStart
-            self.trialEndsAt = access.trialEnd
-            if let normalizedPhone, normalizedPhone.count == 8 {
-                self.phoneNumber = normalizedPhone
-            }
-            Task {
-                guard access.status != .trialExpired else { return }
-                await self.fetchNews()
-                await self.fetchNotifications()
-                if self.canModerate {
-                    await self.fetchPendingNewsRequests()
-                }
+        let access = self.resolveAuthAccess(for: profile)
+        self.currentUser = profile
+        self.status = access.status
+        self.trialStartedAt = access.trialStart
+        self.trialEndsAt = access.trialEnd
+        if let normalizedPhone, normalizedPhone.count == 8 {
+            self.phoneNumber = normalizedPhone
+        }
+        Task {
+            guard access.status != .trialExpired else { return }
+            await self.fetchNews(force: true)
+            await self.fetchNotifications()
+            if self.canModerate {
+                await self.fetchPendingNewsRequests()
             }
         }
     }
     
     func checkUserProfile() async {
         guard let user = try? await supabase.auth.session.user else {
-            #if DEBUG
-            print("🔴 [AUTH] No session found → unauthenticated")
-            #endif
-            await MainActor.run {
-                self.status = .unauthenticated
-                self.trialStartedAt = nil
-                self.trialEndsAt = nil
-            }
+            Log.info("[AUTH] No session found → unauthenticated")
+            self.status = .unauthenticated
+            self.trialStartedAt = nil
+            self.trialEndsAt = nil
             return
         }
 
         let normalizedSessionPhone = user.phone ?? self.phoneNumber
-        #if DEBUG
-        print("🔵 [AUTH] Session found. UUID: \(user.id), Phone: \(normalizedSessionPhone)")
-        #endif
+        Log.info("[AUTH] Session found. UUID: \(user.id), Phone: \(normalizedSessionPhone)")
 
         // المحاولة 1: البحث بـ auth.uid مباشرة
         do {
@@ -704,9 +692,7 @@ class AuthViewModel: ObservableObject {
             let members = try JSONDecoder().decode([FamilyMember].self, from: response.data)
 
             if let profile = members.first {
-                #if DEBUG
-                print("🟢 [AUTH] Found profile by UUID: \(profile.fullName), role: \(profile.role)")
-                #endif
+                Log.info("[AUTH] Found profile by UUID: \(profile.fullName), role: \(profile.role)")
                 await applyAuthenticatedProfile(profile, normalizedPhone: normalizedSessionPhone)
                 if let token = pushToken { await registerPushToken(token) }
                 return
@@ -717,9 +703,7 @@ class AuthViewModel: ObservableObject {
 
         // المحاولة 2: البحث بالرقم
         if let phoneProfile = await findProfileByPhone(normalizedSessionPhone) {
-            #if DEBUG
-            print("🟢 [AUTH] Found profile by phone: \(phoneProfile.fullName)")
-            #endif
+            Log.info("[AUTH] Found profile by phone: \(phoneProfile.fullName)")
             await applyAuthenticatedProfile(phoneProfile, normalizedPhone: normalizedSessionPhone)
             if let token = pushToken { await registerPushToken(token) }
             return
@@ -728,20 +712,16 @@ class AuthViewModel: ObservableObject {
         // المحاولة 3: البحث بالرقم المحلي
         let local8 = KuwaitPhone.localEightDigits(normalizedSessionPhone)
         if local8.count == 8, let directPhoneProfile = await findProfileByPhone(local8) {
-            #if DEBUG
-            print("🟢 [AUTH] Found profile by local phone: \(directPhoneProfile.fullName)")
-            #endif
+            Log.info("[AUTH] Found profile by local phone: \(directPhoneProfile.fullName)")
             await applyAuthenticatedProfile(directPhoneProfile, normalizedPhone: local8)
             if let token = pushToken { await registerPushToken(token) }
             return
         }
 
         Log.warning("لم يتم العثور على بروفايل. Phone: \(normalizedSessionPhone), UUID: \(user.id)")
-        await MainActor.run {
-            self.status = .authenticatedNoProfile
-            self.trialStartedAt = nil
-            self.trialEndsAt = nil
-        }
+        self.status = .authenticatedNoProfile
+        self.trialStartedAt = nil
+        self.trialEndsAt = nil
     }
     func signOut() async {
         _ = try? await supabase.auth.signOut()
@@ -762,7 +742,7 @@ class AuthViewModel: ObservableObject {
     @Published var deleteAccountError: String?
 
     func deleteAccount() async -> Bool {
-        await MainActor.run { self.isLoading = true }
+        self.isLoading = true
 
         do {
             // استدعاء Edge Function لحذف الحساب بالكامل
@@ -774,25 +754,21 @@ class AuthViewModel: ObservableObject {
             // تسجيل الخروج محلياً
             _ = try? await supabase.auth.signOut()
 
-            await MainActor.run {
-                self.isLoading = false
-                withAnimation {
-                    self.status = .unauthenticated
-                    self.isAuthenticated = false
-                    self.currentUser = nil
-                    self.allMembers = []
-                    self.isOtpSent = false
-                    self.phoneNumber = ""
-                }
+            self.isLoading = false
+            withAnimation {
+                self.status = .unauthenticated
+                self.isAuthenticated = false
+                self.currentUser = nil
+                self.allMembers = []
+                self.isOtpSent = false
+                self.phoneNumber = ""
             }
 
             Log.info("تم حذف الحساب بنجاح")
             return true
         } catch {
-            await MainActor.run {
-                self.isLoading = false
-                self.deleteAccountError = "تعذر حذف الحساب: \(error.localizedDescription)"
-            }
+            self.isLoading = false
+            self.deleteAccountError = "تعذر حذف الحساب: \(error.localizedDescription)"
             Log.error("خطأ في حذف الحساب: \(error.localizedDescription)")
             return false
         }
@@ -800,8 +776,13 @@ class AuthViewModel: ObservableObject {
 
     // MARK: - جلب البيانات (Fetch)
     
-    func fetchAllMembers() async {
-        await MainActor.run { self.activePath = [] } // تصفير المسار عند كل تحميل
+    func fetchAllMembers(force: Bool = false) async {
+        // تجنب إعادة التحميل خلال 15 ثانية إلا إذا force
+        if !force, let last = lastMembersFetchDate, Date().timeIntervalSince(last) < 15, !allMembers.isEmpty {
+            return
+        }
+        
+        self.activePath = [] // تصفير المسار عند كل تحميل
         
         do {
             let response = try await supabase
@@ -811,9 +792,8 @@ class AuthViewModel: ObservableObject {
             
             let members = try JSONDecoder().decode([FamilyMember].self, from: response.data)
             
-            await MainActor.run {
-                self.allMembers = members
-            }
+            self.allMembers = members
+            self.lastMembersFetchDate = Date()
         } catch {
             Log.error("خطأ برمجياً في الشجرة: \(error)")
         }
@@ -834,6 +814,23 @@ class AuthViewModel: ObservableObject {
         }
     }
     
+    func reorderChildren(_ children: [FamilyMember]) async {
+        // تحديث محلي فوري
+        currentMemberChildren = children
+        
+        for (index, child) in children.enumerated() {
+            do {
+                try await supabase
+                    .from("profiles")
+                    .update(["sort_order": AnyEncodable(index)])
+                    .eq("id", value: child.id.uuidString)
+                    .execute()
+            } catch {
+                Log.error("خطأ تحديث ترتيب الابن: \(error.localizedDescription)")
+            }
+        }
+    }
+    
     // MARK: - إدارة الأعضاء (Member Management)
     
     // MARK: - تسجيل عضو جديد من الإدارة (بدون حساب مصادقة)
@@ -847,7 +844,7 @@ class AuthViewModel: ObservableObject {
         self.isLoading = true
         let newId = UUID()
 
-        var memberData: [String: AnyEncodable] = [
+        let memberData: [String: AnyEncodable] = [
             "id": AnyEncodable(newId.uuidString),
             "full_name": AnyEncodable(fullName),
             "first_name": AnyEncodable(firstName),
@@ -883,7 +880,8 @@ class AuthViewModel: ObservableObject {
         fatherId: UUID,
         isDeceased: Bool,
         deathDate: String?,
-        gender: String?
+        gender: String?,
+        silent: Bool = false
     ) async -> UUID? {
         self.isLoading = true
         
@@ -976,41 +974,36 @@ class AuthViewModel: ObservableObject {
                 gender: gender,
                 createdAt: nil
             )
-            await MainActor.run {
-                self.allMembers.append(optimisticChild)
-            }
+            self.allMembers.append(optimisticChild)
             
-            // تسجيل طلب إداري معلوماتي لإشعار الإدارة بإضافة ابن جديد
-            let requester = currentUser?.id ?? fatherId
-            let details = "تمت إضافة ابن جديد: \(firstNameOnly) (\(isDeceased ? "متوفى" : "حي"))."
-            let requestData: [String: AnyEncodable] = [
-                "member_id": AnyEncodable(fatherId.uuidString),
-                "requester_id": AnyEncodable(requester.uuidString),
-                "request_type": AnyEncodable("child_add"),
-                "new_value": AnyEncodable(newId.uuidString),
-                "status": AnyEncodable("pending"),
-                "details": AnyEncodable(details)
-            ]
-            do {
-                try await supabase
-                    .from("admin_requests")
-                    .insert(requestData)
-                    .execute()
-                
-                let requesterName = currentUser?.firstName ?? "عضو"
-                let childAddBody = "تمت إضافة ابن جديد: \(firstNameOnly)\nالأب: \(father.firstName)\nبواسطة: \(requesterName)"
-                await sendExternalAdminPush(
-                    title: "إضافة ابن جديد",
-                    body: childAddBody,
-                    kind: "child_add"
-                )
-                await notifyAdmins(
-                    title: "إضافة ابن جديد",
-                    body: childAddBody,
-                    kind: "child_add"
-                )
-            } catch {
-                Log.warning("لم يتم إدراج طلب child_add في admin_requests: \(error.localizedDescription)")
+            // تسجيل طلب إداري + إشعار فقط إذا الإضافة من حسابي (وليس من تعديل المدير)
+            if !silent {
+                let requester = currentUser?.id ?? fatherId
+                let details = "تمت إضافة ابن جديد: \(firstNameOnly) (\(isDeceased ? "متوفى" : "حي"))."
+                let requestData: [String: AnyEncodable] = [
+                    "member_id": AnyEncodable(fatherId.uuidString),
+                    "requester_id": AnyEncodable(requester.uuidString),
+                    "request_type": AnyEncodable("child_add"),
+                    "new_value": AnyEncodable(newId.uuidString),
+                    "status": AnyEncodable("pending"),
+                    "details": AnyEncodable(details)
+                ]
+                do {
+                    try await supabase
+                        .from("admin_requests")
+                        .insert(requestData)
+                        .execute()
+                    
+                    let requesterName = currentUser?.firstName ?? "عضو"
+                    let childAddBody = "تمت إضافة ابن جديد: \(firstNameOnly)\nالأب: \(father.firstName)\nبواسطة: \(requesterName)"
+                    await notifyAdminsWithPush(
+                        title: "إضافة ابن جديد",
+                        body: childAddBody,
+                        kind: "child_add"
+                    )
+                } catch {
+                    Log.warning("لم يتم إدراج طلب child_add في admin_requests: \(error.localizedDescription)")
+                }
             }
             
             // تحديث البيانات فوراً
@@ -1324,6 +1317,22 @@ class AuthViewModel: ObservableObject {
         }
     }
     
+    func fetchAllGalleryPhotos() async -> [MemberGalleryPhoto] {
+        do {
+            let photos: [MemberGalleryPhoto] = try await supabase
+                .from("member_gallery_photos")
+                .select()
+                .order("created_at", ascending: false)
+                .limit(200)
+                .execute()
+                .value
+            return photos
+        } catch {
+            Log.error("خطأ جلب كل صور المعرض: \(error.localizedDescription)")
+            return []
+        }
+    }
+    
     func uploadMemberGalleryPhotoMulti(image: UIImage, for memberId: UUID) async -> MemberGalleryPhoto? {
         self.isLoading = true
         
@@ -1367,17 +1376,18 @@ class AuthViewModel: ObservableObject {
             let galleryMemberName = currentUser?.firstName ?? "عضو"
             let galleryBody = "قام \(galleryMemberName) بإضافة صورة جديدة في معرض الصور."
             if currentUser?.role == .member {
-                await sendExternalAdminPush(
+                await notifyAdminsWithPush(
+                    title: "إضافة صورة جديدة",
+                    body: galleryBody,
+                    kind: "gallery_add"
+                )
+            } else {
+                await notifyAdmins(
                     title: "إضافة صورة جديدة",
                     body: galleryBody,
                     kind: "gallery_add"
                 )
             }
-            await notifyAdmins(
-                title: "إضافة صورة جديدة",
-                body: galleryBody,
-                kind: "gallery_add"
-            )
             
             self.isLoading = false
             return inserted.first
@@ -1463,7 +1473,8 @@ class AuthViewModel: ObservableObject {
             let payload: [String: AnyEncodable] = [
                 "role": AnyEncodable("member"),
                 "status": AnyEncodable("active"),
-                "father_id": AnyEncodable(fatherId?.uuidString)
+                "father_id": AnyEncodable(fatherId?.uuidString),
+                "is_hidden_from_tree": AnyEncodable(false)
             ]
             
             try await supabase
@@ -1485,6 +1496,7 @@ class AuthViewModel: ObservableObject {
                 allMembers[index].role = .member
                 allMembers[index].status = .active
                 allMembers[index].fatherId = fatherId
+                allMembers[index].isHiddenFromTree = false
                 objectWillChange.send()
             }
 
@@ -1681,9 +1693,29 @@ class AuthViewModel: ObservableObject {
         self.isLoading = false
     }
 
+    /// تحديث السيرة الذاتية (bio_json)
+    func updateMemberBio(memberId: UUID, bio: [FamilyMember.BioStation]) async {
+        do {
+            try await supabase
+                .from("profiles")
+                .update(["bio_json": AnyEncodable(bio)])
+                .eq("id", value: memberId.uuidString)
+                .execute()
+
+            await fetchAllMembers()
+            if memberId == currentUser?.id {
+                await checkUserProfile()
+            }
+            Log.info("تم تحديث السيرة الذاتية بنجاح")
+        } catch {
+            Log.error("خطأ في تحديث السيرة: \(error.localizedDescription)")
+        }
+    }
+
     /// تحديث إخفاء رقم الهاتف فقط
-    func updatePhoneHidden(_ isHidden: Bool) async {
-        guard let userId = currentUser?.id else { return }
+    @discardableResult
+    func updatePhoneHidden(_ isHidden: Bool) async -> Bool {
+        guard let userId = currentUser?.id else { return false }
         do {
             try await supabase
                 .from("profiles")
@@ -1694,14 +1726,17 @@ class AuthViewModel: ObservableObject {
             if let updated = allMembers.first(where: { $0.id == userId }) {
                 self.currentUser = updated
             }
+            return true
         } catch {
             Log.error("خطأ تحديث إخفاء الرقم: \(error.localizedDescription)")
+            return false
         }
     }
 
     /// تحديث إخفاء تاريخ الميلاد
-    func updateBirthDateHidden(_ isHidden: Bool) async {
-        guard let userId = currentUser?.id else { return }
+    @discardableResult
+    func updateBirthDateHidden(_ isHidden: Bool) async -> Bool {
+        guard let userId = currentUser?.id else { return false }
         do {
             try await supabase
                 .from("profiles")
@@ -1712,8 +1747,27 @@ class AuthViewModel: ObservableObject {
             if let updated = allMembers.first(where: { $0.id == userId }) {
                 self.currentUser = updated
             }
+            return true
         } catch {
             Log.error("خطأ تحديث إخفاء تاريخ الميلاد: \(error.localizedDescription)")
+            return false
+        }
+    }
+
+    func updateBadgeEnabled(_ isEnabled: Bool) async {
+        guard let userId = currentUser?.id else { return }
+        do {
+            try await supabase
+                .from("profiles")
+                .update(["badge_enabled": AnyEncodable(isEnabled)])
+                .eq("id", value: userId.uuidString)
+                .execute()
+            await fetchAllMembers()
+            if let updated = allMembers.first(where: { $0.id == userId }) {
+                self.currentUser = updated
+            }
+        } catch {
+            Log.error("خطأ تحديث إعداد شارة الإشعارات: \(error.localizedDescription)")
         }
     }
 
@@ -1737,18 +1791,9 @@ class AuthViewModel: ObservableObject {
     }
     
     // MARK: - Helper Struct
-    struct AnyEncodable: Encodable {
-        private let _encode: (Encoder) throws -> Void
-        init<T: Encodable>(_ wrapped: T) {
-            _encode = wrapped.encode
-        }
-        func encode(to encoder: Encoder) throws {
-            try _encode(encoder)
-        }
-    }
     // داخل AuthViewModel.swift
     
-    func registerNewUser(firstName: String, familyName: String, birthDate: Date, gender: String) async {
+    func registerNewUser(firstName: String, familyName: String, birthDate: Date, gender: String, fatherId: UUID? = nil) async {
         self.isLoading = true
         guard let user = try? await supabase.auth.session.user else { return }
         
@@ -1778,10 +1823,11 @@ class AuthViewModel: ObservableObject {
             "birth_date": AnyEncodable(formatter.string(from: birthDate)),
             "role": AnyEncodable("pending"),
             "status": AnyEncodable("pending"),
-            "father_id": AnyEncodable(Optional<String>.none),
+            "father_id": AnyEncodable(fatherId?.uuidString),
+            "gender": AnyEncodable(gender.isEmpty ? nil : gender),
             "is_deceased": AnyEncodable(false),
             "is_married": AnyEncodable(false),
-            "is_hidden_from_tree": AnyEncodable(false),
+            "is_hidden_from_tree": AnyEncodable(true),
             "sort_order": AnyEncodable(0),
             "created_at": AnyEncodable(ISO8601DateFormatter().string(from: Date()))
         ]
@@ -1821,12 +1867,7 @@ class AuthViewModel: ObservableObject {
                 pushBody = "طلب ربط جديد من \(cleanFirstName) — \(matchedMemberIds.count) مطابقة محتملة."
             }
             
-            await sendExternalAdminPush(
-                title: "طلب ربط عضو جديد",
-                body: pushBody,
-                kind: "link_request"
-            )
-            await notifyAdmins(
+            await notifyAdminsWithPush(
                 title: "طلب ربط عضو جديد",
                 body: pushBody,
                 kind: "link_request"
@@ -1837,9 +1878,7 @@ class AuthViewModel: ObservableObject {
             if let createdProfile = await loadProfile(by: user.id) {
                 await applyAuthenticatedProfile(createdProfile, normalizedPhone: KuwaitPhone.localEightDigits(normalizedPhone))
             } else {
-                await MainActor.run {
-                    self.status = .pendingApproval
-                }
+                self.status = .pendingApproval
             }
             
         } catch {
@@ -1916,11 +1955,18 @@ class AuthViewModel: ObservableObject {
             Log.error("تم رفض تحديث الرتبة: الصلاحية للمدير فقط")
             return
         }
+        
+        // تجاهل إذا الرتبة نفسها لم تتغير
+        let currentRole = allMembers.first(where: { $0.id == memberId })?.role
+        guard currentRole != newRole else {
+            Log.info("الرتبة لم تتغير، تم التجاهل")
+            return
+        }
+        
         self.isLoading = true
         
         do {
             // 1. تحديث حقل role في قاعدة البيانات
-            // نستخدم rawValue لأن الرتبة في سوبابيس مخزنة كنص (String)
             try await supabase
                 .from("profiles")
                 .update(["role": AnyEncodable(newRole.rawValue)])
@@ -1932,11 +1978,44 @@ class AuthViewModel: ObservableObject {
             
             let memberName = allMembers.first(where: { $0.id == memberId })?.firstName ?? "عضو"
             let roleName = newRole == .admin ? "مدير" : (newRole == .supervisor ? "مشرف" : "عضو")
-            await notifyAdmins(
-                title: "تغيير رتبة",
-                body: "تم تغيير رتبة \(memberName) إلى \(roleName).",
-                kind: "admin"
+            
+            // 3. إشعار المدراء بتغيير الرتبة (push + داخلي)
+            await notifyAdminsWithPush(
+                title: L10n.t("تغيير رتبة", "Role Changed"),
+                body: L10n.t(
+                    "تم تغيير رتبة \(memberName) إلى \(roleName).",
+                    "\(memberName)'s role changed to \(roleName)."
+                ),
+                kind: "role_change"
             )
+            
+            // 4. إشعار العضو نفسه بتغيير رتبته
+            if notificationsFeatureAvailable {
+                let personalPayload: [String: AnyEncodable] = [
+                    "target_member_id": AnyEncodable(memberId.uuidString),
+                    "title": AnyEncodable(L10n.t("تغيير رتبتك", "Your Role Changed")),
+                    "body": AnyEncodable(L10n.t(
+                        "تم تغيير رتبتك إلى: \(roleName).",
+                        "Your role has been changed to: \(roleName)."
+                    )),
+                    "kind": AnyEncodable("role_change"),
+                    "created_by": AnyEncodable(currentUser?.id.uuidString)
+                ]
+                do {
+                    try await supabase.from("notifications").insert(personalPayload).execute()
+                    await sendPushToMembers(
+                        title: L10n.t("تغيير رتبتك", "Your Role Changed"),
+                        body: L10n.t(
+                            "تم تغيير رتبتك إلى: \(roleName).",
+                            "Your role has been changed to: \(roleName)."
+                        ),
+                        kind: "role_change",
+                        targetMemberIds: [memberId]
+                    )
+                } catch {
+                    Log.warning("تعذر إرسال إشعار تغيير الرتبة للعضو: \(error.localizedDescription)")
+                }
+            }
             
             Log.info("تم تحديث رتبة العضو بنجاح إلى: \(newRole.rawValue)")
             
@@ -1952,21 +2031,19 @@ class AuthViewModel: ObservableObject {
         self.isLoading = true
         
         // 1) تحديث الترتيب في الذاكرة مباشرة لظهور أسرع
-        await MainActor.run {
-            for (index, child) in newOrder.enumerated() {
-                if let allIdx = self.allMembers.firstIndex(where: { $0.id == child.id }) {
-                    self.allMembers[allIdx].sortOrder = index
-                }
+        for (index, child) in newOrder.enumerated() {
+            if let allIdx = self.allMembers.firstIndex(where: { $0.id == child.id }) {
+                self.allMembers[allIdx].sortOrder = index
             }
-            if fatherId == self.currentUser?.id {
-                self.currentMemberChildren = newOrder.enumerated().map { idx, child in
-                    var mutable = child
-                    mutable.sortOrder = idx
-                    return mutable
-                }
-            }
-            self.objectWillChange.send()
         }
+        if fatherId == self.currentUser?.id {
+            self.currentMemberChildren = newOrder.enumerated().map { idx, child in
+                var mutable = child
+                mutable.sortOrder = idx
+                return mutable
+            }
+        }
+        self.objectWillChange.send()
         
         // 2) تحديث sort_order فعلياً في Supabase
         for (index, child) in newOrder.enumerated() {
@@ -2012,12 +2089,7 @@ class AuthViewModel: ObservableObject {
             let deceasedMemberName = allMembers.first(where: { $0.id == memberId })?.firstName ?? "عضو"
             let requesterDeceasedName = currentUser?.firstName ?? "عضو"
             let deceasedBody = "طلب تأكيد وفاة: \(deceasedMemberName)\nتاريخ الوفاة: \(dateString)\nبواسطة: \(requesterDeceasedName)"
-            await sendExternalAdminPush(
-                title: "طلب تأكيد وفاة",
-                body: deceasedBody,
-                kind: "deceased_report"
-            )
-            await notifyAdmins(
+            await notifyAdminsWithPush(
                 title: "طلب تأكيد وفاة",
                 body: deceasedBody,
                 kind: "deceased_report"
@@ -2029,7 +2101,9 @@ class AuthViewModel: ObservableObject {
         }
         self.isLoading = false
     }
-    func fetchDeceasedRequests() async {
+    func fetchDeceasedRequests(force: Bool = false) async {
+        if !force, let last = lastDeceasedFetchDate, Date().timeIntervalSince(last) < 20, !deceasedRequests.isEmpty { return }
+        lastDeceasedFetchDate = Date()
         do {
             let requests: [AdminRequest] = try await supabase
                 .from("admin_requests")
@@ -2039,9 +2113,7 @@ class AuthViewModel: ObservableObject {
                 .execute()
                 .value
             
-            await MainActor.run {
-                self.deceasedRequests = requests
-            }
+            self.deceasedRequests = requests
         } catch {
             Log.error("فشل جلب طلبات الوفاة: \(error)")
         }
@@ -2066,7 +2138,7 @@ class AuthViewModel: ObservableObject {
                 .execute()
             
             // ج. تحديث البيانات محلياً
-            await fetchDeceasedRequests()
+            await fetchDeceasedRequests(force: true)
             await fetchAllMembers()
             
             let memberName = allMembers.first(where: { $0.id == request.memberId })?.firstName ?? "عضو"
@@ -2083,9 +2155,28 @@ class AuthViewModel: ObservableObject {
         self.isLoading = false
     }
 
+    func rejectDeceasedRequest(request: AdminRequest) async {
+        self.isLoading = true
+        do {
+            try await supabase
+                .from("admin_requests")
+                .update(["status": AnyEncodable("rejected")])
+                .eq("id", value: request.id.uuidString)
+                .execute()
+
+            await fetchDeceasedRequests(force: true)
+            Log.info("تم رفض طلب تأكيد الوفاة")
+        } catch {
+            Log.error("فشل في رفض طلب الوفاة: \(error)")
+        }
+        self.isLoading = false
+    }
+
     // MARK: - طلبات إضافة الأبناء (Child Add Requests)
 
-    func fetchChildAddRequests() async {
+    func fetchChildAddRequests(force: Bool = false) async {
+        if !force, let last = lastChildAddFetchDate, Date().timeIntervalSince(last) < 20, !childAddRequests.isEmpty { return }
+        lastChildAddFetchDate = Date()
         do {
             let requests: [AdminRequest] = try await supabase
                 .from("admin_requests")
@@ -2095,9 +2186,7 @@ class AuthViewModel: ObservableObject {
                 .execute()
                 .value
 
-            await MainActor.run {
-                self.childAddRequests = requests
-            }
+            self.childAddRequests = requests
         } catch {
             Log.error("فشل جلب طلبات إضافة الأبناء: \(error)")
         }
@@ -2122,12 +2211,12 @@ class AuthViewModel: ObservableObject {
                 .eq("id", value: request.id.uuidString)
                 .execute()
 
-            await fetchChildAddRequests()
+            await fetchChildAddRequests(force: true)
             await fetchAllMembers()
 
             let rejectChildDetails = request.details ?? "طلب إضافة ابن"
             let rejectByName = currentUser?.firstName ?? "مدير"
-            await notifyAdmins(
+            await notifyAdminsWithPush(
                 title: "رفض إضافة ابن",
                 body: "\(rejectChildDetails)\nتم الرفض بواسطة: \(rejectByName)",
                 kind: "child_add"
@@ -2150,11 +2239,11 @@ class AuthViewModel: ObservableObject {
                 .eq("id", value: request.id.uuidString)
                 .execute()
 
-            await fetchChildAddRequests()
+            await fetchChildAddRequests(force: true)
 
             let approveChildDetails = request.details ?? "طلب إضافة ابن"
             let approveByName = currentUser?.firstName ?? "مدير"
-            await notifyAdmins(
+            await notifyAdminsWithPush(
                 title: "قبول إضافة ابن",
                 body: "\(approveChildDetails)\nتم القبول بواسطة: \(approveByName)",
                 kind: "child_add"
@@ -2168,7 +2257,7 @@ class AuthViewModel: ObservableObject {
     }
 
     func adminAddSon(firstName: String, parent: FamilyMember?) async {
-        await MainActor.run { self.isLoading = true }
+        self.isLoading = true
         
         do {
             let newId = UUID()
@@ -2198,17 +2287,17 @@ class AuthViewModel: ObservableObject {
             Log.error("خطأ في إضافة العضو: \(error.localizedDescription)")
         }
         
-        await MainActor.run { self.isLoading = false }
+        self.isLoading = false
     }
     func updateMemberPhone(memberId: UUID, newPhone: String) async {
         await updateMemberPhone(memberId: memberId, country: KuwaitPhone.defaultCountry, localPhone: newPhone)
     }
 
     func updateMemberPhone(memberId: UUID, country: KuwaitPhone.Country, localPhone: String) async {
-        await MainActor.run { self.isLoading = true }
+        self.isLoading = true
         guard let normalizedPhone = KuwaitPhone.normalizedForStorage(country: country, rawLocalDigits: localPhone) else {
             Log.error("رقم الهاتف غير صالح للدولة المختارة.")
-            await MainActor.run { self.isLoading = false }
+            self.isLoading = false
             return
         }
         do {
@@ -2258,10 +2347,10 @@ class AuthViewModel: ObservableObject {
         } catch {
             Log.error("خطأ تحديث الهاتف: \(error.localizedDescription)")
         }
-        await MainActor.run { self.isLoading = false }
+        self.isLoading = false
     }
     func updateMemberFather(memberId: UUID, fatherId: UUID?) async {
-        await MainActor.run { self.isLoading = true }
+        self.isLoading = true
         do {
             // نرسل الـ UUID كـ String، وإذا كان nil نرسل NULL للسيرفر
             let updateData: [String: AnyEncodable] = [
@@ -2279,7 +2368,7 @@ class AuthViewModel: ObservableObject {
         } catch {
             Log.error("خطأ في ربط الأب: \(error.localizedDescription)")
         }
-        await MainActor.run { self.isLoading = false }
+        self.isLoading = false
     }
     func updateMemberHealthAndBirth(
         memberId: UUID,
@@ -2287,8 +2376,8 @@ class AuthViewModel: ObservableObject {
         isDeceased: Bool,
         deathDate: Date?     // أصبح اختيارياً ليدعم "Not Available"
     ) async {
-        await MainActor.run { self.isLoading = true }
-        
+        self.isLoading = true
+
         // 1. تنسيق التواريخ
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
@@ -2328,9 +2417,10 @@ class AuthViewModel: ObservableObject {
             Log.error("خطأ في تحديث البيانات: \(error.localizedDescription)")
         }
         
-        await MainActor.run { self.isLoading = false }
+        self.isLoading = false
     }
-    
+
+    @discardableResult
     func updateChildData(
         member: FamilyMember,
         firstName: String,
@@ -2339,13 +2429,11 @@ class AuthViewModel: ObservableObject {
         isDeceased: Bool,
         deathDate: String?,
         gender: String?
-    ) async {
-        await MainActor.run { self.isLoading = true }
-        
+    ) async -> Bool {
+        self.isLoading = true
+
         let safeFirstName = firstName.trimmingCharacters(in: .whitespacesAndNewlines)
-        let originalParts = member.fullName.split(separator: " ")
-        let familySuffix = originalParts.dropFirst().joined(separator: " ")
-        let finalFullName = familySuffix.isEmpty ? safeFirstName : "\(safeFirstName) \(familySuffix)"
+        let finalFullName = member.fullName.trimmingCharacters(in: .whitespacesAndNewlines)
         
         let normalizedPhone = KuwaitPhone.normalizeForStorageFromInput(phoneNumber)
         let storedPhone = normalizedPhone ?? Optional<String>.none
@@ -2372,9 +2460,11 @@ class AuthViewModel: ObservableObject {
                 .execute()
         } catch {
             Log.error("خطأ تعديل بيانات الابن: \(error.localizedDescription)")
+            self.isLoading = false
+            return false
         }
 
-        // تحديث الجنس بشكل منفصل (العمود قد لا يكون موجود)
+        // تحديث الجنس بشكل منفصل (العمود قد لا يكون في schema cache)
         if let gender, !gender.isEmpty {
             do {
                 try await supabase
@@ -2392,7 +2482,8 @@ class AuthViewModel: ObservableObject {
             await fetchChildren(for: fatherId)
         }
         
-        await MainActor.run { self.isLoading = false }
+        self.isLoading = false
+        return true
     }
     // دالة إرسال طلب تغيير رقم الهاتف للإدارة
     func requestPhoneNumberChange(memberId: UUID, newPhoneNumber: String) async {
@@ -2420,12 +2511,7 @@ class AuthViewModel: ObservableObject {
             
             let phoneRequesterName = currentUser?.firstName ?? "عضو"
             let phoneChangeBody = "طلب تغيير رقم جوال\nالعضو: \(phoneRequesterName)\nالرقم الجديد: \(KuwaitPhone.display(normalizedPhone))"
-            await sendExternalAdminPush(
-                title: "طلب تغيير رقم جوال",
-                body: phoneChangeBody,
-                kind: "phone_change"
-            )
-            await notifyAdmins(
+            await notifyAdminsWithPush(
                 title: "طلب تغيير رقم جوال",
                 body: phoneChangeBody,
                 kind: "phone_change"
@@ -2438,7 +2524,9 @@ class AuthViewModel: ObservableObject {
         self.isLoading = false
     }
     
-    func fetchPhoneChangeRequests() async {
+    func fetchPhoneChangeRequests(force: Bool = false) async {
+        if !force, let last = lastPhoneChangeFetchDate, Date().timeIntervalSince(last) < 20, !phoneChangeRequests.isEmpty { return }
+        lastPhoneChangeFetchDate = Date()
         guard canModerate else {
             phoneChangeRequests = []
             return
@@ -2454,9 +2542,7 @@ class AuthViewModel: ObservableObject {
                 .execute()
                 .value
             
-            await MainActor.run {
-                self.phoneChangeRequests = requests
-            }
+            self.phoneChangeRequests = requests
         } catch {
             Log.error("خطأ جلب طلبات تغيير الرقم: \(error.localizedDescription)")
         }
@@ -2480,7 +2566,7 @@ class AuthViewModel: ObservableObject {
                 .eq("id", value: request.id.uuidString)
                 .execute()
             
-            await fetchPhoneChangeRequests()
+            await fetchPhoneChangeRequests(force: true)
             await fetchAllMembers()
             
             let memberName = allMembers.first(where: { $0.id == request.memberId })?.firstName ?? "عضو"
@@ -2507,7 +2593,7 @@ class AuthViewModel: ObservableObject {
                 .eq("id", value: request.id.uuidString)
                 .execute()
             
-            await fetchPhoneChangeRequests()
+            await fetchPhoneChangeRequests(force: true)
             
             let rejectPhoneMemberName = allMembers.first(where: { $0.id == request.memberId })?.firstName ?? "عضو"
             await notifyAdmins(
@@ -2539,7 +2625,9 @@ class AuthViewModel: ObservableObject {
     }
     
     // 1. جلب الأخبار من السيرفر
-    func fetchNews() async {
+    func fetchNews(force: Bool = false) async {
+        if !force, let last = lastNewsFetchDate, Date().timeIntervalSince(last) < 10, !allNews.isEmpty { return }
+        lastNewsFetchDate = Date()
         do {
             let response: [NewsPost] = try await supabase.from("news")
                 .select()
@@ -2638,10 +2726,8 @@ class AuthViewModel: ObservableObject {
                 }
             }
             
-            await MainActor.run {
-                self.likesCountByPost = counts
-                self.likedPosts = userLikes
-            }
+            self.likesCountByPost = counts
+            self.likedPosts = userLikes
         } catch {
             if isCancellationError(error) { return }
             Log.error("خطأ جلب الاعجابات: \(error.localizedDescription)")
@@ -2672,10 +2758,8 @@ class AuthViewModel: ObservableObject {
                 counts[comment.news_id, default: 0] += 1
             }
             
-            await MainActor.run {
-                self.commentsByPost = aggregated
-                self.commentsCountByPost = counts
-            }
+            self.commentsByPost = aggregated
+            self.commentsCountByPost = counts
         } catch {
             if isCancellationError(error) { return }
             Log.error("خطأ جلب التعليقات: \(error.localizedDescription)")
@@ -2688,14 +2772,12 @@ class AuthViewModel: ObservableObject {
         let isCurrentlyLiked = likedPosts.contains(postId)
         
         // Optimistic update
-        await MainActor.run {
-            if isCurrentlyLiked {
-                likedPosts.remove(postId)
-                likesCountByPost[postId, default: 1] -= 1
-            } else {
-                likedPosts.insert(postId)
-                likesCountByPost[postId, default: 0] += 1
-            }
+        if isCurrentlyLiked {
+            likedPosts.remove(postId)
+            likesCountByPost[postId, default: 1] -= 1
+        } else {
+            likedPosts.insert(postId)
+            likesCountByPost[postId, default: 0] += 1
         }
         
         do {
@@ -2719,14 +2801,12 @@ class AuthViewModel: ObservableObject {
         } catch {
             Log.error("خطأ تحديث الاعجاب: \(error.localizedDescription)")
             // Revert on error
-            await MainActor.run {
-                if isCurrentlyLiked {
-                    likedPosts.insert(postId)
-                    likesCountByPost[postId, default: 0] += 1
-                } else {
-                    likedPosts.remove(postId)
-                    likesCountByPost[postId, default: 1] -= 1
-                }
+            if isCurrentlyLiked {
+                likedPosts.insert(postId)
+                likesCountByPost[postId, default: 0] += 1
+            } else {
+                likedPosts.remove(postId)
+                likesCountByPost[postId, default: 1] -= 1
             }
         }
     }
@@ -2760,7 +2840,9 @@ class AuthViewModel: ObservableObject {
         }
     }
     
-    func fetchPendingNewsRequests() async {
+    func fetchPendingNewsRequests(force: Bool = false) async {
+        if !force, let last = lastPendingNewsFetchDate, Date().timeIntervalSince(last) < 20, !pendingNewsRequests.isEmpty { return }
+        lastPendingNewsFetchDate = Date()
         guard canModerate else {
             pendingNewsRequests = []
             return
@@ -2789,7 +2871,9 @@ class AuthViewModel: ObservableObject {
         }
     }
     
-    func fetchNotifications() async {
+    func fetchNotifications(force: Bool = false) async {
+        if !force, let last = lastNotificationsFetchDate, Date().timeIntervalSince(last) < 15, !notifications.isEmpty { return }
+        lastNotificationsFetchDate = Date()
         guard let userId = currentUser?.id else {
             notifications = []
             return
@@ -2814,10 +2898,11 @@ class AuthViewModel: ObservableObject {
                 .execute()
                 .value
             
-            await MainActor.run {
-                self.notificationsFeatureAvailable = true
-                self.notifications = response
-            }
+            let unreadCount = response.filter { !$0.read }.count
+            self.notificationsFeatureAvailable = true
+            self.notifications = response
+            let badgeOn = currentUser?.badgeEnabled ?? true
+            try? await UNUserNotificationCenter.current().setBadgeCount(badgeOn ? unreadCount : 0)
         } catch {
             if isMissingNotificationsTableError(error) {
                 notificationsFeatureAvailable = false
@@ -2829,35 +2914,97 @@ class AuthViewModel: ObservableObject {
     }
     
     func deleteNotification(id: UUID) async {
+        // تحديث محلي فوري
+        notifications.removeAll { $0.id == id }
+        let badgeOn = currentUser?.badgeEnabled ?? true
+        let unread = notifications.filter { !$0.read }.count
+        try? await UNUserNotificationCenter.current().setBadgeCount(badgeOn ? unread : 0)
+        
         do {
             try await supabase
                 .from("notifications")
                 .delete()
                 .eq("id", value: id.uuidString)
                 .execute()
-            
-            await fetchNotifications()
         } catch {
             Log.error("خطأ حذف إشعار: \(error.localizedDescription)")
+            await fetchNotifications(force: true)
+        }
+    }
+    
+    func deleteNotifications(ids: Set<UUID>) async {
+        guard !ids.isEmpty else { return }
+        // تحديث محلي فوري
+        notifications.removeAll { ids.contains($0.id) }
+        let badgeOn = currentUser?.badgeEnabled ?? true
+        let unread = notifications.filter { !$0.read }.count
+        try? await UNUserNotificationCenter.current().setBadgeCount(badgeOn ? unread : 0)
+        
+        do {
+            let idStrings = ids.map { $0.uuidString }
+            try await supabase
+                .from("notifications")
+                .delete()
+                .in("id", values: idStrings)
+                .execute()
+        } catch {
+            Log.error("خطأ حذف إشعارات: \(error.localizedDescription)")
+            await fetchNotifications(force: true)
         }
     }
     
     func markNotificationAsRead(id: UUID) async {
+        // تحديث محلي فوري
+        if let idx = notifications.firstIndex(where: { $0.id == id }) {
+            notifications[idx] = notifications[idx].withRead(true)
+        }
+        let badgeOn = currentUser?.badgeEnabled ?? true
+        let unread = notifications.filter { !$0.read }.count
+        try? await UNUserNotificationCenter.current().setBadgeCount(badgeOn ? unread : 0)
+        
         do {
             try await supabase
                 .from("notifications")
                 .update(["is_read": AnyEncodable(true)])
                 .eq("id", value: id.uuidString)
                 .execute()
-            
-            await fetchNotifications()
         } catch {
             Log.error("خطأ تحديث حالة الإشعار: \(error.localizedDescription)")
+            await fetchNotifications(force: true)
+        }
+    }
+    
+    func markNotificationsAsRead(ids: Set<UUID>) async {
+        guard !ids.isEmpty else { return }
+        // تحديث محلي فوري
+        for i in notifications.indices where ids.contains(notifications[i].id) {
+            notifications[i] = notifications[i].withRead(true)
+        }
+        let badgeOn = currentUser?.badgeEnabled ?? true
+        let unread = notifications.filter { !$0.read }.count
+        try? await UNUserNotificationCenter.current().setBadgeCount(badgeOn ? unread : 0)
+        
+        do {
+            let idStrings = ids.map { $0.uuidString }
+            try await supabase
+                .from("notifications")
+                .update(["is_read": AnyEncodable(true)])
+                .in("id", values: idStrings)
+                .execute()
+        } catch {
+            Log.error("خطأ تعليم إشعارات كمقروءة: \(error.localizedDescription)")
+            await fetchNotifications(force: true)
         }
     }
     
     func markAllNotificationsAsRead() async {
         guard let userId = currentUser?.id else { return }
+        // تحديث محلي فوري
+        for i in notifications.indices where !notifications[i].read {
+            notifications[i] = notifications[i].withRead(true)
+        }
+        try? await UNUserNotificationCenter.current().setBadgeCount(0)
+        
         let filter = canModerate
             ? "target_member_id.is.null,target_member_id.eq.\(userId.uuidString)"
             : "target_member_id.eq.\(userId.uuidString)"
@@ -2868,17 +3015,16 @@ class AuthViewModel: ObservableObject {
                 .or(filter)
                 .eq("is_read", value: false)
                 .execute()
-            
-            await fetchNotifications()
         } catch {
             Log.error("خطأ تعليم كل الإشعارات كمقروءة: \(error.localizedDescription)")
+            await fetchNotifications(force: true)
         }
     }
     
     func sendNotification(title: String, body: String, targetMemberIds: [UUID]?, sendPush: Bool = true) async {
         guard canModerate, let creator = currentUser?.id else { return }
         guard notificationsFeatureAvailable else { return }
-        await MainActor.run { self.isLoading = true }
+        self.isLoading = true
         
         do {
             if let ids = targetMemberIds, !ids.isEmpty {
@@ -2920,7 +3066,7 @@ class AuthViewModel: ObservableObject {
                 kind: "admin"
             )
             
-            await fetchNotifications()
+            await fetchNotifications(force: true)
         } catch {
             if isMissingNotificationsTableError(error) {
                 notificationsFeatureAvailable = false
@@ -2929,9 +3075,9 @@ class AuthViewModel: ObservableObject {
             }
         }
         
-        await MainActor.run { self.isLoading = false }
+        self.isLoading = false
     }
-    
+
     /// إرسال إشعار واحد في مركز الإشعارات (broadcast) يراه المدراء والمشرفون
     /// target_member_id = NULL يعني broadcast — الـ RLS يتكفل بإظهاره للمدراء فقط
     private func notifyAdmins(title: String, body: String, kind: String) async {
@@ -2954,6 +3100,13 @@ class AuthViewModel: ObservableObject {
                 Log.warning("تعذر إرسال إشعار للمدراء: \(error.localizedDescription)")
             }
         }
+    }
+    
+    /// إشعار موحّد: يرسل push خارجي + إشعار داخلي في استدعاء واحد
+    private func notifyAdminsWithPush(title: String, body: String, kind: String) async {
+        async let push: Void = sendExternalAdminPush(title: title, body: body, kind: kind)
+        async let inApp: Void = notifyAdmins(title: title, body: body, kind: kind)
+        _ = await (push, inApp)
     }
     
     func uploadNewsImage(image: UIImage, for authorId: UUID) async -> String? {
@@ -3036,9 +3189,9 @@ class AuthViewModel: ObservableObject {
             return false
         }
         
-        await MainActor.run { self.isLoading = true }
+        self.isLoading = true
         newsPostErrorMessage = nil
-        
+
         let shouldAutoApprove = canAutoPublishNews
         
         // تأكد من أن المسميات هنا تطابق أعمدة الجدول في سوبابيس
@@ -3060,14 +3213,9 @@ class AuthViewModel: ObservableObject {
         do {
             try await supabase.from("news").insert(newPost).execute()
             if !shouldAutoApprove, currentUser?.role == .member {
-                await sendExternalAdminPush(
+                await notifyAdminsWithPush(
                     title: "خبر جديد بانتظار المراجعة",
                     body: "قام عضو بإضافة خبر جديد ويحتاج موافقة الإدارة.",
-                    kind: "news_add"
-                )
-                await notifyAdmins(
-                    title: "خبر جديد بانتظار المراجعة",
-                    body: "تمت إضافة خبر جديد ويحتاج موافقة.",
                     kind: "news_add"
                 )
             }
@@ -3080,11 +3228,11 @@ class AuthViewModel: ObservableObject {
                 )
             }
             Log.info(shouldAutoApprove ? "تم نشر الخبر بنجاح" : "تم إرسال الخبر للمراجعة")
-            await fetchNews()
+            await fetchNews(force: true)
             if canModerate {
-                await fetchPendingNewsRequests()
+                await fetchPendingNewsRequests(force: true)
             }
-            await MainActor.run { self.isLoading = false }
+            self.isLoading = false
             return true
         } catch {
             if isMissingNewsApprovalColumnError(error) ||
@@ -3105,8 +3253,8 @@ class AuthViewModel: ObservableObject {
                 do {
                     try await supabase.from("news").insert(legacyPost).execute()
                     Log.info("تم نشر الخبر (وضع التوافق)")
-                    await fetchNews()
-                    await MainActor.run { self.isLoading = false }
+                    await fetchNews(force: true)
+                    self.isLoading = false
                     return true
                 } catch {
                     Log.error("خطأ في نشر الخبر (وضع التوافق): \(error.localizedDescription)")
@@ -3117,8 +3265,8 @@ class AuthViewModel: ObservableObject {
                 newsPostErrorMessage = "تعذر نشر الخبر: \(error.localizedDescription)"
             }
         }
-        
-        await MainActor.run { self.isLoading = false }
+
+        self.isLoading = false
         return false
     }
 
@@ -3135,7 +3283,7 @@ class AuthViewModel: ObservableObject {
             return false
         }
 
-        await MainActor.run { self.isLoading = true }
+        self.isLoading = true
         newsPostErrorMessage = nil
 
         let payload: [String: AnyEncodable] = [
@@ -3154,12 +3302,12 @@ class AuthViewModel: ObservableObject {
                 .eq("id", value: postId.uuidString)
                 .execute()
 
-            await fetchNews()
+            await fetchNews(force: true)
             if canModerate {
-                await fetchPendingNewsRequests()
+                await fetchPendingNewsRequests(force: true)
             }
 
-            await MainActor.run { self.isLoading = false }
+            self.isLoading = false
             return true
         } catch {
             if isMissingNewsRichContentColumnError(error) ||
@@ -3177,12 +3325,12 @@ class AuthViewModel: ObservableObject {
                         .eq("id", value: postId.uuidString)
                         .execute()
 
-                    await fetchNews()
+                    await fetchNews(force: true)
                     if canModerate {
-                        await fetchPendingNewsRequests()
+                        await fetchPendingNewsRequests(force: true)
                     }
 
-                    await MainActor.run { self.isLoading = false }
+                    self.isLoading = false
                     return true
                 } catch {
                     Log.error("خطأ تعديل الخبر (وضع التوافق): \(error.localizedDescription)")
@@ -3194,15 +3342,15 @@ class AuthViewModel: ObservableObject {
             }
         }
 
-        await MainActor.run { self.isLoading = false }
+        self.isLoading = false
         return false
     }
     
     func approveNewsPost(postId: UUID) async {
         guard canModerate, let approverId = currentUser?.id else { return }
         guard newsApprovalFeatureAvailable else { return }
-        await MainActor.run { self.isLoading = true }
-        
+        self.isLoading = true
+
         do {
             let payload: [String: AnyEncodable] = [
                 "approval_status": AnyEncodable("approved"),
@@ -3216,8 +3364,8 @@ class AuthViewModel: ObservableObject {
                 .eq("id", value: postId.uuidString)
                 .execute()
             
-            await fetchPendingNewsRequests()
-            await fetchNews()
+            await fetchPendingNewsRequests(force: true)
+            await fetchNews(force: true)
             // إشعار المدراء والمشرفين بوجود خبر جديد معتمد
             await notifyAdmins(
                 title: "خبر جديد",
@@ -3232,12 +3380,12 @@ class AuthViewModel: ObservableObject {
             }
         }
         
-        await MainActor.run { self.isLoading = false }
+        self.isLoading = false
     }
-    
+
     func rejectNewsPost(postId: UUID) async {
         guard canModerate else { return }
-        await MainActor.run { self.isLoading = true }
+        self.isLoading = true
         
         do {
             try await supabase
@@ -3246,8 +3394,8 @@ class AuthViewModel: ObservableObject {
                 .eq("id", value: postId.uuidString)
                 .execute()
             
-            await fetchPendingNewsRequests()
-            await fetchNews()
+            await fetchPendingNewsRequests(force: true)
+            await fetchNews(force: true)
             
             await notifyAdmins(
                 title: "رفض خبر",
@@ -3258,12 +3406,12 @@ class AuthViewModel: ObservableObject {
             Log.error("خطأ رفض الخبر: \(error.localizedDescription)")
         }
         
-        await MainActor.run { self.isLoading = false }
+        self.isLoading = false
     }
-    
+
     func deleteNewsPost(postId: UUID) async {
         guard currentUser?.role == .admin else { return }
-        await MainActor.run { self.isLoading = true }
+        self.isLoading = true
         
         do {
             try await supabase
@@ -3272,9 +3420,9 @@ class AuthViewModel: ObservableObject {
                 .eq("id", value: postId.uuidString)
                 .execute()
             
-            await fetchNews()
+            await fetchNews(force: true)
             if canModerate {
-                await fetchPendingNewsRequests()
+                await fetchPendingNewsRequests(force: true)
             }
             
             await notifyAdmins(
@@ -3286,13 +3434,13 @@ class AuthViewModel: ObservableObject {
             Log.error("خطأ حذف الخبر: \(error.localizedDescription)")
         }
         
-        await MainActor.run { self.isLoading = false }
+        self.isLoading = false
     }
-    
+
     func reportNewsPost(postId: UUID, reason: String = "بلاغ على محتوى خبر") async {
         guard let userId = currentUser?.id else { return }
         guard currentUser?.role == .member else { return }
-        await MainActor.run { self.isLoading = true }
+        self.isLoading = true
         
         do {
             let payload: [String: AnyEncodable] = [
@@ -3309,12 +3457,7 @@ class AuthViewModel: ObservableObject {
                 .insert(payload)
                 .execute()
             
-            await sendExternalAdminPush(
-                title: "بلاغ جديد على خبر",
-                body: "وصل بلاغ جديد ويحتاج مراجعة الإدارة.",
-                kind: "news_report"
-            )
-            await notifyAdmins(
+            await notifyAdminsWithPush(
                 title: "بلاغ جديد على خبر",
                 body: "وصل بلاغ جديد ويحتاج مراجعة الإدارة.",
                 kind: "news_report"
@@ -3329,19 +3472,19 @@ class AuthViewModel: ObservableObject {
             Log.error("خطأ إرسال البلاغ: \(error.localizedDescription)")
         }
         
-        await MainActor.run { self.isLoading = false }
+        self.isLoading = false
     }
 
     func sendContactMessage(category: String, message: String, preferredContact: String?) async -> Bool {
         guard let user = currentUser else { return false }
-        await MainActor.run { self.isLoading = true }
+        self.isLoading = true
         contactMessageError = nil
 
         let cleanMessage = message.trimmingCharacters(in: .whitespacesAndNewlines)
         let cleanContact = preferredContact?.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleanMessage.isEmpty else {
             contactMessageError = "الرسالة فارغة."
-            await MainActor.run { self.isLoading = false }
+            self.isLoading = false
             return false
         }
 
@@ -3394,33 +3537,28 @@ class AuthViewModel: ObservableObject {
                     options: FunctionInvokeOptions(body: emailPayload)
                 )
             } catch {
-                contactMessageError = "تم حفظ الرسالة لكن تعذر إرسال الإيميل: \(error.localizedDescription)"
-                await MainActor.run { self.isLoading = false }
-                return false
+                Log.warning("تعذر إرسال إيميل التواصل: \(error.localizedDescription)")
             }
 
-            await sendExternalAdminPush(
-                title: "رسالة تواصل جديدة",
-                body: "وصلت رسالة \(category) جديدة.",
-                kind: "contact_message"
-            )
-            await notifyAdmins(
+            await notifyAdminsWithPush(
                 title: "رسالة تواصل جديدة",
                 body: "وصلت رسالة \(category) جديدة.",
                 kind: "contact_message"
             )
 
-            await MainActor.run { self.isLoading = false }
+            self.isLoading = false
             return true
         } catch {
             Log.error("خطأ إرسال رسالة التواصل: \(error.localizedDescription)")
             contactMessageError = error.localizedDescription
-            await MainActor.run { self.isLoading = false }
+            self.isLoading = false
             return false
         }
     }
     
-    func fetchNewsReportRequests() async {
+    func fetchNewsReportRequests(force: Bool = false) async {
+        if !force, let last = lastNewsReportFetchDate, Date().timeIntervalSince(last) < 20, !newsReportRequests.isEmpty { return }
+        lastNewsReportFetchDate = Date()
         guard canModerate else {
             newsReportRequests = []
             return
@@ -3436,9 +3574,7 @@ class AuthViewModel: ObservableObject {
                 .execute()
                 .value
             
-            await MainActor.run {
-                self.newsReportRequests = requests
-            }
+            self.newsReportRequests = requests
         } catch {
             Log.error("خطأ جلب بلاغات الأخبار: \(error.localizedDescription)")
         }
@@ -3446,7 +3582,7 @@ class AuthViewModel: ObservableObject {
     
     func approveNewsReport(request: AdminRequest) async {
         guard canModerate else { return }
-        await MainActor.run { self.isLoading = true }
+        self.isLoading = true
         
         do {
             if let postIdRaw = request.newValue, let postId = UUID(uuidString: postIdRaw) {
@@ -3469,18 +3605,18 @@ class AuthViewModel: ObservableObject {
                 targetMemberIds: [request.memberId]
             )
             
-            await fetchNewsReportRequests()
-            await fetchNews()
+            await fetchNewsReportRequests(force: true)
+            await fetchNews(force: true)
         } catch {
             Log.error("خطأ اعتماد بلاغ الخبر: \(error.localizedDescription)")
         }
         
-        await MainActor.run { self.isLoading = false }
+        self.isLoading = false
     }
-    
+
     func rejectNewsReport(request: AdminRequest) async {
         guard canModerate else { return }
-        await MainActor.run { self.isLoading = true }
+        self.isLoading = true
         
         do {
             try await supabase
@@ -3495,11 +3631,11 @@ class AuthViewModel: ObservableObject {
                 targetMemberIds: [request.memberId]
             )
             
-            await fetchNewsReportRequests()
+            await fetchNewsReportRequests(force: true)
         } catch {
             Log.error("خطأ رفض بلاغ الخبر: \(error.localizedDescription)")
         }
         
-        await MainActor.run { self.isLoading = false }
+        self.isLoading = false
     }
 }

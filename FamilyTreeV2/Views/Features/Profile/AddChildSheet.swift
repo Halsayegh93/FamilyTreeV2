@@ -135,6 +135,11 @@ struct AddChildSheet: View {
                             TextField(L10n.t("اسم الابن", "Child's name"), text: $firstName)
                                 .font(DS.Font.callout)
                                 .foregroundColor(DS.Color.textPrimary)
+                                .onChange(of: firstName) {
+                                    if firstName.count > 50 {
+                                        firstName = String(firstName.prefix(50))
+                                    }
+                                }
                         }
                         Spacer()
                     }
@@ -153,6 +158,11 @@ struct AddChildSheet: View {
                             TextField(L10n.t("اسم العائلة", "Family name"), text: $familyName)
                                 .font(DS.Font.callout)
                                 .foregroundColor(DS.Color.textPrimary)
+                                .onChange(of: familyName) {
+                                    if familyName.count > 50 {
+                                        familyName = String(familyName.prefix(50))
+                                    }
+                                }
                         }
                         Spacer()
                     }
@@ -243,12 +253,13 @@ struct AddChildSheet: View {
                     // Deceased toggle
                     HStack(spacing: DS.Spacing.md) {
                         DSIcon("leaf.fill", color: DS.Color.error)
-                        Toggle(L10n.t("متوفى", "Deceased"), isOn: $isDeceased.animation())
+                        Toggle(L10n.t("متوفى", "Deceased"), isOn: $isDeceased)
                             .font(DS.Font.callout)
                             .tint(DS.Color.error)
                     }
                     .padding(.horizontal, DS.Spacing.lg)
                     .padding(.vertical, DS.Spacing.sm)
+                    .animation(.default, value: isDeceased)
 
                     if isDeceased {
                         DSDivider()

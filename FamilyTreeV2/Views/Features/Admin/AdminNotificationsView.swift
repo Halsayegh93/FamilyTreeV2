@@ -26,7 +26,7 @@ struct AdminNotificationsView: View {
 
                     // Notification content section
                     DSCard(padding: 0) {
-                        DSSectionHeader(title: "محتوى الإشعار", icon: "bell.badge")
+                        DSSectionHeader(title: L10n.t("محتوى الإشعار", "Notification Content"), icon: "bell.badge")
 
                             VStack(spacing: 0) {
                                 HStack(spacing: DS.Spacing.md) {
@@ -37,9 +37,14 @@ struct AdminNotificationsView: View {
                                         .background(DS.Color.gradientPrimary)
                                         .cornerRadius(DS.Radius.sm)
 
-                                    TextField("العنوان", text: $title)
+                                    TextField(L10n.t("العنوان", "Title"), text: $title)
                                         .font(DS.Font.body)
                                         .multilineTextAlignment(.leading)
+                                        .onChange(of: title) {
+                                            if title.count > 100 {
+                                                title = String(title.prefix(100))
+                                            }
+                                        }
                                 }
                                 .padding(.horizontal, DS.Spacing.lg)
                                 .padding(.vertical, DS.Spacing.md)
@@ -59,6 +64,11 @@ struct AdminNotificationsView: View {
                                         .frame(minHeight: 100)
                                         .scrollContentBackground(.hidden)
                                         .background(Color.clear)
+                                        .onChange(of: bodyText) {
+                                            if bodyText.count > 500 {
+                                                bodyText = String(bodyText.prefix(500))
+                                            }
+                                        }
                                 }
                                 .padding(.horizontal, DS.Spacing.lg)
                                 .padding(.vertical, DS.Spacing.md)
@@ -68,7 +78,7 @@ struct AdminNotificationsView: View {
 
                     // Targeting section
                     DSCard(padding: 0) {
-                        DSSectionHeader(title: "الاستهداف", icon: "target")
+                        DSSectionHeader(title: L10n.t("الاستهداف", "Targeting"), icon: "target")
 
                             VStack(spacing: 0) {
                                 HStack(spacing: DS.Spacing.md) {
@@ -79,7 +89,7 @@ struct AdminNotificationsView: View {
                                         .background(DS.Color.gradientPrimary)
                                         .cornerRadius(DS.Radius.sm)
 
-                                    Toggle("إرسال للجميع", isOn: $sendToAll)
+                                    Toggle(L10n.t("إرسال للجميع", "Send to All"), isOn: $sendToAll)
                                         .font(DS.Font.body)
                                         .tint(DS.Color.primary)
                                 }
@@ -93,7 +103,7 @@ struct AdminNotificationsView: View {
                                     HStack(spacing: DS.Spacing.md) {
                                         Image(systemName: "magnifyingglass")
                                             .foregroundColor(DS.Color.textTertiary)
-                                        TextField("بحث عن عضو...", text: $searchText)
+                                        TextField(L10n.t("بحث عن عضو...", "Search for a member..."), text: $searchText)
                                             .font(DS.Font.body)
                                             .multilineTextAlignment(.leading)
                                     }
@@ -136,7 +146,7 @@ struct AdminNotificationsView: View {
 
                     // Send button
                     DSPrimaryButton(
-                        "إرسال الإشعار",
+                        L10n.t("إرسال الإشعار", "Send Notification"),
                         icon: "paperplane.fill",
                         isLoading: authVM.isLoading
                     ) {
@@ -161,11 +171,9 @@ struct AdminNotificationsView: View {
                 .padding(.top, DS.Spacing.lg)
             }
         }
-        .navigationTitle("إرسال إشعار")
+        .navigationTitle(L10n.t("إرسال إشعار", "Send Notification"))
         .navigationBarTitleDisplayMode(.inline)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-        .onAppear {
-            Task { await authVM.fetchAllMembers() }
-        }
+        .task { await authVM.fetchAllMembers() }
     }
 }

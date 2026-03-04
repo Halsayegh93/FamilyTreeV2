@@ -7,7 +7,6 @@ struct AdminActivateAccountsView: View {
     @State private var memberToActivate: FamilyMember?
     @State private var showActivateConfirm = false
     @State private var memberToEditPhone: FamilyMember?
-    @State private var phoneInput = ""
 
     // أعضاء بحالة nil أو pending (غير مفعلين) - ليسوا بـ role pending - أحياء فقط
     private var allInactiveMembers: [FamilyMember] {
@@ -114,8 +113,8 @@ struct AdminActivateAccountsView: View {
         .sheet(item: $memberToEditPhone) { member in
             EditPhoneSheet(member: member, authVM: authVM)
         }
+        .task { await authVM.fetchAllMembers() }
         .onAppear {
-            Task { await authVM.fetchAllMembers() }
             withAnimation(DS.Anim.smooth.delay(0.15)) {
                 appeared = true
             }

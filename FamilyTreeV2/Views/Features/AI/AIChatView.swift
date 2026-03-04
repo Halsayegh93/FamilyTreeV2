@@ -37,10 +37,10 @@ struct AIChatView: View {
                             }
                             .padding(DS.Spacing.lg)
                         }
-                        .onChange(of: aiVM.chatMessages.count) { _ in
+                        .onChange(of: aiVM.chatMessages.count) { _, _ in
                             scrollToBottom(proxy: proxy)
                         }
-                        .onChange(of: aiVM.isChatLoading) { loading in
+                        .onChange(of: aiVM.isChatLoading) { _, loading in
                             if loading { scrollToBottom(proxy: proxy) }
                         }
                     }

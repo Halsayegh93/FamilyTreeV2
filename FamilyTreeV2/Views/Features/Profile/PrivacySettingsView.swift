@@ -1,4 +1,5 @@
 import SwiftUI
+import UserNotifications
 
 struct PrivacySettingsView: View {
     @EnvironmentObject var authVM: AuthViewModel
@@ -6,10 +7,10 @@ struct PrivacySettingsView: View {
     @ObservedObject private var langManager = LanguageManager.shared
 
     @AppStorage("notificationsEnabled") private var notificationsEnabled: Bool = true
+    @State private var badgeEnabled: Bool = true
     @State private var isPhoneHidden: Bool = false
     @State private var isBirthDateHidden: Bool = false
-    @State private var testPushResult: String?
-    @State private var isSendingTestPush = false
+
 
     var body: some View {
         ZStack {
@@ -19,6 +20,7 @@ struct PrivacySettingsView: View {
             ScrollView(showsIndicators: false) {
                 VStack(spacing: DS.Spacing.md) {
                     notificationsCard
+                    badgeCard
                     phonePrivacyCard
                     birthDatePrivacyCard
                 }
@@ -33,6 +35,7 @@ struct PrivacySettingsView: View {
         .onAppear {
             isPhoneHidden = authVM.currentUser?.isPhoneHidden ?? false
             isBirthDateHidden = authVM.currentUser?.isBirthDateHidden ?? false
+            badgeEnabled = authVM.currentUser?.badgeEnabled ?? true
         }
         .onChange(of: notificationsEnabled) { _, newValue in
             Task {
@@ -45,11 +48,28 @@ struct PrivacySettingsView: View {
                 }
             }
         }
+        .onChange(of: badgeEnabled) { _, newValue in
+            Task {
+                await authVM.updateBadgeEnabled(newValue)
+                if !newValue {
+                    try? await UNUserNotificationCenter.current().setBadgeCount(0)
+                } else {
+                    let unread = authVM.notifications.filter { !$0.read }.count
+                    try? await UNUserNotificationCenter.current().setBadgeCount(unread)
+                }
+            }
+        }
         .onChange(of: isPhoneHidden) { _, newValue in
-            Task { await authVM.updatePhoneHidden(newValue) }
+            Task {
+                let success = await authVM.updatePhoneHidden(newValue)
+                if !success { isPhoneHidden = !newValue }
+            }
         }
         .onChange(of: isBirthDateHidden) { _, newValue in
-            Task { await authVM.updateBirthDateHidden(newValue) }
+            Task {
+                let success = await authVM.updateBirthDateHidden(newValue)
+                if !success { isBirthDateHidden = !newValue }
+            }
         }
     }
 
@@ -83,56 +103,35 @@ struct PrivacySettingsView: View {
                 .padding(.horizontal, DS.Spacing.lg)
                 .padding(.vertical, DS.Spacing.md)
 
-                if notificationsEnabled {
-                    DSDivider()
 
-                    Button {
-                        isSendingTestPush = true
-                        testPushResult = nil
-                        Task {
-                            let result = await authVM.sendTestPush()
-                            await MainActor.run {
-                                isSendingTestPush = false
-                                testPushResult = result.success
-                                    ? L10n.t("تم الإرسال بنجاح ✓", "Sent successfully ✓")
-                                    : L10n.t("فشل: \(result.message)", "Failed: \(result.message)")
-                            }
-                        }
-                    } label: {
-                        HStack(spacing: DS.Spacing.md) {
-                            DSIcon("paperplane.fill", color: DS.Color.info)
+            }
+        }
+    }
 
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(L10n.t("إرسال إشعار تجريبي", "Send Test Notification"))
-                                    .font(DS.Font.calloutBold)
-                                    .foregroundColor(DS.Color.textPrimary)
-                                if let result = testPushResult {
-                                    Text(result)
-                                        .font(DS.Font.caption1)
-                                        .foregroundColor(result.contains("✓") ? DS.Color.success : DS.Color.error)
-                                } else {
-                                    Text(L10n.t("اختبر وصول الإشعارات الخارجية", "Test external push delivery"))
-                                        .font(DS.Font.caption1)
-                                        .foregroundColor(DS.Color.textSecondary)
-                                }
-                            }
+    // MARK: - Badge Card
+    private var badgeCard: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            DSCard(padding: 0) {
+                HStack(spacing: DS.Spacing.md) {
+                    DSIcon("app.badge", color: DS.Color.error)
 
-                            Spacer()
-
-                            if isSendingTestPush {
-                                ProgressView()
-                            } else {
-                                Image(systemName: "arrow.up.circle.fill")
-                                    .font(DS.Font.scaled(20))
-                                    .foregroundColor(DS.Color.info)
-                            }
-                        }
-                        .padding(.horizontal, DS.Spacing.lg)
-                        .padding(.vertical, DS.Spacing.md)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(L10n.t("رقم الإشعارات على الأيقونة", "App Icon Badge"))
+                            .font(DS.Font.calloutBold)
+                            .foregroundColor(DS.Color.textPrimary)
+                        Text(L10n.t("عرض عدد الإشعارات غير المقروءة على أيقونة التطبيق", "Show unread count on the app icon"))
+                            .font(DS.Font.caption1)
+                            .foregroundColor(DS.Color.textSecondary)
                     }
-                    .buttonStyle(DSBoldButtonStyle())
-                    .disabled(isSendingTestPush)
+
+                    Spacer()
+
+                    Toggle("", isOn: $badgeEnabled)
+                        .labelsHidden()
+                        .tint(DS.Color.error)
                 }
+                .padding(.horizontal, DS.Spacing.lg)
+                .padding(.vertical, DS.Spacing.md)
             }
         }
     }

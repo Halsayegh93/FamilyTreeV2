@@ -24,9 +24,7 @@ struct AdminChildAddRequestsView: View {
             }
             .navigationTitle(L10n.t("طلبات إضافة الأبناء", "Child Add Requests"))
             .navigationBarTitleDisplayMode(.inline)
-            .onAppear {
-                Task { await authVM.fetchChildAddRequests() }
-            }
+            .task { await authVM.fetchChildAddRequests() }
         }
     }
 
@@ -79,7 +77,8 @@ struct AdminChildAddRequestsView: View {
                 // Action buttons
                 DSApproveRejectButtons(
                     approveTitle: L10n.t("تأكيد الإضافة", "Confirm Addition"),
-                    rejectTitle: L10n.t("رفض وحذف", "Reject & Delete")
+                    rejectTitle: L10n.t("رفض وحذف", "Reject & Delete"),
+                    isLoading: authVM.isLoading
                 ) {
                     Task { await authVM.acknowledgeChildAddRequest(request: request) }
                 } onReject: {

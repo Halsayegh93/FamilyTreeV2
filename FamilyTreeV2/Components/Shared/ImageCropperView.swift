@@ -19,81 +19,92 @@ struct ImageCropperView: View {
 
     private let maxDisplaySize: CGFloat = 1200
 
+    @State private var containerSize: CGSize = .zero
+
     var body: some View {
-        ZStack {
-            Color.black.ignoresSafeArea()
-
-            let screenW = UIScreen.main.bounds.width
-            let screenH = UIScreen.main.bounds.height
-            let cropSize = min(screenW - 40, screenH * 0.55)
-
+        GeometryReader { geometry in
             ZStack {
-                // Image layer
-                if let img = displayImage {
-                    Image(uiImage: img)
-                        .resizable()
-                        .scaledToFill()
-                        .frame(width: cropSize * 1.5, height: cropSize * 1.5)
-                        .clipped()
-                        .scaleEffect(scale)
-                        .offset(offset)
-                } else {
-                    ProgressView().tint(.white)
+                Color.black.ignoresSafeArea()
+
+                let screenW = geometry.size.width
+                let screenH = geometry.size.height
+                let cropSize = min(screenW - 40, screenH * 0.55)
+
+                ZStack {
+                    // Image layer
+                    if let img = displayImage {
+                        Image(uiImage: img)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: cropSize * 1.5, height: cropSize * 1.5)
+                            .clipped()
+                            .scaleEffect(scale)
+                            .offset(offset)
+                    } else {
+                        ProgressView().tint(.white)
+                    }
+
+                    // Static overlay mask
+                    cropOverlay(cropSize: cropSize, screenW: screenW, screenH: screenH)
+                        .allowsHitTesting(false)
                 }
+                .frame(width: screenW, height: screenH)
+                .contentShape(Rectangle())
+                .gesture(dragGesture)
+                .gesture(pinchGesture)
+                .simultaneousGesture(doubleTapGesture)
 
-                // Static overlay mask
-                cropOverlay(cropSize: cropSize)
-                    .allowsHitTesting(false)
-            }
-            .frame(width: screenW, height: screenH)
-            .contentShape(Rectangle())
-            .gesture(dragGesture)
-            .gesture(pinchGesture)
-            .simultaneousGesture(doubleTapGesture)
+                // Controls
+                VStack {
+                    HStack {
+                        Button { onCancel() } label: {
+                            Text(L10n.t("إلغاء", "Cancel"))
+                                .font(DS.Font.scaled(16, weight: .medium))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 8)
+                        }
 
-            // Controls
-            VStack {
-                HStack {
-                    Button { onCancel() } label: {
-                        Text(L10n.t("إلغاء", "Cancel"))
-                            .font(DS.Font.scaled(16, weight: .medium))
+                        Spacer()
+
+                        Text(L10n.t("تعديل الصورة", "Edit Photo"))
+                            .font(DS.Font.scaled(17, weight: .bold))
                             .foregroundColor(.white)
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 8)
+
+                        Spacer()
+
+                        Button {
+                            let cropped = performCrop()
+                            onCrop(cropped)
+                        } label: {
+                            Text(L10n.t("تأكيد", "Confirm"))
+                                .font(DS.Font.scaled(16, weight: .bold))
+                                .foregroundColor(.black)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 8)
+                                .background(Color.white)
+                                .clipShape(Capsule())
+                        }
                     }
+                    .padding(.horizontal)
+                    .padding(.top, 60)
 
                     Spacer()
 
-                    Text(L10n.t("تعديل الصورة", "Edit Photo"))
-                        .font(DS.Font.scaled(17, weight: .bold))
-                        .foregroundColor(.white)
-
-                    Spacer()
-
-                    Button {
-                        let cropped = performCrop()
-                        onCrop(cropped)
-                    } label: {
-                        Text(L10n.t("تأكيد", "Confirm"))
-                            .font(DS.Font.scaled(16, weight: .bold))
-                            .foregroundColor(.black)
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 8)
-                            .background(Color.white)
-                            .clipShape(Capsule())
-                    }
+                    Text(L10n.t("اسحب وكبّر الصورة للتعديل", "Drag and pinch to adjust"))
+                        .font(DS.Font.scaled(13))
+                        .foregroundColor(.white.opacity(0.6))
+                        .padding(.bottom, 50)
                 }
-                .padding(.horizontal)
-                .padding(.top, 60)
-
-                Spacer()
-
-                Text(L10n.t("اسحب وكبّر الصورة للتعديل", "Drag and pinch to adjust"))
-                    .font(DS.Font.scaled(13))
-                    .foregroundColor(.white.opacity(0.6))
-                    .padding(.bottom, 50)
+            }
+            .onAppear {
+                containerSize = geometry.size
+            }
+            .onChange(of: geometry.size) {
+                containerSize = geometry.size
             }
         }
+        .ignoresSafeArea()
         .environment(\.layoutDirection, .leftToRight)
         .onAppear {
             displayImage = downsample(image, maxSize: maxDisplaySize)
@@ -116,9 +127,9 @@ struct ImageCropperView: View {
     }
 
     private var pinchGesture: some Gesture {
-        MagnificationGesture()
+        MagnifyGesture()
             .onChanged { value in
-                let newScale = lastScale * value
+                let newScale = lastScale * value.magnification
                 scale = min(max(newScale, 0.5), 5.0)
             }
             .onEnded { _ in
@@ -140,11 +151,8 @@ struct ImageCropperView: View {
 
     // MARK: - Overlay
 
-    private func cropOverlay(cropSize: CGFloat) -> some View {
-        let screenW = UIScreen.main.bounds.width
-        let screenH = UIScreen.main.bounds.height
-
-        return ZStack {
+    private func cropOverlay(cropSize: CGFloat, screenW: CGFloat, screenH: CGFloat) -> some View {
+        ZStack {
             // Semi-transparent background
             Color.black.opacity(0.6)
 
@@ -199,7 +207,7 @@ struct ImageCropperView: View {
         let sourceImage = image // Use original for quality
         let imageSize = sourceImage.size
 
-        let viewSize = CGFloat(min(UIScreen.main.bounds.width - 40, UIScreen.main.bounds.height * 0.55))
+        let viewSize = CGFloat(min(containerSize.width - 40, containerSize.height * 0.55))
         let displaySize = viewSize * 1.5
 
         let imageAspect = imageSize.width / imageSize.height

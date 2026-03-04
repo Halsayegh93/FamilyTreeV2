@@ -18,6 +18,8 @@ struct EditChildSheet: View {
     @State private var selectedImageItem: PhotosPickerItem? = nil
     @State private var selectedUIImage: UIImage? = nil
     @State private var showSuccessAlert = false
+    @State private var showErrorAlert = false
+    @State private var errorMessage = ""
 
     var body: some View {
         NavigationStack {
@@ -62,6 +64,11 @@ struct EditChildSheet: View {
             Button(L10n.t("موافق", "OK")) { dismiss() }
         } message: {
             Text(L10n.t("تم تحديث بيانات الابن بنجاح.", "Child info updated successfully."))
+        }
+        .alert(L10n.t("خطأ", "Error"), isPresented: $showErrorAlert) {
+            Button(L10n.t("موافق", "OK"), role: .cancel) {}
+        } message: {
+            Text(errorMessage)
         }
     }
 
@@ -136,6 +143,11 @@ struct EditChildSheet: View {
                             TextField(L10n.t("اسم الابن", "Child's name"), text: $firstName)
                                 .font(DS.Font.callout)
                                 .foregroundColor(DS.Color.textPrimary)
+                                .onChange(of: firstName) {
+                                    if firstName.count > 50 {
+                                        firstName = String(firstName.prefix(50))
+                                    }
+                                }
                         }
                         Spacer()
                     }
@@ -154,6 +166,11 @@ struct EditChildSheet: View {
                             TextField(L10n.t("اسم العائلة", "Family name"), text: $familyName)
                                 .font(DS.Font.callout)
                                 .foregroundColor(DS.Color.textPrimary)
+                                .onChange(of: familyName) {
+                                    if familyName.count > 50 {
+                                        familyName = String(familyName.prefix(50))
+                                    }
+                                }
                         }
                         Spacer()
                     }
@@ -245,12 +262,13 @@ struct EditChildSheet: View {
                     // Deceased toggle
                     HStack(spacing: DS.Spacing.md) {
                         DSIcon("leaf.fill", color: DS.Color.error)
-                        Toggle(L10n.t("متوفى", "Deceased"), isOn: $isDeceased.animation())
+                        Toggle(L10n.t("متوفى", "Deceased"), isOn: $isDeceased)
                             .font(DS.Font.callout)
                             .tint(DS.Color.error)
                     }
                     .padding(.horizontal, DS.Spacing.lg)
                     .padding(.vertical, DS.Spacing.sm)
+                    .animation(.default, value: isDeceased)
 
                     if isDeceased {
                         DSDivider()
@@ -332,7 +350,7 @@ struct EditChildSheet: View {
             updatedMember.fullName = finalFullName
             updatedMember.firstName = cleanFirst
 
-            await authVM.updateChildData(
+            let success = await authVM.updateChildData(
                 member: updatedMember,
                 firstName: cleanFirst,
                 phoneNumber: KuwaitPhone.normalizedForStorage(
@@ -350,7 +368,12 @@ struct EditChildSheet: View {
             }
 
             isSaving = false
-            showSuccessAlert = true
+            if success {
+                showSuccessAlert = true
+            } else {
+                errorMessage = L10n.t("فشل حفظ التعديلات. حاول مرة أخرى.", "Failed to save changes. Please try again.")
+                showErrorAlert = true
+            }
         }
     }
 }

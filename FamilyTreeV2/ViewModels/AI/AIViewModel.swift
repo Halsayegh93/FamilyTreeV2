@@ -24,6 +24,11 @@ class AIViewModel: ObservableObject {
     @Published var isAdminLoading: Bool = false
     @Published var adminError: String?
 
+    // MARK: - Bio Generation State
+    @Published var generatedBioStations: [FamilyMember.BioStation] = []
+    @Published var isBioLoading: Bool = false
+    @Published var bioError: String?
+
     // MARK: - Tree Analysis State
     @Published var treeAnalysis: String = ""
     @Published var isTreeAnalysisLoading: Bool = false
@@ -40,15 +45,7 @@ class AIViewModel: ObservableObject {
 
     // MARK: - Type-erased Encodable wrapper
 
-    private struct AnyEncodable: Encodable {
-        private let _encode: (Encoder) throws -> Void
-        init<T: Encodable>(_ wrapped: T) {
-            _encode = wrapped.encode
-        }
-        func encode(to encoder: Encoder) throws {
-            try _encode(encoder)
-        }
-    }
+
 
     // MARK: - Helper: Call Edge Function
 
@@ -162,6 +159,42 @@ class AIViewModel: ObservableObject {
         }
 
         isAdminLoading = false
+    }
+
+    // MARK: - Generate Bio
+
+    func generateBio(memberId: String) async {
+        isBioLoading = true
+        bioError = nil
+        generatedBioStations = []
+
+        let payload: [String: AnyEncodable] = [
+            "action": AnyEncodable("generate_bio"),
+            "user_id": AnyEncodable(userId),
+            "member_id": AnyEncodable(memberId)
+        ]
+
+        do {
+            let data = try await invokeAI(payload: payload)
+            let result = try JSONDecoder().decode(AIBioResponse.self, from: data)
+            if result.ok, let stations = result.bio_stations {
+                generatedBioStations = stations.compactMap { dto in
+                    guard let title = dto.title, !title.isEmpty else { return nil }
+                    return FamilyMember.BioStation(
+                        year: dto.year,
+                        title: title,
+                        details: dto.details ?? ""
+                    )
+                }
+            } else {
+                bioError = result.message ?? L10n.t("تعذر إنشاء السيرة الذاتية", "Could not generate bio")
+            }
+        } catch {
+            bioError = L10n.t("خطأ في إنشاء السيرة الذاتية", "Error generating bio")
+            Log.error("Bio generation error: \(error.localizedDescription)")
+        }
+
+        isBioLoading = false
     }
 
     // MARK: - Tree Analysis

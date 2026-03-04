@@ -17,6 +17,9 @@ struct MemberDetailsView: View {
     @State private var localCoverPreview: UIImage? = nil
     @State private var pendingCropImage: UIImage? = nil
     @State private var showCropper = false
+    @State private var showShareSheet = false
+    @State private var shareItems: [Any] = []
+    @State private var showDeleteBioAlert = false
 
     var isAdminOrSupervisor: Bool {
         let role = authVM.currentUser?.role
@@ -75,6 +78,9 @@ struct MemberDetailsView: View {
         .photosPicker(isPresented: $showCoverPicker, selection: $selectedCoverItem, matching: .images)
         .onChange(of: selectedCoverItem) { _, newValue in
             handleCoverImageChange(newValue)
+        }
+        .sheet(isPresented: $showShareSheet) {
+            ShareSheet(activityItems: shareItems)
         }
     }
 
@@ -277,53 +283,120 @@ struct MemberDetailsView: View {
                 DSSectionHeader(
                     title: L10n.t("السيرة", "Biography"),
                     icon: "book.fill",
+                    trailing: "\(bioStations.count) " + L10n.t("محطة", "stations"),
                     iconColor: DS.Color.primary
                 )
                 .padding(.horizontal, DS.Spacing.lg)
-                .padding(.bottom, DS.Spacing.sm)
+                .padding(.bottom, DS.Spacing.md)
 
                 VStack(spacing: 0) {
                     ForEach(Array(bioStations.enumerated()), id: \.element.id) { index, station in
-                        HStack(alignment: .top, spacing: DS.Spacing.md) {
+                        HStack(alignment: .top, spacing: DS.Spacing.lg) {
                             // خط + نقطة التايملاين
                             VStack(spacing: 0) {
-                                Circle()
-                                    .fill(DS.Color.primary)
-                                    .frame(width: 10, height: 10)
+                                // نقطة متدرجة
+                                ZStack {
+                                    Circle()
+                                        .fill(DS.Color.primary.opacity(0.15))
+                                        .frame(width: 24, height: 24)
+                                    Circle()
+                                        .fill(DS.Color.gradientPrimary)
+                                        .frame(width: 12, height: 12)
+                                }
+                                
                                 if index < bioStations.count - 1 {
                                     Rectangle()
-                                        .fill(DS.Color.primary.opacity(0.2))
+                                        .fill(
+                                            LinearGradient(
+                                                colors: [DS.Color.primary.opacity(0.3), DS.Color.primary.opacity(0.1)],
+                                                startPoint: .top, endPoint: .bottom
+                                            )
+                                        )
                                         .frame(width: 2)
                                         .frame(maxHeight: .infinity)
                                 }
                             }
-                            .frame(width: 10)
+                            .frame(width: 24)
 
-                            // محتوى المحطة
-                            VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                            // كرت المحطة
+                            VStack(alignment: .leading, spacing: DS.Spacing.sm) {
                                 if let year = station.year, !year.isEmpty {
-                                    Text(year)
-                                        .font(DS.Font.caption1)
-                                        .foregroundColor(DS.Color.primary)
-                                        .fontWeight(.bold)
+                                    HStack(spacing: DS.Spacing.xs) {
+                                        Image(systemName: "calendar.circle.fill")
+                                            .font(DS.Font.scaled(12, weight: .semibold))
+                                            .foregroundColor(DS.Color.primary)
+                                        Text(year)
+                                            .font(DS.Font.scaled(12, weight: .bold))
+                                            .foregroundColor(DS.Color.primary)
+                                    }
+                                    .padding(.horizontal, DS.Spacing.sm)
+                                    .padding(.vertical, 3)
+                                    .background(DS.Color.primary.opacity(0.08))
+                                    .clipShape(Capsule())
                                 }
+                                
                                 Text(station.title)
                                     .font(DS.Font.calloutBold)
                                     .foregroundColor(DS.Color.textPrimary)
+                                
                                 if !station.details.isEmpty {
                                     Text(station.details)
-                                        .font(DS.Font.caption1)
+                                        .font(DS.Font.subheadline)
                                         .foregroundColor(DS.Color.textSecondary)
                                         .fixedSize(horizontal: false, vertical: true)
                                 }
                             }
-                            .padding(.bottom, DS.Spacing.lg)
+                            .padding(DS.Spacing.md)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(DS.Color.surface)
+                            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                                    .stroke(DS.Color.primary.opacity(0.08), lineWidth: 1)
+                            )
+                            .padding(.bottom, DS.Spacing.sm)
                         }
                     }
                 }
-                .padding(.horizontal, DS.Spacing.xxl)
+                .padding(.horizontal, DS.Spacing.lg)
+
+                // زر حذف السيرة — للمدير/المشرف أو صاحب الحساب
+                if isAdminOrSupervisor || member.id == authVM.currentUser?.id {
+                    Button {
+                        showDeleteBioAlert = true
+                    } label: {
+                        HStack(spacing: DS.Spacing.sm) {
+                            Image(systemName: "trash")
+                                .font(DS.Font.scaled(13, weight: .semibold))
+                            Text(L10n.t("حذف السيرة", "Delete Biography"))
+                                .font(DS.Font.calloutBold)
+                        }
+                        .foregroundColor(DS.Color.error)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, DS.Spacing.md)
+                        .background(DS.Color.error.opacity(0.08))
+                        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+                    }
+                    .padding(.horizontal, DS.Spacing.lg)
+                    .padding(.top, DS.Spacing.sm)
+                }
             }
             .padding(.top, DS.Spacing.lg)
+            .alert(
+                L10n.t("حذف السيرة", "Delete Biography"),
+                isPresented: $showDeleteBioAlert
+            ) {
+                Button(L10n.t("حذف", "Delete"), role: .destructive) {
+                    let memberId = member.id
+                    Task { await authVM.updateMemberBio(memberId: memberId, bio: []) }
+                }
+                Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { }
+            } message: {
+                Text(L10n.t(
+                    "هل تريد حذف السيرة الذاتية؟",
+                    "Delete biography?"
+                ))
+            }
         }
     }
 
@@ -382,6 +455,19 @@ struct MemberDetailsView: View {
 
                 Spacer()
 
+                // زر المشاركة
+                if !member.isDeleted {
+                    Button { shareProfile() } label: {
+                        Image(systemName: "square.and.arrow.up")
+                            .font(DS.Font.scaled(13, weight: .bold))
+                            .foregroundColor(.white)
+                            .frame(width: 40, height: 40)
+                            .background(.ultraThinMaterial)
+                            .clipShape(Circle())
+                            .shadow(color: .black.opacity(0.2), radius: 6, y: 2)
+                    }
+                }
+
                 // زر الإغلاق
                 Button { dismiss() } label: {
                     Image(systemName: "xmark")
@@ -400,6 +486,58 @@ struct MemberDetailsView: View {
         }
         .ignoresSafeArea(.container, edges: .top)
         .padding(.top, DS.Spacing.xxxxl)
+    }
+
+    // MARK: - مشاركة الملف الشخصي
+
+    private func shareProfile() {
+        var lines: [String] = []
+
+        let name = member.fullName
+        lines.append("👤 \(name)")
+        lines.append("")
+
+        if let birth = member.birthDate, !birth.isEmpty, member.isBirthDateHidden != true {
+            lines.append("🎂 " + L10n.t("الميلاد", "Birthday") + ": \(birth)")
+        }
+
+        if member.isDeceased == true, let death = member.deathDate, !death.isEmpty {
+            lines.append("🕊️ " + L10n.t("الوفاة", "Passed") + ": \(death)")
+        }
+
+        if let phone = member.phoneNumber, !phone.isEmpty,
+           member.isPhoneHidden != true, member.isDeceased != true {
+            lines.append("📱 " + KuwaitPhone.display(phone))
+        }
+
+        if let bio = member.bio, !bio.isEmpty {
+            lines.append("")
+            lines.append("📖 " + L10n.t("السيرة", "Biography") + ":")
+            for station in bio {
+                let yearStr = station.year.map { "(\($0)) " } ?? ""
+                lines.append("  • \(yearStr)\(station.title)")
+            }
+        }
+
+        // Father name
+        if let fatherId = member.fatherId,
+           let father = authVM.allMembers.first(where: { $0.id == fatherId }) {
+            lines.append("")
+            lines.append("👨 " + L10n.t("الأب", "Father") + ": \(father.fullName)")
+        }
+
+        // Children
+        let children = authVM.allMembers.filter { $0.fatherId == member.id }
+        if !children.isEmpty {
+            lines.append("👶 " + L10n.t("الأبناء", "Children") + " (\(children.count)): " + children.map { $0.firstName }.joined(separator: ", "))
+        }
+
+        lines.append("")
+        lines.append("— " + L10n.t("شجرة آل محمد علي", "Al-Mohammad Ali Family Tree"))
+
+        let shareText = lines.joined(separator: "\n")
+        shareItems = [shareText]
+        showShareSheet = true
     }
 
     // MARK: - المكونات الفرعية
@@ -446,9 +584,9 @@ struct MemberDetailsView: View {
                     .scaleEffect(avatarPreviewScale, anchor: .center)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
                     .gesture(
-                        MagnificationGesture()
+                        MagnifyGesture()
                             .onChanged { value in
-                                let nextScale = lastAvatarPreviewScale * value
+                                let nextScale = lastAvatarPreviewScale * value.magnification
                                 avatarPreviewScale = min(max(nextScale, 1), 4)
                             }
                             .onEnded { _ in
@@ -545,4 +683,16 @@ struct MemberDetailsView: View {
             }
         }
     }
+}
+
+// MARK: - Share Sheet
+
+private struct ShareSheet: UIViewControllerRepresentable {
+    let activityItems: [Any]
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }

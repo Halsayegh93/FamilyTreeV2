@@ -60,9 +60,7 @@ struct AdminNewsRequestsView: View {
         .navigationTitle(L10n.t("طلبات نشر الأخبار", "News Publish Requests"))
         .navigationBarTitleDisplayMode(.inline)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-        .onAppear {
-            Task { await authVM.fetchPendingNewsRequests() }
-        }
+        .task { await authVM.fetchPendingNewsRequests() }
     }
 
     // MARK: - Empty State

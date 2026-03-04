@@ -10,6 +10,7 @@ struct ProfileView: View {
     @State private var showSettings = false
     @State private var showAddChild = false
     @State private var editingChild: FamilyMember? = nil
+    @State private var isReorderingChildren = false
 
     var user: FamilyMember? { authVM.currentUser }
 
@@ -34,6 +35,7 @@ struct ProfileView: View {
                                     .foregroundColor(.white)
                                     .frame(width: 44, height: 44)
                                     .background(Color.white.opacity(0.15))
+                                    .accessibilityLabel(L10n.t("تعديل الملف الشخصي", "Edit profile"))
                                     .clipShape(Circle())
                                     .overlay(Circle().stroke(Color.white.opacity(0.3), lineWidth: 1.5))
                             }
@@ -57,11 +59,7 @@ struct ProfileView: View {
                             }
                             .padding(.bottom, DS.Spacing.xxl)
                         } // closes ScrollView
-                        .onAppear {
-                            Task {
-                                await authVM.fetchChildren(for: currentUser.id)
-                            }
-                        }
+                        .task { await authVM.fetchChildren(for: currentUser.id) }
                     } // closes VStack
                 } else {
                     ProgressView(L10n.t("جاري تحميل الملف...", "Loading profile..."))
@@ -87,47 +85,104 @@ struct ProfileView: View {
 
     // MARK: - Profile Header — Avatar & Info
     private func profileHeader(user: FamilyMember) -> some View {
-        VStack(spacing: DS.Spacing.sm) {
-            // Overlapping Avatar
+        VStack(spacing: 0) {
+            // الصورة الشخصية
             ZStack {
+                // حلقة خارجية متوهجة
                 Circle()
                     .fill(DS.Color.surface)
-                    .frame(width: 130, height: 130)
-                    .shadow(color: .black.opacity(0.1), radius: 8, y: 4)
+                    .frame(width: 110, height: 110)
+                    .shadow(color: DS.Color.primary.opacity(0.25), radius: 12, y: 4)
+                
+                // حلقة gradient
+                Circle()
+                    .stroke(
+                        LinearGradient(
+                            colors: [DS.Color.primary, DS.Color.primaryLight, DS.Color.primary],
+                            startPoint: .topLeading, endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 3
+                    )
+                    .frame(width: 106, height: 106)
 
                 if let urlStr = user.avatarUrl, let url = URL(string: urlStr) {
-                    AsyncImage(url: url) { img in img.resizable().scaledToFill() }
+                    CachedAsyncImage(url: url) { img in img.resizable().scaledToFill() }
                     placeholder: { ProgressView() }
-                    .frame(width: 120, height: 120).clipShape(Circle())
+                    .frame(width: 98, height: 98).clipShape(Circle())
                 } else {
                     Circle()
                         .fill(DS.Color.background)
-                        .frame(width: 120, height: 120)
+                        .frame(width: 98, height: 98)
                         .overlay(
                             Text(String(user.firstName.first ?? "P"))
-                                .font(DS.Font.scaled(48, weight: .bold))
+                                .font(DS.Font.scaled(40, weight: .bold))
                                 .foregroundColor(DS.Color.primary)
                         )
                 }
             }
+            .padding(.top, DS.Spacing.xl)
             
             // User Info
-            VStack(spacing: DS.Spacing.xs) {
+            VStack(spacing: DS.Spacing.sm) {
                 Text(user.fullName.isEmpty ? L10n.t("غير معروف", "Unknown") : user.fullName)
-                    .font(DS.Font.title3)
+                    .font(DS.Font.title2)
+                    .fontWeight(.bold)
                     .foregroundColor(DS.Color.textPrimary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, DS.Spacing.lg)
 
-                Text(user.roleName)
-                    .font(DS.Font.scaled(11, weight: .semibold))
-                    .foregroundColor(user.roleColor)
-                    .padding(.horizontal, DS.Spacing.sm)
-                    .padding(.vertical, 3)
+                HStack(spacing: DS.Spacing.sm) {
+                    // شارة الدور
+                    HStack(spacing: DS.Spacing.xs) {
+                        Circle()
+                            .fill(user.roleColor)
+                            .frame(width: 8, height: 8)
+                        Text(user.roleName)
+                            .font(DS.Font.scaled(11, weight: .bold))
+                            .foregroundColor(user.roleColor)
+                    }
+                    .padding(.horizontal, DS.Spacing.md)
+                    .padding(.vertical, 4)
                     .background(user.roleColor.opacity(0.10))
                     .clipShape(Capsule())
+                    .overlay(Capsule().stroke(user.roleColor.opacity(0.2), lineWidth: 1))
+                    
+                    // الجنس
+                    if let gender = user.gender, !gender.isEmpty {
+                        let isFemale = gender.lowercased() == "female"
+                        HStack(spacing: DS.Spacing.xs) {
+                            Image(systemName: isFemale ? "figure.stand.dress" : "figure.stand")
+                                .font(DS.Font.scaled(10, weight: .semibold))
+                            Text(isFemale ? L10n.t("أنثى", "Female") : L10n.t("ذكر", "Male"))
+                                .font(DS.Font.scaled(11, weight: .semibold))
+                        }
+                        .foregroundColor(DS.Color.textSecondary)
+                        .padding(.horizontal, DS.Spacing.sm)
+                        .padding(.vertical, 4)
+                        .background(DS.Color.surface)
+                        .clipShape(Capsule())
+                        .overlay(Capsule().stroke(Color.gray.opacity(0.15), lineWidth: 1))
+                    }
+                    
+                    // عدد الأبناء
+                    if !authVM.currentMemberChildren.isEmpty {
+                        HStack(spacing: DS.Spacing.xs) {
+                            Image(systemName: "person.2.fill")
+                                .font(DS.Font.scaled(10, weight: .semibold))
+                            Text("\(authVM.currentMemberChildren.count) " + L10n.t("أبناء", "children"))
+                                .font(DS.Font.scaled(11, weight: .bold))
+                        }
+                        .foregroundColor(DS.Color.success)
+                        .padding(.horizontal, DS.Spacing.sm)
+                        .padding(.vertical, 4)
+                        .background(DS.Color.success.opacity(0.10))
+                        .clipShape(Capsule())
+                        .overlay(Capsule().stroke(DS.Color.success.opacity(0.2), lineWidth: 1))
+                    }
+                }
             }
-            .padding(.bottom, DS.Spacing.xs)
+            .padding(.top, DS.Spacing.md)
+            .padding(.bottom, DS.Spacing.sm)
         }
     }
 
@@ -284,58 +339,99 @@ struct ProfileView: View {
     private var serverSonsSection: some View {
         VStack(alignment: .leading, spacing: 0) {
             DSCard(padding: 0) {
-                DSSectionHeader(
-                    title: L10n.t("الأبناء", "Children"),
-                    icon: "person.2.fill",
-                    trailing: authVM.currentMemberChildren.isEmpty ? nil : "\(authVM.currentMemberChildren.count)",
-                    iconColor: DS.Color.success
-                )
+                // Header مع زر الترتيب
+                HStack {
+                    DSSectionHeader(
+                        title: L10n.t("الأبناء", "Children"),
+                        icon: "person.2.fill",
+                        iconColor: DS.Color.success
+                    )
 
-                let columns = [GridItem(.flexible()), GridItem(.flexible())]
-                LazyVGrid(columns: columns, spacing: DS.Spacing.md) {
-                    ForEach(authVM.currentMemberChildren) { son in
+                    Spacer()
+
+                    if authVM.currentMemberChildren.count > 1 {
                         Button {
-                            editingChild = son
+                            withAnimation(DS.Anim.snappy) {
+                                isReorderingChildren.toggle()
+                            }
                         } label: {
-                            childGridCell(son: son)
+                            HStack(spacing: DS.Spacing.xs) {
+                                Image(systemName: isReorderingChildren ? "checkmark" : "arrow.up.arrow.down")
+                                    .font(DS.Font.scaled(11, weight: .bold))
+                                Text(isReorderingChildren ? L10n.t("تم", "Done") : L10n.t("ترتيب", "Sort"))
+                                    .font(DS.Font.scaled(11, weight: .bold))
+                            }
+                            .foregroundColor(isReorderingChildren ? DS.Color.success : DS.Color.primary)
+                            .padding(.horizontal, DS.Spacing.md)
+                            .padding(.vertical, DS.Spacing.xs + 2)
+                            .background(
+                                (isReorderingChildren ? DS.Color.success : DS.Color.primary).opacity(0.1)
+                            )
+                            .clipShape(Capsule())
                         }
-                        .buttonStyle(PlainButtonStyle())
+                        .buttonStyle(.plain)
+                        .padding(.trailing, DS.Spacing.lg)
                     }
-
-                    // Add child as last grid cell
-                    Button {
-                        showAddChild = true
-                    } label: {
-                        HStack(spacing: DS.Spacing.sm) {
-                            Image(systemName: "plus")
-                                .font(DS.Font.scaled(16, weight: .bold))
-                                .foregroundColor(DS.Color.success)
-                                .frame(width: 36, height: 36)
-                                .background(DS.Color.success.opacity(0.12))
-                                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
-
-                            Text(L10n.t("إضافة ابن", "Add Child"))
-                                .font(DS.Font.caption1)
-                                .fontWeight(.bold)
-                                .foregroundColor(DS.Color.success)
-                                .lineLimit(1)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(DS.Spacing.sm)
-                        .background(DS.Color.surface)
-                        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                                .stroke(DS.Color.success.opacity(0.3), lineWidth: 1)
-                                .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [5]))
-                        )
-                    }
-                    .buttonStyle(PlainButtonStyle())
                 }
-                .padding(DS.Spacing.md)
+
+                if isReorderingChildren {
+                    // وضع الترتيب — قائمة عمودية مع أسهم
+                    childrenReorderView
+                } else {
+                    // الوضع العادي — شبكة
+                    childrenGridView
+                }
             }
         }
         .padding(.horizontal, DS.Spacing.lg)
+    }
+
+    // MARK: - Grid View (الوضع العادي)
+    private var childrenGridView: some View {
+        VStack(spacing: 0) {
+            let columns = [GridItem(.flexible()), GridItem(.flexible())]
+            LazyVGrid(columns: columns, spacing: DS.Spacing.md) {
+                ForEach(authVM.currentMemberChildren, id: \.id) { son in
+                    Button {
+                        editingChild = son
+                    } label: {
+                        childGridCell(son: son)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                }
+
+                // Add child as last grid cell
+                Button {
+                    showAddChild = true
+                } label: {
+                    HStack(spacing: DS.Spacing.sm) {
+                        Image(systemName: "plus")
+                            .font(DS.Font.scaled(16, weight: .bold))
+                            .foregroundColor(DS.Color.success)
+                            .frame(width: 36, height: 36)
+                            .background(DS.Color.success.opacity(0.12))
+                            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
+
+                        Text(L10n.t("إضافة ابن", "Add Child"))
+                            .font(DS.Font.caption1)
+                            .fontWeight(.bold)
+                            .foregroundColor(DS.Color.success)
+                            .lineLimit(1)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(DS.Spacing.sm)
+                    .background(DS.Color.surface)
+                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                            .stroke(DS.Color.success.opacity(0.3), lineWidth: 1)
+                            .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [5]))
+                    )
+                }
+                .buttonStyle(PlainButtonStyle())
+            }
+            .padding(DS.Spacing.md)
+        }
     }
 
     private func childGridCell(son: FamilyMember) -> some View {
@@ -348,12 +444,27 @@ struct ProfileView: View {
         let iconColor = isDeceased ? DS.Color.error : (isFemale ? DS.Color.neonPink : DS.Color.primary)
 
         return HStack(spacing: DS.Spacing.sm) {
-            Image(systemName: iconName)
-                .font(DS.Font.scaled(16, weight: .bold))
-                .foregroundColor(iconColor)
-                .frame(width: 36, height: 36)
-                .background(iconColor.opacity(0.12))
-                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
+            ZStack {
+                if let urlStr = son.avatarUrl, let url = URL(string: urlStr) {
+                    CachedAsyncImage(url: url) { image in
+                        image.resizable().scaledToFill()
+                    } placeholder: {
+                        Image(systemName: iconName)
+                            .font(DS.Font.scaled(16, weight: .bold))
+                            .foregroundColor(iconColor)
+                    }
+                    .frame(width: 36, height: 36)
+                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
+                } else {
+                    Image(systemName: iconName)
+                        .font(DS.Font.scaled(16, weight: .bold))
+                        .foregroundColor(iconColor)
+                        .frame(width: 36, height: 36)
+                        .background(iconColor.opacity(0.12))
+                        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
+                }
+
+            }
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(son.firstName.isEmpty ? L10n.t("الاسم", "Name") : son.firstName)
@@ -362,11 +473,22 @@ struct ProfileView: View {
                     .foregroundColor(DS.Color.textPrimary)
                     .lineLimit(1)
 
-                if let birth = son.birthDate, !birth.isEmpty {
-                    Text(birth)
-                        .font(DS.Font.caption2)
-                        .foregroundColor(DS.Color.textSecondary)
-                        .lineLimit(1)
+                HStack(spacing: DS.Spacing.xs) {
+                    if let birth = son.birthDate, !birth.isEmpty {
+                        Text(birth)
+                            .font(DS.Font.caption2)
+                            .foregroundColor(DS.Color.textSecondary)
+                            .lineLimit(1)
+                    }
+                    if isDeceased {
+                        Text(L10n.t("متوفى", "Deceased"))
+                            .font(DS.Font.scaled(8, weight: .bold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1)
+                            .background(DS.Color.error.opacity(0.8))
+                            .clipShape(Capsule())
+                    }
                 }
             }
         }
@@ -378,6 +500,102 @@ struct ProfileView: View {
             RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
                 .stroke(iconColor.opacity(0.15), lineWidth: 1)
         )
+    }
+
+    // MARK: - Reorder View (وضع الترتيب)
+    private var childrenReorderView: some View {
+        VStack(spacing: 0) {
+            let children = authVM.currentMemberChildren
+            ForEach(Array(children.enumerated()), id: \.element.id) { index, son in
+                if index > 0 { DSDivider() }
+
+                let isDeceased = son.isDeceased ?? false
+                let isFemale = son.gender?.lowercased() == "female"
+                let iconName: String = {
+                    if isDeceased { return "person.fill.xmark" }
+                    return isFemale ? "figure.stand.dress" : "person.fill"
+                }()
+                let iconColor = isDeceased ? DS.Color.error : (isFemale ? DS.Color.neonPink : DS.Color.primary)
+
+                HStack(spacing: DS.Spacing.md) {
+                    // رقم الترتيب
+                    Text("\(index + 1)")
+                        .font(DS.Font.scaled(13, weight: .bold))
+                        .foregroundColor(.white)
+                        .frame(width: 28, height: 28)
+                        .background(iconColor.opacity(0.8))
+                        .clipShape(Circle())
+
+                    // صورة
+                    ZStack {
+                        if let urlStr = son.avatarUrl, let url = URL(string: urlStr) {
+                            CachedAsyncImage(url: url) { image in
+                                image.resizable().scaledToFill()
+                            } placeholder: {
+                                Image(systemName: iconName)
+                                    .font(DS.Font.scaled(14, weight: .bold))
+                                    .foregroundColor(iconColor)
+                            }
+                            .frame(width: 36, height: 36)
+                            .clipShape(Circle())
+                        } else {
+                            Image(systemName: iconName)
+                                .font(DS.Font.scaled(14, weight: .bold))
+                                .foregroundColor(iconColor)
+                                .frame(width: 36, height: 36)
+                                .background(iconColor.opacity(0.12))
+                                .clipShape(Circle())
+                        }
+                    }
+
+                    // الاسم
+                    Text(son.firstName.isEmpty ? L10n.t("الاسم", "Name") : son.firstName)
+                        .font(DS.Font.callout)
+                        .fontWeight(.bold)
+                        .foregroundColor(DS.Color.textPrimary)
+                        .lineLimit(1)
+
+                    Spacer()
+
+                    // أزرار أعلى/أسفل
+                    VStack(spacing: 4) {
+                        Button {
+                            guard index > 0 else { return }
+                            var reordered = children
+                            reordered.swapAt(index, index - 1)
+                            Task {
+                                await authVM.reorderChildren(reordered)
+                            }
+                        } label: {
+                            Image(systemName: "chevron.up")
+                                .font(DS.Font.scaled(12, weight: .bold))
+                                .foregroundColor(index > 0 ? DS.Color.primary : DS.Color.textTertiary.opacity(0.3))
+                                .frame(width: 30, height: 22)
+                        }
+                        .disabled(index == 0)
+
+                        Button {
+                            guard index < children.count - 1 else { return }
+                            var reordered = children
+                            reordered.swapAt(index, index + 1)
+                            Task {
+                                await authVM.reorderChildren(reordered)
+                            }
+                        } label: {
+                            Image(systemName: "chevron.down")
+                                .font(DS.Font.scaled(12, weight: .bold))
+                                .foregroundColor(index < children.count - 1 ? DS.Color.primary : DS.Color.textTertiary.opacity(0.3))
+                                .frame(width: 30, height: 22)
+                        }
+                        .disabled(index >= children.count - 1)
+                    }
+                }
+                .padding(.horizontal, DS.Spacing.lg)
+                .padding(.vertical, DS.Spacing.sm)
+            }
+        }
+        .padding(.vertical, DS.Spacing.xs)
+        .transition(.opacity.combined(with: .move(edge: .top)))
     }
 
     // MARK: - General Section (Gallery, Privacy, Settings, Sign Out)
@@ -488,17 +706,3 @@ struct ProfileView: View {
     }
 }
 
-// MARK: - RoundedShape
-private struct RoundedShape: Shape {
-    var corners: UIRectCorner
-    var radius: CGFloat
-    
-    func path(in rect: CGRect) -> Path {
-        let path = UIBezierPath(
-            roundedRect: rect,
-            byRoundingCorners: corners,
-            cornerRadii: CGSize(width: radius, height: radius)
-        )
-        return Path(path.cgPath)
-    }
-}

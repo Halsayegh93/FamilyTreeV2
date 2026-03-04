@@ -53,9 +53,7 @@ struct AdminPendingRequestsView: View {
             FatherLinkApprovalSheet(member: member, suggestedMatchIds: matchedIdsForSelected)
                 .environmentObject(authVM)
         }
-        .onAppear {
-            Task { await authVM.fetchAllMembers() }
-        }
+        .task { await authVM.fetchAllMembers() }
     }
 
     func pendingMemberCard(member: FamilyMember) -> some View {

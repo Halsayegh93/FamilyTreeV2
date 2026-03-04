@@ -37,9 +37,7 @@ struct PersonalGalleryView: View {
         .navigationTitle(L10n.t("معرض الصور", "Gallery"))
         .navigationBarTitleDisplayMode(.inline)
         .environment(\.layoutDirection, langManager.layoutDirection)
-        .onAppear {
-            Task { await refreshGalleryPhotos() }
-        }
+        .task { await refreshGalleryPhotos() }
         .photosPicker(isPresented: $showGalleryPicker, selection: $selectedGalleryItems, maxSelectionCount: 5, matching: .images)
         .onChange(of: selectedGalleryItems) { _, items in
             handleGalleryImagesChange(items)

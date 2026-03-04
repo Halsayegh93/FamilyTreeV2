@@ -25,6 +25,27 @@ struct TreeView: View {
     @State private var searchDebounceTask: Task<Void, Never>?
     @State private var isSearchFocused = false
     @State private var searchedMemberID: UUID? = nil
+    @State private var includeDeceased = false
+    @State private var showFilters = false
+    @State private var genderFilter: GenderFilter = .all
+    
+    enum GenderFilter: String, CaseIterable {
+        case all, male, female
+        var label: String {
+            switch self {
+            case .all: return L10n.t("الكل", "All")
+            case .male: return L10n.t("ذكور", "Male")
+            case .female: return L10n.t("إناث", "Female")
+            }
+        }
+        var icon: String {
+            switch self {
+            case .all: return "person.2.fill"
+            case .male: return "figure.stand"
+            case .female: return "figure.stand.dress"
+            }
+        }
+    }
 
     @State private var scale: CGFloat = 0.8
     @State private var treeID = UUID()
@@ -40,6 +61,7 @@ struct TreeView: View {
     @State private var cachedMemberById: [UUID: FamilyMember] = [:]
     @State private var cachedRootMembers: [FamilyMember] = []
     @State private var cachedChildrenByFatherId: [UUID: [FamilyMember]] = [:]
+    @State private var cachedMemberIds: Set<UUID> = []
 
     private var lightweightFullTree: Bool {
         cachedVisibleMembers.count > 90
@@ -69,7 +91,7 @@ struct TreeView: View {
 
     /// يُعاد حساب البيانات المُخزنة عند تغيّر الأعضاء فقط
     private func rebuildCache() {
-        let visible = authVM.allMembers.filter { !$0.isHiddenFromTree }
+        let visible = authVM.allMembers.filter { !$0.isHiddenFromTree && $0.role != .pending }
         let byId = Dictionary(uniqueKeysWithValues: visible.map { ($0.id, $0) })
 
         let roots = sortedMembers(visible.filter { member in
@@ -86,6 +108,7 @@ struct TreeView: View {
         cachedMemberById = byId
         cachedRootMembers = roots
         cachedChildrenByFatherId = childrenMap
+        cachedMemberIds = Set(visible.map(\.id))
     }
 
     private func sortedMembers(_ members: [FamilyMember]) -> [FamilyMember] {
@@ -103,15 +126,38 @@ struct TreeView: View {
 
         var results: [FamilyMember] = []
         for member in cachedVisibleMembers {
-            guard results.count < 15 else { break }
-            if !(member.isDeceased ?? false) &&
-                getFullLineage(for: member, lookup: cachedMemberById)
+            guard results.count < 20 else { break }
+            
+            // فلتر المتوفين
+            if !includeDeceased && (member.isDeceased ?? false) { continue }
+            
+            // فلتر الجنس
+            switch genderFilter {
+            case .male:
+                if member.gender?.lowercased() == "female" { continue }
+            case .female:
+                if member.gender?.lowercased() != "female" { continue }
+            case .all:
+                break
+            }
+            
+            if getFullLineage(for: member, lookup: cachedMemberById)
                     .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
                     .contains(folded) {
                 results.append(member)
             }
         }
         return results
+    }
+    
+    /// إحصائيات سريعة للشجرة
+    private var treeStats: (alive: Int, deceased: Int, male: Int, female: Int) {
+        var alive = 0, deceased = 0, male = 0, female = 0
+        for m in cachedVisibleMembers {
+            if m.isDeceased ?? false { deceased += 1 } else { alive += 1 }
+            if m.gender?.lowercased() == "female" { female += 1 } else { male += 1 }
+        }
+        return (alive, deceased, male, female)
     }
 
     var body: some View {
@@ -133,12 +179,12 @@ struct TreeView: View {
                                             .scaleEffect(scale * gestureZoom, anchor: .top)
                                             .id(treeID)
                                             .gesture(
-                                                MagnificationGesture()
+                                                MagnifyGesture()
                                                     .updating($gestureZoom) { value, state, _ in
-                                                        state = value
+                                                        state = value.magnification
                                                     }
                                                     .onEnded { value in
-                                                        let newScale = scale * value
+                                                        let newScale = scale * value.magnification
                                                         scale = min(max(newScale, 0.4), 3.0)
                                                     }
                                             )
@@ -174,7 +220,7 @@ struct TreeView: View {
                                 guard !isRefreshing else { return }
                                 isRefreshing = true
                                 Task {
-                                    await authVM.fetchAllMembers()
+                                    await authVM.fetchAllMembers(force: true)
                                     rebuildCache()
                                     withAnimation { isRefreshing = false }
                                 }
@@ -198,6 +244,7 @@ struct TreeView: View {
                             }
                             .buttonStyle(BounceButtonStyle())
                             .disabled(isRefreshing)
+                            .accessibilityLabel(L10n.t("تحديث الشجرة", "Refresh tree"))
 
                             // زر الموقع
                             Button(action: {
@@ -223,6 +270,7 @@ struct TreeView: View {
                                 .contentShape(Circle())
                             }
                             .buttonStyle(BounceButtonStyle())
+                            .accessibilityLabel(L10n.t("موقعي في الشجرة", "My location in tree"))
                         }
 
                         searchOverlay
@@ -246,14 +294,19 @@ struct TreeView: View {
                     .presentationDetents([.medium, .large])
             }
             .onAppear {
+                let isFirstLoad = cachedVisibleMembers.isEmpty
                 Task {
                     await authVM.fetchAllMembers()
                     rebuildCache()
-                    currentLocationMemberID = authVM.currentUser?.id
-                    resetToTopRoot()
+                    if isFirstLoad {
+                        currentLocationMemberID = authVM.currentUser?.id
+                        resetToTopRoot()
+                    }
                 }
             }
             .onChange(of: authVM.allMembers.count) { _, _ in
+                let currentIds = Set(authVM.allMembers.map(\.id))
+                guard currentIds != cachedMemberIds else { return }
                 rebuildCache()
             }
             .onChange(of: searchText) { _, newValue in
@@ -293,7 +346,8 @@ struct TreeView: View {
 
     private var searchOverlay: some View {
         VStack(spacing: 0) {
-            HStack {
+            // شريط البحث
+            HStack(spacing: DS.Spacing.sm) {
                 HStack(spacing: DS.Spacing.md - 2) {
                     ZStack {
                         Circle()
@@ -304,7 +358,7 @@ struct TreeView: View {
                             .foregroundColor(DS.Color.primary)
                     }
 
-                    TextField(L10n.t("ابحث عن فرد...", "Search member..."), text: $searchText, onEditingChanged: { focused in
+                    TextField(L10n.t("ابحث بالاسم أو النسب...", "Search by name or lineage..."), text: $searchText, onEditingChanged: { focused in
                         isSearchFocused = focused
                     })
                     .font(DS.Font.body)
@@ -335,57 +389,286 @@ struct TreeView: View {
                         )
                 )
                 .shadow(color: isSearchFocused ? DS.Color.primary.opacity(0.1) : .clear, radius: 8)
+                
+                // زر الفلاتر
+                Button(action: {
+                    withAnimation(DS.Anim.snappy) { showFilters.toggle() }
+                }) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                            .fill(showFilters ? DS.Color.primary : DS.Color.surface)
+                            .frame(width: 42, height: 42)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                                    .stroke(showFilters ? DS.Color.primary : Color.gray.opacity(0.12), lineWidth: 1)
+                            )
+                        Image(systemName: "line.3.horizontal.decrease.circle.fill")
+                            .font(DS.Font.scaled(18, weight: .semibold))
+                            .foregroundColor(showFilters ? .white : DS.Color.primary)
+                    }
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(L10n.t("فلاتر البحث", "Search filters"))
+            }
+            
+            // شريط الفلاتر
+            if showFilters {
+                filterChipsBar
+                    .padding(.top, DS.Spacing.sm)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+            
+            // إحصائيات سريعة عند عدم البحث
+            if searchText.isEmpty && showFilters {
+                treeStatsBar
+                    .padding(.top, DS.Spacing.sm)
+                    .transition(.opacity)
             }
 
+            // نتائج البحث
             if !filteredMembers.isEmpty {
-                ScrollView {
-                    VStack(spacing: 0) {
-                        ForEach(filteredMembers) { member in
-                            Button(action: { selectMemberFromSearch(member) }) {
-                                HStack(spacing: 8) {
-                                    ZStack {
-                                        Circle()
-                                            .fill(
-                                                LinearGradient(
-                                                    colors: [member.roleColor, member.roleColor.opacity(0.7)],
-                                                    startPoint: .topLeading, endPoint: .bottomTrailing
-                                                )
-                                            )
-                                            .frame(width: 28, height: 28)
-                                        Text(String(member.firstName.prefix(1)))
-                                            .font(DS.Font.scaled(11, weight: .bold))
-                                            .foregroundColor(.white)
-                                    }
-
-                                    VStack(alignment: .leading, spacing: 1) {
-                                        Text(getFullLineage(for: member, lookup: cachedMemberById))
-                                            .font(DS.Font.scaled(13, weight: .semibold))
-                                            .foregroundColor(DS.Color.textPrimary)
-                                            .lineLimit(1)
-                                        Text(member.roleName)
-                                            .font(DS.Font.scaled(10))
-                                            .foregroundColor(DS.Color.textSecondary)
-                                    }
-                                    Spacer()
-                                    Image(systemName: "arrow.up.left.circle.fill")
-                                        .font(DS.Font.scaled(16))
-                                        .foregroundColor(member.roleColor.opacity(0.7))
+                VStack(spacing: 0) {
+                    // عدد النتائج
+                    HStack {
+                        Text(L10n.t("النتائج", "Results"))
+                            .font(DS.Font.scaled(11, weight: .semibold))
+                            .foregroundColor(DS.Color.textSecondary)
+                        Text("(\(filteredMembers.count))")
+                            .font(DS.Font.scaled(11, weight: .bold))
+                            .foregroundColor(DS.Color.primary)
+                        Spacer()
+                    }
+                    .padding(.horizontal, DS.Spacing.md)
+                    .padding(.top, DS.Spacing.sm)
+                    .padding(.bottom, DS.Spacing.xs)
+                    
+                    ScrollView {
+                        VStack(spacing: 0) {
+                            ForEach(filteredMembers) { member in
+                                Button(action: { selectMemberFromSearch(member) }) {
+                                    searchResultRow(for: member)
                                 }
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 7)
-                            }
-                            if member.id != filteredMembers.last?.id {
-                                Divider().padding(.horizontal, 10)
+                                if member.id != filteredMembers.last?.id {
+                                    Divider().padding(.horizontal, DS.Spacing.md)
+                                }
                             }
                         }
                     }
                 }
                 .glassCard(radius: DS.Radius.lg)
-                .frame(maxHeight: 220)
+                .frame(maxHeight: 280)
+                .padding(.top, 4)
+            } else if !debouncedSearchText.isEmpty && searchText == debouncedSearchText {
+                // لا توجد نتائج
+                HStack(spacing: DS.Spacing.sm) {
+                    Image(systemName: "person.slash.fill")
+                        .font(DS.Font.scaled(16))
+                        .foregroundColor(DS.Color.textTertiary)
+                    Text(L10n.t("لا توجد نتائج", "No results found"))
+                        .font(DS.Font.callout)
+                        .foregroundColor(DS.Color.textSecondary)
+                    Spacer()
+                }
+                .padding(DS.Spacing.md)
+                .glassCard(radius: DS.Radius.lg)
                 .padding(.top, 4)
             }
         }
         .zIndex(100)
+    }
+    
+    // MARK: - صف نتيجة البحث مع صورة
+    private func searchResultRow(for member: FamilyMember) -> some View {
+        HStack(spacing: DS.Spacing.md) {
+            // صورة العضو أو الأحرف الأولى
+            ZStack {
+                Circle()
+                    .fill(
+                        LinearGradient(
+                            colors: [member.roleColor, member.roleColor.opacity(0.7)],
+                            startPoint: .topLeading, endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(width: 38, height: 38)
+                
+                if let urlStr = member.avatarUrl, let url = URL(string: urlStr) {
+                    CachedAsyncImage(url: url) { image in
+                        image.resizable().scaledToFill()
+                    } placeholder: {
+                        Text(String(member.firstName.prefix(1)))
+                            .font(DS.Font.scaled(14, weight: .bold))
+                            .foregroundColor(.white)
+                    }
+                    .frame(width: 38, height: 38)
+                    .clipShape(Circle())
+                } else {
+                    Text(String(member.firstName.prefix(1)))
+                        .font(DS.Font.scaled(14, weight: .bold))
+                        .foregroundColor(.white)
+                }
+                
+                // مؤشر المتوفى
+                if member.isDeceased ?? false {
+                    VStack {
+                        Spacer()
+                        HStack {
+                            Spacer()
+                            Circle()
+                                .fill(DS.Color.deceased)
+                                .frame(width: 12, height: 12)
+                                .overlay(
+                                    Image(systemName: "heart.slash.fill")
+                                        .font(.system(size: 6, weight: .bold))
+                                        .foregroundColor(.white)
+                                )
+                        }
+                    }
+                    .frame(width: 38, height: 38)
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(getFullLineage(for: member, lookup: cachedMemberById))
+                    .font(DS.Font.scaled(13, weight: .semibold))
+                    .foregroundColor(DS.Color.textPrimary)
+                    .lineLimit(1)
+                
+                HStack(spacing: DS.Spacing.xs) {
+                    // الدور
+                    Text(member.roleName)
+                        .font(DS.Font.scaled(10, weight: .medium))
+                        .foregroundColor(member.roleColor)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(member.roleColor.opacity(0.1))
+                        .clipShape(Capsule())
+                    
+                    // عدد الأبناء
+                    let childCount = cachedChildrenByFatherId[member.id]?.count ?? 0
+                    if childCount > 0 {
+                        HStack(spacing: 2) {
+                            Image(systemName: "person.2.fill")
+                                .font(.system(size: 8))
+                            Text("\(childCount)")
+                                .font(DS.Font.scaled(10, weight: .bold))
+                        }
+                        .foregroundColor(DS.Color.textTertiary)
+                    }
+                    
+                    if member.isDeceased ?? false {
+                        Text(L10n.t("متوفى", "Deceased"))
+                            .font(DS.Font.scaled(9, weight: .medium))
+                            .foregroundColor(DS.Color.deceased)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1)
+                            .background(DS.Color.deceased.opacity(0.1))
+                            .clipShape(Capsule())
+                    }
+                }
+            }
+            Spacer()
+            Image(systemName: "arrow.up.left.circle.fill")
+                .font(DS.Font.scaled(18))
+                .foregroundColor(member.roleColor.opacity(0.6))
+        }
+        .padding(.horizontal, DS.Spacing.md)
+        .padding(.vertical, DS.Spacing.sm + 2)
+    }
+    
+    // MARK: - شرائح الفلتر
+    private var filterChipsBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: DS.Spacing.sm) {
+                // فلتر المتوفين
+                Button(action: {
+                    withAnimation(DS.Anim.snappy) { includeDeceased.toggle() }
+                }) {
+                    HStack(spacing: DS.Spacing.xs) {
+                        Image(systemName: includeDeceased ? "checkmark.circle.fill" : "circle")
+                            .font(DS.Font.scaled(12, weight: .semibold))
+                        Text(L10n.t("المتوفين", "Deceased"))
+                            .font(DS.Font.scaled(12, weight: .semibold))
+                    }
+                    .foregroundColor(includeDeceased ? .white : DS.Color.textSecondary)
+                    .padding(.horizontal, DS.Spacing.md)
+                    .padding(.vertical, DS.Spacing.sm)
+                    .background(
+                        Capsule()
+                            .fill(includeDeceased ? DS.Color.deceased : DS.Color.surface)
+                    )
+                    .overlay(Capsule().stroke(includeDeceased ? DS.Color.deceased : Color.gray.opacity(0.15), lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+                
+                // فلاتر الجنس
+                ForEach(GenderFilter.allCases, id: \.self) { filter in
+                    Button(action: {
+                        withAnimation(DS.Anim.snappy) { genderFilter = filter }
+                    }) {
+                        HStack(spacing: DS.Spacing.xs) {
+                            Image(systemName: filter.icon)
+                                .font(DS.Font.scaled(12, weight: .semibold))
+                            Text(filter.label)
+                                .font(DS.Font.scaled(12, weight: .semibold))
+                        }
+                        .foregroundColor(genderFilter == filter ? .white : DS.Color.textSecondary)
+                        .padding(.horizontal, DS.Spacing.md)
+                        .padding(.vertical, DS.Spacing.sm)
+                        .background(
+                            Capsule()
+                                .fill(genderFilter == filter ? DS.Color.primary : DS.Color.surface)
+                        )
+                        .overlay(Capsule().stroke(genderFilter == filter ? DS.Color.primary : Color.gray.opacity(0.15), lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, DS.Spacing.xs)
+        }
+    }
+    
+    // MARK: - إحصائيات الشجرة
+    private var treeStatsBar: some View {
+        let stats = treeStats
+        return HStack(spacing: 0) {
+            statItem(icon: "person.fill", value: stats.alive, label: L10n.t("أحياء", "Alive"), color: DS.Color.success)
+            statDivider
+            statItem(icon: "heart.slash.fill", value: stats.deceased, label: L10n.t("متوفين", "Deceased"), color: DS.Color.deceased)
+            statDivider
+            statItem(icon: "figure.stand", value: stats.male, label: L10n.t("ذكور", "Male"), color: DS.Color.primary)
+            statDivider
+            statItem(icon: "figure.stand.dress", value: stats.female, label: L10n.t("إناث", "Female"), color: DS.Color.neonPink)
+        }
+        .padding(.vertical, DS.Spacing.sm)
+        .background(DS.Color.surface)
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                .stroke(Color.gray.opacity(0.12), lineWidth: 1)
+        )
+    }
+    
+    private func statItem(icon: String, value: Int, label: String, color: Color) -> some View {
+        VStack(spacing: 2) {
+            HStack(spacing: 3) {
+                Image(systemName: icon)
+                    .font(DS.Font.scaled(10, weight: .semibold))
+                    .foregroundColor(color)
+                Text("\(value)")
+                    .font(DS.Font.scaled(14, weight: .black))
+                    .foregroundColor(DS.Color.textPrimary)
+            }
+            Text(label)
+                .font(DS.Font.scaled(9, weight: .medium))
+                .foregroundColor(DS.Color.textTertiary)
+        }
+        .frame(maxWidth: .infinity)
+    }
+    
+    private var statDivider: some View {
+        Rectangle()
+            .fill(Color.gray.opacity(0.15))
+            .frame(width: 1, height: 28)
     }
 
     private func selectMemberFromSearch(_ member: FamilyMember) {
@@ -498,6 +781,7 @@ struct TreeView: View {
                             .background(Color.white.opacity(0.1))
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel(L10n.t("تكبير", "Zoom in"))
 
                     Divider()
                         .frame(width: 30)
@@ -512,6 +796,7 @@ struct TreeView: View {
                             .background(Color.white.opacity(0.1))
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel(L10n.t("إعادة ضبط العرض", "Reset view"))
 
                     Divider()
                         .frame(width: 30)
@@ -526,6 +811,7 @@ struct TreeView: View {
                             .background(Color.white.opacity(0.1))
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel(L10n.t("تصغير", "Zoom out"))
                 }
                 .background(.ultraThinMaterial)
                 .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
@@ -935,14 +1221,12 @@ struct TreeMemberNode: View {
 
                         // الصورة أو الأيقونة
                         if shouldLoadImage, let urlStr = member.avatarUrl, let url = URL(string: urlStr) {
-                            AsyncImage(url: url) { phase in
-                                if let image = phase.image {
-                                    image.resizable().scaledToFill()
-                                } else {
-                                    Image(systemName: "person.fill")
-                                        .font(DS.Font.scaled(30))
-                                        .foregroundColor(.white.opacity(0.7))
-                                }
+                            CachedAsyncImage(url: url) { image in
+                                image.resizable().scaledToFill()
+                            } placeholder: {
+                                Image(systemName: "person.fill")
+                                    .font(DS.Font.scaled(30))
+                                    .foregroundColor(.white.opacity(0.7))
                             }
                             .frame(width: interactiveNodeSize, height: interactiveNodeSize)
                             .clipShape(Circle())

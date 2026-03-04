@@ -13,6 +13,8 @@ final class PushNotificationDelegate: NSObject, UIApplicationDelegate, UNUserNot
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil
     ) -> Bool {
         UNUserNotificationCenter.current().delegate = self
+        // مسح Badge عند فتح التطبيق
+        Task { try? await UNUserNotificationCenter.current().setBadgeCount(0) }
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
             guard granted else { return }
             DispatchQueue.main.async {

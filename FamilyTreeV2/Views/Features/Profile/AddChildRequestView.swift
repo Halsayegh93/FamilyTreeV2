@@ -85,6 +85,11 @@ struct AddChildRequestView: View {
                             TextField(L10n.t("الاسم الأول", "First Name"), text: $firstName)
                                 .font(DS.Font.callout)
                                 .foregroundColor(DS.Color.textPrimary)
+                                .onChange(of: firstName) {
+                                    if firstName.count > 50 {
+                                        firstName = String(firstName.prefix(50))
+                                    }
+                                }
                         }
                         Spacer()
                     }

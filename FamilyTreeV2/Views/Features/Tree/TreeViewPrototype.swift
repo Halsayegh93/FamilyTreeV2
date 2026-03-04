@@ -164,37 +164,39 @@ struct VariantA_Bubble: View {
     @State private var scale: CGFloat = 1.0
 
     var body: some View {
-        ZStack(alignment: .top) {
-            // Engraved grid background
-            VariantA_Background()
-                .ignoresSafeArea()
+        GeometryReader { geometry in
+            ZStack(alignment: .top) {
+                // Engraved grid background
+                VariantA_Background()
+                    .ignoresSafeArea()
 
-            ScrollView([.horizontal, .vertical], showsIndicators: false) {
-                ZStack {
-                    ForEach(ProtoMember.roots(in: members)) { root in
-                        VariantA_Branch(
-                            member: root,
-                            members: members,
-                            expandedIds: $expandedIds,
-                            level: 0,
-                            onSelect: onSelect
-                        )
+                ScrollView([.horizontal, .vertical], showsIndicators: false) {
+                    ZStack {
+                        ForEach(ProtoMember.roots(in: members)) { root in
+                            VariantA_Branch(
+                                member: root,
+                                members: members,
+                                expandedIds: $expandedIds,
+                                level: 0,
+                                onSelect: onSelect
+                            )
+                        }
                     }
+                    .scaleEffect(scale)
+                    .padding(80)
+                    .frame(minWidth: geometry.size.width,
+                           minHeight: geometry.size.height)
                 }
-                .scaleEffect(scale)
-                .padding(80)
-                .frame(minWidth: UIScreen.main.bounds.width,
-                       minHeight: UIScreen.main.bounds.height)
-            }
 
-            // Zoom controls
-            VStack {
-                Spacer()
-                HStack {
+                // Zoom controls
+                VStack {
                     Spacer()
-                    VariantA_ZoomControls(scale: $scale)
-                        .padding(.trailing, 20)
-                        .padding(.bottom, 30)
+                    HStack {
+                        Spacer()
+                        VariantA_ZoomControls(scale: $scale)
+                            .padding(.trailing, 20)
+                            .padding(.bottom, 30)
+                    }
                 }
             }
         }
