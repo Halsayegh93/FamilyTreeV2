@@ -1385,7 +1385,7 @@ struct TreeMemberNode: View {
         if !full.isEmpty {
             return full.split(separator: " ").first.map(String.init) ?? full
         }
-        return L10n.t("غير معروف", "Unknown")
+        return L10n.t("بدون اسم", "No name")
     }
 
     private var fullDisplayName: String {
@@ -1393,7 +1393,7 @@ struct TreeMemberNode: View {
         if !full.isEmpty { return full }
         let first = member.firstName.trimmingCharacters(in: .whitespacesAndNewlines)
         if !first.isEmpty { return first }
-        return L10n.t("غير معروف", "Unknown")
+        return L10n.t("بدون اسم", "No name")
     }
 
     private var interactiveNodeSize: CGFloat { 105 }

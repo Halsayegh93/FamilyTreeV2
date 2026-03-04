@@ -76,8 +76,11 @@ struct FamilyMember: Identifiable, Codable, Equatable {
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
-        self.firstName = try container.decodeIfPresent(String.self, forKey: .firstName) ?? "Unknown"
-        self.fullName = try container.decodeIfPresent(String.self, forKey: .fullName) ?? "Unknown Member"
+        let rawFirst = try container.decodeIfPresent(String.self, forKey: .firstName)
+        let rawFull = try container.decodeIfPresent(String.self, forKey: .fullName)
+        // استخدام الاسم المتوفر كبديل إذا كان الآخر فارغ
+        self.firstName = rawFirst ?? rawFull?.split(separator: " ").first.map(String.init) ?? ""
+        self.fullName = rawFull ?? rawFirst ?? ""
         self.phoneNumber = try container.decodeIfPresent(String.self, forKey: .phoneNumber)
         self.birthDate = try container.decodeIfPresent(String.self, forKey: .birthDate)
         self.deathDate = try container.decodeIfPresent(String.self, forKey: .deathDate)
@@ -87,7 +90,7 @@ struct FamilyMember: Identifiable, Codable, Equatable {
            let parsedRole = UserRole(rawValue: roleStr.lowercased()) {
             self.role = parsedRole
         } else {
-            self.role = .pending
+            self.role = .member
         }
         
         self.fatherId = try container.decodeIfPresent(UUID.self, forKey: .fatherId)
@@ -105,7 +108,7 @@ struct FamilyMember: Identifiable, Codable, Equatable {
            let parsedStatus = MemberStatus(rawValue: statusStr.lowercased()) {
             self.status = parsedStatus
         } else {
-            self.status = .pending
+            self.status = .active
         }
         
         self.avatarUrl = try container.decodeIfPresent(String.self, forKey: .avatarUrl)
