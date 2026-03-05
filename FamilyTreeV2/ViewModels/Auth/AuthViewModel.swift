@@ -75,6 +75,10 @@ class AuthViewModel: ObservableObject {
     
     @Published var phoneNumber: String = ""
     @Published var dialingCode: String = "+965"
+    
+    /// حفظ آخر رقم هاتف مستخدم للتسجيل — يبقى بعد إعادة فتح التطبيق
+    @AppStorage("lastAuthPhone") private var lastAuthPhone: String = ""
+    @AppStorage("lastAuthDialingCode") private var lastAuthDialingCode: String = ""
     @Published var otpCode: String = ""
     @Published var isOtpSent: Bool = false
     @Published var isLoading: Bool = false
@@ -605,6 +609,10 @@ class AuthViewModel: ObservableObject {
             
             Log.info("تم التحقق من الرمز بنجاح!")
             
+            // حفظ الرقم محلياً — يبقى بعد إعادة فتح التطبيق
+            self.lastAuthPhone = cleanPhone
+            self.lastAuthDialingCode = cleanDialingCode
+            
             // بعد نجاح الرمز، نحدث بيانات المستخدم لكي يفتح التطبيق تلقائياً
             await checkUserProfile()
             
@@ -628,7 +636,18 @@ class AuthViewModel: ObservableObject {
             return
         }
 
-        let normalizedSessionPhone = user.phone ?? self.phoneNumber
+        // استخدام الرقم المحفوظ محلياً كـ fallback إذا user.phone فارغ
+        let rawPhone = user.phone ?? self.phoneNumber
+        let normalizedSessionPhone: String
+        if !rawPhone.isEmpty {
+            normalizedSessionPhone = rawPhone
+        } else if !lastAuthPhone.isEmpty {
+            // استخدام الرقم المحفوظ من آخر تسجيل OTP
+            let code = lastAuthDialingCode.isEmpty ? "+965" : lastAuthDialingCode
+            normalizedSessionPhone = toE164(dialingCode: code, localDigits: lastAuthPhone) ?? lastAuthPhone
+        } else {
+            normalizedSessionPhone = ""
+        }
         Log.info("[AUTH] Session found. UUID: \(user.id), Phone: \(normalizedSessionPhone)")
 
         // المحاولة 1: البحث بـ auth.uid مباشرة
@@ -702,6 +721,9 @@ class AuthViewModel: ObservableObject {
             self.trialStartedAt = nil
             self.trialEndsAt = nil
         }
+        // مسح الرقم المحفوظ
+        self.lastAuthPhone = ""
+        self.lastAuthDialingCode = ""
     }
 
     // MARK: - حذف الحساب (Account Deletion — Apple Requirement)
