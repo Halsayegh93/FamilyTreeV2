@@ -20,6 +20,12 @@ class AdminRequestViewModel: ObservableObject {
     @Published var phoneChangeRequests: [PhoneChangeRequest] = []
     @Published var newsReportRequests: [AdminRequest] = []
     @Published var isLoading: Bool = false
+    @Published var mergeResult: MergeResult? = nil
+    
+    enum MergeResult {
+        case success(String)
+        case failure(String)
+    }
 
     // MARK: - Throttle Dates
 
@@ -626,7 +632,29 @@ class AdminRequestViewModel: ObservableObject {
                 .update(updatePayload)
                 .eq("id", value: newMemberId.uuidString)
                 .execute()
-            Log.info("[MERGE] تم تحديث السجل الجديد بنجاح: role=member, status=active, name=\(treeMember.fullName)")
+            Log.info("[MERGE] تم إرسال تحديث السجل الجديد")
+            
+            // التحقق من نجاح التحديث فعلياً (RLS قد يمنع التحديث بصمت)
+            let verifyResponse = try await supabase
+                .from("profiles")
+                .select()
+                .eq("id", value: newMemberId.uuidString)
+                .limit(1)
+                .execute()
+            let verifyMembers = try JSONDecoder().decode([FamilyMember].self, from: verifyResponse.data)
+            if let verified = verifyMembers.first {
+                if verified.role == .member && verified.status == .active {
+                    Log.info("[MERGE] ✅ التحقق ناجح: role=\(verified.role), status=\(verified.status ?? .active), name=\(verified.fullName)")
+                } else {
+                    Log.error("[MERGE] ⚠️ التحديث لم يُطبق! role=\(verified.role), status=\(verified.status ?? .pending). قد يكون RLS يمنع التحديث.")
+                    self.mergeResult = .failure(L10n.t(
+                        "فشل تحديث حالة العضو. تحقق من صلاحيات قاعدة البيانات (RLS).",
+                        "Failed to update member status. Check database permissions (RLS)."
+                    ))
+                    self.isLoading = false
+                    return
+                }
+            }
             
             // 3) Re-link children: change their father_id from old to new
             _ = try? await supabase
@@ -697,8 +725,16 @@ class AdminRequestViewModel: ObservableObject {
             await notifyJoinApproval(memberId: newMemberId, fatherName: treeMember.fatherId.flatMap { id in memberById(id)?.fullName })
             
             Log.info("[MERGE] تم دمج العضو بنجاح: \(treeMember.fullName) → auth UUID: \(newMemberId)")
+            self.mergeResult = .success(L10n.t(
+                "تم دمج \(treeMember.fullName) بنجاح وتفعيل حسابه.",
+                "Successfully merged \(treeMember.fullName) and activated their account."
+            ))
         } catch {
             Log.error("[MERGE] فشل دمج العضو: \(error.localizedDescription)")
+            self.mergeResult = .failure(L10n.t(
+                "حدث خطأ أثناء الدمج: \(error.localizedDescription)",
+                "Error during merge: \(error.localizedDescription)"
+            ))
         }
         self.isLoading = false
     }

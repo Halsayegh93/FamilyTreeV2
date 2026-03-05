@@ -661,12 +661,14 @@ class AuthViewModel: ObservableObject {
             let members = try JSONDecoder().decode([FamilyMember].self, from: response.data)
 
             if let profile = members.first {
-                Log.info("[AUTH] Found profile by UUID: \(profile.fullName), role: \(profile.role)")
+                Log.info("[AUTH] Found profile by UUID: \(profile.fullName), role: \(profile.role), status: \(profile.status?.rawValue ?? "nil")")
                 await applyAuthenticatedProfile(profile, normalizedPhone: normalizedSessionPhone)
                 return
+            } else {
+                Log.warning("[AUTH] UUID lookup returned 0 results for: \(user.id)")
             }
         } catch {
-            Log.error("خطأ في جلب البروفايل بـ UUID: \(error.localizedDescription)")
+            Log.error("[AUTH] خطأ في جلب البروفايل بـ UUID: \(error.localizedDescription)")
         }
 
         // المحاولة 2: البحث بالرقم
@@ -702,7 +704,7 @@ class AuthViewModel: ObservableObject {
             Log.warning("[AUTH] Retry check failed: \(error.localizedDescription)")
         }
 
-        Log.warning("لم يتم العثور على بروفايل. Phone: \(normalizedSessionPhone), UUID: \(user.id)")
+        Log.warning("[AUTH] ⚠️ لم يتم العثور على بروفايل بعد 4 محاولات. Phone: \(normalizedSessionPhone), UUID: \(user.id), lastAuthPhone: \(lastAuthPhone)")
         self.status = .authenticatedNoProfile
         self.trialStartedAt = nil
         self.trialEndsAt = nil

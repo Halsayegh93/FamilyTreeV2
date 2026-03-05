@@ -116,19 +116,21 @@ struct AdminPendingRequestsView: View {
         ) {
             Button(L10n.t("دمج", "Merge"), role: .destructive) {
                 if let target = mergeTarget {
-                    let pendingName = target.pendingMember.fullName
-                    let treeName = target.treeMember.fullName
                     Task {
                         await adminRequestVM.mergeMemberIntoTreeMember(
                             newMemberId: target.pendingMember.id,
                             existingTreeMemberId: target.treeMember.id
                         )
                         await MainActor.run {
-                            mergeSuccessMessage = L10n.t(
-                                "تم دمج \(pendingName) مع \(treeName) بنجاح",
-                                "Successfully merged \(pendingName) with \(treeName)"
-                            )
-                            showMergeSuccess = true
+                            if let result = adminRequestVM.mergeResult {
+                                switch result {
+                                case .success(let msg):
+                                    mergeSuccessMessage = msg
+                                case .failure(let msg):
+                                    mergeSuccessMessage = msg
+                                }
+                                showMergeSuccess = true
+                            }
                             mergeTarget = nil
                         }
                     }
@@ -146,10 +148,17 @@ struct AdminPendingRequestsView: View {
             }
         }
         .alert(
-            L10n.t("تم الدمج", "Merge Complete"),
+            {
+                if case .failure = adminRequestVM.mergeResult {
+                    return L10n.t("خطأ في الدمج", "Merge Error")
+                }
+                return L10n.t("تم الدمج", "Merge Complete")
+            }(),
             isPresented: $showMergeSuccess
         ) {
-            Button(L10n.t("حسناً", "OK"), role: .cancel) { }
+            Button(L10n.t("حسناً", "OK"), role: .cancel) {
+                adminRequestVM.mergeResult = nil
+            }
         } message: {
             Text(mergeSuccessMessage)
         }
