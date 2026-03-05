@@ -651,21 +651,22 @@ class AuthViewModel: ObservableObject {
         Log.info("[AUTH] Session found. UUID: \(user.id), Phone: \(normalizedSessionPhone)")
 
         // المحاولة 1: البحث بـ auth.uid مباشرة
+        let userIdString = user.id.uuidString.lowercased()
         do {
-            let response = try await supabase
+            let response: [FamilyMember] = try await supabase
                 .from("profiles")
                 .select()
-                .eq("id", value: user.id)
+                .eq("id", value: userIdString)
+                .limit(1)
                 .execute()
+                .value
 
-            let members = try JSONDecoder().decode([FamilyMember].self, from: response.data)
-
-            if let profile = members.first {
+            if let profile = response.first {
                 Log.info("[AUTH] Found profile by UUID: \(profile.fullName), role: \(profile.role), status: \(profile.status?.rawValue ?? "nil")")
                 await applyAuthenticatedProfile(profile, normalizedPhone: normalizedSessionPhone)
                 return
             } else {
-                Log.warning("[AUTH] UUID lookup returned 0 results for: \(user.id)")
+                Log.warning("[AUTH] UUID lookup returned 0 results for: \(userIdString)")
             }
         } catch {
             Log.error("[AUTH] خطأ في جلب البروفايل بـ UUID: \(error.localizedDescription)")
@@ -689,13 +690,14 @@ class AuthViewModel: ObservableObject {
         // المحاولة 4: إعادة محاولة بعد تأخير قصير (لحالات التأخر في الشبكة)
         try? await Task.sleep(nanoseconds: 1_500_000_000)
         do {
-            let retryResponse = try await supabase
+            let retryResponse: [FamilyMember] = try await supabase
                 .from("profiles")
                 .select()
-                .eq("id", value: user.id)
+                .eq("id", value: userIdString)
+                .limit(1)
                 .execute()
-            let retryMembers = try JSONDecoder().decode([FamilyMember].self, from: retryResponse.data)
-            if let retryProfile = retryMembers.first {
+                .value
+            if let retryProfile = retryResponse.first {
                 Log.info("[AUTH] Found profile on retry by UUID: \(retryProfile.fullName)")
                 await applyAuthenticatedProfile(retryProfile, normalizedPhone: normalizedSessionPhone)
                 return
@@ -704,7 +706,7 @@ class AuthViewModel: ObservableObject {
             Log.warning("[AUTH] Retry check failed: \(error.localizedDescription)")
         }
 
-        Log.warning("[AUTH] ⚠️ لم يتم العثور على بروفايل بعد 4 محاولات. Phone: \(normalizedSessionPhone), UUID: \(user.id), lastAuthPhone: \(lastAuthPhone)")
+        Log.warning("[AUTH] ⚠️ لم يتم العثور على بروفايل بعد 4 محاولات. Phone: \(normalizedSessionPhone), UUID: \(userIdString), lastAuthPhone: \(lastAuthPhone)")
         self.status = .authenticatedNoProfile
         self.trialStartedAt = nil
         self.trialEndsAt = nil
