@@ -732,20 +732,45 @@ class AdminRequestViewModel: ObservableObject {
                 .eq("member_id", value: existingTreeMemberId.uuidString)
                 .execute()
             
-            // 9) Delete the old tree record
+            // 9) Delete the old tree record (مع حماية ضد حذف السجل الخطأ)
+            guard existingTreeMemberId != newMemberId else {
+                Log.error("[MERGE] ❌ محاولة حذف نفس السجل المراد الاحتفاظ به! تم الإيقاف.")
+                self.mergeResult = .failure(L10n.t(
+                    "خطأ: لا يمكن دمج العضو مع نفسه.",
+                    "Error: Cannot merge a member with itself."
+                ))
+                self.isLoading = false
+                return
+            }
             do {
+                Log.info("[MERGE] حذف السجل القديم: \(existingTreeMemberId) (العضو المحفوظ: \(newMemberId))")
                 try await supabase
                     .from("profiles")
                     .delete()
                     .eq("id", value: existingTreeMemberId.uuidString)
                     .execute()
-                Log.info("[MERGE] حذف السجل القديم بنجاح: \(existingTreeMemberId)")
+                Log.info("[MERGE] ✅ تم حذف السجل القديم بنجاح")
             } catch {
                 Log.error("[MERGE] فشل حذف السجل القديم: \(error.localizedDescription)")
                 // حتى لو فشل الحذف، السجل الجديد اتحدث بنجاح
             }
             
-            // 10) Refresh local data
+            // 10) التحقق النهائي: السجل الجديد لا يزال موجوداً بعد الحذف
+            let finalCheck = try? await supabase
+                .from("profiles")
+                .select("id, role, status, full_name")
+                .eq("id", value: newMemberId.uuidString)
+                .limit(1)
+                .execute()
+            if let checkData = finalCheck?.data,
+               let checkMembers = try? JSONDecoder().decode([FamilyMember].self, from: checkData),
+               let final = checkMembers.first {
+                Log.info("[MERGE] ✅ التحقق النهائي: السجل موجود — \(final.fullName), role=\(final.role), status=\(final.status?.rawValue ?? "nil")")
+            } else {
+                Log.error("[MERGE] ❌ التحقق النهائي: السجل الجديد اختفى بعد الحذف! UUID: \(newMemberId)")
+            }
+            
+            // 11) Refresh local data
             await memberVM?.fetchAllMembers()
             
             // 11) Notify the member

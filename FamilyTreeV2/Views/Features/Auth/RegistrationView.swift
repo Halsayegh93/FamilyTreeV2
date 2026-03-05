@@ -78,6 +78,7 @@ struct RegistrationView: View {
         .toolbar(.hidden, for: .navigationBar)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .onAppear {
+            Log.info("[REGISTRATION] RegistrationView ظهرت — البروفايل غير موجود. phone=\(authVM.phoneNumber), lastAuthPhone=\(UserDefaults.standard.string(forKey: "lastAuthPhone") ?? "empty")")
             withAnimation(.spring(response: 0.8, dampingFraction: 0.6).delay(0.2)) {
                 headerScale = 1.0
                 headerOpacity = 1.0
