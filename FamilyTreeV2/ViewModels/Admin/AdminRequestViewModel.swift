@@ -575,9 +575,32 @@ class AdminRequestViewModel: ObservableObject {
     /// Copies the tree position data (father, children, bio, photos) from the old tree record
     /// to the new registration record (which has the correct auth UUID), then deletes the old record.
     func mergeMemberIntoTreeMember(newMemberId: UUID, existingTreeMemberId: UUID) async {
-        Log.info("[MERGE] بدء الدمج: جديد=\(newMemberId) ← شجرة=\(existingTreeMemberId)")
+        Log.info("[MERGE] ==============================")
+        Log.info("[MERGE] بدء الدمج:")
+        Log.info("[MERGE]   العضو الجديد (يبقى): \(newMemberId)")
+        Log.info("[MERGE]   عضو الشجرة (يُحذف): \(existingTreeMemberId)")
+        Log.info("[MERGE] ==============================")
         self.isLoading = true
         do {
+            // 0) التحقق من وجود سجل العضو الجديد أولاً
+            let newMemberResponse = try await supabase
+                .from("profiles")
+                .select()
+                .eq("id", value: newMemberId.uuidString)
+                .limit(1)
+                .execute()
+            let newMembers = try JSONDecoder().decode([FamilyMember].self, from: newMemberResponse.data)
+            guard let newMember = newMembers.first else {
+                Log.error("[MERGE] ❌ سجل العضو الجديد غير موجود! UUID: \(newMemberId)")
+                self.mergeResult = .failure(L10n.t(
+                    "سجل العضو الجديد غير موجود في قاعدة البيانات.",
+                    "New member record not found in database."
+                ))
+                self.isLoading = false
+                return
+            }
+            Log.info("[MERGE] سجل العضو الجديد موجود: \(newMember.fullName), role=\(newMember.role), phone=\(newMember.phoneNumber ?? "nil")")
+            
             // 1) Load the existing tree record to get tree data
             let treeResponse = try await supabase
                 .from("profiles")
@@ -588,7 +611,11 @@ class AdminRequestViewModel: ObservableObject {
             
             let treeMembers = try JSONDecoder().decode([FamilyMember].self, from: treeResponse.data)
             guard let treeMember = treeMembers.first else {
-                Log.error("لم يتم العثور على سجل الشجرة للدمج")
+                Log.error("[MERGE] ❌ سجل الشجرة غير موجود! UUID: \(existingTreeMemberId)")
+                self.mergeResult = .failure(L10n.t(
+                    "سجل عضو الشجرة غير موجود في قاعدة البيانات.",
+                    "Tree member record not found in database."
+                ))
                 self.isLoading = false
                 return
             }

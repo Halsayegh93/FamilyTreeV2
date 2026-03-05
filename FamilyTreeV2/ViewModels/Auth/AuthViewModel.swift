@@ -803,6 +803,14 @@ class AuthViewModel: ObservableObject {
                 .upsert(profileData)
                 .execute()
             
+            // التحقق من نجاح الإنشاء
+            let verifyProfile = await loadProfile(by: user.id)
+            if let vp = verifyProfile {
+                Log.info("[REGISTER] ✅ تم إنشاء البروفايل بنجاح: \(vp.fullName), UUID: \(user.id), role: \(vp.role)")
+            } else {
+                Log.error("[REGISTER] ⚠️ الـ upsert لم يُنشئ السجل! UUID: \(user.id). قد يكون RLS يمنع الإنشاء.")
+            }
+            
             // بناء تفاصيل الطلب مع المطابقات المحتملة
             let matchInfo: String
             if matchedMemberIds.isEmpty {
