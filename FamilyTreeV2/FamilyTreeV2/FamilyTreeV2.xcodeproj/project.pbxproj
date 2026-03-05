@@ -13,9 +13,7 @@
 /* Begin PBXFileReference section */
 		9A8DF20B2F406AEB000B2DD7 /* FamilyTreeV2.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FamilyTreeV2.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		9AA8863A2F524EBB001B4183 /* FamilyTreeV2.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = FamilyTreeV2.xcodeproj; sourceTree = "<group>"; };
-		9F1F30C12F5A2B1700CC6742 /* FamilyTreeV2.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = FamilyTreeV2.xcodeproj; sourceTree = "<group>"; };
 		9F71E7492F0D83E20001F8B7 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
-		9F7C021C2F591B0C0080797B /* FamilyTreeV2.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = FamilyTreeV2.xcodeproj; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -75,13 +73,6 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
-		9F1F30CA2F5A2B1700CC6742 /* Products */ = {
-			isa = PBXGroup;
-			children = (
-			);
-			name = Products;
-			sourceTree = "<group>";
-		};
 		9F71E69B2F0B04F70001F8B7 = {
 			isa = PBXGroup;
 			children = (
@@ -95,13 +86,6 @@
 				9F71E6D82F0B05610001F8B7 /* Components */,
 				9A8DF20B2F406AEB000B2DD7 /* FamilyTreeV2.app */,
 			);
-			sourceTree = "<group>";
-		};
-		9F7C02252F591B0C0080797B /* Products */ = {
-			isa = PBXGroup;
-			children = (
-			);
-			name = Products;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -168,14 +152,6 @@
 			productRefGroup = 9F71E69B2F0B04F70001F8B7;
 			projectDirPath = "";
 			projectReferences = (
-				{
-					ProductGroup = 9F1F30CA2F5A2B1700CC6742 /* Products */;
-					ProjectRef = 9F1F30C12F5A2B1700CC6742 /* FamilyTreeV2.xcodeproj */;
-				},
-				{
-					ProductGroup = 9F7C02252F591B0C0080797B /* Products */;
-					ProjectRef = 9F7C021C2F591B0C0080797B /* FamilyTreeV2.xcodeproj */;
-				},
 				{
 					ProductGroup = 9AA886402F524EBB001B4183 /* Products */;
 					ProjectRef = 9AA8863A2F524EBB001B4183 /* FamilyTreeV2.xcodeproj */;
