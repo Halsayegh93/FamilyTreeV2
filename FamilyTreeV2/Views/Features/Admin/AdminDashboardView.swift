@@ -2,6 +2,9 @@ import SwiftUI
 
 struct AdminDashboardView: View {
     @EnvironmentObject var authVM: AuthViewModel
+    @EnvironmentObject var memberVM: MemberViewModel
+    @EnvironmentObject var newsVM: NewsViewModel
+    @EnvironmentObject var adminRequestVM: AdminRequestViewModel
     @StateObject private var diwaniyaVM = DiwaniyasViewModel()
     @Binding var selectedTab: Int
     @State private var showingNotifications = false
@@ -15,16 +18,16 @@ struct AdminDashboardView: View {
 
     // MARK: - Cached badge counts
     private var pendingCount: Int {
-        authVM.allMembers.filter { $0.role == .pending }.count
+        memberVM.allMembers.filter { $0.role == .pending }.count
     }
     private var inactiveCount: Int {
-        authVM.allMembers.filter { $0.role != .pending && ($0.status == nil || $0.status == .pending) && $0.isDeceased != true }.count
+        memberVM.allMembers.filter { $0.role != .pending && ($0.status == nil || $0.status == .pending) && $0.isDeceased != true }.count
     }
     private var moderatorCount: Int {
-        authVM.allMembers.filter { $0.role == .admin || $0.role == .supervisor }.count
+        memberVM.allMembers.filter { $0.role == .admin || $0.role == .supervisor }.count
     }
     private var incompleteMembersCount: Int {
-        authVM.allMembers
+        memberVM.allMembers
             .filter { $0.role != .pending && $0.isDeceased != true }
             .filter { member in
                 let noPhone = member.phoneNumber == nil || (member.phoneNumber ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -91,15 +94,15 @@ struct AdminDashboardView: View {
                                     }
                                     DSDivider()
                                     NavigationLink(destination: AdminNewsRequestsView()) {
-                                        DSActionRow(title: L10n.t("طلبات نشر الأخبار", "News Publish Requests"), subtitle: L10n.t("مراجعة أخبار الأعضاء قبل النشر", "Review member news before publishing"), icon: "newspaper.fill", color: DS.Color.warning, badge: authVM.pendingNewsRequests.count)
+                                        DSActionRow(title: L10n.t("طلبات نشر الأخبار", "News Publish Requests"), subtitle: L10n.t("مراجعة أخبار الأعضاء قبل النشر", "Review member news before publishing"), icon: "newspaper.fill", color: DS.Color.warning, badge: newsVM.pendingNewsRequests.count)
                                     }
                                     DSDivider()
                                     NavigationLink(destination: AdminNewsReportsView()) {
-                                        DSActionRow(title: L10n.t("بلاغات الأخبار", "News Reports"), subtitle: L10n.t("مراجعة بلاغات الأعضاء على الأخبار", "Review member reports on news"), icon: "exclamationmark.bubble.fill", color: DS.Color.error, badge: authVM.newsReportRequests.count)
+                                        DSActionRow(title: L10n.t("بلاغات الأخبار", "News Reports"), subtitle: L10n.t("مراجعة بلاغات الأعضاء على الأخبار", "Review member reports on news"), icon: "exclamationmark.bubble.fill", color: DS.Color.error, badge: adminRequestVM.newsReportRequests.count)
                                     }
                                     DSDivider()
                                     NavigationLink(destination: AdminPhoneRequestsView()) {
-                                        DSActionRow(title: L10n.t("طلبات تغيير الجوال", "Phone Change Requests"), subtitle: L10n.t("مراجعة واعتماد تحديثات الأرقام", "Review and approve phone updates"), icon: "phone.badge.checkmark", color: DS.Color.success, badge: authVM.phoneChangeRequests.count)
+                                        DSActionRow(title: L10n.t("طلبات تغيير الجوال", "Phone Change Requests"), subtitle: L10n.t("مراجعة واعتماد تحديثات الأرقام", "Review and approve phone updates"), icon: "phone.badge.checkmark", color: DS.Color.success, badge: adminRequestVM.phoneChangeRequests.count)
                                     }
                                     DSDivider()
                                     NavigationLink(destination: AdminDiwaniyaRequestsView()) {
@@ -107,11 +110,11 @@ struct AdminDashboardView: View {
                                     }
                                     DSDivider()
                                     NavigationLink(destination: AdminDeceasedRequestsView()) {
-                                        DSActionRow(title: L10n.t("تأكيد حالات الوفاة", "Confirm Deceased"), subtitle: L10n.t("تحديثات حالة أعضاء الشجرة", "Update family tree member status"), icon: "bolt.heart.fill", color: DS.Color.error, badge: authVM.deceasedRequests.count)
+                                        DSActionRow(title: L10n.t("تأكيد حالات الوفاة", "Confirm Deceased"), subtitle: L10n.t("تحديثات حالة أعضاء الشجرة", "Update family tree member status"), icon: "bolt.heart.fill", color: DS.Color.error, badge: adminRequestVM.deceasedRequests.count)
                                     }
                                     DSDivider()
                                     NavigationLink(destination: AdminChildAddRequestsView()) {
-                                        DSActionRow(title: L10n.t("طلبات إضافة الأبناء", "Child Add Requests"), subtitle: L10n.t("مراجعة طلبات إضافة أبناء جدد", "Review new child addition requests"), icon: "person.badge.plus", color: DS.Color.success, badge: authVM.childAddRequests.count)
+                                        DSActionRow(title: L10n.t("طلبات إضافة الأبناء", "Child Add Requests"), subtitle: L10n.t("مراجعة طلبات إضافة أبناء جدد", "Review new child addition requests"), icon: "person.badge.plus", color: DS.Color.success, badge: adminRequestVM.childAddRequests.count)
                                     }
                                     DSDivider()
                                     NavigationLink(destination: AdminIncompleteMembersView()) {
@@ -216,12 +219,12 @@ struct AdminDashboardView: View {
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .task {
             // تحميل البيانات بالتوازي لتسريع الأداء
-            async let members: () = authVM.fetchAllMembers()
-            async let deceased: () = authVM.fetchDeceasedRequests()
-            async let pendingNews: () = authVM.fetchPendingNewsRequests()
-            async let newsReports: () = authVM.fetchNewsReportRequests()
-            async let phoneChanges: () = authVM.fetchPhoneChangeRequests()
-            async let childAdds: () = authVM.fetchChildAddRequests()
+            async let members: () = memberVM.fetchAllMembers()
+            async let deceased: () = adminRequestVM.fetchDeceasedRequests()
+            async let pendingNews: () = newsVM.fetchPendingNewsRequests()
+            async let newsReports: () = adminRequestVM.fetchNewsReportRequests()
+            async let phoneChanges: () = adminRequestVM.fetchPhoneChangeRequests()
+            async let childAdds: () = adminRequestVM.fetchChildAddRequests()
             async let diwaniyas: () = diwaniyaVM.fetchPendingDiwaniyas()
             _ = await (members, deceased, pendingNews, newsReports, phoneChanges, childAdds, diwaniyas)
         }
@@ -241,7 +244,7 @@ struct AdminDashboardView: View {
             // Tree Members stat card
             adminColorfulStatCard(
                 title: L10n.t("الأعضاء", "Members"),
-                value: "\(authVM.allMembers.count)",
+                value: "\(memberVM.allMembers.count)",
                 icon: "person.2.fill",
                 color: DS.Color.info
             )
@@ -257,7 +260,7 @@ struct AdminDashboardView: View {
             // News Requests
             adminColorfulStatCard(
                 title: L10n.t("الأخبار", "News"),
-                value: "\(authVM.pendingNewsRequests.count)",
+                value: "\(newsVM.pendingNewsRequests.count)",
                 icon: "newspaper.fill",
                 color: DS.Color.accent
             )
@@ -265,7 +268,7 @@ struct AdminDashboardView: View {
             // Deceased Requests
             adminColorfulStatCard(
                 title: L10n.t("الوفيات", "Deceased"),
-                value: "\(authVM.deceasedRequests.count)",
+                value: "\(adminRequestVM.deceasedRequests.count)",
                 icon: "bolt.heart.fill",
                 color: DS.Color.error
             )
@@ -273,7 +276,7 @@ struct AdminDashboardView: View {
             // Phone Updates
             adminColorfulStatCard(
                 title: L10n.t("الجوال", "Phone"),
-                value: "\(authVM.phoneChangeRequests.count)",
+                value: "\(adminRequestVM.phoneChangeRequests.count)",
                 icon: "phone.badge.checkmark",
                 color: DS.Color.success
             )
@@ -281,7 +284,7 @@ struct AdminDashboardView: View {
             // Reports
             adminColorfulStatCard(
                 title: L10n.t("بلاغات", "Reports"),
-                value: "\(authVM.newsReportRequests.count)",
+                value: "\(adminRequestVM.newsReportRequests.count)",
                 icon: "exclamationmark.bubble.fill",
                 color: DS.Color.error
             )
@@ -327,9 +330,8 @@ struct AdminDashboardView: View {
         .glassCard(radius: DS.Radius.lg)
         .overlay(
             RoundedRectangle(cornerRadius: DS.Radius.lg)
-                .stroke(Color.gray.opacity(0.3), lineWidth: 0.5)
+                .stroke(DS.Color.textTertiary.opacity(DS.Opacity.divider), lineWidth: 0.5)
         )
-        .shadow(color: color.opacity(0.15), radius: 12, x: 0, y: 4)
         .dsCardShadow()
     }
 

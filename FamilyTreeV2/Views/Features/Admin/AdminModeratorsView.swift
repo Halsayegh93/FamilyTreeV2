@@ -2,6 +2,7 @@ import SwiftUI
 
 struct AdminModeratorsView: View {
     @EnvironmentObject var authVM: AuthViewModel
+    @EnvironmentObject var memberVM: MemberViewModel
     @State private var appeared = false
     @State private var showAddSheet = false
     @State private var memberToChange: FamilyMember?
@@ -14,7 +15,7 @@ struct AdminModeratorsView: View {
     }
 
     private var moderators: [FamilyMember] {
-        authVM.allMembers
+        memberVM.allMembers
             .filter { $0.role == .admin || $0.role == .supervisor }
             .sorted { a, b in
                 if a.role == .admin && b.role != .admin { return true }
@@ -77,6 +78,7 @@ struct AdminModeratorsView: View {
         .sheet(isPresented: $showAddSheet) {
             AddModeratorSheet()
                 .environmentObject(authVM)
+                .environmentObject(memberVM)
         }
         .alert(
             L10n.t("تغيير الرتبة", "Change Role"),
@@ -85,7 +87,7 @@ struct AdminModeratorsView: View {
         ) { member in
             Button(L10n.t("تأكيد", "Confirm"), role: .destructive) {
                 Task {
-                    await authVM.updateMemberRole(memberId: member.id, newRole: pendingRole)
+                    await memberVM.updateMemberRole(memberId: member.id, newRole: pendingRole)
                 }
             }
             Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
@@ -103,7 +105,7 @@ struct AdminModeratorsView: View {
         ) { member in
             Button(L10n.t("إزالة", "Remove"), role: .destructive) {
                 Task {
-                    await authVM.updateMemberRole(memberId: member.id, newRole: .member)
+                    await memberVM.updateMemberRole(memberId: member.id, newRole: .member)
                 }
             }
             Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
@@ -309,12 +311,13 @@ struct AdminModeratorsView: View {
 // MARK: - Add Moderator Sheet
 struct AddModeratorSheet: View {
     @EnvironmentObject var authVM: AuthViewModel
+    @EnvironmentObject var memberVM: MemberViewModel
     @Environment(\.dismiss) var dismiss
     @State private var searchText = ""
     @State private var selectedRole: FamilyMember.UserRole = .supervisor
 
     private var regularMembers: [FamilyMember] {
-        authVM.allMembers
+        memberVM.allMembers
             .filter { $0.role == .member }
             .filter { member in
                 searchText.isEmpty || member.fullName.localizedCaseInsensitiveContains(searchText)
@@ -366,7 +369,7 @@ struct AddModeratorSheet: View {
                             ForEach(regularMembers) { member in
                                 Button {
                                     Task {
-                                        await authVM.updateMemberRole(memberId: member.id, newRole: selectedRole)
+                                        await memberVM.updateMemberRole(memberId: member.id, newRole: selectedRole)
                                         dismiss()
                                     }
                                 } label: {

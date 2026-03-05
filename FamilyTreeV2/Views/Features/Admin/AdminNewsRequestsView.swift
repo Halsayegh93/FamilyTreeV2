@@ -2,26 +2,28 @@ import SwiftUI
 
 struct AdminNewsRequestsView: View {
     @EnvironmentObject var authVM: AuthViewModel
+    @EnvironmentObject var newsVM: NewsViewModel
+    @EnvironmentObject var memberVM: MemberViewModel
 
     var body: some View {
         ZStack {
             DS.Color.background.ignoresSafeArea()
             DSDecorativeBackground()
 
-            if authVM.pendingNewsRequests.isEmpty {
+            if newsVM.pendingNewsRequests.isEmpty {
                 emptyState
             } else {
                 ScrollView(showsIndicators: false) {
                     DSSectionHeader(
                         title: L10n.t("طلبات معلقة", "Pending Requests"),
                         icon: "newspaper.fill",
-                        trailing: "\(authVM.pendingNewsRequests.count)"
+                        trailing: "\(newsVM.pendingNewsRequests.count)"
                     )
                     .padding(.horizontal, DS.Spacing.lg)
                     .padding(.top, DS.Spacing.sm)
 
                     LazyVStack(spacing: DS.Spacing.md) {
-                        ForEach(authVM.pendingNewsRequests) { post in
+                        ForEach(newsVM.pendingNewsRequests) { post in
                             card(for: post)
                         }
                     }
@@ -34,7 +36,7 @@ struct AdminNewsRequestsView: View {
         .navigationTitle(L10n.t("طلبات نشر الأخبار", "News Publish Requests"))
         .navigationBarTitleDisplayMode(.inline)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-        .task { await authVM.fetchPendingNewsRequests() }
+        .task { await newsVM.fetchPendingNewsRequests() }
     }
 
     // MARK: - Empty State
@@ -76,7 +78,7 @@ struct AdminNewsRequestsView: View {
                 // Header: author + type
                 HStack(spacing: DS.Spacing.sm) {
                     // صورة الكاتب
-                    let member = authVM.member(byId: post.author_id)
+                    let member = post.author_id.flatMap { memberVM.member(byId: $0) }
                     if let urlStr = member?.avatarUrl, let url = URL(string: urlStr) {
                         CachedAsyncImage(url: url) { img in
                             img.resizable().scaledToFill()
@@ -157,15 +159,15 @@ struct AdminNewsRequestsView: View {
                 DSApproveRejectButtons(
                     approveTitle: L10n.t("اعتماد النشر", "Approve"),
                     rejectTitle: L10n.t("رفض", "Reject"),
-                    isLoading: authVM.isLoading,
+                    isLoading: newsVM.isLoading,
                     approveGradient: LinearGradient(
                         colors: [DS.Color.success, DS.Color.success.opacity(0.8)],
                         startPoint: .leading, endPoint: .trailing
                     )
                 ) {
-                    Task { await authVM.approveNewsPost(postId: post.id) }
+                    Task { await newsVM.approveNewsPost(postId: post.id) }
                 } onReject: {
-                    Task { await authVM.rejectNewsPost(postId: post.id) }
+                    Task { await newsVM.rejectNewsPost(postId: post.id) }
                 }
             }
             .padding(DS.Spacing.lg)

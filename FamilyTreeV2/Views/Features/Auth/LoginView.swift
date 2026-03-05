@@ -170,7 +170,7 @@ struct LoginView: View {
 
                 ZStack(alignment: .leading) {
                     if authVM.phoneNumber.isEmpty {
-                        Text("رقم الهاتف المحمول")
+                        Text(L10n.t("رقم الهاتف المحمول", "Mobile Number"))
                             .font(DS.Font.subheadline)
                             .foregroundStyle(DS.Color.textTertiary)
                     } else {
@@ -234,8 +234,8 @@ struct LoginView: View {
                 }
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity)
-                .frame(height: 52)
-                .background(DS.Color.accent.opacity(isDisabled ? 0.5 : 1.0))
+                .frame(height: 58)
+                .background(DS.Color.accent.opacity(isDisabled ? DS.Opacity.disabled : 1.0))
                 .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
             }
             .buttonStyle(DSScaleButtonStyle())
@@ -246,7 +246,7 @@ struct LoginView: View {
         .padding(DS.Spacing.lg)
         .background(DS.Color.background)
         .cornerRadius(DS.Radius.lg)
-        .shadow(color: .black.opacity(0.05), radius: 15, x: 0, y: 5)
+        .dsSubtleShadow()
     }
 
     // MARK: - OTP Input — Compact Card
@@ -316,6 +316,7 @@ struct LoginView: View {
                         )
                 )
                 .focused($isFieldFocused)
+                .accessibilityLabel(L10n.t("رمز التحقق", "Verification Code"))
                 .onAppear { isFieldFocused = true }
                 .onChange(of: authVM.otpCode) { _, newValue in
                     if newValue.count == 6 { Task { await authVM.verifyOTP() } }
@@ -335,8 +336,8 @@ struct LoginView: View {
                     }
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
-                    .frame(height: 52)
-                    .background(DS.Color.accent.opacity(otpDisabled ? 0.5 : 1.0))
+                    .frame(height: 58)
+                    .background(DS.Color.accent.opacity(otpDisabled ? DS.Opacity.disabled : 1.0))
                     .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
                 }
                 .buttonStyle(DSScaleButtonStyle())
@@ -348,7 +349,7 @@ struct LoginView: View {
         .padding(DS.Spacing.lg)
         .background(DS.Color.background)
         .cornerRadius(DS.Radius.lg)
-        .shadow(color: .black.opacity(0.05), radius: 15, x: 0, y: 5)
+        .dsSubtleShadow()
     }
 
     @ViewBuilder

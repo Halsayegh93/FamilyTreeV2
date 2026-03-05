@@ -172,7 +172,7 @@ struct DiwaniyasView: View {
                             .foregroundColor(cardColor)
                     }
 
-                    VStack(alignment: .leading, spacing: 3) {
+                    VStack(alignment: .leading, spacing: DS.Spacing.xs) {
                         HStack(spacing: DS.Spacing.sm) {
                             Text(item.title)
                                 .font(DS.Font.headline)
@@ -187,7 +187,7 @@ struct DiwaniyasView: View {
                                 }
                                 .foregroundColor(.white)
                                 .padding(.horizontal, DS.Spacing.sm)
-                                .padding(.vertical, 3)
+                                .padding(.vertical, DS.Spacing.xs)
                                 .background(DS.Color.error.opacity(0.8))
                                 .clipShape(Capsule())
                             }

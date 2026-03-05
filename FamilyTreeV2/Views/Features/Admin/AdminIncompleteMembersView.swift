@@ -2,6 +2,7 @@ import SwiftUI
 
 struct AdminIncompleteMembersView: View {
     @EnvironmentObject var authVM: AuthViewModel
+    @EnvironmentObject var memberVM: MemberViewModel
     @State private var appeared = false
     @State private var searchText = ""
     @State private var selectedFilter: IncompleteFilter = .all
@@ -44,7 +45,7 @@ struct AdminIncompleteMembersView: View {
 
     /// Returns members (non-pending, non-deceased) with at least one missing field
     private var allIncompleteMembers: [FamilyMember] {
-        authVM.allMembers
+        memberVM.allMembers
             .filter { $0.role != .pending && $0.isDeceased != true }
             .filter { memberHasIncompleteData($0) }
             .sorted { $0.fullName < $1.fullName }
@@ -149,7 +150,7 @@ struct AdminIncompleteMembersView: View {
         }
         .navigationTitle(L10n.t("بيانات ناقصة", "Incomplete Data"))
         .navigationBarTitleDisplayMode(.inline)
-        .task { await authVM.fetchAllMembers() }
+        .task { await memberVM.fetchAllMembers() }
         .onAppear {
             withAnimation(DS.Anim.smooth.delay(0.15)) {
                 appeared = true

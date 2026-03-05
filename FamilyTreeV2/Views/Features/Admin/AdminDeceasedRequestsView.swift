@@ -2,18 +2,19 @@ import SwiftUI
 
 struct AdminDeceasedRequestsView: View {
     @EnvironmentObject var authVM: AuthViewModel
+    @EnvironmentObject var adminRequestVM: AdminRequestViewModel
 
     var body: some View {
         ZStack {
             DS.Color.background.ignoresSafeArea()
             DSDecorativeBackground()
 
-            if authVM.deceasedRequests.isEmpty {
+            if adminRequestVM.deceasedRequests.isEmpty {
                 emptyState
             } else {
                 ScrollView(showsIndicators: false) {
                     LazyVStack(spacing: DS.Spacing.md) {
-                        ForEach(authVM.deceasedRequests) { request in
+                        ForEach(adminRequestVM.deceasedRequests) { request in
                             requestCard(request: request)
                         }
                     }
@@ -24,7 +25,7 @@ struct AdminDeceasedRequestsView: View {
         .navigationTitle(L10n.t("طلبات تأكيد الوفاة", "Deceased Confirmation Requests"))
         .navigationBarTitleDisplayMode(.inline)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-        .task { await authVM.fetchDeceasedRequests() }
+        .task { await adminRequestVM.fetchDeceasedRequests() }
     }
 
     private func requestCard(request: AdminRequest) -> some View {
@@ -71,11 +72,11 @@ struct AdminDeceasedRequestsView: View {
                 DSApproveRejectButtons(
                     approveTitle: L10n.t("موافقة وتحديث الشجرة", "Approve & Update Tree"),
                     rejectTitle: L10n.t("رفض", "Reject"),
-                    isLoading: authVM.isLoading
+                    isLoading: adminRequestVM.isLoading
                 ) {
-                    Task { await authVM.approveDeceasedRequest(request: request) }
+                    Task { await adminRequestVM.approveDeceasedRequest(request: request) }
                 } onReject: {
-                    Task { await authVM.rejectDeceasedRequest(request: request) }
+                    Task { await adminRequestVM.rejectDeceasedRequest(request: request) }
                 }
             }
             .padding(DS.Spacing.lg)

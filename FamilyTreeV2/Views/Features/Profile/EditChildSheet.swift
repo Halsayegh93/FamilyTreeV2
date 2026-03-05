@@ -3,7 +3,7 @@ import PhotosUI
 import UIKit
 
 struct EditChildSheet: View {
-    @EnvironmentObject var authVM: AuthViewModel
+    @EnvironmentObject var memberVM: MemberViewModel
     @Environment(\.dismiss) private var dismiss
     let member: FamilyMember
 
@@ -295,7 +295,7 @@ struct EditChildSheet: View {
             updatedMember.fullName = finalFullName
             updatedMember.firstName = cleanFirst
 
-            let success = await authVM.updateChildData(
+            let success = await memberVM.updateChildData(
                 member: updatedMember,
                 firstName: cleanFirst,
                 phoneNumber: KuwaitPhone.normalizedForStorage(
@@ -309,7 +309,7 @@ struct EditChildSheet: View {
             )
 
             if let image = selectedUIImage {
-                await authVM.uploadAvatar(image: image, for: member.id)
+                await memberVM.uploadAvatar(image: image, for: member.id)
             }
 
             isSaving = false

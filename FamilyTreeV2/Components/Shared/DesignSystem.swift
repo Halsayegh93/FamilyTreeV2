@@ -111,6 +111,26 @@ enum DS {
         static let gridAlerts    = SwiftUI.Color(hex: "#B5302A") // Crimson
         static let gridDiwaniya  = SwiftUI.Color.adaptive(light: "#1B3A8C", dark: "#5B8FE6") // Royal Blue
         static let gridContact   = SwiftUI.Color(hex: "#C8962E") // Gold
+
+        // Glass Effect Helpers — adaptive for light/dark mode
+        static func glassBright(_ cs: ColorScheme) -> SwiftUI.Color {
+            cs == .dark ? SwiftUI.Color.white.opacity(0.12) : SwiftUI.Color.white.opacity(0.8)
+        }
+        static func glassMedium(_ cs: ColorScheme) -> SwiftUI.Color {
+            cs == .dark ? SwiftUI.Color.white.opacity(0.06) : SwiftUI.Color.white.opacity(0.4)
+        }
+        static func glassSubtle(_ cs: ColorScheme) -> SwiftUI.Color {
+            cs == .dark ? SwiftUI.Color.white.opacity(0.04) : SwiftUI.Color.white.opacity(0.15)
+        }
+        static func glassBorder(_ cs: ColorScheme) -> SwiftUI.Color {
+            cs == .dark ? SwiftUI.Color.white.opacity(0.10) : SwiftUI.Color.white.opacity(0.6)
+        }
+        static func glassBorderBright(_ cs: ColorScheme) -> SwiftUI.Color {
+            cs == .dark ? SwiftUI.Color.white.opacity(0.15) : SwiftUI.Color.white.opacity(0.8)
+        }
+        static func glassDivider(_ cs: ColorScheme) -> SwiftUI.Color {
+            cs == .dark ? SwiftUI.Color.white.opacity(0.08) : SwiftUI.Color.white.opacity(0.15)
+        }
     }
 
     // MARK: Typography — خطوط حديثة ونظيفة مع دعم Dynamic Type
@@ -164,6 +184,19 @@ enum DS {
     }
 
     // MARK: Radius — حواف حديثة ناعمة
+    // MARK: Opacity
+    enum Opacity {
+        static let disabled: Double = 0.5
+        static let divider: Double  = 0.3
+        static let border: Double   = 0.12
+    }
+
+    // MARK: Border
+    enum Border {
+        static let width: CGFloat     = 1.0
+        static let widthBold: CGFloat = 1.5
+    }
+
     enum Radius {
         static let sm:   CGFloat = 8
         static let md:   CGFloat = 12
@@ -773,7 +806,7 @@ struct DSRoleBadge: View {
             .font(DS.Font.caption2)
             .foregroundColor(color)
             .padding(.horizontal, DS.Spacing.md)
-            .padding(.vertical, 5)
+            .padding(.vertical, DS.Spacing.xs)
             .background(color.opacity(0.12))
             .clipShape(Capsule())
             .overlay(Capsule().stroke(color.opacity(0.25), lineWidth: 0.7))

@@ -3,6 +3,7 @@ import UIKit
 
 struct AdminReportsView: View {
     @EnvironmentObject var authVM: AuthViewModel
+    @EnvironmentObject var memberVM: MemberViewModel
 
     // Age filter
     @State private var ageFilterMode: AgeFilterMode = .all
@@ -52,7 +53,7 @@ struct AdminReportsView: View {
     }
 
     private var activeMembers: [FamilyMember] {
-        authVM.allMembers.filter { $0.role != .pending }
+        memberVM.allMembers.filter { $0.role != .pending }
     }
 
     private var filteredMembers: [FamilyMember] {
@@ -122,7 +123,7 @@ struct AdminReportsView: View {
         .navigationTitle(L10n.t("التقارير", "Reports"))
         .navigationBarTitleDisplayMode(.inline)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-        .task { await authVM.fetchAllMembers() }
+        .task { await memberVM.fetchAllMembers() }
         .sheet(isPresented: $showShareSheet) {
             ActivityView(items: shareItems)
         }

@@ -3,6 +3,7 @@ import SwiftUI
 // MARK: - Family Directory View — دليل الأعضاء
 struct FamilyDirectoryView: View {
     @EnvironmentObject var authVM: AuthViewModel
+    @EnvironmentObject var memberVM: MemberViewModel
     @Environment(\.dismiss) var dismiss
     
     @State private var searchText = ""
@@ -33,7 +34,7 @@ struct FamilyDirectoryView: View {
     }
     
     private func rebuildFilteredMembers() {
-        var members = authVM.allMembers.filter {
+        var members = memberVM.allMembers.filter {
             $0.role != .pending && !$0.isHiddenFromTree
         }
         
@@ -151,7 +152,7 @@ struct FamilyDirectoryView: View {
         .onChange(of: sortOption) { _, _ in rebuildFilteredMembers() }
         .onChange(of: filterRole) { _, _ in rebuildFilteredMembers() }
         .onChange(of: showDeceasedOnly) { _, _ in rebuildFilteredMembers() }
-        .onChange(of: authVM.allMembers.count) { _, _ in rebuildFilteredMembers() }
+        .onChange(of: memberVM.allMembers.count) { _, _ in rebuildFilteredMembers() }
     }
     
     // MARK: - Search Bar
@@ -178,7 +179,7 @@ struct FamilyDirectoryView: View {
         .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                .stroke(Color.gray.opacity(0.12), lineWidth: 1)
+                .stroke(DS.Color.textTertiary.opacity(DS.Opacity.border), lineWidth: 1)
         )
         .padding(.horizontal, DS.Spacing.lg)
         .padding(.top, DS.Spacing.sm)
@@ -224,7 +225,7 @@ struct FamilyDirectoryView: View {
                             .padding(.horizontal, DS.Spacing.md)
                             .padding(.vertical, DS.Spacing.sm)
                             .background(Capsule().fill(isActive ? role.color : DS.Color.surface))
-                            .overlay(Capsule().stroke(isActive ? role.color : Color.gray.opacity(0.12), lineWidth: 1))
+                            .overlay(Capsule().stroke(isActive ? role.color : DS.Color.textTertiary.opacity(DS.Opacity.border), lineWidth: 1))
                     }
                     .buttonStyle(.plain)
                 }
@@ -243,7 +244,7 @@ struct FamilyDirectoryView: View {
                     .padding(.horizontal, DS.Spacing.md)
                     .padding(.vertical, DS.Spacing.sm)
                     .background(Capsule().fill(showDeceasedOnly ? DS.Color.deceased : DS.Color.surface))
-                    .overlay(Capsule().stroke(showDeceasedOnly ? DS.Color.deceased : Color.gray.opacity(0.12), lineWidth: 1))
+                    .overlay(Capsule().stroke(showDeceasedOnly ? DS.Color.deceased : DS.Color.textTertiary.opacity(DS.Opacity.border), lineWidth: 1))
                 }
                 .buttonStyle(.plain)
             }

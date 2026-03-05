@@ -3,6 +3,8 @@ import UniformTypeIdentifiers
 
 struct AdminMemberDetailSheet: View {
     @EnvironmentObject var authVM: AuthViewModel
+    @EnvironmentObject var memberVM: MemberViewModel
+    @EnvironmentObject var adminRequestVM: AdminRequestViewModel
     @Environment(\.dismiss) var dismiss
 
     let member: FamilyMember
@@ -22,6 +24,7 @@ struct AdminMemberDetailSheet: View {
     @State private var isDeceased: Bool
     @State private var deathDate: Date
     @State private var hasDeathDate: Bool
+    @State private var selectedGender: String
 
     // حالات ترتيب الأبناء
     @State private var localChildren: [FamilyMember] = []
@@ -61,6 +64,7 @@ struct AdminMemberDetailSheet: View {
             self._hasBirthDate = State(initialValue: false)
         }
 
+        self._selectedGender = State(initialValue: member.gender ?? "male")
         self._isDeceased = State(initialValue: member.isDeceased ?? false)
         if let dDateStr = member.deathDate, !dDateStr.isEmpty, let date = formatter.date(from: dDateStr) {
             self._deathDate = State(initialValue: date)
@@ -86,6 +90,9 @@ struct AdminMemberDetailSheet: View {
 
                         // Basic info section
                         basicInfoSection
+
+                        // Gender section
+                        genderSection
 
                         // Father link section
                         fatherSection
@@ -145,14 +152,14 @@ struct AdminMemberDetailSheet: View {
                 AddSonByAdminSheet(parent: member, editingChild: child)
             }
             .onAppear { setupLocalChildren() }
-            .onChange(of: authVM.allMembers) { _, _ in
+            .onChange(of: memberVM.allMembers) { _, _ in
                 setupLocalChildren()
             }
             .alert(L10n.t("حذف نهائي", "Permanent Delete"), isPresented: $showDeleteConfirmation) {
                 Button(L10n.t("حذف", "Delete"), role: .destructive) {
                     Task {
                         guard canManageAccessPermissions else { return }
-                        await authVM.rejectOrDeleteMember(memberId: member.id)
+                        await adminRequestVM.rejectOrDeleteMember(memberId: member.id)
                         dismiss()
                     }
                 }
@@ -238,6 +245,64 @@ struct AdminMemberDetailSheet: View {
         .padding(.horizontal, DS.Spacing.lg)
     }
 
+    // MARK: - Gender Section
+    private var genderSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            DSCard(padding: 0) {
+                DSSectionHeader(
+                    title: L10n.t("الجنس", "Gender"),
+                    icon: "person.fill",
+                    iconColor: DS.Color.info
+                )
+
+                HStack(spacing: DS.Spacing.sm) {
+                    genderOption(
+                        title: L10n.t("ذكر", "Male"),
+                        icon: "figure.stand",
+                        value: "male"
+                    )
+
+                    genderOption(
+                        title: L10n.t("أنثى", "Female"),
+                        icon: "figure.stand.dress",
+                        value: "female"
+                    )
+                }
+                .padding(.horizontal, DS.Spacing.md)
+                .padding(.vertical, DS.Spacing.sm)
+            }
+        }
+        .padding(.horizontal, DS.Spacing.lg)
+    }
+
+    private func genderOption(title: String, icon: String, value: String) -> some View {
+        let isSelected = selectedGender == value
+        return Button {
+            withAnimation(DS.Anim.snappy) { selectedGender = value }
+        } label: {
+            HStack(spacing: DS.Spacing.sm) {
+                Image(systemName: icon)
+                    .font(DS.Font.scaled(16, weight: .bold))
+                Text(title)
+                    .font(DS.Font.calloutBold)
+            }
+            .foregroundColor(isSelected ? .white : DS.Color.textPrimary)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, DS.Spacing.md)
+            .background(
+                isSelected
+                    ? AnyShapeStyle(DS.Color.gradientPrimary)
+                    : AnyShapeStyle(DS.Color.surface)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                    .stroke(isSelected ? DS.Color.primary.opacity(0.3) : DS.Color.textTertiary.opacity(0.2), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
     // MARK: - Father Section
     private var fatherSection: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -257,7 +322,7 @@ struct AdminMemberDetailSheet: View {
                                 .font(DS.Font.caption2)
                                 .foregroundColor(DS.Color.textTertiary)
 
-                            if let fId = selectedFatherId, let father = authVM.member(byId: fId) {
+                            if let fId = selectedFatherId, let father = memberVM.member(byId: fId) {
                                 Text(father.fullName)
                                     .font(DS.Font.calloutBold)
                                     .foregroundColor(DS.Color.textPrimary)
@@ -324,6 +389,17 @@ struct AdminMemberDetailSheet: View {
                         .keyboardType(.numberPad)
                         .multilineTextAlignment(.leading)
                         .font(DS.Font.callout)
+
+                    if !phoneNumber.isEmpty {
+                        Button {
+                            phoneNumber = ""
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(DS.Font.scaled(16))
+                                .foregroundColor(DS.Color.error.opacity(0.7))
+                        }
+                        .buttonStyle(.plain)
+                    }
 
                     DSIcon("phone.fill", color: DS.Color.success, size: iconSm, iconSize: iconFontSm)
                 }
@@ -463,7 +539,7 @@ struct AdminMemberDetailSheet: View {
                 Button(L10n.t("حذف", "Delete"), role: .destructive) {
                     if let child = childToDelete {
                         Task {
-                            await authVM.rejectOrDeleteMember(memberId: child.id)
+                            await adminRequestVM.rejectOrDeleteMember(memberId: child.id)
                             localChildren.removeAll { $0.id == child.id }
                             childToDelete = nil
                         }
@@ -789,7 +865,7 @@ struct AdminMemberDetailSheet: View {
     }
 
     private func setupLocalChildren() {
-        localChildren = authVM.allMembers
+        localChildren = memberVM.allMembers
             .filter { $0.fatherId == member.id }
             .sorted(by: { $0.sortOrder < $1.sortOrder })
     }
@@ -809,6 +885,7 @@ struct AdminMemberDetailSheet: View {
         let capturedIsDeceased = isDeceased
         let capturedDeathDate = (isDeceased && hasDeathDate) ? deathDate : nil
         let capturedChildren = localChildren
+        let capturedGender = selectedGender
 
         let cleanFamily = familyName.trimmingCharacters(in: .whitespacesAndNewlines)
         var finalFullName = fullName.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -846,8 +923,9 @@ struct AdminMemberDetailSheet: View {
                formatter.string(from: cd) != formatter.string(from: od) { return true }
             return false
         }()
+        let genderChanged = capturedGender != (member.gender ?? "male")
         let childrenOrderChanged: Bool = {
-            let originalChildren = authVM.allMembers
+            let originalChildren = memberVM.allMembers
                 .filter { $0.fatherId == capturedMemberId }
                 .sorted(by: { $0.sortOrder < $1.sortOrder })
             if capturedChildren.count != originalChildren.count { return true }
@@ -858,7 +936,7 @@ struct AdminMemberDetailSheet: View {
         }()
 
         // If nothing changed, just dismiss
-        guard nameChanged || roleChanged || phoneChanged || fatherChanged || datesChanged || childrenOrderChanged else {
+        guard nameChanged || roleChanged || phoneChanged || fatherChanged || datesChanged || genderChanged || childrenOrderChanged else {
             dismiss()
             return
         }
@@ -867,23 +945,30 @@ struct AdminMemberDetailSheet: View {
         isSaving = true
         Task {
             if nameChanged {
-                await authVM.updateMemberName(memberId: capturedMemberId, fullName: capturedFullName)
+                await memberVM.updateMemberName(memberId: capturedMemberId, fullName: capturedFullName)
             }
             if capturedIsAdmin && roleChanged {
-                await authVM.updateMemberRole(memberId: capturedMemberId, newRole: capturedRole)
+                await memberVM.updateMemberRole(memberId: capturedMemberId, newRole: capturedRole)
             }
             if phoneChanged {
-                await authVM.updateMemberPhone(
-                    memberId: capturedMemberId,
-                    country: capturedPhoneCountry,
-                    localPhone: capturedPhone
-                )
+                if capturedPhone.isEmpty {
+                    await memberVM.clearMemberPhone(memberId: capturedMemberId)
+                } else {
+                    await memberVM.updateMemberPhone(
+                        memberId: capturedMemberId,
+                        country: capturedPhoneCountry,
+                        localPhone: capturedPhone
+                    )
+                }
             }
             if fatherChanged {
-                await authVM.updateMemberFather(memberId: capturedMemberId, fatherId: capturedFatherId)
+                await memberVM.updateMemberFather(memberId: capturedMemberId, fatherId: capturedFatherId)
+            }
+            if genderChanged {
+                await memberVM.updateMemberGender(memberId: capturedMemberId, gender: capturedGender)
             }
             if datesChanged {
-                await authVM.updateMemberHealthAndBirth(
+                await memberVM.updateMemberHealthAndBirth(
                     memberId: capturedMemberId,
                     birthDate: capturedBirthDate,
                     isDeceased: capturedIsDeceased,
@@ -895,7 +980,7 @@ struct AdminMemberDetailSheet: View {
                 for i in 0..<updatedChildren.count {
                     updatedChildren[i].sortOrder = i
                 }
-                await authVM.updateChildrenOrder(for: capturedMemberId, newOrder: updatedChildren)
+                await memberVM.updateChildrenOrder(for: capturedMemberId, newOrder: updatedChildren)
             }
             isSaving = false
             dismiss()
@@ -906,12 +991,15 @@ struct AdminMemberDetailSheet: View {
 // MARK: - واجهة اختيار الأب
 struct FatherPickerSheet: View {
     @EnvironmentObject var authVM: AuthViewModel
+    @EnvironmentObject var memberVM: MemberViewModel
     @Binding var selectedId: UUID?
     @Environment(\.dismiss) var dismiss
     @State private var searchText = ""
+    @State private var pendingSelection: FamilyMember? = nil
+    @State private var showUnlinkConfirm = false
 
     var filteredMembers: [FamilyMember] {
-        let sorted = authVM.allMembers.sorted { $0.fullName < $1.fullName }
+        let sorted = memberVM.allMembers.sorted { $0.fullName < $1.fullName }
         if searchText.isEmpty { return sorted }
         return sorted.filter { $0.fullName.localizedCaseInsensitiveContains(searchText) }
     }
@@ -926,8 +1014,7 @@ struct FatherPickerSheet: View {
                         // خيار إزالة الربط (رأس شجرة)
                         DSCard(padding: 0) {
                             Button {
-                                selectedId = nil
-                                dismiss()
+                                showUnlinkConfirm = true
                             } label: {
                                 HStack(spacing: DS.Spacing.sm) {
                                     Image(systemName: "person.crop.circle.badge.minus")
@@ -968,8 +1055,7 @@ struct FatherPickerSheet: View {
                             LazyVStack(spacing: 0) {
                                 ForEach(filteredMembers) { m in
                                     Button {
-                                        selectedId = m.id
-                                        dismiss()
+                                        pendingSelection = m
                                     } label: {
                                         HStack(spacing: DS.Spacing.sm) {
                                             // Avatar
@@ -1037,6 +1123,43 @@ struct FatherPickerSheet: View {
                 }
             }
             .tint(DS.Color.primary)
+            .alert(
+                L10n.t("تأكيد اختيار الأب", "Confirm Father Selection"),
+                isPresented: Binding(
+                    get: { pendingSelection != nil },
+                    set: { if !$0 { pendingSelection = nil } }
+                ),
+                presenting: pendingSelection
+            ) { member in
+                Button(L10n.t("تأكيد", "Confirm")) {
+                    selectedId = member.id
+                    pendingSelection = nil
+                    dismiss()
+                }
+                Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {
+                    pendingSelection = nil
+                }
+            } message: { member in
+                Text(L10n.t(
+                    "هل تريد ربط هذا العضو بـ \(member.fullName) كأب؟",
+                    "Link this member to \(member.fullName) as father?"
+                ))
+            }
+            .alert(
+                L10n.t("إزالة ربط الأب", "Remove Father Link"),
+                isPresented: $showUnlinkConfirm
+            ) {
+                Button(L10n.t("تأكيد", "Confirm")) {
+                    selectedId = nil
+                    dismiss()
+                }
+                Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
+            } message: {
+                Text(L10n.t(
+                    "هل تريد جعل هذا العضو رأس شجرة بدون أب؟",
+                    "Make this member a tree root with no father?"
+                ))
+            }
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         }
     }

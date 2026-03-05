@@ -2,7 +2,7 @@ import SwiftUI
 import PhotosUI
 
 struct PersonalGalleryView: View {
-    @EnvironmentObject var authVM: AuthViewModel
+    @EnvironmentObject var memberVM: MemberViewModel
     @Environment(\.dismiss) var dismiss
     @ObservedObject private var langManager = LanguageManager.shared
 
@@ -222,7 +222,7 @@ struct PersonalGalleryView: View {
                         .font(DS.Font.scaled(22))
                         .symbolRenderingMode(.palette)
                         .foregroundStyle(.white, DS.Color.error)
-                        .shadow(color: .black.opacity(0.3), radius: 2, y: 1)
+                        .dsSubtleShadow()
                         .padding(4)
                 }
                 .buttonStyle(.plain)
@@ -268,7 +268,7 @@ struct PersonalGalleryView: View {
                         .font(DS.Font.scaled(22))
                         .symbolRenderingMode(.palette)
                         .foregroundStyle(.white, DS.Color.error)
-                        .shadow(color: .black.opacity(0.3), radius: 2, y: 1)
+                        .dsSubtleShadow()
                         .padding(4)
                 }
                 .buttonStyle(.plain)
@@ -301,7 +301,7 @@ struct PersonalGalleryView: View {
         Task {
             await MainActor.run { isUploading = true; showPendingPreview = false }
             for image in pendingImages {
-                _ = await authVM.uploadMemberGalleryPhotoMulti(image: image, for: member.id)
+                _ = await memberVM.uploadMemberGalleryPhotoMulti(image: image, for: member.id)
             }
             await MainActor.run {
                 pendingImages = []
@@ -317,7 +317,7 @@ struct PersonalGalleryView: View {
             return
         }
         Log.info("حذف صورة: \(photo.id) — \(photo.photoURL)")
-        let success = await authVM.deleteMemberGalleryPhotoMulti(photoId: photo.id, photoURL: photo.photoURL)
+        let success = await memberVM.deleteMemberGalleryPhotoMulti(photoId: photo.id, photoURL: photo.photoURL)
         if !success {
             Log.error("فشل حذف الصورة: \(photo.id)")
             return
@@ -330,7 +330,7 @@ struct PersonalGalleryView: View {
     }
 
     private func refreshGalleryPhotos() async {
-        let photos = await authVM.fetchMemberGalleryPhotos(for: member.id)
+        let photos = await memberVM.fetchMemberGalleryPhotos(for: member.id)
         await MainActor.run {
             self.galleryPhotos = photos
             self.legacyGalleryPhotoURL = photos.isEmpty ? member.photoURL : nil
@@ -339,7 +339,7 @@ struct PersonalGalleryView: View {
     }
 
     private func deleteLegacyGalleryPhoto() async {
-        let success = await authVM.deleteMemberGalleryPhoto(for: member.id)
+        let success = await memberVM.deleteMemberGalleryPhoto(for: member.id)
         guard success else { return }
         await MainActor.run {
             self.showDeleteLegacyPhotoAlert = false

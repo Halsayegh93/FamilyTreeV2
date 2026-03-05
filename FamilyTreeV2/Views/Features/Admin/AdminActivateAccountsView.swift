@@ -2,6 +2,8 @@ import SwiftUI
 
 struct AdminActivateAccountsView: View {
     @EnvironmentObject var authVM: AuthViewModel
+    @EnvironmentObject var memberVM: MemberViewModel
+    @EnvironmentObject var adminRequestVM: AdminRequestViewModel
     @State private var appeared = false
     @State private var searchText = ""
     @State private var memberToActivate: FamilyMember?
@@ -10,7 +12,7 @@ struct AdminActivateAccountsView: View {
 
     // أعضاء بحالة nil أو pending (غير مفعلين) - ليسوا بـ role pending - أحياء فقط
     private var allInactiveMembers: [FamilyMember] {
-        authVM.allMembers
+        memberVM.allMembers
             .filter { $0.role != .pending && ($0.status == nil || $0.status == .pending) && $0.isDeceased != true }
             .sorted { $0.fullName < $1.fullName }
     }
@@ -111,9 +113,9 @@ struct AdminActivateAccountsView: View {
             ))
         }
         .sheet(item: $memberToEditPhone) { member in
-            EditPhoneSheet(member: member, authVM: authVM)
+            EditPhoneSheet(member: member, memberVM: memberVM)
         }
-        .task { await authVM.fetchAllMembers() }
+        .task { await memberVM.fetchAllMembers() }
         .onAppear {
             withAnimation(DS.Anim.smooth.delay(0.15)) {
                 appeared = true
@@ -272,22 +274,22 @@ struct AdminActivateAccountsView: View {
     }
 
     private func activateMember(_ member: FamilyMember) async {
-        await authVM.activateAccount(memberId: member.id)
+        await adminRequestVM.activateAccount(memberId: member.id)
     }
 }
 
 // MARK: - Edit Phone Sheet
 struct EditPhoneSheet: View {
     let member: FamilyMember
-    let authVM: AuthViewModel
+    let memberVM: MemberViewModel
     @Environment(\.dismiss) var dismiss
     @State private var phoneInput: String
     @State private var isSaving = false
     @State private var showSuccess = false
 
-    init(member: FamilyMember, authVM: AuthViewModel) {
+    init(member: FamilyMember, memberVM: MemberViewModel) {
         self.member = member
-        self.authVM = authVM
+        self.memberVM = memberVM
         _phoneInput = State(initialValue: member.phoneNumber ?? "")
     }
 
@@ -347,7 +349,7 @@ struct EditPhoneSheet: View {
                     Button {
                         isSaving = true
                         Task {
-                            await authVM.updateMemberPhone(memberId: member.id, newPhone: phoneInput.trimmingCharacters(in: .whitespacesAndNewlines))
+                            await memberVM.updateMemberPhone(memberId: member.id, newPhone: phoneInput.trimmingCharacters(in: .whitespacesAndNewlines))
                             isSaving = false
                             dismiss()
                         }

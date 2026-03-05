@@ -25,7 +25,7 @@ struct RegistrationView: View {
                 HStack {
                     Button(action: { Task { await authVM.signOut() } }) {
                         HStack(spacing: DS.Spacing.xs) {
-                            Image(systemName: "chevron.right")
+                            Image(systemName: L10n.isArabic ? "chevron.right" : "chevron.left")
                                 .font(DS.Font.scaled(13, weight: .bold))
                             Text(L10n.t("رجوع", "Back"))
                         }

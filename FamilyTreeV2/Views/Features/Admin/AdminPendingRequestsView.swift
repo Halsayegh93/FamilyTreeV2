@@ -2,15 +2,20 @@ import SwiftUI
 
 struct AdminPendingRequestsView: View {
     @EnvironmentObject var authVM: AuthViewModel
+    @EnvironmentObject var memberVM: MemberViewModel
+    @EnvironmentObject var adminRequestVM: AdminRequestViewModel
     @State private var selectedMemberForLinking: FamilyMember?
     @State private var matchedIdsForSelected: [UUID] = []
     /// نتائج مطابقة الأسماء لكل عضو (يتم تفعيلها بالضغط على الزر)
     @State private var nameMatchResults: [UUID: [(member: FamilyMember, matchCount: Int, matchedParts: [String])]] = [:]
     @State private var loadingMatchFor: UUID? = nil
+    /// Merge confirmation state
+    @State private var mergeTarget: (pendingMember: FamilyMember, treeMember: FamilyMember)? = nil
+    @State private var showMergeConfirm = false
 
     // تصفية الأعضاء الذين حالتهم "Pending"
     var pendingMembers: [FamilyMember] {
-        authVM.allMembers.filter { $0.role == .pending }
+        memberVM.allMembers.filter { $0.role == .pending }
     }
 
     // MARK: - مطابقة الاسم المحلية
@@ -24,7 +29,7 @@ struct AdminPendingRequestsView: View {
 
         guard newParts.count >= 3 else { return [] }
 
-        let existingMembers = authVM.allMembers.filter { $0.role != .pending && $0.id != member.id }
+        let existingMembers = memberVM.allMembers.filter { $0.role != .pending && $0.id != member.id }
 
         var matches: [(member: FamilyMember, matchCount: Int, matchedParts: [String])] = []
 
@@ -100,8 +105,36 @@ struct AdminPendingRequestsView: View {
         .sheet(item: $selectedMemberForLinking) { member in
             FatherLinkApprovalSheet(member: member, suggestedMatchIds: matchedIdsForSelected)
                 .environmentObject(authVM)
+                .environmentObject(memberVM)
+                .environmentObject(adminRequestVM)
         }
-        .task { await authVM.fetchAllMembers() }
+        .alert(
+            L10n.t("تأكيد الدمج", "Confirm Merge"),
+            isPresented: $showMergeConfirm
+        ) {
+            Button(L10n.t("دمج", "Merge"), role: .destructive) {
+                if let target = mergeTarget {
+                    Task {
+                        await adminRequestVM.mergeMemberIntoTreeMember(
+                            newMemberId: target.pendingMember.id,
+                            existingTreeMemberId: target.treeMember.id
+                        )
+                        mergeTarget = nil
+                    }
+                }
+            }
+            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {
+                mergeTarget = nil
+            }
+        } message: {
+            if let target = mergeTarget {
+                Text(L10n.t(
+                    "سيتم ربط حساب \(target.pendingMember.fullName) بسجل \(target.treeMember.fullName) الموجود بالشجرة. سيحتفظ بموقعه بالشجرة وأبنائه وبياناته.",
+                    "This will link \(target.pendingMember.fullName)'s account to the existing tree record \(target.treeMember.fullName). Tree position, children, and data will be preserved."
+                ))
+            }
+        }
+        .task { await memberVM.fetchAllMembers() }
     }
 
     func pendingMemberCard(member: FamilyMember) -> some View {
@@ -226,7 +259,7 @@ struct AdminPendingRequestsView: View {
                                 // زر إعادة البحث
                                 Button {
                                     withAnimation(DS.Anim.snappy) {
-                                        nameMatchResults.removeValue(forKey: member.id)
+                                        _ = nameMatchResults.removeValue(forKey: member.id)
                                     }
                                 } label: {
                                     Image(systemName: "arrow.counterclockwise")
@@ -267,7 +300,7 @@ struct AdminPendingRequestsView: View {
                             // زر إعادة البحث
                             Button {
                                 withAnimation(DS.Anim.snappy) {
-                                    nameMatchResults.removeValue(forKey: member.id)
+                                    _ = nameMatchResults.removeValue(forKey: member.id)
                                 }
                             } label: {
                                 Image(systemName: "arrow.counterclockwise")
@@ -285,10 +318,10 @@ struct AdminPendingRequestsView: View {
                 DSApproveRejectButtons(
                     approveTitle: L10n.t("ربط بالشجرة", "Link to Tree"),
                     rejectTitle: L10n.t("رفض", "Reject"),
-                    isLoading: authVM.isLoading
+                    isLoading: adminRequestVM.isLoading
                 ) {
                     Task {
-                        let ids = await authVM.fetchMatchedMemberIds(for: member.id)
+                        let ids = await adminRequestVM.fetchMatchedMemberIds(for: member.id)
                         // ندمج المطابقات المحلية مع مطابقات السيرفر
                         let localMatchIds = nameMatches.map(\.member.id)
                         let combined = Array(Set(ids + localMatchIds))
@@ -299,7 +332,7 @@ struct AdminPendingRequestsView: View {
                     }
                 } onReject: {
                     Task {
-                        await authVM.rejectOrDeleteMember(memberId: member.id)
+                        await adminRequestVM.rejectOrDeleteMember(memberId: member.id)
                     }
                 }
             }
@@ -360,6 +393,25 @@ struct AdminPendingRequestsView: View {
             }
 
             Spacer()
+
+            // زر الدمج
+            Button {
+                mergeTarget = (pendingMember: pendingMember, treeMember: match.member)
+                showMergeConfirm = true
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "arrow.triangle.merge")
+                        .font(DS.Font.scaled(11, weight: .bold))
+                    Text(L10n.t("دمج", "Merge"))
+                        .font(DS.Font.scaled(11, weight: .bold))
+                }
+                .foregroundColor(.white)
+                .padding(.horizontal, DS.Spacing.md)
+                .padding(.vertical, DS.Spacing.sm)
+                .background(DS.Color.gradientPrimary)
+                .clipShape(Capsule())
+            }
+            .buttonStyle(DSScaleButtonStyle())
         }
         .padding(DS.Spacing.md)
         .background(strengthColor.opacity(0.04))
@@ -397,6 +449,8 @@ struct AdminPendingRequestsView: View {
 
 struct FatherLinkApprovalSheet: View {
     @EnvironmentObject var authVM: AuthViewModel
+    @EnvironmentObject var memberVM: MemberViewModel
+    @EnvironmentObject var adminRequestVM: AdminRequestViewModel
     @Environment(\.dismiss) var dismiss
     @FocusState private var isSearchFocused: Bool
 
@@ -407,7 +461,7 @@ struct FatherLinkApprovalSheet: View {
 
     /// المرشحون: المطابقات المقترحة أولاً ثم الباقي
     private var fatherCandidates: [FamilyMember] {
-        let candidates = authVM.allMembers.filter { $0.role != .pending && $0.id != member.id }
+        let candidates = memberVM.allMembers.filter { $0.role != .pending && $0.id != member.id }
 
         if searchText.isEmpty {
             // المطابقات المقترحة أولاً
@@ -558,15 +612,15 @@ struct FatherLinkApprovalSheet: View {
                 DSPrimaryButton(
                     L10n.t("تفعيل العضوية والربط", "Activate & Link"),
                     icon: "checkmark.circle.fill",
-                    isLoading: authVM.isLoading
+                    isLoading: adminRequestVM.isLoading
                 ) {
                     Task {
-                        await authVM.approveMember(memberId: member.id, fatherId: selectedFatherId)
+                        await adminRequestVM.approveMember(memberId: member.id, fatherId: selectedFatherId)
                         dismiss()
                     }
                 }
-                .disabled(selectedFatherId == nil || authVM.isLoading)
-                .opacity((selectedFatherId == nil || authVM.isLoading) ? 0.6 : 1.0)
+                .disabled(selectedFatherId == nil || adminRequestVM.isLoading)
+                .opacity((selectedFatherId == nil || adminRequestVM.isLoading) ? 0.6 : 1.0)
             }
             .padding(DS.Spacing.lg)
             .navigationTitle(L10n.t("اعتماد طلب الربط", "Approve Link Request"))

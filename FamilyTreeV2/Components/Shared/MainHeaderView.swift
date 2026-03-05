@@ -2,6 +2,7 @@ import SwiftUI
 
 struct MainHeaderView<TrailingContent: View>: View {
     @EnvironmentObject var authVM: AuthViewModel
+    @EnvironmentObject var notificationVM: NotificationViewModel
     @Binding var selectedTab: Int
     @Binding var showingNotifications: Bool
     
@@ -119,12 +120,12 @@ struct MainHeaderView<TrailingContent: View>: View {
                     Button(action: { showingNotifications = true }) {
                         ZStack(alignment: .topTrailing) {
                             headerIconView(
-                                icon: authVM.unreadNotificationsCount > 0 ? "bell.badge.fill" : "bell.fill",
+                                icon: notificationVM.unreadNotificationsCount > 0 ? "bell.badge.fill" : "bell.fill",
                                 color: .white
                             )
                             
-                            if authVM.unreadNotificationsCount > 0 {
-                                Text(authVM.unreadNotificationsCount > 99 ? "99+" : "\(authVM.unreadNotificationsCount)")
+                            if notificationVM.unreadNotificationsCount > 0 {
+                                Text(notificationVM.unreadNotificationsCount > 99 ? "99+" : "\(notificationVM.unreadNotificationsCount)")
                                     .font(DS.Font.scaled(10, weight: .bold))
                                     .foregroundColor(.white)
                                     .padding(.horizontal, 5)
@@ -136,8 +137,8 @@ struct MainHeaderView<TrailingContent: View>: View {
                         }
                     }
                     .buttonStyle(BounceButtonStyle())
-                    .accessibilityLabel(authVM.unreadNotificationsCount > 0
-                        ? L10n.t("\(authVM.unreadNotificationsCount) إشعار غير مقروء", "\(authVM.unreadNotificationsCount) unread notifications")
+                    .accessibilityLabel(notificationVM.unreadNotificationsCount > 0
+                        ? L10n.t("\(notificationVM.unreadNotificationsCount) إشعار غير مقروء", "\(notificationVM.unreadNotificationsCount) unread notifications")
                         : L10n.t("الإشعارات", "Notifications"))
                 }
             }

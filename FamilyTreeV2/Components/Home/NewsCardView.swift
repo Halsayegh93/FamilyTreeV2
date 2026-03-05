@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct NewsCardView: View {
+    @Environment(\.colorScheme) private var colorScheme
+
     let authorName: String
     let role: String
     let roleColor: Color
@@ -36,7 +38,7 @@ struct NewsCardView: View {
 
             // Glass divider
             Rectangle()
-                .fill(Color.white.opacity(0.15))
+                .fill(DS.Color.glassDivider(colorScheme))
                 .frame(height: 1)
                 .padding(.vertical, DS.Spacing.sm)
 
@@ -56,8 +58,8 @@ struct NewsCardView: View {
                 // Gradient overlay for that "iOS 26" futuristic aesthetic
                 LinearGradient(
                     gradient: Gradient(colors: [
-                        Color.white.opacity(0.4),
-                        Color.white.opacity(0.0)
+                        DS.Color.glassMedium(colorScheme),
+                        Color.clear
                     ]),
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
@@ -69,16 +71,15 @@ struct NewsCardView: View {
             RoundedRectangle(cornerRadius: DS.Radius.xxl)
                 .stroke(
                     LinearGradient(
-                        colors: [Color.white.opacity(0.8), Color.white.opacity(0.2)],
+                        colors: [DS.Color.glassBorderBright(colorScheme), DS.Color.glassSubtle(colorScheme)],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     ),
                     lineWidth: 1
                 )
         )
-        // Advanced dynamic shadow
-        .shadow(color: Color.black.opacity(0.08), radius: 20, x: 0, y: 10)
-        .shadow(color: roleColor.opacity(0.15), radius: 30, x: 0, y: 15)
+        // Dynamic shadow
+        .dsCardShadow()
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
 }
@@ -127,7 +128,7 @@ extension NewsCardView {
             }
             .overlay(
                 Circle()
-                    .stroke(Color.white.opacity(0.8), lineWidth: 1.5)
+                    .stroke(DS.Color.glassBorderBright(colorScheme), lineWidth: 1.5)
             )
             .shadow(color: roleColor.opacity(0.4), radius: 8, x: 0, y: 4)
 
@@ -179,7 +180,7 @@ extension NewsCardView {
             .clipShape(Capsule())
             .overlay(
                 Capsule()
-                    .stroke(LinearGradient(colors: [Color.white.opacity(0.8), Color.white.opacity(0.1)], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1)
+                    .stroke(LinearGradient(colors: [DS.Color.glassBorderBright(colorScheme), DS.Color.glassSubtle(colorScheme)], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1)
             )
             .foregroundColor(tagColor)
             .shadow(color: tagColor.opacity(0.2), radius: 5, x: 0, y: 2)
@@ -206,7 +207,7 @@ extension NewsCardView {
                                     .foregroundStyle(DS.Color.gradientPrimary)
                             } else {
                                 Circle()
-                                    .stroke(Color.white.opacity(0.6), lineWidth: 1.5)
+                                    .stroke(DS.Color.glassBorder(colorScheme), lineWidth: 1.5)
                                     .background(Circle().fill(.ultraThinMaterial))
                                     .frame(width: 22, height: 22)
                             }
@@ -218,14 +219,14 @@ extension NewsCardView {
                                 if selectedPollOption == index {
                                     DS.Color.primary.opacity(0.15)
                                 } else {
-                                    Color.white.opacity(0.1)
+                                    DS.Color.glassSubtle(colorScheme)
                                 }
                             }
                         )
                         .cornerRadius(DS.Radius.md)
                         .overlay(
                             RoundedRectangle(cornerRadius: DS.Radius.md)
-                                .stroke(selectedPollOption == index ? DS.Color.primary.opacity(0.5) : Color.white.opacity(0.4), lineWidth: 1)
+                                .stroke(selectedPollOption == index ? DS.Color.primary.opacity(0.5) : DS.Color.glassMedium(colorScheme), lineWidth: 1)
                         )
                         .shadow(color: Color.black.opacity(0.04), radius: 3, x: 0, y: 1)
                     }
@@ -260,10 +261,10 @@ extension NewsCardView {
                         .background(
                             ZStack {
                                 Circle().fill(.ultraThinMaterial)
-                                Color.white.opacity(0.2)
+                                DS.Color.glassSubtle(colorScheme)
                             }
                         )
-                        .overlay(Circle().stroke(Color.white.opacity(0.6), lineWidth: 1.5))
+                        .overlay(Circle().stroke(DS.Color.glassBorder(colorScheme), lineWidth: 1.5))
                         .shadow(color: Color.black.opacity(0.08), radius: 4, x: 0, y: 2)
                 }
             }
@@ -283,7 +284,7 @@ extension NewsCardView {
         .background(
             ZStack {
                 Capsule().fill(.ultraThinMaterial)
-                Color.white.opacity(0.15) // Highlighted glass
+                DS.Color.glassDivider(colorScheme)
                 tint.opacity(0.12)
             }
         )
@@ -291,7 +292,7 @@ extension NewsCardView {
         .clipShape(Capsule())
         .overlay(
             Capsule()
-                .stroke(Color.white.opacity(0.6), lineWidth: 1.5)
+                .stroke(DS.Color.glassBorder(colorScheme), lineWidth: 1.5)
         )
         .shadow(color: tint.opacity(0.15), radius: 4, x: 0, y: 2)
     }

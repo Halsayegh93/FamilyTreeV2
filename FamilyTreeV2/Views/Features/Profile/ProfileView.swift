@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ProfileView: View {
     @EnvironmentObject var authVM: AuthViewModel
+    @EnvironmentObject var memberVM: MemberViewModel
     @Binding var selectedTab: Int
     @State private var showingNotifications = false
     @ObservedObject private var langManager = LanguageManager.shared
@@ -59,7 +60,7 @@ struct ProfileView: View {
                             }
                             .padding(.bottom, DS.Spacing.xxl)
                         } // closes ScrollView
-                        .task { await authVM.fetchChildren(for: currentUser.id) }
+                        .task { await memberVM.fetchChildren(for: currentUser.id) }
                     } // closes VStack
                 } else {
                     ProgressView(L10n.t("جاري تحميل الملف...", "Loading profile..."))
@@ -72,11 +73,11 @@ struct ProfileView: View {
             .sheet(item: $editingChild) { child in EditChildSheet(member: child) }
             .onChange(of: showAddChild) { _, isPresented in
                 guard !isPresented, let currentUser = user else { return }
-                Task { await authVM.fetchChildren(for: currentUser.id) }
+                Task { await memberVM.fetchChildren(for: currentUser.id) }
             }
             .onChange(of: editingChild) { _, newValue in
                 guard newValue == nil, let currentUser = user else { return }
-                Task { await authVM.fetchChildren(for: currentUser.id) }
+                Task { await memberVM.fetchChildren(for: currentUser.id) }
             }
 
         }
@@ -142,7 +143,7 @@ struct ProfileView: View {
                             .foregroundColor(user.roleColor)
                     }
                     .padding(.horizontal, DS.Spacing.md)
-                    .padding(.vertical, 4)
+                    .padding(.vertical, DS.Spacing.xs)
                     .background(user.roleColor.opacity(0.10))
                     .clipShape(Capsule())
                     .overlay(Capsule().stroke(user.roleColor.opacity(0.2), lineWidth: 1))
@@ -158,23 +159,23 @@ struct ProfileView: View {
                         }
                         .foregroundColor(DS.Color.textSecondary)
                         .padding(.horizontal, DS.Spacing.sm)
-                        .padding(.vertical, 4)
+                        .padding(.vertical, DS.Spacing.xs)
                         .background(DS.Color.surface)
                         .clipShape(Capsule())
                         .overlay(Capsule().stroke(Color.gray.opacity(0.15), lineWidth: 1))
                     }
                     
                     // عدد الأبناء
-                    if !authVM.currentMemberChildren.isEmpty {
+                    if !memberVM.currentMemberChildren.isEmpty {
                         HStack(spacing: DS.Spacing.xs) {
                             Image(systemName: "person.2.fill")
                                 .font(DS.Font.scaled(10, weight: .semibold))
-                            Text("\(authVM.currentMemberChildren.count) " + L10n.t("أبناء", "children"))
+                            Text("\(memberVM.currentMemberChildren.count) " + L10n.t("أبناء", "children"))
                                 .font(DS.Font.scaled(11, weight: .bold))
                         }
                         .foregroundColor(DS.Color.success)
                         .padding(.horizontal, DS.Spacing.sm)
-                        .padding(.vertical, 4)
+                        .padding(.vertical, DS.Spacing.xs)
                         .background(DS.Color.success.opacity(0.10))
                         .clipShape(Capsule())
                         .overlay(Capsule().stroke(DS.Color.success.opacity(0.2), lineWidth: 1))
@@ -349,7 +350,7 @@ struct ProfileView: View {
 
                     Spacer()
 
-                    if authVM.currentMemberChildren.count > 1 {
+                    if memberVM.currentMemberChildren.count > 1 {
                         Button {
                             withAnimation(DS.Anim.snappy) {
                                 isReorderingChildren.toggle()
@@ -391,7 +392,7 @@ struct ProfileView: View {
         VStack(spacing: 0) {
             let columns = [GridItem(.flexible()), GridItem(.flexible())]
             LazyVGrid(columns: columns, spacing: DS.Spacing.md) {
-                ForEach(authVM.currentMemberChildren, id: \.id) { son in
+                ForEach(memberVM.currentMemberChildren, id: \.id) { son in
                     Button {
                         editingChild = son
                     } label: {
@@ -505,7 +506,7 @@ struct ProfileView: View {
     // MARK: - Reorder View (وضع الترتيب)
     private var childrenReorderView: some View {
         VStack(spacing: 0) {
-            let children = authVM.currentMemberChildren
+            let children = memberVM.currentMemberChildren
             ForEach(Array(children.enumerated()), id: \.element.id) { index, son in
                 if index > 0 { DSDivider() }
 
@@ -564,13 +565,14 @@ struct ProfileView: View {
                             var reordered = children
                             reordered.swapAt(index, index - 1)
                             Task {
-                                await authVM.reorderChildren(reordered)
+                                await memberVM.reorderChildren(reordered)
                             }
                         } label: {
                             Image(systemName: "chevron.up")
-                                .font(DS.Font.scaled(12, weight: .bold))
+                                .font(DS.Font.scaled(14, weight: .bold))
                                 .foregroundColor(index > 0 ? DS.Color.primary : DS.Color.textTertiary.opacity(0.3))
-                                .frame(width: 30, height: 22)
+                                .frame(width: 44, height: 44)
+                                .contentShape(Rectangle())
                         }
                         .disabled(index == 0)
 
@@ -579,13 +581,14 @@ struct ProfileView: View {
                             var reordered = children
                             reordered.swapAt(index, index + 1)
                             Task {
-                                await authVM.reorderChildren(reordered)
+                                await memberVM.reorderChildren(reordered)
                             }
                         } label: {
                             Image(systemName: "chevron.down")
-                                .font(DS.Font.scaled(12, weight: .bold))
+                                .font(DS.Font.scaled(14, weight: .bold))
                                 .foregroundColor(index < children.count - 1 ? DS.Color.primary : DS.Color.textTertiary.opacity(0.3))
-                                .frame(width: 30, height: 22)
+                                .frame(width: 44, height: 44)
+                                .contentShape(Rectangle())
                         }
                         .disabled(index >= children.count - 1)
                     }

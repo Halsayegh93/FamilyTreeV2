@@ -2,9 +2,11 @@ import SwiftUI
 
 struct AdminNewsReportsView: View {
     @EnvironmentObject var authVM: AuthViewModel
+    @EnvironmentObject var adminRequestVM: AdminRequestViewModel
+    @EnvironmentObject var newsVM: NewsViewModel
 
     private var newsById: [UUID: NewsPost] {
-        Dictionary(uniqueKeysWithValues: authVM.allNews.map { ($0.id, $0) })
+        Dictionary(uniqueKeysWithValues: newsVM.allNews.map { ($0.id, $0) })
     }
 
     var body: some View {
@@ -12,12 +14,12 @@ struct AdminNewsReportsView: View {
             DS.Color.background.ignoresSafeArea()
             DSDecorativeBackground()
 
-            if authVM.newsReportRequests.isEmpty {
+            if adminRequestVM.newsReportRequests.isEmpty {
                 emptyState
             } else {
                 ScrollView(showsIndicators: false) {
                     LazyVStack(spacing: DS.Spacing.md) {
-                        ForEach(authVM.newsReportRequests) { request in
+                        ForEach(adminRequestVM.newsReportRequests) { request in
                             reportCard(for: request)
                         }
                     }
@@ -29,8 +31,8 @@ struct AdminNewsReportsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .task {
-            async let reports: () = authVM.fetchNewsReportRequests()
-            async let news: () = authVM.fetchNews()
+            async let reports: () = adminRequestVM.fetchNewsReportRequests()
+            async let news: () = newsVM.fetchNews()
             _ = await (reports, news)
         }
     }
@@ -138,15 +140,15 @@ struct AdminNewsReportsView: View {
                 DSApproveRejectButtons(
                     approveTitle: L10n.t("اعتماد البلاغ", "Approve Report"),
                     rejectTitle: L10n.t("رفض البلاغ", "Reject Report"),
-                    isLoading: authVM.isLoading,
+                    isLoading: adminRequestVM.isLoading,
                     approveGradient: LinearGradient(
                         colors: [DS.Color.error, DS.Color.error.opacity(0.8)],
                         startPoint: .leading, endPoint: .trailing
                     )
                 ) {
-                    Task { await authVM.approveNewsReport(request: request) }
+                    Task { await adminRequestVM.approveNewsReport(request: request) }
                 } onReject: {
-                    Task { await authVM.rejectNewsReport(request: request) }
+                    Task { await adminRequestVM.rejectNewsReport(request: request) }
                 }
             }
             .padding(DS.Spacing.lg)

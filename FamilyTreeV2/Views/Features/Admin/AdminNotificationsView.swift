@@ -2,6 +2,8 @@ import SwiftUI
 
 struct AdminNotificationsView: View {
     @EnvironmentObject var authVM: AuthViewModel
+    @EnvironmentObject var notificationVM: NotificationViewModel
+    @EnvironmentObject var memberVM: MemberViewModel
     @Environment(\.dismiss) var dismiss
 
     @State private var title = ""
@@ -11,7 +13,7 @@ struct AdminNotificationsView: View {
     @State private var searchText = ""
 
     private var candidates: [FamilyMember] {
-        let base = authVM.allMembers.filter { $0.role != .pending }
+        let base = memberVM.allMembers.filter { $0.role != .pending }
         if searchText.isEmpty { return base }
         return base.filter { $0.fullName.localizedCaseInsensitiveContains(searchText) }
     }
@@ -148,10 +150,10 @@ struct AdminNotificationsView: View {
                     DSPrimaryButton(
                         L10n.t("إرسال الإشعار", "Send Notification"),
                         icon: "paperplane.fill",
-                        isLoading: authVM.isLoading
+                        isLoading: notificationVM.isLoading
                     ) {
                         Task {
-                            await authVM.sendNotification(
+                            await notificationVM.sendNotification(
                                 title: title,
                                 body: bodyText,
                                 targetMemberIds: sendToAll ? nil : Array(selectedMemberIds)
@@ -174,6 +176,6 @@ struct AdminNotificationsView: View {
         .navigationTitle(L10n.t("إرسال إشعار", "Send Notification"))
         .navigationBarTitleDisplayMode(.inline)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-        .task { await authVM.fetchAllMembers() }
+        .task { await memberVM.fetchAllMembers() }
     }
 }

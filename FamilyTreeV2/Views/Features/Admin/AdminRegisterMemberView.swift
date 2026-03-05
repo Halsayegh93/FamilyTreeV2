@@ -2,6 +2,7 @@ import SwiftUI
 
 struct AdminRegisterMemberView: View {
     @EnvironmentObject var authVM: AuthViewModel
+    @EnvironmentObject var memberVM: MemberViewModel
     @Environment(\.dismiss) var dismiss
 
     @State private var fullName: String = ""
@@ -81,7 +82,7 @@ struct AdminRegisterMemberView: View {
         .alert(L10n.t("خطأ", "Error"), isPresented: $showingError) {
             Button(L10n.t("حسناً", "OK"), role: .cancel) {}
         } message: {
-            Text(authVM.errorMessage ?? L10n.t("تعذر إضافة العضو. حاول مرة أخرى.", "Failed to add member. Please try again."))
+            Text(L10n.t("تعذر إضافة العضو. حاول مرة أخرى.", "Failed to add member. Please try again."))
         }
         .onAppear {
             withAnimation(.spring(response: 0.8, dampingFraction: 0.6).delay(0.2)) {
@@ -297,11 +298,11 @@ struct AdminRegisterMemberView: View {
         VStack(spacing: DS.Spacing.sm) {
             let trimmedFull = fullName.trimmingCharacters(in: .whitespacesAndNewlines)
             let trimmedFamily = familyName.trimmingCharacters(in: .whitespacesAndNewlines)
-            let isDisabled = trimmedFull.isEmpty || trimmedFamily.isEmpty || authVM.isLoading
+            let isDisabled = trimmedFull.isEmpty || trimmedFamily.isEmpty || memberVM.isLoading
             DSPrimaryButton(
                 L10n.t("إضافة العضو", "Add Member"),
                 icon: "person.badge.plus",
-                isLoading: authVM.isLoading,
+                isLoading: memberVM.isLoading,
                 useGradient: !isDisabled,
                 color: isDisabled ? .gray : DS.Color.primary
             ) {
@@ -318,7 +319,7 @@ struct AdminRegisterMemberView: View {
                 )
 
                 Task {
-                    let success = await authVM.adminAddMember(
+                    let success = await memberVM.adminAddMember(
                         fullName: trimmedFull,
                         firstName: first,
                         birthDate: birthStr,

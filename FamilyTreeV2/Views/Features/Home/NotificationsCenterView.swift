@@ -2,6 +2,8 @@ import SwiftUI
 
 struct NotificationsCenterView: View {
     @EnvironmentObject var authVM: AuthViewModel
+    @EnvironmentObject var notificationVM: NotificationViewModel
+    @EnvironmentObject var memberVM: MemberViewModel
     @Environment(\.dismiss) var dismiss
     @State private var appeared = false
     @State private var isSelecting = false
@@ -27,7 +29,7 @@ struct NotificationsCenterView: View {
                 DSDecorativeBackground()
 
                 VStack(spacing: 0) {
-                    if authVM.notifications.isEmpty {
+                    if notificationVM.notifications.isEmpty {
                         emptyState
                             .frame(maxHeight: .infinity)
                     } else {
@@ -73,7 +75,7 @@ struct NotificationsCenterView: View {
                     }
                 }
 
-                if !authVM.notifications.isEmpty {
+                if !notificationVM.notifications.isEmpty {
                     ToolbarItem(placement: .topBarTrailing) {
                         Button {
                             withAnimation(DS.Anim.snappy) {
@@ -105,7 +107,7 @@ struct NotificationsCenterView: View {
                     }
                 }
             }
-            .task { await authVM.fetchNotifications() }
+            .task { await notificationVM.fetchNotifications() }
             .onAppear {
                 withAnimation(DS.Anim.smooth.delay(0.15)) {
                     appeared = true
@@ -263,7 +265,7 @@ struct NotificationsCenterView: View {
                     Button(role: .destructive) {
                         let id = notification.id
                         selectedNotification = nil
-                        Task { await authVM.deleteNotification(id: id) }
+                        Task { await notificationVM.deleteNotification(id: id) }
                     } label: {
                         Image(systemName: "trash")
                             .font(DS.Font.scaled(16, weight: .medium))
@@ -292,7 +294,7 @@ struct NotificationsCenterView: View {
                     selectedIds.removeAll()
                     isSelecting = false
                 }
-                Task { await authVM.deleteNotifications(ids: ids) }
+                Task { await notificationVM.deleteNotifications(ids: ids) }
             } label: {
                 HStack(spacing: DS.Spacing.xs) {
                     Image(systemName: "trash.fill")
@@ -316,7 +318,7 @@ struct NotificationsCenterView: View {
                     selectedIds.removeAll()
                     isSelecting = false
                 }
-                Task { await authVM.markNotificationsAsRead(ids: ids) }
+                Task { await notificationVM.markNotificationsAsRead(ids: ids) }
             } label: {
                 HStack(spacing: DS.Spacing.xs) {
                     Image(systemName: "envelope.open.fill")
@@ -356,8 +358,8 @@ struct NotificationsCenterView: View {
 
     // MARK: - Filtered Notifications
     private var filteredNotifications: [AppNotification] {
-        guard let kind = filterKind else { return authVM.notifications }
-        return authVM.notifications.filter { kindGroup(for: $0.kind) == kind }
+        guard let kind = filterKind else { return notificationVM.notifications }
+        return notificationVM.notifications.filter { kindGroup(for: $0.kind) == kind }
     }
 
     // MARK: - إحصائية سريعة
@@ -377,7 +379,7 @@ struct NotificationsCenterView: View {
 
                     // زر جعل الكل مقروء
                     Button {
-                        Task { await authVM.markAllNotificationsAsRead() }
+                        Task { await notificationVM.markAllNotificationsAsRead() }
                     } label: {
                         HStack(spacing: DS.Spacing.xs) {
                             Image(systemName: "envelope.open.fill")
@@ -401,16 +403,16 @@ struct NotificationsCenterView: View {
 
     // MARK: - فلاتر الإشعارات
     private var notificationFilterChips: some View {
-        let groupedKinds = Array(Set(authVM.notifications.map { kindGroup(for: $0.kind) })).sorted()
+        let groupedKinds = Array(Set(notificationVM.notifications.map { kindGroup(for: $0.kind) })).sorted()
         return Group {
             if groupedKinds.count > 1 {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: DS.Spacing.sm) {
                         // زر الكل
-                        filterChip(label: L10n.t("الكل", "All"), kind: nil, count: authVM.notifications.count)
+                        filterChip(label: L10n.t("الكل", "All"), kind: nil, count: notificationVM.notifications.count)
 
                         ForEach(groupedKinds, id: \.self) { group in
-                            let count = authVM.notifications.filter { kindGroup(for: $0.kind) == group }.count
+                            let count = notificationVM.notifications.filter { kindGroup(for: $0.kind) == group }.count
                             filterChip(label: kindLabel(for: group), kind: group, count: count)
                         }
                     }
@@ -526,7 +528,7 @@ struct NotificationsCenterView: View {
     private func createdByName(for notification: AppNotification) -> String? {
         guard authVM.canModerate else { return nil }
         if let creatorId = notification.createdBy {
-            if let member = authVM.member(byId: creatorId) {
+            if let member = memberVM.member(byId: creatorId) {
                 return member.fullName
             }
             if creatorId == authVM.currentUser?.id {
@@ -608,7 +610,7 @@ struct NotificationsCenterView: View {
                             .listRowSeparator(.hidden)
                             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                                 Button(role: .destructive) {
-                                    Task { await authVM.deleteNotification(id: item.id) }
+                                    Task { await notificationVM.deleteNotification(id: item.id) }
                                 } label: {
                                     Label(L10n.t("حذف", "Delete"), systemImage: "trash")
                                 }
@@ -616,7 +618,7 @@ struct NotificationsCenterView: View {
                             .swipeActions(edge: .leading, allowsFullSwipe: true) {
                                 if isUnread {
                                     Button {
-                                        Task { await authVM.markNotificationAsRead(id: item.id) }
+                                        Task { await notificationVM.markNotificationAsRead(id: item.id) }
                                     } label: {
                                         Label(L10n.t("مقروء", "Read"), systemImage: "envelope.open")
                                     }
@@ -642,7 +644,7 @@ struct NotificationsCenterView: View {
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .refreshable {
-            await authVM.fetchNotifications()
+            await notificationVM.fetchNotifications()
         }
     }
 
@@ -660,7 +662,7 @@ struct NotificationsCenterView: View {
             } else {
                 selectedNotification = item
                 if isUnread {
-                    Task { await authVM.markNotificationAsRead(id: item.id) }
+                    Task { await notificationVM.markNotificationAsRead(id: item.id) }
                 }
             }
         } label: {
@@ -678,7 +680,7 @@ struct NotificationsCenterView: View {
                 // Icon
                 ZStack {
                     Circle()
-                        .fill(isUnread ? iconInfo.gradient : LinearGradient(colors: [Color.gray.opacity(0.3), Color.gray.opacity(0.2)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                        .fill(isUnread ? iconInfo.gradient : LinearGradient(colors: [DS.Color.textTertiary.opacity(DS.Opacity.divider), DS.Color.textTertiary.opacity(0.2)], startPoint: .topLeading, endPoint: .bottomTrailing))
                         .frame(width: 48, height: 48)
 
                     Image(systemName: iconInfo.icon)
@@ -691,7 +693,7 @@ struct NotificationsCenterView: View {
                             .fill(DS.Color.error)
                             .frame(width: 14, height: 14)
                             .overlay(Circle().stroke(DS.Color.surface, lineWidth: 2.5))
-                            .offset(x: 16, y: -16)
+                            .offset(x: DS.Spacing.lg, y: -DS.Spacing.lg)
                     }
                 }
                 .padding(.top, 2)
@@ -763,14 +765,14 @@ struct NotificationsCenterView: View {
         .contextMenu {
             if isUnread {
                 Button {
-                    Task { await authVM.markNotificationAsRead(id: item.id) }
+                    Task { await notificationVM.markNotificationAsRead(id: item.id) }
                 } label: {
                     Label(L10n.t("تعليم كمقروء", "Mark as Read"), systemImage: "envelope.open")
                 }
             }
 
             Button(role: .destructive) {
-                Task { await authVM.deleteNotification(id: item.id) }
+                Task { await notificationVM.deleteNotification(id: item.id) }
             } label: {
                 Label(L10n.t("حذف", "Delete"), systemImage: "trash")
             }

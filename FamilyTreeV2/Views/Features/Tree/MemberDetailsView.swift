@@ -3,6 +3,7 @@ import PhotosUI
 
 struct MemberDetailsView: View {
     @EnvironmentObject var authVM: AuthViewModel
+    @EnvironmentObject var memberVM: MemberViewModel
     @Environment(\.dismiss) var dismiss
 
     let member: FamilyMember
@@ -91,11 +92,11 @@ struct MemberDetailsView: View {
             Spacer(minLength: 80)
             ZStack {
                 Circle()
-                    .fill(Color.gray.opacity(0.15))
+                    .fill(DS.Color.textTertiary.opacity(0.15))
                     .frame(width: 100, height: 100)
                 Image(systemName: "person.slash.fill")
                     .font(DS.Font.scaled(36))
-                    .foregroundColor(.gray)
+                    .foregroundColor(DS.Color.textTertiary)
             }
             Text(L10n.t("هذا العضو حذف حسابه", "This member deleted their account"))
                 .font(DS.Font.headline)
@@ -163,16 +164,16 @@ struct MemberDetailsView: View {
             HStack(spacing: DS.Spacing.sm) {
                 DSRoleBadge(
                     title: member.roleName,
-                    color: member.isDeceased == true ? .gray : member.roleColor
+                    color: member.isDeceased == true ? DS.Color.textTertiary : member.roleColor
                 )
 
                 if member.isDeceased == true {
                     Text(L10n.t("رحمه الله", "Rest in peace"))
                         .font(DS.Font.scaled(11, weight: .bold))
-                        .foregroundColor(.gray)
+                        .foregroundColor(DS.Color.textSecondary)
                         .padding(.horizontal, DS.Spacing.sm)
                         .padding(.vertical, DS.Spacing.xs)
-                        .background(.gray.opacity(0.12))
+                        .background(DS.Color.textTertiary.opacity(0.12))
                         .clipShape(Capsule())
                 }
             }
@@ -210,7 +211,7 @@ struct MemberDetailsView: View {
                     icon: "calendar",
                     title: L10n.t("الميلاد", "Birth"),
                     value: shouldHide ? L10n.t("مخفي", "Hidden") : birth,
-                    color: shouldHide ? .gray : DS.Color.primary
+                    color: shouldHide ? DS.Color.textTertiary : DS.Color.primary
                 )
             }
 
@@ -224,7 +225,7 @@ struct MemberDetailsView: View {
                     icon: "phone.fill",
                     title: L10n.t("الهاتف", "Phone"),
                     value: shouldHide ? L10n.t("مخفي", "Hidden") : KuwaitPhone.display(phone),
-                    color: shouldHide ? .gray : DS.Color.success
+                    color: shouldHide ? DS.Color.textTertiary : DS.Color.success
                 )
             }
 
@@ -237,7 +238,7 @@ struct MemberDetailsView: View {
                     icon: "heart.fill",
                     title: L10n.t("الوفاة", "Death"),
                     value: deathValue,
-                    color: .gray
+                    color: DS.Color.textTertiary
                 )
             }
         }
@@ -388,7 +389,7 @@ struct MemberDetailsView: View {
             ) {
                 Button(L10n.t("حذف", "Delete"), role: .destructive) {
                     let memberId = member.id
-                    Task { await authVM.updateMemberBio(memberId: memberId, bio: []) }
+                    Task { await memberVM.updateMemberBio(memberId: memberId, bio: []) }
                 }
                 Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { }
             } message: {
@@ -521,13 +522,13 @@ struct MemberDetailsView: View {
 
         // Father name
         if let fatherId = member.fatherId,
-           let father = authVM.member(byId: fatherId) {
+           let father = memberVM.member(byId: fatherId) {
             lines.append("")
             lines.append("👨 " + L10n.t("الأب", "Father") + ": \(father.fullName)")
         }
 
         // Children
-        let children = authVM.allMembers.filter { $0.fatherId == member.id }
+        let children = memberVM.allMembers.filter { $0.fatherId == member.id }
         if !children.isEmpty {
             lines.append("👶 " + L10n.t("الأبناء", "Children") + " (\(children.count)): " + children.map { $0.firstName }.joined(separator: ", "))
         }
@@ -657,7 +658,7 @@ struct MemberDetailsView: View {
             self.localCoverPreview = croppedImage
         }
         Task {
-            await authVM.uploadCover(image: croppedImage, for: member.id)
+            await memberVM.uploadCover(image: croppedImage, for: member.id)
         }
     }
 

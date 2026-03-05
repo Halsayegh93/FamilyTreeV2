@@ -2,10 +2,11 @@ import SwiftUI
 
 struct AdminMembersListView: View {
     @EnvironmentObject var authVM: AuthViewModel
+    @EnvironmentObject var memberVM: MemberViewModel
     @State private var searchText = ""
 
     var filteredMembers: [FamilyMember] {
-        let members = authVM.allMembers.filter { $0.role != .pending }
+        let members = memberVM.allMembers.filter { $0.role != .pending }
         if searchText.isEmpty {
             return members.sorted { $0.fullName < $1.fullName }
         } else {
@@ -56,7 +57,7 @@ struct AdminMembersListView: View {
                         icon: "person.2.fill",
                         color: DS.Color.primary,
                         title: L10n.t("إجمالي الأعضاء", "Total Members"),
-                        value: "\(authVM.allMembers.filter { $0.role != .pending }.count)"
+                        value: "\(memberVM.allMembers.filter { $0.role != .pending }.count)"
                     )
                     statCell(
                         icon: "line.3.horizontal.decrease.circle.fill",
@@ -68,13 +69,13 @@ struct AdminMembersListView: View {
                         icon: "shield.fill",
                         color: DS.Color.warning,
                         title: L10n.t("مدراء ومشرفين", "Admins & Supervisors"),
-                        value: "\(authVM.allMembers.filter { $0.role == .admin || $0.role == .supervisor }.count)"
+                        value: "\(memberVM.allMembers.filter { $0.role == .admin || $0.role == .supervisor }.count)"
                     )
                     statCell(
                         icon: "person.fill.checkmark",
                         color: DS.Color.success,
                         title: L10n.t("أعضاء فعالين", "Active Members"),
-                        value: "\(authVM.allMembers.filter { $0.status == .active }.count)"
+                        value: "\(memberVM.allMembers.filter { $0.status == .active }.count)"
                     )
                 }
                 .padding(DS.Spacing.md)

@@ -13,7 +13,7 @@ struct SplashScreenView: View {
     var body: some View {
         ZStack {
             // MARK: - Background
-            Color(UIColor.systemBackground).ignoresSafeArea()
+            DS.Color.background.ignoresSafeArea()
 
             // MARK: - Content
             VStack(spacing: DS.Spacing.lg) {
@@ -22,27 +22,27 @@ struct SplashScreenView: View {
                 // Logo — Minimalist
                 ZStack {
                     Circle()
-                        .fill(Color(UIColor.secondarySystemBackground))
+                        .fill(DS.Color.surface)
                         .frame(width: 120, height: 120)
                         
                     Text("🌳")
                         .font(DS.Font.scaled(70))
                 }
-                .shadow(color: .black.opacity(0.05), radius: 10, x: 0, y: 5)
+                .dsSubtleShadow()
                 .scaleEffect(logoScale)
                 .opacity(logoOpacity)
 
                 // App Name
                 Text(L10n.t("شجرة العائلة", "Family Tree"))
-                    .font(.system(size: 34, weight: .bold, design: .serif))
-                    .foregroundColor(.primary)
+                    .font(DS.Font.largeTitle)
+                    .foregroundColor(DS.Color.textPrimary)
                     .offset(y: titleOffset)
                     .opacity(titleOpacity)
 
                 // Family Name
                 Text(L10n.t("عائلة المحمد علي", "Al-Muhammad Ali Family"))
-                    .font(.system(size: 18, weight: .medium, design: .serif))
-                    .foregroundColor(.secondary)
+                    .font(DS.Font.title3)
+                    .foregroundColor(DS.Color.textSecondary)
                     .opacity(subtitleOpacity)
 
                 Spacer()
@@ -50,7 +50,7 @@ struct SplashScreenView: View {
                 // Version
                 Text(L10n.t("الإصدار", "Version") + " \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "2.0")")
                     .font(DS.Font.scaled(12))
-                    .foregroundColor(Color(UIColor.tertiaryLabel))
+                    .foregroundColor(DS.Color.textTertiary)
                     .opacity(versionOpacity)
                     .padding(.bottom, DS.Spacing.xxl)
             }

@@ -10,6 +10,7 @@ enum TreeDisplayMode: Hashable {
 // MARK: - 1. واجهة الشجرة الرئيسية — Liquid Glass
 struct TreeView: View {
     @EnvironmentObject var authVM: AuthViewModel
+    @EnvironmentObject var memberVM: MemberViewModel
     @Binding var selectedTab: Int
     @State private var showingNotifications = false
     @State private var selectedMember: FamilyMember? = nil
@@ -70,7 +71,7 @@ struct TreeView: View {
 
     /// يُعاد حساب البيانات المُخزنة عند تغيّر الأعضاء فقط
     private func rebuildCache() {
-        let visible = authVM.allMembers.filter { !$0.isHiddenFromTree && $0.role != .pending }
+        let visible = memberVM.allMembers.filter { !$0.isHiddenFromTree && $0.role != .pending }
         let byId = Dictionary(uniqueKeysWithValues: visible.map { ($0.id, $0) })
 
         let roots = sortedMembers(visible.filter { member in
@@ -150,8 +151,8 @@ struct TreeView: View {
                                     minWidth: geometry.size.width,
                                     minHeight: geometry.size.height
                                 )
-                                .padding(.vertical, 150)
-                                .padding(.horizontal, 50)
+                                .padding(.vertical, DS.Spacing.xxxxl * 3)
+                                .padding(.horizontal, DS.Spacing.xxxxl)
                             }
                             .onChange(of: scrollCounter) { _, _ in
                                 if let id = scrollTarget {
@@ -176,7 +177,7 @@ struct TreeView: View {
                                 guard !isRefreshing else { return }
                                 isRefreshing = true
                                 Task {
-                                    await authVM.fetchAllMembers(force: true)
+                                    await memberVM.fetchAllMembers(force: true)
                                     rebuildCache()
                                     withAnimation { isRefreshing = false }
                                 }
@@ -205,7 +206,7 @@ struct TreeView: View {
                             // زر الموقع
                             Button(action: {
                                 if let currentUserID = authVM.currentUser?.id,
-                                   let userMember = cachedMemberById[currentUserID] ?? authVM.member(byId: currentUserID) {
+                                   let userMember = cachedMemberById[currentUserID] ?? memberVM.member(byId: currentUserID) {
                                     currentLocationMemberID = userMember.id
                                     centerOnMember(userMember, highlight: true, includeFocusedMemberInPath: false)
                                     Task {
@@ -252,7 +253,7 @@ struct TreeView: View {
             .onAppear {
                 let isFirstLoad = cachedVisibleMembers.isEmpty
                 Task {
-                    await authVM.fetchAllMembers()
+                    await memberVM.fetchAllMembers()
                     rebuildCache()
                     if isFirstLoad {
                         currentLocationMemberID = authVM.currentUser?.id
@@ -260,8 +261,8 @@ struct TreeView: View {
                     }
                 }
             }
-            .onChange(of: authVM.allMembers.count) { _, _ in
-                let currentIds = Set(authVM.allMembers.map(\.id))
+            .onChange(of: memberVM.allMembers.count) { _, _ in
+                let currentIds = Set(memberVM.allMembers.map(\.id))
                 guard currentIds != cachedMemberIds else { return }
                 rebuildCache()
             }
@@ -304,7 +305,7 @@ struct TreeView: View {
         VStack(spacing: 0) {
             // شريط البحث
             HStack(spacing: DS.Spacing.sm) {
-                HStack(spacing: DS.Spacing.md - 2) {
+                HStack(spacing: DS.Spacing.sm) {
                     ZStack {
                         Circle()
                             .fill(DS.Color.primary.opacity(0.12))
@@ -334,7 +335,7 @@ struct TreeView: View {
                     }
                 }
                 .padding(.horizontal, DS.Spacing.md)
-                .padding(.vertical, DS.Spacing.md - 2)
+                .padding(.vertical, DS.Spacing.sm)
                 .background(DS.Color.surface)
                 .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
                 .overlay(
@@ -461,8 +462,8 @@ struct TreeView: View {
                     Text(member.roleName)
                         .font(DS.Font.scaled(10, weight: .medium))
                         .foregroundColor(member.roleColor)
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 1)
+                        .padding(.horizontal, DS.Spacing.xs)
+                        .padding(.vertical, 2)
                         .background(member.roleColor.opacity(0.1))
                         .clipShape(Capsule())
                     
@@ -483,7 +484,7 @@ struct TreeView: View {
                             .font(DS.Font.scaled(9, weight: .medium))
                             .foregroundColor(DS.Color.deceased)
                             .padding(.horizontal, 4)
-                            .padding(.vertical, 1)
+                            .padding(.vertical, 2)
                             .background(DS.Color.deceased.opacity(0.1))
                             .clipShape(Capsule())
                     }

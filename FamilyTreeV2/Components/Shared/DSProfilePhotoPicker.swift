@@ -35,16 +35,17 @@ struct DSProfilePhotoPicker: View {
                 iconColor: DS.Color.neonPurple
             )
 
-            if showCropper, let rawImage = rawPickedImage {
+            if showCropper, let _ = rawPickedImage {
                 // Inline crop indicator — actual cropper is fullScreenCover
                 VStack(spacing: DS.Spacing.md) {
                     ProgressView().tint(DS.Color.primary)
+                        .frame(width: 140, height: 140)
                     Text(L10n.t("جاري فتح المحرر...", "Opening editor..."))
                         .font(DS.Font.caption1)
                         .foregroundColor(DS.Color.textSecondary)
                 }
                 .frame(maxWidth: .infinity)
-                .aspectRatio(4/5, contentMode: .fit)
+                .padding(.vertical, DS.Spacing.lg)
             } else if let image = selectedImage {
                 selectedImagePreview(image)
             } else if isLoading {
@@ -85,13 +86,14 @@ struct DSProfilePhotoPicker: View {
     // MARK: - Selected Image Preview
 
     private func selectedImagePreview(_ image: UIImage) -> some View {
-        VStack(spacing: 0) {
+        VStack(spacing: DS.Spacing.md) {
             Image(uiImage: image)
                 .resizable()
                 .scaledToFill()
-                .frame(maxWidth: .infinity)
-                .aspectRatio(4/5, contentMode: .fit)
-                .clipped()
+                .frame(width: 140, height: 140)
+                .clipShape(Circle())
+                .overlay(Circle().stroke(DS.Color.primary.opacity(0.2), lineWidth: 2))
+                .dsGlowShadow()
 
             photoActionBar(onDelete: {
                 let generator = UIImpactFeedbackGenerator(style: .light)
@@ -102,24 +104,26 @@ struct DSProfilePhotoPicker: View {
                 }
             })
         }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, DS.Spacing.lg)
     }
 
     // MARK: - Existing Image Preview
 
     private func existingImagePreview(_ url: URL) -> some View {
-        VStack(spacing: 0) {
+        VStack(spacing: DS.Spacing.md) {
             CachedAsyncPhaseImage(url: url) { phase in
                 if let image = phase.image {
                     image.resizable().scaledToFill()
-                        .frame(maxWidth: .infinity)
-                        .aspectRatio(4/5, contentMode: .fit)
-                        .clipped()
+                        .frame(width: 140, height: 140)
+                        .clipShape(Circle())
+                        .overlay(Circle().stroke(DS.Color.primary.opacity(0.2), lineWidth: 2))
+                        .dsGlowShadow()
                 } else if phase.error != nil {
                     emptyState
                 } else {
-                    VStack { ProgressView().tint(DS.Color.primary) }
-                        .frame(maxWidth: .infinity)
-                        .aspectRatio(4/5, contentMode: .fit)
+                    ProgressView().tint(DS.Color.primary)
+                        .frame(width: 140, height: 140)
                 }
             }
 
@@ -129,6 +133,8 @@ struct DSProfilePhotoPicker: View {
                 onDeleteExisting?()
             } : nil)
         }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, DS.Spacing.lg)
     }
 
     // MARK: - Loading State
@@ -136,12 +142,13 @@ struct DSProfilePhotoPicker: View {
     private var loadingState: some View {
         VStack(spacing: DS.Spacing.md) {
             ProgressView().tint(DS.Color.primary)
+                .frame(width: 140, height: 140)
             Text(L10n.t("جاري تحميل الصورة...", "Loading photo..."))
                 .font(DS.Font.caption1)
                 .foregroundColor(DS.Color.textSecondary)
         }
         .frame(maxWidth: .infinity)
-        .aspectRatio(4/5, contentMode: .fit)
+        .padding(.vertical, DS.Spacing.lg)
     }
 
     // MARK: - Empty State
@@ -339,7 +346,7 @@ struct DSMultiPhotoPicker: View {
                 .foregroundColor(DS.Color.textSecondary)
         }
         .frame(maxWidth: .infinity)
-        .aspectRatio(4/5, contentMode: .fit)
+        .aspectRatio(1, contentMode: .fit)
     }
 
     // MARK: - Carousel Preview
@@ -352,7 +359,7 @@ struct DSMultiPhotoPicker: View {
                         .tag(idx)
                 }
             }
-            .aspectRatio(4/5, contentMode: .fit)
+            .aspectRatio(1, contentMode: .fit)
             .clipped()
             .tabViewStyle(.page(indexDisplayMode: .never))
 

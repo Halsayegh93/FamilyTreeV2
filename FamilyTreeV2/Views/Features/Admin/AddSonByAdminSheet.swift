@@ -2,6 +2,7 @@ import SwiftUI
 
 struct AddSonByAdminSheet: View {
     @EnvironmentObject var authVM: AuthViewModel
+    @EnvironmentObject var memberVM: MemberViewModel
     @Environment(\.dismiss) var dismiss
 
     let parent: FamilyMember
@@ -351,7 +352,7 @@ struct AddSonByAdminSheet: View {
         let capturedIsDeceased = isDeceased
         let capturedDeathDate = (isDeceased && hasDeathDate) ? formatter.string(from: deathDate) : nil
         let capturedGender = selectedGender
-        let vm = authVM
+        let vm = memberVM
 
         // Dismiss immediately for snappy UX
         dismiss()

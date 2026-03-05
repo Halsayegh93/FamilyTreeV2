@@ -10,6 +10,7 @@ struct ContactCenterView: View {
 
     @State private var showSuccessAlert = false
     @State private var showErrorAlert = false
+    @State private var showCharacterLimitWarning = false
     @State private var appeared = false
 
     private let categoryItems: [(key: String, icon: String, labelAr: String, labelEn: String, color: Color)] = [
@@ -60,6 +61,11 @@ struct ContactCenterView: View {
                 Button(L10n.t("حسناً", "OK"), role: .cancel) {}
             } message: {
                 Text(authVM.contactMessageError ?? L10n.t("تعذر إرسال الرسالة حالياً. حاول مرة أخرى.", "Failed to send message. Please try again."))
+            }
+            .alert(L10n.t("الحد الأقصى", "Character Limit"), isPresented: $showCharacterLimitWarning) {
+                Button(L10n.t("حسناً", "OK"), role: .cancel) {}
+            } message: {
+                Text(L10n.t("تم الوصول إلى الحد الأقصى للرسالة (1000 حرف).", "You've reached the maximum message length (1000 characters)."))
             }
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
             .onAppear {
@@ -169,6 +175,7 @@ struct ContactCenterView: View {
                         .onChange(of: message) { _, newValue in
                             if newValue.count > 1000 {
                                 message = String(newValue.prefix(1000))
+                                showCharacterLimitWarning = true
                             }
                         }
 
@@ -219,7 +226,7 @@ struct ContactCenterView: View {
             submit()
         }
         .disabled(!canSubmit)
-        .opacity(canSubmit ? 1.0 : 0.5)
+        .opacity(canSubmit ? 1.0 : DS.Opacity.disabled)
         .opacity(appeared ? 1 : 0)
         .offset(y: appeared ? 0 : 12)
         .animation(DS.Anim.smooth.delay(0.15), value: appeared)

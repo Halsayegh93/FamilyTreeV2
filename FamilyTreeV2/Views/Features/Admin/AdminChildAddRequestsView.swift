@@ -2,18 +2,19 @@ import SwiftUI
 
 struct AdminChildAddRequestsView: View {
     @EnvironmentObject var authVM: AuthViewModel
+    @EnvironmentObject var adminRequestVM: AdminRequestViewModel
 
     var body: some View {
         ZStack {
             DS.Color.background.ignoresSafeArea()
             DSDecorativeBackground()
 
-            if authVM.childAddRequests.isEmpty {
+            if adminRequestVM.childAddRequests.isEmpty {
                 emptyState
             } else {
                 ScrollView(showsIndicators: false) {
                     LazyVStack(spacing: DS.Spacing.md) {
-                        ForEach(authVM.childAddRequests) { request in
+                        ForEach(adminRequestVM.childAddRequests) { request in
                             requestCard(request: request)
                         }
                     }
@@ -24,7 +25,7 @@ struct AdminChildAddRequestsView: View {
         .navigationTitle(L10n.t("طلبات إضافة الأبناء", "Child Add Requests"))
         .navigationBarTitleDisplayMode(.inline)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-        .task { await authVM.fetchChildAddRequests() }
+        .task { await adminRequestVM.fetchChildAddRequests() }
     }
 
     private func requestCard(request: AdminRequest) -> some View {
@@ -77,11 +78,11 @@ struct AdminChildAddRequestsView: View {
                 DSApproveRejectButtons(
                     approveTitle: L10n.t("تأكيد الإضافة", "Confirm Addition"),
                     rejectTitle: L10n.t("رفض وحذف", "Reject & Delete"),
-                    isLoading: authVM.isLoading
+                    isLoading: adminRequestVM.isLoading
                 ) {
-                    Task { await authVM.acknowledgeChildAddRequest(request: request) }
+                    Task { await adminRequestVM.acknowledgeChildAddRequest(request: request) }
                 } onReject: {
-                    Task { await authVM.rejectChildAddRequest(request: request) }
+                    Task { await adminRequestVM.rejectChildAddRequest(request: request) }
                 }
             }
             .padding(DS.Spacing.lg)

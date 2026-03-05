@@ -2,6 +2,7 @@ import SwiftUI
 
 struct FamilyPhotoAlbumsView: View {
     @EnvironmentObject var authVM: AuthViewModel
+    @EnvironmentObject var memberVM: MemberViewModel
     @Environment(\.dismiss) var dismiss
     @ObservedObject private var langManager = LanguageManager.shared
 
@@ -36,7 +37,7 @@ struct FamilyPhotoAlbumsView: View {
     private var membersWithPhotos: [(member: FamilyMember, photos: [MemberGalleryPhoto])] {
         let grouped = Dictionary(grouping: allPhotos, by: { $0.memberId })
         return grouped.compactMap { (memberId, photos) in
-            guard let member = authVM.member(byId: memberId) else { return nil }
+            guard let member = memberVM.member(byId: memberId) else { return nil }
             return (member: member, photos: photos.sorted { ($0.createdAt ?? "") > ($1.createdAt ?? "") })
         }
         .sorted { $0.photos.count > $1.photos.count }
@@ -177,7 +178,7 @@ struct FamilyPhotoAlbumsView: View {
     private var memberFilterChip: some View {
         HStack(spacing: DS.Spacing.sm) {
             if let memberId = selectedMemberId,
-               let member = authVM.member(byId: memberId) {
+               let member = memberVM.member(byId: memberId) {
                 HStack(spacing: DS.Spacing.sm) {
                     memberAvatar(member, size: 24)
                     Text(member.fullName)
@@ -265,7 +266,7 @@ struct FamilyPhotoAlbumsView: View {
                     VStack {
                         Spacer()
                         if selectedMemberId == nil,
-                           let member = authVM.member(byId: photo.memberId) {
+                           let member = memberVM.member(byId: photo.memberId) {
                             Text(member.firstName)
                                 .font(DS.Font.scaled(10, weight: .bold))
                                 .foregroundColor(.white)
@@ -412,7 +413,7 @@ struct FamilyPhotoAlbumsView: View {
 
                 Spacer()
 
-                if let member = authVM.member(byId: photo.memberId) {
+                if let member = memberVM.member(byId: photo.memberId) {
                     HStack(spacing: DS.Spacing.sm) {
                         memberAvatar(member, size: 28)
                         Text(member.firstName)
@@ -510,7 +511,7 @@ struct FamilyPhotoAlbumsView: View {
     private func loadPhotos() async {
         isLoading = true
         loadError = false
-        let photos = await authVM.fetchAllGalleryPhotos()
+        let photos = await memberVM.fetchAllGalleryPhotos()
         await MainActor.run {
             allPhotos = photos
             isLoading = false

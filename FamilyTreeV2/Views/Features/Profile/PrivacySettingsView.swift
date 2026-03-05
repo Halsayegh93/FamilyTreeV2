@@ -3,6 +3,8 @@ import UserNotifications
 
 struct PrivacySettingsView: View {
     @EnvironmentObject var authVM: AuthViewModel
+    @EnvironmentObject var notificationVM: NotificationViewModel
+    @EnvironmentObject var memberVM: MemberViewModel
     @Environment(\.dismiss) var dismiss
     @ObservedObject private var langManager = LanguageManager.shared
 
@@ -41,28 +43,28 @@ struct PrivacySettingsView: View {
         .onChange(of: notificationsEnabled) { _, newValue in
             Task {
                 if newValue {
-                    if let token = authVM.pushToken {
-                        await authVM.registerPushToken(token)
+                    if let token = notificationVM.pushToken {
+                        await notificationVM.registerPushToken(token)
                     }
                 } else {
-                    await authVM.unregisterPushToken()
+                    await notificationVM.unregisterPushToken()
                 }
             }
         }
         .onChange(of: badgeEnabled) { _, newValue in
             Task {
-                await authVM.updateBadgeEnabled(newValue)
+                await memberVM.updateBadgeEnabled(newValue)
                 if !newValue {
                     try? await UNUserNotificationCenter.current().setBadgeCount(0)
                 } else {
-                    let unread = authVM.notifications.filter { !$0.read }.count
+                    let unread = notificationVM.notifications.filter { !$0.read }.count
                     try? await UNUserNotificationCenter.current().setBadgeCount(unread)
                 }
             }
         }
         .onChange(of: isPhoneHidden) { _, newValue in
             Task {
-                let success = await authVM.updatePhoneHidden(newValue)
+                let success = await memberVM.updatePhoneHidden(newValue)
                 if !success {
                     isPhoneHidden = !newValue
                     showUpdateError = true
@@ -71,7 +73,7 @@ struct PrivacySettingsView: View {
         }
         .onChange(of: isBirthDateHidden) { _, newValue in
             Task {
-                let success = await authVM.updateBirthDateHidden(newValue)
+                let success = await memberVM.updateBirthDateHidden(newValue)
                 if !success {
                     isBirthDateHidden = !newValue
                     showUpdateError = true

@@ -3,7 +3,7 @@ import PhotosUI
 import UIKit
 
 struct AddChildSheet: View {
-    @EnvironmentObject var authVM: AuthViewModel
+    @EnvironmentObject var memberVM: MemberViewModel
     @Environment(\.dismiss) private var dismiss
 
     let member: FamilyMember
@@ -195,7 +195,7 @@ struct AddChildSheet: View {
                     HStack(spacing: DS.Spacing.md) {
                         DSIcon("calendar", color: DS.Color.info)
                         DatePicker(L10n.t("تاريخ الميلاد", "Birth Date"), selection: $birthDate, in: ...Date(), displayedComponents: .date)
-                            .environment(\.locale, Locale(identifier: "en_US"))
+                            .environment(\.locale, Locale(identifier: L10n.isArabic ? "ar" : "en_US"))
                     }
                     .padding(.horizontal, DS.Spacing.lg)
                     .padding(.vertical, DS.Spacing.sm)
@@ -218,7 +218,7 @@ struct AddChildSheet: View {
                         HStack(spacing: DS.Spacing.md) {
                             DSIcon("calendar", color: DS.Color.error)
                             DatePicker(L10n.t("تاريخ الوفاة", "Death Date"), selection: $deathDate, in: ...Date(), displayedComponents: .date)
-                                .environment(\.locale, Locale(identifier: "en_US"))
+                                .environment(\.locale, Locale(identifier: L10n.isArabic ? "ar" : "en_US"))
                         }
                         .padding(.horizontal, DS.Spacing.lg)
                         .padding(.vertical, DS.Spacing.sm)
@@ -231,11 +231,11 @@ struct AddChildSheet: View {
         DSPrimaryButton(
             L10n.t("إضافة الابن", "Add Child"),
             icon: "checkmark.circle.fill",
-            isLoading: authVM.isLoading,
+            isLoading: memberVM.isLoading,
             action: saveChild
         )
         .opacity(firstName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || familyName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.5 : 1.0)
-        .disabled(firstName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || familyName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || authVM.isLoading)
+        .disabled(firstName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || familyName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || memberVM.isLoading)
     }
 
     private func saveChild() {
@@ -247,7 +247,7 @@ struct AddChildSheet: View {
             let birthDateString: String? = formatter.string(from: birthDate)
             let deathDateString: String? = isDeceased ? formatter.string(from: deathDate) : nil
 
-            let childId = await authVM.addChild(
+            let childId = await memberVM.addChild(
                 firstNameOnly: firstName.trimmingCharacters(in: .whitespacesAndNewlines),
                 phoneNumber: KuwaitPhone.normalizedForStorage(
                     country: selectedPhoneCountry,
@@ -268,10 +268,10 @@ struct AddChildSheet: View {
             }
 
             if let image = selectedUIImage {
-                await authVM.uploadAvatar(image: image, for: childId)
+                await memberVM.uploadAvatar(image: image, for: childId)
             }
 
-            await authVM.fetchChildren(for: member.id)
+            await memberVM.fetchChildren(for: member.id)
             showSuccessAlert = true
         }
     }

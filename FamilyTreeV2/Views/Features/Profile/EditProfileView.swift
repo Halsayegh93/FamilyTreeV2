@@ -3,6 +3,8 @@ import PhotosUI
 
 struct EditProfileView: View {
     @EnvironmentObject var authVM: AuthViewModel
+    @EnvironmentObject var memberVM: MemberViewModel
+    @EnvironmentObject var adminRequestVM: AdminRequestViewModel
     @Environment(\.dismiss) var dismiss
 
     @State var member: FamilyMember
@@ -111,7 +113,7 @@ struct EditProfileView: View {
             }
             .onChange(of: localPreviewImage) { _, newImage in
                 guard let newImage else { return }
-                Task { await authVM.uploadAvatar(image: newImage, for: member.id) }
+                Task { await memberVM.uploadAvatar(image: newImage, for: member.id) }
             }
             .alert(L10n.t("خطأ", "Error"), isPresented: $showSaveError) {
                 Button(L10n.t("حسناً", "OK"), role: .cancel) {}
@@ -313,7 +315,7 @@ struct EditProfileView: View {
                         // Accept button
                         Button {
                             Task {
-                                await authVM.updateMemberBio(
+                                await memberVM.updateMemberBio(
                                     memberId: member.id,
                                     bio: vm.generatedBioStations
                                 )
@@ -388,7 +390,7 @@ struct EditProfileView: View {
             Button(L10n.t("حذف", "Delete"), role: .destructive) {
                 let memberId = member.id
                 member.bio = nil
-                Task { await authVM.updateMemberBio(memberId: memberId, bio: []) }
+                Task { await memberVM.updateMemberBio(memberId: memberId, bio: []) }
             }
             Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { }
         } message: {
@@ -405,10 +407,10 @@ struct EditProfileView: View {
 
         return DSPrimaryButton(
             L10n.t("حفظ التغييرات", "Save Changes"),
-            isLoading: authVM.isLoading,
+            isLoading: memberVM.isLoading,
             action: saveChangesAction
         )
-        .disabled(fullName.isEmpty || authVM.isLoading || !isPhoneValid)
+        .disabled(fullName.isEmpty || memberVM.isLoading || !isPhoneValid)
         .padding(.horizontal, DS.Spacing.lg)
     }
 
@@ -440,14 +442,14 @@ struct EditProfileView: View {
             let isDeceasedChanged = (isDeceased && !(member.isDeceased ?? false))
 
             if isDeceasedChanged {
-                await authVM.requestDeceasedStatus(memberId: member.id, deathDate: deathDate)
+                await adminRequestVM.requestDeceasedStatus(memberId: member.id, deathDate: deathDate)
             }
 
             if isPhoneChanged {
-                await authVM.requestPhoneNumberChange(memberId: member.id, newPhoneNumber: normalizedPhone)
+                await adminRequestVM.requestPhoneNumberChange(memberId: member.id, newPhoneNumber: normalizedPhone)
             }
 
-            let success = await authVM.updateMemberData(
+            let success = await memberVM.updateMemberData(
                 memberId: member.id,
                 fullName: fullName,
                 phoneNumber: member.phoneNumber ?? "",

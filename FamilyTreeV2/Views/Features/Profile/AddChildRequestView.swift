@@ -3,7 +3,7 @@ import PhotosUI
 import UIKit
 
 struct AddChildRequestView: View {
-    @EnvironmentObject var authVM: AuthViewModel
+    @EnvironmentObject var memberVM: MemberViewModel
     @Environment(\.dismiss) private var dismiss
 
     let member: FamilyMember
@@ -215,11 +215,11 @@ struct AddChildRequestView: View {
         DSPrimaryButton(
             L10n.t("إضافة الابن", "Add Child"),
             icon: "checkmark.circle.fill",
-            isLoading: authVM.isLoading,
+            isLoading: memberVM.isLoading,
             action: saveChild
         )
         .opacity(firstName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.5 : 1.0)
-        .disabled(firstName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || authVM.isLoading)
+        .disabled(firstName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || memberVM.isLoading)
     }
 
     private func saveChild() {
@@ -231,7 +231,7 @@ struct AddChildRequestView: View {
             let birthDateString: String? = hasBirthDate ? formatter.string(from: birthDate) : nil
             let deathDateString: String? = (isDeceased && hasDeathDate) ? formatter.string(from: deathDate) : nil
 
-            let childId = await authVM.addChild(
+            let childId = await memberVM.addChild(
                 firstNameOnly: firstName.trimmingCharacters(in: .whitespacesAndNewlines),
                 phoneNumber: KuwaitPhone.normalizedForStorage(
                     country: selectedPhoneCountry,
@@ -245,10 +245,10 @@ struct AddChildRequestView: View {
             )
 
             if let childId, let image = selectedUIImage {
-                await authVM.uploadAvatar(image: image, for: childId)
+                await memberVM.uploadAvatar(image: image, for: childId)
             }
 
-            if !authVM.isLoading {
+            if !memberVM.isLoading {
                 showSuccessAlert = true
             }
         }

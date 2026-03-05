@@ -3,6 +3,8 @@ import PhotosUI
 
 struct AdminMemberControlView: View {
     @EnvironmentObject var authVM: AuthViewModel
+    @EnvironmentObject var memberVM: MemberViewModel
+    @EnvironmentObject var adminRequestVM: AdminRequestViewModel
     @Environment(\.dismiss) var dismiss
 
     let member: FamilyMember
@@ -58,7 +60,7 @@ struct AdminMemberControlView: View {
                                 showDeleteForExisting: true,
                                 onDeleteExisting: {
                                     Task {
-                                        await authVM.deleteAvatar(for: member.id)
+                                        await memberVM.deleteAvatar(for: member.id)
                                         await MainActor.run {
                                             avatarURL = nil
                                             localAvatarPreviewImage = nil
@@ -70,7 +72,7 @@ struct AdminMemberControlView: View {
                             .onChange(of: localAvatarPreviewImage) { _, newImage in
                                 guard let newImage else { return }
                                 Task {
-                                    await authVM.uploadAvatar(image: newImage, for: member.id)
+                                    await memberVM.uploadAvatar(image: newImage, for: member.id)
                                     await MainActor.run { avatarURL = nil }
                                 }
                             }
@@ -188,11 +190,11 @@ struct AdminMemberControlView: View {
                         // Save button
                         DSPrimaryButton(
                             L10n.t("حفظ التعديلات", "Save Changes"),
-                            isLoading: authVM.isLoading
+                            isLoading: memberVM.isLoading
                         ) {
                             Task {
-                                let previousName = authVM.member(byId: member.id)?.fullName
-                                await authVM.updateMemberData(
+                                let previousName = memberVM.member(byId: member.id)?.fullName
+                                await memberVM.updateMemberData(
                                     memberId: member.id,
                                     fullName: fullName,
                                     phoneNumber: member.phoneNumber ?? "",
@@ -203,7 +205,7 @@ struct AdminMemberControlView: View {
                                     isPhoneHidden: member.isPhoneHidden ?? false
                                 )
                                 // Check if update succeeded by verifying data changed
-                                let updatedMember = authVM.member(byId: member.id)
+                                let updatedMember = memberVM.member(byId: member.id)
                                 if updatedMember?.fullName == previousName && fullName != previousName {
                                     errorMessage = L10n.t("حدث خطأ أثناء حفظ التعديلات. حاول مرة أخرى.", "An error occurred while saving changes. Please try again.")
                                     showErrorAlert = true
@@ -213,7 +215,7 @@ struct AdminMemberControlView: View {
                                 }
                             }
                         }
-                        .disabled(authVM.isLoading)
+                        .disabled(memberVM.isLoading)
                         .padding(.horizontal, DS.Spacing.lg)
 
                         // Delete button
@@ -247,9 +249,9 @@ struct AdminMemberControlView: View {
             .alert(L10n.t("تأكيد الحذف", "Confirm Deletion"), isPresented: $showDeleteAlert) {
                 Button(L10n.t("حذف", "Delete"), role: .destructive) {
                     Task {
-                        await authVM.rejectOrDeleteMember(memberId: member.id)
+                        await adminRequestVM.rejectOrDeleteMember(memberId: member.id)
                         // Check if deletion succeeded
-                        if authVM.allMembers.contains(where: { $0.id == member.id }) {
+                        if memberVM.allMembers.contains(where: { $0.id == member.id }) {
                             errorMessage = L10n.t("حدث خطأ أثناء حذف العضو. حاول مرة أخرى.", "An error occurred while deleting the member. Please try again.")
                             showErrorAlert = true
                             Log.error("rejectOrDeleteMember failed silently for member \(member.id)")

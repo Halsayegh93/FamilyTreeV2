@@ -2,18 +2,19 @@ import SwiftUI
 
 struct AdminPhoneRequestsView: View {
     @EnvironmentObject var authVM: AuthViewModel
+    @EnvironmentObject var adminRequestVM: AdminRequestViewModel
 
     var body: some View {
         ZStack {
             DS.Color.background.ignoresSafeArea()
             DSDecorativeBackground()
 
-            if authVM.phoneChangeRequests.isEmpty {
+            if adminRequestVM.phoneChangeRequests.isEmpty {
                 emptyState
             } else {
                 ScrollView(showsIndicators: false) {
                     LazyVStack(spacing: DS.Spacing.md) {
-                        ForEach(authVM.phoneChangeRequests) { request in
+                        ForEach(adminRequestVM.phoneChangeRequests) { request in
                             phoneRequestCard(request: request)
                         }
                     }
@@ -24,7 +25,7 @@ struct AdminPhoneRequestsView: View {
         .navigationTitle(L10n.t("طلبات تغيير الجوال", "Phone Change Requests"))
         .navigationBarTitleDisplayMode(.inline)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-        .task { await authVM.fetchPhoneChangeRequests() }
+        .task { await adminRequestVM.fetchPhoneChangeRequests() }
     }
 
     private func phoneRequestCard(request: PhoneChangeRequest) -> some View {
@@ -118,11 +119,11 @@ struct AdminPhoneRequestsView: View {
                 DSApproveRejectButtons(
                     approveTitle: L10n.t("اعتماد الرقم", "Approve Number"),
                     rejectTitle: L10n.t("رفض", "Reject"),
-                    isLoading: authVM.isLoading
+                    isLoading: adminRequestVM.isLoading
                 ) {
-                    Task { await authVM.approvePhoneChangeRequest(request: request) }
+                    Task { await adminRequestVM.approvePhoneChangeRequest(request: request) }
                 } onReject: {
-                    Task { await authVM.rejectPhoneChangeRequest(request: request) }
+                    Task { await adminRequestVM.rejectPhoneChangeRequest(request: request) }
                 }
             }
             .padding(DS.Spacing.lg)
