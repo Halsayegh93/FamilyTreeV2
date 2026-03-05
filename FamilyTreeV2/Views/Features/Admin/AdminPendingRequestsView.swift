@@ -377,90 +377,121 @@ struct AdminPendingRequestsView: View {
         let matchRatio = Double(match.matchCount) / Double(max(totalParts, 1))
         let strengthColor: Color = matchRatio >= 0.8 ? DS.Color.success : matchRatio >= 0.6 ? DS.Color.info : DS.Color.warning
 
-        return HStack(spacing: DS.Spacing.md) {
-            // أيقونة قوة التطابق
-            ZStack {
-                Circle()
-                    .fill(strengthColor.opacity(0.15))
-                    .frame(width: 36, height: 36)
-                Image(systemName: matchRatio >= 0.8 ? "checkmark.circle.fill" : "person.fill.questionmark")
-                    .font(DS.Font.scaled(15, weight: .semibold))
-                    .foregroundColor(strengthColor)
+        // اسم الأب لعضو الشجرة
+        let fatherName: String? = match.member.fatherId.flatMap { fid in
+            memberVM.allMembers.first(where: { $0.id == fid })?.fullName
+        }
+
+        return VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            // الصف الأول: أيقونة + اسم العضو المتطابق
+            HStack(alignment: .top, spacing: DS.Spacing.md) {
+                // أيقونة قوة التطابق
+                ZStack {
+                    Circle()
+                        .fill(strengthColor.opacity(0.15))
+                        .frame(width: 40, height: 40)
+                    Image(systemName: matchRatio >= 0.8 ? "checkmark.circle.fill" : "person.fill.questionmark")
+                        .font(DS.Font.scaled(17, weight: .semibold))
+                        .foregroundColor(strengthColor)
+                }
+
+                VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                    // اسم العضو الكامل بالشجرة
+                    Text(L10n.t("عضو الشجرة:", "Tree member:"))
+                        .font(DS.Font.scaled(10, weight: .medium))
+                        .foregroundColor(DS.Color.textTertiary)
+
+                    // الاسم مع تمييز الأجزاء المتطابقة
+                    highlightedName(
+                        fullName: match.member.fullName,
+                        matchedParts: match.matchedParts,
+                        highlightColor: strengthColor
+                    )
+
+                    // اسم الأب إذا موجود
+                    if let fatherName {
+                        HStack(spacing: 4) {
+                            Image(systemName: "arrow.up.right")
+                                .font(DS.Font.scaled(9, weight: .semibold))
+                            Text(L10n.t("ابن: \(fatherName)", "Son of: \(fatherName)"))
+                                .font(DS.Font.scaled(11, weight: .medium))
+                        }
+                        .foregroundColor(DS.Color.textSecondary)
+                    }
+                }
+
+                Spacer()
             }
 
-            VStack(alignment: .leading, spacing: 2) {
-                // اسم العضو المتطابق مع تمييز الأجزاء المتطابقة
-                highlightedName(
-                    fullName: match.member.fullName,
-                    matchedParts: match.matchedParts,
-                    highlightColor: strengthColor
-                )
+            // الصف الثاني: badges + زر الدمج
+            HStack(spacing: DS.Spacing.sm) {
+                // بادج عدد التطابق
+                Text(L10n.t(
+                    "\(match.matchCount)/\(totalParts) متطابق",
+                    "\(match.matchCount)/\(totalParts) match"
+                ))
+                .font(DS.Font.scaled(10, weight: .semibold))
+                .foregroundColor(strengthColor)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(strengthColor.opacity(0.12))
+                .clipShape(Capsule())
 
-                HStack(spacing: DS.Spacing.sm) {
-                    // عدد التطابق
-                    Text(L10n.t(
-                        "\(match.matchCount) أجزاء متطابقة",
-                        "\(match.matchCount) parts match"
-                    ))
-                    .font(DS.Font.scaled(10, weight: .semibold))
-                    .foregroundColor(strengthColor)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(strengthColor.opacity(0.12))
+                // بادج قوة التطابق
+                Text(matchStrengthLabel(ratio: matchRatio))
+                    .font(DS.Font.scaled(10, weight: .bold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(strengthColor)
                     .clipShape(Capsule())
 
-                    // بادج قوة التطابق
-                    Text(matchStrengthLabel(ratio: matchRatio))
-                        .font(DS.Font.scaled(10, weight: .bold))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(strengthColor)
-                        .clipShape(Capsule())
-                }
-            }
+                Spacer()
 
-            Spacer()
-
-            // زر الدمج
-            Button {
-                mergeTarget = (pendingMember: pendingMember, treeMember: match.member)
-                showMergeConfirm = true
-            } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: "arrow.triangle.merge")
-                        .font(DS.Font.scaled(11, weight: .bold))
-                    Text(L10n.t("دمج", "Merge"))
-                        .font(DS.Font.scaled(11, weight: .bold))
+                // زر الدمج
+                Button {
+                    mergeTarget = (pendingMember: pendingMember, treeMember: match.member)
+                    showMergeConfirm = true
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.triangle.merge")
+                            .font(DS.Font.scaled(12, weight: .bold))
+                        Text(L10n.t("دمج", "Merge"))
+                            .font(DS.Font.scaled(12, weight: .bold))
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, DS.Spacing.lg)
+                    .padding(.vertical, DS.Spacing.sm)
+                    .background(DS.Color.gradientPrimary)
+                    .clipShape(Capsule())
                 }
-                .foregroundColor(.white)
-                .padding(.horizontal, DS.Spacing.md)
-                .padding(.vertical, DS.Spacing.sm)
-                .background(DS.Color.gradientPrimary)
-                .clipShape(Capsule())
+                .buttonStyle(DSScaleButtonStyle())
             }
-            .buttonStyle(DSScaleButtonStyle())
         }
         .padding(DS.Spacing.md)
         .background(strengthColor.opacity(0.04))
-        .cornerRadius(DS.Radius.md)
+        .cornerRadius(DS.Radius.lg)
         .overlay(
-            RoundedRectangle(cornerRadius: DS.Radius.md)
-                .stroke(strengthColor.opacity(0.15), lineWidth: 1)
+            RoundedRectangle(cornerRadius: DS.Radius.lg)
+                .stroke(strengthColor.opacity(0.2), lineWidth: 1)
         )
     }
 
     // MARK: - تمييز الأجزاء المتطابقة
     private func highlightedName(fullName: String, matchedParts: [String], highlightColor: Color) -> some View {
         let parts = fullName.split(whereSeparator: \.isWhitespace).map(String.init)
-        return HStack(spacing: 3) {
-            ForEach(Array(parts.enumerated()), id: \.offset) { _, part in
-                let isMatched = matchedParts.contains { $0.localizedCaseInsensitiveCompare(part) == .orderedSame }
-                Text(part)
-                    .font(DS.Font.scaled(13, weight: isMatched ? .bold : .regular))
-                    .foregroundColor(isMatched ? highlightColor : DS.Color.textSecondary)
-            }
+        // استخدام Text concatenation بدل HStack لتجنب القص
+        return parts.enumerated().reduce(Text("")) { result, item in
+            let (index, part) = item
+            let isMatched = matchedParts.contains { $0.localizedCaseInsensitiveCompare(part) == .orderedSame }
+            let separator = index > 0 ? Text(" ") : Text("")
+            let styledPart = Text(part)
+                .font(DS.Font.scaled(14, weight: isMatched ? .bold : .regular))
+                .foregroundColor(isMatched ? highlightColor : DS.Color.textSecondary)
+            return result + separator + styledPart
         }
+        .lineLimit(2)
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     // MARK: - وصف قوة التطابق
