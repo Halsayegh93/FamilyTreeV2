@@ -453,15 +453,15 @@ struct ProfileView: View {
                             .font(DS.Font.scaled(16, weight: .bold))
                             .foregroundColor(iconColor)
                     }
-                    .frame(width: 36, height: 36)
-                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
+                    .frame(width: 44, height: 44)
+                    .clipShape(Circle())
                 } else {
                     Image(systemName: iconName)
                         .font(DS.Font.scaled(16, weight: .bold))
                         .foregroundColor(iconColor)
-                        .frame(width: 36, height: 36)
+                        .frame(width: 44, height: 44)
                         .background(iconColor.opacity(0.12))
-                        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
+                        .clipShape(Circle())
                 }
 
             }
@@ -536,13 +536,13 @@ struct ProfileView: View {
                                     .font(DS.Font.scaled(14, weight: .bold))
                                     .foregroundColor(iconColor)
                             }
-                            .frame(width: 36, height: 36)
+                            .frame(width: 44, height: 44)
                             .clipShape(Circle())
                         } else {
                             Image(systemName: iconName)
                                 .font(DS.Font.scaled(14, weight: .bold))
                                 .foregroundColor(iconColor)
-                                .frame(width: 36, height: 36)
+                                .frame(width: 44, height: 44)
                                 .background(iconColor.opacity(0.12))
                                 .clipShape(Circle())
                         }

@@ -4,28 +4,27 @@ struct AdminChildAddRequestsView: View {
     @EnvironmentObject var authVM: AuthViewModel
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                DS.Color.background.ignoresSafeArea()
-                DSDecorativeBackground()
+        ZStack {
+            DS.Color.background.ignoresSafeArea()
+            DSDecorativeBackground()
 
-                if authVM.childAddRequests.isEmpty {
-                    emptyState
-                } else {
-                    ScrollView {
-                        VStack(spacing: DS.Spacing.lg) {
-                            ForEach(authVM.childAddRequests) { request in
-                                requestCard(request: request)
-                            }
+            if authVM.childAddRequests.isEmpty {
+                emptyState
+            } else {
+                ScrollView(showsIndicators: false) {
+                    LazyVStack(spacing: DS.Spacing.md) {
+                        ForEach(authVM.childAddRequests) { request in
+                            requestCard(request: request)
                         }
-                        .padding(DS.Spacing.lg)
                     }
+                    .padding(DS.Spacing.lg)
                 }
             }
-            .navigationTitle(L10n.t("طلبات إضافة الأبناء", "Child Add Requests"))
-            .navigationBarTitleDisplayMode(.inline)
-            .task { await authVM.fetchChildAddRequests() }
         }
+        .navigationTitle(L10n.t("طلبات إضافة الأبناء", "Child Add Requests"))
+        .navigationBarTitleDisplayMode(.inline)
+        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+        .task { await authVM.fetchChildAddRequests() }
     }
 
     private func requestCard(request: AdminRequest) -> some View {
@@ -93,15 +92,15 @@ struct AdminChildAddRequestsView: View {
         VStack(spacing: DS.Spacing.lg) {
             ZStack {
                 Circle()
-                    .fill(DS.Color.gridTree.opacity(0.08))
+                    .fill(DS.Color.success.opacity(0.08))
                     .frame(width: 120, height: 120)
                 Circle()
-                    .fill(DS.Color.gridTree.opacity(0.12))
+                    .fill(DS.Color.success.opacity(0.12))
                     .frame(width: 88, height: 88)
                 Circle()
                     .fill(DS.Color.gradientPrimary)
                     .frame(width: 60, height: 60)
-                Image(systemName: "tray")
+                Image(systemName: "checkmark.circle.fill")
                     .font(DS.Font.scaled(26, weight: .semibold))
                     .foregroundColor(.white)
             }

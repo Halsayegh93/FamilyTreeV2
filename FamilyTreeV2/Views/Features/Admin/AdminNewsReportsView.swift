@@ -13,29 +13,10 @@ struct AdminNewsReportsView: View {
             DSDecorativeBackground()
 
             if authVM.newsReportRequests.isEmpty {
-                // Empty state with gradient circles
-                VStack(spacing: DS.Spacing.lg) {
-                    ZStack {
-                        Circle()
-                            .fill(DS.Color.success.opacity(0.08))
-                            .frame(width: 120, height: 120)
-                        Circle()
-                            .fill(DS.Color.success.opacity(0.12))
-                            .frame(width: 88, height: 88)
-                        Circle()
-                            .fill(DS.Color.gradientPrimary)
-                            .frame(width: 60, height: 60)
-                        Image(systemName: "checkmark.shield")
-                            .font(DS.Font.scaled(26, weight: .semibold))
-                            .foregroundColor(.white)
-                    }
-                    Text(L10n.t("لا توجد بلاغات أخبار معلقة", "No pending news reports"))
-                        .font(DS.Font.headline)
-                        .foregroundColor(DS.Color.textSecondary)
-                }
+                emptyState
             } else {
-                ScrollView {
-                    VStack(spacing: DS.Spacing.md) {
+                ScrollView(showsIndicators: false) {
+                    LazyVStack(spacing: DS.Spacing.md) {
                         ForEach(authVM.newsReportRequests) { request in
                             reportCard(for: request)
                         }
@@ -54,6 +35,29 @@ struct AdminNewsReportsView: View {
         }
     }
 
+    // MARK: - Empty State
+    private var emptyState: some View {
+        VStack(spacing: DS.Spacing.lg) {
+            ZStack {
+                Circle()
+                    .fill(DS.Color.success.opacity(0.08))
+                    .frame(width: 120, height: 120)
+                Circle()
+                    .fill(DS.Color.success.opacity(0.12))
+                    .frame(width: 88, height: 88)
+                Circle()
+                    .fill(DS.Color.gradientPrimary)
+                    .frame(width: 60, height: 60)
+                Image(systemName: "checkmark.circle.fill")
+                    .font(DS.Font.scaled(26, weight: .semibold))
+                    .foregroundColor(.white)
+            }
+            Text(L10n.t("لا توجد بلاغات أخبار معلقة", "No pending news reports"))
+                .font(DS.Font.headline)
+                .foregroundColor(DS.Color.textSecondary)
+        }
+    }
+
     private func reportCard(for request: AdminRequest) -> some View {
         let postId = UUID(uuidString: request.newValue ?? "")
         let reportedPost = postId.flatMap { newsById[$0] }
@@ -61,29 +65,29 @@ struct AdminNewsReportsView: View {
         return DSCard {
             VStack(alignment: .leading, spacing: DS.Spacing.md) {
 
-                // Red gradient top accent
-                DS.Color.gradientWarm
-                    .frame(height: 4)
-                    .cornerRadius(DS.Radius.full)
+                // Red gradient accent bar
+                LinearGradient(
+                    colors: [DS.Color.error, DS.Color.error.opacity(0.7)],
+                    startPoint: .leading, endPoint: .trailing
+                )
+                .frame(height: 4)
+                .cornerRadius(DS.Radius.full)
 
-                // Header: badge + member info
-                HStack {
-                    // Gradient-tinted capsule badge
-                    Text(L10n.t("بلاغ", "Report"))
-                        .font(DS.Font.caption2)
-                        .fontWeight(.bold)
-                        .foregroundColor(DS.Color.error)
-                        .padding(.horizontal, DS.Spacing.sm)
-                        .padding(.vertical, 3)
-                        .background(
-                            LinearGradient(
-                                colors: [DS.Color.error.opacity(0.15), DS.Color.error.opacity(0.08)],
-                                startPoint: .leading, endPoint: .trailing
+                // Header: icon + member info
+                HStack(spacing: DS.Spacing.md) {
+                    ZStack {
+                        Circle()
+                            .fill(
+                                LinearGradient(
+                                    colors: [DS.Color.error.opacity(0.2), DS.Color.error.opacity(0.08)],
+                                    startPoint: .topLeading, endPoint: .bottomTrailing
+                                )
                             )
-                        )
-                        .clipShape(Capsule())
-
-                    Spacer()
+                            .frame(width: 44, height: 44)
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundColor(DS.Color.error)
+                            .font(DS.Font.scaled(18, weight: .semibold))
+                    }
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(request.member?.fullName ?? L10n.t("عضو", "Member"))
@@ -93,6 +97,18 @@ struct AdminNewsReportsView: View {
                             .font(DS.Font.caption2)
                             .foregroundColor(DS.Color.textSecondary)
                     }
+
+                    Spacer()
+
+                    // Badge
+                    Text(L10n.t("بلاغ", "Report"))
+                        .font(DS.Font.caption2)
+                        .fontWeight(.bold)
+                        .foregroundColor(DS.Color.error)
+                        .padding(.horizontal, DS.Spacing.sm)
+                        .padding(.vertical, 3)
+                        .background(DS.Color.error.opacity(0.12))
+                        .clipShape(Capsule())
                 }
 
                 // Details text

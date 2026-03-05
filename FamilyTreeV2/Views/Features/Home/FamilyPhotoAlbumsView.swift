@@ -10,6 +10,7 @@ struct FamilyPhotoAlbumsView: View {
     @State private var selectedMemberId: UUID? = nil
     @State private var selectedPhoto: MemberGalleryPhoto? = nil
     @State private var showPhotoViewer = false
+    @State private var loadError = false
     @State private var viewMode: ViewMode = .grid
 
     enum ViewMode: String, CaseIterable {
@@ -35,7 +36,7 @@ struct FamilyPhotoAlbumsView: View {
     private var membersWithPhotos: [(member: FamilyMember, photos: [MemberGalleryPhoto])] {
         let grouped = Dictionary(grouping: allPhotos, by: { $0.memberId })
         return grouped.compactMap { (memberId, photos) in
-            guard let member = authVM.allMembers.first(where: { $0.id == memberId }) else { return nil }
+            guard let member = authVM.member(byId: memberId) else { return nil }
             return (member: member, photos: photos.sorted { ($0.createdAt ?? "") > ($1.createdAt ?? "") })
         }
         .sorted { $0.photos.count > $1.photos.count }
@@ -56,6 +57,8 @@ struct FamilyPhotoAlbumsView: View {
 
                 if isLoading {
                     loadingView
+                } else if loadError {
+                    errorStateView
                 } else if allPhotos.isEmpty {
                     emptyStateView
                 } else {
@@ -174,7 +177,7 @@ struct FamilyPhotoAlbumsView: View {
     private var memberFilterChip: some View {
         HStack(spacing: DS.Spacing.sm) {
             if let memberId = selectedMemberId,
-               let member = authVM.allMembers.first(where: { $0.id == memberId }) {
+               let member = authVM.member(byId: memberId) {
                 HStack(spacing: DS.Spacing.sm) {
                     memberAvatar(member, size: 24)
                     Text(member.fullName)
@@ -242,7 +245,7 @@ struct FamilyPhotoAlbumsView: View {
             Color.clear
                 .aspectRatio(1, contentMode: .fit)
                 .overlay(
-                    AsyncImage(url: URL(string: photo.photoURL)) { phase in
+                    CachedAsyncPhaseImage(url: URL(string: photo.photoURL)) { phase in
                         if let image = phase.image {
                             image.resizable().scaledToFill()
                         } else if phase.error != nil {
@@ -262,7 +265,7 @@ struct FamilyPhotoAlbumsView: View {
                     VStack {
                         Spacer()
                         if selectedMemberId == nil,
-                           let member = authVM.allMembers.first(where: { $0.id == photo.memberId }) {
+                           let member = authVM.member(byId: photo.memberId) {
                             Text(member.firstName)
                                 .font(DS.Font.scaled(10, weight: .bold))
                                 .foregroundColor(.white)
@@ -287,7 +290,7 @@ struct FamilyPhotoAlbumsView: View {
     // MARK: - Albums List
 
     private var albumsListView: some View {
-        VStack(spacing: DS.Spacing.lg) {
+        LazyVStack(spacing: DS.Spacing.lg) {
             ForEach(membersWithPhotos, id: \.member.id) { item in
                 albumCard(member: item.member, photos: item.photos)
             }
@@ -312,7 +315,7 @@ struct FamilyPhotoAlbumsView: View {
                         Color.clear
                             .aspectRatio(1, contentMode: .fit)
                             .overlay(
-                                AsyncImage(url: URL(string: photo.photoURL)) { phase in
+                                CachedAsyncPhaseImage(url: URL(string: photo.photoURL)) { phase in
                                     if let image = phase.image {
                                         image.resizable().scaledToFill()
                                     } else {
@@ -374,7 +377,7 @@ struct FamilyPhotoAlbumsView: View {
                 .onTapGesture { showPhotoViewer = false }
 
             if let url = URL(string: photo.photoURL) {
-                AsyncImage(url: url) { phase in
+                CachedAsyncPhaseImage(url: url) { phase in
                     if let image = phase.image {
                         image
                             .resizable()
@@ -409,7 +412,7 @@ struct FamilyPhotoAlbumsView: View {
 
                 Spacer()
 
-                if let member = authVM.allMembers.first(where: { $0.id == photo.memberId }) {
+                if let member = authVM.member(byId: photo.memberId) {
                     HStack(spacing: DS.Spacing.sm) {
                         memberAvatar(member, size: 28)
                         Text(member.firstName)
@@ -433,7 +436,7 @@ struct FamilyPhotoAlbumsView: View {
     private func memberAvatar(_ member: FamilyMember, size: CGFloat) -> some View {
         Group {
             if let avatarUrl = member.avatarUrl, let url = URL(string: avatarUrl) {
-                AsyncImage(url: url) { phase in
+                CachedAsyncPhaseImage(url: url) { phase in
                     if let image = phase.image {
                         image.resizable().scaledToFill()
                     } else {
@@ -487,10 +490,26 @@ struct FamilyPhotoAlbumsView: View {
         }
     }
 
+    private var errorStateView: some View {
+        VStack(spacing: DS.Spacing.lg) {
+            Image(systemName: "exclamationmark.triangle")
+                .font(DS.Font.scaled(50))
+                .foregroundColor(DS.Color.warning)
+            Text(L10n.t("تعذر تحميل الصور", "Failed to load photos"))
+                .font(DS.Font.headline)
+                .foregroundColor(DS.Color.textSecondary)
+            DSSecondaryButton(L10n.t("إعادة المحاولة", "Retry"), icon: "arrow.clockwise") {
+                Task { await loadPhotos() }
+            }
+            .frame(width: 200)
+        }
+    }
+
     // MARK: - Data
 
     private func loadPhotos() async {
         isLoading = true
+        loadError = false
         let photos = await authVM.fetchAllGalleryPhotos()
         await MainActor.run {
             allPhotos = photos

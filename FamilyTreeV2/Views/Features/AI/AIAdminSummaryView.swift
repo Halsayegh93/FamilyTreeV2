@@ -66,6 +66,29 @@ struct AIAdminSummaryView: View {
                         if aiVM.isAdminLoading || aiVM.isTreeAnalysisLoading {
                             loadingCard
                         }
+
+                        // Empty state — no data and not loading
+                        if !aiVM.isAdminLoading && !aiVM.isTreeAnalysisLoading
+                            && aiVM.adminSummary.isEmpty && aiVM.treeAnalysis.isEmpty
+                            && aiVM.adminStats == nil
+                            && aiVM.adminError == nil && aiVM.treeAnalysisError == nil {
+                            VStack(spacing: DS.Spacing.lg) {
+                                Image(systemName: "sparkles")
+                                    .font(DS.Font.scaled(44))
+                                    .foregroundColor(DS.Color.textTertiary)
+                                Text(L10n.t("لا تتوفر بيانات للتحليل حالياً", "No data available for analysis"))
+                                    .font(DS.Font.callout)
+                                    .foregroundColor(DS.Color.textSecondary)
+                                DSSecondaryButton(L10n.t("إعادة المحاولة", "Retry"), icon: "arrow.clockwise") {
+                                    Task {
+                                        await aiVM.fetchAdminSummary()
+                                        await aiVM.analyzeTree()
+                                    }
+                                }
+                                .frame(width: 200)
+                            }
+                            .padding(.top, DS.Spacing.xxxl)
+                        }
                     }
                     .padding(DS.Spacing.lg)
                 }

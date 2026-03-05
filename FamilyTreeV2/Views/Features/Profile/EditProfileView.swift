@@ -17,13 +17,12 @@ struct EditProfileView: View {
     @State private var deathDate: Date = Date()
     @State private var isPhoneHidden: Bool = false
     // متغيرات الصورة
-    @State private var selectedItem: PhotosPickerItem? = nil
     @State private var localPreviewImage: UIImage? = nil
-    @State private var showPhotoPicker: Bool = false
     // AI Bio
     @State private var aiVM: AIViewModel? = nil
     @State private var showBioResult = false
     @State private var showDeleteBioAlert = false
+    @State private var showSaveError = false
 
 
 
@@ -110,8 +109,15 @@ struct EditProfileView: View {
                     aiVM = AIViewModel(userId: userId)
                 }
             }
-            .photosPicker(isPresented: $showPhotoPicker, selection: $selectedItem, matching: .images)
-            .onChange(of: selectedItem) { _, _ in handleImageChange(selectedItem) }
+            .onChange(of: localPreviewImage) { _, newImage in
+                guard let newImage else { return }
+                Task { await authVM.uploadAvatar(image: newImage, for: member.id) }
+            }
+            .alert(L10n.t("خطأ", "Error"), isPresented: $showSaveError) {
+                Button(L10n.t("حسناً", "OK"), role: .cancel) {}
+            } message: {
+                Text(L10n.t("تعذر حفظ التغييرات. حاول مرة أخرى.", "Failed to save changes. Please try again."))
+            }
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
@@ -119,64 +125,11 @@ struct EditProfileView: View {
     // MARK: - المكونات المصممة (Custom Components)
 
     private var imagePickerHeader: some View {
-        VStack(spacing: DS.Spacing.md) {
-            Button(action: { showPhotoPicker = true }) {
-                ZStack(alignment: .bottomTrailing) {
-                    ZStack {
-                        if let uiImage = localPreviewImage {
-                            Image(uiImage: uiImage)
-                                .resizable()
-                                .scaledToFill()
-                                .frame(width: 80, height: 80)
-                                .clipped()
-                        } else if let urlStr = member.avatarUrl, let url = URL(string: urlStr) {
-                            AsyncImage(url: url) { phase in
-                                if let image = phase.image {
-                                    image.resizable().scaledToFill().frame(width: 80, height: 80).clipped()
-                                } else if phase.error != nil {
-                                    Circle().fill(DS.Color.surface)
-                                        .frame(width: 80, height: 80)
-                                        .overlay(Image(systemName: "person.fill").font(DS.Font.scaled(30)).foregroundColor(DS.Color.textTertiary))
-                                } else {
-                                    ZStack {
-                                        Circle().fill(DS.Color.surface)
-                                        ProgressView()
-                                    }
-                                    .frame(width: 80, height: 80)
-                                }
-                            }
-                        } else {
-                            Circle().fill(DS.Color.surface)
-                                .frame(width: 80, height: 80)
-                                .overlay(Image(systemName: "person.fill").font(DS.Font.scaled(30)).foregroundColor(DS.Color.textTertiary))
-                        }
-                    }
-                    .frame(width: 80, height: 80)
-                    .clipShape(Circle())
-                    .overlay(
-                        Circle()
-                            .stroke(DS.Color.primary.opacity(0.3), lineWidth: 2)
-                    )
-
-                    // Camera button with gradient background
-                    ZStack {
-                        Circle()
-                            .fill(DS.Color.gradientPrimary)
-                            .frame(width: 28, height: 28)
-
-                        Image(systemName: "camera.fill")
-                            .font(DS.Font.scaled(12, weight: .semibold))
-                            .foregroundColor(.white)
-                    }
-                    .overlay(Circle().stroke(DS.Color.surface, lineWidth: 2))
-                    .languageHorizontalOffset(8, y: 8)
-                }
-            }
-            Text(L10n.t("تغيير الصورة الشخصية", "Change Profile Photo"))
-                .font(DS.Font.caption1)
-                .fontWeight(.bold)
-                .foregroundColor(DS.Color.primary)
-        }
+        DSProfilePhotoPicker(
+            selectedImage: $localPreviewImage,
+            existingURL: member.avatarUrl
+        )
+        .padding(.horizontal, DS.Spacing.lg)
     }
 
     private func modernTextField(label: String, text: Binding<String>, icon: String, placeholder: String) -> some View {
@@ -494,7 +447,7 @@ struct EditProfileView: View {
                 await authVM.requestPhoneNumberChange(memberId: member.id, newPhoneNumber: normalizedPhone)
             }
 
-            await authVM.updateMemberData(
+            let success = await authVM.updateMemberData(
                 memberId: member.id,
                 fullName: fullName,
                 phoneNumber: member.phoneNumber ?? "",
@@ -504,15 +457,11 @@ struct EditProfileView: View {
                 deathDate: member.isDeceased ?? false ? deathDate : nil,
                 isPhoneHidden: isPhoneHidden
             )
-            dismiss()
-        }
-    }
-
-    private func handleImageChange(_ item: PhotosPickerItem?) {
-        Task {
-            guard let data = try? await item?.loadTransferable(type: Data.self), let uiImg = UIImage(data: data) else { return }
-            await MainActor.run { withAnimation { self.localPreviewImage = uiImg } }
-            await authVM.uploadAvatar(image: uiImg, for: member.id)
+            if success {
+                dismiss()
+            } else {
+                showSaveError = true
+            }
         }
     }
 
@@ -534,7 +483,7 @@ struct GalleryPhotoViewer: View {
                 .onTapGesture { onClose() }
 
             if let url = URL(string: photoURL) {
-                AsyncImage(url: url) { phase in
+                CachedAsyncPhaseImage(url: url) { phase in
                     if let image = phase.image {
                         image
                             .resizable()

@@ -6,25 +6,12 @@ struct RegistrationView: View {
     @State private var fullName: String = ""
     @State private var familyName: String = ""
     @State private var birthDate: Date = Calendar.current.date(byAdding: .year, value: -20, to: Date()) ?? Date()
-    @State private var searchText = ""
-    @State private var selectedFatherId: UUID?
     @State private var selectedGender: String = "male"
 
     // Animation states
     @State private var headerScale: CGFloat = 0.8
     @State private var headerOpacity: CGFloat = 0
     @State private var cardsAppeared = false
-
-    private var fatherCandidates: [FamilyMember] {
-        let base = authVM.allMembers.filter { $0.role != .pending }
-        if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return base.prefix(20).map { $0 }
-        }
-        return base.filter {
-            $0.fullName.localizedCaseInsensitiveContains(searchText) ||
-            $0.firstName.localizedCaseInsensitiveContains(searchText)
-        }.prefix(20).map { $0 }
-    }
 
     var body: some View {
         ZStack {
@@ -77,25 +64,19 @@ struct RegistrationView: View {
                             genderSection
                                 .opacity(cardsAppeared ? 1 : 0)
                                 .offset(y: cardsAppeared ? 0 : 35)
-
-                            // Father selection
-                            fatherSelectionSection
-                                .opacity(cardsAppeared ? 1 : 0)
-                                .offset(y: cardsAppeared ? 0 : 40)
                         }
                         .padding(.horizontal, DS.Spacing.lg)
 
                         // Submit button
                         submitButton
                             .opacity(cardsAppeared ? 1 : 0)
-                            .offset(y: cardsAppeared ? 0 : 50)
+                            .offset(y: cardsAppeared ? 0 : 40)
                     }
                 }
             }
         }
         .toolbar(.hidden, for: .navigationBar)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-        .task { await authVM.fetchAllMembers() }
         .onAppear {
             withAnimation(.spring(response: 0.8, dampingFraction: 0.6).delay(0.2)) {
                 headerScale = 1.0
@@ -290,106 +271,6 @@ struct RegistrationView: View {
         }
     }
 
-    // MARK: - Father Selection Section
-    private var fatherSelectionSection: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-            DSSectionHeader(title: L10n.t("اختيار الأب من الشجرة", "Select Father from Tree"), icon: "person.2.fill")
-
-            DSCard {
-                // Search field
-                HStack(spacing: DS.Spacing.sm) {
-                    DSIcon("magnifyingglass", color: DS.Color.primary)
-                    TextField(L10n.t("ابحث عن اسم الأب...", "Search father's name..."), text: $searchText)
-                        .font(DS.Font.body)
-                }
-                .padding(.horizontal, DS.Spacing.md)
-                .padding(.vertical, DS.Spacing.sm)
-
-                if let fatherId = selectedFatherId,
-                   let father = authVM.allMembers.first(where: { $0.id == fatherId }) {
-                    DSDivider()
-                    HStack {
-                        // Gradient checkmark badge
-                        ZStack {
-                            Circle()
-                                .fill(DS.Color.gradientPrimary)
-                                .frame(width: 24, height: 24)
-                            Image(systemName: "checkmark")
-                                .font(DS.Font.scaled(11, weight: .bold))
-                                .foregroundColor(.white)
-                        }
-                        Text(L10n.t("الأب المختار: \(father.fullName)", "Selected: \(father.fullName)"))
-                            .font(DS.Font.caption1)
-                            .foregroundColor(DS.Color.textSecondary)
-                        Spacer()
-                        Button(L10n.t("إزالة", "Remove")) { selectedFatherId = nil }
-                            .font(DS.Font.caption2)
-                            .foregroundColor(DS.Color.error)
-                    }
-                    .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.vertical, DS.Spacing.sm)
-                }
-
-                if !fatherCandidates.isEmpty {
-                    DSDivider()
-                    VStack(spacing: 0) {
-                        ForEach(fatherCandidates) { candidate in
-                            Button {
-                                selectedFatherId = candidate.id
-                                searchText = candidate.fullName
-                            } label: {
-                                HStack(spacing: DS.Spacing.md) {
-                                    // Gradient avatar circle with first letter
-                                    ZStack {
-                                        Circle()
-                                            .fill(
-                                                selectedFatherId == candidate.id
-                                                    ? DS.Color.gradientPrimary
-                                                    : LinearGradient(
-                                                        colors: [DS.Color.primary.opacity(0.15), DS.Color.neonPurple.opacity(0.15)],
-                                                        startPoint: .topLeading,
-                                                        endPoint: .bottomTrailing
-                                                    )
-                                            )
-                                            .frame(width: 36, height: 36)
-
-                                        Text(String(candidate.fullName.prefix(1)))
-                                            .font(DS.Font.scaled(14, weight: .bold))
-                                            .foregroundColor(selectedFatherId == candidate.id ? .white : DS.Color.primary)
-                                    }
-
-                                    Text(candidate.fullName)
-                                        .font(DS.Font.callout)
-                                        .foregroundColor(DS.Color.textPrimary)
-                                        .lineLimit(1)
-
-                                    Spacer()
-
-                                    if selectedFatherId == candidate.id {
-                                        Image(systemName: "checkmark.circle.fill")
-                                            .foregroundColor(DS.Color.success)
-                                            .font(DS.Font.scaled(18))
-                                    }
-                                }
-                                .padding(.horizontal, DS.Spacing.lg)
-                                .padding(.vertical, DS.Spacing.md)
-                                .background(
-                                    selectedFatherId == candidate.id
-                                        ? DS.Color.primary.opacity(0.05)
-                                        : Color.clear
-                                )
-                            }
-                            if candidate.id != fatherCandidates.last?.id {
-                                DSDivider()
-                            }
-                        }
-                    }
-                    .frame(maxHeight: 200)
-                }
-            }
-        }
-    }
-
     // MARK: - Submit Button
     private var submitButton: some View {
         VStack(spacing: DS.Spacing.sm) {
@@ -408,8 +289,7 @@ struct RegistrationView: View {
                         firstName: trimmedFull,
                         familyName: trimmedFamily,
                         birthDate: birthDate,
-                        gender: selectedGender,
-                        fatherId: selectedFatherId
+                        gender: selectedGender
                     )
                 }
             }

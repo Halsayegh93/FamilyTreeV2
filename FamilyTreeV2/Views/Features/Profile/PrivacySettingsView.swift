@@ -10,6 +10,7 @@ struct PrivacySettingsView: View {
     @State private var badgeEnabled: Bool = true
     @State private var isPhoneHidden: Bool = false
     @State private var isBirthDateHidden: Bool = false
+    @State private var showUpdateError: Bool = false
 
 
     var body: some View {
@@ -62,14 +63,25 @@ struct PrivacySettingsView: View {
         .onChange(of: isPhoneHidden) { _, newValue in
             Task {
                 let success = await authVM.updatePhoneHidden(newValue)
-                if !success { isPhoneHidden = !newValue }
+                if !success {
+                    isPhoneHidden = !newValue
+                    showUpdateError = true
+                }
             }
         }
         .onChange(of: isBirthDateHidden) { _, newValue in
             Task {
                 let success = await authVM.updateBirthDateHidden(newValue)
-                if !success { isBirthDateHidden = !newValue }
+                if !success {
+                    isBirthDateHidden = !newValue
+                    showUpdateError = true
+                }
             }
+        }
+        .alert(L10n.t("خطأ", "Error"), isPresented: $showUpdateError) {
+            Button(L10n.t("حسناً", "OK"), role: .cancel) {}
+        } message: {
+            Text(L10n.t("تعذر تحديث الإعداد. حاول مرة أخرى.", "Failed to update setting. Please try again."))
         }
     }
 

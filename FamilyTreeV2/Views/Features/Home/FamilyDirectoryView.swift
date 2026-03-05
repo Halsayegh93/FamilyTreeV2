@@ -286,8 +286,8 @@ struct FamilyDirectoryView: View {
                                 startPoint: .topLeading, endPoint: .bottomTrailing
                             )
                         )
-                        .frame(width: 48, height: 48)
-                    
+                        .frame(width: 44, height: 44)
+
                     if let urlStr = member.avatarUrl, let url = URL(string: urlStr) {
                         CachedAsyncImage(url: url) { image in
                             image.resizable().scaledToFill()
@@ -296,21 +296,21 @@ struct FamilyDirectoryView: View {
                                 .font(DS.Font.scaled(18, weight: .bold))
                                 .foregroundColor(.white)
                         }
-                        .frame(width: 48, height: 48)
+                        .frame(width: 44, height: 44)
                         .clipShape(Circle())
                     } else {
                         Text(String(member.firstName.prefix(1)))
                             .font(DS.Font.scaled(18, weight: .bold))
                             .foregroundColor(.white)
                     }
-                    
+
                     if member.isDeceased ?? false {
                         VStack {
                             Spacer()
                             HStack { Spacer()
                                 Circle()
                                     .fill(DS.Color.deceased)
-                                    .frame(width: 14, height: 14)
+                                    .frame(width: 13, height: 13)
                                     .overlay(
                                         Image(systemName: "heart.slash.fill")
                                             .font(.system(size: 7, weight: .bold))
@@ -318,7 +318,7 @@ struct FamilyDirectoryView: View {
                                     )
                             }
                         }
-                        .frame(width: 48, height: 48)
+                        .frame(width: 44, height: 44)
                     }
                 }
                 

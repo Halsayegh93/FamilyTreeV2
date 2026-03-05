@@ -86,7 +86,12 @@ class AuthViewModel: ObservableObject {
     @Published var isLoading: Bool = false
     @Published var isAuthenticated: Bool = false
     @Published var currentUser: FamilyMember? = nil
-    @Published var allMembers: [FamilyMember] = []
+    @Published var allMembers: [FamilyMember] = [] {
+        didSet { _memberById = Dictionary(uniqueKeysWithValues: allMembers.map { ($0.id, $0) }) }
+    }
+    /// O(1) member lookup by ID — use instead of allMembers.first(where:)
+    private(set) var _memberById: [UUID: FamilyMember] = [:]
+    func member(byId id: UUID) -> FamilyMember? { _memberById[id] }
     @Published var currentMemberChildren: [FamilyMember] = []
     
     // Fetch throttle timestamps
@@ -901,7 +906,7 @@ class AuthViewModel: ObservableObject {
         
         // 3. البحث عن بيانات الأب لبناء الاسم الكامل
         let father: FamilyMember?
-        if let localFather = allMembers.first(where: { $0.id == fatherId }) {
+        if let localFather = _memberById[fatherId] {
             father = localFather
         } else {
             let remoteFathers: [FamilyMember]? = try? await supabase
@@ -1087,7 +1092,7 @@ class AuthViewModel: ObservableObject {
         do {
             // حذف الملف من التخزين إذا كان موجوداً
             let cachedAvatarURL =
-                allMembers.first(where: { $0.id == memberId })?.avatarUrl ??
+                _memberById[memberId]?.avatarUrl ??
                 (currentUser?.id == memberId ? currentUser?.avatarUrl : nil)
             
             let safeName = getSafeMemberName(for: memberId)
@@ -1179,7 +1184,7 @@ class AuthViewModel: ObservableObject {
         self.isLoading = true
         do {
             let cachedCoverURL =
-                allMembers.first(where: { $0.id == memberId })?.coverUrl ??
+                _memberById[memberId]?.coverUrl ??
                 (currentUser?.id == memberId ? currentUser?.coverUrl : nil)
             
             let safeName = getSafeMemberName(for: memberId)
@@ -1269,7 +1274,7 @@ class AuthViewModel: ObservableObject {
         self.isLoading = true
         let safeName = getSafeMemberName(for: memberId)
         
-        let photoURL = allMembers.first(where: { $0.id == memberId })?.photoURL ?? (currentUser?.id == memberId ? currentUser?.photoURL : nil)
+        let photoURL = _memberById[memberId]?.photoURL ?? (currentUser?.id == memberId ? currentUser?.photoURL : nil)
         var pathsToRemove: [String] = ["member_photos/\(memberId.uuidString).jpg", "member_photos/\(safeName).jpg"]
         
         if let photoURL, let parsedPath = storagePath(fromPublicURL: photoURL, bucket: "gallery"), !pathsToRemove.contains(parsedPath) {
@@ -1467,7 +1472,7 @@ class AuthViewModel: ObservableObject {
     func approveMember(memberId: UUID, fatherId: UUID?) async {
         self.isLoading = true
         let fatherName = fatherId.flatMap { id in
-            allMembers.first(where: { $0.id == id })?.fullName
+            _memberById[id]?.fullName
         }
         do {
             let payload: [String: AnyEncodable] = [
@@ -1615,7 +1620,7 @@ class AuthViewModel: ObservableObject {
                 .execute()
             
             // 4) التحديث المحلي الفوري لضمان اختفائه من الواجهة فوراً
-            let deletedName = allMembers.first(where: { $0.id == memberId })?.firstName ?? "عضو"
+            let deletedName = _memberById[memberId]?.firstName ?? "عضو"
             allMembers.removeAll(where: { $0.id == memberId })
             currentMemberChildren.removeAll(where: { $0.id == memberId })
             objectWillChange.send()
@@ -1633,6 +1638,7 @@ class AuthViewModel: ObservableObject {
         }
     }
     // تحديث بيانات فرد (سواء الملف الشخصي الحالي أو بيانات الأبناء) ✅
+    @discardableResult
     func updateMemberData(
         memberId: UUID,
         fullName: String,
@@ -1642,17 +1648,17 @@ class AuthViewModel: ObservableObject {
         isDeceased: Bool,
         deathDate: Date?,
         isPhoneHidden: Bool
-    ) async {
+    ) async -> Bool {
         self.isLoading = true
-        
+
         // استخراج الاسم الأول تلقائياً
         let firstName = fullName.components(separatedBy: " ").first ?? fullName
-        
+
         // إعداد منسق التاريخ (Locale لضمان أرقام إنجليزية)
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
         formatter.locale = Locale(identifier: "en_US_POSIX")
-        
+
         // 2. تجهيز مصفوفة البيانات وإضافة حقل الهاتف ✅
         let normalizedPhone = KuwaitPhone.normalizeForStorageFromInput(phoneNumber) ?? ""
         var updateData: [String: AnyEncodable] = [
@@ -1664,11 +1670,11 @@ class AuthViewModel: ObservableObject {
             "is_deceased": AnyEncodable(isDeceased),
             "is_phone_hidden": AnyEncodable(isPhoneHidden)
         ]
-        
+
         if isDeceased, let dDate = deathDate {
             updateData["death_date"] = AnyEncodable(formatter.string(from: dDate))
         }
-        
+
         do {
             // 3. تنفيذ التحديث في Supabase
             try await supabase
@@ -1676,21 +1682,24 @@ class AuthViewModel: ObservableObject {
                 .update(updateData)
                 .eq("id", value: memberId.uuidString)
                 .execute()
-            
+
             // 4. تحديث البيانات محلياً
             await fetchAllMembers()
-            
+
             // إذا كان المستخدم يحدّث ملفه الشخصي "هو"
             if memberId == currentUser?.id {
                 await checkUserProfile()
             }
-            
+
             Log.info("تم تحديث بيانات: \(fullName) بنجاح")
-            
+            self.isLoading = false
+            return true
+
         } catch {
             Log.error("خطأ في التحديث: \(error.localizedDescription)")
+            self.isLoading = false
+            return false
         }
-        self.isLoading = false
     }
 
     /// تحديث السيرة الذاتية (bio_json)
@@ -1723,7 +1732,7 @@ class AuthViewModel: ObservableObject {
                 .eq("id", value: userId.uuidString)
                 .execute()
             await fetchAllMembers()
-            if let updated = allMembers.first(where: { $0.id == userId }) {
+            if let updated = _memberById[userId] {
                 self.currentUser = updated
             }
             return true
@@ -1744,7 +1753,7 @@ class AuthViewModel: ObservableObject {
                 .eq("id", value: userId.uuidString)
                 .execute()
             await fetchAllMembers()
-            if let updated = allMembers.first(where: { $0.id == userId }) {
+            if let updated = _memberById[userId] {
                 self.currentUser = updated
             }
             return true
@@ -1763,7 +1772,7 @@ class AuthViewModel: ObservableObject {
                 .eq("id", value: userId.uuidString)
                 .execute()
             await fetchAllMembers()
-            if let updated = allMembers.first(where: { $0.id == userId }) {
+            if let updated = _memberById[userId] {
                 self.currentUser = updated
             }
         } catch {
@@ -1814,7 +1823,7 @@ class AuthViewModel: ObservableObject {
         
         // بحث تلقائي عن مطابقات في الشجرة بالاسم الكامل أو أجزاء منه
         let matchedMemberIds = await searchForNameMatches(fullName: fullName, firstName: cleanFirstName)
-        
+
         let profileData: [String: AnyEncodable] = [
             "id": AnyEncodable(user.id),
             "full_name": AnyEncodable(fullName),
@@ -1957,7 +1966,7 @@ class AuthViewModel: ObservableObject {
         }
         
         // تجاهل إذا الرتبة نفسها لم تتغير
-        let currentRole = allMembers.first(where: { $0.id == memberId })?.role
+        let currentRole = _memberById[memberId]?.role
         guard currentRole != newRole else {
             Log.info("الرتبة لم تتغير، تم التجاهل")
             return
@@ -1976,7 +1985,7 @@ class AuthViewModel: ObservableObject {
             // 2. تحديث البيانات محلياً لكي تظهر التغييرات فوراً في الشجرة
             await fetchAllMembers()
             
-            let memberName = allMembers.first(where: { $0.id == memberId })?.firstName ?? "عضو"
+            let memberName = _memberById[memberId]?.firstName ?? "عضو"
             let roleName = newRole == .admin ? "مدير" : (newRole == .supervisor ? "مشرف" : "عضو")
             
             // 3. إشعار المدراء بتغيير الرتبة (push + داخلي)
@@ -2086,7 +2095,7 @@ class AuthViewModel: ObservableObject {
                 .insert(requestData)
                 .execute()
             
-            let deceasedMemberName = allMembers.first(where: { $0.id == memberId })?.firstName ?? "عضو"
+            let deceasedMemberName = _memberById[memberId]?.firstName ?? "عضو"
             let requesterDeceasedName = currentUser?.firstName ?? "عضو"
             let deceasedBody = "طلب تأكيد وفاة: \(deceasedMemberName)\nتاريخ الوفاة: \(dateString)\nبواسطة: \(requesterDeceasedName)"
             await notifyAdminsWithPush(
@@ -2141,7 +2150,7 @@ class AuthViewModel: ObservableObject {
             await fetchDeceasedRequests(force: true)
             await fetchAllMembers()
             
-            let memberName = allMembers.first(where: { $0.id == request.memberId })?.firstName ?? "عضو"
+            let memberName = _memberById[request.memberId]?.firstName ?? "عضو"
             await notifyAdmins(
                 title: "تأكيد وفاة",
                 body: "تم تأكيد وفاة \(memberName).",
@@ -2569,7 +2578,7 @@ class AuthViewModel: ObservableObject {
             await fetchPhoneChangeRequests(force: true)
             await fetchAllMembers()
             
-            let memberName = allMembers.first(where: { $0.id == request.memberId })?.firstName ?? "عضو"
+            let memberName = _memberById[request.memberId]?.firstName ?? "عضو"
             await notifyAdmins(
                 title: "اعتماد تغيير رقم",
                 body: "تم اعتماد تغيير رقم جوال \(memberName).",
@@ -2595,7 +2604,7 @@ class AuthViewModel: ObservableObject {
             
             await fetchPhoneChangeRequests(force: true)
             
-            let rejectPhoneMemberName = allMembers.first(where: { $0.id == request.memberId })?.firstName ?? "عضو"
+            let rejectPhoneMemberName = _memberById[request.memberId]?.firstName ?? "عضو"
             await notifyAdmins(
                 title: "رفض تغيير رقم",
                 body: "تم رفض طلب تغيير رقم جوال \(rejectPhoneMemberName).",

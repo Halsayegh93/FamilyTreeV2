@@ -24,7 +24,6 @@ struct NotificationsCenterView: View {
         NavigationStack {
             ZStack {
                 DS.Color.background.ignoresSafeArea()
-
                 DSDecorativeBackground()
 
                 VStack(spacing: 0) {
@@ -34,10 +33,10 @@ struct NotificationsCenterView: View {
                     } else {
                         // فلاتر نوع الإشعار
                         notificationFilterChips
-                        
+
                         // ملخص سريع
                         notificationSummaryBar
-                        
+
                         notificationsList
                     }
 
@@ -79,8 +78,7 @@ struct NotificationsCenterView: View {
                         Button {
                             withAnimation(DS.Anim.snappy) {
                                 if isSelecting {
-                                    // تحديد الكل / إلغاء تحديد الكل
-                                    let allIds = Set(authVM.notifications.map(\.id))
+                                    let allIds = Set(filteredNotifications.map(\.id))
                                     if selectedIds == allIds {
                                         selectedIds.removeAll()
                                     } else {
@@ -93,7 +91,7 @@ struct NotificationsCenterView: View {
                             }
                         } label: {
                             if isSelecting {
-                                let allIds = Set(authVM.notifications.map(\.id))
+                                let allIds = Set(filteredNotifications.map(\.id))
                                 let allSelected = !allIds.isEmpty && selectedIds == allIds
                                 Image(systemName: allSelected ? "checkmark.circle.fill" : "checklist")
                                     .font(DS.Font.scaled(20, weight: .medium))
@@ -127,17 +125,23 @@ struct NotificationsCenterView: View {
         return NavigationStack {
             ZStack {
                 DS.Color.background.ignoresSafeArea()
+                DSDecorativeBackground()
 
-                ScrollView {
+                ScrollView(showsIndicators: false) {
                     VStack(spacing: DS.Spacing.xl) {
                         // Icon
                         ZStack {
                             Circle()
+                                .fill(iconInfo.color.opacity(0.08))
+                                .frame(width: 100, height: 100)
+                            Circle()
+                                .fill(iconInfo.color.opacity(0.12))
+                                .frame(width: 76, height: 76)
+                            Circle()
                                 .fill(iconInfo.gradient)
-                                .frame(width: 72, height: 72)
-
+                                .frame(width: 56, height: 56)
                             Image(systemName: iconInfo.icon)
-                                .font(DS.Font.scaled(28, weight: .bold))
+                                .font(DS.Font.scaled(24, weight: .bold))
                                 .foregroundColor(.white)
                         }
                         .padding(.top, DS.Spacing.xl)
@@ -160,10 +164,10 @@ struct NotificationsCenterView: View {
                             .multilineTextAlignment(.center)
                             .padding(.horizontal, DS.Spacing.lg)
 
-                        // Body — full text
-                        DSCard(padding: 0) {
+                        // Body
+                        DSCard {
                             VStack(alignment: .leading, spacing: DS.Spacing.md) {
-                                Text(notification.body)
+                                Text(cleanBody(notification.body))
                                     .font(DS.Font.body)
                                     .foregroundColor(DS.Color.textPrimary)
                                     .multilineTextAlignment(.leading)
@@ -173,39 +177,71 @@ struct NotificationsCenterView: View {
                         }
                         .padding(.horizontal, DS.Spacing.lg)
 
-                        // Created by
-                        if let creatorName = createdByName(for: notification) {
-                            HStack(spacing: DS.Spacing.sm) {
-                                DSIcon("person.fill", color: DS.Color.warning)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(L10n.t("بواسطة", "By"))
-                                        .font(DS.Font.caption1)
-                                        .foregroundColor(DS.Color.textSecondary)
-                                    Text(creatorName)
-                                        .font(DS.Font.calloutBold)
-                                        .foregroundColor(DS.Color.textPrimary)
+                        // Info rows
+                        VStack(spacing: DS.Spacing.md) {
+                            // Created by
+                            if let creatorName = createdByName(for: notification) {
+                                DSCard {
+                                    HStack(spacing: DS.Spacing.md) {
+                                        ZStack {
+                                            Circle()
+                                                .fill(
+                                                    LinearGradient(
+                                                        colors: [DS.Color.warning.opacity(0.2), DS.Color.warning.opacity(0.08)],
+                                                        startPoint: .topLeading, endPoint: .bottomTrailing
+                                                    )
+                                                )
+                                                .frame(width: 40, height: 40)
+                                            Image(systemName: "person.fill")
+                                                .font(DS.Font.scaled(16, weight: .semibold))
+                                                .foregroundColor(DS.Color.warning)
+                                        }
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(L10n.t("بواسطة", "By"))
+                                                .font(DS.Font.caption1)
+                                                .foregroundColor(DS.Color.textSecondary)
+                                            Text(creatorName)
+                                                .font(DS.Font.calloutBold)
+                                                .foregroundColor(DS.Color.textPrimary)
+                                        }
+                                        Spacer()
+                                    }
+                                    .padding(DS.Spacing.lg)
                                 }
-                                Spacer()
                             }
-                            .padding(.horizontal, DS.Spacing.lg)
-                        }
 
-                        // Time
-                        HStack(spacing: DS.Spacing.sm) {
-                            DSIcon("clock", color: DS.Color.textTertiary)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(L10n.t("الوقت", "Time"))
-                                    .font(DS.Font.caption1)
-                                    .foregroundColor(DS.Color.textSecondary)
-                                Text(relativeTime(notification.createdDate))
-                                    .font(DS.Font.calloutBold)
-                                    .foregroundColor(DS.Color.textPrimary)
+                            // Time
+                            DSCard {
+                                HStack(spacing: DS.Spacing.md) {
+                                    ZStack {
+                                        Circle()
+                                            .fill(
+                                                LinearGradient(
+                                                    colors: [DS.Color.textTertiary.opacity(0.2), DS.Color.textTertiary.opacity(0.08)],
+                                                    startPoint: .topLeading, endPoint: .bottomTrailing
+                                                )
+                                            )
+                                            .frame(width: 40, height: 40)
+                                        Image(systemName: "clock")
+                                            .font(DS.Font.scaled(16, weight: .semibold))
+                                            .foregroundColor(DS.Color.textTertiary)
+                                    }
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(L10n.t("الوقت", "Time"))
+                                            .font(DS.Font.caption1)
+                                            .foregroundColor(DS.Color.textSecondary)
+                                        Text(relativeTime(notification.createdDate))
+                                            .font(DS.Font.calloutBold)
+                                            .foregroundColor(DS.Color.textPrimary)
+                                    }
+                                    Spacer()
+                                }
+                                .padding(DS.Spacing.lg)
                             }
-                            Spacer()
                         }
                         .padding(.horizontal, DS.Spacing.lg)
 
-                        Spacer()
+                        Spacer(minLength: DS.Spacing.xxxl)
                     }
                 }
             }
@@ -299,7 +335,12 @@ struct NotificationsCenterView: View {
         }
         .padding(.horizontal, DS.Spacing.lg)
         .padding(.vertical, DS.Spacing.md)
-        .background(.ultraThinMaterial)
+        .background(DS.Color.surfaceElevated)
+        .overlay(alignment: .top) {
+            Rectangle()
+                .fill(DS.Color.textTertiary.opacity(0.15))
+                .frame(height: 0.5)
+        }
         .transition(.move(edge: .bottom).combined(with: .opacity))
     }
 
@@ -312,16 +353,16 @@ struct NotificationsCenterView: View {
         default: return kind
         }
     }
-    
+
     // MARK: - Filtered Notifications
     private var filteredNotifications: [AppNotification] {
         guard let kind = filterKind else { return authVM.notifications }
         return authVM.notifications.filter { kindGroup(for: $0.kind) == kind }
     }
-    
+
     // MARK: - إحصائية سريعة
     private var notificationSummaryBar: some View {
-        let unreadCount = authVM.notifications.filter { !$0.read }.count
+        let unreadCount = filteredNotifications.filter { !$0.read }.count
         return Group {
             if unreadCount > 0 {
                 HStack(spacing: DS.Spacing.sm) {
@@ -331,9 +372,9 @@ struct NotificationsCenterView: View {
                     Text("\(unreadCount) " + L10n.t("غير مقروء", "unread"))
                         .font(DS.Font.scaled(12, weight: .semibold))
                         .foregroundColor(DS.Color.textSecondary)
-                    
+
                     Spacer()
-                    
+
                     // زر جعل الكل مقروء
                     Button {
                         Task { await authVM.markAllNotificationsAsRead() }
@@ -357,7 +398,7 @@ struct NotificationsCenterView: View {
             }
         }
     }
-    
+
     // MARK: - فلاتر الإشعارات
     private var notificationFilterChips: some View {
         let groupedKinds = Array(Set(authVM.notifications.map { kindGroup(for: $0.kind) })).sorted()
@@ -367,7 +408,7 @@ struct NotificationsCenterView: View {
                     HStack(spacing: DS.Spacing.sm) {
                         // زر الكل
                         filterChip(label: L10n.t("الكل", "All"), kind: nil, count: authVM.notifications.count)
-                        
+
                         ForEach(groupedKinds, id: \.self) { group in
                             let count = authVM.notifications.filter { kindGroup(for: $0.kind) == group }.count
                             filterChip(label: kindLabel(for: group), kind: group, count: count)
@@ -379,11 +420,11 @@ struct NotificationsCenterView: View {
             }
         }
     }
-    
+
     private func filterChip(label: String, kind: String?, count: Int) -> some View {
         let isActive = filterKind == kind
         let iconInfo: (icon: String, gradient: LinearGradient, color: Color) = kind.map { notificationIcon(for: $0) } ?? ("bell.fill", DS.Color.gradientPrimary, DS.Color.primary)
-        
+
         return Button {
             withAnimation(DS.Anim.snappy) { filterKind = kind }
         } label: {
@@ -407,24 +448,23 @@ struct NotificationsCenterView: View {
         }
         .buttonStyle(.plain)
     }
-    
+
     // MARK: - Empty State
     private var emptyState: some View {
         VStack(spacing: DS.Spacing.xl) {
             ZStack {
                 Circle()
-                    .fill(DS.Color.gradientPrimary)
+                    .fill(DS.Color.primary.opacity(0.08))
                     .frame(width: 120, height: 120)
-                    .opacity(0.08)
-
                 Circle()
-                    .fill(DS.Color.gradientAccent)
+                    .fill(DS.Color.primary.opacity(0.12))
                     .frame(width: 88, height: 88)
-                    .opacity(0.12)
-
+                Circle()
+                    .fill(DS.Color.gradientPrimary)
+                    .frame(width: 60, height: 60)
                 Image(systemName: "bell.slash.fill")
-                    .font(DS.Font.scaled(40, weight: .bold))
-                    .foregroundStyle(DS.Color.gradientPrimary)
+                    .font(DS.Font.scaled(26, weight: .bold))
+                    .foregroundColor(.white)
             }
             .scaleEffect(appeared ? 1 : 0.7)
             .opacity(appeared ? 1 : 0)
@@ -433,7 +473,7 @@ struct NotificationsCenterView: View {
                 Text(L10n.t("لا توجد إشعارات", "No Notifications"))
                     .font(DS.Font.title3)
                     .foregroundColor(DS.Color.textPrimary)
-                
+
                 Text(L10n.t("ستظهر الإشعارات هنا عند وصولها", "Notifications will appear here when received"))
                     .font(DS.Font.subheadline)
                     .foregroundColor(DS.Color.textSecondary)
@@ -485,16 +525,14 @@ struct NotificationsCenterView: View {
     // MARK: - Created By Name (للمدراء والمشرفين فقط)
     private func createdByName(for notification: AppNotification) -> String? {
         guard authVM.canModerate else { return nil }
-        // البحث عبر created_by أولاً
         if let creatorId = notification.createdBy {
-            if let member = authVM.allMembers.first(where: { $0.id == creatorId }) {
+            if let member = authVM.member(byId: creatorId) {
                 return member.fullName
             }
             if creatorId == authVM.currentUser?.id {
                 return authVM.currentUser?.fullName
             }
         }
-        // استخراج الاسم من نص الإشعار إذا يحتوي سطر "بواسطة:"
         for line in notification.body.components(separatedBy: "\n") {
             if line.hasPrefix("بواسطة: ") {
                 let name = String(line.dropFirst("بواسطة: ".count)).trimmingCharacters(in: .whitespacesAndNewlines)
@@ -536,7 +574,7 @@ struct NotificationsCenterView: View {
             return L10n.t("أقدم", "Older")
         }
     }
-    
+
     private var groupedNotifications: [(String, [AppNotification])] {
         let sorted = filteredNotifications.sorted { $0.createdDate > $1.createdDate }
         let grouped = Dictionary(grouping: sorted) { dateSection(for: $0.createdDate) }
@@ -551,7 +589,7 @@ struct NotificationsCenterView: View {
             return (section, items)
         }
     }
-    
+
     // MARK: - Notifications List
     private var notificationsList: some View {
         List {
@@ -564,7 +602,7 @@ struct NotificationsCenterView: View {
                         notificationRow(item: item, iconInfo: iconInfo, isUnread: isUnread)
                             .opacity(appeared ? 1 : 0)
                             .offset(y: appeared ? 0 : 20)
-                            .animation(DS.Anim.smooth.delay(Double(index) * 0.04), value: appeared)
+                            .animation(DS.Anim.smooth.delay(Double(min(index, 5)) * 0.04), value: appeared)
                             .listRowInsets(EdgeInsets(top: DS.Spacing.xs, leading: DS.Spacing.lg, bottom: DS.Spacing.xs, trailing: DS.Spacing.lg))
                             .listRowBackground(Color.clear)
                             .listRowSeparator(.hidden)
@@ -591,7 +629,7 @@ struct NotificationsCenterView: View {
                         Text(section)
                             .font(DS.Font.scaled(13, weight: .bold))
                             .foregroundColor(DS.Color.textSecondary)
-                        
+
                         Rectangle()
                             .fill(DS.Color.textTertiary.opacity(0.2))
                             .frame(height: 1)
@@ -603,6 +641,9 @@ struct NotificationsCenterView: View {
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
+        .refreshable {
+            await authVM.fetchNotifications()
+        }
     }
 
     // MARK: - Notification Row
@@ -639,7 +680,7 @@ struct NotificationsCenterView: View {
                     Circle()
                         .fill(isUnread ? iconInfo.gradient : LinearGradient(colors: [Color.gray.opacity(0.3), Color.gray.opacity(0.2)], startPoint: .topLeading, endPoint: .bottomTrailing))
                         .frame(width: 48, height: 48)
-                    
+
                     Image(systemName: iconInfo.icon)
                         .font(DS.Font.scaled(18, weight: .bold))
                         .foregroundColor(isUnread ? .white : DS.Color.textTertiary)
@@ -662,9 +703,9 @@ struct NotificationsCenterView: View {
                             .font(isUnread ? DS.Font.headline : DS.Font.callout)
                             .foregroundColor(isUnread ? DS.Color.textPrimary : DS.Color.textSecondary)
                             .lineLimit(1)
-                        
+
                         Spacer(minLength: 0)
-                        
+
                         // Kind badge
                         Text(kindLabel(for: item.kind))
                             .font(DS.Font.caption2)
@@ -675,13 +716,14 @@ struct NotificationsCenterView: View {
                             .background((isUnread ? iconInfo.color : Color.gray).opacity(0.10))
                             .clipShape(Capsule())
                     }
-                    
-                    // Body — كل التفاصيل
-                    Text(item.body)
+
+                    // Body — محدود السطور مع cleanBody
+                    Text(cleanBody(item.body))
                         .font(DS.Font.subheadline)
                         .foregroundColor(isUnread ? DS.Color.textPrimary : DS.Color.textTertiary)
+                        .lineLimit(2)
                         .multilineTextAlignment(.leading)
-                    
+
                     // Created by (للمدراء والمشرفين فقط)
                     if let creatorName = createdByName(for: item) {
                         HStack(spacing: DS.Spacing.xs) {
@@ -694,7 +736,7 @@ struct NotificationsCenterView: View {
                         .foregroundColor(DS.Color.warning)
                         .padding(.top, 1)
                     }
-                    
+
                     // Time
                     HStack(spacing: DS.Spacing.xs) {
                         Image(systemName: "clock")
@@ -726,7 +768,7 @@ struct NotificationsCenterView: View {
                     Label(L10n.t("تعليم كمقروء", "Mark as Read"), systemImage: "envelope.open")
                 }
             }
-            
+
             Button(role: .destructive) {
                 Task { await authVM.deleteNotification(id: item.id) }
             } label: {

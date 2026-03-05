@@ -99,12 +99,22 @@ struct HomeNewsView: View {
     }
 
     // MARK: - Comment Sheet Component
+    @State private var isLoadingComments = false
+
     private func NewsCommentsSheet(news: NewsPost) -> some View {
         NavigationStack {
             VStack {
-                if let postComments = authVM.commentsByPost[news.id], !postComments.isEmpty {
+                if isLoadingComments {
+                    VStack(spacing: DS.Spacing.md) {
+                        ProgressView()
+                        Text(L10n.t("جاري تحميل التعليقات...", "Loading comments..."))
+                            .font(DS.Font.callout)
+                            .foregroundColor(DS.Color.textSecondary)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if let postComments = authVM.commentsByPost[news.id], !postComments.isEmpty {
                     ScrollView {
-                        VStack(spacing: DS.Spacing.sm) {
+                        LazyVStack(spacing: DS.Spacing.sm) {
                             ForEach(postComments) { comment in
                                 HStack(alignment: .top, spacing: DS.Spacing.sm) {
                                     VStack(alignment: .leading, spacing: 2) {
@@ -169,6 +179,11 @@ struct HomeNewsView: View {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(L10n.t("إغلاق", "Close")) { selectedNewsForComments = nil }
                 }
+            }
+            .task {
+                isLoadingComments = true
+                await authVM.fetchNewsComments(for: [news.id])
+                isLoadingComments = false
             }
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
@@ -450,7 +465,25 @@ struct HomeNewsCardView: View {
         case "زواج": return DS.Color.newsWedding
         case "مولود": return DS.Color.newsBirth
         case "تصويت": return DS.Color.newsVote
+        case "إعلان": return DS.Color.newsAnnouncement
+        case "تهنئة": return DS.Color.newsCongrats
+        case "تذكير": return DS.Color.newsReminder
+        case "دعوة": return DS.Color.newsInvitation
         default: return DS.Color.primary
+        }
+    }
+
+    private func iconForType(_ type: String) -> String {
+        switch type {
+        case "وفاة": return "heart.slash.fill"
+        case "زواج": return "heart.fill"
+        case "مولود": return "figure.child"
+        case "تصويت": return "chart.bar.fill"
+        case "إعلان": return "megaphone.fill"
+        case "تهنئة": return "hands.clap.fill"
+        case "تذكير": return "bell.badge.fill"
+        case "دعوة": return "envelope.open.fill"
+        default: return "newspaper.fill"
         }
     }
 
@@ -461,13 +494,17 @@ struct HomeNewsCardView: View {
         case "مولود": return L10n.t("مولود", "Newborn")
         case "وفاة": return L10n.t("وفاة", "Obituary")
         case "تصويت": return L10n.t("تصويت", "Poll")
+        case "إعلان": return L10n.t("إعلان", "Announcement")
+        case "تهنئة": return L10n.t("تهنئة", "Congrats")
+        case "تذكير": return L10n.t("تذكير", "Reminder")
+        case "دعوة": return L10n.t("دعوة", "Invitation")
         default: return type
         }
     }
 
     private var authorMember: FamilyMember? {
         guard let authorId else { return nil }
-        return authVM.allMembers.first(where: { $0.id == authorId })
+        return authVM.member(byId: authorId)
     }
 
     private var shortDisplayName: String {
@@ -537,9 +574,13 @@ struct HomeNewsCardView: View {
                                 .foregroundColor(DS.Color.textPrimary)
                                 .lineLimit(1)
                             
-                            Text(displayNameForType(type))
-                                .font(DS.Font.caption2)
-                                .fontWeight(.semibold)
+                            HStack(spacing: 3) {
+                                Image(systemName: iconForType(type))
+                                    .font(DS.Font.scaled(9, weight: .bold))
+                                Text(displayNameForType(type))
+                                    .font(DS.Font.caption2)
+                                    .fontWeight(.semibold)
+                            }
                                 .foregroundColor(colorForType(type))
                                 .padding(.horizontal, DS.Spacing.sm)
                                 .padding(.vertical, 2)
@@ -602,47 +643,44 @@ struct HomeNewsCardView: View {
                     .padding(.bottom, DS.Spacing.md)
             }
 
-            // منطقة الميديا (صور)
+            // منطقة الميديا (صور) — Instagram-style
             if !imageUrls.isEmpty {
                 TabView {
                     ForEach(Array(imageUrls.enumerated()), id: \.offset) { _, urlStr in
                         if let encodedStr = urlStr.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
                            let url = URL(string: encodedStr) {
                             CachedAsyncImage(url: url) { img in
-                                img.resizable().scaledToFit()
-                                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
-                            } placeholder: { 
+                                img.resizable().scaledToFill()
+                                    .frame(maxWidth: .infinity)
+                                    .clipped()
+                            } placeholder: {
                                 ZStack {
                                     Color.gray.opacity(0.05)
-                                    ProgressView().tint(DS.Color.primary) 
+                                    ProgressView().tint(DS.Color.primary)
                                 }
-                                .frame(height: 200)
-                                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
                             }
                         }
                     }
                 }
-                .frame(height: 300)
+                .aspectRatio(4/5, contentMode: .fit)
+                .clipped()
                 .tabViewStyle(.page(indexDisplayMode: imageUrls.count > 1 ? .automatic : .never))
-                .padding(.horizontal, DS.Spacing.md)
             } else if let urlStr = imageUrl,
                       let encodedStr = urlStr.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
                       let url = URL(string: encodedStr) {
                 CachedAsyncImage(url: url) { img in
                     img.resizable()
-                        .scaledToFit()
+                        .scaledToFill()
                         .frame(maxWidth: .infinity)
-                        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+                        .clipped()
                 } placeholder: {
                     ZStack {
                         Color.gray.opacity(0.05)
                         ProgressView().tint(DS.Color.primary)
                     }
-                    .frame(height: 200)
-                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
                 }
-                .frame(maxWidth: .infinity)
-                .padding(.horizontal, DS.Spacing.md)
+                .aspectRatio(4/5, contentMode: .fit)
+                .clipped()
             }
 
             // التصويت
@@ -819,7 +857,6 @@ struct AddNewsView: View {
     @Environment(\.dismiss) var dismiss
     @State private var content = ""
     @State private var selectedType = "خبر"
-    @State private var selectedPhotoItems: [PhotosPickerItem] = []
     @State private var selectedImages: [UIImage] = []
     @State private var pollQuestion = ""
     @State private var pollOption1 = ""
@@ -827,7 +864,7 @@ struct AddNewsView: View {
     @State private var pollOption3 = ""
     @State private var pollOption4 = ""
     @State private var showPostErrorAlert = false
-    let types = ["خبر", "زواج", "مولود", "وفاة", "تصويت"]
+    let types = ["خبر", "إعلان", "زواج", "مولود", "وفاة", "تهنئة", "دعوة", "تذكير", "تصويت"]
 
     private func colorForType(_ type: String) -> Color {
         switch type {
@@ -835,6 +872,10 @@ struct AddNewsView: View {
         case "زواج": return DS.Color.newsWedding
         case "مولود": return DS.Color.newsBirth
         case "تصويت": return DS.Color.newsVote
+        case "إعلان": return DS.Color.newsAnnouncement
+        case "تهنئة": return DS.Color.newsCongrats
+        case "تذكير": return DS.Color.newsReminder
+        case "دعوة": return DS.Color.newsInvitation
         default: return DS.Color.primary
         }
     }
@@ -845,6 +886,10 @@ struct AddNewsView: View {
         case "زواج": return "heart.fill"
         case "مولود": return "figure.child"
         case "تصويت": return "chart.bar.fill"
+        case "إعلان": return "megaphone.fill"
+        case "تهنئة": return "hands.clap.fill"
+        case "تذكير": return "bell.badge.fill"
+        case "دعوة": return "envelope.open.fill"
         default: return "newspaper.fill"
         }
     }
@@ -856,6 +901,10 @@ struct AddNewsView: View {
         case "مولود": return L10n.t("مولود", "Newborn")
         case "وفاة": return L10n.t("وفاة", "Obituary")
         case "تصويت": return L10n.t("تصويت", "Poll")
+        case "إعلان": return L10n.t("إعلان", "Announcement")
+        case "تهنئة": return L10n.t("تهنئة", "Congrats")
+        case "تذكير": return L10n.t("تذكير", "Reminder")
+        case "دعوة": return L10n.t("دعوة", "Invitation")
         default: return type
         }
     }
@@ -905,14 +954,13 @@ struct AddNewsView: View {
             .alert(L10n.t("تعذر النشر", "Post Failed"), isPresented: $showPostErrorAlert) {
                 Button(L10n.t("حسناً", "OK"), role: .cancel) {}
             } message: { Text(authVM.newsPostErrorMessage ?? L10n.t("حدث خطأ أثناء نشر الخبر.", "An error occurred.")) }
-            .onChange(of: selectedPhotoItems) { _, newItems in
-                handleSelectedImages(newItems)
-            }
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         }
     }
 
     // MARK: - Type Selector
+    private let gridColumns = Array(repeating: GridItem(.flexible(), spacing: DS.Spacing.sm), count: 3)
+
     private var addNewsTypeSelector: some View {
         DSCard(padding: 0) {
             DSSectionHeader(
@@ -921,38 +969,46 @@ struct AddNewsView: View {
                 iconColor: DS.Color.primary
             )
 
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: DS.Spacing.sm) {
-                    ForEach(types, id: \.self) { type in
-                        let isSelected = selectedType == type
-                        let typeColor = colorForType(type)
+            LazyVGrid(columns: gridColumns, spacing: DS.Spacing.sm) {
+                ForEach(types, id: \.self) { type in
+                    let isSelected = selectedType == type
+                    let typeColor = colorForType(type)
 
-                        Button(action: {
-                            withAnimation(DS.Anim.snappy) { selectedType = type }
-                        }) {
-                            HStack(spacing: DS.Spacing.xs) {
+                    Button(action: {
+                        withAnimation(DS.Anim.snappy) { selectedType = type }
+                    }) {
+                        VStack(spacing: DS.Spacing.xs) {
+                            ZStack {
+                                Circle()
+                                    .fill(isSelected ? typeColor : typeColor.opacity(0.12))
+                                    .frame(width: 42, height: 42)
+
                                 Image(systemName: iconForType(type))
-                                    .font(DS.Font.scaled(12, weight: .bold))
-                                Text(displayNameForType(type))
-                                    .font(DS.Font.caption1)
-                                    .fontWeight(.bold)
+                                    .font(DS.Font.scaled(16, weight: .semibold))
+                                    .foregroundColor(isSelected ? .white : typeColor)
                             }
-                            .foregroundColor(isSelected ? .white : typeColor)
-                            .padding(.horizontal, DS.Spacing.md)
-                            .padding(.vertical, DS.Spacing.sm)
-                            .background(isSelected ? typeColor : typeColor.opacity(0.1))
-                            .clipShape(Capsule())
-                            .overlay(
-                                Capsule()
-                                    .stroke(typeColor.opacity(isSelected ? 0 : 0.25), lineWidth: 1)
-                            )
+
+                            Text(displayNameForType(type))
+                                .font(DS.Font.caption1)
+                                .fontWeight(.bold)
+                                .foregroundColor(isSelected ? typeColor : DS.Color.textSecondary)
                         }
-                        .buttonStyle(DSBoldButtonStyle())
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, DS.Spacing.sm)
+                        .background(
+                            RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                                .fill(isSelected ? typeColor.opacity(0.1) : Color.clear)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                                .stroke(isSelected ? typeColor.opacity(0.4) : Color.clear, lineWidth: 1.5)
+                        )
                     }
+                    .buttonStyle(DSBoldButtonStyle())
                 }
-                .padding(.horizontal, DS.Spacing.md)
-                .padding(.bottom, DS.Spacing.md)
             }
+            .padding(.horizontal, DS.Spacing.md)
+            .padding(.bottom, DS.Spacing.md)
         }
     }
 
@@ -988,48 +1044,11 @@ struct AddNewsView: View {
 
     // MARK: - Photos Section
     private var addNewsPhotosSection: some View {
-        DSCard(padding: 0) {
-            DSSectionHeader(
-                title: L10n.t("الصور", "Photos"),
-                icon: "photo.fill",
-                trailing: selectedImages.isEmpty ? nil : "\(selectedImages.count)",
-                iconColor: DS.Color.info
-            )
-
-            PhotosPicker(selection: $selectedPhotoItems, maxSelectionCount: 5, matching: .images) {
-                HStack(spacing: DS.Spacing.sm) {
-                    Image(systemName: "photo.on.rectangle.angled")
-                        .font(DS.Font.scaled(18, weight: .semibold))
-                    Text(L10n.t("اختر صور (اختياري)", "Choose Photos (optional)"))
-                        .font(DS.Font.callout)
-                        .fontWeight(.medium)
-                }
-                .foregroundColor(DS.Color.primary)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, DS.Spacing.md)
-                .background(DS.Color.primary.opacity(0.06))
-                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                        .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [6]))
-                        .foregroundColor(DS.Color.primary.opacity(0.2))
-                )
-            }
-            .padding(.horizontal, DS.Spacing.md)
-            .padding(.bottom, selectedImages.isEmpty ? DS.Spacing.md : DS.Spacing.sm)
-
-            if !selectedImages.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: DS.Spacing.sm) {
-                        ForEach(Array(selectedImages.enumerated()), id: \.offset) { idx, image in
-                            addNewsImageThumb(image: image, index: idx)
-                        }
-                    }
-                    .padding(.horizontal, DS.Spacing.md)
-                }
-                .padding(.bottom, DS.Spacing.md)
-            }
-        }
+        DSMultiPhotoPicker(
+            selectedImages: $selectedImages,
+            maxCount: 5,
+            enableCrop: false
+        )
     }
 
     // MARK: - Poll Section
@@ -1081,30 +1100,6 @@ struct AddNewsView: View {
         }
     }
 
-    private func addNewsImageThumb(image: UIImage, index: Int) -> some View {
-        ZStack(alignment: .topTrailing) {
-            Image(uiImage: image)
-                .resizable()
-                .scaledToFill()
-                .frame(width: 80, height: 80)
-                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
-
-            Button {
-                withAnimation {
-                        let i: Int = index
-                        selectedImages.remove(at: i)
-                    }
-            } label: {
-                Image(systemName: "xmark.circle.fill")
-                    .font(DS.Font.scaled(16))
-                    .foregroundColor(.white)
-                    .background(Color.black.opacity(0.5))
-                    .clipShape(Circle())
-            }
-            .offset(x: 4, y: -4)
-        }
-    }
-
     private func pollField(placeholder: String, text: Binding<String>, icon: String) -> some View {
         HStack(spacing: DS.Spacing.sm) {
             Image(systemName: icon)
@@ -1124,17 +1119,6 @@ struct AddNewsView: View {
             RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
                 .stroke(DS.Color.textTertiary.opacity(0.15), lineWidth: 1)
         )
-    }
-
-    private func handleSelectedImages(_ items: [PhotosPickerItem]) {
-        Task {
-            var loaded: [UIImage] = []
-            for item in items {
-                if let data = try? await item.loadTransferable(type: Data.self),
-                   let image = UIImage(data: data) { loaded.append(image) }
-            }
-            await MainActor.run { selectedImages = loaded }
-        }
     }
 
     private func submitNews() async {
@@ -1164,15 +1148,16 @@ struct EditNewsView: View {
     @State private var content: String
     @State private var selectedType: String
     @State private var existingImageURLs: [String]
-    @State private var selectedPhotoItems: [PhotosPickerItem] = []
     @State private var selectedImages: [UIImage] = []
+    @State private var editPickerItems: [PhotosPickerItem] = []
+    @State private var isLoadingEditImages = false
     @State private var pollQuestion: String
     @State private var pollOption1: String
     @State private var pollOption2: String
     @State private var pollOption3: String
     @State private var pollOption4: String
     @State private var showEditErrorAlert = false
-    let types = ["خبر", "زواج", "مولود", "وفاة", "تصويت"]
+    let types = ["خبر", "إعلان", "زواج", "مولود", "وفاة", "تهنئة", "دعوة", "تذكير", "تصويت"]
 
     init(news: NewsPost) {
         self.news = news
@@ -1194,7 +1179,25 @@ struct EditNewsView: View {
         case "زواج": return DS.Color.newsWedding
         case "مولود": return DS.Color.newsBirth
         case "تصويت": return DS.Color.newsVote
+        case "إعلان": return DS.Color.newsAnnouncement
+        case "تهنئة": return DS.Color.newsCongrats
+        case "تذكير": return DS.Color.newsReminder
+        case "دعوة": return DS.Color.newsInvitation
         default: return DS.Color.primary
+        }
+    }
+
+    private func iconForType(_ type: String) -> String {
+        switch type {
+        case "وفاة": return "heart.slash.fill"
+        case "زواج": return "heart.fill"
+        case "مولود": return "figure.child"
+        case "تصويت": return "chart.bar.fill"
+        case "إعلان": return "megaphone.fill"
+        case "تهنئة": return "hands.clap.fill"
+        case "تذكير": return "bell.badge.fill"
+        case "دعوة": return "envelope.open.fill"
+        default: return "newspaper.fill"
         }
     }
 
@@ -1205,6 +1208,10 @@ struct EditNewsView: View {
         case "مولود": return L10n.t("مولود", "Newborn")
         case "وفاة": return L10n.t("وفاة", "Obituary")
         case "تصويت": return L10n.t("تصويت", "Poll")
+        case "إعلان": return L10n.t("إعلان", "Announcement")
+        case "تهنئة": return L10n.t("تهنئة", "Congrats")
+        case "تذكير": return L10n.t("تذكير", "Reminder")
+        case "دعوة": return L10n.t("دعوة", "Invitation")
         default: return type
         }
     }
@@ -1227,27 +1234,53 @@ struct EditNewsView: View {
         NavigationStack {
             ScrollView(showsIndicators: false) {
                 VStack(spacing: DS.Spacing.md) {
-                    HStack(spacing: DS.Spacing.xs) {
-                        ForEach(types, id: \.self) { type in
-                            let isSelected = selectedType == type
-                            let typeColor = colorForType(type)
+                    DSCard(padding: 0) {
+                        DSSectionHeader(
+                            title: L10n.t("نوع الخبر", "Post Type"),
+                            icon: "tag.fill",
+                            iconColor: DS.Color.primary
+                        )
 
-                            Button(action: { selectedType = type }) {
-                                Text(displayNameForType(type))
-                                    .font(DS.Font.caption1)
-                                    .fontWeight(.bold)
-                                    .foregroundColor(isSelected ? .white : typeColor)
+                        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: DS.Spacing.sm), count: 3), spacing: DS.Spacing.sm) {
+                            ForEach(types, id: \.self) { type in
+                                let isSelected = selectedType == type
+                                let typeColor = colorForType(type)
+
+                                Button(action: {
+                                    withAnimation(DS.Anim.snappy) { selectedType = type }
+                                }) {
+                                    VStack(spacing: DS.Spacing.xs) {
+                                        ZStack {
+                                            Circle()
+                                                .fill(isSelected ? typeColor : typeColor.opacity(0.12))
+                                                .frame(width: 42, height: 42)
+
+                                            Image(systemName: iconForType(type))
+                                                .font(DS.Font.scaled(16, weight: .semibold))
+                                                .foregroundColor(isSelected ? .white : typeColor)
+                                        }
+
+                                        Text(displayNameForType(type))
+                                            .font(DS.Font.caption1)
+                                            .fontWeight(.bold)
+                                            .foregroundColor(isSelected ? typeColor : DS.Color.textSecondary)
+                                    }
                                     .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 8)
-                                    .background(isSelected ? typeColor : typeColor.opacity(0.12))
-                                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous)
-                                            .stroke(typeColor.opacity(0.25), lineWidth: 1)
+                                    .padding(.vertical, DS.Spacing.sm)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                                            .fill(isSelected ? typeColor.opacity(0.1) : Color.clear)
                                     )
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                                            .stroke(isSelected ? typeColor.opacity(0.4) : Color.clear, lineWidth: 1.5)
+                                    )
+                                }
+                                .buttonStyle(DSBoldButtonStyle())
                             }
-                            .buttonStyle(.plain)
                         }
+                        .padding(.horizontal, DS.Spacing.md)
+                        .padding(.bottom, DS.Spacing.md)
                     }
 
                     TextEditor(text: $content)
@@ -1260,9 +1293,13 @@ struct EditNewsView: View {
                                 .stroke(DS.Color.primary.opacity(0.10), lineWidth: 1)
                         )
 
-                    PhotosPicker(selection: $selectedPhotoItems, maxSelectionCount: 5, matching: .images) {
+                    PhotosPicker(selection: $editPickerItems, maxSelectionCount: 5, matching: .images) {
                         HStack(spacing: DS.Spacing.sm) {
-                            Image(systemName: "photo.on.rectangle.angled")
+                            if isLoadingEditImages {
+                                ProgressView().tint(DS.Color.primary)
+                            } else {
+                                Image(systemName: "photo.on.rectangle.angled")
+                            }
                             Text(L10n.t("إضافة صور جديدة", "Add new photos"))
                         }
                         .font(DS.Font.calloutBold)
@@ -1272,54 +1309,56 @@ struct EditNewsView: View {
                         .background(DS.Color.primary.opacity(0.08))
                         .cornerRadius(DS.Radius.md)
                     }
+                    .disabled(isLoadingEditImages)
 
                     if !existingImageURLs.isEmpty || !selectedImages.isEmpty {
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: DS.Spacing.sm) {
-                                ForEach(Array(existingImageURLs.enumerated()), id: \.offset) { index, url in
-                                    ZStack(alignment: .topTrailing) {
+                        let allImages: [(isExisting: Bool, index: Int, urlOrNil: String?)] =
+                            existingImageURLs.enumerated().map { (true, $0.offset, $0.element) } +
+                            selectedImages.enumerated().map { (false, $0.offset, nil) }
+
+                        TabView {
+                            ForEach(Array(allImages.enumerated()), id: \.offset) { _, item in
+                                ZStack(alignment: .topTrailing) {
+                                    if item.isExisting, let url = item.urlOrNil {
                                         CachedAsyncImage(url: URL(string: url)) { image in
                                             image.resizable().scaledToFill()
+                                                .frame(maxWidth: .infinity)
+                                                .clipped()
                                         } placeholder: {
-                                            RoundedRectangle(cornerRadius: DS.Radius.sm)
-                                                .fill(DS.Color.surface)
+                                            ZStack {
+                                                Color.gray.opacity(0.05)
+                                                ProgressView().tint(DS.Color.primary)
+                                            }
                                         }
-                                        .frame(width: 76, height: 76)
-                                        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm))
-
-                                        Button {
-                                            existingImageURLs.remove(at: index)
-                                        } label: {
-                                            Image(systemName: "xmark.circle.fill")
-                                                .foregroundColor(.white)
-                                                .background(Color.black.opacity(0.45))
-                                                .clipShape(Circle())
-                                        }
-                                        .padding(4)
-                                    }
-                                }
-
-                                ForEach(Array(selectedImages.enumerated()), id: \.offset) { index, image in
-                                    ZStack(alignment: .topTrailing) {
-                                        Image(uiImage: image)
+                                    } else if !item.isExisting, selectedImages.indices.contains(item.index) {
+                                        Image(uiImage: selectedImages[item.index])
                                             .resizable()
                                             .scaledToFill()
-                                            .frame(width: 76, height: 76)
-                                            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm))
-
-                                        Button {
-                                            selectedImages.remove(at: index)
-                                        } label: {
-                                            Image(systemName: "xmark.circle.fill")
-                                                .foregroundColor(.white)
-                                                .background(Color.black.opacity(0.45))
-                                                .clipShape(Circle())
-                                        }
-                                        .padding(4)
+                                            .frame(maxWidth: .infinity)
+                                            .clipped()
                                     }
+
+                                    Button {
+                                        withAnimation {
+                                            if item.isExisting {
+                                                existingImageURLs.remove(at: item.index)
+                                            } else {
+                                                selectedImages.remove(at: item.index)
+                                            }
+                                        }
+                                    } label: {
+                                        Image(systemName: "xmark.circle.fill")
+                                            .font(DS.Font.scaled(22, weight: .bold))
+                                            .foregroundColor(.white)
+                                            .shadow(color: .black.opacity(0.5), radius: 4, x: 0, y: 2)
+                                    }
+                                    .padding(DS.Spacing.sm)
                                 }
                             }
                         }
+                        .aspectRatio(4/5, contentMode: .fit)
+                        .clipped()
+                        .tabViewStyle(.page(indexDisplayMode: allImages.count > 1 ? .automatic : .never))
                     }
 
                     if selectedType == "تصويت" {
@@ -1363,21 +1402,23 @@ struct EditNewsView: View {
             .alert(L10n.t("تعذر التعديل", "Edit Failed"), isPresented: $showEditErrorAlert) {
                 Button(L10n.t("حسناً", "OK"), role: .cancel) {}
             } message: { Text(authVM.newsPostErrorMessage ?? L10n.t("حدث خطأ أثناء تعديل الخبر.", "An error occurred while updating.")) }
-            .onChange(of: selectedPhotoItems) { _, newItems in
-                handleSelectedImages(newItems)
+            .onChange(of: editPickerItems) { _, items in
+                Task {
+                    await MainActor.run { isLoadingEditImages = true }
+                    var loaded: [UIImage] = []
+                    for item in items {
+                        if let data = try? await item.loadTransferable(type: Data.self),
+                           let image = UIImage(data: data) { loaded.append(image) }
+                    }
+                    let generator = UIImpactFeedbackGenerator(style: .medium)
+                    generator.impactOccurred()
+                    await MainActor.run {
+                        selectedImages = loaded
+                        isLoadingEditImages = false
+                    }
+                }
             }
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-        }
-    }
-
-    private func handleSelectedImages(_ items: [PhotosPickerItem]) {
-        Task {
-            var loaded: [UIImage] = []
-            for item in items {
-                if let data = try? await item.loadTransferable(type: Data.self),
-                   let image = UIImage(data: data) { loaded.append(image) }
-            }
-            await MainActor.run { selectedImages = loaded }
         }
     }
 

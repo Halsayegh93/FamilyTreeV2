@@ -172,7 +172,7 @@ struct AdminMemberDetailSheet: View {
                     .shadow(color: .black.opacity(0.08), radius: 6, y: 3)
 
                 if let urlStr = member.avatarUrl, let url = URL(string: urlStr) {
-                    AsyncImage(url: url) { img in img.resizable().scaledToFill() }
+                    CachedAsyncImage(url: url) { img in img.resizable().scaledToFill() }
                     placeholder: { ProgressView() }
                     .frame(width: 62, height: 62).clipShape(Circle())
                 } else {
@@ -257,7 +257,7 @@ struct AdminMemberDetailSheet: View {
                                 .font(DS.Font.caption2)
                                 .foregroundColor(DS.Color.textTertiary)
 
-                            if let fId = selectedFatherId, let father = authVM.allMembers.first(where: { $0.id == fId }) {
+                            if let fId = selectedFatherId, let father = authVM.member(byId: fId) {
                                 Text(father.fullName)
                                     .font(DS.Font.calloutBold)
                                     .foregroundColor(DS.Color.textPrimary)
@@ -979,7 +979,7 @@ struct FatherPickerSheet: View {
                                                     .frame(width: 34, height: 34)
 
                                                 if let urlStr = m.avatarUrl, let url = URL(string: urlStr) {
-                                                    AsyncImage(url: url) { img in img.resizable().scaledToFill() }
+                                                    CachedAsyncImage(url: url) { img in img.resizable().scaledToFill() }
                                                     placeholder: { ProgressView() }
                                                     .frame(width: 30, height: 30).clipShape(Circle())
                                                 } else {

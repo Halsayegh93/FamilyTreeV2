@@ -4,10 +4,57 @@ struct AdminPendingRequestsView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @State private var selectedMemberForLinking: FamilyMember?
     @State private var matchedIdsForSelected: [UUID] = []
+    /// نتائج مطابقة الأسماء لكل عضو (يتم تفعيلها بالضغط على الزر)
+    @State private var nameMatchResults: [UUID: [(member: FamilyMember, matchCount: Int, matchedParts: [String])]] = [:]
+    @State private var loadingMatchFor: UUID? = nil
 
     // تصفية الأعضاء الذين حالتهم "Pending"
     var pendingMembers: [FamilyMember] {
         authVM.allMembers.filter { $0.role == .pending }
+    }
+
+    // MARK: - مطابقة الاسم المحلية
+    /// يقارن أجزاء اسم العضو الجديد مع أعضاء الشجرة الموجودين
+    /// يرجع التطابقات مع عدد الأجزاء المتطابقة (3 أو أكثر)
+    private func findNameMatches(for member: FamilyMember) -> [(member: FamilyMember, matchCount: Int, matchedParts: [String])] {
+        let newParts = member.fullName
+            .split(whereSeparator: \.isWhitespace)
+            .map { String($0).trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+
+        guard newParts.count >= 3 else { return [] }
+
+        let existingMembers = authVM.allMembers.filter { $0.role != .pending && $0.id != member.id }
+
+        var matches: [(member: FamilyMember, matchCount: Int, matchedParts: [String])] = []
+
+        for existing in existingMembers {
+            let existingParts = existing.fullName
+                .split(whereSeparator: \.isWhitespace)
+                .map { String($0).trimmingCharacters(in: .whitespaces) }
+                .filter { !$0.isEmpty }
+
+            // نقارن كل جزء من الاسم الجديد مع أجزاء الاسم الموجود
+            var matchedParts: [String] = []
+            var usedIndices: Set<Int> = []
+
+            for newPart in newParts {
+                for (idx, existingPart) in existingParts.enumerated() {
+                    if !usedIndices.contains(idx) && newPart.localizedCaseInsensitiveCompare(existingPart) == .orderedSame {
+                        matchedParts.append(newPart)
+                        usedIndices.insert(idx)
+                        break
+                    }
+                }
+            }
+
+            if matchedParts.count >= 3 {
+                matches.append((member: existing, matchCount: matchedParts.count, matchedParts: matchedParts))
+            }
+        }
+
+        // ترتيب حسب عدد التطابق (الأكثر أولاً)
+        return matches.sorted { $0.matchCount > $1.matchCount }
     }
 
     var body: some View {
@@ -45,6 +92,7 @@ struct AdminPendingRequestsView: View {
                     }
                 }
                 .listStyle(.plain)
+                .scrollContentBackground(.hidden)
             }
         }
         .navigationTitle(L10n.t("طلبات الربط", "Link Requests"))
@@ -57,12 +105,19 @@ struct AdminPendingRequestsView: View {
     }
 
     func pendingMemberCard(member: FamilyMember) -> some View {
-        DSCard {
+        let nameMatches = nameMatchResults[member.id] ?? []
+        let hasMatches = !nameMatches.isEmpty
+        let isLoading = loadingMatchFor == member.id
+        let hasSearched = nameMatchResults.keys.contains(member.id)
+
+        return DSCard {
             VStack(spacing: DS.Spacing.lg) {
 
-                // Accent bar
+                // Accent bar — لون مختلف إذا فيه تطابق
                 LinearGradient(
-                    colors: [DS.Color.warning, DS.Color.warning.opacity(0.6)],
+                    colors: hasMatches
+                        ? [DS.Color.info, DS.Color.success]
+                        : [DS.Color.warning, DS.Color.warning.opacity(0.6)],
                     startPoint: .leading, endPoint: .trailing
                 )
                 .frame(height: 4)
@@ -110,6 +165,123 @@ struct AdminPendingRequestsView: View {
                     Spacer()
                 }
 
+                // MARK: - زر البحث عن التطابق
+                if !hasSearched {
+                    Button {
+                        withAnimation(DS.Anim.snappy) {
+                            loadingMatchFor = member.id
+                        }
+                        // تأخير بسيط لإظهار اللودنج
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            let results = findNameMatches(for: member)
+                            withAnimation(DS.Anim.smooth) {
+                                nameMatchResults[member.id] = results
+                                loadingMatchFor = nil
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: DS.Spacing.sm) {
+                            if isLoading {
+                                ProgressView()
+                                    .scaleEffect(0.8)
+                                    .tint(DS.Color.info)
+                            } else {
+                                Image(systemName: "person.2.fill")
+                                    .font(DS.Font.scaled(14, weight: .semibold))
+                            }
+                            Text(L10n.t("البحث عن تطابق بالشجرة", "Search for tree matches"))
+                                .font(DS.Font.scaled(13, weight: .bold))
+                        }
+                        .foregroundColor(DS.Color.info)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, DS.Spacing.md)
+                        .background(DS.Color.info.opacity(0.08))
+                        .cornerRadius(DS.Radius.md)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: DS.Radius.md)
+                                .stroke(DS.Color.info.opacity(0.2), lineWidth: 1)
+                        )
+                    }
+                    .buttonStyle(DSScaleButtonStyle())
+                    .disabled(isLoading)
+                }
+
+                // MARK: - نتائج التطابق
+                if hasSearched {
+                    if hasMatches {
+                        VStack(spacing: DS.Spacing.sm) {
+                            // عنوان التطابق
+                            HStack(spacing: DS.Spacing.sm) {
+                                Image(systemName: "person.2.fill")
+                                    .font(DS.Font.scaled(13, weight: .semibold))
+                                    .foregroundColor(DS.Color.info)
+                                Text(L10n.t(
+                                    "تطابق محتمل مع \(nameMatches.count) عضو بالشجرة",
+                                    "Potential match with \(nameMatches.count) tree member(s)"
+                                ))
+                                .font(DS.Font.scaled(12, weight: .bold))
+                                .foregroundColor(DS.Color.info)
+                                Spacer()
+
+                                // زر إعادة البحث
+                                Button {
+                                    withAnimation(DS.Anim.snappy) {
+                                        nameMatchResults.removeValue(forKey: member.id)
+                                    }
+                                } label: {
+                                    Image(systemName: "arrow.counterclockwise")
+                                        .font(DS.Font.scaled(12, weight: .semibold))
+                                        .foregroundColor(DS.Color.textTertiary)
+                                }
+                            }
+                            .padding(.horizontal, DS.Spacing.md)
+                            .padding(.vertical, DS.Spacing.sm)
+                            .background(DS.Color.info.opacity(0.08))
+                            .cornerRadius(DS.Radius.md)
+
+                            // قائمة الأعضاء المتطابقين
+                            ForEach(nameMatches.prefix(3), id: \.member.id) { match in
+                                nameMatchRow(match: match, pendingMember: member)
+                            }
+
+                            if nameMatches.count > 3 {
+                                Text(L10n.t(
+                                    "+\(nameMatches.count - 3) تطابق آخر",
+                                    "+\(nameMatches.count - 3) more match(es)"
+                                ))
+                                .font(DS.Font.caption2)
+                                .foregroundColor(DS.Color.textTertiary)
+                            }
+                        }
+                    } else {
+                        // لا يوجد تطابق
+                        HStack(spacing: DS.Spacing.sm) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(DS.Font.scaled(14, weight: .semibold))
+                                .foregroundColor(DS.Color.success)
+                            Text(L10n.t("لا يوجد تطابق بالشجرة — اسم جديد", "No tree matches — new name"))
+                                .font(DS.Font.scaled(12, weight: .bold))
+                                .foregroundColor(DS.Color.success)
+                            Spacer()
+
+                            // زر إعادة البحث
+                            Button {
+                                withAnimation(DS.Anim.snappy) {
+                                    nameMatchResults.removeValue(forKey: member.id)
+                                }
+                            } label: {
+                                Image(systemName: "arrow.counterclockwise")
+                                    .font(DS.Font.scaled(12, weight: .semibold))
+                                    .foregroundColor(DS.Color.textTertiary)
+                            }
+                        }
+                        .padding(.horizontal, DS.Spacing.md)
+                        .padding(.vertical, DS.Spacing.sm)
+                        .background(DS.Color.success.opacity(0.08))
+                        .cornerRadius(DS.Radius.md)
+                    }
+                }
+
                 DSApproveRejectButtons(
                     approveTitle: L10n.t("ربط بالشجرة", "Link to Tree"),
                     rejectTitle: L10n.t("رفض", "Reject"),
@@ -117,8 +289,11 @@ struct AdminPendingRequestsView: View {
                 ) {
                     Task {
                         let ids = await authVM.fetchMatchedMemberIds(for: member.id)
+                        // ندمج المطابقات المحلية مع مطابقات السيرفر
+                        let localMatchIds = nameMatches.map(\.member.id)
+                        let combined = Array(Set(ids + localMatchIds))
                         await MainActor.run {
-                            matchedIdsForSelected = ids
+                            matchedIdsForSelected = combined
                             selectedMemberForLinking = member
                         }
                     }
@@ -129,6 +304,93 @@ struct AdminPendingRequestsView: View {
                 }
             }
             .padding(DS.Spacing.lg)
+        }
+    }
+
+    // MARK: - صف التطابق
+    private func nameMatchRow(match: (member: FamilyMember, matchCount: Int, matchedParts: [String]), pendingMember: FamilyMember) -> some View {
+        let totalParts = max(
+            pendingMember.fullName.split(whereSeparator: \.isWhitespace).count,
+            match.member.fullName.split(whereSeparator: \.isWhitespace).count
+        )
+        let matchRatio = Double(match.matchCount) / Double(max(totalParts, 1))
+        let strengthColor: Color = matchRatio >= 0.8 ? DS.Color.success : matchRatio >= 0.6 ? DS.Color.info : DS.Color.warning
+
+        return HStack(spacing: DS.Spacing.md) {
+            // أيقونة قوة التطابق
+            ZStack {
+                Circle()
+                    .fill(strengthColor.opacity(0.15))
+                    .frame(width: 36, height: 36)
+                Image(systemName: matchRatio >= 0.8 ? "checkmark.circle.fill" : "person.fill.questionmark")
+                    .font(DS.Font.scaled(15, weight: .semibold))
+                    .foregroundColor(strengthColor)
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                // اسم العضو المتطابق مع تمييز الأجزاء المتطابقة
+                highlightedName(
+                    fullName: match.member.fullName,
+                    matchedParts: match.matchedParts,
+                    highlightColor: strengthColor
+                )
+
+                HStack(spacing: DS.Spacing.sm) {
+                    // عدد التطابق
+                    Text(L10n.t(
+                        "\(match.matchCount) أجزاء متطابقة",
+                        "\(match.matchCount) parts match"
+                    ))
+                    .font(DS.Font.scaled(10, weight: .semibold))
+                    .foregroundColor(strengthColor)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(strengthColor.opacity(0.12))
+                    .clipShape(Capsule())
+
+                    // بادج قوة التطابق
+                    Text(matchStrengthLabel(ratio: matchRatio))
+                        .font(DS.Font.scaled(10, weight: .bold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(strengthColor)
+                        .clipShape(Capsule())
+                }
+            }
+
+            Spacer()
+        }
+        .padding(DS.Spacing.md)
+        .background(strengthColor.opacity(0.04))
+        .cornerRadius(DS.Radius.md)
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Radius.md)
+                .stroke(strengthColor.opacity(0.15), lineWidth: 1)
+        )
+    }
+
+    // MARK: - تمييز الأجزاء المتطابقة
+    private func highlightedName(fullName: String, matchedParts: [String], highlightColor: Color) -> some View {
+        let parts = fullName.split(whereSeparator: \.isWhitespace).map(String.init)
+        return HStack(spacing: 3) {
+            ForEach(Array(parts.enumerated()), id: \.offset) { _, part in
+                let isMatched = matchedParts.contains { $0.localizedCaseInsensitiveCompare(part) == .orderedSame }
+                Text(part)
+                    .font(DS.Font.scaled(13, weight: isMatched ? .bold : .regular))
+                    .foregroundColor(isMatched ? highlightColor : DS.Color.textSecondary)
+            }
+        }
+    }
+
+    // MARK: - وصف قوة التطابق
+    private func matchStrengthLabel(ratio: Double) -> String {
+        if ratio >= 0.8 {
+            return L10n.t("تطابق قوي", "Strong")
+        } else if ratio >= 0.6 {
+            return L10n.t("تطابق متوسط", "Medium")
+        } else {
+            return L10n.t("تطابق ضعيف", "Weak")
         }
     }
 }

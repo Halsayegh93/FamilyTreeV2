@@ -92,10 +92,14 @@ enum DS {
         static let pendingRole    = SwiftUI.Color.gray
 
         // News Type Colors — ألوان أنواع الأخبار
-        static let newsWedding  = SwiftUI.Color(hex: "#D4A38C") // Rose Gold
-        static let newsBirth    = SwiftUI.Color(hex: "#4AADA8") // Teal
-        static let newsDeath    = SwiftUI.Color(hex: "#8A8A8E") // Muted Gray
-        static let newsVote     = SwiftUI.Color(hex: "#C8962E") // Gold
+        static let newsWedding      = SwiftUI.Color(hex: "#D4A38C") // Rose Gold
+        static let newsBirth        = SwiftUI.Color(hex: "#4AADA8") // Teal
+        static let newsDeath        = SwiftUI.Color(hex: "#8A8A8E") // Muted Gray
+        static let newsVote         = SwiftUI.Color(hex: "#C8962E") // Gold
+        static let newsAnnouncement = SwiftUI.Color(hex: "#5B7FD4") // Royal Blue
+        static let newsCongrats     = SwiftUI.Color(hex: "#D4A04B") // Warm Gold
+        static let newsReminder     = SwiftUI.Color(hex: "#C46B3E") // Burnt Orange
+        static let newsInvitation   = SwiftUI.Color(hex: "#7B5EA7") // Purple
 
         // Status Colors
         static let deceased         = SwiftUI.Color(hex: "#8A8A8E")

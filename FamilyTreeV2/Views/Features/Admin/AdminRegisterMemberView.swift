@@ -12,6 +12,7 @@ struct AdminRegisterMemberView: View {
     @State private var phoneNumber: String = ""
     @State private var selectedPhoneCountry: KuwaitPhone.Country = KuwaitPhone.defaultCountry
     @State private var showingSuccess = false
+    @State private var showingError = false
 
     // Animation states
     @State private var headerScale: CGFloat = 0.8
@@ -76,6 +77,11 @@ struct AdminRegisterMemberView: View {
             Button(L10n.t("حسناً", "OK"), role: .cancel) { dismiss() }
         } message: {
             Text(L10n.t("تمت إضافة العضو بنجاح.", "Member added successfully."))
+        }
+        .alert(L10n.t("خطأ", "Error"), isPresented: $showingError) {
+            Button(L10n.t("حسناً", "OK"), role: .cancel) {}
+        } message: {
+            Text(authVM.errorMessage ?? L10n.t("تعذر إضافة العضو. حاول مرة أخرى.", "Failed to add member. Please try again."))
         }
         .onAppear {
             withAnimation(.spring(response: 0.8, dampingFraction: 0.6).delay(0.2)) {
@@ -321,6 +327,8 @@ struct AdminRegisterMemberView: View {
                     )
                     if success {
                         showingSuccess = true
+                    } else {
+                        showingError = true
                     }
                 }
             }

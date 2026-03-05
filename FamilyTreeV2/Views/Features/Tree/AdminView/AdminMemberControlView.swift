@@ -14,10 +14,7 @@ struct AdminMemberControlView: View {
     @State private var birthDate: Date
     @State private var deathDate: Date?
     @State private var showDeleteAlert = false
-    @State private var showAvatarPicker = false
-    @State private var selectedAvatarItem: PhotosPickerItem? = nil
     @State private var localAvatarPreviewImage: UIImage? = nil
-    @State private var showDeleteAvatarAlert = false
     @State private var avatarURL: String? = nil
     @State private var errorMessage = ""
     @State private var showErrorAlert = false
@@ -48,85 +45,35 @@ struct AdminMemberControlView: View {
         NavigationStack {
             ZStack {
                 DS.Color.background.ignoresSafeArea()
+                DSDecorativeBackground()
 
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: DS.Spacing.xl) {
 
                         // Avatar section
                         if isManager {
-                            DSCard {
-                                VStack(spacing: DS.Spacing.lg) {
-                                    HStack {
-                                        Spacer()
-                                        ZStack {
-                                            if let localAvatarPreviewImage {
-                                                Image(uiImage: localAvatarPreviewImage)
-                                                    .resizable()
-                                                    .scaledToFill()
-                                            } else if let avatar = avatarURL, let url = URL(string: avatar) {
-                                                AsyncImage(url: url) { img in
-                                                    img.resizable().scaledToFill()
-                                                } placeholder: {
-                                                    ProgressView().tint(DS.Color.primary)
-                                                }
-                                            } else {
-                                                Circle()
-                                                    .fill(
-                                                        LinearGradient(
-                                                            colors: [DS.Color.primary.opacity(0.15), DS.Color.accent.opacity(0.08)],
-                                                            startPoint: .topLeading,
-                                                            endPoint: .bottomTrailing
-                                                        )
-                                                    )
-                                                    .overlay(
-                                                        Image(systemName: "person.fill")
-                                                            .font(DS.Font.scaled(28, weight: .bold))
-                                                            .foregroundColor(DS.Color.primary)
-                                                    )
-                                            }
-                                        }
-                                        .frame(width: 100, height: 100)
-                                        .clipShape(Circle())
-                                        .overlay(
-                                            Circle()
-                                                .stroke(DS.Color.gradientPrimary, lineWidth: 3)
-                                        )
-                                        .dsGlowShadow()
-                                        Spacer()
-                                    }
-
-                                    Button {
-                                        showAvatarPicker = true
-                                    } label: {
-                                        HStack(spacing: DS.Spacing.sm) {
-                                            Image(systemName: "camera.fill")
-                                                .foregroundColor(.white)
-                                                .font(DS.Font.scaled(12))
-                                                .frame(width: 28, height: 28)
-                                                .background(DS.Color.gradientPrimary)
-                                                .clipShape(Circle())
-                                            Text(L10n.t("تغيير صورة البروفايل", "Change Profile Photo"))
-                                                .font(DS.Font.calloutBold)
-                                                .foregroundColor(DS.Color.primary)
-                                        }
-                                        .frame(maxWidth: .infinity)
-                                        .padding(.vertical, DS.Spacing.sm)
-                                    }
-
-                                    if avatarURL != nil || localAvatarPreviewImage != nil {
-                                        Button(role: .destructive) {
-                                            showDeleteAvatarAlert = true
-                                        } label: {
-                                            Label(L10n.t("حذف صورة البروفايل", "Delete Profile Photo"), systemImage: "trash")
-                                                .font(DS.Font.calloutBold)
-                                                .foregroundColor(DS.Color.error)
-                                                .frame(maxWidth: .infinity)
+                            DSProfilePhotoPicker(
+                                selectedImage: $localAvatarPreviewImage,
+                                existingURL: avatarURL,
+                                showDeleteForExisting: true,
+                                onDeleteExisting: {
+                                    Task {
+                                        await authVM.deleteAvatar(for: member.id)
+                                        await MainActor.run {
+                                            avatarURL = nil
+                                            localAvatarPreviewImage = nil
                                         }
                                     }
                                 }
-                                .padding(DS.Spacing.lg)
-                            }
+                            )
                             .padding(.horizontal, DS.Spacing.lg)
+                            .onChange(of: localAvatarPreviewImage) { _, newImage in
+                                guard let newImage else { return }
+                                Task {
+                                    await authVM.uploadAvatar(image: newImage, for: member.id)
+                                    await MainActor.run { avatarURL = nil }
+                                }
+                            }
                         }
 
                         // Basic Information section
@@ -244,7 +191,7 @@ struct AdminMemberControlView: View {
                             isLoading: authVM.isLoading
                         ) {
                             Task {
-                                let previousName = authVM.allMembers.first(where: { $0.id == member.id })?.fullName
+                                let previousName = authVM.member(byId: member.id)?.fullName
                                 await authVM.updateMemberData(
                                     memberId: member.id,
                                     fullName: fullName,
@@ -256,7 +203,7 @@ struct AdminMemberControlView: View {
                                     isPhoneHidden: member.isPhoneHidden ?? false
                                 )
                                 // Check if update succeeded by verifying data changed
-                                let updatedMember = authVM.allMembers.first(where: { $0.id == member.id })
+                                let updatedMember = authVM.member(byId: member.id)
                                 if updatedMember?.fullName == previousName && fullName != previousName {
                                     errorMessage = L10n.t("حدث خطأ أثناء حفظ التعديلات. حاول مرة أخرى.", "An error occurred while saving changes. Please try again.")
                                     showErrorAlert = true
@@ -315,39 +262,8 @@ struct AdminMemberControlView: View {
             } message: {
                 Text(L10n.t("هل أنت متأكد من حذف \(member.fullName)؟ لا يمكن التراجع عن هذا الإجراء.", "Are you sure you want to delete \(member.fullName)? This action cannot be undone."))
             }
-            .photosPicker(isPresented: $showAvatarPicker, selection: $selectedAvatarItem, matching: .images)
-            .onChange(of: selectedAvatarItem) { _, newItem in
-                handleAvatarImageChange(newItem)
-            }
-            .alert(L10n.t("حذف صورة البروفايل", "Delete Profile Photo"), isPresented: $showDeleteAvatarAlert) {
-                Button(L10n.t("حذف", "Delete"), role: .destructive) {
-                    Task {
-                        await authVM.deleteAvatar(for: member.id)
-                        await MainActor.run {
-                            self.avatarURL = nil
-                            self.localAvatarPreviewImage = nil
-                        }
-                    }
-                }
-                Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { }
-            } message: {
-                Text(L10n.t("هل تريد حذف صورة البروفايل لهذا العضو؟", "Do you want to delete this member's profile photo?"))
-            }
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
 
-    private func handleAvatarImageChange(_ item: PhotosPickerItem?) {
-        Task {
-            guard let data = try? await item?.loadTransferable(type: Data.self),
-                  let uiImage = UIImage(data: data) else { return }
-            await MainActor.run {
-                self.localAvatarPreviewImage = uiImage
-            }
-            await authVM.uploadAvatar(image: uiImage, for: member.id)
-            await MainActor.run {
-                self.avatarURL = nil
-            }
-        }
-    }
 }

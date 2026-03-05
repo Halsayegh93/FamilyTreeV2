@@ -16,7 +16,6 @@ struct AddChildSheet: View {
     @State private var selectedGender: String = "male"
     @State private var isDeceased: Bool = false
     @State private var deathDate: Date = Date()
-    @State private var selectedImageItem: PhotosPickerItem? = nil
     @State private var selectedUIImage: UIImage? = nil
     @State private var showSuccessAlert = false
     @State private var showErrorAlert = false
@@ -51,15 +50,6 @@ struct AddChildSheet: View {
             }
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-        .onChange(of: selectedImageItem) { _, newItem in
-            guard let newItem else { return }
-            Task {
-                if let data = try? await newItem.loadTransferable(type: Data.self),
-                   let image = UIImage(data: data) {
-                    await MainActor.run { selectedUIImage = image }
-                }
-            }
-        }
         .alert(L10n.t("تمت الإضافة", "Added Successfully"), isPresented: $showSuccessAlert) {
             Button(L10n.t("موافق", "OK")) { dismiss() }
         } message: {
@@ -73,48 +63,10 @@ struct AddChildSheet: View {
     }
 
     private var heroHeader: some View {
-        VStack(spacing: DS.Spacing.md) {
-            PhotosPicker(selection: $selectedImageItem, matching: .images) {
-                ZStack(alignment: .bottomTrailing) {
-                    ZStack {
-                        if let image = selectedUIImage {
-                            Image(uiImage: image)
-                                .resizable()
-                                .scaledToFill()
-                                .frame(width: 80, height: 80)
-                                .clipShape(Circle())
-                        } else {
-                            Circle().fill(DS.Color.surface)
-                                .frame(width: 80, height: 80)
-                                .overlay(
-                                    Image(systemName: "person.fill")
-                                        .font(DS.Font.scaled(30))
-                                        .foregroundColor(DS.Color.textTertiary)
-                                )
-                        }
-                    }
-                    .frame(width: 80, height: 80)
-                    .clipShape(Circle())
-                    .overlay(Circle().stroke(DS.Color.primary.opacity(0.3), lineWidth: 2))
-
-                    ZStack {
-                        Circle()
-                            .fill(DS.Color.gradientPrimary)
-                            .frame(width: 28, height: 28)
-                        Image(systemName: "camera.fill")
-                            .font(DS.Font.scaled(12, weight: .semibold))
-                            .foregroundColor(.white)
-                    }
-                    .overlay(Circle().stroke(DS.Color.surface, lineWidth: 2))
-                    .languageHorizontalOffset(8, y: 8)
-                }
-            }
-            .buttonStyle(.plain)
-
-            Text(L10n.t("الصورة الشخصية (اختياري)", "Profile Photo (optional)"))
-                .font(DS.Font.caption1)
-                .foregroundColor(DS.Color.textSecondary)
-        }
+        DSProfilePhotoPicker(
+            selectedImage: $selectedUIImage
+        )
+        .padding(.horizontal, DS.Spacing.lg)
     }
 
     private var basicInfoCard: some View {

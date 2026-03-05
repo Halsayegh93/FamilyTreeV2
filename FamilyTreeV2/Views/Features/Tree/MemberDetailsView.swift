@@ -521,7 +521,7 @@ struct MemberDetailsView: View {
 
         // Father name
         if let fatherId = member.fatherId,
-           let father = authVM.allMembers.first(where: { $0.id == fatherId }) {
+           let father = authVM.member(byId: fatherId) {
             lines.append("")
             lines.append("👨 " + L10n.t("الأب", "Father") + ": \(father.fullName)")
         }
@@ -549,11 +549,11 @@ struct MemberDetailsView: View {
                     .resizable()
                     .scaledToFill()
             } else if let url = member.coverUrl, let imageUrl = URL(string: url) {
-                AsyncImage(url: imageUrl) { img in
+                CachedAsyncImage(url: imageUrl) { img in
                     img.resizable().scaledToFill()
                 } placeholder: { ProgressView().tint(DS.Color.primary) }
             } else if let url = member.avatarUrl, let imageUrl = URL(string: url) {
-                AsyncImage(url: imageUrl) { img in
+                CachedAsyncImage(url: imageUrl) { img in
                     img.resizable().scaledToFill()
                 } placeholder: { ProgressView().tint(DS.Color.primary) }
             } else {

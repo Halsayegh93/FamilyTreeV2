@@ -51,6 +51,16 @@ class DiwaniyasViewModel: ObservableObject {
     }
     
     func addDiwaniya(ownerId: UUID, ownerName: String, title: String, scheduleText: String?, contactPhone: String?, mapsUrl: String?, address: String? = nil) async -> Bool {
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedOwner = ownerName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedTitle.isEmpty else {
+            self.errorMessage = L10n.t("يرجى إدخال اسم الديوانية.", "Please enter the diwaniya name.")
+            return false
+        }
+        guard !trimmedOwner.isEmpty else {
+            self.errorMessage = L10n.t("يرجى إدخال اسم صاحب الديوانية.", "Please enter the diwaniya owner name.")
+            return false
+        }
         isLoading = true
         errorMessage = nil
         do {
@@ -134,6 +144,16 @@ class DiwaniyasViewModel: ObservableObject {
     }
     
     func updateDiwaniya(id: UUID, title: String, ownerName: String, scheduleText: String?, contactPhone: String?, mapsUrl: String?, address: String?, isClosed: Bool) async -> Bool {
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedOwner = ownerName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedTitle.isEmpty else {
+            self.errorMessage = L10n.t("يرجى إدخال اسم الديوانية.", "Please enter the diwaniya name.")
+            return false
+        }
+        guard !trimmedOwner.isEmpty else {
+            self.errorMessage = L10n.t("يرجى إدخال اسم صاحب الديوانية.", "Please enter the diwaniya owner name.")
+            return false
+        }
         isLoading = true
         errorMessage = nil
         do {

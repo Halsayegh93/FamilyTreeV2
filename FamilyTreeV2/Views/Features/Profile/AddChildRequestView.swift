@@ -16,7 +16,6 @@ struct AddChildRequestView: View {
     @State private var isDeceased: Bool = false
     @State private var hasDeathDate: Bool = false
     @State private var deathDate: Date = Date()
-    @State private var selectedImageItem: PhotosPickerItem? = nil
     @State private var selectedUIImage: UIImage? = nil
     @State private var showSuccessAlert = false
 
@@ -49,15 +48,6 @@ struct AddChildRequestView: View {
             }
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-        .onChange(of: selectedImageItem) { _, newItem in
-            guard let newItem else { return }
-            Task {
-                if let data = try? await newItem.loadTransferable(type: Data.self),
-                   let image = UIImage(data: data) {
-                    await MainActor.run { selectedUIImage = image }
-                }
-            }
-        }
         .alert(L10n.t("تمت الإضافة", "Added Successfully"), isPresented: $showSuccessAlert) {
             Button(L10n.t("موافق", "OK")) { dismiss() }
         } message: {
@@ -142,28 +132,15 @@ struct AddChildRequestView: View {
                     }
                     .padding(.horizontal, DS.Spacing.lg)
                     .padding(.vertical, DS.Spacing.md)
+                }
+            }
 
-                    DSDivider()
+            DSProfilePhotoPicker(
+                selectedImage: $selectedUIImage
+            )
 
-                    // Photo picker row
-                    PhotosPicker(selection: $selectedImageItem, matching: .images) {
-                        HStack(spacing: DS.Spacing.md) {
-                            DSIcon("photo", color: DS.Color.neonPurple)
-                            Text(L10n.t("الصورة الشخصية (اختياري)", "Profile Photo (optional)"))
-                                .font(DS.Font.calloutBold)
-                                .foregroundColor(DS.Color.textPrimary)
-                            Spacer()
-                            if selectedUIImage != nil {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .foregroundColor(DS.Color.success)
-                            }
-                        }
-                        .padding(.horizontal, DS.Spacing.lg)
-                        .padding(.vertical, DS.Spacing.md)
-                    }
-                    .buttonStyle(.plain)
-
-                    DSDivider()
+            DSCard(padding: 0) {
+                VStack(spacing: 0) {
 
                     HStack(spacing: DS.Spacing.md) {
                         DSIcon("calendar", color: DS.Color.info)

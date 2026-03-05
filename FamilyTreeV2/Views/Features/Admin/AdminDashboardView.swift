@@ -23,6 +23,18 @@ struct AdminDashboardView: View {
     private var moderatorCount: Int {
         authVM.allMembers.filter { $0.role == .admin || $0.role == .supervisor }.count
     }
+    private var incompleteMembersCount: Int {
+        authVM.allMembers
+            .filter { $0.role != .pending && $0.isDeceased != true }
+            .filter { member in
+                let noPhone = member.phoneNumber == nil || (member.phoneNumber ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                let noBirth = member.birthDate == nil || (member.birthDate ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                let noFather = member.fatherId == nil
+                let noGender = member.gender == nil || (member.gender ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                return noPhone || noBirth || noFather || noGender
+            }
+            .count
+    }
 
     var body: some View {
         NavigationStack {
@@ -100,6 +112,16 @@ struct AdminDashboardView: View {
                                     DSDivider()
                                     NavigationLink(destination: AdminChildAddRequestsView()) {
                                         DSActionRow(title: L10n.t("طلبات إضافة الأبناء", "Child Add Requests"), subtitle: L10n.t("مراجعة طلبات إضافة أبناء جدد", "Review new child addition requests"), icon: "person.badge.plus", color: DS.Color.success, badge: authVM.childAddRequests.count)
+                                    }
+                                    DSDivider()
+                                    NavigationLink(destination: AdminIncompleteMembersView()) {
+                                        DSActionRow(
+                                            title: L10n.t("بيانات أعضاء ناقصة", "Incomplete Member Data"),
+                                            subtitle: L10n.t("أعضاء ينقصهم جوال أو تاريخ ميلاد أو أب أو جنس", "Members missing phone, birth date, father, or gender"),
+                                            icon: "exclamationmark.triangle.fill",
+                                            color: DS.Color.warning,
+                                            badge: incompleteMembersCount
+                                        )
                                     }
                                 }
                             .padding(.horizontal, DS.Spacing.lg)
@@ -262,6 +284,14 @@ struct AdminDashboardView: View {
                 value: "\(authVM.newsReportRequests.count)",
                 icon: "exclamationmark.bubble.fill",
                 color: DS.Color.error
+            )
+
+            // Incomplete Members
+            adminColorfulStatCard(
+                title: L10n.t("ناقص", "Incomplete"),
+                value: "\(incompleteMembersCount)",
+                icon: "exclamationmark.triangle.fill",
+                color: DS.Color.warning
             )
         }
         .padding(.horizontal, DS.Spacing.lg)

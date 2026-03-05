@@ -119,10 +119,10 @@ extension NewsCardView {
                             endPoint: .bottomTrailing
                         )
                     )
-                    .frame(width: 48, height: 48)
+                    .frame(width: 44, height: 44)
 
                 Text(String(authorName.first ?? "U"))
-                    .font(DS.Font.scaled(20, weight: .bold))
+                    .font(DS.Font.scaled(18, weight: .bold))
                     .foregroundColor(.white)
             }
             .overlay(
@@ -156,6 +156,10 @@ extension NewsCardView {
         case "مولود": return L10n.t("مولود", "Newborn")
         case "وفاة": return L10n.t("وفاة", "Obituary")
         case "تصويت": return L10n.t("تصويت", "Poll")
+        case "إعلان": return L10n.t("إعلان", "Announcement")
+        case "تهنئة": return L10n.t("تهنئة", "Congrats")
+        case "تذكير": return L10n.t("تذكير", "Reminder")
+        case "دعوة": return L10n.t("دعوة", "Invitation")
         default: return type
         }
     }
@@ -296,10 +300,14 @@ extension NewsCardView {
         switch type {
         case "تنبيه", "خبر", "News", "Urgent": return DS.Color.primary
         case "مناسبة", "Event": return DS.Color.success
-        case "زواج", "Wedding": return DS.Color.success
-        case "مولود", "Newborn": return DS.Color.success
-        case "وفاة", "Obituary": return DS.Color.error
-        case "تصويت", "Poll": return DS.Color.warning
+        case "زواج", "Wedding": return DS.Color.newsWedding
+        case "مولود", "Newborn": return DS.Color.newsBirth
+        case "وفاة", "Obituary": return DS.Color.newsDeath
+        case "تصويت", "Poll": return DS.Color.newsVote
+        case "إعلان", "Announcement": return DS.Color.newsAnnouncement
+        case "تهنئة", "Congrats": return DS.Color.newsCongrats
+        case "تذكير", "Reminder": return DS.Color.newsReminder
+        case "دعوة", "Invitation": return DS.Color.newsInvitation
         default: return DS.Color.primary
         }
     }

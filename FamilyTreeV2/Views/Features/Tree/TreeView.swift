@@ -25,27 +25,6 @@ struct TreeView: View {
     @State private var searchDebounceTask: Task<Void, Never>?
     @State private var isSearchFocused = false
     @State private var searchedMemberID: UUID? = nil
-    @State private var includeDeceased = false
-    @State private var showFilters = false
-    @State private var genderFilter: GenderFilter = .all
-    
-    enum GenderFilter: String, CaseIterable {
-        case all, male, female
-        var label: String {
-            switch self {
-            case .all: return L10n.t("الكل", "All")
-            case .male: return L10n.t("ذكور", "Male")
-            case .female: return L10n.t("إناث", "Female")
-            }
-        }
-        var icon: String {
-            switch self {
-            case .all: return "person.2.fill"
-            case .male: return "figure.stand"
-            case .female: return "figure.stand.dress"
-            }
-        }
-    }
 
     @State private var scale: CGFloat = 0.8
     @State private var treeID = UUID()
@@ -70,10 +49,10 @@ struct TreeView: View {
     /// الحد الأقصى لعدد العقد المرسومة في وقت واحد لتجنب التهنيق
     private var maxRenderedNodes: Int {
         let count = cachedVisibleMembers.count
-        if count > 5000 { return 50 }
-        if count > 2000 { return 80 }
-        if count > 500 { return 120 }
-        return 200
+        if count > 5000 { return 30 }
+        if count > 2000 { return 50 }
+        if count > 500 { return 80 }
+        return 150
     }
 
     private var preferredBaseScale: CGFloat { 0.8 }
@@ -127,20 +106,7 @@ struct TreeView: View {
         var results: [FamilyMember] = []
         for member in cachedVisibleMembers {
             guard results.count < 20 else { break }
-            
-            // فلتر المتوفين
-            if !includeDeceased && (member.isDeceased ?? false) { continue }
-            
-            // فلتر الجنس
-            switch genderFilter {
-            case .male:
-                if member.gender?.lowercased() == "female" { continue }
-            case .female:
-                if member.gender?.lowercased() != "female" { continue }
-            case .all:
-                break
-            }
-            
+
             if getFullLineage(for: member, lookup: cachedMemberById)
                     .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
                     .contains(folded) {
@@ -150,16 +116,6 @@ struct TreeView: View {
         return results
     }
     
-    /// إحصائيات سريعة للشجرة
-    private var treeStats: (alive: Int, deceased: Int, male: Int, female: Int) {
-        var alive = 0, deceased = 0, male = 0, female = 0
-        for m in cachedVisibleMembers {
-            if m.isDeceased ?? false { deceased += 1 } else { alive += 1 }
-            if m.gender?.lowercased() == "female" { female += 1 } else { male += 1 }
-        }
-        return (alive, deceased, male, female)
-    }
-
     var body: some View {
         NavigationStack {
             GeometryReader { geometry in
@@ -249,7 +205,7 @@ struct TreeView: View {
                             // زر الموقع
                             Button(action: {
                                 if let currentUserID = authVM.currentUser?.id,
-                                   let userMember = cachedMemberById[currentUserID] ?? authVM.allMembers.first(where: { $0.id == currentUserID }) {
+                                   let userMember = cachedMemberById[currentUserID] ?? authVM.member(byId: currentUserID) {
                                     currentLocationMemberID = userMember.id
                                     centerOnMember(userMember, highlight: true, includeFocusedMemberInPath: false)
                                     Task {
@@ -390,39 +346,6 @@ struct TreeView: View {
                 )
                 .shadow(color: isSearchFocused ? DS.Color.primary.opacity(0.1) : .clear, radius: 8)
                 
-                // زر الفلاتر
-                Button(action: {
-                    withAnimation(DS.Anim.snappy) { showFilters.toggle() }
-                }) {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                            .fill(showFilters ? DS.Color.primary : DS.Color.surface)
-                            .frame(width: 42, height: 42)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                                    .stroke(showFilters ? DS.Color.primary : Color.gray.opacity(0.12), lineWidth: 1)
-                            )
-                        Image(systemName: "line.3.horizontal.decrease.circle.fill")
-                            .font(DS.Font.scaled(18, weight: .semibold))
-                            .foregroundColor(showFilters ? .white : DS.Color.primary)
-                    }
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(L10n.t("فلاتر البحث", "Search filters"))
-            }
-            
-            // شريط الفلاتر
-            if showFilters {
-                filterChipsBar
-                    .padding(.top, DS.Spacing.sm)
-                    .transition(.move(edge: .top).combined(with: .opacity))
-            }
-            
-            // إحصائيات سريعة عند عدم البحث
-            if searchText.isEmpty && showFilters {
-                treeStatsBar
-                    .padding(.top, DS.Spacing.sm)
-                    .transition(.opacity)
             }
 
             // نتائج البحث
@@ -443,7 +366,7 @@ struct TreeView: View {
                     .padding(.bottom, DS.Spacing.xs)
                     
                     ScrollView {
-                        VStack(spacing: 0) {
+                        LazyVStack(spacing: 0) {
                             ForEach(filteredMembers) { member in
                                 Button(action: { selectMemberFromSearch(member) }) {
                                     searchResultRow(for: member)
@@ -489,24 +412,24 @@ struct TreeView: View {
                             startPoint: .topLeading, endPoint: .bottomTrailing
                         )
                     )
-                    .frame(width: 38, height: 38)
-                
+                    .frame(width: 44, height: 44)
+
                 if let urlStr = member.avatarUrl, let url = URL(string: urlStr) {
                     CachedAsyncImage(url: url) { image in
                         image.resizable().scaledToFill()
                     } placeholder: {
                         Text(String(member.firstName.prefix(1)))
-                            .font(DS.Font.scaled(14, weight: .bold))
+                            .font(DS.Font.scaled(16, weight: .bold))
                             .foregroundColor(.white)
                     }
-                    .frame(width: 38, height: 38)
+                    .frame(width: 44, height: 44)
                     .clipShape(Circle())
                 } else {
                     Text(String(member.firstName.prefix(1)))
-                        .font(DS.Font.scaled(14, weight: .bold))
+                        .font(DS.Font.scaled(16, weight: .bold))
                         .foregroundColor(.white)
                 }
-                
+
                 // مؤشر المتوفى
                 if member.isDeceased ?? false {
                     VStack {
@@ -515,15 +438,15 @@ struct TreeView: View {
                             Spacer()
                             Circle()
                                 .fill(DS.Color.deceased)
-                                .frame(width: 12, height: 12)
+                                .frame(width: 13, height: 13)
                                 .overlay(
                                     Image(systemName: "heart.slash.fill")
-                                        .font(.system(size: 6, weight: .bold))
+                                        .font(.system(size: 7, weight: .bold))
                                         .foregroundColor(.white)
                                 )
                         }
                     }
-                    .frame(width: 38, height: 38)
+                    .frame(width: 44, height: 44)
                 }
             }
 
@@ -575,101 +498,6 @@ struct TreeView: View {
         .padding(.vertical, DS.Spacing.sm + 2)
     }
     
-    // MARK: - شرائح الفلتر
-    private var filterChipsBar: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: DS.Spacing.sm) {
-                // فلتر المتوفين
-                Button(action: {
-                    withAnimation(DS.Anim.snappy) { includeDeceased.toggle() }
-                }) {
-                    HStack(spacing: DS.Spacing.xs) {
-                        Image(systemName: includeDeceased ? "checkmark.circle.fill" : "circle")
-                            .font(DS.Font.scaled(12, weight: .semibold))
-                        Text(L10n.t("المتوفين", "Deceased"))
-                            .font(DS.Font.scaled(12, weight: .semibold))
-                    }
-                    .foregroundColor(includeDeceased ? .white : DS.Color.textSecondary)
-                    .padding(.horizontal, DS.Spacing.md)
-                    .padding(.vertical, DS.Spacing.sm)
-                    .background(
-                        Capsule()
-                            .fill(includeDeceased ? DS.Color.deceased : DS.Color.surface)
-                    )
-                    .overlay(Capsule().stroke(includeDeceased ? DS.Color.deceased : Color.gray.opacity(0.15), lineWidth: 1))
-                }
-                .buttonStyle(.plain)
-                
-                // فلاتر الجنس
-                ForEach(GenderFilter.allCases, id: \.self) { filter in
-                    Button(action: {
-                        withAnimation(DS.Anim.snappy) { genderFilter = filter }
-                    }) {
-                        HStack(spacing: DS.Spacing.xs) {
-                            Image(systemName: filter.icon)
-                                .font(DS.Font.scaled(12, weight: .semibold))
-                            Text(filter.label)
-                                .font(DS.Font.scaled(12, weight: .semibold))
-                        }
-                        .foregroundColor(genderFilter == filter ? .white : DS.Color.textSecondary)
-                        .padding(.horizontal, DS.Spacing.md)
-                        .padding(.vertical, DS.Spacing.sm)
-                        .background(
-                            Capsule()
-                                .fill(genderFilter == filter ? DS.Color.primary : DS.Color.surface)
-                        )
-                        .overlay(Capsule().stroke(genderFilter == filter ? DS.Color.primary : Color.gray.opacity(0.15), lineWidth: 1))
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(.horizontal, DS.Spacing.xs)
-        }
-    }
-    
-    // MARK: - إحصائيات الشجرة
-    private var treeStatsBar: some View {
-        let stats = treeStats
-        return HStack(spacing: 0) {
-            statItem(icon: "person.fill", value: stats.alive, label: L10n.t("أحياء", "Alive"), color: DS.Color.success)
-            statDivider
-            statItem(icon: "heart.slash.fill", value: stats.deceased, label: L10n.t("متوفين", "Deceased"), color: DS.Color.deceased)
-            statDivider
-            statItem(icon: "figure.stand", value: stats.male, label: L10n.t("ذكور", "Male"), color: DS.Color.primary)
-            statDivider
-            statItem(icon: "figure.stand.dress", value: stats.female, label: L10n.t("إناث", "Female"), color: DS.Color.neonPink)
-        }
-        .padding(.vertical, DS.Spacing.sm)
-        .background(DS.Color.surface)
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                .stroke(Color.gray.opacity(0.12), lineWidth: 1)
-        )
-    }
-    
-    private func statItem(icon: String, value: Int, label: String, color: Color) -> some View {
-        VStack(spacing: 2) {
-            HStack(spacing: 3) {
-                Image(systemName: icon)
-                    .font(DS.Font.scaled(10, weight: .semibold))
-                    .foregroundColor(color)
-                Text("\(value)")
-                    .font(DS.Font.scaled(14, weight: .black))
-                    .foregroundColor(DS.Color.textPrimary)
-            }
-            Text(label)
-                .font(DS.Font.scaled(9, weight: .medium))
-                .foregroundColor(DS.Color.textTertiary)
-        }
-        .frame(maxWidth: .infinity)
-    }
-    
-    private var statDivider: some View {
-        Rectangle()
-            .fill(Color.gray.opacity(0.15))
-            .frame(width: 1, height: 28)
-    }
 
     private func selectMemberFromSearch(_ member: FamilyMember) {
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
@@ -741,7 +569,7 @@ struct TreeView: View {
         if let root = primaryRootMember {
             let updates = {
                 scale = preferredBaseScale
-                activePath.removeAll()
+                activePath = [root.id]
                 searchedMemberID = nil
                 treeID = UUID()
                 scrollTarget = root.id
@@ -926,7 +754,10 @@ struct RecursiveTreeBranch: View {
     @Binding var renderedCount: Int
     let maxRendered: Int
 
-    @State private var isExpanded: Bool
+    /// الفتح يعتمد على activePath كمصدر وحيد للحقيقة
+    private var isExpanded: Bool {
+        activePath.contains(member.id)
+    }
 
     init(member: FamilyMember, childrenByFatherId: [UUID: [FamilyMember]], ancestorIDs: Set<UUID>, activePath: Binding<Set<UUID>>, searchedMemberID: Binding<UUID?>, selectedMember: Binding<FamilyMember?>, scrollTarget: Binding<UUID?>, scrollAnchor: Binding<UnitPoint>, scrollCounter: Binding<Int>, level: Int, viewMode: TreeDisplayMode, lightweightFullTree: Bool, currentLocationMemberID: UUID?, renderedCount: Binding<Int>, maxRendered: Int) {
         self.member = member
@@ -944,7 +775,6 @@ struct RecursiveTreeBranch: View {
         self.currentLocationMemberID = currentLocationMemberID
         self._renderedCount = renderedCount
         self.maxRendered = maxRendered
-        self._isExpanded = State(initialValue: level == 0)
     }
 
     private var visibleChildren: [FamilyMember] {
@@ -985,10 +815,11 @@ struct RecursiveTreeBranch: View {
             } onToggle: {
                 let willExpand = !isExpanded
                 withAnimation(.easeInOut(duration: 0.2)) {
-                    isExpanded = willExpand
                     if willExpand {
+                        // نفتح هالعقدة ونحتفظ بالأجداد فقط
                         activePath = ancestorIDs.union([member.id])
                     } else {
+                        // نقفل هالعقدة وكل أبنائها — نشيل كل شي ماعدا الأجداد
                         activePath = ancestorIDs
                         searchedMemberID = nil
                     }
@@ -1003,8 +834,8 @@ struct RecursiveTreeBranch: View {
             }.id(member.id)
             .onAppear { renderedCount += 1 }
 
-            // ما نعرض الأبناء إلا إذا العقدة مفتوحة فعلياً (expanded أو في المسار النشط)
-            let isPathOpen = viewMode == .fullTree || activePath.contains(member.id) || isExpanded
+            // ما نعرض الأبناء إلا إذا العقدة مفتوحة فعلياً (في المسار النشط)
+            let isPathOpen = viewMode == .fullTree || activePath.contains(member.id)
 
             if isPathOpen && renderedCount < maxRendered {
                 let childrenToDisplay = self.visibleChildren
@@ -1139,7 +970,7 @@ struct TreeMemberNode: View {
                                 .scaleEffect(isPulsing ? 1.3 : 1.0)
                                 .opacity(isPulsing ? 0.0 : 0.9)
                                 .shadow(color: DS.Color.currentLocation.opacity(0.45), radius: 7)
-                                .animation(Animation.easeOut(duration: 1.5).repeatForever(autoreverses: false), value: isPulsing)
+                                .animation(Animation.easeOut(duration: 1.5).repeatCount(3, autoreverses: false), value: isPulsing)
                                 .onAppear { isPulsing = true }
                         }
                     }
@@ -1170,7 +1001,7 @@ struct TreeMemberNode: View {
                                 .scaleEffect(isPulsing ? 1.4 : 1.0)
                                 .opacity(isPulsing ? 0.0 : 0.9)
                                 .shadow(color: DS.Color.currentLocation.opacity(0.5), radius: 10)
-                                .animation(Animation.easeOut(duration: 1.5).repeatForever(autoreverses: false), value: isPulsing)
+                                .animation(Animation.easeOut(duration: 1.5).repeatCount(3, autoreverses: false), value: isPulsing)
                                 .onAppear { isPulsing = true }
                         }
                     }
@@ -1265,7 +1096,7 @@ struct TreeMemberNode: View {
                             .scaleEffect(isPulsing ? 1.35 : 1.0)
                             .opacity(isPulsing ? 0.0 : 0.9)
                             .shadow(color: DS.Color.currentLocation.opacity(0.5), radius: 12)
-                            .animation(Animation.easeOut(duration: 1.5).repeatForever(autoreverses: false), value: isPulsing)
+                            .animation(Animation.easeOut(duration: 1.5).repeatCount(3, autoreverses: false), value: isPulsing)
                             .onAppear { isPulsing = true }
                     }
                 }

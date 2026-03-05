@@ -93,6 +93,14 @@ struct DiwaniyasView: View {
             }
             .task { await viewModel.fetchDiwaniyas() }
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+            .alert(L10n.t("خطأ", "Error"), isPresented: .init(
+                get: { viewModel.errorMessage != nil },
+                set: { if !$0 { viewModel.errorMessage = nil } }
+            )) {
+                Button(L10n.t("حسناً", "OK"), role: .cancel) { viewModel.errorMessage = nil }
+            } message: {
+                Text(viewModel.errorMessage ?? "")
+            }
         }
     }
 

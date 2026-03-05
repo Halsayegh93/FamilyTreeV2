@@ -75,7 +75,7 @@ final class ImageCache {
     }
 }
 
-// MARK: - Convenience init matching AsyncImage(url:) { phase in ... } pattern
+// MARK: - Convenience init matching AsyncImage(url:) { image in ... } pattern
 
 extension CachedAsyncImage where Placeholder == ProgressView<EmptyView, EmptyView> {
     init(
@@ -85,5 +85,69 @@ extension CachedAsyncImage where Placeholder == ProgressView<EmptyView, EmptyVie
         self.url = url
         self.content = content
         self.placeholder = { ProgressView() }
+    }
+}
+
+// MARK: - Phase-based init matching AsyncImage(url:) { phase in ... } pattern
+
+/// Phase enum mirroring SwiftUI's AsyncImagePhase for CachedAsyncImage compatibility.
+enum CachedImagePhase {
+    case empty
+    case success(Image)
+    case failure(Error)
+
+    var image: Image? {
+        if case .success(let img) = self { return img }
+        return nil
+    }
+    var error: Error? {
+        if case .failure(let err) = self { return err }
+        return nil
+    }
+}
+
+/// Phase-based CachedAsyncImage — drop-in replacement for `AsyncImage(url:) { phase in … }`.
+struct CachedAsyncPhaseImage<Content: View>: View {
+    let url: URL?
+    let content: (CachedImagePhase) -> Content
+
+    @State private var phase: CachedImagePhase = .empty
+
+    init(
+        url: URL?,
+        @ViewBuilder content: @escaping (CachedImagePhase) -> Content
+    ) {
+        self.url = url
+        self.content = content
+    }
+
+    var body: some View {
+        content(phase)
+            .task(id: url) { await loadImage() }
+    }
+
+    private func loadImage() async {
+        guard let url else { return }
+        let request = URLRequest(url: url)
+
+        if let cached = ImageCache.shared.cache.cachedResponse(for: request),
+           let uiImage = UIImage(data: cached.data) {
+            phase = .success(Image(uiImage: uiImage))
+            return
+        }
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard !Task.isCancelled else { return }
+            guard let uiImage = UIImage(data: data) else {
+                phase = .failure(URLError(.cannotDecodeContentData))
+                return
+            }
+            let cached = CachedURLResponse(response: response, data: data)
+            ImageCache.shared.cache.storeCachedResponse(cached, for: request)
+            phase = .success(Image(uiImage: uiImage))
+        } catch {
+            if !Task.isCancelled { phase = .failure(error) }
+        }
     }
 }

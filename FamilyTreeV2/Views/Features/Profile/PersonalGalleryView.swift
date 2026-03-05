@@ -11,7 +11,11 @@ struct PersonalGalleryView: View {
 
     @State private var galleryPhotos: [MemberGalleryPhoto] = []
     @State private var selectedGalleryItems: [PhotosPickerItem] = []
+    @State private var pendingImages: [UIImage] = []
+    @State private var isLoadingSelection = false
     @State private var showGalleryPicker: Bool = false
+    @State private var showPendingPreview = false
+    @State private var pendingPreviewIndex = 0
     @State private var selectedPreviewPhoto: MemberGalleryPhoto? = nil
     @State private var showGalleryViewer = false
     @State private var pendingDeletePhoto: MemberGalleryPhoto? = nil
@@ -19,19 +23,42 @@ struct PersonalGalleryView: View {
     @State private var isViewingLegacyPhoto = false
     @State private var legacyGalleryPhotoURL: String? = nil
     @State private var showDeleteLegacyPhotoAlert = false
+    @State private var isLoadingPhotos = true
+    @State private var isUploading = false
 
     var body: some View {
         ZStack {
             DS.Color.background.ignoresSafeArea()
             DSDecorativeBackground()
 
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: DS.Spacing.xxl) {
-                    galleryGrid
-                        .padding(.horizontal, DS.Spacing.lg)
-                        .padding(.top, DS.Spacing.xl)
+            if isLoadingPhotos {
+                VStack(spacing: DS.Spacing.md) {
+                    ProgressView()
+                    Text(L10n.t("جاري تحميل الصور...", "Loading photos..."))
+                        .font(DS.Font.callout)
+                        .foregroundColor(DS.Color.textSecondary)
                 }
-                .padding(.bottom, DS.Spacing.xxxl)
+            } else {
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: DS.Spacing.xxl) {
+                        if isUploading {
+                            HStack(spacing: DS.Spacing.sm) {
+                                ProgressView()
+                                Text(L10n.t("جاري رفع الصور...", "Uploading photos..."))
+                                    .font(DS.Font.caption1)
+                                    .foregroundColor(DS.Color.textSecondary)
+                            }
+                            .padding(DS.Spacing.md)
+                            .glassCard(radius: DS.Radius.md)
+                            .padding(.horizontal, DS.Spacing.lg)
+                            .padding(.top, DS.Spacing.sm)
+                        }
+                        galleryGrid
+                            .padding(.horizontal, DS.Spacing.lg)
+                            .padding(.top, isUploading ? 0 : DS.Spacing.xl)
+                    }
+                    .padding(.bottom, DS.Spacing.xxxl)
+                }
             }
         }
         .navigationTitle(L10n.t("معرض الصور", "Gallery"))
@@ -41,6 +68,9 @@ struct PersonalGalleryView: View {
         .photosPicker(isPresented: $showGalleryPicker, selection: $selectedGalleryItems, maxSelectionCount: 5, matching: .images)
         .onChange(of: selectedGalleryItems) { _, items in
             handleGalleryImagesChange(items)
+        }
+        .sheet(isPresented: $showPendingPreview) {
+            galleryPendingPreviewSheet
         }
         .fullScreenCover(isPresented: $showGalleryViewer) {
             if let photo = selectedPreviewPhoto {
@@ -159,7 +189,7 @@ struct PersonalGalleryView: View {
                 Color.clear
                     .aspectRatio(1, contentMode: .fit)
                     .overlay(
-                        AsyncImage(url: URL(string: photo.photoURL)) { phase in
+                        CachedAsyncPhaseImage(url: URL(string: photo.photoURL)) { phase in
                             if let image = phase.image {
                                 image
                                     .resizable()
@@ -212,7 +242,7 @@ struct PersonalGalleryView: View {
                 Color.clear
                     .aspectRatio(1, contentMode: .fit)
                     .overlay(
-                        AsyncImage(url: URL(string: url)) { phase in
+                        CachedAsyncPhaseImage(url: URL(string: url)) { phase in
                             if let image = phase.image {
                                 image
                                     .resizable()
@@ -250,12 +280,33 @@ struct PersonalGalleryView: View {
     private func handleGalleryImagesChange(_ items: [PhotosPickerItem]) {
         Task {
             guard !items.isEmpty else { return }
+            await MainActor.run { isLoadingSelection = true }
+            var loaded: [UIImage] = []
             for item in items {
                 guard let data = try? await item.loadTransferable(type: Data.self),
                       let uiImg = UIImage(data: data) else { continue }
-                _ = await authVM.uploadMemberGalleryPhotoMulti(image: uiImg, for: member.id)
+                loaded.append(uiImg)
             }
-            await MainActor.run { self.selectedGalleryItems = [] }
+            await MainActor.run {
+                pendingImages = loaded
+                pendingPreviewIndex = 0
+                isLoadingSelection = false
+                if !loaded.isEmpty { showPendingPreview = true }
+                self.selectedGalleryItems = []
+            }
+        }
+    }
+
+    private func uploadPendingImages() {
+        Task {
+            await MainActor.run { isUploading = true; showPendingPreview = false }
+            for image in pendingImages {
+                _ = await authVM.uploadMemberGalleryPhotoMulti(image: image, for: member.id)
+            }
+            await MainActor.run {
+                pendingImages = []
+                isUploading = false
+            }
             await refreshGalleryPhotos()
         }
     }
@@ -283,6 +334,7 @@ struct PersonalGalleryView: View {
         await MainActor.run {
             self.galleryPhotos = photos
             self.legacyGalleryPhotoURL = photos.isEmpty ? member.photoURL : nil
+            self.isLoadingPhotos = false
         }
     }
 
@@ -297,6 +349,116 @@ struct PersonalGalleryView: View {
                 self.isViewingLegacyPhoto = false
             }
         }
+    }
+
+    // MARK: - Pending Preview Sheet
+    private var galleryPendingPreviewSheet: some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                // Instagram-style carousel
+                ZStack(alignment: .top) {
+                    TabView(selection: $pendingPreviewIndex) {
+                        ForEach(Array(pendingImages.enumerated()), id: \.offset) { idx, image in
+                            ZStack(alignment: .topTrailing) {
+                                Image(uiImage: image)
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(maxWidth: .infinity)
+                                    .clipped()
+
+                                Button {
+                                    withAnimation {
+                                        pendingImages.remove(at: idx)
+                                        if pendingPreviewIndex >= pendingImages.count {
+                                            pendingPreviewIndex = max(0, pendingImages.count - 1)
+                                        }
+                                        if pendingImages.isEmpty { showPendingPreview = false }
+                                    }
+                                } label: {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .font(DS.Font.scaled(24, weight: .bold))
+                                        .foregroundColor(.white)
+                                        .shadow(color: .black.opacity(0.6), radius: 4, x: 0, y: 2)
+                                }
+                                .padding(DS.Spacing.md)
+                            }
+                            .tag(idx)
+                        }
+                    }
+                    .aspectRatio(4/5, contentMode: .fit)
+                    .clipped()
+                    .tabViewStyle(.page(indexDisplayMode: .never))
+
+                    if pendingImages.count > 1 {
+                        HStack {
+                            Spacer()
+                            Text("\(pendingPreviewIndex + 1)/\(pendingImages.count)")
+                                .font(DS.Font.caption1)
+                                .fontWeight(.bold)
+                                .foregroundColor(.white)
+                                .padding(.horizontal, DS.Spacing.sm)
+                                .padding(.vertical, DS.Spacing.xs)
+                                .background(.black.opacity(0.55))
+                                .clipShape(Capsule())
+                                .padding(DS.Spacing.md)
+                        }
+                    }
+                }
+
+                // Thumbnail strip
+                if pendingImages.count > 1 {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: DS.Spacing.sm) {
+                            ForEach(Array(pendingImages.enumerated()), id: \.offset) { idx, image in
+                                Button {
+                                    withAnimation { pendingPreviewIndex = idx }
+                                } label: {
+                                    Image(uiImage: image)
+                                        .resizable()
+                                        .scaledToFill()
+                                        .frame(width: 56, height: 56)
+                                        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous)
+                                                .stroke(pendingPreviewIndex == idx ? DS.Color.primary : Color.clear, lineWidth: 2.5)
+                                        )
+                                        .opacity(pendingPreviewIndex == idx ? 1 : 0.6)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .padding(.horizontal, DS.Spacing.md)
+                        .padding(.vertical, DS.Spacing.sm)
+                    }
+                }
+
+                Spacer()
+
+                // Upload button
+                DSPrimaryButton(
+                    L10n.t("رفع \(pendingImages.count) صور", "Upload \(pendingImages.count) Photos"),
+                    icon: "arrow.up.circle.fill"
+                ) {
+                    uploadPendingImages()
+                }
+                .padding(.horizontal, DS.Spacing.lg)
+                .padding(.bottom, DS.Spacing.xxl)
+            }
+            .background(DS.Color.background)
+            .navigationTitle(L10n.t("معاينة الصور", "Preview Photos"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(L10n.t("إلغاء", "Cancel")) {
+                        pendingImages = []
+                        showPendingPreview = false
+                    }
+                    .font(DS.Font.calloutBold)
+                    .foregroundColor(DS.Color.error)
+                }
+            }
+        }
+        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
 
     private func legacyPreviewPhoto(url: String) -> MemberGalleryPhoto? {

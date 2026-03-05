@@ -11,8 +11,8 @@ struct AdminPhoneRequestsView: View {
             if authVM.phoneChangeRequests.isEmpty {
                 emptyState
             } else {
-                ScrollView {
-                    VStack(spacing: DS.Spacing.lg) {
+                ScrollView(showsIndicators: false) {
+                    LazyVStack(spacing: DS.Spacing.md) {
                         ForEach(authVM.phoneChangeRequests) { request in
                             phoneRequestCard(request: request)
                         }
@@ -35,20 +35,37 @@ struct AdminPhoneRequestsView: View {
         return DSCard {
             VStack(alignment: .leading, spacing: DS.Spacing.lg) {
 
-                // Gradient accent bar at top
+                // Gradient accent bar
                 DS.Color.gradientPrimary
                     .frame(height: 4)
                     .cornerRadius(DS.Radius.full)
 
-                // Header: date + name
-                HStack {
-                    Text((request.createdAt ?? "").prefix(10))
-                        .font(DS.Font.caption2)
-                        .foregroundColor(DS.Color.textSecondary)
+                // Header: icon + name + date
+                HStack(spacing: DS.Spacing.md) {
+                    ZStack {
+                        Circle()
+                            .fill(
+                                LinearGradient(
+                                    colors: [DS.Color.primary.opacity(0.2), DS.Color.primary.opacity(0.08)],
+                                    startPoint: .topLeading, endPoint: .bottomTrailing
+                                )
+                            )
+                            .frame(width: 44, height: 44)
+                        Image(systemName: "phone.arrow.right")
+                            .foregroundColor(DS.Color.primary)
+                            .font(DS.Font.scaled(18, weight: .semibold))
+                    }
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(memberName)
+                            .font(DS.Font.calloutBold)
+                            .foregroundColor(DS.Color.textPrimary)
+                        Text((request.createdAt ?? "").prefix(10))
+                            .font(DS.Font.caption2)
+                            .foregroundColor(DS.Color.textSecondary)
+                    }
+
                     Spacer()
-                    Text(memberName)
-                        .font(DS.Font.calloutBold)
-                        .foregroundColor(DS.Color.textPrimary)
                 }
 
                 DSDivider()
@@ -73,12 +90,12 @@ struct AdminPhoneRequestsView: View {
                             .stroke(DS.Color.success.opacity(0.2), lineWidth: 1)
                     )
 
-                    // Arrow — DS.Color.primary
+                    // Arrow
                     Image(systemName: "arrow.left")
                         .foregroundColor(DS.Color.primary)
                         .font(DS.Font.scaled(14, weight: .semibold))
 
-                    // Current phone — DS.Color.textSecondary styled
+                    // Current phone
                     VStack(alignment: .center, spacing: DS.Spacing.xs) {
                         Text(L10n.t("الرقم الحالي", "Current Number"))
                             .font(DS.Font.caption2)
