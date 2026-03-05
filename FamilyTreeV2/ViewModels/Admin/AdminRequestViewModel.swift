@@ -569,6 +569,7 @@ class AdminRequestViewModel: ObservableObject {
     /// Copies the tree position data (father, children, bio, photos) from the old tree record
     /// to the new registration record (which has the correct auth UUID), then deletes the old record.
     func mergeMemberIntoTreeMember(newMemberId: UUID, existingTreeMemberId: UUID) async {
+        Log.info("[MERGE] بدء الدمج: جديد=\(newMemberId) ← شجرة=\(existingTreeMemberId)")
         self.isLoading = true
         do {
             // 1) Load the existing tree record to get tree data
@@ -625,6 +626,7 @@ class AdminRequestViewModel: ObservableObject {
                 .update(updatePayload)
                 .eq("id", value: newMemberId.uuidString)
                 .execute()
+            Log.info("[MERGE] تم تحديث السجل الجديد بنجاح: role=member, status=active, name=\(treeMember.fullName)")
             
             // 3) Re-link children: change their father_id from old to new
             _ = try? await supabase
@@ -668,22 +670,35 @@ class AdminRequestViewModel: ObservableObject {
                 .eq("requester_id", value: existingTreeMemberId.uuidString)
                 .execute()
             
-            // 8) Delete the old tree record
-            try await supabase
-                .from("profiles")
-                .delete()
-                .eq("id", value: existingTreeMemberId.uuidString)
+            // 8) Transfer device tokens from old to new
+            _ = try? await supabase
+                .from("device_tokens")
+                .update(["member_id": AnyEncodable(newMemberId.uuidString)])
+                .eq("member_id", value: existingTreeMemberId.uuidString)
                 .execute()
             
-            // 9) Refresh local data
+            // 9) Delete the old tree record
+            do {
+                try await supabase
+                    .from("profiles")
+                    .delete()
+                    .eq("id", value: existingTreeMemberId.uuidString)
+                    .execute()
+                Log.info("[MERGE] حذف السجل القديم بنجاح: \(existingTreeMemberId)")
+            } catch {
+                Log.error("[MERGE] فشل حذف السجل القديم: \(error.localizedDescription)")
+                // حتى لو فشل الحذف، السجل الجديد اتحدث بنجاح
+            }
+            
+            // 10) Refresh local data
             await memberVM?.fetchAllMembers()
             
-            // 10) Notify the member
+            // 11) Notify the member
             await notifyJoinApproval(memberId: newMemberId, fatherName: treeMember.fatherId.flatMap { id in memberById(id)?.fullName })
             
-            Log.info("تم دمج العضو بنجاح: \(treeMember.fullName)")
+            Log.info("[MERGE] تم دمج العضو بنجاح: \(treeMember.fullName) → auth UUID: \(newMemberId)")
         } catch {
-            Log.error("فشل دمج العضو: \(error.localizedDescription)")
+            Log.error("[MERGE] فشل دمج العضو: \(error.localizedDescription)")
         }
         self.isLoading = false
     }

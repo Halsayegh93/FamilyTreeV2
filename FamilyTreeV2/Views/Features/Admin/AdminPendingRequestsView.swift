@@ -12,6 +12,8 @@ struct AdminPendingRequestsView: View {
     /// Merge confirmation state
     @State private var mergeTarget: (pendingMember: FamilyMember, treeMember: FamilyMember)? = nil
     @State private var showMergeConfirm = false
+    @State private var showMergeSuccess = false
+    @State private var mergeSuccessMessage = ""
 
     // تصفية الأعضاء الذين حالتهم "Pending"
     var pendingMembers: [FamilyMember] {
@@ -114,12 +116,21 @@ struct AdminPendingRequestsView: View {
         ) {
             Button(L10n.t("دمج", "Merge"), role: .destructive) {
                 if let target = mergeTarget {
+                    let pendingName = target.pendingMember.fullName
+                    let treeName = target.treeMember.fullName
                     Task {
                         await adminRequestVM.mergeMemberIntoTreeMember(
                             newMemberId: target.pendingMember.id,
                             existingTreeMemberId: target.treeMember.id
                         )
-                        mergeTarget = nil
+                        await MainActor.run {
+                            mergeSuccessMessage = L10n.t(
+                                "تم دمج \(pendingName) مع \(treeName) بنجاح",
+                                "Successfully merged \(pendingName) with \(treeName)"
+                            )
+                            showMergeSuccess = true
+                            mergeTarget = nil
+                        }
                     }
                 }
             }
@@ -133,6 +144,14 @@ struct AdminPendingRequestsView: View {
                     "This will link \(target.pendingMember.fullName)'s account to the existing tree record \(target.treeMember.fullName). Tree position, children, and data will be preserved."
                 ))
             }
+        }
+        .alert(
+            L10n.t("تم الدمج", "Merge Complete"),
+            isPresented: $showMergeSuccess
+        ) {
+            Button(L10n.t("حسناً", "OK"), role: .cancel) { }
+        } message: {
+            Text(mergeSuccessMessage)
         }
         .task { await memberVM.fetchAllMembers() }
     }
