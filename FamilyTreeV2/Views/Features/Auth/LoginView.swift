@@ -125,14 +125,14 @@ struct LoginView: View {
                     .frame(width: 100, height: 100)
 
                 Text("🌳")
-                    .font(DS.Font.scaled(54))
+                    .font(DS.Font.scaled(48))
             }
-            .shadow(color: .black.opacity(0.05), radius: 10, x: 0, y: 5)
+            .shadow(color: DS.Color.shadowSubtle, radius: 10, x: 0, y: 5)
             .padding(.bottom, DS.Spacing.sm)
 
             VStack(spacing: DS.Spacing.xs) {
                 Text(L10n.t("عائلة المحمد علي", "Al-Muhammad Ali Family"))
-                    .font(DS.Font.scaled(28, weight: .bold))
+                    .font(DS.Font.title1)
                     .foregroundColor(DS.Color.textPrimary)
 
                 Text(L10n.t("مرحباً بك في تطبيق شجرة العائلة", "Welcome to the Family Tree App"))
@@ -232,7 +232,7 @@ struct LoginView: View {
                             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
                     }
                 }
-                .foregroundColor(.white)
+                .foregroundColor(DS.Color.textOnPrimary)
                 .frame(maxWidth: .infinity)
                 .frame(height: 58)
                 .background(DS.Color.accent.opacity(isDisabled ? DS.Opacity.disabled : 1.0))
@@ -334,7 +334,7 @@ struct LoginView: View {
                                 .font(DS.Font.calloutBold)
                         }
                     }
-                    .foregroundColor(.white)
+                    .foregroundColor(DS.Color.textOnPrimary)
                     .frame(maxWidth: .infinity)
                     .frame(height: 58)
                     .background(DS.Color.accent.opacity(otpDisabled ? DS.Opacity.disabled : 1.0))
@@ -365,7 +365,7 @@ struct LoginView: View {
                     .foregroundColor(DS.Color.error)
             }
             .padding(.horizontal, DS.Spacing.lg)
-            .padding(.vertical, DS.Spacing.sm)
+            .padding(.vertical, DS.Spacing.xs)
             .background(DS.Color.error.opacity(0.12))
             .clipShape(Capsule())
             .transition(.scale.combined(with: .opacity))
@@ -380,7 +380,7 @@ struct LoginView: View {
                     .foregroundColor(DS.Color.success)
             }
             .padding(.horizontal, DS.Spacing.lg)
-            .padding(.vertical, DS.Spacing.sm)
+            .padding(.vertical, DS.Spacing.xs)
             .background(DS.Color.success.opacity(0.12))
             .clipShape(Capsule())
             .transition(.scale.combined(with: .opacity))

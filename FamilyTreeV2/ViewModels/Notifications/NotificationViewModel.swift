@@ -2,6 +2,7 @@ import Foundation
 import Supabase
 import SwiftUI
 import Combine
+import UIKit
 
 @MainActor
 class NotificationViewModel: ObservableObject {
@@ -12,6 +13,120 @@ class NotificationViewModel: ObservableObject {
     @Published var notificationsFeatureAvailable: Bool = true
     @Published var pushToken: String?
     @Published var isLoading: Bool = false
+    @Published var linkedDevices: [LinkedDevice] = []
+    
+    /// نموذج الجهاز المرتبط
+    struct LinkedDevice: Identifiable, Codable {
+        let id: Int
+        let memberId: UUID
+        let token: String?
+        let platform: String
+        let deviceName: String?
+        let deviceId: String?
+        let createdAt: String
+        let updatedAt: String
+        
+        enum CodingKeys: String, CodingKey {
+            case id
+            case memberId = "member_id"
+            case token
+            case platform
+            case deviceName = "device_name"
+            case deviceId = "device_id"
+            case createdAt = "created_at"
+            case updatedAt = "updated_at"
+        }
+        
+        /// هل هذا الجهاز الحالي
+        func isCurrent(currentDeviceId: String?) -> Bool {
+            guard let currentDeviceId, let deviceId else { return false }
+            return deviceId == currentDeviceId
+        }
+        
+        /// اسم الجهاز للعرض (نوع الجهاز)
+        var displayName: String {
+            if let name = deviceName, !name.isEmpty {
+                return name
+            }
+            return platform.uppercased()
+        }
+    }
+    
+    /// الحصول على نوع الجهاز الحقيقي (مثل iPhone 16 Pro Max)
+    static var deviceModelName: String {
+        var size = 0
+        sysctlbyname("hw.machine", nil, &size, nil, 0)
+        var machine = [CChar](repeating: 0, count: size)
+        sysctlbyname("hw.machine", &machine, &size, nil, 0)
+        let identifier = String(cString: machine)
+        return mapIdentifierToName(identifier)
+    }
+    
+    private static func mapIdentifierToName(_ id: String) -> String {
+        // Simulator
+        if id == "x86_64" || id == "arm64" {
+            return "Simulator"
+        }
+        
+        let map: [String: String] = [
+            // iPhone
+            "iPhone10,1": "iPhone 8", "iPhone10,4": "iPhone 8",
+            "iPhone10,2": "iPhone 8 Plus", "iPhone10,5": "iPhone 8 Plus",
+            "iPhone10,3": "iPhone X", "iPhone10,6": "iPhone X",
+            "iPhone11,2": "iPhone XS",
+            "iPhone11,4": "iPhone XS Max", "iPhone11,6": "iPhone XS Max",
+            "iPhone11,8": "iPhone XR",
+            "iPhone12,1": "iPhone 11",
+            "iPhone12,3": "iPhone 11 Pro",
+            "iPhone12,5": "iPhone 11 Pro Max",
+            "iPhone12,8": "iPhone SE (2nd)",
+            "iPhone13,1": "iPhone 12 mini",
+            "iPhone13,2": "iPhone 12",
+            "iPhone13,3": "iPhone 12 Pro",
+            "iPhone13,4": "iPhone 12 Pro Max",
+            "iPhone14,4": "iPhone 13 mini",
+            "iPhone14,5": "iPhone 13",
+            "iPhone14,2": "iPhone 13 Pro",
+            "iPhone14,3": "iPhone 13 Pro Max",
+            "iPhone14,6": "iPhone SE (3rd)",
+            "iPhone14,7": "iPhone 14",
+            "iPhone14,8": "iPhone 14 Plus",
+            "iPhone15,2": "iPhone 14 Pro",
+            "iPhone15,3": "iPhone 14 Pro Max",
+            "iPhone15,4": "iPhone 15",
+            "iPhone15,5": "iPhone 15 Plus",
+            "iPhone16,1": "iPhone 15 Pro",
+            "iPhone16,2": "iPhone 15 Pro Max",
+            "iPhone17,1": "iPhone 16 Pro",
+            "iPhone17,2": "iPhone 16 Pro Max",
+            "iPhone17,3": "iPhone 16",
+            "iPhone17,4": "iPhone 16 Plus",
+            "iPhone17,5": "iPhone 16e",
+            // iPad
+            "iPad13,1": "iPad Air (4th)", "iPad13,2": "iPad Air (4th)",
+            "iPad13,4": "iPad Pro 11\" (3rd)", "iPad13,5": "iPad Pro 11\" (3rd)",
+            "iPad13,6": "iPad Pro 11\" (3rd)", "iPad13,7": "iPad Pro 11\" (3rd)",
+            "iPad13,8": "iPad Pro 12.9\" (5th)", "iPad13,9": "iPad Pro 12.9\" (5th)",
+            "iPad13,10": "iPad Pro 12.9\" (5th)", "iPad13,11": "iPad Pro 12.9\" (5th)",
+            "iPad13,16": "iPad Air (5th)", "iPad13,17": "iPad Air (5th)",
+            "iPad13,18": "iPad (10th)", "iPad13,19": "iPad (10th)",
+            "iPad14,1": "iPad mini (6th)", "iPad14,2": "iPad mini (6th)",
+            "iPad14,3": "iPad Pro 11\" (4th)", "iPad14,4": "iPad Pro 11\" (4th)",
+            "iPad14,5": "iPad Pro 12.9\" (6th)", "iPad14,6": "iPad Pro 12.9\" (6th)",
+            "iPad14,8": "iPad Air 11\" (M2)", "iPad14,9": "iPad Air 11\" (M2)",
+            "iPad14,10": "iPad Air 13\" (M2)", "iPad14,11": "iPad Air 13\" (M2)",
+            "iPad16,1": "iPad mini (A17 Pro)", "iPad16,2": "iPad mini (A17 Pro)",
+            "iPad16,3": "iPad Pro 11\" (M4)", "iPad16,4": "iPad Pro 11\" (M4)",
+            "iPad16,5": "iPad Pro 13\" (M4)", "iPad16,6": "iPad Pro 13\" (M4)",
+        ]
+        
+        return map[id] ?? UIDevice.current.model
+    }
+    
+    /// معرّف الجهاز الحالي
+    var currentDeviceId: String? {
+        UIDevice.current.identifierForVendor?.uuidString
+    }
     
     private var lastNotificationsFetchDate: Date?
     
@@ -20,7 +135,7 @@ class NotificationViewModel: ObservableObject {
     // MARK: - Computed Properties
     
     var unreadNotificationsCount: Int {
-        notifications.filter { !$0.read }.count
+        notifications.filter { !$0.read && $0.targetMemberId != nil }.count
     }
     
     private var currentUser: FamilyMember? {
@@ -64,6 +179,59 @@ class NotificationViewModel: ObservableObject {
         return desc.contains("cancelled") || desc.contains("canceled") || desc.contains("مُلغى")
     }
     
+    // MARK: - Device Registration
+    
+    /// تسجيل الجهاز عند تسجيل الدخول (بغض النظر عن الإشعارات)
+    func registerDevice() async {
+        guard let memberId = currentUser?.id else { return }
+        guard let deviceId = currentDeviceId else {
+            Log.warning("[DEVICE] لا يمكن الحصول على معرّف الجهاز")
+            return
+        }
+        
+        // فحص حد الأجهزة
+        do {
+            let existingDevices: [LinkedDevice] = try await supabase
+                .from("device_tokens")
+                .select()
+                .eq("member_id", value: memberId.uuidString)
+                .execute()
+                .value
+            
+            let isAlreadyRegistered = existingDevices.contains { $0.deviceId == deviceId }
+            
+            if !isAlreadyRegistered && existingDevices.count >= AuthViewModel.maxDevicesPerAccount {
+                Log.warning("[DEVICE] تجاوز الحد: \(existingDevices.count) أجهزة مسجلة، الحد \(AuthViewModel.maxDevicesPerAccount)")
+                self.linkedDevices = existingDevices
+                self.isDeviceLimitExceeded = true
+                authVM?.status = .deviceLimitExceeded
+                return
+            }
+        } catch {
+            Log.error("خطأ فحص حد الأجهزة: \(error.localizedDescription)")
+        }
+        
+        // تسجيل الجهاز
+        do {
+            let deviceModelName = NotificationViewModel.deviceModelName
+            let payload: [String: AnyEncodable] = [
+                "member_id": AnyEncodable(memberId.uuidString),
+                "device_id": AnyEncodable(deviceId),
+                "platform": AnyEncodable("ios"),
+                "device_name": AnyEncodable(deviceModelName)
+            ]
+            
+            try await supabase
+                .from("device_tokens")
+                .upsert(payload, onConflict: "member_id,device_id")
+                .execute()
+            
+            Log.info("[DEVICE] تم تسجيل الجهاز: \(deviceModelName)")
+        } catch {
+            Log.error("خطأ تسجيل الجهاز: \(error.localizedDescription)")
+        }
+    }
+    
     // MARK: - Push Token
     
     func registerPushToken(_ token: String) async {
@@ -77,19 +245,22 @@ class NotificationViewModel: ObservableObject {
         guard notificationsEnabled else { return }
 
         guard let memberId = currentUser?.id else { return }
+        guard let deviceId = currentDeviceId else { return }
+        
+        // تحديث التوكن على سجل الجهاز الحالي
         do {
-            let payload: [String: AnyEncodable] = [
-                "member_id": AnyEncodable(memberId.uuidString),
-                "token": AnyEncodable(cleanToken),
-                "platform": AnyEncodable("ios")
-            ]
-
             try await supabase
                 .from("device_tokens")
-                .upsert(payload, onConflict: "token")
+                .update([
+                    "token": AnyEncodable(cleanToken)
+                ])
+                .eq("member_id", value: memberId.uuidString)
+                .eq("device_id", value: deviceId)
                 .execute()
+            
+            Log.info("[DEVICE] تم تحديث Push Token للجهاز")
         } catch {
-            Log.error("خطأ حفظ Push Token: \(error.localizedDescription)")
+            Log.error("خطأ تحديث Push Token: \(error.localizedDescription)")
         }
     }
 
@@ -106,6 +277,74 @@ class NotificationViewModel: ObservableObject {
             Log.info("تم إلغاء تسجيل التوكن للإشعارات")
         } catch {
             Log.error("خطأ إلغاء تسجيل Push Token: \(error.localizedDescription)")
+        }
+    }
+    
+    @Published var isDeviceLimitExceeded: Bool = false
+    
+    // MARK: - Linked Devices
+    
+    func fetchLinkedDevices() async {
+        guard let memberId = currentUser?.id else { return }
+        do {
+            let devices: [LinkedDevice] = try await supabase
+                .from("device_tokens")
+                .select()
+                .eq("member_id", value: memberId.uuidString)
+                .order("updated_at", ascending: false)
+                .execute()
+                .value
+            self.linkedDevices = devices
+        } catch {
+            Log.error("خطأ جلب الأجهزة المرتبطة: \(error.localizedDescription)")
+        }
+    }
+    
+    /// التحقق من عدد الأجهزة عند تسجيل الدخول
+    func checkDeviceLimit() async {
+        guard let memberId = currentUser?.id else { return }
+        do {
+            let devices: [LinkedDevice] = try await supabase
+                .from("device_tokens")
+                .select()
+                .eq("member_id", value: memberId.uuidString)
+                .execute()
+                .value
+            self.linkedDevices = devices
+            
+            let isCurrentDeviceRegistered = devices.contains { $0.deviceId == currentDeviceId }
+            
+            // إذا الجهاز الحالي مسجل، ما في مشكلة
+            if isCurrentDeviceRegistered {
+                self.isDeviceLimitExceeded = false
+                return
+            }
+            
+            // إذا وصل الحد الأقصى وهذا جهاز جديد
+            if devices.count >= AuthViewModel.maxDevicesPerAccount {
+                Log.warning("[DEVICE] تجاوز الحد الأقصى للأجهزة: \(devices.count)/\(AuthViewModel.maxDevicesPerAccount)")
+                self.isDeviceLimitExceeded = true
+                self.linkedDevices = devices
+                authVM?.status = .deviceLimitExceeded
+            } else {
+                self.isDeviceLimitExceeded = false
+            }
+        } catch {
+            Log.error("خطأ فحص حد الأجهزة: \(error.localizedDescription)")
+        }
+    }
+    
+    func removeDevice(_ device: LinkedDevice) async {
+        do {
+            try await supabase
+                .from("device_tokens")
+                .delete()
+                .eq("id", value: device.id)
+                .execute()
+            self.linkedDevices.removeAll { $0.id == device.id }
+            Log.info("تم حذف الجهاز بنجاح")
+        } catch {
+            Log.error("خطأ حذف الجهاز: \(error.localizedDescription)")
         }
     }
     
@@ -152,33 +391,37 @@ class NotificationViewModel: ObservableObject {
     // MARK: - Notifications
     
     func fetchNotifications(force: Bool = false) async {
-        if !force, let last = lastNotificationsFetchDate, Date().timeIntervalSince(last) < 15, !notifications.isEmpty { return }
+        if !force, let last = lastNotificationsFetchDate, Date().timeIntervalSince(last) < 15, !notifications.isEmpty {
+            Log.info("[NOTIF-FETCH] تخطي الجلب (cache ≤ 15 ثانية) — عدد حالي: \(notifications.count)")
+            return
+        }
         lastNotificationsFetchDate = Date()
         guard let userId = currentUser?.id else {
+            Log.warning("[NOTIF-FETCH] لا يوجد مستخدم حالي — تفريغ الإشعارات")
             notifications = []
             return
         }
         guard notificationsFeatureAvailable else {
+            Log.warning("[NOTIF-FETCH] الإشعارات غير متاحة — تفريغ")
             notifications = []
             return
         }
         
+        Log.info("[NOTIF-FETCH] جلب إشعارات للعضو: \(userId.uuidString) (force: \(force))")
+        
         do {
-            // المدراء يشوفون الإشعارات الموجهة لهم + البث العام (notifyAdmins)
-            // الأعضاء العاديون يشوفون فقط الإشعارات الموجهة لهم شخصياً
-            let filter = canModerate
-                ? "target_member_id.is.null,target_member_id.eq.\(userId.uuidString)"
-                : "target_member_id.eq.\(userId.uuidString)"
-            
+            // جلب الإشعارات الموجهة للعضو شخصياً فقط (بدون البث الإداري)
             let response: [AppNotification] = try await supabase
                 .from("notifications")
                 .select()
-                .or(filter)
+                .eq("target_member_id", value: userId.uuidString)
                 .order("created_at", ascending: false)
                 .execute()
                 .value
             
             let unreadCount = response.filter { !$0.read }.count
+            Log.info("[NOTIF-FETCH] ✅ تم الجلب — إجمالي: \(response.count) | غير مقروء: \(unreadCount)")
+            
             self.notificationsFeatureAvailable = true
             self.notifications = response
             let badgeOn = currentUser?.badgeEnabled ?? true
@@ -187,15 +430,18 @@ class NotificationViewModel: ObservableObject {
             if isMissingNotificationsTableError(error) {
                 notificationsFeatureAvailable = false
                 notifications = []
+                Log.error("[NOTIF-FETCH] ❌ جدول الإشعارات غير موجود")
             } else {
-                Log.error("خطأ جلب الإشعارات: \(error.localizedDescription)")
+                Log.error("[NOTIF-FETCH] ❌ خطأ جلب الإشعارات: \(error.localizedDescription)")
             }
         }
     }
     
     func deleteNotification(id: UUID) async {
+        Log.info("[NOTIF-DELETE] حذف إشعار واحد: \(id.uuidString.prefix(8))… | قبل الحذف: \(notifications.count)")
         // تحديث محلي فوري
         notifications.removeAll { $0.id == id }
+        Log.info("[NOTIF-DELETE] بعد الحذف المحلي: \(notifications.count)")
         let badgeOn = currentUser?.badgeEnabled ?? true
         let unread = notifications.filter { !$0.read }.count
         try? await UNUserNotificationCenter.current().setBadgeCount(badgeOn ? unread : 0)
@@ -206,16 +452,23 @@ class NotificationViewModel: ObservableObject {
                 .delete()
                 .eq("id", value: id.uuidString)
                 .execute()
+            Log.info("[NOTIF-DELETE] ✅ تم الحذف من قاعدة البيانات — إعادة جلب للتأكد")
+            await fetchNotifications(force: true)
         } catch {
-            Log.error("خطأ حذف إشعار: \(error.localizedDescription)")
+            Log.error("[NOTIF-DELETE] ❌ خطأ حذف إشعار: \(error.localizedDescription)")
             await fetchNotifications(force: true)
         }
     }
     
     func deleteNotifications(ids: Set<UUID>) async {
         guard !ids.isEmpty else { return }
+        Log.info("[NOTIF-DELETE-MULTI] حذف \(ids.count) إشعار | قبل الحذف: \(notifications.count)")
+        for id in ids {
+            Log.info("[NOTIF-DELETE-MULTI]   → \(id.uuidString.prefix(8))…")
+        }
         // تحديث محلي فوري
         notifications.removeAll { ids.contains($0.id) }
+        Log.info("[NOTIF-DELETE-MULTI] بعد الحذف المحلي: \(notifications.count)")
         let badgeOn = currentUser?.badgeEnabled ?? true
         let unread = notifications.filter { !$0.read }.count
         try? await UNUserNotificationCenter.current().setBadgeCount(badgeOn ? unread : 0)
@@ -227,8 +480,10 @@ class NotificationViewModel: ObservableObject {
                 .delete()
                 .in("id", values: idStrings)
                 .execute()
+            Log.info("[NOTIF-DELETE-MULTI] ✅ تم الحذف من قاعدة البيانات — إعادة جلب للتأكد")
+            await fetchNotifications(force: true)
         } catch {
-            Log.error("خطأ حذف إشعارات: \(error.localizedDescription)")
+            Log.error("[NOTIF-DELETE-MULTI] ❌ خطأ حذف إشعارات: \(error.localizedDescription)")
             await fetchNotifications(force: true)
         }
     }
@@ -285,14 +540,11 @@ class NotificationViewModel: ObservableObject {
         }
         try? await UNUserNotificationCenter.current().setBadgeCount(0)
         
-        let filter = canModerate
-            ? "target_member_id.is.null,target_member_id.eq.\(userId.uuidString)"
-            : "target_member_id.eq.\(userId.uuidString)"
         do {
             try await supabase
                 .from("notifications")
                 .update(["is_read": AnyEncodable(true)])
-                .or(filter)
+                .eq("target_member_id", value: userId.uuidString)
                 .eq("is_read", value: false)
                 .execute()
         } catch {

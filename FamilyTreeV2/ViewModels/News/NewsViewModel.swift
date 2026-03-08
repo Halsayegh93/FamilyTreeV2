@@ -151,12 +151,14 @@ class NewsViewModel: ObservableObject {
                 }
             }
 
+            // تجنب إطلاق طلبات فرعية إذا تم إلغاء المهمة
+            guard !Task.isCancelled else { return }
+            
             let pollPostIds = allNews.filter { $0.hasPoll }.map(\.id)
             let allPostIds = allNews.map(\.id)
-            async let fetchVotes: () = fetchNewsPollVotes(for: pollPostIds)
-            async let fetchLikes: () = fetchNewsLikes(for: allPostIds)
-            async let fetchComments: () = fetchNewsComments(for: allPostIds)
-            _ = await (fetchVotes, fetchLikes, fetchComments)
+            await fetchNewsPollVotes(for: pollPostIds)
+            await fetchNewsLikes(for: allPostIds)
+            await fetchNewsComments(for: allPostIds)
         } catch {
             Log.error("خطأ جلب الأخبار: \(error)")
         }

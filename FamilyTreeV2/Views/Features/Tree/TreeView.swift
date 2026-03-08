@@ -11,8 +11,10 @@ enum TreeDisplayMode: Hashable {
 struct TreeView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var memberVM: MemberViewModel
+    @EnvironmentObject var adminRequestVM: AdminRequestViewModel
     @Binding var selectedTab: Int
     @State private var showingNotifications = false
+    @State private var showingTreeEditRequest = false
     @State private var selectedMember: FamilyMember? = nil
     @State private var scrollTarget: UUID? = nil
     @State private var scrollCounter: Int = 0
@@ -172,36 +174,23 @@ struct TreeView: View {
                             subtitle: "\(cachedVisibleMembers.count) " + L10n.t("عضو", "members") + " • " + "\(cachedRootMembers.count) " + L10n.t("جذور", "roots"),
                             icon: "leaf.fill"
                         ) {
-                            // زر تحديث الشجرة
+                            // زر طلب تعديل الشجرة
                             Button(action: {
-                                guard !isRefreshing else { return }
-                                isRefreshing = true
-                                Task {
-                                    await memberVM.fetchAllMembers(force: true)
-                                    rebuildCache()
-                                    withAnimation { isRefreshing = false }
-                                }
+                                showingTreeEditRequest = true
                             }) {
                                 ZStack {
                                     Circle()
-                                        .fill(Color.white.opacity(0.15))
+                                        .fill(DS.Color.overlayIcon)
                                         .frame(width: 44, height: 44)
-                                        .overlay(Circle().stroke(Color.white.opacity(0.3), lineWidth: 1))
-                                    if isRefreshing {
-                                        ProgressView()
-                                            .tint(.white)
-                                            .scaleEffect(0.8)
-                                    } else {
-                                        Image(systemName: "arrow.clockwise")
-                                            .font(DS.Font.scaled(16, weight: .bold))
-                                            .foregroundColor(.white)
-                                    }
+                                        .overlay(Circle().stroke(DS.Color.overlayIconBorder, lineWidth: 1.5))
+                                    Image(systemName: "pencil.line")
+                                        .font(DS.Font.scaled(16, weight: .bold))
+                                        .foregroundColor(DS.Color.textOnPrimary)
                                 }
                                 .contentShape(Circle())
                             }
                             .buttonStyle(BounceButtonStyle())
-                            .disabled(isRefreshing)
-                            .accessibilityLabel(L10n.t("تحديث الشجرة", "Refresh tree"))
+                            .accessibilityLabel(L10n.t("طلب تعديل الشجرة", "Request tree edit"))
 
                             // زر الموقع
                             Button(action: {
@@ -217,12 +206,12 @@ struct TreeView: View {
                             }) {
                                 ZStack {
                                     Circle()
-                                        .fill(Color.white.opacity(0.15))
+                                        .fill(DS.Color.overlayIcon)
                                         .frame(width: 44, height: 44)
-                                        .overlay(Circle().stroke(Color.white.opacity(0.3), lineWidth: 1))
+                                        .overlay(Circle().stroke(DS.Color.overlayIconBorder, lineWidth: 1.5))
                                     Image(systemName: "location.fill")
                                         .font(DS.Font.scaled(18, weight: .bold))
-                                        .foregroundColor(.white)
+                                        .foregroundColor(DS.Color.textOnPrimary)
                                 }
                                 .contentShape(Circle())
                             }
@@ -249,6 +238,9 @@ struct TreeView: View {
             .sheet(item: $selectedMember) { member in
                 MemberDetailsView(member: member)
                     .presentationDetents([.medium, .large])
+            }
+            .fullScreenCover(isPresented: $showingTreeEditRequest) {
+                TreeEditRequestView()
             }
             .onAppear {
                 let isFirstLoad = cachedVisibleMembers.isEmpty
@@ -335,13 +327,13 @@ struct TreeView: View {
                     }
                 }
                 .padding(.horizontal, DS.Spacing.md)
-                .padding(.vertical, DS.Spacing.sm)
+                .padding(.vertical, DS.Spacing.xs)
                 .background(DS.Color.surface)
                 .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
                         .stroke(
-                            isSearchFocused ? DS.Color.primary.opacity(0.4) : Color.gray.opacity(0.12),
+                            isSearchFocused ? DS.Color.primary.opacity(0.4) : DS.Color.inactiveBorder,
                             lineWidth: isSearchFocused ? 1.5 : 1
                         )
                 )
@@ -373,7 +365,7 @@ struct TreeView: View {
                                     searchResultRow(for: member)
                                 }
                                 if member.id != filteredMembers.last?.id {
-                                    Divider().padding(.horizontal, DS.Spacing.md)
+                                    DSDivider()
                                 }
                             }
                         }
@@ -421,14 +413,14 @@ struct TreeView: View {
                     } placeholder: {
                         Text(String(member.firstName.prefix(1)))
                             .font(DS.Font.scaled(16, weight: .bold))
-                            .foregroundColor(.white)
+                            .foregroundColor(DS.Color.textOnPrimary)
                     }
                     .frame(width: 44, height: 44)
                     .clipShape(Circle())
                 } else {
                     Text(String(member.firstName.prefix(1)))
                         .font(DS.Font.scaled(16, weight: .bold))
-                        .foregroundColor(.white)
+                        .foregroundColor(DS.Color.textOnPrimary)
                 }
 
                 // مؤشر المتوفى
@@ -442,8 +434,8 @@ struct TreeView: View {
                                 .frame(width: 13, height: 13)
                                 .overlay(
                                     Image(systemName: "heart.slash.fill")
-                                        .font(.system(size: 7, weight: .bold))
-                                        .foregroundColor(.white)
+                                        .font(DS.Font.scaled(7, weight: .bold))
+                                        .foregroundColor(DS.Color.textOnPrimary)
                                 )
                         }
                     }
@@ -472,7 +464,7 @@ struct TreeView: View {
                     if childCount > 0 {
                         HStack(spacing: 2) {
                             Image(systemName: "person.2.fill")
-                                .font(.system(size: 8))
+                                .font(DS.Font.caption2)
                             Text("\(childCount)")
                                 .font(DS.Font.scaled(10, weight: .bold))
                         }
@@ -595,11 +587,11 @@ struct TreeView: View {
                         .font(DS.Font.scaled(12, weight: .bold))
                         .foregroundColor(DS.Color.primary)
                         .frame(width: 44, height: 44)
-                        .background(Color.white.opacity(0.1))
+                        .background(DS.Color.overlayIcon)
 
                     Divider()
                         .frame(width: 30)
-                        .background(Color.gray.opacity(0.2))
+                        .background(DS.Color.mutedBackground)
 
                     // زر تكبير
                     Button(action: { withAnimation(.easeInOut(duration: 0.3)) { scale = min(scale + 0.10, 3.0) } }) {
@@ -607,14 +599,14 @@ struct TreeView: View {
                             .font(DS.Font.scaled(16, weight: .bold))
                             .foregroundColor(DS.Color.primary)
                             .frame(width: 44, height: 44)
-                            .background(Color.white.opacity(0.1))
+                            .background(DS.Color.overlayIcon)
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(L10n.t("تكبير", "Zoom in"))
 
                     Divider()
                         .frame(width: 30)
-                        .background(Color.gray.opacity(0.2))
+                        .background(DS.Color.mutedBackground)
 
                     // زر إعادة
                     Button(action: { resetToTopRoot() }) {
@@ -622,14 +614,14 @@ struct TreeView: View {
                             .font(DS.Font.scaled(15, weight: .bold))
                             .foregroundColor(DS.Color.primary)
                             .frame(width: 44, height: 44)
-                            .background(Color.white.opacity(0.1))
+                            .background(DS.Color.overlayIcon)
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(L10n.t("إعادة ضبط العرض", "Reset view"))
 
                     Divider()
                         .frame(width: 30)
-                        .background(Color.gray.opacity(0.2))
+                        .background(DS.Color.mutedBackground)
 
                     // زر تصغير
                     Button(action: { withAnimation(.easeInOut(duration: 0.3)) { scale = max(scale - 0.10, 0.4) } }) {
@@ -637,7 +629,7 @@ struct TreeView: View {
                             .font(DS.Font.scaled(16, weight: .bold))
                             .foregroundColor(DS.Color.primary)
                             .frame(width: 44, height: 44)
-                            .background(Color.white.opacity(0.1))
+                            .background(DS.Color.overlayIcon)
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(L10n.t("تصغير", "Zoom out"))
@@ -646,9 +638,9 @@ struct TreeView: View {
                 .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                        .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                        .stroke(DS.Color.mutedBackground, lineWidth: 1)
                 )
-                .shadow(color: Color.black.opacity(0.08), radius: 8, y: 4)
+                .shadow(color: DS.Color.shadowMedium, radius: 8, y: 4)
                 .padding(.bottom, DS.Spacing.xxl)
             }.padding(.horizontal, DS.Spacing.xl)
         }
@@ -912,7 +904,7 @@ struct TreeMemberNode: View {
     // لون دائرة الصورة — موحّد لكل الأحياء بلون التطبيق
     private var nodeAccentColor: Color {
         if member.isDeceased == true {
-            return Color.gray.opacity(0.7)
+            return DS.Color.muted
         }
         return DS.Color.primary
     }
@@ -938,7 +930,7 @@ struct TreeMemberNode: View {
                         Circle()
                             .fill(
                                 member.isDeceased == true
-                                    ? Color.gray.opacity(0.7)
+                                    ? DS.Color.muted
                                     : nodeAccentColor.opacity(0.9)
                             )
                             .frame(width: 14, height: 14)
@@ -991,7 +983,7 @@ struct TreeMemberNode: View {
 
                             Text(String(fullDisplayName.prefix(1)))
                                 .font(DS.Font.scaled(19, weight: .black))
-                                .foregroundColor(.white)
+                                .foregroundColor(DS.Color.textOnPrimary)
                         }
                     }
                     .overlay {
@@ -1010,7 +1002,7 @@ struct TreeMemberNode: View {
                         if isCurrentLocationMember {
                             Text(L10n.t("موقعك ( أنا )", "Your Location (Me)"))
                                 .font(DS.Font.scaled(10, weight: .bold))
-                                .foregroundColor(.black.opacity(0.85))
+                                .foregroundColor(DS.Color.textDark)
                                 .padding(.horizontal, 7)
                                 .padding(.vertical, 2)
                                 .background(DS.Color.currentLocation)
@@ -1058,7 +1050,7 @@ struct TreeMemberNode: View {
                             } placeholder: {
                                 Image(systemName: "person.fill")
                                     .font(DS.Font.scaled(30))
-                                    .foregroundColor(.white.opacity(0.7))
+                                    .foregroundColor(DS.Color.overlayTextMuted)
                             }
                             .frame(width: interactiveNodeSize, height: interactiveNodeSize)
                             .clipShape(Circle())
@@ -1067,7 +1059,7 @@ struct TreeMemberNode: View {
                                 .resizable()
                                 .scaledToFit()
                                 .frame(width: 44)
-                                .foregroundColor(.white.opacity(0.7))
+                                .foregroundColor(DS.Color.overlayTextMuted)
                         }
 
                         if member.isDeceased ?? false { deathTag }
@@ -1106,7 +1098,7 @@ struct TreeMemberNode: View {
                     if isCurrentLocationMember {
                         Text(L10n.t("موقعك ( أنا )", "Your Location (Me)"))
                             .font(DS.Font.scaled(10, weight: .bold))
-                            .foregroundColor(.black.opacity(0.85))
+                            .foregroundColor(DS.Color.textDark)
                             .padding(.horizontal, 8)
                             .padding(.vertical, 3)
                             .background(DS.Color.currentLocation)
@@ -1166,17 +1158,17 @@ struct TreeMemberNode: View {
                                     .fill(DS.Color.gradientPrimary)
                                     .frame(width: 40, height: 40)
                                     .shadow(color: DS.Color.primary.opacity(0.4), radius: 6, y: 3)
-                                    .overlay(Circle().stroke(LinearGradient(colors: [Color.white, Color.white.opacity(0.3)], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1.5))
+                                    .overlay(Circle().stroke(LinearGradient(colors: [DS.Color.textOnPrimary, DS.Color.overlayIconBorder], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1.5))
 
                                 Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
                                     .font(DS.Font.scaled(18, weight: .black))
-                                    .foregroundColor(.white)
-                                    .shadow(color: .black.opacity(0.3), radius: 2, y: 1)
+                                    .foregroundColor(DS.Color.textOnPrimary)
+                                    .shadow(color: DS.Color.shadowStrong, radius: 2, y: 1)
                             }
                             .frame(width: interactiveLabelWidth, alignment: .center)
                         }
                     }
-                }.foregroundColor(.white).zIndex(1)
+                }.foregroundColor(DS.Color.textOnPrimary).zIndex(1)
             }.fixedSize()
         }
     }
@@ -1186,7 +1178,7 @@ struct TreeMemberNode: View {
             Spacer()
             Text(getLifeSpan())
                 .font(DS.Font.scaled(9, weight: .black))
-                .foregroundColor(.white)
+                .foregroundColor(DS.Color.textOnPrimary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
                 .frame(width: interactiveLabelWidth, height: interactiveLabelHeight)

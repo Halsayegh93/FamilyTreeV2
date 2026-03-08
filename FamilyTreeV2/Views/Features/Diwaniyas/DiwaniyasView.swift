@@ -26,13 +26,16 @@ struct DiwaniyasView: View {
                         icon: "map.fill"
                     ) {
                         Button(action: { showingAddRequest = true }) {
-                            Image(systemName: "plus")
-                                .font(DS.Font.scaled(16, weight: .bold))
-                                .foregroundColor(.white)
-                                .frame(width: 44, height: 44)
-                                .background(Color.white.opacity(0.15))
-                                .clipShape(Circle())
-                                .overlay(Circle().stroke(Color.white.opacity(0.3), lineWidth: 1.5))
+                            ZStack {
+                                Circle()
+                                    .fill(DS.Color.overlayIcon)
+                                    .frame(width: 44, height: 44)
+                                    .overlay(Circle().stroke(DS.Color.overlayIconBorder, lineWidth: 1.5))
+                                Image(systemName: "plus")
+                                    .font(DS.Font.scaled(16, weight: .bold))
+                                    .foregroundColor(DS.Color.textOnPrimary)
+                            }
+                            .contentShape(Circle())
                         }
                     }
 
@@ -181,11 +184,11 @@ struct DiwaniyasView: View {
                             if isClosed {
                                 HStack(spacing: 3) {
                                     Image(systemName: "lock.fill")
-                                        .font(.system(size: 8))
+                                        .font(DS.Font.caption2)
                                     Text(L10n.t("مغلقة", "Closed"))
                                         .font(DS.Font.scaled(10, weight: .bold))
                                 }
-                                .foregroundColor(.white)
+                                .foregroundColor(DS.Color.textOnPrimary)
                                 .padding(.horizontal, DS.Spacing.sm)
                                 .padding(.vertical, DS.Spacing.xs)
                                 .background(DS.Color.error.opacity(0.8))
@@ -194,7 +197,7 @@ struct DiwaniyasView: View {
                         }
                         HStack(spacing: DS.Spacing.xs) {
                             Image(systemName: "person.fill")
-                                .font(.system(size: 10))
+                                .font(DS.Font.caption1)
                                 .foregroundColor(DS.Color.textTertiary)
                             Text(item.ownerName)
                                 .font(DS.Font.caption1)
@@ -223,7 +226,7 @@ struct DiwaniyasView: View {
                     }
                 }
                 .padding(.horizontal, DS.Spacing.lg)
-                .padding(.vertical, DS.Spacing.md)
+                .padding(.vertical, DS.Spacing.xs)
 
                 // معلومات مدمجة في شبكة
                 let infoItems = buildDiwaniyaInfoItems(item)
@@ -243,10 +246,10 @@ struct DiwaniyasView: View {
                                 Spacer()
                             }
                             .padding(.horizontal, DS.Spacing.lg)
-                            .padding(.vertical, DS.Spacing.sm)
+                            .padding(.vertical, DS.Spacing.xs)
                             
                             if index < infoItems.count - 1 {
-                                Divider().padding(.horizontal, DS.Spacing.xxxl)
+                                DSDivider()
                             }
                         }
                     }
@@ -268,7 +271,7 @@ struct DiwaniyasView: View {
                                 .fontWeight(.bold)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, DS.Spacing.sm + 4)
-                                .foregroundColor(.white)
+                                .foregroundColor(DS.Color.textOnPrimary)
                                 .background(DS.Color.gradientPrimary)
                                 .clipShape(Capsule())
                             }
@@ -294,7 +297,7 @@ struct DiwaniyasView: View {
                         }
                     }
                     .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.vertical, DS.Spacing.md)
+                    .padding(.vertical, DS.Spacing.xs)
                 }
             }
         }
@@ -462,7 +465,7 @@ private struct AddDiwaniyaRequestView: View {
                                     }
                                 }
                                 .padding(.horizontal, DS.Spacing.lg)
-                                .padding(.vertical, DS.Spacing.md)
+                                .padding(.vertical, DS.Spacing.xs)
 
                                 DSDivider()
 
@@ -584,7 +587,7 @@ private struct AddDiwaniyaRequestView: View {
                 .autocorrectionDisabled(keyboard == .URL || keyboard == .phonePad)
         }
         .padding(.horizontal, DS.Spacing.lg)
-        .padding(.vertical, DS.Spacing.md)
+        .padding(.vertical, DS.Spacing.xs)
     }
 }
 
@@ -749,7 +752,7 @@ private struct EditDiwaniyaView: View {
                                 }
                             }
                             .padding(.horizontal, DS.Spacing.lg)
-                            .padding(.vertical, DS.Spacing.md)
+                            .padding(.vertical, DS.Spacing.xs)
 
                             DSDivider()
 
@@ -805,7 +808,7 @@ private struct EditDiwaniyaView: View {
                                     .labelsHidden()
                             }
                             .padding(.horizontal, DS.Spacing.lg)
-                            .padding(.vertical, DS.Spacing.md)
+                            .padding(.vertical, DS.Spacing.xs)
                         }
                         .padding(.horizontal, DS.Spacing.lg)
 
@@ -884,6 +887,6 @@ private struct EditDiwaniyaView: View {
                 .autocorrectionDisabled(keyboard == .URL || keyboard == .phonePad)
         }
         .padding(.horizontal, DS.Spacing.lg)
-        .padding(.vertical, DS.Spacing.md)
+        .padding(.vertical, DS.Spacing.xs)
     }
 }

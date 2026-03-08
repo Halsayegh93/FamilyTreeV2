@@ -28,14 +28,14 @@ struct EditChildSheet: View {
                 DSDecorativeBackground()
 
                 ScrollView(showsIndicators: false) {
-                    VStack(spacing: DS.Spacing.xxl) {
+                    VStack(spacing: DS.Spacing.md) {
                         heroHeader
                         basicInfoCard
+                            .padding(.horizontal, DS.Spacing.lg)
                         submitButton
+                            .padding(.horizontal, DS.Spacing.lg)
                     }
-                    .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.top, DS.Spacing.md)
-                    .padding(.bottom, DS.Spacing.xxl)
+                    .padding(.vertical, DS.Spacing.xs)
                 }
             }
             .navigationTitle(L10n.t("تعديل بيانات الابن", "Edit Child Info"))
@@ -65,7 +65,12 @@ struct EditChildSheet: View {
     private var heroHeader: some View {
         DSProfilePhotoPicker(
             selectedImage: $selectedUIImage,
-            existingURL: member.avatarUrl
+            existingURL: member.avatarUrl,
+            onDeleteExisting: {
+                Task {
+                    await memberVM.deleteAvatar(for: member.id)
+                }
+            }
         )
         .padding(.horizontal, DS.Spacing.lg)
     }
@@ -73,7 +78,7 @@ struct EditChildSheet: View {
     private var basicInfoCard: some View {
         DSCard(padding: 0) {
             DSSectionHeader(
-                title: L10n.t("البيانات الأساسية", "Basic Info"),
+                title: L10n.t("المعلومات الشخصية", "Personal Info"),
                 icon: "person.text.rectangle"
             )
 
@@ -97,7 +102,7 @@ struct EditChildSheet: View {
                         Spacer()
                     }
                     .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.vertical, DS.Spacing.md)
+                    .padding(.vertical, DS.Spacing.xs)
 
                     DSDivider()
 
@@ -120,7 +125,7 @@ struct EditChildSheet: View {
                         Spacer()
                     }
                     .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.vertical, DS.Spacing.md)
+                    .padding(.vertical, DS.Spacing.xs)
 
                     DSDivider()
 
@@ -140,7 +145,7 @@ struct EditChildSheet: View {
                         Spacer()
                     }
                     .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.vertical, DS.Spacing.md)
+                    .padding(.vertical, DS.Spacing.xs)
 
                     DSDivider()
 
@@ -163,7 +168,7 @@ struct EditChildSheet: View {
                                 } label: {
                                     HStack(spacing: 6) {
                                         Text(selectedPhoneCountry.flag)
-                                        Text(selectedPhoneCountry.dialingCode).font(DS.Font.callout)
+                                        Text(selectedPhoneCountry.dialingCode).font(DS.Font.caption1)
                                         Image(systemName: "chevron.down")
                                             .font(DS.Font.scaled(10, weight: .semibold))
                                     }
@@ -189,7 +194,7 @@ struct EditChildSheet: View {
                         Spacer()
                     }
                     .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.vertical, DS.Spacing.md)
+                    .padding(.vertical, DS.Spacing.xs)
 
                     DSDivider()
 
@@ -200,7 +205,7 @@ struct EditChildSheet: View {
                             .environment(\.locale, Locale(identifier: "en_US"))
                     }
                     .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.vertical, DS.Spacing.sm)
+                    .padding(.vertical, DS.Spacing.xs)
 
                     DSDivider()
 
@@ -212,7 +217,7 @@ struct EditChildSheet: View {
                             .tint(DS.Color.error)
                     }
                     .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.vertical, DS.Spacing.sm)
+                    .padding(.vertical, DS.Spacing.xs)
                     .animation(.default, value: isDeceased)
 
                     if isDeceased {
@@ -223,7 +228,7 @@ struct EditChildSheet: View {
                                 .environment(\.locale, Locale(identifier: "en_US"))
                         }
                         .padding(.horizontal, DS.Spacing.lg)
-                        .padding(.vertical, DS.Spacing.sm)
+                        .padding(.vertical, DS.Spacing.xs)
                     }
                 }
             }

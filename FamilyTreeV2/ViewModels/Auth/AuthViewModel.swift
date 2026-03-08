@@ -101,9 +101,14 @@ class AuthViewModel: ObservableObject {
         case fullyAuthenticated
         case pendingApproval
         case trialExpired
+        case deviceLimitExceeded
     }
+    
+    static let maxDevicesPerAccount = 3
 
     private let trialDurationDays = 7
+    
+    weak var notificationVM: NotificationViewModel?
     
     var canModerate: Bool {
         currentUser?.role == .admin || currentUser?.role == .supervisor
@@ -481,6 +486,11 @@ class AuthViewModel: ObservableObject {
         self.trialEndsAt = access.trialEnd
         if let normalizedPhone, normalizedPhone.count == 8 {
             self.phoneNumber = normalizedPhone
+        }
+        
+        // تسجيل الجهاز عند تسجيل الدخول
+        if access.status == .fullyAuthenticated {
+            await notificationVM?.registerDevice()
         }
     }
     
@@ -869,13 +879,18 @@ class AuthViewModel: ObservableObject {
     // MARK: - Contact
     
     func sendContactMessage(category: String, message: String, preferredContact: String?) async -> Bool {
-        guard let user = currentUser else { return false }
+        guard let user = currentUser else {
+            Log.error("[Contact] ❌ لا يوجد مستخدم حالي — تم إلغاء الإرسال")
+            return false
+        }
+        Log.info("[Contact] 📨 بدء إرسال رسالة تواصل — التصنيف: \(category), المرسل: \(user.fullName)")
         self.isLoading = true
         contactMessageError = nil
 
         let cleanMessage = message.trimmingCharacters(in: .whitespacesAndNewlines)
         let cleanContact = preferredContact?.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleanMessage.isEmpty else {
+            Log.warning("[Contact] ⚠️ الرسالة فارغة — تم الإلغاء")
             contactMessageError = "الرسالة فارغة."
             self.isLoading = false
             return false
@@ -888,6 +903,8 @@ class AuthViewModel: ObservableObject {
         """
 
         do {
+            // 1. حفظ في admin_requests
+            Log.info("[Contact] 1️⃣ حفظ الطلب في admin_requests...")
             let basePayload: [String: AnyEncodable] = [
                 "member_id": AnyEncodable(user.id.uuidString),
                 "requester_id": AnyEncodable(user.id.uuidString),
@@ -904,18 +921,22 @@ class AuthViewModel: ObservableObject {
                     .from("admin_requests")
                     .insert(payload)
                     .execute()
+                Log.info("[Contact] ✅ تم الحفظ في admin_requests بنجاح")
             } catch {
-                // fallback لقواعد بيانات لم تُحدَّث فيها new_value
                 if isMissingAdminRequestNewValueColumnError(error) {
+                    Log.warning("[Contact] ⚠️ عمود new_value غير موجود — إعادة المحاولة بدونه")
                     try await supabase
                         .from("admin_requests")
                         .insert(basePayload)
                         .execute()
+                    Log.info("[Contact] ✅ تم الحفظ في admin_requests (بدون new_value)")
                 } else {
                     throw error
                 }
             }
 
+            // 2. إرسال الإيميل عبر contact-email
+            Log.info("[Contact] 2️⃣ استدعاء contact-email edge function...")
             let emailPayload: [String: AnyEncodable] = [
                 "category": AnyEncodable(category),
                 "message": AnyEncodable(cleanMessage),
@@ -929,20 +950,27 @@ class AuthViewModel: ObservableObject {
                     "contact-email",
                     options: FunctionInvokeOptions(body: emailPayload)
                 )
+                Log.info("[Contact] ✅ contact-email اكتمل بنجاح (لم يرمِ خطأ)")
             } catch {
-                Log.warning("تعذر إرسال إيميل التواصل: \(error.localizedDescription)")
+                Log.warning("[Contact] ⚠️ فشل contact-email: \(error.localizedDescription)")
+                Log.warning("[Contact] ⚠️ تفاصيل الخطأ: \(error)")
             }
 
+            // 3. إشعار المشرفين
+            Log.info("[Contact] 3️⃣ إرسال إشعار للمشرفين...")
             await notifyAdminsWithPush(
                 title: "رسالة تواصل جديدة",
                 body: "وصلت رسالة \(category) جديدة.",
                 kind: "contact_message"
             )
+            Log.info("[Contact] ✅ تم إرسال إشعار المشرفين")
 
+            Log.info("[Contact] ✅ اكتمل إرسال رسالة التواصل بنجاح")
             self.isLoading = false
             return true
         } catch {
-            Log.error("خطأ إرسال رسالة التواصل: \(error.localizedDescription)")
+            Log.error("[Contact] ❌ خطأ إرسال رسالة التواصل: \(error.localizedDescription)")
+            Log.error("[Contact] ❌ تفاصيل: \(error)")
             contactMessageError = error.localizedDescription
             self.isLoading = false
             return false

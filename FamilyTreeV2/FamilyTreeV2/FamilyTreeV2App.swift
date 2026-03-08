@@ -7,6 +7,7 @@
 
 import SwiftUI
 import UserNotifications
+import Combine
 
 @main
 struct FamilyTreeV2App: App {
@@ -34,6 +35,7 @@ struct FamilyTreeV2App: App {
                 .environmentObject(appState.newsVM)
                 .environmentObject(appState.notificationVM)
                 .environmentObject(appState.adminRequestVM)
+                .environmentObject(appState.projectsVM)
                 .environment(\.locale, langManager.locale)
                 .environment(\.layoutDirection, langManager.layoutDirection)
                 .environment(\.multilineTextAlignment, langManager.selectedLanguage == "ar" ? .leading : .trailing)
@@ -47,11 +49,8 @@ struct FamilyTreeV2App: App {
                     guard let token = note.object as? String else { return }
                     Task { await self.appState.notificationVM.registerPushToken(token) }
                 }
-                .onReceive(NotificationCenter.default.publisher(for: .didReceivePushNotification)) { _ in
-                    Task { await self.appState.notificationVM.fetchNotifications() }
-                }
-                .onReceive(NotificationCenter.default.publisher(for: .didTapPushNotification)) { _ in
-                    Task { await self.appState.notificationVM.fetchNotifications() }
+                .onReceive(NotificationCenter.default.publisher(for: .didReceivePushNotification).merge(with: NotificationCenter.default.publisher(for: .didTapPushNotification))) { _ in
+                    Task { await self.appState.notificationVM.fetchNotifications(force: true) }
                 }
         }
     }

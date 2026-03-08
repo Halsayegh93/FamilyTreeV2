@@ -3,6 +3,9 @@ import SwiftUI
 enum NewsTypeHelper {
     static let allTypes = ["خبر", "إعلان", "زواج", "مولود", "وفاة", "تهنئة", "دعوة", "تذكير", "تصويت"]
 
+    /// الأنواع الأساسية المعروضة عند إضافة خبر جديد
+    static let mainTypes = ["خبر", "إعلان", "زواج", "مولود", "وفاة", "تصويت"]
+
     static func color(for type: String) -> Color {
         switch type {
         case "وفاة": return DS.Color.newsDeath

@@ -143,7 +143,7 @@ struct AddSonByAdminSheet: View {
                         }
                 }
                 .padding(.horizontal, DS.Spacing.md)
-                .padding(.vertical, DS.Spacing.sm)
+                .padding(.vertical, DS.Spacing.xs)
 
                 DSDivider()
 
@@ -165,7 +165,7 @@ struct AddSonByAdminSheet: View {
                     .frame(width: 150)
                 }
                 .padding(.horizontal, DS.Spacing.md)
-                .padding(.vertical, DS.Spacing.sm)
+                .padding(.vertical, DS.Spacing.xs)
             }
         }
         .padding(.horizontal, DS.Spacing.lg)
@@ -213,7 +213,7 @@ struct AddSonByAdminSheet: View {
                     DSIcon("phone.fill", color: DS.Color.success, size: iconSm, iconSize: iconFontSm)
                 }
                 .padding(.horizontal, DS.Spacing.md)
-                .padding(.vertical, DS.Spacing.sm)
+                .padding(.vertical, DS.Spacing.xs)
                 .environment(\.layoutDirection, .leftToRight)
                 .onChange(of: phoneNumber) { _, newValue in
                     phoneNumber = KuwaitPhone.userTypedDigits(newValue, maxDigits: selectedPhoneCountry.maxDigits)
@@ -251,7 +251,7 @@ struct AddSonByAdminSheet: View {
                         .tint(DS.Color.primary)
                 }
                 .padding(.horizontal, DS.Spacing.md)
-                .padding(.vertical, DS.Spacing.sm)
+                .padding(.vertical, DS.Spacing.xs)
                 .animation(.default, value: hasBirthDate)
 
                 if hasBirthDate {
@@ -270,7 +270,7 @@ struct AddSonByAdminSheet: View {
                             .foregroundColor(DS.Color.textSecondary)
                     }
                     .padding(.horizontal, DS.Spacing.md)
-                    .padding(.vertical, DS.Spacing.sm)
+                    .padding(.vertical, DS.Spacing.xs)
                 }
 
                 DSDivider()
@@ -290,7 +290,7 @@ struct AddSonByAdminSheet: View {
                         .tint(DS.Color.error)
                 }
                 .padding(.horizontal, DS.Spacing.md)
-                .padding(.vertical, DS.Spacing.sm)
+                .padding(.vertical, DS.Spacing.xs)
                 .animation(.default, value: isDeceased)
 
                 if isDeceased {
@@ -310,7 +310,7 @@ struct AddSonByAdminSheet: View {
                             .tint(DS.Color.error)
                     }
                     .padding(.horizontal, DS.Spacing.md)
-                    .padding(.vertical, DS.Spacing.sm)
+                    .padding(.vertical, DS.Spacing.xs)
                     .animation(.default, value: hasDeathDate)
 
                     if hasDeathDate {
@@ -329,7 +329,7 @@ struct AddSonByAdminSheet: View {
                                 .foregroundColor(DS.Color.textSecondary)
                         }
                         .padding(.horizontal, DS.Spacing.md)
-                        .padding(.vertical, DS.Spacing.sm)
+                        .padding(.vertical, DS.Spacing.xs)
                     }
                 }
             }

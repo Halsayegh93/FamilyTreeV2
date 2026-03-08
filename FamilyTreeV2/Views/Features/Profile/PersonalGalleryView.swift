@@ -1,5 +1,6 @@
 import SwiftUI
 import PhotosUI
+import Photos
 
 struct PersonalGalleryView: View {
     @EnvironmentObject var memberVM: MemberViewModel
@@ -23,6 +24,7 @@ struct PersonalGalleryView: View {
     @State private var isViewingLegacyPhoto = false
     @State private var legacyGalleryPhotoURL: String? = nil
     @State private var showDeleteLegacyPhotoAlert = false
+    @State private var showPermissionDenied = false
     @State private var isLoadingPhotos = true
     @State private var isUploading = false
 
@@ -68,6 +70,22 @@ struct PersonalGalleryView: View {
         .photosPicker(isPresented: $showGalleryPicker, selection: $selectedGalleryItems, maxSelectionCount: 5, matching: .images)
         .onChange(of: selectedGalleryItems) { _, items in
             handleGalleryImagesChange(items)
+        }
+        .alert(
+            L10n.t("الوصول للصور مطلوب", "Photo Access Required"),
+            isPresented: $showPermissionDenied
+        ) {
+            Button(L10n.t("فتح الإعدادات", "Open Settings")) {
+                if let url = URL(string: UIApplication.openSettingsURLString) {
+                    UIApplication.shared.open(url)
+                }
+            }
+            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
+        } message: {
+            Text(L10n.t(
+                "يحتاج التطبيق إذن الوصول لمكتبة الصور لاختيار صور. يرجى السماح من الإعدادات.",
+                "The app needs access to your photo library to select photos. Please allow access in Settings."
+            ))
         }
         .sheet(isPresented: $showPendingPreview) {
             galleryPendingPreviewSheet
@@ -122,7 +140,7 @@ struct PersonalGalleryView: View {
                     Text("\(galleryPhotos.count)")
                         .font(DS.Font.caption1)
                         .fontWeight(.bold)
-                        .foregroundColor(.white)
+                        .foregroundColor(DS.Color.textOnPrimary)
                         .frame(width: 26, height: 26)
                         .background(DS.Color.primary)
                         .clipShape(Circle())
@@ -131,7 +149,7 @@ struct PersonalGalleryView: View {
                 Spacer()
 
                 if isEditable {
-                    Button(action: { showGalleryPicker = true }) {
+                    Button(action: { checkPhotoPermission { showGalleryPicker = true } }) {
                         HStack(spacing: DS.Spacing.xs) {
                             Image(systemName: "plus")
                                 .font(DS.Font.scaled(13, weight: .bold))
@@ -139,9 +157,9 @@ struct PersonalGalleryView: View {
                                 .font(DS.Font.caption1)
                                 .fontWeight(.bold)
                         }
-                        .foregroundColor(.white)
+                        .foregroundColor(DS.Color.textOnPrimary)
                         .padding(.horizontal, DS.Spacing.md)
-                        .padding(.vertical, DS.Spacing.sm)
+                        .padding(.vertical, DS.Spacing.xs)
                         .background(DS.Color.gradientPrimary)
                         .clipShape(Capsule())
                     }
@@ -159,7 +177,7 @@ struct PersonalGalleryView: View {
                             .font(DS.Font.scaled(40))
                             .foregroundColor(DS.Color.textTertiary)
                         Text(L10n.t("لا توجد صور حالياً", "No photos yet"))
-                            .font(DS.Font.callout)
+                            .font(DS.Font.title3)
                             .foregroundColor(DS.Color.textSecondary)
                     }
                     .frame(maxWidth: .infinity)
@@ -277,6 +295,26 @@ struct PersonalGalleryView: View {
     }
 
     // MARK: - Gallery Logic
+    private func checkPhotoPermission(action: @escaping () -> Void) {
+        let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
+        switch status {
+        case .authorized, .limited:
+            action()
+        case .notDetermined:
+            PHPhotoLibrary.requestAuthorization(for: .readWrite) { newStatus in
+                DispatchQueue.main.async {
+                    if newStatus == .authorized || newStatus == .limited {
+                        action()
+                    } else {
+                        showPermissionDenied = true
+                    }
+                }
+            }
+        default:
+            showPermissionDenied = true
+        }
+    }
+
     private func handleGalleryImagesChange(_ items: [PhotosPickerItem]) {
         Task {
             guard !items.isEmpty else { return }
@@ -377,8 +415,8 @@ struct PersonalGalleryView: View {
                                 } label: {
                                     Image(systemName: "xmark.circle.fill")
                                         .font(DS.Font.scaled(24, weight: .bold))
-                                        .foregroundColor(.white)
-                                        .shadow(color: .black.opacity(0.6), radius: 4, x: 0, y: 2)
+                                        .foregroundColor(DS.Color.textOnPrimary)
+                                        .shadow(color: DS.Color.shadowDense, radius: 4, x: 0, y: 2)
                                 }
                                 .padding(DS.Spacing.md)
                             }
@@ -395,10 +433,10 @@ struct PersonalGalleryView: View {
                             Text("\(pendingPreviewIndex + 1)/\(pendingImages.count)")
                                 .font(DS.Font.caption1)
                                 .fontWeight(.bold)
-                                .foregroundColor(.white)
+                                .foregroundColor(DS.Color.textOnPrimary)
                                 .padding(.horizontal, DS.Spacing.sm)
                                 .padding(.vertical, DS.Spacing.xs)
-                                .background(.black.opacity(0.55))
+                                .background(DS.Color.shadowOverlay)
                                 .clipShape(Capsule())
                                 .padding(DS.Spacing.md)
                         }
@@ -428,7 +466,7 @@ struct PersonalGalleryView: View {
                             }
                         }
                         .padding(.horizontal, DS.Spacing.md)
-                        .padding(.vertical, DS.Spacing.sm)
+                        .padding(.vertical, DS.Spacing.xs)
                     }
                 }
 

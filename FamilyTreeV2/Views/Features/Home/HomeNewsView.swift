@@ -18,6 +18,7 @@ struct HomeNewsView: View {
     @State private var selectedMemberForDetails: FamilyMember? = nil
     @State private var lastRefreshDate: Date? = nil
     @State private var showingPhotoAlbums = false
+    @State private var showingProjects = false
 
     var body: some View {
         NavigationStack {
@@ -56,6 +57,7 @@ struct HomeNewsView: View {
             .sheet(isPresented: $showingContactCenter) { ContactCenterView() }
 
             .sheet(isPresented: $showingPhotoAlbums) { FamilyPhotoAlbumsView() }
+            .sheet(isPresented: $showingProjects) { FamilyProjectsView() }
             .sheet(item: $selectedNewsForComments) { news in
                 NewsCommentsSheet(news: news)
             }
@@ -103,6 +105,7 @@ struct HomeNewsView: View {
     private var quickActionsSection: some View {
         HStack(spacing: DS.Spacing.md) {
             quickActionItem(icon: "photo.on.rectangle.angled.fill", title: L10n.t("الصور", "Photos"), color: DS.Color.gridDiwaniya) { showingPhotoAlbums = true }
+            quickActionItem(icon: "briefcase.fill", title: L10n.t("مشاريع", "Projects"), color: DS.Color.neonBlue) { showingProjects = true }
             quickActionItem(icon: "bubble.left.and.bubble.right.fill", title: L10n.t("تواصل", "Contact"), color: DS.Color.gridContact) { showingContactCenter = true }
         }
         .padding(.horizontal, DS.Spacing.lg)
@@ -123,7 +126,7 @@ struct HomeNewsView: View {
                     )
 
                 Text(title)
-                    .font(DS.Font.caption2)
+                    .font(DS.Font.caption1)
                     .fontWeight(.medium)
                     .foregroundColor(DS.Color.textSecondary)
                     .lineLimit(1)
@@ -137,53 +140,52 @@ struct HomeNewsView: View {
     // MARK: - News Feed Section
     private var newsFeedSection: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Section header — كرت زجاجي
-            HStack(spacing: DS.Spacing.md) {
+            // Section header
+            HStack(spacing: DS.Spacing.sm) {
+                // أيقونة بدائرة gradient
                 Image(systemName: "newspaper.fill")
                     .font(DS.Font.scaled(16, weight: .semibold))
-                    .foregroundColor(DS.Color.primary)
+                    .foregroundColor(.white)
+                    .frame(width: 36, height: 36)
+                    .background(DS.Color.gradientPrimary)
+                    .clipShape(Circle())
 
-                Text(L10n.t("أخبار العائلة", "Family News"))
-                    .font(DS.Font.calloutBold)
-                    .foregroundColor(DS.Color.textPrimary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(L10n.t("أخبار العائلة", "Family News"))
+                        .font(DS.Font.title3)
+                        .fontWeight(.bold)
+                        .foregroundColor(DS.Color.textPrimary)
+
+                    if !newsVM.allNews.isEmpty {
+                        Text(L10n.t("\(newsVM.allNews.count) خبر", "\(newsVM.allNews.count) posts"))
+                            .font(DS.Font.caption1)
+                            .foregroundColor(DS.Color.textTertiary)
+                    }
+                }
 
                 Spacer()
 
-                if !newsVM.allNews.isEmpty {
-                    Text("\(newsVM.allNews.count)")
-                        .font(DS.Font.caption1)
-                        .fontWeight(.bold)
-                        .foregroundColor(DS.Color.primary)
-                        .frame(minWidth: 26, minHeight: 26)
-                        .background(DS.Color.primary.opacity(0.1))
-                        .clipShape(Circle())
-                }
-
                 if authVM.currentUser?.role != .pending {
                     Button(action: { showingAddNews = true }) {
-                        Image(systemName: "plus")
-                            .font(DS.Font.scaled(14, weight: .bold))
-                            .foregroundColor(.white)
-                            .frame(width: 30, height: 30)
-                            .background(DS.Color.gradientPrimary)
-                            .clipShape(Circle())
+                        HStack(spacing: DS.Spacing.sm) {
+                            Image(systemName: "plus.circle.fill")
+                                .font(DS.Font.scaled(18, weight: .semibold))
+                            Text(L10n.t("إضافة خبر", "Add Post"))
+                                .font(DS.Font.callout)
+                                .fontWeight(.bold)
+                        }
+                        .foregroundColor(DS.Color.primary)
+                        .padding(.horizontal, DS.Spacing.lg)
+                        .padding(.vertical, DS.Spacing.sm + 2)
+                        .background(DS.Color.primary.opacity(0.15))
+                        .clipShape(Capsule())
                     }
-                    .buttonStyle(DSBoldButtonStyle())
+                    .buttonStyle(DSScaleButtonStyle())
                     .accessibilityLabel(L10n.t("إضافة خبر جديد", "Add new post"))
                 }
             }
             .padding(.horizontal, DS.Spacing.lg)
             .padding(.vertical, DS.Spacing.md)
-            .background(
-                RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
-                    .fill(.ultraThinMaterial)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
-                            .stroke(DS.Color.glassSubtle(colorScheme), lineWidth: 0.75)
-                    )
-            )
-            .shadow(color: Color.black.opacity(0.06), radius: 10, x: 0, y: 3)
-            .padding(.horizontal, DS.Spacing.md)
 
             if newsVM.allNews.isEmpty {
                 emptyNewsView
@@ -247,7 +249,7 @@ struct HomeNewsView: View {
                     .foregroundColor(DS.Color.textTertiary)
 
                 Text(L10n.t("لا توجد أخبار حديثة", "No recent news"))
-                    .font(DS.Font.callout)
+                    .font(DS.Font.title3)
                     .foregroundColor(DS.Color.textSecondary)
 
                 if authVM.currentUser?.role != .pending {
@@ -261,7 +263,7 @@ struct HomeNewsView: View {
                         }
                         .foregroundColor(DS.Color.primary)
                         .padding(.horizontal, DS.Spacing.lg)
-                        .padding(.vertical, DS.Spacing.sm)
+                        .padding(.vertical, DS.Spacing.xs)
                         .background(DS.Color.primary.opacity(0.1))
                         .clipShape(Capsule())
                         .overlay(

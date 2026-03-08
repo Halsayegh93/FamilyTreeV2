@@ -23,12 +23,16 @@ struct ImageCropperView: View {
 
     var body: some View {
         GeometryReader { geometry in
-            ZStack {
-                Color.black.ignoresSafeArea()
+            let screenW = max(geometry.size.width, 1)
+            let screenH = max(geometry.size.height, 1)
+            let cropSize = max(min(screenW - 40, screenH * 0.55), 44)
 
-                let screenW = geometry.size.width
-                let screenH = geometry.size.height
-                let cropSize = min(screenW - 40, screenH * 0.55)
+            ZStack {
+                // خلفية شفافة مع blur
+                Color(uiColor: .systemBackground).ignoresSafeArea()
+                Rectangle()
+                    .fill(.ultraThinMaterial)
+                    .ignoresSafeArea()
 
                 ZStack {
                     // Image layer
@@ -59,8 +63,8 @@ struct ImageCropperView: View {
                     HStack {
                         Button { onCancel() } label: {
                             Text(L10n.t("إلغاء", "Cancel"))
-                                .font(DS.Font.scaled(16, weight: .medium))
-                                .foregroundColor(.white)
+                                .font(DS.Font.callout)
+                                .foregroundColor(DS.Color.error)
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 8)
                         }
@@ -68,8 +72,8 @@ struct ImageCropperView: View {
                         Spacer()
 
                         Text(L10n.t("تعديل الصورة", "Edit Photo"))
-                            .font(DS.Font.scaled(17, weight: .bold))
-                            .foregroundColor(.white)
+                            .font(DS.Font.calloutBold)
+                            .foregroundColor(DS.Color.textPrimary)
 
                         Spacer()
 
@@ -78,11 +82,11 @@ struct ImageCropperView: View {
                             onCrop(cropped)
                         } label: {
                             Text(L10n.t("تأكيد", "Confirm"))
-                                .font(DS.Font.scaled(16, weight: .bold))
-                                .foregroundColor(.black)
+                                .font(DS.Font.calloutBold)
+                                .foregroundColor(DS.Color.textOnPrimary)
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 8)
-                                .background(Color.white)
+                                .background(DS.Color.primary)
                                 .clipShape(Capsule())
                         }
                     }
@@ -93,7 +97,7 @@ struct ImageCropperView: View {
 
                     Text(L10n.t("اسحب وكبّر الصورة للتعديل", "Drag and pinch to adjust"))
                         .font(DS.Font.scaled(13))
-                        .foregroundColor(.white.opacity(0.6))
+                        .foregroundColor(DS.Color.textTertiary)
                         .padding(.bottom, 50)
                 }
             }
@@ -153,10 +157,10 @@ struct ImageCropperView: View {
 
     private func cropOverlay(cropSize: CGFloat, screenW: CGFloat, screenH: CGFloat) -> some View {
         ZStack {
-            // Semi-transparent background
-            Color.black.opacity(0.6)
+            // خلفية شبه شفافة
+            Color(uiColor: .systemBackground).opacity(0.7)
 
-            // Cutout hole
+            // فتحة القص
             Group {
                 if cropShape == .circle {
                     Circle()
@@ -169,15 +173,15 @@ struct ImageCropperView: View {
                 }
             }
 
-            // Border
+            // إطار القص
             Group {
                 if cropShape == .circle {
                     Circle()
-                        .stroke(Color.white.opacity(0.8), lineWidth: 1.5)
+                        .stroke(DS.Color.primary.opacity(0.6), lineWidth: 2)
                         .frame(width: cropSize, height: cropSize)
                 } else {
                     RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color.white.opacity(0.8), lineWidth: 1.5)
+                        .stroke(DS.Color.primary.opacity(0.6), lineWidth: 2)
                         .frame(width: cropSize, height: cropSize)
                 }
             }
@@ -204,60 +208,65 @@ struct ImageCropperView: View {
     // MARK: - Crop
 
     private func performCrop() -> UIImage {
-        let sourceImage = image // Use original for quality
+        let sourceImage = image
         let imageSize = sourceImage.size
+        guard imageSize.width > 0, imageSize.height > 0 else { return sourceImage }
 
-        let viewSize = CGFloat(min(containerSize.width - 40, containerSize.height * 0.55))
-        let displaySize = viewSize * 1.5
+        // مطابقة حسابات العرض بالضبط
+        let viewCropSize = max(min(containerSize.width - 40, containerSize.height * 0.55), 44)
+        let frameSize = viewCropSize * 1.5
 
+        // scaledToFill: الصورة تملأ الإطار بالكامل (البعد الأصغر يطابق الإطار)
         let imageAspect = imageSize.width / imageSize.height
+        let frameAspect: CGFloat = 1.0 // الإطار مربع
 
-        var drawWidth: CGFloat
-        var drawHeight: CGFloat
+        var renderedWidth: CGFloat
+        var renderedHeight: CGFloat
 
-        if imageAspect > 1 {
-            drawHeight = displaySize
-            drawWidth = displaySize * imageAspect
+        if imageAspect > frameAspect {
+            // الصورة أعرض — الارتفاع يطابق الإطار
+            renderedHeight = frameSize
+            renderedWidth = frameSize * imageAspect
         } else {
-            drawWidth = displaySize
-            drawHeight = displaySize / imageAspect
+            // الصورة أطول — العرض يطابق الإطار
+            renderedWidth = frameSize
+            renderedHeight = frameSize / imageAspect
         }
 
-        drawWidth *= scale
-        drawHeight *= scale
+        // تطبيق الـ scale
+        renderedWidth *= scale
+        renderedHeight *= scale
 
-        let cropCenterX = displaySize / 2 - offset.width
-        let cropCenterY = displaySize / 2 - offset.height
+        // مركز الصورة المعروضة يتوسط الشاشة
+        // الـ offset يحرك الصورة، لذا مركز القص بالنسبة للصورة هو:
+        // (نصف حجم الصورة المعروضة - الإزاحة)
+        let cropCenterInImageViewX = renderedWidth / 2 - offset.width
+        let cropCenterInImageViewY = renderedHeight / 2 - offset.height
 
-        let scaleX = imageSize.width / drawWidth
-        let scaleY = imageSize.height / drawHeight
+        // تحويل من إحداثيات العرض إلى إحداثيات الصورة الأصلية
+        let ratioX = imageSize.width / renderedWidth
+        let ratioY = imageSize.height / renderedHeight
 
-        let imageCropCenterX = cropCenterX * scaleX
-        let imageCropCenterY = cropCenterY * scaleY
-        let imageCropSize = viewSize * scaleX
+        let realCenterX = cropCenterInImageViewX * ratioX
+        let realCenterY = cropCenterInImageViewY * ratioY
+        let realCropSize = viewCropSize * ratioX
 
-        let cropRect = CGRect(
-            x: imageCropCenterX - imageCropSize / 2,
-            y: imageCropCenterY - imageCropSize / 2,
-            width: imageCropSize,
-            height: imageCropSize
-        ).intersection(CGRect(origin: .zero, size: imageSize))
+        var cropRect = CGRect(
+            x: realCenterX - realCropSize / 2,
+            y: realCenterY - realCropSize / 2,
+            width: realCropSize,
+            height: realCropSize
+        )
 
-        guard let cgImage = sourceImage.cgImage?.cropping(to: cropRect) else {
+        // ضمان عدم الخروج عن حدود الصورة
+        cropRect = cropRect.intersection(CGRect(origin: .zero, size: imageSize))
+
+        guard !cropRect.isEmpty,
+              let cgImage = sourceImage.cgImage?.cropping(to: cropRect) else {
             return sourceImage
         }
 
         let croppedImage = UIImage(cgImage: cgImage, scale: sourceImage.scale, orientation: sourceImage.imageOrientation)
-
-        if cropShape == .circle {
-            let size = CGSize(width: cropRect.width, height: cropRect.height)
-            let renderer = UIGraphicsImageRenderer(size: size)
-            return renderer.image { _ in
-                let rect = CGRect(origin: .zero, size: size)
-                UIBezierPath(ovalIn: rect).addClip()
-                croppedImage.draw(in: rect)
-            }
-        }
 
         return croppedImage
     }

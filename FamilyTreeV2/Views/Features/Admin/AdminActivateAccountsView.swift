@@ -64,7 +64,7 @@ struct AdminActivateAccountsView: View {
                     .background(DS.Color.surface)
                     .cornerRadius(DS.Radius.lg)
                     .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.vertical, DS.Spacing.sm)
+                    .padding(.vertical, DS.Spacing.xs)
 
                     if filteredMembers.isEmpty {
                         // لا توجد نتائج بحث
@@ -157,7 +157,7 @@ struct AdminActivateAccountsView: View {
                     Text(statusText)
                         .font(DS.Font.caption2)
                         .fontWeight(.bold)
-                        .foregroundColor(.white)
+                        .foregroundColor(DS.Color.textOnPrimary)
                         .padding(.horizontal, DS.Spacing.sm)
                         .padding(.vertical, 2)
                         .background(member.status == .pending ? DS.Color.warning : DS.Color.textTertiary)
@@ -323,7 +323,7 @@ struct EditPhoneSheet: View {
 
                         HStack(spacing: DS.Spacing.md) {
                             Image(systemName: "phone.fill")
-                                .foregroundColor(.white)
+                                .foregroundColor(DS.Color.textOnPrimary)
                                 .font(DS.Font.scaled(14))
                                 .frame(width: DS.Icon.sizeSm, height: DS.Icon.sizeSm)
                                 .background(DS.Color.info)
@@ -365,10 +365,10 @@ struct EditPhoneSheet: View {
                                 .fontWeight(.bold)
                         }
                         .font(DS.Font.callout)
-                        .foregroundColor(.white)
+                        .foregroundColor(DS.Color.textOnPrimary)
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, DS.Spacing.md)
-                        .background(phoneInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? Color.gray : Color.blue)
+                        .padding(.vertical, DS.Spacing.xs)
+                        .background(phoneInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? DS.Color.inactive : DS.Color.primary)
                         .cornerRadius(DS.Radius.lg)
                     }
                     .disabled(phoneInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSaving)

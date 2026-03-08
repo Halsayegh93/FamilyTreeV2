@@ -33,7 +33,7 @@ struct AdminNotificationsView: View {
                             VStack(spacing: 0) {
                                 HStack(spacing: DS.Spacing.md) {
                                     Image(systemName: "textformat")
-                                        .foregroundColor(.white)
+                                        .foregroundColor(DS.Color.textOnPrimary)
                                         .font(DS.Font.scaled(14))
                                         .frame(width: DS.Icon.sizeSm, height: DS.Icon.sizeSm)
                                         .background(DS.Color.gradientPrimary)
@@ -49,13 +49,13 @@ struct AdminNotificationsView: View {
                                         }
                                 }
                                 .padding(.horizontal, DS.Spacing.lg)
-                                .padding(.vertical, DS.Spacing.md)
+                                .padding(.vertical, DS.Spacing.xs)
 
                                 DSDivider()
 
                                 HStack(alignment: .top, spacing: DS.Spacing.md) {
                                     Image(systemName: "text.alignright")
-                                        .foregroundColor(.white)
+                                        .foregroundColor(DS.Color.textOnPrimary)
                                         .font(DS.Font.scaled(14))
                                         .frame(width: DS.Icon.sizeSm, height: DS.Icon.sizeSm)
                                         .background(DS.Color.gradientPrimary)
@@ -73,7 +73,7 @@ struct AdminNotificationsView: View {
                                         }
                                 }
                                 .padding(.horizontal, DS.Spacing.lg)
-                                .padding(.vertical, DS.Spacing.md)
+                                .padding(.vertical, DS.Spacing.xs)
                             }
                         }
                         .padding(.horizontal, DS.Spacing.lg)
@@ -85,7 +85,7 @@ struct AdminNotificationsView: View {
                             VStack(spacing: 0) {
                                 HStack(spacing: DS.Spacing.md) {
                                     Image(systemName: "person.3.fill")
-                                        .foregroundColor(.white)
+                                        .foregroundColor(DS.Color.textOnPrimary)
                                         .font(DS.Font.scaled(12))
                                         .frame(width: DS.Icon.sizeSm, height: DS.Icon.sizeSm)
                                         .background(DS.Color.gradientPrimary)
@@ -96,7 +96,7 @@ struct AdminNotificationsView: View {
                                         .tint(DS.Color.primary)
                                 }
                                 .padding(.horizontal, DS.Spacing.lg)
-                                .padding(.vertical, DS.Spacing.md)
+                                .padding(.vertical, DS.Spacing.xs)
 
                                 if !sendToAll {
                                     DSDivider()
@@ -110,7 +110,7 @@ struct AdminNotificationsView: View {
                                             .multilineTextAlignment(.leading)
                                     }
                                     .padding(.horizontal, DS.Spacing.lg)
-                                    .padding(.vertical, DS.Spacing.sm)
+                                    .padding(.vertical, DS.Spacing.xs)
 
                                     DSDivider()
 
@@ -134,7 +134,7 @@ struct AdminNotificationsView: View {
                                                     .foregroundColor(DS.Color.textPrimary)
                                             }
                                             .padding(.horizontal, DS.Spacing.lg)
-                                            .padding(.vertical, DS.Spacing.sm)
+                                            .padding(.vertical, DS.Spacing.xs)
                                         }
 
                                         if member.id != candidates.last?.id {

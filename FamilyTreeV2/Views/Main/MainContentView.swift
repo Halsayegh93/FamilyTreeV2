@@ -17,6 +17,8 @@ struct MainContentView: View {
                 WaitingForApprovalView()
             case .trialExpired:
                 TrialExpiredView()
+            case .deviceLimitExceeded:
+                DeviceLimitView()
             case .fullyAuthenticated:
                 // الدخول الكامل للتطبيق
                 MainTabView()

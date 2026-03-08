@@ -4,6 +4,7 @@ import PhotosUI
 struct MemberDetailsView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var memberVM: MemberViewModel
+    @EnvironmentObject var adminRequestVM: AdminRequestViewModel
     @Environment(\.dismiss) var dismiss
 
     let member: FamilyMember
@@ -12,14 +13,13 @@ struct MemberDetailsView: View {
     @State private var lastAvatarPreviewScale: CGFloat = 1.0
     @State private var showAvatarPreview = false
 
-    // تعديل صورة الغلاف
-    @State private var showCoverPicker = false
-    @State private var selectedCoverItem: PhotosPickerItem? = nil
-    @State private var localCoverPreview: UIImage? = nil
-    @State private var pendingCropImage: UIImage? = nil
+    // طلب إضافة صورة
+    @State private var photoPickerItem: PhotosPickerItem? = nil
+    @State private var rawPickedImage: UIImage? = nil
     @State private var showCropper = false
-    @State private var showShareSheet = false
-    @State private var shareItems: [Any] = []
+    @State private var isSubmittingPhotoSuggestion = false
+    @State private var showPhotoSuggestionSuccess = false
+
     @State private var showDeleteBioAlert = false
 
     var isAdminOrSupervisor: Bool {
@@ -40,15 +40,12 @@ struct MemberDetailsView: View {
                 } else {
                     ScrollView(showsIndicators: false) {
                         VStack(spacing: 0) {
-                            // صورة هيرو
+                            // صورة هيرو + اسم + بادجات
                             heroPhotoSection
-
-                            // أفاتار + اسم + بادجات
-                            profileInfoSection
 
                             // كبسولات المعلومات
                             statsRow
-                                .padding(.top, DS.Spacing.sm)
+                                .padding(.top, DS.Spacing.lg)
 
                             // قسم السيرة
                             bioTimelineSection
@@ -73,15 +70,54 @@ struct MemberDetailsView: View {
         .fullScreenCover(isPresented: $showAvatarPreview) {
             avatarPreviewOverlay
         }
+        .onChange(of: photoPickerItem) { newItem in
+            guard let newItem else { return }
+            Task {
+                if let data = try? await newItem.loadTransferable(type: Data.self),
+                   let uiImage = UIImage(data: data) {
+                    rawPickedImage = uiImage
+                    showCropper = true
+                }
+                photoPickerItem = nil
+            }
+        }
         .fullScreenCover(isPresented: $showCropper) {
-            cropperView
+            if let rawPickedImage {
+                ImageCropperView(
+                    image: rawPickedImage,
+                    cropShape: .square,
+                    onCrop: { croppedImage in
+                        showCropper = false
+                        self.rawPickedImage = nil
+                        isSubmittingPhotoSuggestion = true
+                        Task {
+                            let success = await adminRequestVM.submitPhotoSuggestion(
+                                image: croppedImage,
+                                for: member.id
+                            )
+                            isSubmittingPhotoSuggestion = false
+                            if success {
+                                showPhotoSuggestionSuccess = true
+                            }
+                        }
+                    },
+                    onCancel: {
+                        showCropper = false
+                        self.rawPickedImage = nil
+                    }
+                )
+            }
         }
-        .photosPicker(isPresented: $showCoverPicker, selection: $selectedCoverItem, matching: .images)
-        .onChange(of: selectedCoverItem) { _, newValue in
-            handleCoverImageChange(newValue)
-        }
-        .sheet(isPresented: $showShareSheet) {
-            ShareSheet(activityItems: shareItems)
+        .alert(
+            L10n.t("تم الإرسال", "Submitted"),
+            isPresented: $showPhotoSuggestionSuccess
+        ) {
+            Button(L10n.t("حسناً", "OK"), role: .cancel) { }
+        } message: {
+            Text(L10n.t(
+                "تم إرسال اقتراح الصورة للإدارة وسيتم مراجعته",
+                "Photo suggestion sent to admin for review"
+            ))
         }
     }
 
@@ -99,7 +135,7 @@ struct MemberDetailsView: View {
                     .foregroundColor(DS.Color.textTertiary)
             }
             Text(L10n.t("هذا العضو حذف حسابه", "This member deleted their account"))
-                .font(DS.Font.headline)
+                .font(DS.Font.title3)
                 .foregroundColor(DS.Color.textSecondary)
             Text(L10n.t("البيانات الشخصية لم تعد متوفرة", "Personal data is no longer available"))
                 .font(DS.Font.caption1)
@@ -109,58 +145,55 @@ struct MemberDetailsView: View {
         .frame(maxWidth: .infinity)
     }
 
-    // MARK: - صورة هيرو
+    // MARK: - صورة هيرو + اسم
 
     private var heroPhotoSection: some View {
-        ZStack(alignment: .bottom) {
-            avatarContent
-                .frame(height: heroHeight)
-                .frame(maxWidth: .infinity)
-                .clipped()
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    showAvatarPreview = true
-                }
+        VStack(spacing: 0) {
+            // الصورة مع تدريج
+            ZStack(alignment: .bottom) {
+                avatarContent
+                    .frame(height: heroHeight)
+                    .frame(maxWidth: .infinity)
+                    .clipped()
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        showAvatarPreview = true
+                    }
 
-            // تدريج من فوق للـ status bar
-            VStack {
+                // تدريج من فوق للـ status bar
+                VStack {
+                    LinearGradient(
+                        colors: [DS.Color.overlayDark.opacity(0.45), DS.Color.overlayDark.opacity(0.1), .clear],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .frame(height: 110)
+                    Spacer()
+                }
+                .allowsHitTesting(false)
+
+                // تدريج من تحت
                 LinearGradient(
-                    colors: [Color.black.opacity(0.45), Color.black.opacity(0.1), .clear],
+                    colors: [.clear, DS.Color.background.opacity(0.5), DS.Color.background],
                     startPoint: .top,
                     endPoint: .bottom
                 )
-                .frame(height: 110)
-                Spacer()
+                .frame(height: 120)
+                .allowsHitTesting(false)
             }
-            .allowsHitTesting(false)
+            .frame(height: heroHeight)
 
-            // تدريج من تحت للانتقال للمحتوى
-            LinearGradient(
-                colors: [.clear, DS.Color.background.opacity(0.6), DS.Color.background],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .frame(height: 100)
-            .allowsHitTesting(false)
-
-        
-        }
-        .frame(height: heroHeight)
-    }
-
-    // MARK: - اسم + بادجات + زر تعديل الغلاف
-
-    private var profileInfoSection: some View {
-        VStack(spacing: DS.Spacing.sm) {
-            // الاسم الكامل
+            // الاسم تحت الصورة
             Text(member.fullName)
                 .font(DS.Font.title2)
+                .fontWeight(.bold)
                 .foregroundColor(DS.Color.textPrimary)
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
                 .padding(.horizontal, DS.Spacing.xxl)
+                .padding(.top, DS.Spacing.sm)
 
-            // بادجات الرتبة + متوفى
+            // رتبة الحساب + متوفى
             HStack(spacing: DS.Spacing.sm) {
                 DSRoleBadge(
                     title: member.roleName,
@@ -177,25 +210,41 @@ struct MemberDetailsView: View {
                         .clipShape(Capsule())
                 }
             }
+            .padding(.top, DS.Spacing.sm)
 
-            // زر تعديل الغلاف
-            Button { showCoverPicker = true } label: {
-                HStack(spacing: DS.Spacing.xs) {
-                    Image(systemName: "camera.fill")
-                        .font(DS.Font.scaled(12, weight: .bold))
-                    Text(L10n.t("تعديل الغلاف", "Edit Cover"))
-                        .font(DS.Font.scaled(12, weight: .semibold))
+            // زر طلب إضافة صورة — يظهر فقط إذا العضو ما عنده صورة ومو صاحب الحساب
+            if member.id != authVM.currentUser?.id && !member.isDeleted,
+               member.avatarUrl == nil || (member.avatarUrl ?? "").isEmpty {
+                if isSubmittingPhotoSuggestion {
+                    HStack(spacing: DS.Spacing.sm) {
+                        ProgressView().tint(DS.Color.primary)
+                        Text(L10n.t("جاري الإرسال...", "Submitting..."))
+                            .font(DS.Font.calloutBold)
+                            .foregroundColor(DS.Color.primary)
+                    }
+                    .padding(.top, DS.Spacing.md)
+                } else {
+                    PhotosPicker(
+                        selection: $photoPickerItem,
+                        matching: .images
+                    ) {
+                        HStack(spacing: DS.Spacing.sm) {
+                            Image(systemName: "camera.badge.ellipsis")
+                                .font(DS.Font.scaled(13, weight: .semibold))
+                            Text(L10n.t("طلب إضافة صورة", "Request Add Photo"))
+                                .font(DS.Font.calloutBold)
+                        }
+                        .foregroundColor(DS.Color.primary)
+                        .padding(.horizontal, DS.Spacing.xl)
+                        .padding(.vertical, DS.Spacing.sm)
+                        .background(DS.Color.primary.opacity(0.1))
+                        .clipShape(Capsule())
+                    }
+                    .buttonStyle(DSScaleButtonStyle())
+                    .padding(.top, DS.Spacing.md)
                 }
-                .foregroundColor(DS.Color.primary)
-                .padding(.horizontal, DS.Spacing.lg)
-                .padding(.vertical, DS.Spacing.sm)
-                .background(DS.Color.primary.opacity(0.08))
-                .clipShape(Capsule())
-                .overlay(Capsule().stroke(DS.Color.primary.opacity(0.15), lineWidth: 1))
             }
         }
-        .frame(maxWidth: .infinity)
-        .padding(.bottom, DS.Spacing.sm)
     }
 
     // MARK: - كبسولات المعلومات
@@ -256,17 +305,18 @@ struct MemberDetailsView: View {
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(title)
-                    .font(DS.Font.caption2)
+                    .font(DS.Font.caption1)
                     .foregroundColor(DS.Color.textTertiary)
                 Text(value)
-                    .font(DS.Font.scaled(13, weight: .semibold))
+                    .font(DS.Font.callout)
+                    .fontWeight(.semibold)
                     .foregroundColor(DS.Color.textPrimary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
             }
         }
         .padding(.horizontal, DS.Spacing.md)
-        .padding(.vertical, DS.Spacing.sm)
+        .padding(.vertical, DS.Spacing.xs)
         .background(color.opacity(0.06))
         .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
         .overlay(
@@ -374,7 +424,7 @@ struct MemberDetailsView: View {
                         }
                         .foregroundColor(DS.Color.error)
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, DS.Spacing.md)
+                        .padding(.vertical, DS.Spacing.xs)
                         .background(DS.Color.error.opacity(0.08))
                         .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
                     }
@@ -446,38 +496,25 @@ struct MemberDetailsView: View {
                     Button { showAdminControl = true } label: {
                         Image(systemName: "pencil")
                             .font(DS.Font.scaled(14, weight: .bold))
-                            .foregroundColor(.white)
+                            .foregroundColor(DS.Color.textOnPrimary)
                             .frame(width: 40, height: 40)
                             .background(.ultraThinMaterial)
                             .clipShape(Circle())
-                            .shadow(color: .black.opacity(0.2), radius: 6, y: 2)
+                            .shadow(color: DS.Color.shadowMediumDark, radius: 6, y: 2)
                     }
                 }
 
                 Spacer()
 
-                // زر المشاركة
-                if !member.isDeleted {
-                    Button { shareProfile() } label: {
-                        Image(systemName: "square.and.arrow.up")
-                            .font(DS.Font.scaled(13, weight: .bold))
-                            .foregroundColor(.white)
-                            .frame(width: 40, height: 40)
-                            .background(.ultraThinMaterial)
-                            .clipShape(Circle())
-                            .shadow(color: .black.opacity(0.2), radius: 6, y: 2)
-                    }
-                }
-
                 // زر الإغلاق
                 Button { dismiss() } label: {
                     Image(systemName: "xmark")
                         .font(DS.Font.scaled(12, weight: .bold))
-                        .foregroundColor(.white)
+                        .foregroundColor(DS.Color.textOnPrimary)
                         .frame(width: 40, height: 40)
                         .background(.ultraThinMaterial)
                         .clipShape(Circle())
-                        .shadow(color: .black.opacity(0.2), radius: 6, y: 2)
+                        .shadow(color: DS.Color.shadowMediumDark, radius: 6, y: 2)
                 }
             }
             .padding(.horizontal, DS.Spacing.lg)
@@ -489,74 +526,16 @@ struct MemberDetailsView: View {
         .padding(.top, DS.Spacing.xxxxl)
     }
 
-    // MARK: - مشاركة الملف الشخصي
-
-    private func shareProfile() {
-        var lines: [String] = []
-
-        let name = member.fullName
-        lines.append("👤 \(name)")
-        lines.append("")
-
-        if let birth = member.birthDate, !birth.isEmpty, member.isBirthDateHidden != true {
-            lines.append("🎂 " + L10n.t("الميلاد", "Birthday") + ": \(birth)")
-        }
-
-        if member.isDeceased == true, let death = member.deathDate, !death.isEmpty {
-            lines.append("🕊️ " + L10n.t("الوفاة", "Passed") + ": \(death)")
-        }
-
-        if let phone = member.phoneNumber, !phone.isEmpty,
-           member.isPhoneHidden != true, member.isDeceased != true {
-            lines.append("📱 " + KuwaitPhone.display(phone))
-        }
-
-        if let bio = member.bio, !bio.isEmpty {
-            lines.append("")
-            lines.append("📖 " + L10n.t("السيرة", "Biography") + ":")
-            for station in bio {
-                let yearStr = station.year.map { "(\($0)) " } ?? ""
-                lines.append("  • \(yearStr)\(station.title)")
-            }
-        }
-
-        // Father name
-        if let fatherId = member.fatherId,
-           let father = memberVM.member(byId: fatherId) {
-            lines.append("")
-            lines.append("👨 " + L10n.t("الأب", "Father") + ": \(father.fullName)")
-        }
-
-        // Children
-        let children = memberVM.allMembers.filter { $0.fatherId == member.id }
-        if !children.isEmpty {
-            lines.append("👶 " + L10n.t("الأبناء", "Children") + " (\(children.count)): " + children.map { $0.firstName }.joined(separator: ", "))
-        }
-
-        lines.append("")
-        lines.append("— " + L10n.t("شجرة آل محمد علي", "Al-Mohammad Ali Family Tree"))
-
-        let shareText = lines.joined(separator: "\n")
-        shareItems = [shareText]
-        showShareSheet = true
-    }
-
     // MARK: - المكونات الفرعية
 
     private var avatarContent: some View {
         ZStack {
-            if let localCoverPreview {
-                Image(uiImage: localCoverPreview)
-                    .resizable()
-                    .scaledToFill()
-            } else if let url = member.coverUrl, let imageUrl = URL(string: url) {
+            if let url = member.avatarUrl, let imageUrl = URL(string: url) {
                 CachedAsyncImage(url: imageUrl) { img in
                     img.resizable().scaledToFill()
-                } placeholder: { ProgressView().tint(DS.Color.primary) }
-            } else if let url = member.avatarUrl, let imageUrl = URL(string: url) {
-                CachedAsyncImage(url: imageUrl) { img in
-                    img.resizable().scaledToFill()
-                } placeholder: { ProgressView().tint(DS.Color.primary) }
+                } placeholder: {
+                    ProgressView().tint(DS.Color.primary)
+                }
             } else {
                 LinearGradient(
                     colors: [DS.Color.primary.opacity(0.15), DS.Color.accent.opacity(0.08)],
@@ -574,11 +553,12 @@ struct MemberDetailsView: View {
 
     private var avatarPreviewOverlay: some View {
         ZStack(alignment: .topTrailing) {
-            Color.black.opacity(0.92).ignoresSafeArea()
+            DS.Color.overlayDark.opacity(0.92).ignoresSafeArea()
 
             GeometryReader { _ in
                 avatarContent
                     .frame(width: 300, height: 300)
+                    .background(DS.Color.primary.opacity(0.15))
                     .clipShape(Circle())
                     .overlay(Circle().stroke(DS.Color.gradientPrimary, lineWidth: 4))
                     .dsGlowShadow()
@@ -615,85 +595,12 @@ struct MemberDetailsView: View {
             } label: {
                 Image(systemName: "xmark.circle.fill")
                     .font(DS.Font.scaled(30))
-                    .foregroundColor(.white.opacity(0.92))
+                    .foregroundColor(DS.Color.overlayTextFull)
                     .padding()
             }
             .buttonStyle(.plain)
         }
     }
 
-    // MARK: - تعديل صورة الغلاف
-
-    @ViewBuilder
-    private var cropperView: some View {
-        if let img = pendingCropImage {
-            ImageCropperView(
-                image: img,
-                cropShape: .square,
-                onCrop: { cropped in
-                    confirmCoverCrop(cropped)
-                },
-                onCancel: { showCropper = false }
-            )
-        } else {
-            Color.black.ignoresSafeArea()
-                .onAppear { showCropper = false }
-        }
-    }
-
-    private func handleCoverImageChange(_ item: PhotosPickerItem?) {
-        Task {
-            guard let data = try? await item?.loadTransferable(type: Data.self) else { return }
-            let resized = await downsampleInBackground(data)
-            guard let resized else { return }
-            pendingCropImage = resized
-            try? await Task.sleep(nanoseconds: 400_000_000)
-            showCropper = true
-        }
-    }
-
-    private func confirmCoverCrop(_ croppedImage: UIImage) {
-        showCropper = false
-        withAnimation(.easeInOut(duration: 0.2)) {
-            self.localCoverPreview = croppedImage
-        }
-        Task {
-            await memberVM.uploadCover(image: croppedImage, for: member.id)
-        }
-    }
-
-    private func downsampleInBackground(_ data: Data) async -> UIImage? {
-        await withCheckedContinuation { continuation in
-            DispatchQueue.global(qos: .userInitiated).async {
-                let maxPixels: CGFloat = 1600
-                guard let source = CGImageSourceCreateWithData(data as CFData, nil) else {
-                    continuation.resume(returning: UIImage(data: data))
-                    return
-                }
-                let options: [CFString: Any] = [
-                    kCGImageSourceCreateThumbnailFromImageAlways: true,
-                    kCGImageSourceThumbnailMaxPixelSize: maxPixels,
-                    kCGImageSourceCreateThumbnailWithTransform: true
-                ]
-                guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
-                    continuation.resume(returning: UIImage(data: data))
-                    return
-                }
-                let result = UIImage(cgImage: cgImage)
-                continuation.resume(returning: result)
-            }
-        }
-    }
 }
 
-// MARK: - Share Sheet
-
-private struct ShareSheet: UIViewControllerRepresentable {
-    let activityItems: [Any]
-
-    func makeUIViewController(context: Context) -> UIActivityViewController {
-        UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
-    }
-
-    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
-}

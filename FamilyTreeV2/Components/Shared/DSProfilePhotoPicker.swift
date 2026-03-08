@@ -1,5 +1,6 @@
 import SwiftUI
 import PhotosUI
+import Photos
 
 /// Reusable profile photo picker component with crop integration.
 /// Handles empty state, loading, preview, existing URL, and optional cropping.
@@ -11,7 +12,7 @@ struct DSProfilePhotoPicker: View {
     /// Whether to show the crop editor after selection
     var enableCrop: Bool = true
     /// Crop shape (circle or square)
-    var cropShape: ImageCropperView.CropShape = .square
+    var cropShape: ImageCropperView.CropShape = .circle
     /// Section title
     var title: String = L10n.t("الصورة الشخصية", "Profile Photo")
     /// Trailing text (e.g. "Optional")
@@ -25,27 +26,26 @@ struct DSProfilePhotoPicker: View {
     @State private var isLoading = false
     @State private var rawPickedImage: UIImage? = nil
     @State private var showCropper = false
+    @State private var showPermissionDenied = false
+    @State private var showPicker = false
+    @State private var showChangeOptions = false
+    /// Stores the last raw (uncropped) image so user can re-edit crop
+    @State private var lastRawImage: UIImage? = nil
+
+    private let avatarSize: CGFloat = 128
 
     var body: some View {
-        DSCard(padding: 0) {
-            DSSectionHeader(
-                title: title,
-                icon: "camera.fill",
-                trailing: trailing,
-                iconColor: DS.Color.neonPurple
-            )
-
+        VStack(spacing: DS.Spacing.sm) {
             if showCropper, let _ = rawPickedImage {
-                // Inline crop indicator — actual cropper is fullScreenCover
+                // Inline crop indicator
                 VStack(spacing: DS.Spacing.md) {
                     ProgressView().tint(DS.Color.primary)
-                        .frame(width: 140, height: 140)
+                        .frame(width: avatarSize, height: avatarSize)
                     Text(L10n.t("جاري فتح المحرر...", "Opening editor..."))
                         .font(DS.Font.caption1)
                         .foregroundColor(DS.Color.textSecondary)
                 }
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, DS.Spacing.lg)
             } else if let image = selectedImage {
                 selectedImagePreview(image)
             } else if isLoading {
@@ -56,10 +56,12 @@ struct DSProfilePhotoPicker: View {
                 emptyState
             }
         }
+        .padding(.vertical, DS.Spacing.sm)
         .onChange(of: pickerItem) { _, newItem in
             guard let newItem else { return }
             loadImage(from: newItem)
         }
+        .photosPicker(isPresented: $showPicker, selection: $pickerItem, matching: .images)
         .fullScreenCover(isPresented: $showCropper) {
             if let rawImage = rawPickedImage {
                 ImageCropperView(
@@ -68,6 +70,10 @@ struct DSProfilePhotoPicker: View {
                     onCrop: { cropped in
                         let generator = UIImpactFeedbackGenerator(style: .medium)
                         generator.impactOccurred()
+                        // Save the raw image for re-editing later
+                        if lastRawImage == nil {
+                            lastRawImage = rawImage
+                        }
                         withAnimation(DS.Anim.bouncy) {
                             selectedImage = cropped
                         }
@@ -81,60 +87,345 @@ struct DSProfilePhotoPicker: View {
                 )
             }
         }
+        .alert(
+            L10n.t("الوصول للصور مطلوب", "Photo Access Required"),
+            isPresented: $showPermissionDenied
+        ) {
+            Button(L10n.t("فتح الإعدادات", "Open Settings")) {
+                if let url = URL(string: UIApplication.openSettingsURLString) {
+                    UIApplication.shared.open(url)
+                }
+            }
+            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
+        } message: {
+            Text(L10n.t(
+                "يحتاج التطبيق إذن الوصول لمكتبة الصور لاختيار صورة. يرجى السماح من الإعدادات.",
+                "The app needs access to your photo library to select a photo. Please allow access in Settings."
+            ))
+        }
+        .onAppear {
+            requestPhotoPermission()
+        }
+    }
+
+    // MARK: - Photo Permission
+
+    private func requestPhotoPermission() {
+        let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
+        if status == .notDetermined {
+            PHPhotoLibrary.requestAuthorization(for: .readWrite) { _ in }
+        }
+    }
+
+    private func checkPermissionAndProceed(action: @escaping () -> Void) {
+        let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
+        switch status {
+        case .authorized, .limited:
+            action()
+        case .notDetermined:
+            PHPhotoLibrary.requestAuthorization(for: .readWrite) { newStatus in
+                DispatchQueue.main.async {
+                    if newStatus == .authorized || newStatus == .limited {
+                        action()
+                    } else {
+                        showPermissionDenied = true
+                    }
+                }
+            }
+        default:
+            showPermissionDenied = true
+        }
     }
 
     // MARK: - Selected Image Preview
 
     private func selectedImagePreview(_ image: UIImage) -> some View {
-        VStack(spacing: DS.Spacing.md) {
-            Image(uiImage: image)
-                .resizable()
-                .scaledToFill()
-                .frame(width: 140, height: 140)
-                .clipShape(Circle())
-                .overlay(Circle().stroke(DS.Color.primary.opacity(0.2), lineWidth: 2))
-                .dsGlowShadow()
-
-            photoActionBar(onDelete: {
-                let generator = UIImpactFeedbackGenerator(style: .light)
-                generator.impactOccurred()
-                withAnimation(DS.Anim.bouncy) {
-                    selectedImage = nil
-                    pickerItem = nil
+        VStack(spacing: DS.Spacing.sm) {
+            ZStack(alignment: .bottomTrailing) {
+                // المعاينة بنفس شكل القص
+                if cropShape == .circle {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: avatarSize, height: avatarSize)
+                        .clipShape(Circle())
+                        .overlay(Circle().stroke(DS.Color.primary.opacity(0.15), lineWidth: 2.5))
+                        .dsGlowShadow()
+                } else {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: avatarSize, height: avatarSize)
+                        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
+                                .stroke(DS.Color.primary.opacity(0.15), lineWidth: 2.5)
+                        )
+                        .dsGlowShadow()
                 }
-            })
+
+                // أيقونة الكاميرا
+                Button {
+                    showChangeOptions = true
+                } label: {
+                    Image(systemName: "camera.fill")
+                        .font(DS.Font.scaled(12, weight: .bold))
+                        .foregroundColor(DS.Color.textOnPrimary)
+                        .frame(width: 32, height: 32)
+                        .background(DS.Color.primary)
+                        .clipShape(Circle())
+                        .overlay(Circle().stroke(DS.Color.background, lineWidth: 2.5))
+                }
+            }
+
+            // أزرار تعديل وتغيير وحذف
+            HStack(spacing: DS.Spacing.md) {
+                // تعديل الصورة (إعادة القص)
+                if enableCrop, lastRawImage != nil {
+                    Button {
+                        rawPickedImage = lastRawImage
+                        showCropper = true
+                    } label: {
+                        HStack(spacing: DS.Spacing.xs) {
+                            Image(systemName: "crop")
+                                .font(DS.Font.scaled(12, weight: .bold))
+                            Text(L10n.t("تعديل", "Edit"))
+                                .font(DS.Font.scaled(13, weight: .bold))
+                        }
+                        .foregroundColor(DS.Color.info)
+                        .padding(.horizontal, DS.Spacing.lg)
+                        .padding(.vertical, DS.Spacing.sm)
+                        .background(DS.Color.info.opacity(0.08))
+                        .clipShape(Capsule())
+                    }
+                }
+
+                // تغيير الصورة (اختيار جديدة)
+                Button {
+                    checkPermissionAndProceed { showPicker = true }
+                } label: {
+                    HStack(spacing: DS.Spacing.xs) {
+                        Image(systemName: "arrow.triangle.2.circlepath.camera")
+                            .font(DS.Font.scaled(12, weight: .bold))
+                        Text(L10n.t("تغيير", "Change"))
+                            .font(DS.Font.scaled(13, weight: .bold))
+                    }
+                    .foregroundColor(DS.Color.primary)
+                    .padding(.horizontal, DS.Spacing.lg)
+                    .padding(.vertical, DS.Spacing.sm)
+                    .background(DS.Color.primary.opacity(0.08))
+                    .clipShape(Capsule())
+                }
+
+                // حذف الصورة
+                Button {
+                    let generator = UIImpactFeedbackGenerator(style: .light)
+                    generator.impactOccurred()
+                    withAnimation(DS.Anim.bouncy) {
+                        selectedImage = nil
+                        pickerItem = nil
+                        lastRawImage = nil
+                    }
+                } label: {
+                    HStack(spacing: DS.Spacing.xs) {
+                        Image(systemName: "trash.fill")
+                            .font(DS.Font.scaled(12, weight: .bold))
+                        Text(L10n.t("حذف", "Delete"))
+                            .font(DS.Font.scaled(13, weight: .bold))
+                    }
+                    .foregroundColor(DS.Color.error)
+                    .padding(.horizontal, DS.Spacing.lg)
+                    .padding(.vertical, DS.Spacing.sm)
+                    .background(DS.Color.error.opacity(0.08))
+                    .clipShape(Capsule())
+                }
+            }
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, DS.Spacing.lg)
+        .confirmationDialog(
+            L10n.t("خيارات الصورة", "Photo Options"),
+            isPresented: $showChangeOptions,
+            titleVisibility: .visible
+        ) {
+            Button(L10n.t("تعديل الصورة", "Edit Photo")) {
+                if let raw = lastRawImage {
+                    rawPickedImage = raw
+                    showCropper = true
+                }
+            }
+            .disabled(lastRawImage == nil)
+            
+            Button(L10n.t("تغيير الصورة", "Change Photo")) {
+                checkPermissionAndProceed { showPicker = true }
+            }
+            
+            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
+        }
     }
 
     // MARK: - Existing Image Preview
 
+    @State private var isDownloadingForEdit = false
+
     private func existingImagePreview(_ url: URL) -> some View {
-        VStack(spacing: DS.Spacing.md) {
-            CachedAsyncPhaseImage(url: url) { phase in
-                if let image = phase.image {
-                    image.resizable().scaledToFill()
-                        .frame(width: 140, height: 140)
+        VStack(spacing: DS.Spacing.sm) {
+            ZStack(alignment: .bottomTrailing) {
+                CachedAsyncPhaseImage(url: url) { phase in
+                    if let image = phase.image {
+                        if cropShape == .circle {
+                            image.resizable().scaledToFill()
+                                .frame(width: avatarSize, height: avatarSize)
+                                .clipShape(Circle())
+                                .overlay(Circle().stroke(DS.Color.primary.opacity(0.15), lineWidth: 2.5))
+                                .dsGlowShadow()
+                        } else {
+                            image.resizable().scaledToFill()
+                                .frame(width: avatarSize, height: avatarSize)
+                                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
+                                        .stroke(DS.Color.primary.opacity(0.15), lineWidth: 2.5)
+                                )
+                                .dsGlowShadow()
+                        }
+                    } else if phase.error != nil {
+                        emptyCirclePlaceholder
+                    } else {
+                        ProgressView().tint(DS.Color.primary)
+                            .frame(width: avatarSize, height: avatarSize)
+                    }
+                }
+
+                // أيقونة الكاميرا
+                Button {
+                    showChangeOptions = true
+                } label: {
+                    Image(systemName: "camera.fill")
+                        .font(DS.Font.scaled(12, weight: .bold))
+                        .foregroundColor(DS.Color.textOnPrimary)
+                        .frame(width: 32, height: 32)
+                        .background(DS.Color.primary)
                         .clipShape(Circle())
-                        .overlay(Circle().stroke(DS.Color.primary.opacity(0.2), lineWidth: 2))
-                        .dsGlowShadow()
-                } else if phase.error != nil {
-                    emptyState
-                } else {
-                    ProgressView().tint(DS.Color.primary)
-                        .frame(width: 140, height: 140)
+                        .overlay(Circle().stroke(DS.Color.background, lineWidth: 2.5))
                 }
             }
 
-            photoActionBar(onDelete: showDeleteForExisting ? {
-                let generator = UIImpactFeedbackGenerator(style: .light)
-                generator.impactOccurred()
-                onDeleteExisting?()
-            } : nil)
+            // أزرار تعديل وتغيير وحذف
+            HStack(spacing: DS.Spacing.md) {
+                // تعديل الصورة (تحميل من URL ثم قص)
+                if enableCrop {
+                    Button {
+                        downloadAndEdit(from: url)
+                    } label: {
+                        HStack(spacing: DS.Spacing.xs) {
+                            if isDownloadingForEdit {
+                                ProgressView()
+                                    .scaleEffect(0.7)
+                                    .tint(DS.Color.info)
+                            } else {
+                                Image(systemName: "crop")
+                                    .font(DS.Font.scaled(12, weight: .bold))
+                            }
+                            Text(L10n.t("تعديل", "Edit"))
+                                .font(DS.Font.scaled(13, weight: .bold))
+                        }
+                        .foregroundColor(DS.Color.info)
+                        .padding(.horizontal, DS.Spacing.lg)
+                        .padding(.vertical, DS.Spacing.sm)
+                        .background(DS.Color.info.opacity(0.08))
+                        .clipShape(Capsule())
+                    }
+                    .disabled(isDownloadingForEdit)
+                }
+
+                // تغيير الصورة (اختيار جديدة)
+                Button {
+                    checkPermissionAndProceed { showPicker = true }
+                } label: {
+                    HStack(spacing: DS.Spacing.xs) {
+                        Image(systemName: "arrow.triangle.2.circlepath.camera")
+                            .font(DS.Font.scaled(12, weight: .bold))
+                        Text(L10n.t("تغيير", "Change"))
+                            .font(DS.Font.scaled(13, weight: .bold))
+                    }
+                    .foregroundColor(DS.Color.primary)
+                    .padding(.horizontal, DS.Spacing.lg)
+                    .padding(.vertical, DS.Spacing.sm)
+                    .background(DS.Color.primary.opacity(0.08))
+                    .clipShape(Capsule())
+                }
+
+                if let onDeleteExisting {
+                    Button {
+                        let generator = UIImpactFeedbackGenerator(style: .light)
+                        generator.impactOccurred()
+                        onDeleteExisting()
+                    } label: {
+                        HStack(spacing: DS.Spacing.xs) {
+                            Image(systemName: "trash.fill")
+                                .font(DS.Font.scaled(12, weight: .bold))
+                            Text(L10n.t("حذف", "Delete"))
+                                .font(DS.Font.scaled(13, weight: .bold))
+                        }
+                        .foregroundColor(DS.Color.error)
+                        .padding(.horizontal, DS.Spacing.lg)
+                        .padding(.vertical, DS.Spacing.sm)
+                        .background(DS.Color.error.opacity(0.08))
+                        .clipShape(Capsule())
+                    }
+                }
+            }
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, DS.Spacing.lg)
+        .confirmationDialog(
+            L10n.t("خيارات الصورة", "Photo Options"),
+            isPresented: $showChangeOptions,
+            titleVisibility: .visible
+        ) {
+            if enableCrop {
+                Button(L10n.t("تعديل الصورة", "Edit Photo")) {
+                    downloadAndEdit(from: url)
+                }
+            }
+            
+            Button(L10n.t("تغيير الصورة", "Change Photo")) {
+                checkPermissionAndProceed { showPicker = true }
+            }
+            
+            if onDeleteExisting != nil {
+                Button(L10n.t("حذف الصورة", "Delete Photo"), role: .destructive) {
+                    let generator = UIImpactFeedbackGenerator(style: .light)
+                    generator.impactOccurred()
+                    onDeleteExisting?()
+                }
+            }
+            
+            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
+        }
+    }
+
+    /// تحميل الصورة من URL ثم فتح محرر القص
+    private func downloadAndEdit(from url: URL) {
+        guard !isDownloadingForEdit else { return }
+        isDownloadingForEdit = true
+        Task {
+            do {
+                let (data, _) = try await URLSession.shared.data(from: url)
+                await MainActor.run {
+                    isDownloadingForEdit = false
+                    if let uiImage = UIImage(data: data) {
+                        lastRawImage = uiImage
+                        rawPickedImage = uiImage
+                        showCropper = true
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    isDownloadingForEdit = false
+                    Log.error("فشل تحميل الصورة للتعديل: \(error.localizedDescription)")
+                }
+            }
+        }
     }
 
     // MARK: - Loading State
@@ -142,77 +433,71 @@ struct DSProfilePhotoPicker: View {
     private var loadingState: some View {
         VStack(spacing: DS.Spacing.md) {
             ProgressView().tint(DS.Color.primary)
-                .frame(width: 140, height: 140)
+                .frame(width: avatarSize, height: avatarSize)
             Text(L10n.t("جاري تحميل الصورة...", "Loading photo..."))
                 .font(DS.Font.caption1)
                 .foregroundColor(DS.Color.textSecondary)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, DS.Spacing.lg)
     }
 
     // MARK: - Empty State
 
     private var emptyState: some View {
-        PhotosPicker(selection: $pickerItem, matching: .images) {
-            VStack(spacing: DS.Spacing.md) {
-                Image(systemName: "person.crop.rectangle.badge.plus")
-                    .font(DS.Font.scaled(36, weight: .light))
-                    .foregroundColor(DS.Color.primary.opacity(0.5))
-                Text(L10n.t("اختر صورة شخصية", "Choose a profile photo"))
-                    .font(DS.Font.callout)
-                    .fontWeight(.medium)
-                    .foregroundColor(DS.Color.primary)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, DS.Spacing.xxl)
-            .background(DS.Color.primary.opacity(0.04))
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                    .strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [8]))
-                    .foregroundColor(DS.Color.primary.opacity(0.15))
-            )
-        }
-        .padding(.horizontal, DS.Spacing.md)
-        .padding(.bottom, DS.Spacing.md)
-    }
+        VStack(spacing: DS.Spacing.sm) {
+            // دائرة فارغة مع أيقونة
+            emptyCirclePlaceholder
 
-    // MARK: - Unified Action Bar
-
-    private func photoActionBar(onDelete: (() -> Void)? = nil) -> some View {
-        HStack(spacing: DS.Spacing.md) {
-            // زر تغيير الصورة
-            PhotosPicker(selection: $pickerItem, matching: .images) {
+            // زر اختيار الصورة
+            Button {
+                checkPermissionAndProceed { showPicker = true }
+            } label: {
                 HStack(spacing: DS.Spacing.xs) {
                     Image(systemName: "arrow.triangle.2.circlepath.camera")
-                        .font(DS.Font.scaled(13, weight: .semibold))
-                    Text(L10n.t("تغيير", "Change"))
-                        .font(DS.Font.caption1)
-                        .fontWeight(.bold)
+                        .font(DS.Font.scaled(12, weight: .bold))
+                    Text(L10n.t("اختر صورة", "Choose Photo"))
+                        .font(DS.Font.scaled(13, weight: .bold))
                 }
                 .foregroundColor(DS.Color.primary)
+                .padding(.horizontal, DS.Spacing.lg)
+                .padding(.vertical, DS.Spacing.sm)
+                .background(DS.Color.primary.opacity(0.08))
+                .clipShape(Capsule())
             }
+            .buttonStyle(DSBoldButtonStyle())
 
-            Spacer()
-
-            // زر حذف الصورة
-            if let onDelete {
-                Button(action: onDelete) {
-                    HStack(spacing: DS.Spacing.xs) {
-                        Image(systemName: "trash")
-                            .font(DS.Font.scaled(13, weight: .semibold))
-                        Text(L10n.t("حذف", "Delete"))
-                            .font(DS.Font.caption1)
-                            .fontWeight(.bold)
-                    }
-                    .foregroundColor(DS.Color.error)
-                }
+            if let trailing {
+                Text(trailing)
+                    .font(DS.Font.caption1)
+                    .foregroundColor(DS.Color.textTertiary)
             }
         }
-        .padding(.horizontal, DS.Spacing.lg)
-        .padding(.vertical, DS.Spacing.sm)
-        .padding(.bottom, DS.Spacing.sm)
+        .frame(maxWidth: .infinity)
+    }
+
+    // MARK: - Empty Placeholder
+
+    private var emptyCirclePlaceholder: some View {
+        ZStack {
+            if cropShape == .circle {
+                Circle()
+                    .fill(DS.Color.primary.opacity(0.06))
+                    .frame(width: avatarSize, height: avatarSize)
+                    .overlay(Circle().stroke(DS.Color.primary.opacity(0.12), style: StrokeStyle(lineWidth: 2, dash: [8])))
+            } else {
+                RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
+                    .fill(DS.Color.primary.opacity(0.06))
+                    .frame(width: avatarSize, height: avatarSize)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
+                            .stroke(DS.Color.primary.opacity(0.12), style: StrokeStyle(lineWidth: 2, dash: [8]))
+                    )
+            }
+
+            Image(systemName: cropShape == .circle ? "person.fill" : "photo.fill")
+                .font(DS.Font.scaled(40, weight: .light))
+                .foregroundColor(DS.Color.primary.opacity(0.25))
+        }
     }
 
     // MARK: - Image Loading
@@ -231,6 +516,7 @@ struct DSProfilePhotoPicker: View {
 
             await MainActor.run {
                 isLoading = false
+                lastRawImage = uiImage
                 if enableCrop {
                     rawPickedImage = uiImage
                     showCropper = true
@@ -261,6 +547,8 @@ struct DSMultiPhotoPicker: View {
     @State private var cropQueueProcessedCount = 0
     @State private var showCropper = false
     @State private var currentCropImage: UIImage? = nil
+    @State private var showPicker = false
+    @State private var showPermissionDenied = false
 
     var body: some View {
         DSCard(padding: 0) {
@@ -283,6 +571,26 @@ struct DSMultiPhotoPicker: View {
         .onChange(of: pickerItems) { _, items in
             guard !items.isEmpty else { return }
             loadImages(from: items)
+        }
+        .photosPicker(isPresented: $showPicker, selection: $pickerItems, maxSelectionCount: maxCount, matching: .images)
+        .alert(
+            L10n.t("الوصول للصور مطلوب", "Photo Access Required"),
+            isPresented: $showPermissionDenied
+        ) {
+            Button(L10n.t("فتح الإعدادات", "Open Settings")) {
+                if let url = URL(string: UIApplication.openSettingsURLString) {
+                    UIApplication.shared.open(url)
+                }
+            }
+            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
+        } message: {
+            Text(L10n.t(
+                "يحتاج التطبيق إذن الوصول لمكتبة الصور لاختيار صور. يرجى السماح من الإعدادات.",
+                "The app needs access to your photo library to select photos. Please allow access in Settings."
+            ))
+        }
+        .onAppear {
+            requestPhotoPermission()
         }
         .fullScreenCover(isPresented: $showCropper) {
             if let cropImage = currentCropImage {
@@ -309,7 +617,9 @@ struct DSMultiPhotoPicker: View {
     // MARK: - Empty State
 
     private var emptyState: some View {
-        PhotosPicker(selection: $pickerItems, maxSelectionCount: maxCount, matching: .images) {
+        Button {
+            checkPermissionAndProceed { showPicker = true }
+        } label: {
             VStack(spacing: DS.Spacing.md) {
                 Image(systemName: "photo.on.rectangle.angled")
                     .font(DS.Font.scaled(36, weight: .light))
@@ -355,60 +665,66 @@ struct DSMultiPhotoPicker: View {
         ZStack(alignment: .top) {
             TabView(selection: $currentIndex) {
                 ForEach(Array(selectedImages.enumerated()), id: \.offset) { idx, image in
-                    imageThumb(image: image, index: idx)
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(maxWidth: .infinity)
+                        .clipped()
                         .tag(idx)
                 }
             }
-            .aspectRatio(1, contentMode: .fit)
+            .aspectRatio(4/3, contentMode: .fit)
+            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
             .clipped()
             .tabViewStyle(.page(indexDisplayMode: .never))
+            .padding(.horizontal, DS.Spacing.md)
 
-            if selectedImages.count > 1 {
+            // العداد + زر الحذف فوق الصورة
+            VStack {
                 HStack {
-                    Spacer()
-                    Text("\(currentIndex + 1)/\(selectedImages.count)")
-                        .font(DS.Font.caption1)
-                        .fontWeight(.bold)
-                        .foregroundColor(.white)
-                        .padding(.horizontal, DS.Spacing.sm)
-                        .padding(.vertical, DS.Spacing.xs)
-                        .background(.black.opacity(0.55))
+                    // زر حذف الصورة
+                    Button {
+                        let generator = UIImpactFeedbackGenerator(style: .light)
+                        generator.impactOccurred()
+                        withAnimation(DS.Anim.bouncy) {
+                            guard currentIndex < selectedImages.count else { return }
+                            selectedImages.remove(at: currentIndex)
+                            if currentIndex >= selectedImages.count {
+                                currentIndex = max(0, selectedImages.count - 1)
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: DS.Spacing.xs) {
+                            Image(systemName: "trash.fill")
+                                .font(DS.Font.scaled(12, weight: .bold))
+                            Text(L10n.t("حذف", "Delete"))
+                                .font(DS.Font.scaled(12, weight: .bold))
+                        }
+                        .foregroundColor(DS.Color.textOnPrimary)
+                        .padding(.horizontal, DS.Spacing.md)
+                        .padding(.vertical, DS.Spacing.xs + 2)
+                        .background(DS.Color.error.opacity(0.85))
                         .clipShape(Capsule())
-                        .padding(DS.Spacing.md)
-                }
-            }
-        }
-    }
+                    }
 
-    private func imageThumb(image: UIImage, index: Int) -> some View {
-        VStack(spacing: 0) {
-            Image(uiImage: image)
-                .resizable()
-                .scaledToFill()
-                .frame(maxWidth: .infinity)
-                .clipped()
+                    Spacer()
 
-            // شريط حذف الصورة
-            Button {
-                let generator = UIImpactFeedbackGenerator(style: .light)
-                generator.impactOccurred()
-                withAnimation(DS.Anim.bouncy) {
-                    selectedImages.remove(at: index)
-                    if currentIndex >= selectedImages.count {
-                        currentIndex = max(0, selectedImages.count - 1)
+                    // عداد الصور
+                    if selectedImages.count > 1 {
+                        Text("\(currentIndex + 1)/\(selectedImages.count)")
+                            .font(DS.Font.caption1)
+                            .fontWeight(.bold)
+                            .foregroundColor(DS.Color.textOnPrimary)
+                            .padding(.horizontal, DS.Spacing.sm)
+                            .padding(.vertical, DS.Spacing.xs)
+                            .background(DS.Color.shadowOverlay)
+                            .clipShape(Capsule())
                     }
                 }
-            } label: {
-                HStack(spacing: DS.Spacing.xs) {
-                    Image(systemName: "trash")
-                        .font(DS.Font.scaled(13, weight: .semibold))
-                    Text(L10n.t("حذف الصورة", "Delete Photo"))
-                        .font(DS.Font.caption1)
-                        .fontWeight(.bold)
-                }
-                .foregroundColor(DS.Color.error)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, DS.Spacing.sm)
+                .padding(DS.Spacing.md)
+                .padding(.horizontal, DS.Spacing.md)
+
+                Spacer()
             }
         }
     }
@@ -437,7 +753,9 @@ struct DSMultiPhotoPicker: View {
                 }
 
                 if selectedImages.count < maxCount {
-                    PhotosPicker(selection: $pickerItems, maxSelectionCount: maxCount, matching: .images) {
+                    Button {
+                        checkPermissionAndProceed { showPicker = true }
+                    } label: {
                         VStack(spacing: 2) {
                             Image(systemName: "plus")
                                 .font(DS.Font.scaled(16, weight: .bold))
@@ -504,6 +822,35 @@ struct DSMultiPhotoPicker: View {
             cropQueue = []
             cropQueueProcessedCount = 0
             currentIndex = 0
+        }
+    }
+
+    // MARK: - Photo Permission
+
+    private func requestPhotoPermission() {
+        let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
+        if status == .notDetermined {
+            PHPhotoLibrary.requestAuthorization(for: .readWrite) { _ in }
+        }
+    }
+
+    private func checkPermissionAndProceed(action: @escaping () -> Void) {
+        let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
+        switch status {
+        case .authorized, .limited:
+            action()
+        case .notDetermined:
+            PHPhotoLibrary.requestAuthorization(for: .readWrite) { newStatus in
+                DispatchQueue.main.async {
+                    if newStatus == .authorized || newStatus == .limited {
+                        action()
+                    } else {
+                        showPermissionDenied = true
+                    }
+                }
+            }
+        default:
+            showPermissionDenied = true
         }
     }
 }

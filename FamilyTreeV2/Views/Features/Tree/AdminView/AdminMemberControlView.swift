@@ -50,7 +50,7 @@ struct AdminMemberControlView: View {
                 DSDecorativeBackground()
 
                 ScrollView(showsIndicators: false) {
-                    VStack(spacing: DS.Spacing.xl) {
+                    VStack(spacing: DS.Spacing.md) {
 
                         // Avatar section
                         if isManager {
@@ -86,7 +86,7 @@ struct AdminMemberControlView: View {
                                 VStack(spacing: 0) {
                                     HStack(spacing: DS.Spacing.md) {
                                         Image(systemName: "person.fill")
-                                            .foregroundColor(.white)
+                                            .foregroundColor(DS.Color.textOnPrimary)
                                             .font(DS.Font.scaled(14))
                                             .frame(width: DS.Icon.sizeSm, height: DS.Icon.sizeSm)
                                             .background(DS.Color.gradientPrimary)
@@ -102,13 +102,13 @@ struct AdminMemberControlView: View {
                                             }
                                     }
                                     .padding(.horizontal, DS.Spacing.lg)
-                                    .padding(.vertical, DS.Spacing.md)
+                                    .padding(.vertical, DS.Spacing.xs)
 
                                     DSDivider()
 
                                     HStack(spacing: DS.Spacing.md) {
                                         Image(systemName: "calendar")
-                                            .foregroundColor(.white)
+                                            .foregroundColor(DS.Color.textOnPrimary)
                                             .font(DS.Font.scaled(14))
                                             .frame(width: DS.Icon.sizeSm, height: DS.Icon.sizeSm)
                                             .background(DS.Color.gradientPrimary)
@@ -118,13 +118,13 @@ struct AdminMemberControlView: View {
                                             .font(DS.Font.body)
                                     }
                                     .padding(.horizontal, DS.Spacing.lg)
-                                    .padding(.vertical, DS.Spacing.md)
+                                    .padding(.vertical, DS.Spacing.xs)
 
                                     DSDivider()
 
                                     HStack(spacing: DS.Spacing.md) {
                                         Image(systemName: "heart.fill")
-                                            .foregroundColor(.white)
+                                            .foregroundColor(DS.Color.textOnPrimary)
                                             .font(DS.Font.scaled(14))
                                             .frame(width: DS.Icon.sizeSm, height: DS.Icon.sizeSm)
                                             .background(DS.Color.gradientPrimary)
@@ -135,7 +135,7 @@ struct AdminMemberControlView: View {
                                             .tint(DS.Color.primary)
                                     }
                                     .padding(.horizontal, DS.Spacing.lg)
-                                    .padding(.vertical, DS.Spacing.md)
+                                    .padding(.vertical, DS.Spacing.xs)
                                 }
                             }
                             .padding(.horizontal, DS.Spacing.lg)
@@ -149,7 +149,7 @@ struct AdminMemberControlView: View {
                                 VStack(spacing: 0) {
                                     HStack(spacing: DS.Spacing.md) {
                                         Image(systemName: "cross.fill")
-                                            .foregroundColor(.white)
+                                            .foregroundColor(DS.Color.textOnPrimary)
                                             .font(DS.Font.scaled(14))
                                             .frame(width: DS.Icon.sizeSm, height: DS.Icon.sizeSm)
                                             .background(DS.Color.gradientPrimary)
@@ -160,14 +160,14 @@ struct AdminMemberControlView: View {
                                             .tint(DS.Color.error)
                                     }
                                     .padding(.horizontal, DS.Spacing.lg)
-                                    .padding(.vertical, DS.Spacing.md)
+                                    .padding(.vertical, DS.Spacing.xs)
 
                                     if isDeceased {
                                         DSDivider()
 
                                         HStack(spacing: DS.Spacing.md) {
                                             Image(systemName: "calendar.badge.exclamationmark")
-                                                .foregroundColor(.white)
+                                                .foregroundColor(DS.Color.textOnPrimary)
                                                 .font(DS.Font.scaled(14))
                                                 .frame(width: DS.Icon.sizeSm, height: DS.Icon.sizeSm)
                                                 .background(DS.Color.gradientPrimary)
@@ -180,7 +180,7 @@ struct AdminMemberControlView: View {
                                             .font(DS.Font.body)
                                         }
                                         .padding(.horizontal, DS.Spacing.lg)
-                                        .padding(.vertical, DS.Spacing.md)
+                                        .padding(.vertical, DS.Spacing.xs)
                                     }
                                 }
                             }

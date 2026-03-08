@@ -22,6 +22,9 @@ struct RootView: View {
             case .trialExpired:
                 TrialExpiredView()
 
+            case .deviceLimitExceeded:
+                DeviceLimitView()
+
             case .fullyAuthenticated:
                 MainTabView()
             }

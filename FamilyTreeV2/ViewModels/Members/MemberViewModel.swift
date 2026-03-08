@@ -328,12 +328,13 @@ class MemberViewModel: ObservableObject {
                     options: FileOptions(contentType: "image/jpeg", upsert: true)
                 )
             
-            // 3. الحصول على الرابط العام
+            // 3. الحصول على الرابط العام مع cache-busting
             let publicUrl = try supabase.storage
                 .from("avatars")
                 .getPublicURL(path: fileName)
             
-            let urlString = publicUrl.absoluteString
+            let timestamp = Int(Date().timeIntervalSince1970)
+            let urlString = "\(publicUrl.absoluteString)?v=\(timestamp)"
             
             // 4. تحديث رابط الصورة في جدول profiles
             try await supabase
@@ -428,7 +429,8 @@ class MemberViewModel: ObservableObject {
                 .from("avatars")
                 .getPublicURL(path: fileName)
             
-            let urlString = publicUrl.absoluteString
+            let coverTimestamp = Int(Date().timeIntervalSince1970)
+            let urlString = "\(publicUrl.absoluteString)?v=\(coverTimestamp)"
             
             try await supabase
                 .from("profiles")
@@ -514,10 +516,8 @@ class MemberViewModel: ObservableObject {
                     options: FileOptions(contentType: "image/jpeg", upsert: true)
                 )
             
-            let publicURL = try supabase.storage
-                .from("gallery")
-                .getPublicURL(path: filePath)
-                .absoluteString
+            let photoTimestamp = Int(Date().timeIntervalSince1970)
+            let publicURL = "\(try supabase.storage.from("gallery").getPublicURL(path: filePath).absoluteString)?v=\(photoTimestamp)"
             
             try await supabase
                 .from("profiles")

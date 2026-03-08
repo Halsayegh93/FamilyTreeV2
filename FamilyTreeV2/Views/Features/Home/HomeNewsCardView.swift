@@ -75,7 +75,7 @@ struct HomeNewsCardView: View {
                                         .overlay(
                                             Text(String(authorName.first ?? "A"))
                                                 .font(DS.Font.scaled(15, weight: .bold))
-                                                .foregroundColor(.white)
+                                                .foregroundColor(DS.Color.textOnPrimary)
                                         )
                                 }
                                 .frame(width: 38, height: 38)
@@ -92,7 +92,7 @@ struct HomeNewsCardView: View {
                                     .frame(width: 38, height: 38)
                                 Text(String(authorName.first ?? "A"))
                                     .font(DS.Font.scaled(15, weight: .bold))
-                                    .foregroundColor(.white)
+                                    .foregroundColor(DS.Color.textOnPrimary)
                             }
                         }
                         .frame(width: 38, height: 38)
@@ -223,9 +223,9 @@ struct HomeNewsCardView: View {
                     // قلب الإعجاب
                     if showDoubleTapHeart {
                         Image(systemName: "heart.fill")
-                            .font(.system(size: 60, weight: .bold))
-                            .foregroundStyle(.white)
-                            .shadow(color: Color.black.opacity(0.3), radius: 8, x: 0, y: 4)
+                            .font(DS.Font.scaled(60, weight: .bold))
+                            .foregroundStyle(DS.Color.textOnPrimary)
+                            .shadow(color: DS.Color.shadowStrong, radius: 8, x: 0, y: 4)
                             .transition(.scale.combined(with: .opacity))
                     }
                 }
@@ -260,7 +260,7 @@ struct HomeNewsCardView: View {
             // شريط الإجراءات
             actionBar
                 .padding(.horizontal, DS.Spacing.lg)
-                .padding(.vertical, DS.Spacing.md)
+                .padding(.vertical, DS.Spacing.xs)
         }
         .background(
             ZStack {
@@ -287,7 +287,7 @@ struct HomeNewsCardView: View {
                     lineWidth: 0.75
                 )
         )
-        .shadow(color: Color.black.opacity(0.10), radius: 16, x: 0, y: 8)
+        .shadow(color: DS.Color.shadowMedium, radius: 16, x: 0, y: 8)
         .shadow(color: NewsTypeHelper.color(for: type).opacity(0.12), radius: 20, x: 0, y: 10)
     }
 
@@ -310,14 +310,14 @@ struct HomeNewsCardView: View {
                         Text("\(pollVotes[index] ?? 0)")
                             .font(DS.Font.caption1)
                             .fontWeight(.bold)
-                            .foregroundColor(isSelected ? .white : DS.Color.textSecondary)
+                            .foregroundColor(isSelected ? DS.Color.textOnPrimary : DS.Color.textSecondary)
                             .padding(.horizontal, DS.Spacing.sm)
                             .padding(.vertical, 3)
                             .background(isSelected ? DS.Color.primary : DS.Color.glassDivider(colorScheme))
                             .clipShape(Capsule())
                     }
                     .padding(.horizontal, DS.Spacing.md)
-                    .padding(.vertical, DS.Spacing.md)
+                    .padding(.vertical, DS.Spacing.xs)
                     .background(
                         ZStack {
                             RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)

@@ -26,6 +26,15 @@ struct AdminDashboardView: View {
     private var moderatorCount: Int {
         memberVM.allMembers.filter { $0.role == .admin || $0.role == .supervisor }.count
     }
+    private var totalReviewRequestsCount: Int {
+        newsVM.pendingNewsRequests.count
+        + adminRequestVM.newsReportRequests.count
+        + adminRequestVM.phoneChangeRequests.count
+        + diwaniyaVM.pendingDiwaniyas.count
+        + adminRequestVM.deceasedRequests.count
+        + adminRequestVM.childAddRequests.count
+        + adminRequestVM.photoSuggestionRequests.count
+    }
     private var incompleteMembersCount: Int {
         memberVM.allMembers
             .filter { $0.role != .pending && $0.isDeceased != true }
@@ -93,34 +102,20 @@ struct AdminDashboardView: View {
                                         )
                                     }
                                     DSDivider()
-                                    NavigationLink(destination: AdminNewsRequestsView()) {
-                                        DSActionRow(title: L10n.t("طلبات نشر الأخبار", "News Publish Requests"), subtitle: L10n.t("مراجعة أخبار الأعضاء قبل النشر", "Review member news before publishing"), icon: "newspaper.fill", color: DS.Color.warning, badge: newsVM.pendingNewsRequests.count)
-                                    }
-                                    DSDivider()
-                                    NavigationLink(destination: AdminNewsReportsView()) {
-                                        DSActionRow(title: L10n.t("بلاغات الأخبار", "News Reports"), subtitle: L10n.t("مراجعة بلاغات الأعضاء على الأخبار", "Review member reports on news"), icon: "exclamationmark.bubble.fill", color: DS.Color.error, badge: adminRequestVM.newsReportRequests.count)
-                                    }
-                                    DSDivider()
-                                    NavigationLink(destination: AdminPhoneRequestsView()) {
-                                        DSActionRow(title: L10n.t("طلبات تغيير الجوال", "Phone Change Requests"), subtitle: L10n.t("مراجعة واعتماد تحديثات الأرقام", "Review and approve phone updates"), icon: "phone.badge.checkmark", color: DS.Color.success, badge: adminRequestVM.phoneChangeRequests.count)
-                                    }
-                                    DSDivider()
-                                    NavigationLink(destination: AdminDiwaniyaRequestsView()) {
-                                        DSActionRow(title: L10n.t("طلبات الديوانيات", "Diwaniya Requests"), subtitle: L10n.t("مراجعة واعتماد ديوانيات الأعضاء", "Review and approve member diwaniyas"), icon: "tent.fill", color: DS.Color.gridDiwaniya, badge: diwaniyaVM.pendingDiwaniyas.count)
-                                    }
-                                    DSDivider()
-                                    NavigationLink(destination: AdminDeceasedRequestsView()) {
-                                        DSActionRow(title: L10n.t("تأكيد حالات الوفاة", "Confirm Deceased"), subtitle: L10n.t("تحديثات حالة أعضاء الشجرة", "Update family tree member status"), icon: "bolt.heart.fill", color: DS.Color.error, badge: adminRequestVM.deceasedRequests.count)
-                                    }
-                                    DSDivider()
-                                    NavigationLink(destination: AdminChildAddRequestsView()) {
-                                        DSActionRow(title: L10n.t("طلبات إضافة الأبناء", "Child Add Requests"), subtitle: L10n.t("مراجعة طلبات إضافة أبناء جدد", "Review new child addition requests"), icon: "person.badge.plus", color: DS.Color.success, badge: adminRequestVM.childAddRequests.count)
+                                    NavigationLink(destination: AdminAllRequestsView()) {
+                                        DSActionRow(
+                                            title: L10n.t("طلبات المراجعة", "Review Requests"),
+                                            subtitle: L10n.t("أخبار، بلاغات، جوال، ديوانيات، وفاة، أبناء، صور", "News, reports, phone, diwaniyas, deceased, children, photos"),
+                                            icon: "tray.full.fill",
+                                            color: DS.Color.warning,
+                                            badge: totalReviewRequestsCount
+                                        )
                                     }
                                     DSDivider()
                                     NavigationLink(destination: AdminIncompleteMembersView()) {
                                         DSActionRow(
-                                            title: L10n.t("بيانات أعضاء ناقصة", "Incomplete Member Data"),
-                                            subtitle: L10n.t("أعضاء ينقصهم جوال أو تاريخ ميلاد أو أب أو جنس", "Members missing phone, birth date, father, or gender"),
+                                            title: L10n.t("تحديث البيانات", "Update Data"),
+                                            subtitle: L10n.t("أعضاء تحتاج بياناتهم تحديث", "Members that need data updates"),
                                             icon: "exclamationmark.triangle.fill",
                                             color: DS.Color.warning,
                                             badge: incompleteMembersCount
@@ -145,16 +140,20 @@ struct AdminDashboardView: View {
                                         DSActionRow(title: L10n.t("إرسال إشعارات", "Send Notifications"), subtitle: L10n.t("إرسال إشعار عام أو مخصص", "Send a general or targeted notification"), icon: "bell.badge.fill", color: DS.Color.warning)
                                     }
                                     DSDivider()
-                                    NavigationLink(destination: AdminMembersListView()) {
-                                        DSActionRow(title: L10n.t("سجل أعضاء الشجرة", "Member Registry"), subtitle: L10n.t("إدارة الرتب، الصلاحيات، والحذف", "Manage roles, permissions, deletion"), icon: "person.3.sequence.fill", color: adminAccent)
+                                    NavigationLink(destination: AdminMembersDirectoryView()) {
+                                        DSActionRow(title: L10n.t("سجل ودليل الأعضاء", "Members & Directory"), subtitle: L10n.t("إدارة الأعضاء وتصفح بيانات العائلة", "Manage members and browse family data"), icon: "person.3.sequence.fill", color: adminAccent)
                                     }
                                     DSDivider()
                                     NavigationLink(destination: AdminReportsView()) {
                                         DSActionRow(title: L10n.t("تقارير PDF", "PDF Reports"), subtitle: L10n.t("تقرير الأرقام والأعمار للأعضاء", "Member numbers and ages report"), icon: "doc.text.fill", color: DS.Color.info)
                                     }
                                     DSDivider()
-                                    NavigationLink(destination: FamilyDirectoryView()) {
-                                        DSActionRow(title: L10n.t("دليل أفراد العائلة", "Family Directory"), subtitle: L10n.t("بحث وتصفية بيانات جميع الأعضاء", "Search and filter all member data"), icon: "person.text.rectangle", color: DS.Color.success)
+                                    NavigationLink(destination: AdminAnalyticsView()) {
+                                        DSActionRow(title: L10n.t("إحصائيات متقدمة", "Analytics"), subtitle: L10n.t("رسوم بيانية وتحليلات مفصلة", "Charts and detailed analysis"), icon: "chart.bar.xaxis", color: DS.Color.neonBlue)
+                                    }
+                                    DSDivider()
+                                    NavigationLink(destination: AdminAppSettingsView()) {
+                                        DSActionRow(title: L10n.t("إعدادات التطبيق", "App Settings"), subtitle: L10n.t("تحكم بإعدادات التسجيل والأمان", "Manage registration and security settings"), icon: "gearshape.fill", color: DS.Color.gridContact)
                                     }
                                     DSDivider()
                                     Button {
@@ -225,8 +224,9 @@ struct AdminDashboardView: View {
             async let newsReports: () = adminRequestVM.fetchNewsReportRequests()
             async let phoneChanges: () = adminRequestVM.fetchPhoneChangeRequests()
             async let childAdds: () = adminRequestVM.fetchChildAddRequests()
+            async let photoSuggestions: () = adminRequestVM.fetchPhotoSuggestionRequests()
             async let diwaniyas: () = diwaniyaVM.fetchPendingDiwaniyas()
-            _ = await (members, deceased, pendingNews, newsReports, phoneChanges, childAdds, diwaniyas)
+            _ = await (members, deceased, pendingNews, newsReports, phoneChanges, childAdds, photoSuggestions, diwaniyas)
         }
     }
 
@@ -325,7 +325,7 @@ struct AdminDashboardView: View {
                 .minimumScaleFactor(0.8)
                 .multilineTextAlignment(.center)
         }
-        .padding(.vertical, DS.Spacing.sm)
+        .padding(.vertical, DS.Spacing.xs)
         .frame(maxWidth: .infinity)
         .glassCard(radius: DS.Radius.lg)
         .overlay(

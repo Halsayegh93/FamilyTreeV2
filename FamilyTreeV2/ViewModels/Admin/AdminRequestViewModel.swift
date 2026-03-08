@@ -82,6 +82,64 @@ class AdminRequestViewModel: ObservableObject {
         return memberVM?.member(byId: id)
     }
 
+    // MARK: - Tree Edit Requests
+
+    /// إرسال طلب تعديل الشجرة (إضافة / تعديل اسم / حذف)
+    func submitTreeEditRequest(actionType: String, memberName: String, details: String) async -> Bool {
+        guard let user = currentUser else { return false }
+        self.isLoading = true
+        defer { self.isLoading = false }
+
+        let cleanDetails = details.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanMemberName = memberName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanMemberName.isEmpty else { return false }
+
+        let fullDetails = """
+        نوع التعديل: \(actionType)
+        الاسم المعني: \(cleanMemberName)
+        التفاصيل: \(cleanDetails.isEmpty ? "لا توجد تفاصيل إضافية" : cleanDetails)
+        بواسطة: \(user.fullName)
+        """
+
+        do {
+            let basePayload: [String: AnyEncodable] = [
+                "member_id": AnyEncodable(user.id.uuidString),
+                "requester_id": AnyEncodable(user.id.uuidString),
+                "request_type": AnyEncodable("tree_edit"),
+                "status": AnyEncodable("pending"),
+                "details": AnyEncodable(fullDetails)
+            ]
+
+            do {
+                var payload = basePayload
+                payload["new_value"] = AnyEncodable(actionType)
+                try await supabase.from("admin_requests").insert(payload).execute()
+            } catch {
+                if isMissingAdminRequestNewValueColumnError(error) {
+                    try await supabase.from("admin_requests").insert(basePayload).execute()
+                } else {
+                    throw error
+                }
+            }
+
+            let requesterName = user.firstName ?? "عضو"
+            await notificationVM?.notifyAdminsWithPush(
+                title: L10n.t("طلب تعديل الشجرة", "Tree Edit Request"),
+                body: L10n.t(
+                    "طلب \(actionType) من \(requesterName): \(cleanMemberName)",
+                    "\(actionType) request from \(requesterName): \(cleanMemberName)"
+                ),
+                kind: "tree_edit"
+            )
+
+            Log.info("[TreeEdit] تم إرسال طلب تعديل الشجرة: \(actionType) — \(cleanMemberName)")
+            return true
+        } catch {
+            Log.error("[TreeEdit] خطأ في إرسال طلب تعديل الشجرة: \(error.localizedDescription)")
+            return false
+        }
+    }
+
     // MARK: - Deceased Status Requests
 
     func requestDeceasedStatus(memberId: UUID, deathDate: Date?) async {
@@ -991,6 +1049,193 @@ class AdminRequestViewModel: ObservableObject {
             await fetchNewsReportRequests(force: true)
         } catch {
             Log.error("خطأ رفض بلاغ الخبر: \(error.localizedDescription)")
+        }
+
+        self.isLoading = false
+    }
+
+    // MARK: - Photo Suggestion Requests
+
+    @Published var photoSuggestionRequests: [AdminRequest] = []
+    private var lastPhotoSuggestionFetchDate: Date?
+
+    /// إرسال اقتراح صورة لعضو — يرفع الصورة كملف مؤقت ويسجل طلب إداري
+    func submitPhotoSuggestion(image: UIImage, for memberId: UUID) async -> Bool {
+        guard let user = currentUser else { return false }
+        self.isLoading = true
+        defer { self.isLoading = false }
+
+        guard let imageData = image.jpegData(compressionQuality: 0.5) else { return false }
+
+        let fileName = "photo_suggestion_\(memberId.uuidString)_\(Int(Date().timeIntervalSince1970)).jpg"
+
+        do {
+            // 1. رفع الصورة المقترحة إلى التخزين
+            try await supabase.storage
+                .from("avatars")
+                .upload(
+                    fileName,
+                    data: imageData,
+                    options: FileOptions(contentType: "image/jpeg", upsert: true)
+                )
+
+            let publicUrl = try supabase.storage
+                .from("avatars")
+                .getPublicURL(path: fileName)
+
+            let urlString = publicUrl.absoluteString
+
+            // 2. إنشاء طلب إداري
+            let memberName = memberById(memberId)?.fullName ?? "عضو"
+            let requesterName = user.firstName ?? "عضو"
+
+            let basePayload: [String: AnyEncodable] = [
+                "member_id": AnyEncodable(memberId.uuidString),
+                "requester_id": AnyEncodable(user.id.uuidString),
+                "request_type": AnyEncodable("photo_suggestion"),
+                "status": AnyEncodable("pending"),
+                "details": AnyEncodable("اقتراح صورة لـ \(memberName) بواسطة \(requesterName)")
+            ]
+
+            // محاولة إرسال مع new_value
+            do {
+                var payload = basePayload
+                payload["new_value"] = AnyEncodable(urlString)
+                try await supabase.from("admin_requests").insert(payload).execute()
+            } catch {
+                if isMissingAdminRequestNewValueColumnError(error) {
+                    try await supabase.from("admin_requests").insert(basePayload).execute()
+                } else {
+                    throw error
+                }
+            }
+
+            // 3. إشعار المدراء
+            await notificationVM?.notifyAdminsWithPush(
+                title: L10n.t("اقتراح صورة", "Photo Suggestion"),
+                body: L10n.t(
+                    "اقترح \(requesterName) صورة لـ \(memberName)",
+                    "\(requesterName) suggested a photo for \(memberName)"
+                ),
+                kind: "photo_suggestion"
+            )
+
+            Log.info("[PhotoSuggestion] تم إرسال اقتراح صورة لـ \(memberName)")
+            return true
+        } catch {
+            Log.error("[PhotoSuggestion] خطأ في إرسال اقتراح الصورة: \(error.localizedDescription)")
+            return false
+        }
+    }
+
+    func fetchPhotoSuggestionRequests(force: Bool = false) async {
+        if !force, let last = lastPhotoSuggestionFetchDate, Date().timeIntervalSince(last) < 20, !photoSuggestionRequests.isEmpty { return }
+        lastPhotoSuggestionFetchDate = Date()
+
+        do {
+            let requests: [AdminRequest] = try await supabase
+                .from("admin_requests")
+                .select("*, member:profiles!member_id(*)")
+                .eq("request_type", value: "photo_suggestion")
+                .eq("status", value: "pending")
+                .order("created_at", ascending: false)
+                .execute()
+                .value
+
+            self.photoSuggestionRequests = requests
+        } catch {
+            Log.error("خطأ جلب اقتراحات الصور: \(error.localizedDescription)")
+        }
+    }
+
+    /// الموافقة على اقتراح صورة — تحديث صورة العضو
+    func approvePhotoSuggestion(request: AdminRequest) async {
+        guard canModerate else { return }
+        guard let photoUrl = request.newValue, !photoUrl.isEmpty else {
+            Log.error("[PhotoSuggestion] لا يوجد رابط صورة في الطلب")
+            return
+        }
+        self.isLoading = true
+
+        do {
+            // 1. تحديث صورة العضو
+            let timestamp = Int(Date().timeIntervalSince1970)
+            let urlWithCache = photoUrl.contains("?") ? "\(photoUrl)&v=\(timestamp)" : "\(photoUrl)?v=\(timestamp)"
+
+            try await supabase
+                .from("profiles")
+                .update(["avatar_url": AnyEncodable(urlWithCache)])
+                .eq("id", value: request.memberId.uuidString)
+                .execute()
+
+            // 2. تحديث حالة الطلب
+            try await supabase
+                .from("admin_requests")
+                .update(["status": AnyEncodable("approved")])
+                .eq("id", value: request.id.uuidString)
+                .execute()
+
+            // 3. إشعار مقدم الطلب
+            let memberName = memberById(request.memberId)?.fullName ?? "عضو"
+            await notificationVM?.sendNotification(
+                title: L10n.t("تم قبول اقتراح الصورة", "Photo Suggestion Approved"),
+                body: L10n.t(
+                    "تم قبول الصورة المقترحة لـ \(memberName)",
+                    "The suggested photo for \(memberName) was approved"
+                ),
+                targetMemberIds: [request.requesterId]
+            )
+
+            await fetchPhotoSuggestionRequests(force: true)
+            await memberVM?.fetchAllMembers(force: true)
+
+            Log.info("[PhotoSuggestion] تم قبول اقتراح الصورة وتحديث الملف الشخصي")
+        } catch {
+            Log.error("[PhotoSuggestion] خطأ قبول اقتراح الصورة: \(error.localizedDescription)")
+        }
+
+        self.isLoading = false
+    }
+
+    /// رفض اقتراح صورة — حذف الصورة من التخزين
+    func rejectPhotoSuggestion(request: AdminRequest) async {
+        guard canModerate else { return }
+        self.isLoading = true
+
+        do {
+            // حذف الصورة من التخزين
+            if let photoUrl = request.newValue,
+               let url = URL(string: photoUrl),
+               let range = url.path.range(of: "/storage/v1/object/public/avatars/") {
+                let storagePath = String(url.path[range.upperBound...])
+                _ = try? await supabase.storage
+                    .from("avatars")
+                    .remove(paths: [storagePath])
+            }
+
+            // تحديث حالة الطلب
+            try await supabase
+                .from("admin_requests")
+                .update(["status": AnyEncodable("rejected")])
+                .eq("id", value: request.id.uuidString)
+                .execute()
+
+            // إشعار مقدم الطلب
+            let memberName = memberById(request.memberId)?.fullName ?? "عضو"
+            await notificationVM?.sendNotification(
+                title: L10n.t("تم رفض اقتراح الصورة", "Photo Suggestion Rejected"),
+                body: L10n.t(
+                    "تم رفض الصورة المقترحة لـ \(memberName)",
+                    "The suggested photo for \(memberName) was rejected"
+                ),
+                targetMemberIds: [request.requesterId]
+            )
+
+            await fetchPhotoSuggestionRequests(force: true)
+
+            Log.info("[PhotoSuggestion] تم رفض اقتراح الصورة")
+        } catch {
+            Log.error("[PhotoSuggestion] خطأ رفض اقتراح الصورة: \(error.localizedDescription)")
         }
 
         self.isLoading = false

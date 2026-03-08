@@ -235,7 +235,7 @@ struct AdminReportsView: View {
                                     .font(DS.Font.caption1)
                                     .fontWeight(.bold)
                                     .padding(.horizontal, DS.Spacing.md)
-                                    .padding(.vertical, DS.Spacing.sm)
+                                    .padding(.vertical, DS.Spacing.xs)
                                     .foregroundColor(ageFilterMode == mode ? .white : DS.Color.primary)
                                     .background(ageFilterMode == mode ? DS.Color.gradientPrimary : LinearGradient(colors: [DS.Color.primary.opacity(0.1)], startPoint: .leading, endPoint: .trailing))
                                     .clipShape(Capsule())
@@ -243,7 +243,7 @@ struct AdminReportsView: View {
                         }
                     }
                     .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.vertical, DS.Spacing.md)
+                    .padding(.vertical, DS.Spacing.xs)
                 }
 
                 // Custom range steppers
@@ -294,7 +294,7 @@ struct AdminReportsView: View {
                         .multilineTextAlignment(.leading)
                 }
                 .padding(.horizontal, DS.Spacing.lg)
-                .padding(.vertical, DS.Spacing.sm)
+                .padding(.vertical, DS.Spacing.xs)
 
                 DSDivider()
 
@@ -337,7 +337,7 @@ struct AdminReportsView: View {
                     Spacer()
                 }
                 .padding(.horizontal, DS.Spacing.lg)
-                .padding(.vertical, DS.Spacing.sm)
+                .padding(.vertical, DS.Spacing.xs)
 
                 DSDivider()
 
@@ -450,7 +450,7 @@ struct AdminReportsView: View {
             Spacer()
         }
         .padding(.horizontal, DS.Spacing.lg)
-        .padding(.vertical, DS.Spacing.sm)
+        .padding(.vertical, DS.Spacing.xs)
     }
 
     // MARK: - Helpers
@@ -596,7 +596,7 @@ private enum MembersPDFBuilder {
                 )
                 currentY += 26
 
-                UIColor(white: 0.92, alpha: 1).setFill()
+                UIColor(DS.Color.surface).setFill()
                 UIBezierPath(rect: CGRect(x: margin, y: currentY, width: pageWidth - margin * 2, height: rowHeight)).fill()
 
                 let numberRect = CGRect(x: margin + 6, y: currentY + 5, width: 28, height: rowHeight)
@@ -632,7 +632,7 @@ private enum MembersPDFBuilder {
                 row.age.draw(in: ageRect, withAttributes: [.font: bodyFont])
                 row.phone.draw(in: phoneRect, withAttributes: [.font: bodyFont])
 
-                UIColor(white: 0.92, alpha: 1).setStroke()
+                UIColor(DS.Color.surface).setStroke()
                 let line = UIBezierPath()
                 line.move(to: CGPoint(x: margin, y: currentY + rowHeight))
                 line.addLine(to: CGPoint(x: pageWidth - margin, y: currentY + rowHeight))

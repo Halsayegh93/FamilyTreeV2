@@ -1,5 +1,6 @@
 import SwiftUI
 import PhotosUI
+import Photos
 
 struct EditNewsView: View {
     @EnvironmentObject var authVM: AuthViewModel
@@ -19,6 +20,8 @@ struct EditNewsView: View {
     @State private var pollOption3: String
     @State private var pollOption4: String
     @State private var showEditErrorAlert = false
+    @State private var showEditPicker = false
+    @State private var showPermissionDenied = false
 
     init(news: NewsPost) {
         self.news = news
@@ -59,45 +62,43 @@ struct EditNewsView: View {
                             iconColor: DS.Color.primary
                         )
 
-                        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: DS.Spacing.sm), count: 3), spacing: DS.Spacing.sm) {
-                            ForEach(NewsTypeHelper.allTypes, id: \.self) { type in
-                                let isSelected = selectedType == type
-                                let typeColor = NewsTypeHelper.color(for: type)
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: DS.Spacing.sm) {
+                                ForEach(NewsTypeHelper.mainTypes, id: \.self) { type in
+                                    let isSelected = selectedType == type
+                                    let typeColor = NewsTypeHelper.color(for: type)
 
-                                Button(action: {
-                                    withAnimation(DS.Anim.snappy) { selectedType = type }
-                                }) {
-                                    VStack(spacing: DS.Spacing.xs) {
-                                        ZStack {
-                                            Circle()
-                                                .fill(isSelected ? typeColor : typeColor.opacity(0.12))
-                                                .frame(width: 42, height: 42)
-
+                                    Button(action: {
+                                        withAnimation(DS.Anim.snappy) { selectedType = type }
+                                    }) {
+                                        HStack(spacing: DS.Spacing.sm) {
                                             Image(systemName: NewsTypeHelper.icon(for: type))
-                                                .font(DS.Font.scaled(16, weight: .semibold))
-                                                .foregroundColor(isSelected ? .white : typeColor)
-                                        }
+                                                .font(DS.Font.scaled(14, weight: .semibold))
+                                                .foregroundColor(isSelected ? DS.Color.textOnPrimary : typeColor)
+                                                .frame(width: 28, height: 28)
+                                                .background(isSelected ? typeColor : typeColor.opacity(0.12))
+                                                .clipShape(Circle())
 
-                                        Text(NewsTypeHelper.displayName(for: type))
-                                            .font(DS.Font.caption1)
-                                            .fontWeight(.bold)
-                                            .foregroundColor(isSelected ? typeColor : DS.Color.textSecondary)
+                                            Text(NewsTypeHelper.displayName(for: type))
+                                                .font(DS.Font.scaled(13, weight: .bold))
+                                                .foregroundColor(isSelected ? typeColor : DS.Color.textSecondary)
+                                        }
+                                        .padding(.horizontal, DS.Spacing.md)
+                                        .padding(.vertical, DS.Spacing.xs)
+                                        .background(
+                                            Capsule()
+                                                .fill(isSelected ? typeColor.opacity(0.1) : DS.Color.surface.opacity(0.5))
+                                        )
+                                        .overlay(
+                                            Capsule()
+                                                .stroke(isSelected ? typeColor.opacity(0.4) : DS.Color.primary.opacity(0.08), lineWidth: 1.5)
+                                        )
                                     }
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, DS.Spacing.sm)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                                            .fill(isSelected ? typeColor.opacity(0.1) : Color.clear)
-                                    )
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                                            .stroke(isSelected ? typeColor.opacity(0.4) : Color.clear, lineWidth: 1.5)
-                                    )
+                                    .buttonStyle(DSBoldButtonStyle())
                                 }
-                                .buttonStyle(DSBoldButtonStyle())
                             }
+                            .padding(.horizontal, DS.Spacing.md)
                         }
-                        .padding(.horizontal, DS.Spacing.md)
                         .padding(.bottom, DS.Spacing.md)
                     }
 
@@ -111,7 +112,9 @@ struct EditNewsView: View {
                                 .stroke(DS.Color.primary.opacity(0.10), lineWidth: 1)
                         )
 
-                    PhotosPicker(selection: $editPickerItems, maxSelectionCount: 5, matching: .images) {
+                    Button {
+                        checkPhotoPermission { showEditPicker = true }
+                    } label: {
                         HStack(spacing: DS.Spacing.sm) {
                             if isLoadingEditImages {
                                 ProgressView().tint(DS.Color.primary)
@@ -123,7 +126,7 @@ struct EditNewsView: View {
                         .font(DS.Font.calloutBold)
                         .foregroundColor(DS.Color.primary)
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, DS.Spacing.md)
+                        .padding(.vertical, DS.Spacing.xs)
                         .background(DS.Color.primary.opacity(0.08))
                         .cornerRadius(DS.Radius.md)
                     }
@@ -167,8 +170,8 @@ struct EditNewsView: View {
                                     } label: {
                                         Image(systemName: "xmark.circle.fill")
                                             .font(DS.Font.scaled(22, weight: .bold))
-                                            .foregroundColor(.white)
-                                            .shadow(color: .black.opacity(0.5), radius: 4, x: 0, y: 2)
+                                            .foregroundColor(DS.Color.textOnPrimary)
+                                            .shadow(color: DS.Color.shadowHeavy, radius: 4, x: 0, y: 2)
                                     }
                                     .padding(DS.Spacing.sm)
                                 }
@@ -220,6 +223,23 @@ struct EditNewsView: View {
             .alert(L10n.t("تعذر التعديل", "Edit Failed"), isPresented: $showEditErrorAlert) {
                 Button(L10n.t("حسناً", "OK"), role: .cancel) {}
             } message: { Text(newsVM.newsPostErrorMessage ?? L10n.t("حدث خطأ أثناء تعديل الخبر.", "An error occurred while updating.")) }
+            .photosPicker(isPresented: $showEditPicker, selection: $editPickerItems, maxSelectionCount: 5, matching: .images)
+            .alert(
+                L10n.t("الوصول للصور مطلوب", "Photo Access Required"),
+                isPresented: $showPermissionDenied
+            ) {
+                Button(L10n.t("فتح الإعدادات", "Open Settings")) {
+                    if let url = URL(string: UIApplication.openSettingsURLString) {
+                        UIApplication.shared.open(url)
+                    }
+                }
+                Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
+            } message: {
+                Text(L10n.t(
+                    "يحتاج التطبيق إذن الوصول لمكتبة الصور لاختيار صور. يرجى السماح من الإعدادات.",
+                    "The app needs access to your photo library to select photos. Please allow access in Settings."
+                ))
+            }
             .onChange(of: editPickerItems) { _, items in
                 Task {
                     await MainActor.run { isLoadingEditImages = true }
@@ -266,6 +286,26 @@ struct EditNewsView: View {
             dismiss()
         } else {
             showEditErrorAlert = true
+        }
+    }
+
+    private func checkPhotoPermission(action: @escaping () -> Void) {
+        let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
+        switch status {
+        case .authorized, .limited:
+            action()
+        case .notDetermined:
+            PHPhotoLibrary.requestAuthorization(for: .readWrite) { newStatus in
+                DispatchQueue.main.async {
+                    if newStatus == .authorized || newStatus == .limited {
+                        action()
+                    } else {
+                        showPermissionDenied = true
+                    }
+                }
+            }
+        default:
+            showPermissionDenied = true
         }
     }
 }

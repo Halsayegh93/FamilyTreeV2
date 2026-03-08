@@ -27,14 +27,13 @@ struct AddChildRequestView: View {
                 DSDecorativeBackground()
 
                 ScrollView(showsIndicators: false) {
-                    VStack(spacing: DS.Spacing.xxl) {
+                    VStack(spacing: DS.Spacing.md) {
                         basicInfoCard
                         statusCard
                         submitButton
                     }
                     .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.top, DS.Spacing.md)
-                    .padding(.bottom, DS.Spacing.xxl)
+                    .padding(.vertical, DS.Spacing.xs)
                 }
             }
             .navigationTitle(L10n.t("إضافة ابن", "Add Child"))
@@ -84,7 +83,7 @@ struct AddChildRequestView: View {
                         Spacer()
                     }
                     .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.vertical, DS.Spacing.md)
+                    .padding(.vertical, DS.Spacing.xs)
 
                     DSDivider()
 
@@ -106,7 +105,7 @@ struct AddChildRequestView: View {
                                 } label: {
                                     HStack(spacing: 6) {
                                         Text(selectedPhoneCountry.flag)
-                                        Text(selectedPhoneCountry.dialingCode).font(DS.Font.callout)
+                                        Text(selectedPhoneCountry.dialingCode).font(DS.Font.caption1)
                                         Image(systemName: "chevron.down")
                                             .font(DS.Font.scaled(10, weight: .semibold))
                                     }
@@ -131,7 +130,7 @@ struct AddChildRequestView: View {
                         Spacer()
                     }
                     .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.vertical, DS.Spacing.md)
+                    .padding(.vertical, DS.Spacing.xs)
                 }
             }
 
@@ -149,7 +148,7 @@ struct AddChildRequestView: View {
                             .tint(DS.Color.primary)
                     }
                     .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.vertical, DS.Spacing.sm)
+                    .padding(.vertical, DS.Spacing.xs)
 
                     if hasBirthDate {
                         DSDivider()
@@ -159,7 +158,7 @@ struct AddChildRequestView: View {
                                 .environment(\.locale, Locale(identifier: "en_US"))
                         }
                         .padding(.horizontal, DS.Spacing.lg)
-                        .padding(.vertical, DS.Spacing.sm)
+                        .padding(.vertical, DS.Spacing.xs)
                     }
                 }
             }
@@ -182,7 +181,7 @@ struct AddChildRequestView: View {
                             .tint(.gray)
                     }
                     .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.vertical, DS.Spacing.sm)
+                    .padding(.vertical, DS.Spacing.xs)
 
                     if isDeceased {
                         DSDivider()
@@ -193,7 +192,7 @@ struct AddChildRequestView: View {
                                 .tint(DS.Color.primary)
                         }
                         .padding(.horizontal, DS.Spacing.lg)
-                        .padding(.vertical, DS.Spacing.sm)
+                        .padding(.vertical, DS.Spacing.xs)
 
                         if hasDeathDate {
                             DSDivider()
@@ -203,7 +202,7 @@ struct AddChildRequestView: View {
                                     .environment(\.locale, Locale(identifier: "en_US"))
                             }
                             .padding(.horizontal, DS.Spacing.lg)
-                            .padding(.vertical, DS.Spacing.sm)
+                            .padding(.vertical, DS.Spacing.xs)
                         }
                     }
                 }

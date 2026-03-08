@@ -33,7 +33,7 @@ struct CachedAsyncImage<Content: View, Placeholder: View>: View {
     }
 
     private func loadImage() async {
-        guard let url, image == nil else { return }
+        guard let url else { return }
 
         let request = URLRequest(url: url)
 
