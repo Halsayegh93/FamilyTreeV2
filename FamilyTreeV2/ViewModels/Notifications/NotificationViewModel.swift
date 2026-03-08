@@ -348,6 +348,128 @@ class NotificationViewModel: ObservableObject {
         }
     }
     
+    // MARK: - Admin Device Management
+    
+    /// جلب أجهزة عضو محدد (للمدير)
+    func fetchDevicesForMember(_ memberId: UUID) async -> [LinkedDevice] {
+        do {
+            let devices: [LinkedDevice] = try await supabase
+                .from("device_tokens")
+                .select()
+                .eq("member_id", value: memberId.uuidString)
+                .order("updated_at", ascending: false)
+                .execute()
+                .value
+            return devices
+        } catch {
+            Log.error("[ADMIN-DEVICE] خطأ جلب أجهزة العضو: \(error.localizedDescription)")
+            return []
+        }
+    }
+    
+    /// حذف جهاز عضو بواسطة المدير
+    func removeDeviceByAdmin(_ device: LinkedDevice) async -> Bool {
+        do {
+            try await supabase
+                .from("device_tokens")
+                .delete()
+                .eq("id", value: device.id)
+                .execute()
+            Log.info("[ADMIN-DEVICE] تم حذف جهاز العضو بنجاح: \(device.displayName)")
+            return true
+        } catch {
+            Log.error("[ADMIN-DEVICE] خطأ حذف جهاز العضو: \(error.localizedDescription)")
+            return false
+        }
+    }
+    
+    /// جلب جميع الأجهزة المسجلة (للمدير)
+    func fetchAllDevices() async -> [LinkedDevice] {
+        do {
+            let devices: [LinkedDevice] = try await supabase
+                .from("device_tokens")
+                .select()
+                .order("updated_at", ascending: false)
+                .execute()
+                .value
+            return devices
+        } catch {
+            Log.error("[ADMIN-DEVICE] خطأ جلب جميع الأجهزة: \(error.localizedDescription)")
+            return []
+        }
+    }
+    
+    // MARK: - Device Authorization
+    
+    /// فحص: هل الجهاز كان مسجّل سابقاً وتم حذفه بواسطة المدير أو المستخدم؟
+    /// يرجع true إذا العضو عنده أجهزة أخرى لكن هذا الجهاز مو منهم (يعني انحذف)
+    func checkIfDeviceWasRevoked() async -> Bool {
+        guard let memberId = currentUser?.id else { return false }
+        guard let deviceId = currentDeviceId else { return false }
+        
+        do {
+            // جلب كل أجهزة العضو
+            let allDevices: [LinkedDevice] = try await supabase
+                .from("device_tokens")
+                .select()
+                .eq("member_id", value: memberId.uuidString)
+                .execute()
+                .value
+            
+            // إذا ما في أجهزة أبداً = أول تسجيل، مو محذوف
+            if allDevices.isEmpty {
+                Log.info("[DEVICE-REVOKE] لا توجد أجهزة مسجلة — أول تسجيل")
+                return false
+            }
+            
+            // إذا في أجهزة لكن هذا الجهاز مو منهم = تم حذفه
+            let thisDeviceExists = allDevices.contains { $0.deviceId == deviceId }
+            if !thisDeviceExists {
+                Log.warning("[DEVICE-REVOKE] الجهاز \(deviceId.prefix(8))… محذوف — العضو عنده \(allDevices.count) أجهزة أخرى")
+                return true
+            }
+            
+            return false
+        } catch {
+            Log.error("[DEVICE-REVOKE] خطأ فحص الحذف: \(error.localizedDescription)")
+            return false
+        }
+    }
+    
+    /// التحقق من أن الجهاز الحالي لا يزال مصرّح — إذا تم حذفه من القائمة يتم تسجيل الخروج
+    func verifyDeviceAuthorization() async {
+        guard let memberId = currentUser?.id else {
+            Log.info("[DEVICE-VERIFY] تخطي — لا يوجد مستخدم حالي")
+            return
+        }
+        guard let deviceId = currentDeviceId else {
+            Log.info("[DEVICE-VERIFY] تخطي — لا يوجد معرّف جهاز")
+            return
+        }
+        
+        Log.info("[DEVICE-VERIFY] التحقق من تصريح الجهاز: \(deviceId.prefix(8))… للعضو: \(memberId.uuidString.prefix(8))…")
+        
+        do {
+            let devices: [LinkedDevice] = try await supabase
+                .from("device_tokens")
+                .select()
+                .eq("member_id", value: memberId.uuidString)
+                .eq("device_id", value: deviceId)
+                .execute()
+                .value
+            
+            if devices.isEmpty {
+                Log.warning("[DEVICE-VERIFY] الجهاز الحالي غير مصرّح — تسجيل خروج تلقائي")
+                await authVM?.signOut()
+            } else {
+                Log.info("[DEVICE-VERIFY] الجهاز مصرّح ✓")
+            }
+        } catch {
+            // لا نسجّل خروج عند خطأ شبكة — فقط عند التأكد من الحذف
+            Log.error("[DEVICE-VERIFY] خطأ التحقق من تصريح الجهاز: \(error.localizedDescription)")
+        }
+    }
+    
     private func sendExternalAdminPush(title: String, body: String, kind: String = "admin_request") async {
         do {
             let payload = [

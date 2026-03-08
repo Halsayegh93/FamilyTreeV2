@@ -5,18 +5,20 @@ struct AdminIncompleteMembersView: View {
     @EnvironmentObject var memberVM: MemberViewModel
     @State private var appeared = false
     @State private var searchText = ""
-    @State private var selectedFilter: IncompleteFilter = .all
+    @State private var selectedFilter: IncompleteFilter = .noBirthDate
     @State private var isSelectionMode = false
     @State private var selectedMembers: Set<UUID> = []
     @State private var memberToEdit: FamilyMember?
+    @State private var showGenderConfirm = false
+    @State private var pendingGender: String = "male"
+    @State private var genderUpdateResult: String?
+    @State private var showGenderResult = false
 
     enum IncompleteFilter: String, CaseIterable {
-        case all, noPhone, noBirthDate, noFather, noGender
+        case noBirthDate, noFather, noGender
 
         var label: String {
             switch self {
-            case .all:         return L10n.t("الكل", "All")
-            case .noPhone:     return L10n.t("بدون جوال", "No Phone")
             case .noBirthDate: return L10n.t("بدون ميلاد", "No Birth Date")
             case .noFather:    return L10n.t("بدون أب", "No Father")
             case .noGender:    return L10n.t("بدون جنس", "No Gender")
@@ -25,8 +27,6 @@ struct AdminIncompleteMembersView: View {
 
         var icon: String {
             switch self {
-            case .all:         return "checklist"
-            case .noPhone:     return "phone.badge.plus"
             case .noBirthDate: return "calendar.badge.exclamationmark"
             case .noFather:    return "person.line.dotted.person"
             case .noGender:    return "person.fill.questionmark"
@@ -35,8 +35,6 @@ struct AdminIncompleteMembersView: View {
 
         var color: Color {
             switch self {
-            case .all:         return DS.Color.primary
-            case .noPhone:     return DS.Color.error
             case .noBirthDate: return DS.Color.warning
             case .noFather:    return DS.Color.info
             case .noGender:    return DS.Color.neonPurple
@@ -59,8 +57,6 @@ struct AdminIncompleteMembersView: View {
 
         // Apply category filter
         switch selectedFilter {
-        case .all:         break
-        case .noPhone:     members = members.filter { isMissingPhone($0) }
         case .noBirthDate: members = members.filter { isMissingBirthDate($0) }
         case .noFather:    members = members.filter { isMissingFather($0) }
         case .noGender:    members = members.filter { isMissingGender($0) }
@@ -71,7 +67,6 @@ struct AdminIncompleteMembersView: View {
             let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
             members = members.filter {
                 $0.fullName.localizedCaseInsensitiveContains(query)
-                || ($0.phoneNumber ?? "").contains(query)
             }
         }
 
@@ -79,10 +74,6 @@ struct AdminIncompleteMembersView: View {
     }
 
     // MARK: - Missing Data Checks
-
-    private func isMissingPhone(_ m: FamilyMember) -> Bool {
-        m.phoneNumber == nil || (m.phoneNumber ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
 
     private func isMissingBirthDate(_ m: FamilyMember) -> Bool {
         m.birthDate == nil || (m.birthDate ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -97,12 +88,11 @@ struct AdminIncompleteMembersView: View {
     }
 
     private func memberHasIncompleteData(_ m: FamilyMember) -> Bool {
-        isMissingPhone(m) || isMissingBirthDate(m) || isMissingFather(m) || isMissingGender(m)
+        isMissingBirthDate(m) || isMissingFather(m) || isMissingGender(m)
     }
 
     private func missingFields(for m: FamilyMember) -> [IncompleteFilter] {
         var missing: [IncompleteFilter] = []
-        if isMissingPhone(m)     { missing.append(.noPhone) }
         if isMissingBirthDate(m) { missing.append(.noBirthDate) }
         if isMissingFather(m)    { missing.append(.noFather) }
         if isMissingGender(m)    { missing.append(.noGender) }
@@ -113,9 +103,6 @@ struct AdminIncompleteMembersView: View {
 
     var body: some View {
         ZStack {
-            DS.Color.background.ignoresSafeArea()
-            DSDecorativeBackground()
-
             if allIncompleteMembers.isEmpty {
                 emptyState
             } else {
@@ -150,21 +137,23 @@ struct AdminIncompleteMembersView: View {
                                         }
                                     }
                                     .buttonStyle(DSScaleButtonStyle())
-                                    .listRowBackground(
-                                        selectedMembers.contains(member.id)
-                                            ? DS.Color.primary.opacity(0.08)
-                                            : DS.Color.surface
-                                    )
                                 } else {
                                     NavigationLink(destination: AdminMemberDetailSheet(member: member)) {
                                         memberRow(member: member, index: index)
                                     }
                                     .buttonStyle(DSBoldButtonStyle())
-                                    .listRowBackground(DS.Color.surface)
+                                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                        Button {
+                                            memberToEdit = member
+                                        } label: {
+                                            Label(L10n.t("تعديل", "Edit"), systemImage: "pencil")
+                                        }
+                                        .tint(DS.Color.primary)
+                                    }
                                 }
                             }
                         }
-                        .listStyle(.insetGrouped)
+                        .listStyle(.plain)
                         .scrollContentBackground(.hidden)
                     }
 
@@ -175,8 +164,6 @@ struct AdminIncompleteMembersView: View {
                 }
             }
         }
-        .navigationTitle(L10n.t("تحديث البيانات", "Update Data"))
-        .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 if !allIncompleteMembers.isEmpty {
@@ -202,7 +189,44 @@ struct AdminIncompleteMembersView: View {
                 AdminMemberDetailSheet(member: member)
             }
         }
-        .task { await memberVM.fetchAllMembers() }
+        .alert(
+            L10n.t("تأكيد تحديث الجنس", "Confirm Gender Update"),
+            isPresented: $showGenderConfirm
+        ) {
+            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
+            Button(
+                pendingGender == "male"
+                    ? L10n.t("تعيين ذكر", "Set Male")
+                    : L10n.t("تعيين أنثى", "Set Female")
+            ) {
+                let ids = selectedMembers
+                let gender = pendingGender
+                withAnimation(DS.Anim.snappy) {
+                    selectedMembers.removeAll()
+                    isSelectionMode = false
+                }
+                Task {
+                    let count = await memberVM.bulkUpdateGender(memberIds: ids, gender: gender)
+                    let genderText = gender == "male" ? L10n.t("ذكر", "male") : L10n.t("أنثى", "female")
+                    genderUpdateResult = L10n.t(
+                        "تم تحديث \(count) عضو إلى \(genderText)",
+                        "Updated \(count) members to \(genderText)"
+                    )
+                    showGenderResult = true
+                }
+            }
+        } message: {
+            let genderText = pendingGender == "male" ? L10n.t("ذكر", "male") : L10n.t("أنثى", "female")
+            Text(L10n.t(
+                "هل تريد تعيين \(selectedMembers.count) عضو كـ \(genderText)؟",
+                "Set \(selectedMembers.count) members as \(genderText)?"
+            ))
+        }
+        .alert(L10n.t("تم التحديث", "Updated"), isPresented: $showGenderResult) {
+            Button(L10n.t("حسناً", "OK"), role: .cancel) {}
+        } message: {
+            Text(genderUpdateResult ?? "")
+        }
         .onAppear {
             withAnimation(DS.Anim.smooth.delay(0.15)) {
                 appeared = true
@@ -221,9 +245,7 @@ struct AdminIncompleteMembersView: View {
             )
             miniStat(
                 count: filteredMembers.count,
-                label: selectedFilter == .all
-                    ? L10n.t("معروض", "Shown")
-                    : selectedFilter.label,
+                label: selectedFilter.label,
                 color: selectedFilter.color
             )
         }
@@ -249,20 +271,14 @@ struct AdminIncompleteMembersView: View {
 
     // MARK: - Filter Chips
     private var filterChips: some View {
-        VStack(spacing: DS.Spacing.sm) {
-            // الصف الأول: الكل + بدون جوال + بدون ميلاد
+        ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: DS.Spacing.sm) {
-                filterChip(.all)
-                filterChip(.noPhone)
-                filterChip(.noBirthDate)
+                ForEach(IncompleteFilter.allCases, id: \.self) { filter in
+                    filterChip(filter)
+                }
             }
-            // الصف الثاني: بدون أب + بدون جنس
-            HStack(spacing: DS.Spacing.sm) {
-                filterChip(.noFather)
-                filterChip(.noGender)
-            }
+            .padding(.horizontal, DS.Spacing.lg)
         }
-        .padding(.horizontal, DS.Spacing.lg)
     }
 
     private func filterChip(_ filter: IncompleteFilter) -> some View {
@@ -401,64 +417,102 @@ struct AdminIncompleteMembersView: View {
 
     // MARK: - Selection Action Bar
     private var selectionActionBar: some View {
-        HStack(spacing: DS.Spacing.md) {
-            // Select all / Deselect all
-            Button {
-                withAnimation(DS.Anim.snappy) {
-                    if selectedMembers.count == filteredMembers.count {
-                        selectedMembers.removeAll()
-                    } else {
-                        selectedMembers = Set(filteredMembers.map(\.id))
+        VStack(spacing: DS.Spacing.sm) {
+            // الصف الأول: تحديد الكل + العدد
+            HStack(spacing: DS.Spacing.md) {
+                Button {
+                    withAnimation(DS.Anim.snappy) {
+                        if selectedMembers.count == filteredMembers.count {
+                            selectedMembers.removeAll()
+                        } else {
+                            selectedMembers = Set(filteredMembers.map(\.id))
+                        }
                     }
+                } label: {
+                    HStack(spacing: DS.Spacing.xs) {
+                        Image(systemName: selectedMembers.count == filteredMembers.count
+                              ? "checklist.unchecked" : "checklist.checked")
+                            .font(DS.Font.callout)
+                        Text(selectedMembers.count == filteredMembers.count
+                             ? L10n.t("إلغاء الكل", "Deselect All")
+                             : L10n.t("تحديد الكل", "Select All"))
+                            .font(DS.Font.calloutBold)
+                    }
+                    .foregroundColor(DS.Color.primary)
                 }
-            } label: {
-                HStack(spacing: DS.Spacing.xs) {
-                    Image(systemName: selectedMembers.count == filteredMembers.count
-                          ? "checklist.unchecked" : "checklist.checked")
-                        .font(DS.Font.callout)
-                    Text(selectedMembers.count == filteredMembers.count
-                         ? L10n.t("إلغاء الكل", "Deselect All")
-                         : L10n.t("تحديد الكل", "Select All"))
-                        .font(DS.Font.calloutBold)
+                .buttonStyle(DSScaleButtonStyle())
+
+                Spacer()
+
+                if !selectedMembers.isEmpty {
+                    Text(L10n.t(
+                        "محدد: \(selectedMembers.count)",
+                        "Selected: \(selectedMembers.count)"
+                    ))
+                    .font(DS.Font.caption1)
+                    .foregroundColor(DS.Color.textSecondary)
                 }
-                .foregroundColor(DS.Color.primary)
             }
-            .buttonStyle(DSScaleButtonStyle())
 
-            Spacer()
-
-            // Selected count
+            // الصف الثاني: أزرار الإجراءات
             if !selectedMembers.isEmpty {
-                Text(L10n.t(
-                    "محدد: \(selectedMembers.count)",
-                    "Selected: \(selectedMembers.count)"
-                ))
-                .font(DS.Font.caption1)
-                .foregroundColor(DS.Color.textSecondary)
-            }
+                HStack(spacing: DS.Spacing.sm) {
+                    // زر ذكر
+                    Button {
+                        pendingGender = "male"
+                        showGenderConfirm = true
+                    } label: {
+                        HStack(spacing: DS.Spacing.xs) {
+                            Image(systemName: "person.fill")
+                                .font(DS.Font.scaled(13, weight: .bold))
+                            Text(L10n.t("ذكر", "Male"))
+                                .font(DS.Font.calloutBold)
+                        }
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, DS.Spacing.sm)
+                        .background(DS.Color.primary)
+                        .clipShape(Capsule())
+                    }
+                    .buttonStyle(DSBoldButtonStyle())
 
-            // Edit button
-            Button {
-                if let firstSelectedId = selectedMembers.first,
-                   let member = filteredMembers.first(where: { $0.id == firstSelectedId }) {
-                    memberToEdit = member
+                    // زر أنثى
+                    Button {
+                        pendingGender = "female"
+                        showGenderConfirm = true
+                    } label: {
+                        HStack(spacing: DS.Spacing.xs) {
+                            Image(systemName: "figure.stand.dress")
+                                .font(DS.Font.scaled(13, weight: .bold))
+                            Text(L10n.t("أنثى", "Female"))
+                                .font(DS.Font.calloutBold)
+                        }
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, DS.Spacing.sm)
+                        .background(DS.Color.neonPink)
+                        .clipShape(Capsule())
+                    }
+                    .buttonStyle(DSBoldButtonStyle())
+
+                    // زر تعديل فردي
+                    Button {
+                        if let firstSelectedId = selectedMembers.first,
+                           let member = filteredMembers.first(where: { $0.id == firstSelectedId }) {
+                            memberToEdit = member
+                        }
+                    } label: {
+                        Image(systemName: "pencil.circle.fill")
+                            .font(DS.Font.scaled(16, weight: .bold))
+                            .foregroundColor(DS.Color.primary)
+                            .frame(width: 44, height: 44)
+                            .background(DS.Color.primary.opacity(0.1))
+                            .clipShape(Circle())
+                    }
+                    .buttonStyle(DSScaleButtonStyle())
                 }
-            } label: {
-                HStack(spacing: DS.Spacing.xs) {
-                    Image(systemName: "pencil.circle.fill")
-                        .font(DS.Font.callout)
-                    Text(L10n.t("تعديل", "Edit"))
-                        .font(DS.Font.calloutBold)
-                }
-                .foregroundColor(DS.Color.textOnPrimary)
-                .padding(.horizontal, DS.Spacing.xl)
-                .padding(.vertical, DS.Spacing.sm)
-                .background(DS.Color.primary)
-                .clipShape(Capsule())
+                .transition(.move(edge: .bottom).combined(with: .opacity))
             }
-            .buttonStyle(DSBoldButtonStyle())
-            .disabled(selectedMembers.isEmpty)
-            .opacity(selectedMembers.isEmpty ? 0.4 : 1)
         }
         .padding(.horizontal, DS.Spacing.lg)
         .padding(.vertical, DS.Spacing.md)

@@ -6,44 +6,92 @@ struct AdminActivateAccountsView: View {
     @EnvironmentObject var adminRequestVM: AdminRequestViewModel
     @State private var appeared = false
     @State private var searchText = ""
+    @State private var selectedFilter: InactiveFilter = .pending
     @State private var memberToActivate: FamilyMember?
     @State private var showActivateConfirm = false
     @State private var memberToEditPhone: FamilyMember?
 
-    // أعضاء بحالة nil أو pending (غير مفعلين) - ليسوا بـ role pending - أحياء فقط
+    enum InactiveFilter: String, CaseIterable {
+        case pending, notActivated
+
+        var label: String {
+            switch self {
+            case .pending:      return L10n.t("معلق", "Pending")
+            case .notActivated: return L10n.t("غير مفعل", "Not Activated")
+            }
+        }
+
+        var icon: String {
+            switch self {
+            case .pending:      return "clock.badge.exclamationmark"
+            case .notActivated: return "person.badge.minus"
+            }
+        }
+
+        var color: Color {
+            switch self {
+            case .pending:      return DS.Color.warning
+            case .notActivated: return DS.Color.textTertiary
+            }
+        }
+    }
+
+    // أعضاء بحالة nil أو pending (غير مفعلين) أو بدون رقم جوال - ليسوا بـ role pending - أحياء فقط
     private var allInactiveMembers: [FamilyMember] {
         memberVM.allMembers
-            .filter { $0.role != .pending && ($0.status == nil || $0.status == .pending) && $0.isDeceased != true }
+            .filter { $0.role != .pending && $0.isDeceased != true }
+            .filter { member in
+                let isNotActivated = member.status == nil || member.status == .pending
+                let hasNoPhone = member.phoneNumber == nil || (member.phoneNumber ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                return isNotActivated || hasNoPhone
+            }
             .sorted { $0.fullName < $1.fullName }
     }
 
+    private var pendingMembers: [FamilyMember] {
+        allInactiveMembers.filter { $0.status == .pending }
+    }
+
+    private var notActivatedMembers: [FamilyMember] {
+        allInactiveMembers.filter { member in
+            let statusNil = member.status == nil
+            let hasNoPhone = member.phoneNumber == nil || (member.phoneNumber ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            return statusNil || hasNoPhone
+        }
+    }
+
     private var filteredMembers: [FamilyMember] {
-        if searchText.isEmpty { return allInactiveMembers }
-        return allInactiveMembers.filter { $0.fullName.localizedCaseInsensitiveContains(searchText) }
+        var members: [FamilyMember]
+        switch selectedFilter {
+        case .pending:      members = pendingMembers
+        case .notActivated: members = notActivatedMembers
+        }
+        if searchText.isEmpty { return members }
+        return members.filter { $0.fullName.localizedCaseInsensitiveContains(searchText) }
     }
 
     var body: some View {
         ZStack {
-            DS.Color.background.ignoresSafeArea()
-
-            DSDecorativeBackground()
-
             if allInactiveMembers.isEmpty {
                 emptyState
             } else {
                 VStack(spacing: 0) {
-                    // عدد الأعضاء غير المفعلين
+                    // فلتر التصنيف
+                    filterChips
+                        .padding(.top, DS.Spacing.sm)
+                        .padding(.bottom, DS.Spacing.xs)
+
+                    // عدد الأعضاء
                     HStack {
                         Text(L10n.t(
-                            "\(allInactiveMembers.count) عضو غير مفعل",
-                            "\(allInactiveMembers.count) inactive members"
+                            "\(filteredMembers.count) عضو",
+                            "\(filteredMembers.count) members"
                         ))
                         .font(DS.Font.caption1)
                         .foregroundColor(DS.Color.textTertiary)
                         Spacer()
                     }
                     .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.top, DS.Spacing.sm)
 
                     // البحث
                     HStack(spacing: DS.Spacing.sm) {
@@ -87,14 +135,12 @@ struct AdminActivateAccountsView: View {
                                 memberRow(member: member, index: index)
                             }
                         }
-                        .listStyle(.insetGrouped)
+                        .listStyle(.plain)
                         .scrollContentBackground(.hidden)
                     }
                 }
             }
         }
-        .navigationTitle(L10n.t("حسابات غير مفعلة", "Inactive Accounts"))
-        .navigationBarTitleDisplayMode(.inline)
         .alert(
             L10n.t("تفعيل الحساب", "Activate Account"),
             isPresented: $showActivateConfirm,
@@ -115,7 +161,6 @@ struct AdminActivateAccountsView: View {
         .sheet(item: $memberToEditPhone) { member in
             EditPhoneSheet(member: member, memberVM: memberVM)
         }
-        .task { await memberVM.fetchAllMembers() }
         .onAppear {
             withAnimation(DS.Anim.smooth.delay(0.15)) {
                 appeared = true
@@ -206,7 +251,6 @@ struct AdminActivateAccountsView: View {
         .opacity(appeared ? 1 : 0)
         .offset(y: appeared ? 0 : 15)
         .animation(DS.Anim.smooth.delay(Double(index) * 0.04), value: appeared)
-        .listRowBackground(DS.Color.surface)
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             Button {
                 memberToActivate = member
@@ -244,6 +288,59 @@ struct AdminActivateAccountsView: View {
                 Label(L10n.t("تفعيل الحساب", "Activate Account"), systemImage: "checkmark.circle.fill")
             }
         }
+    }
+
+    // MARK: - Filter Chips
+    private var filterChips: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: DS.Spacing.sm) {
+                ForEach(InactiveFilter.allCases, id: \.self) { filter in
+                    filterChip(filter)
+                }
+            }
+            .padding(.horizontal, DS.Spacing.lg)
+        }
+    }
+
+    private func filterChip(_ filter: InactiveFilter) -> some View {
+        let isSelected = selectedFilter == filter
+        let count: Int = {
+            switch filter {
+            case .pending:      return pendingMembers.count
+            case .notActivated: return notActivatedMembers.count
+            }
+        }()
+        return Button {
+            withAnimation(DS.Anim.snappy) {
+                selectedFilter = filter
+            }
+        } label: {
+            HStack(spacing: DS.Spacing.xs) {
+                Image(systemName: filter.icon)
+                    .font(DS.Font.scaled(11, weight: .bold))
+                Text(filter.label)
+                    .font(DS.Font.caption1)
+                    .fontWeight(.semibold)
+                Text("\(count)")
+                    .font(DS.Font.caption2)
+                    .fontWeight(.bold)
+                    .foregroundColor(isSelected ? filter.color : DS.Color.textOnPrimary)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(isSelected ? DS.Color.textOnPrimary.opacity(0.3) : filter.color.opacity(0.8))
+                    .clipShape(Capsule())
+            }
+            .foregroundColor(isSelected ? DS.Color.textOnPrimary : filter.color)
+            .padding(.horizontal, DS.Spacing.md)
+            .padding(.vertical, DS.Spacing.xs)
+            .background(isSelected ? filter.color : filter.color.opacity(0.1))
+            .clipShape(Capsule())
+            .overlay(
+                Capsule()
+                    .stroke(isSelected ? Color.clear : filter.color.opacity(0.3), lineWidth: 1)
+            )
+        }
+        .buttonStyle(DSScaleButtonStyle())
     }
 
     // MARK: - Empty State

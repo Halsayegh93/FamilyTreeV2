@@ -3,14 +3,19 @@ import SwiftUI
 /// شاشة طلب تعديل الشجرة — إضافة / تعديل اسم / حذف
 struct TreeEditRequestView: View {
     @EnvironmentObject var adminRequestVM: AdminRequestViewModel
+    @EnvironmentObject var memberVM: MemberViewModel
     @Environment(\.dismiss) private var dismiss
     @FocusState private var isDetailsFocused: Bool
+    @FocusState private var isNameFieldFocused: Bool
 
     @State private var selectedAction = "تعديل اسم"
     @State private var memberName = ""
     @State private var details = ""
     @State private var showSuccessAlert = false
     @State private var showErrorAlert = false
+    @State private var nameSearchText = ""
+    @State private var selectedMember: FamilyMember?
+    @State private var showMemberPicker = false
 
     private let actionItems: [(key: String, icon: String, labelAr: String, labelEn: String, color: Color)] = [
         ("إضافة", "person.badge.plus", "إضافة", "Add", DS.Color.success),
@@ -114,28 +119,173 @@ struct TreeEditRequestView: View {
                 .font(DS.Font.calloutBold)
                 .foregroundColor(DS.Color.textPrimary)
 
-            HStack(spacing: DS.Spacing.sm) {
-                Image(systemName: "person.fill")
-                    .font(DS.Font.scaled(14, weight: .medium))
-                    .foregroundColor(DS.Color.textTertiary)
-                    .frame(width: 24)
+            // Tappable field to open member picker
+            Button {
+                showMemberPicker = true
+            } label: {
+                HStack(spacing: DS.Spacing.sm) {
+                    Image(systemName: "person.fill")
+                        .font(DS.Font.scaled(14, weight: .medium))
+                        .foregroundColor(DS.Color.textTertiary)
+                        .frame(width: 24)
 
-                TextField(
-                    L10n.t("اكتب اسم العضو المراد تعديله...", "Enter the member name..."),
-                    text: $memberName
+                    if let selected = selectedMember {
+                        Text(selected.fullName)
+                            .font(DS.Font.body)
+                            .foregroundColor(DS.Color.textPrimary)
+                    } else {
+                        Text(L10n.t("اختر العضو من القائمة...", "Select member from list..."))
+                            .font(DS.Font.body)
+                            .foregroundColor(DS.Color.textTertiary)
+                    }
+
+                    Spacer()
+
+                    Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
+                        .font(DS.Font.scaled(12, weight: .medium))
+                        .foregroundColor(DS.Color.textTertiary)
+                }
+                .padding(.horizontal, DS.Spacing.md)
+                .padding(.vertical, DS.Spacing.md)
+                .background(DS.Color.surface)
+                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
+                .overlay(
+                    RoundedRectangle(cornerRadius: DS.Radius.lg)
+                        .stroke(
+                            selectedMember != nil ? DS.Color.primary.opacity(0.3) : DS.Color.textTertiary.opacity(0.15),
+                            lineWidth: selectedMember != nil ? 1.5 : 1
+                        )
                 )
-                .font(DS.Font.body)
-                .foregroundColor(DS.Color.textPrimary)
             }
-            .padding(.horizontal, DS.Spacing.md)
-            .padding(.vertical, DS.Spacing.md)
-            .background(DS.Color.surface)
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.lg)
-                    .stroke(DS.Color.textTertiary.opacity(0.15), lineWidth: 1)
-            )
+            .buttonStyle(DSScaleButtonStyle())
         }
+        .sheet(isPresented: $showMemberPicker) {
+            memberPickerSheet
+        }
+        .onChange(of: selectedAction) { _ in
+            // Reset selection when action type changes
+            selectedMember = nil
+            memberName = ""
+        }
+    }
+
+    // MARK: - Member Picker Sheet
+    private var memberPickerSheet: some View {
+        NavigationStack {
+            ZStack {
+                DS.Color.background.ignoresSafeArea()
+
+                VStack(spacing: 0) {
+                    // Search bar
+                    HStack(spacing: DS.Spacing.sm) {
+                        Image(systemName: "magnifyingglass")
+                            .font(DS.Font.scaled(14, weight: .medium))
+                            .foregroundColor(DS.Color.textTertiary)
+
+                        TextField(
+                            L10n.t("ابحث عن عضو...", "Search for a member..."),
+                            text: $nameSearchText
+                        )
+                        .font(DS.Font.body)
+                        .foregroundColor(DS.Color.textPrimary)
+                        .focused($isNameFieldFocused)
+
+                        if !nameSearchText.isEmpty {
+                            Button {
+                                nameSearchText = ""
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(DS.Font.scaled(14, weight: .medium))
+                                    .foregroundColor(DS.Color.textTertiary)
+                            }
+                        }
+                    }
+                    .padding(.horizontal, DS.Spacing.md)
+                    .padding(.vertical, DS.Spacing.md)
+                    .background(DS.Color.surface)
+                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
+                    .padding(.horizontal, DS.Spacing.lg)
+                    .padding(.top, DS.Spacing.sm)
+
+                    // Members list
+                    ScrollView(showsIndicators: false) {
+                        LazyVStack(spacing: DS.Spacing.xs) {
+                            ForEach(filteredMembers) { member in
+                                Button {
+                                    selectedMember = member
+                                    memberName = member.fullName
+                                    showMemberPicker = false
+                                    nameSearchText = ""
+                                } label: {
+                                    HStack(spacing: DS.Spacing.sm) {
+                                        // Avatar circle
+                                        ZStack {
+                                            Circle()
+                                                .fill(DS.Color.primary.opacity(0.1))
+                                                .frame(width: 32, height: 32)
+
+                                            Text(String(member.firstName.prefix(1)))
+                                                .font(DS.Font.caption1)
+                                                .fontWeight(.semibold)
+                                                .foregroundColor(DS.Color.primary)
+                                        }
+
+                                        Text(member.fullName)
+                                            .font(DS.Font.callout)
+                                            .foregroundColor(DS.Color.textPrimary)
+                                            .lineLimit(1)
+
+                                        Spacer()
+
+                                        if selectedMember?.id == member.id {
+                                            Image(systemName: "checkmark.circle.fill")
+                                                .font(DS.Font.scaled(16, weight: .medium))
+                                                .foregroundColor(DS.Color.primary)
+                                        }
+                                    }
+                                    .padding(.horizontal, DS.Spacing.md)
+                                    .padding(.vertical, DS.Spacing.sm)
+                                }
+                                .buttonStyle(DSScaleButtonStyle())
+
+                                if member.id != filteredMembers.last?.id {
+                                    Divider()
+                                        .padding(.leading, 52)
+                                }
+                            }
+                        }
+                        .padding(.top, DS.Spacing.sm)
+                        .padding(.bottom, DS.Spacing.xxxxl)
+                    }
+                }
+            }
+            .navigationTitle(L10n.t("اختر العضو", "Select Member"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(L10n.t("إلغاء", "Cancel")) {
+                        showMemberPicker = false
+                        nameSearchText = ""
+                    }
+                    .font(DS.Font.calloutBold)
+                    .foregroundColor(DS.Color.error)
+                }
+            }
+            .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+            .onAppear { isNameFieldFocused = true }
+        }
+    }
+
+    /// Filtered members based on search text — show first 15 by default, all when searching
+    private var filteredMembers: [FamilyMember] {
+        let members = memberVM.allMembers.filter { $0.status != .frozen }
+        let sorted = members.sorted { $0.fullName < $1.fullName }
+        if nameSearchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return Array(sorted.prefix(15))
+        }
+        let query = nameSearchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return sorted
+            .filter { $0.fullName.lowercased().contains(query) || $0.firstName.lowercased().contains(query) }
     }
 
     // MARK: - Details Section

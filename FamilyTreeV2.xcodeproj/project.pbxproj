@@ -6,16 +6,12 @@
 	objectVersion = 77;
 	objects = {
 
-/* Begin PBXBuildFile section */
-		9A8DF3002F406AED000B2DD7 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 9A8DF3012F406AED000B2DD7 /* Supabase */; };
-/* End PBXBuildFile section */
-
 /* Begin PBXFileReference section */
-		9A8DF20B2F406AEB000B2DD7 /* FamilyTreeV2.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FamilyTreeV2.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		9AA8863A2F524EBB001B4183 /* FamilyTreeV2.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = FamilyTreeV2.xcodeproj; sourceTree = "<group>"; };
 		9F1F30C12F5A2B1700CC6742 /* FamilyTreeV2.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = FamilyTreeV2.xcodeproj; sourceTree = "<group>"; };
 		9F71E7492F0D83E20001F8B7 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 		9F7C021C2F591B0C0080797B /* FamilyTreeV2.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = FamilyTreeV2.xcodeproj; sourceTree = "<group>"; };
+		9F9F23F02F5E301500E127CC /* FamilyTreeV2.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = FamilyTreeV2.xcodeproj; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -56,17 +52,6 @@
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
-/* Begin PBXFrameworksBuildPhase section */
-		9A8DF2082F406AEB000B2DD7 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				9A8DF3002F406AED000B2DD7 /* Supabase in Frameworks */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-/* End PBXFrameworksBuildPhase section */
-
 /* Begin PBXGroup section */
 		9AA886402F524EBB001B4183 /* Products */ = {
 			isa = PBXGroup;
@@ -93,7 +78,6 @@
 				9F71E6D42F0B054A0001F8B7 /* Views */,
 				9F71E6D62F0B05550001F8B7 /* Services */,
 				9F71E6D82F0B05610001F8B7 /* Components */,
-				9A8DF20B2F406AEB000B2DD7 /* FamilyTreeV2.app */,
 			);
 			sourceTree = "<group>";
 		};
@@ -104,39 +88,14 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
-/* End PBXGroup section */
-
-/* Begin PBXNativeTarget section */
-		9A8DF20A2F406AEB000B2DD7 /* FamilyTreeV2 */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = 9A8DF22F2F406AEC000B2DD7 /* Build configuration list for PBXNativeTarget "FamilyTreeV2" */;
-			buildPhases = (
-				9A8DF2072F406AEB000B2DD7 /* Sources */,
-				9A8DF2082F406AEB000B2DD7 /* Frameworks */,
-				9A8DF2092F406AEB000B2DD7 /* Resources */,
+		9F9F23F92F5E301500E127CC /* Products */ = {
+			isa = PBXGroup;
+			children = (
 			);
-			buildRules = (
-			);
-			dependencies = (
-			);
-			fileSystemSynchronizedGroups = (
-				9F71E6A62F0B04F70001F8B7 /* FamilyTreeV2 */,
-				9F71E6CE2F0B05150001F8B7 /* Core */,
-				9F71E6CF2F0B05220001F8B7 /* Models */,
-				9F71E6D12F0B052E0001F8B7 /* ViewModels */,
-				9F71E6D42F0B054A0001F8B7 /* Views */,
-				9F71E6D62F0B05550001F8B7 /* Services */,
-				9F71E6D82F0B05610001F8B7 /* Components */,
-			);
-			name = FamilyTreeV2;
-			packageProductDependencies = (
-				9A8DF3012F406AED000B2DD7 /* Supabase */,
-			);
-			productName = FamilyTreeV2;
-			productReference = 9A8DF20B2F406AEB000B2DD7 /* FamilyTreeV2.app */;
-			productType = "com.apple.product-type.application";
+			name = Products;
+			sourceTree = "<group>";
 		};
-/* End PBXNativeTarget section */
+/* End PBXGroup section */
 
 /* Begin PBXProject section */
 		9F71E69C2F0B04F70001F8B7 /* Project object */ = {
@@ -145,11 +104,6 @@
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 2620;
 				LastUpgradeCheck = 2630;
-				TargetAttributes = {
-					9A8DF20A2F406AEB000B2DD7 = {
-						CreatedOnToolsVersion = 26.2;
-					};
-				};
 			};
 			buildConfigurationList = 9F71E69F2F0B04F70001F8B7 /* Build configuration list for PBXProject "FamilyTreeV2" */;
 			developmentRegion = ar;
@@ -173,6 +127,10 @@
 					ProjectRef = 9F1F30C12F5A2B1700CC6742 /* FamilyTreeV2.xcodeproj */;
 				},
 				{
+					ProductGroup = 9F9F23F92F5E301500E127CC /* Products */;
+					ProjectRef = 9F9F23F02F5E301500E127CC /* FamilyTreeV2.xcodeproj */;
+				},
+				{
 					ProductGroup = 9F7C02252F591B0C0080797B /* Products */;
 					ProjectRef = 9F7C021C2F591B0C0080797B /* FamilyTreeV2.xcodeproj */;
 				},
@@ -183,112 +141,11 @@
 			);
 			projectRoot = "";
 			targets = (
-				9A8DF20A2F406AEB000B2DD7 /* FamilyTreeV2 */,
 			);
 		};
 /* End PBXProject section */
 
-/* Begin PBXResourcesBuildPhase section */
-		9A8DF2092F406AEB000B2DD7 /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-/* End PBXResourcesBuildPhase section */
-
-/* Begin PBXSourcesBuildPhase section */
-		9A8DF2072F406AEB000B2DD7 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-/* End PBXSourcesBuildPhase section */
-
 /* Begin XCBuildConfiguration section */
-		9A8DF2292F406AEC000B2DD7 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
-				CODE_SIGN_ENTITLEMENTS = FamilyTreeV2/FamilyTreeV2.entitlements;
-				CODE_SIGN_IDENTITY = "Apple Development";
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = G8GVN83P97;
-				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = Info.plist;
-				INFOPLIST_KEY_OTP_FALLBACK_API_KEY = MY_OTP_KEY_2026;
-				INFOPLIST_KEY_OTP_FALLBACK_URL = "https://poxyxsgvzwmnmewytsiw.supabase.co/functions/v1/otp-fallback";
-				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				IPHONEOS_DEPLOYMENT_TARGET = 17.6;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-				);
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = Hasan.FamilyTreeV2;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				PROVISIONING_PROFILE_SPECIFIER = "";
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-			};
-			name = Debug;
-		};
-		9A8DF22A2F406AEC000B2DD7 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
-				CODE_SIGN_ENTITLEMENTS = FamilyTreeV2/FamilyTreeV2.entitlements;
-				CODE_SIGN_IDENTITY = "Apple Development";
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = G8GVN83P97;
-				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = Info.plist;
-				INFOPLIST_KEY_OTP_FALLBACK_API_KEY = MY_OTP_KEY_2026;
-				INFOPLIST_KEY_OTP_FALLBACK_URL = "https://poxyxsgvzwmnmewytsiw.supabase.co/functions/v1/otp-fallback";
-				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				IPHONEOS_DEPLOYMENT_TARGET = 17.6;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-				);
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = Hasan.FamilyTreeV2;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				PROVISIONING_PROFILE_SPECIFIER = "";
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-			};
-			name = Release;
-		};
 		9F71E6C32F0B04F90001F8B7 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -419,15 +276,6 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		9A8DF22F2F406AEC000B2DD7 /* Build configuration list for PBXNativeTarget "FamilyTreeV2" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				9A8DF2292F406AEC000B2DD7 /* Debug */,
-				9A8DF22A2F406AEC000B2DD7 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
 		9F71E69F2F0B04F70001F8B7 /* Build configuration list for PBXProject "FamilyTreeV2" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -449,14 +297,6 @@
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
-
-/* Begin XCSwiftPackageProductDependency section */
-		9A8DF3012F406AED000B2DD7 /* Supabase */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 9F71E6F02F0B077E0001F8B7 /* XCRemoteSwiftPackageReference "supabase-swift" */;
-			productName = Supabase;
-		};
-/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 9F71E69C2F0B04F70001F8B7 /* Project object */;
 }

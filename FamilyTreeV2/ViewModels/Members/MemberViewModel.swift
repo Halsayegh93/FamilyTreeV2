@@ -1255,4 +1255,29 @@ class MemberViewModel: ObservableObject {
         self.isLoading = false
         return true
     }
+
+    // MARK: - Bulk Gender Update
+    /// تحديث الجنس لمجموعة أعضاء دفعة واحدة
+    func bulkUpdateGender(memberIds: Set<UUID>, gender: String) async -> Int {
+        self.isLoading = true
+        var successCount = 0
+
+        for id in memberIds {
+            do {
+                try await supabase
+                    .from("profiles")
+                    .update(["gender": AnyEncodable(gender)])
+                    .eq("id", value: id.uuidString)
+                    .execute()
+                successCount += 1
+            } catch {
+                Log.error("فشل تحديث جنس العضو \(id): \(error.localizedDescription)")
+            }
+        }
+
+        await fetchAllMembers()
+        self.isLoading = false
+        Log.info("تم تحديث الجنس لـ \(successCount)/\(memberIds.count) عضو")
+        return successCount
+    }
 }

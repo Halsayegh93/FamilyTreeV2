@@ -5,15 +5,17 @@ struct AdminAllRequestsView: View {
     @EnvironmentObject var newsVM: NewsViewModel
     @EnvironmentObject var adminRequestVM: AdminRequestViewModel
     @EnvironmentObject var memberVM: MemberViewModel
+    @EnvironmentObject var notificationVM: NotificationViewModel
     @StateObject private var diwaniyaVM = DiwaniyasViewModel()
 
     enum RequestTab: String, CaseIterable, Identifiable {
-        case news, reports, phone, diwaniya, deceased, children, photos
+        case joinRequests, news, reports, phone, diwaniya, deceased, children, photos, treeEdit
 
         var id: String { rawValue }
 
         var title: String {
             switch self {
+            case .joinRequests: return L10n.t("انضمام", "Join")
             case .news: return L10n.t("أخبار", "News")
             case .reports: return L10n.t("بلاغات", "Reports")
             case .phone: return L10n.t("جوال", "Phone")
@@ -21,11 +23,13 @@ struct AdminAllRequestsView: View {
             case .deceased: return L10n.t("وفاة", "Deceased")
             case .children: return L10n.t("أبناء", "Children")
             case .photos: return L10n.t("صور", "Photos")
+            case .treeEdit: return L10n.t("تعديل", "Edit")
             }
         }
 
         var icon: String {
             switch self {
+            case .joinRequests: return "person.badge.shield.checkmark"
             case .news: return "newspaper.fill"
             case .reports: return "exclamationmark.bubble.fill"
             case .phone: return "phone.badge.checkmark"
@@ -33,11 +37,13 @@ struct AdminAllRequestsView: View {
             case .deceased: return "bolt.heart.fill"
             case .children: return "person.badge.plus"
             case .photos: return "camera.badge.ellipsis"
+            case .treeEdit: return "pencil.and.list.clipboard"
             }
         }
 
         var color: Color {
             switch self {
+            case .joinRequests: return DS.Color.info
             case .news: return DS.Color.warning
             case .reports: return DS.Color.error
             case .phone: return DS.Color.primary
@@ -45,11 +51,29 @@ struct AdminAllRequestsView: View {
             case .deceased: return DS.Color.error
             case .children: return DS.Color.info
             case .photos: return DS.Color.neonBlue
+            case .treeEdit: return DS.Color.accent
             }
         }
     }
 
-    @State private var selectedTab: RequestTab = .news
+    @State private var selectedTab: RequestTab = .joinRequests
+    @State private var showBulkApproveChildrenConfirm = false
+    @State private var bulkApproveResult: String?
+    @State private var showBulkApproveResult = false
+
+    // Join request states
+    @State private var selectedMemberForLinking: FamilyMember?
+    @State private var matchedIdsForSelected: [UUID] = []
+    @State private var mergeTarget: (pendingMember: FamilyMember, treeMember: FamilyMember)? = nil
+    @State private var showMergeConfirm = false
+    @State private var showMergeSuccess = false
+    @State private var mergeSuccessMessage = ""
+    /// مطابقات التسجيل من السيرفر (matched_ids من admin_requests)
+    @State private var registrationMatches: [UUID: [UUID]] = [:]
+
+    private var pendingMembers: [FamilyMember] {
+        memberVM.allMembers.filter { $0.role == .pending }
+    }
 
     var body: some View {
         ZStack {
@@ -67,6 +91,18 @@ struct AdminAllRequestsView: View {
                     emptyState
                     Spacer()
                 } else {
+                    HStack(spacing: DS.Spacing.xs) {
+                        Image(systemName: "hand.draw.fill")
+                            .font(DS.Font.scaled(11, weight: .medium))
+                        Text(selectedTab == .joinRequests
+                            ? L10n.t("اسحب لليسار للربط • اسحب لليمين للرفض", "Swipe left to link • Swipe right to reject")
+                            : L10n.t("اسحب لليسار للموافقة • اسحب لليمين للرفض", "Swipe left to approve • Swipe right to reject")
+                        )
+                            .font(DS.Font.caption2)
+                    }
+                    .foregroundColor(DS.Color.textTertiary)
+                    .padding(.top, DS.Spacing.xs)
+
                     tabContent
                 }
             }
@@ -75,6 +111,8 @@ struct AdminAllRequestsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .task {
+            diwaniyaVM.notificationVM = notificationVM
+            await memberVM.fetchAllMembers()
             await newsVM.fetchPendingNewsRequests()
             await adminRequestVM.fetchNewsReportRequests()
             await adminRequestVM.fetchPhoneChangeRequests()
@@ -82,11 +120,100 @@ struct AdminAllRequestsView: View {
             await adminRequestVM.fetchDeceasedRequests()
             await adminRequestVM.fetchChildAddRequests()
             await adminRequestVM.fetchPhotoSuggestionRequests()
+            await adminRequestVM.fetchTreeEditRequests()
+            await fetchAllRegistrationMatches()
 
             // اختيار أول تاب فيه طلبات
             if let firstWithItems = RequestTab.allCases.first(where: { itemCount(for: $0) > 0 }) {
                 selectedTab = firstWithItems
             }
+        }
+        .alert(
+            L10n.t("تأكيد الموافقة على الكل", "Confirm Approve All"),
+            isPresented: $showBulkApproveChildrenConfirm
+        ) {
+            Button(L10n.t("الموافقة على الكل", "Approve All"), role: .destructive) {
+                Task {
+                    let count = await adminRequestVM.bulkApproveChildAddRequests()
+                    bulkApproveResult = L10n.t(
+                        "تم قبول \(count) طلب بنجاح",
+                        "Successfully approved \(count) requests"
+                    )
+                    showBulkApproveResult = true
+                }
+            }
+            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
+        } message: {
+            Text(L10n.t(
+                "سيتم الموافقة على جميع طلبات إضافة الأبناء المعلقة (\(adminRequestVM.childAddRequests.count) طلب)",
+                "All pending child add requests (\(adminRequestVM.childAddRequests.count)) will be approved"
+            ))
+        }
+        .alert(
+            L10n.t("تم", "Done"),
+            isPresented: $showBulkApproveResult
+        ) {
+            Button(L10n.t("حسناً", "OK"), role: .cancel) {}
+        } message: {
+            Text(bulkApproveResult ?? "")
+        }
+        .sheet(item: $selectedMemberForLinking) { member in
+            FatherLinkApprovalSheet(member: member, suggestedMatchIds: matchedIdsForSelected)
+                .environmentObject(authVM)
+                .environmentObject(memberVM)
+                .environmentObject(adminRequestVM)
+        }
+        .alert(
+            L10n.t("تأكيد الدمج", "Confirm Merge"),
+            isPresented: $showMergeConfirm
+        ) {
+            Button(L10n.t("دمج", "Merge"), role: .destructive) {
+                if let target = mergeTarget {
+                    Task {
+                        await adminRequestVM.mergeMemberIntoTreeMember(
+                            newMemberId: target.pendingMember.id,
+                            existingTreeMemberId: target.treeMember.id
+                        )
+                        await MainActor.run {
+                            if let result = adminRequestVM.mergeResult {
+                                switch result {
+                                case .success(let msg):
+                                    mergeSuccessMessage = msg
+                                case .failure(let msg):
+                                    mergeSuccessMessage = msg
+                                }
+                                showMergeSuccess = true
+                            }
+                            mergeTarget = nil
+                        }
+                    }
+                }
+            }
+            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {
+                mergeTarget = nil
+            }
+        } message: {
+            if let target = mergeTarget {
+                Text(L10n.t(
+                    "سيتم ربط حساب \(target.pendingMember.fullName) بسجل \(target.treeMember.fullName) الموجود بالشجرة.",
+                    "This will link \(target.pendingMember.fullName)'s account to \(target.treeMember.fullName)'s tree record."
+                ))
+            }
+        }
+        .alert(
+            {
+                if case .failure = adminRequestVM.mergeResult {
+                    return L10n.t("خطأ في الدمج", "Merge Error")
+                }
+                return L10n.t("تم الدمج", "Merge Complete")
+            }(),
+            isPresented: $showMergeSuccess
+        ) {
+            Button(L10n.t("حسناً", "OK"), role: .cancel) {
+                adminRequestVM.mergeResult = nil
+            }
+        } message: {
+            Text(mergeSuccessMessage)
         }
     }
 
@@ -94,6 +221,7 @@ struct AdminAllRequestsView: View {
 
     private func itemCount(for tab: RequestTab) -> Int {
         switch tab {
+        case .joinRequests: return pendingMembers.count
         case .news: return newsVM.pendingNewsRequests.count
         case .reports: return adminRequestVM.newsReportRequests.count
         case .phone: return adminRequestVM.phoneChangeRequests.count
@@ -101,6 +229,7 @@ struct AdminAllRequestsView: View {
         case .deceased: return adminRequestVM.deceasedRequests.count
         case .children: return adminRequestVM.childAddRequests.count
         case .photos: return adminRequestVM.photoSuggestionRequests.count
+        case .treeEdit: return adminRequestVM.treeEditRequests.count
         }
     }
 
@@ -110,16 +239,34 @@ struct AdminAllRequestsView: View {
 
     // MARK: - Tab Bar
 
+    private var topRowTabs: [RequestTab] {
+        [.joinRequests, .news, .reports, .phone, .diwaniya]
+    }
+
+    private var bottomRowTabs: [RequestTab] {
+        [.deceased, .children, .photos, .treeEdit]
+    }
+
     private var tabBar: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: DS.Spacing.sm) {
-                ForEach(RequestTab.allCases) { tab in
-                    tabButton(for: tab)
+        VStack(spacing: DS.Spacing.xs) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: DS.Spacing.sm) {
+                    ForEach(topRowTabs) { tab in
+                        tabButton(for: tab)
+                    }
                 }
+                .padding(.horizontal, DS.Spacing.lg)
             }
-            .padding(.horizontal, DS.Spacing.lg)
-            .padding(.vertical, DS.Spacing.xs)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: DS.Spacing.sm) {
+                    ForEach(bottomRowTabs) { tab in
+                        tabButton(for: tab)
+                    }
+                }
+                .padding(.horizontal, DS.Spacing.lg)
+            }
         }
+        .padding(.vertical, DS.Spacing.xs)
     }
 
     private func tabButton(for tab: RequestTab) -> some View {
@@ -131,32 +278,32 @@ struct AdminAllRequestsView: View {
         } label: {
             HStack(spacing: DS.Spacing.xs) {
                 Image(systemName: tab.icon)
-                    .font(DS.Font.scaled(12, weight: .semibold))
+                    .font(DS.Font.scaled(11, weight: .medium))
 
                 Text(tab.title)
                     .font(DS.Font.caption1)
-                    .fontWeight(.bold)
+                    .fontWeight(.semibold)
 
                 if count > 0 {
                     Text("\(count)")
                         .font(DS.Font.caption2)
-                        .fontWeight(.black)
+                        .fontWeight(.bold)
                         .foregroundColor(isSelected ? tab.color : .white)
-                        .frame(minWidth: 20, minHeight: 20)
-                        .background(isSelected ? DS.Color.surface : tab.color.opacity(0.8))
+                        .frame(minWidth: 18, minHeight: 18)
+                        .background(isSelected ? DS.Color.surface : tab.color.opacity(0.6))
                         .clipShape(Circle())
                 }
             }
-            .foregroundColor(isSelected ? .white : DS.Color.textSecondary)
+            .foregroundColor(isSelected ? .white : DS.Color.textTertiary)
             .padding(.horizontal, DS.Spacing.md)
             .padding(.vertical, DS.Spacing.sm)
             .background(
                 Capsule()
-                    .fill(isSelected ? tab.color : DS.Color.surface)
+                    .fill(isSelected ? tab.color.opacity(0.85) : DS.Color.surface.opacity(0.6))
             )
             .overlay(
                 Capsule()
-                    .stroke(isSelected ? Color.clear : DS.Color.textTertiary.opacity(0.2), lineWidth: 1)
+                    .stroke(isSelected ? Color.clear : DS.Color.textTertiary.opacity(0.12), lineWidth: 0.5)
             )
         }
         .buttonStyle(DSScaleButtonStyle())
@@ -166,43 +313,186 @@ struct AdminAllRequestsView: View {
 
     @ViewBuilder
     private var tabContent: some View {
-        ScrollView(showsIndicators: false) {
-            LazyVStack(spacing: DS.Spacing.md) {
-                switch selectedTab {
-                case .news:
-                    ForEach(newsVM.pendingNewsRequests) { post in
-                        newsCard(for: post)
+        List {
+            // زر الموافقة على الكل — أبناء فقط
+            if selectedTab == .children && adminRequestVM.childAddRequests.count > 1 {
+                Button {
+                    showBulkApproveChildrenConfirm = true
+                } label: {
+                    HStack(spacing: DS.Spacing.sm) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(DS.Font.scaled(14, weight: .semibold))
+                        Text(L10n.t(
+                            "الموافقة على الكل (\(adminRequestVM.childAddRequests.count))",
+                            "Approve All (\(adminRequestVM.childAddRequests.count))"
+                        ))
+                        .font(DS.Font.calloutBold)
                     }
-                case .reports:
-                    ForEach(adminRequestVM.newsReportRequests) { request in
-                        reportCard(for: request)
-                    }
-                case .phone:
-                    ForEach(adminRequestVM.phoneChangeRequests) { request in
-                        phoneCard(for: request)
-                    }
-                case .diwaniya:
-                    ForEach(diwaniyaVM.pendingDiwaniyas) { diwaniya in
-                        diwaniyaCard(for: diwaniya)
-                    }
-                case .deceased:
-                    ForEach(adminRequestVM.deceasedRequests) { request in
-                        deceasedCard(for: request)
-                    }
-                case .children:
-                    ForEach(adminRequestVM.childAddRequests) { request in
-                        childCard(for: request)
-                    }
-                case .photos:
-                    ForEach(adminRequestVM.photoSuggestionRequests) { request in
-                        photoCard(for: request)
-                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, DS.Spacing.sm)
+                    .background(
+                        LinearGradient(
+                            colors: [DS.Color.success, DS.Color.success.opacity(0.8)],
+                            startPoint: .leading, endPoint: .trailing
+                        )
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
+                }
+                .listRowInsets(EdgeInsets(top: DS.Spacing.xs, leading: DS.Spacing.lg, bottom: DS.Spacing.xs, trailing: DS.Spacing.lg))
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+                .disabled(adminRequestVM.isLoading)
+            }
+
+            switch selectedTab {
+            case .joinRequests:
+                ForEach(pendingMembers) { member in
+                    joinRequestRow(for: member)
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            Button {
+                                Task {
+                                    // مطابقات السيرفر المخزنة + المطابقات المحلية
+                                    let serverIds = registrationMatches[member.id] ?? []
+                                    let localIds = findNameMatches(for: member).map(\.member.id)
+                                    let combined = Array(Set(serverIds + localIds))
+                                    await MainActor.run {
+                                        matchedIdsForSelected = combined
+                                        selectedMemberForLinking = member
+                                    }
+                                }
+                            } label: {
+                                Label(L10n.t("ربط", "Link"), systemImage: "link.badge.plus")
+                            }.tint(DS.Color.success)
+                        }
+                        .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                            Button(role: .destructive) {
+                                Task { await adminRequestVM.rejectOrDeleteMember(memberId: member.id) }
+                            } label: {
+                                Label(L10n.t("رفض", "Reject"), systemImage: "xmark.circle.fill")
+                            }
+                        }
+                }
+            case .news:
+                ForEach(newsVM.pendingNewsRequests) { post in
+                    newsRow(for: post)
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            Button { Task { await newsVM.approveNewsPost(postId: post.id) } } label: {
+                                Label(L10n.t("اعتماد", "Approve"), systemImage: "checkmark.circle.fill")
+                            }.tint(DS.Color.success)
+                        }
+                        .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                            Button(role: .destructive) { Task { await newsVM.rejectNewsPost(postId: post.id) } } label: {
+                                Label(L10n.t("رفض", "Reject"), systemImage: "xmark.circle.fill")
+                            }
+                        }
+                }
+            case .reports:
+                ForEach(adminRequestVM.newsReportRequests) { request in
+                    reportRow(for: request)
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            Button { Task { await adminRequestVM.approveNewsReport(request: request) } } label: {
+                                Label(L10n.t("اعتماد", "Approve"), systemImage: "checkmark.circle.fill")
+                            }.tint(DS.Color.success)
+                        }
+                        .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                            Button(role: .destructive) { Task { await adminRequestVM.rejectNewsReport(request: request) } } label: {
+                                Label(L10n.t("رفض", "Reject"), systemImage: "xmark.circle.fill")
+                            }
+                        }
+                }
+            case .phone:
+                ForEach(adminRequestVM.phoneChangeRequests) { request in
+                    phoneRow(for: request)
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            Button { Task { await adminRequestVM.approvePhoneChangeRequest(request: request) } } label: {
+                                Label(L10n.t("اعتماد", "Approve"), systemImage: "checkmark.circle.fill")
+                            }.tint(DS.Color.success)
+                        }
+                        .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                            Button(role: .destructive) { Task { await adminRequestVM.rejectPhoneChangeRequest(request: request) } } label: {
+                                Label(L10n.t("رفض", "Reject"), systemImage: "xmark.circle.fill")
+                            }
+                        }
+                }
+            case .diwaniya:
+                ForEach(diwaniyaVM.pendingDiwaniyas) { diwaniya in
+                    diwaniyaRow(for: diwaniya)
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            Button {
+                                if let adminId = authVM.currentUser?.id {
+                                    Task { await diwaniyaVM.approveDiwaniya(id: diwaniya.id, adminId: adminId) }
+                                }
+                            } label: {
+                                Label(L10n.t("اعتماد", "Approve"), systemImage: "checkmark.circle.fill")
+                            }.tint(DS.Color.success)
+                        }
+                        .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                            Button(role: .destructive) { Task { await diwaniyaVM.rejectDiwaniya(id: diwaniya.id) } } label: {
+                                Label(L10n.t("رفض", "Reject"), systemImage: "xmark.circle.fill")
+                            }
+                        }
+                }
+            case .deceased:
+                ForEach(adminRequestVM.deceasedRequests) { request in
+                    deceasedRow(for: request)
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            Button { Task { await adminRequestVM.approveDeceasedRequest(request: request) } } label: {
+                                Label(L10n.t("موافقة", "Approve"), systemImage: "checkmark.circle.fill")
+                            }.tint(DS.Color.success)
+                        }
+                        .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                            Button(role: .destructive) { Task { await adminRequestVM.rejectDeceasedRequest(request: request) } } label: {
+                                Label(L10n.t("رفض", "Reject"), systemImage: "xmark.circle.fill")
+                            }
+                        }
+                }
+            case .children:
+                ForEach(adminRequestVM.childAddRequests) { request in
+                    childRow(for: request)
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            Button { Task { await adminRequestVM.acknowledgeChildAddRequest(request: request) } } label: {
+                                Label(L10n.t("تأكيد", "Confirm"), systemImage: "checkmark.circle.fill")
+                            }.tint(DS.Color.success)
+                        }
+                        .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                            Button(role: .destructive) { Task { await adminRequestVM.rejectChildAddRequest(request: request) } } label: {
+                                Label(L10n.t("رفض", "Reject"), systemImage: "xmark.circle.fill")
+                            }
+                        }
+                }
+            case .photos:
+                ForEach(adminRequestVM.photoSuggestionRequests) { request in
+                    photoRow(for: request)
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            Button { Task { await adminRequestVM.approvePhotoSuggestion(request: request) } } label: {
+                                Label(L10n.t("موافقة", "Approve"), systemImage: "checkmark.circle.fill")
+                            }.tint(DS.Color.success)
+                        }
+                        .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                            Button(role: .destructive) { Task { await adminRequestVM.rejectPhotoSuggestion(request: request) } } label: {
+                                Label(L10n.t("رفض", "Reject"), systemImage: "xmark.circle.fill")
+                            }
+                        }
+                }
+            case .treeEdit:
+                ForEach(adminRequestVM.treeEditRequests) { request in
+                    treeEditRow(for: request)
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            Button { Task { await adminRequestVM.approveTreeEditRequest(request: request) } } label: {
+                                Label(L10n.t("موافقة", "Approve"), systemImage: "checkmark.circle.fill")
+                            }.tint(DS.Color.success)
+                        }
+                        .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                            Button(role: .destructive) { Task { await adminRequestVM.rejectTreeEditRequest(request: request) } } label: {
+                                Label(L10n.t("رفض", "Reject"), systemImage: "xmark.circle.fill")
+                            }
+                        }
                 }
             }
-            .padding(.horizontal, DS.Spacing.lg)
-            .padding(.top, DS.Spacing.sm)
-            .padding(.bottom, DS.Spacing.xxxl)
         }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
     }
 
     // MARK: - Empty State
@@ -229,414 +519,550 @@ struct AdminAllRequestsView: View {
         }
     }
 
-    // MARK: - News Card
+    // MARK: - Join Request Row
 
-    private func newsCard(for post: NewsPost) -> some View {
-        DSCard {
-            VStack(alignment: .leading, spacing: DS.Spacing.md) {
-                accentBar(color: DS.Color.warning)
+    private func joinRequestRow(for member: FamilyMember) -> some View {
+        let matches = combinedMatches(for: member)
+        let hasMatches = !matches.isEmpty
+        let serverMatchCount = registrationMatches[member.id]?.count ?? 0
 
-                HStack(spacing: DS.Spacing.sm) {
-                    let member = post.author_id.flatMap { memberVM.member(byId: $0) }
-                    memberAvatar(urlStr: member?.avatarUrl, name: post.author_name)
+        return VStack(alignment: .leading, spacing: DS.Spacing.md) {
+            HStack(spacing: DS.Spacing.sm) {
+                iconCircle(icon: "person.badge.shield.checkmark", color: hasMatches ? DS.Color.success : DS.Color.warning, size: 36)
 
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(post.author_name)
-                            .font(DS.Font.calloutBold)
-                            .foregroundColor(DS.Color.textPrimary)
-                            .lineLimit(1)
-                        Text(post.created_at.prefix(10))
-                            .font(DS.Font.caption2)
-                            .foregroundColor(DS.Color.textTertiary)
+                VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                    Text(member.fullName)
+                        .font(DS.Font.calloutBold)
+                        .foregroundColor(DS.Color.textPrimary)
+                        .lineLimit(2)
+
+                    let parts = member.fullName.split(whereSeparator: \.isWhitespace)
+                    if parts.count >= 5 {
+                        HStack(spacing: 4) {
+                            Image(systemName: "checkmark.seal.fill")
+                                .font(DS.Font.scaled(10))
+                                .foregroundColor(DS.Color.success)
+                            Text(L10n.t("اسم خماسي مكتمل", "Full 5-part name"))
+                                .font(DS.Font.scaled(10))
+                                .foregroundColor(DS.Color.success)
+                        }
                     }
 
-                    Spacer()
-
-                    typeBadge(text: post.type, color: newsTypeColor(post.type))
+                    Text(L10n.t("سجل في: \(member.createdAt?.prefix(10) ?? "—")", "Registered: \(member.createdAt?.prefix(10) ?? "—")"))
+                        .font(DS.Font.caption2)
+                        .foregroundColor(DS.Color.textSecondary)
                 }
 
-                Text(post.content)
-                    .font(DS.Font.callout)
-                    .foregroundColor(DS.Color.textPrimary)
-                    .lineSpacing(4)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                Spacer()
 
-                if !post.mediaURLs.isEmpty {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: DS.Spacing.sm) {
-                            ForEach(post.mediaURLs, id: \.self) { urlStr in
-                                if let url = URL(string: urlStr) {
-                                    CachedAsyncImage(url: url) { img in
-                                        img.resizable().scaledToFill()
-                                    } placeholder: {
-                                        RoundedRectangle(cornerRadius: DS.Radius.md)
-                                            .fill(DS.Color.surface)
-                                            .overlay(ProgressView().tint(DS.Color.primary))
-                                    }
-                                    .frame(width: 80, height: 80)
-                                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
+                // بادج مطابقات التسجيل
+                if serverMatchCount > 0 {
+                    VStack(spacing: 2) {
+                        Text("\(serverMatchCount)")
+                            .font(DS.Font.scaled(14, weight: .black))
+                            .foregroundColor(DS.Color.info)
+                        Text(L10n.t("مطابقة", "match"))
+                            .font(DS.Font.scaled(8, weight: .bold))
+                            .foregroundColor(DS.Color.info)
+                    }
+                    .padding(.horizontal, DS.Spacing.sm)
+                    .padding(.vertical, DS.Spacing.xs)
+                    .background(DS.Color.info.opacity(0.1))
+                    .cornerRadius(DS.Radius.md)
+                }
+            }
+
+            // نتائج التطابق
+            if hasMatches {
+                VStack(spacing: DS.Spacing.sm) {
+                    HStack(spacing: DS.Spacing.sm) {
+                        Image(systemName: "person.2.fill")
+                            .font(DS.Font.scaled(13, weight: .semibold))
+                            .foregroundColor(DS.Color.info)
+                        Text(L10n.t(
+                            "تطابق محتمل مع \(matches.count) عضو",
+                            "Potential match with \(matches.count) member(s)"
+                        ))
+                        .font(DS.Font.scaled(12, weight: .bold))
+                        .foregroundColor(DS.Color.info)
+                        Spacer()
+                    }
+
+                    ForEach(matches.prefix(3), id: \.member.id) { match in
+                        joinMatchRow(match: match, pendingMember: member)
+                    }
+                }
+                .padding(DS.Spacing.sm)
+                .background(DS.Color.info.opacity(0.04))
+                .cornerRadius(DS.Radius.md)
+            } else {
+                HStack(spacing: DS.Spacing.sm) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(DS.Font.scaled(12, weight: .semibold))
+                        .foregroundColor(DS.Color.success)
+                    Text(L10n.t("لا يوجد تطابق — اسم جديد", "No tree matches — new name"))
+                        .font(DS.Font.scaled(11, weight: .bold))
+                        .foregroundColor(DS.Color.success)
+                    Spacer()
+                }
+                .padding(.horizontal, DS.Spacing.sm)
+                .padding(.vertical, DS.Spacing.xs)
+                .background(DS.Color.success.opacity(0.06))
+                .cornerRadius(DS.Radius.sm)
+            }
+        }
+    }
+
+    private func joinMatchRow(match: (member: FamilyMember, matchCount: Int, matchedParts: [String], isRegistrationMatch: Bool), pendingMember: FamilyMember) -> some View {
+        let totalParts = max(
+            pendingMember.fullName.split(whereSeparator: \.isWhitespace).count,
+            match.member.fullName.split(whereSeparator: \.isWhitespace).count
+        )
+        let hasNameMatch = match.matchCount >= 3
+        let matchRatio = hasNameMatch ? Double(match.matchCount) / Double(max(totalParts, 1)) : 0
+        let strengthColor: Color = match.isRegistrationMatch ? DS.Color.info : (matchRatio >= 0.8 ? DS.Color.success : matchRatio >= 0.6 ? DS.Color.info : DS.Color.warning)
+
+        return HStack(spacing: DS.Spacing.sm) {
+            ZStack {
+                Circle()
+                    .fill(strengthColor.opacity(0.15))
+                    .frame(width: 28, height: 28)
+                Image(systemName: match.isRegistrationMatch ? "link.circle.fill" : (matchRatio >= 0.8 ? "checkmark.circle.fill" : "person.fill.questionmark"))
+                    .font(DS.Font.scaled(12, weight: .semibold))
+                    .foregroundColor(strengthColor)
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(match.member.fullName)
+                    .font(DS.Font.caption1)
+                    .foregroundColor(DS.Color.textPrimary)
+                    .lineLimit(1)
+
+                HStack(spacing: DS.Spacing.xs) {
+                    if match.isRegistrationMatch {
+                        Text(L10n.t("مطابقة تسجيل", "Registration match"))
+                            .font(DS.Font.scaled(9, weight: .bold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 1)
+                            .background(DS.Color.info)
+                            .clipShape(Capsule())
+                    }
+                    if hasNameMatch {
+                        Text(L10n.t(
+                            "\(match.matchCount)/\(totalParts) متطابق",
+                            "\(match.matchCount)/\(totalParts) match"
+                        ))
+                        .font(DS.Font.scaled(10, weight: .semibold))
+                        .foregroundColor(strengthColor)
+                    }
+                }
+            }
+
+            Spacer()
+
+            Button {
+                mergeTarget = (pendingMember: pendingMember, treeMember: match.member)
+                showMergeConfirm = true
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "arrow.triangle.merge")
+                        .font(DS.Font.scaled(10, weight: .bold))
+                    Text(L10n.t("دمج", "Merge"))
+                        .font(DS.Font.scaled(10, weight: .bold))
+                }
+                .foregroundColor(DS.Color.textOnPrimary)
+                .padding(.horizontal, DS.Spacing.sm)
+                .padding(.vertical, 4)
+                .background(DS.Color.gradientPrimary)
+                .clipShape(Capsule())
+            }
+            .buttonStyle(DSScaleButtonStyle())
+        }
+        .padding(DS.Spacing.xs)
+        .background(strengthColor.opacity(0.04))
+        .cornerRadius(DS.Radius.sm)
+    }
+
+    // MARK: - Registration Matches
+
+    /// جلب مطابقات التسجيل من السيرفر لكل الأعضاء المعلقين
+    private func fetchAllRegistrationMatches() async {
+        for member in pendingMembers {
+            let ids = await adminRequestVM.fetchMatchedMemberIds(for: member.id)
+            if !ids.isEmpty {
+                await MainActor.run {
+                    registrationMatches[member.id] = ids
+                }
+            }
+        }
+    }
+
+    /// المطابقات المدمجة: مطابقات التسجيل (من السيرفر) + المطابقات المحلية بالاسم
+    private func combinedMatches(for member: FamilyMember) -> [(member: FamilyMember, matchCount: Int, matchedParts: [String], isRegistrationMatch: Bool)] {
+        let localMatches = findNameMatches(for: member)
+        let serverIds = registrationMatches[member.id] ?? []
+
+        // جمع الأعضاء المتطابقين من السيرفر اللي مو موجودين بالمطابقة المحلية
+        let localMatchIds = Set(localMatches.map(\.member.id))
+        let serverOnlyMembers = serverIds
+            .filter { !localMatchIds.contains($0) }
+            .compactMap { id in memberVM.allMembers.first(where: { $0.id == id }) }
+
+        var combined: [(member: FamilyMember, matchCount: Int, matchedParts: [String], isRegistrationMatch: Bool)] = []
+
+        // مطابقات السيرفر أولاً (الأهم)
+        for serverMember in serverOnlyMembers {
+            combined.append((member: serverMember, matchCount: 0, matchedParts: [], isRegistrationMatch: true))
+        }
+
+        // ثم المطابقات المحلية اللي أيضاً من السيرفر
+        for match in localMatches {
+            let isAlsoServer = serverIds.contains(match.member.id)
+            combined.append((member: match.member, matchCount: match.matchCount, matchedParts: match.matchedParts, isRegistrationMatch: isAlsoServer))
+        }
+
+        return combined
+    }
+
+    // MARK: - Name Matching
+
+    private func findNameMatches(for member: FamilyMember) -> [(member: FamilyMember, matchCount: Int, matchedParts: [String])] {
+        let newParts = member.fullName
+            .split(whereSeparator: \.isWhitespace)
+            .map { String($0).trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+
+        guard newParts.count >= 3 else { return [] }
+
+        let existingMembers = memberVM.allMembers.filter { $0.role != .pending && $0.id != member.id }
+
+        var matches: [(member: FamilyMember, matchCount: Int, matchedParts: [String])] = []
+
+        for existing in existingMembers {
+            let existingParts = existing.fullName
+                .split(whereSeparator: \.isWhitespace)
+                .map { String($0).trimmingCharacters(in: .whitespaces) }
+                .filter { !$0.isEmpty }
+
+            var matchedParts: [String] = []
+            var usedIndices: Set<Int> = []
+
+            for newPart in newParts {
+                for (idx, existingPart) in existingParts.enumerated() {
+                    if !usedIndices.contains(idx) && newPart.localizedCaseInsensitiveCompare(existingPart) == .orderedSame {
+                        matchedParts.append(newPart)
+                        usedIndices.insert(idx)
+                        break
+                    }
+                }
+            }
+
+            if matchedParts.count >= 3 {
+                matches.append((member: existing, matchCount: matchedParts.count, matchedParts: matchedParts))
+            }
+        }
+
+        return matches.sorted { $0.matchCount > $1.matchCount }
+    }
+
+    // MARK: - News Row
+
+    private func newsRow(for post: NewsPost) -> some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            HStack(spacing: DS.Spacing.sm) {
+                let member = post.author_id.flatMap { memberVM.member(byId: $0) }
+                memberAvatar(urlStr: member?.avatarUrl, name: post.author_name)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(post.author_name)
+                        .font(DS.Font.calloutBold)
+                        .foregroundColor(DS.Color.textPrimary)
+                        .lineLimit(1)
+                    Text(post.created_at.prefix(10))
+                        .font(DS.Font.caption2)
+                        .foregroundColor(DS.Color.textTertiary)
+                }
+
+                Spacer()
+
+                typeBadge(text: post.type, color: newsTypeColor(post.type))
+            }
+
+            Text(post.content)
+                .font(DS.Font.caption1)
+                .foregroundColor(DS.Color.textPrimary)
+                .lineSpacing(3)
+                .lineLimit(3)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            if !post.mediaURLs.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: DS.Spacing.xs) {
+                        ForEach(post.mediaURLs, id: \.self) { urlStr in
+                            if let url = URL(string: urlStr) {
+                                CachedAsyncImage(url: url) { img in
+                                    img.resizable().scaledToFill()
+                                } placeholder: {
+                                    RoundedRectangle(cornerRadius: DS.Radius.sm)
+                                        .fill(DS.Color.surface)
+                                        .overlay(ProgressView().tint(DS.Color.primary))
                                 }
+                                .frame(width: 56, height: 56)
+                                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm))
                             }
                         }
                     }
                 }
-
-                DSApproveRejectButtons(
-                    approveTitle: L10n.t("اعتماد النشر", "Approve"),
-                    rejectTitle: L10n.t("رفض", "Reject"),
-                    isLoading: newsVM.isLoading,
-                    approveGradient: LinearGradient(
-                        colors: [DS.Color.success, DS.Color.success.opacity(0.8)],
-                        startPoint: .leading, endPoint: .trailing
-                    )
-                ) {
-                    Task { await newsVM.approveNewsPost(postId: post.id) }
-                } onReject: {
-                    Task { await newsVM.rejectNewsPost(postId: post.id) }
-                }
             }
-            .padding(DS.Spacing.lg)
         }
     }
 
-    // MARK: - Report Card
+    // MARK: - Report Row
 
-    private func reportCard(for request: AdminRequest) -> some View {
+    private func reportRow(for request: AdminRequest) -> some View {
         let postId = UUID(uuidString: request.newValue ?? "")
         let reportedPost = postId.flatMap { id in newsVM.allNews.first { $0.id == id } }
 
-        return DSCard {
-            VStack(alignment: .leading, spacing: DS.Spacing.md) {
-                accentBar(color: DS.Color.error)
+        return VStack(alignment: .leading, spacing: DS.Spacing.md) {
+            HStack(spacing: DS.Spacing.sm) {
+                iconCircle(icon: "exclamationmark.triangle.fill", color: DS.Color.error, size: 36)
 
-                HStack(spacing: DS.Spacing.md) {
-                    iconCircle(icon: "exclamationmark.triangle.fill", color: DS.Color.error)
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(request.member?.fullName ?? L10n.t("عضو", "Member"))
-                            .font(DS.Font.calloutBold)
-                            .foregroundColor(DS.Color.textPrimary)
-                        Text(request.createdAt?.prefix(10) ?? "—")
-                            .font(DS.Font.caption2)
-                            .foregroundColor(DS.Color.textSecondary)
-                    }
-
-                    Spacer()
-
-                    typeBadge(text: L10n.t("بلاغ", "Report"), color: DS.Color.error)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(request.member?.fullName ?? L10n.t("عضو", "Member"))
+                        .font(DS.Font.calloutBold)
+                        .foregroundColor(DS.Color.textPrimary)
+                    Text(request.createdAt?.prefix(10) ?? "—")
+                        .font(DS.Font.caption2)
+                        .foregroundColor(DS.Color.textSecondary)
                 }
 
-                Text(request.details ?? L10n.t("بلاغ بدون تفاصيل", "Report without details"))
-                    .font(DS.Font.callout)
-                    .foregroundColor(DS.Color.textPrimary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                if let post = reportedPost {
-                    VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                        Text(L10n.t("الخبر المبلغ عنه", "Reported Post"))
-                            .font(DS.Font.caption1)
-                            .foregroundColor(DS.Color.textSecondary)
-                        Text(post.content)
-                            .font(DS.Font.caption1)
-                            .foregroundColor(DS.Color.textPrimary)
-                            .lineLimit(3)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .padding(DS.Spacing.md)
-                    .background(DS.Color.surfaceElevated)
-                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
-                }
-
-                DSApproveRejectButtons(
-                    approveTitle: L10n.t("اعتماد البلاغ", "Approve Report"),
-                    rejectTitle: L10n.t("رفض البلاغ", "Reject Report"),
-                    isLoading: adminRequestVM.isLoading,
-                    approveGradient: LinearGradient(
-                        colors: [DS.Color.error, DS.Color.error.opacity(0.8)],
-                        startPoint: .leading, endPoint: .trailing
-                    )
-                ) {
-                    Task { await adminRequestVM.approveNewsReport(request: request) }
-                } onReject: {
-                    Task { await adminRequestVM.rejectNewsReport(request: request) }
-                }
+                Spacer()
             }
-            .padding(DS.Spacing.lg)
+
+            Text(request.details ?? L10n.t("بلاغ بدون تفاصيل", "Report without details"))
+                .font(DS.Font.caption1)
+                .foregroundColor(DS.Color.textPrimary)
+                .lineLimit(2)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            if let post = reportedPost {
+                Text(post.content)
+                    .font(DS.Font.caption2)
+                    .foregroundColor(DS.Color.textSecondary)
+                    .lineLimit(2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(DS.Spacing.sm)
+                    .background(DS.Color.surfaceElevated)
+                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm))
+            }
         }
     }
 
-    // MARK: - Phone Card
+    // MARK: - Phone Row
 
-    private func phoneCard(for request: PhoneChangeRequest) -> some View {
+    private func phoneRow(for request: PhoneChangeRequest) -> some View {
         let currentPhone = KuwaitPhone.display(request.member?.phoneNumber)
         let newPhone = KuwaitPhone.display(request.newValue)
         let memberName = request.member?.fullName ?? "Member"
 
-        return DSCard {
-            VStack(alignment: .leading, spacing: DS.Spacing.lg) {
-                accentBar(color: DS.Color.primary)
+        return VStack(alignment: .leading, spacing: DS.Spacing.md) {
+            HStack(spacing: DS.Spacing.sm) {
+                iconCircle(icon: "phone.arrow.right", color: DS.Color.primary, size: 36)
 
-                HStack(spacing: DS.Spacing.md) {
-                    iconCircle(icon: "phone.arrow.right", color: DS.Color.primary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(memberName)
+                        .font(DS.Font.calloutBold)
+                        .foregroundColor(DS.Color.textPrimary)
+                    Text((request.createdAt ?? "").prefix(10))
+                        .font(DS.Font.caption2)
+                        .foregroundColor(DS.Color.textSecondary)
+                }
 
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(memberName)
-                            .font(DS.Font.calloutBold)
-                            .foregroundColor(DS.Color.textPrimary)
-                        Text((request.createdAt ?? "").prefix(10))
+                Spacer()
+            }
+
+            HStack(spacing: DS.Spacing.md) {
+                VStack(spacing: 2) {
+                    Text(L10n.t("الجديد", "New"))
+                        .font(DS.Font.caption2)
+                        .foregroundColor(DS.Color.success)
+                    Text(newPhone)
+                        .font(DS.Font.caption1)
+                        .fontWeight(.bold)
+                        .foregroundColor(DS.Color.success)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, DS.Spacing.sm)
+                .background(DS.Color.success.opacity(0.06))
+                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm))
+
+                Image(systemName: "arrow.left")
+                    .font(DS.Font.scaled(12, weight: .semibold))
+                    .foregroundColor(DS.Color.textTertiary)
+
+                VStack(spacing: 2) {
+                    Text(L10n.t("الحالي", "Current"))
+                        .font(DS.Font.caption2)
+                        .foregroundColor(DS.Color.textTertiary)
+                    Text(currentPhone)
+                        .font(DS.Font.caption1)
+                        .fontWeight(.bold)
+                        .foregroundColor(DS.Color.textSecondary)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, DS.Spacing.sm)
+                .background(DS.Color.surfaceElevated)
+                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm))
+            }
+        }
+    }
+
+    // MARK: - Diwaniya Row
+
+    private func diwaniyaRow(for diwaniya: Diwaniya) -> some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.md) {
+            HStack(spacing: DS.Spacing.sm) {
+                iconCircle(icon: "tent.fill", color: DS.Color.gridDiwaniya, size: 36)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(diwaniya.title)
+                        .font(DS.Font.calloutBold)
+                        .foregroundColor(DS.Color.textPrimary)
+                        .lineLimit(1)
+                    Text(diwaniya.ownerName)
+                        .font(DS.Font.caption2)
+                        .foregroundColor(DS.Color.textSecondary)
+                }
+
+                Spacer()
+            }
+
+            if let schedule = diwaniya.scheduleText, !schedule.isEmpty {
+                detailRow(icon: "calendar", text: schedule)
+            }
+            if let address = diwaniya.address, !address.isEmpty {
+                detailRow(icon: "mappin.and.ellipse", text: address)
+            }
+        }
+    }
+
+    // MARK: - Deceased Row
+
+    private func deceasedRow(for request: AdminRequest) -> some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.md) {
+            HStack(spacing: DS.Spacing.sm) {
+                iconCircle(icon: "bolt.heart.fill", color: DS.Color.error, size: 36)
+
+                VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                    Text(request.member?.fullName ?? L10n.t("عضو", "Member"))
+                        .font(DS.Font.calloutBold)
+                        .foregroundColor(DS.Color.textPrimary)
+                    Text(request.details ?? L10n.t("لا توجد تفاصيل", "No details"))
+                        .font(DS.Font.caption2)
+                        .foregroundColor(DS.Color.textSecondary)
+                        .lineLimit(1)
+                }
+                Spacer()
+            }
+        }
+    }
+
+    // MARK: - Child Row
+
+    private func childRow(for request: AdminRequest) -> some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.md) {
+            HStack(spacing: DS.Spacing.sm) {
+                iconCircle(icon: "person.badge.plus", color: DS.Color.info, size: 36)
+
+                VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                    Text(request.member?.fullName ?? L10n.t("عضو", "Member"))
+                        .font(DS.Font.calloutBold)
+                        .foregroundColor(DS.Color.textPrimary)
+                    Text(request.details ?? L10n.t("لا توجد تفاصيل", "No details"))
+                        .font(DS.Font.caption2)
+                        .foregroundColor(DS.Color.textSecondary)
+                        .lineLimit(1)
+                    if let createdAt = request.createdAt {
+                        Text(createdAt.prefix(10))
+                            .font(DS.Font.caption2)
+                            .foregroundColor(DS.Color.textTertiary)
+                    }
+                }
+                Spacer()
+            }
+        }
+    }
+
+    // MARK: - Photo Row
+
+    private func photoRow(for request: AdminRequest) -> some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.md) {
+            HStack(spacing: DS.Spacing.sm) {
+                iconCircle(icon: "camera.badge.ellipsis", color: DS.Color.neonBlue, size: 36)
+
+                VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                    Text(request.member?.fullName ?? L10n.t("عضو", "Member"))
+                        .font(DS.Font.calloutBold)
+                        .foregroundColor(DS.Color.textPrimary)
+                    Text(request.details ?? L10n.t("لا توجد تفاصيل", "No details"))
+                        .font(DS.Font.caption2)
+                        .foregroundColor(DS.Color.textSecondary)
+                        .lineLimit(1)
+                }
+                Spacer()
+            }
+
+            if let photoUrl = request.newValue, let url = URL(string: photoUrl) {
+                CachedAsyncImage(url: url) { img in
+                    img.resizable()
+                        .scaledToFill()
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 140)
+                        .clipped()
+                        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+                } placeholder: {
+                    RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                        .fill(DS.Color.surface)
+                        .frame(height: 140)
+                        .overlay(ProgressView().tint(DS.Color.primary))
+                }
+            }
+        }
+    }
+
+    // MARK: - Tree Edit Row
+
+    private func treeEditRow(for request: AdminRequest) -> some View {
+        let actionType = request.newValue ?? L10n.t("تعديل", "Edit")
+
+        return VStack(alignment: .leading, spacing: DS.Spacing.md) {
+            HStack(spacing: DS.Spacing.sm) {
+                iconCircle(icon: "pencil.and.list.clipboard", color: DS.Color.accent, size: 36)
+
+                VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                    Text(request.member?.fullName ?? L10n.t("عضو", "Member"))
+                        .font(DS.Font.calloutBold)
+                        .foregroundColor(DS.Color.textPrimary)
+                    if let createdAt = request.createdAt {
+                        Text(createdAt.prefix(10))
                             .font(DS.Font.caption2)
                             .foregroundColor(DS.Color.textSecondary)
                     }
-
-                    Spacer()
                 }
 
-                DSDivider()
+                Spacer()
 
-                HStack(spacing: DS.Spacing.xl) {
-                    VStack(alignment: .center, spacing: DS.Spacing.xs) {
-                        Text(L10n.t("الرقم الجديد", "New Number"))
-                            .font(DS.Font.caption2)
-                            .foregroundColor(DS.Color.success)
-                        Text(newPhone)
-                            .font(DS.Font.calloutBold)
-                            .foregroundColor(DS.Color.success)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(DS.Spacing.md)
-                    .background(DS.Color.success.opacity(0.08))
-                    .cornerRadius(DS.Radius.md)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: DS.Radius.md)
-                            .stroke(DS.Color.success.opacity(0.2), lineWidth: 1)
-                    )
-
-                    Image(systemName: "arrow.left")
-                        .foregroundColor(DS.Color.primary)
-                        .font(DS.Font.scaled(14, weight: .semibold))
-
-                    VStack(alignment: .center, spacing: DS.Spacing.xs) {
-                        Text(L10n.t("الرقم الحالي", "Current Number"))
-                            .font(DS.Font.caption2)
-                            .foregroundColor(DS.Color.textSecondary)
-                        Text(currentPhone)
-                            .font(DS.Font.calloutBold)
-                            .foregroundColor(DS.Color.textSecondary)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(DS.Spacing.md)
-                    .background(DS.Color.surfaceElevated)
-                    .cornerRadius(DS.Radius.md)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: DS.Radius.md)
-                            .stroke(DS.Color.textTertiary.opacity(0.2), lineWidth: 1)
-                    )
-                }
-
-                DSApproveRejectButtons(
-                    approveTitle: L10n.t("اعتماد الرقم", "Approve Number"),
-                    rejectTitle: L10n.t("رفض", "Reject"),
-                    isLoading: adminRequestVM.isLoading
-                ) {
-                    Task { await adminRequestVM.approvePhoneChangeRequest(request: request) }
-                } onReject: {
-                    Task { await adminRequestVM.rejectPhoneChangeRequest(request: request) }
-                }
+                typeBadge(text: actionType, color: DS.Color.accent)
             }
-            .padding(DS.Spacing.lg)
-        }
-    }
 
-    // MARK: - Diwaniya Card
-
-    private func diwaniyaCard(for diwaniya: Diwaniya) -> some View {
-        DSCard {
-            VStack(alignment: .leading, spacing: DS.Spacing.md) {
-                accentBar(color: DS.Color.gridDiwaniya)
-
-                HStack(spacing: DS.Spacing.sm) {
-                    Circle()
-                        .fill(DS.Color.gridDiwaniya.opacity(0.15))
-                        .frame(width: 40, height: 40)
-                        .overlay(
-                            Image(systemName: "tent.fill")
-                                .font(DS.Font.scaled(16, weight: .semibold))
-                                .foregroundColor(DS.Color.gridDiwaniya)
-                        )
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(diwaniya.title)
-                            .font(DS.Font.calloutBold)
-                            .foregroundColor(DS.Color.textPrimary)
-                            .lineLimit(1)
-                        Text(diwaniya.ownerName)
-                            .font(DS.Font.caption1)
-                            .foregroundColor(DS.Color.textSecondary)
-                    }
-
-                    Spacer()
-
-                    typeBadge(text: L10n.t("معلق", "Pending"), color: DS.Color.warning)
-                }
-
-                VStack(spacing: DS.Spacing.sm) {
-                    if let schedule = diwaniya.scheduleText, !schedule.isEmpty {
-                        detailRow(icon: "calendar", text: schedule)
-                    }
-                    if let phone = diwaniya.contactPhone, !phone.isEmpty {
-                        detailRow(icon: "phone.fill", text: phone)
-                    }
-                    if let address = diwaniya.address, !address.isEmpty {
-                        detailRow(icon: "mappin.and.ellipse", text: address)
-                    }
-                }
-
-                DSApproveRejectButtons(
-                    approveTitle: L10n.t("اعتماد", "Approve"),
-                    rejectTitle: L10n.t("رفض", "Reject"),
-                    isLoading: diwaniyaVM.isLoading,
-                    approveGradient: LinearGradient(
-                        colors: [DS.Color.success, DS.Color.success.opacity(0.8)],
-                        startPoint: .leading, endPoint: .trailing
-                    )
-                ) {
-                    if let adminId = authVM.currentUser?.id {
-                        Task { await diwaniyaVM.approveDiwaniya(id: diwaniya.id, adminId: adminId) }
-                    }
-                } onReject: {
-                    Task { await diwaniyaVM.rejectDiwaniya(id: diwaniya.id) }
-                }
+            if let details = request.details, !details.isEmpty {
+                Text(details)
+                    .font(DS.Font.caption1)
+                    .foregroundColor(DS.Color.textPrimary)
+                    .lineLimit(2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(DS.Spacing.lg)
-        }
-    }
-
-    // MARK: - Deceased Card
-
-    private func deceasedCard(for request: AdminRequest) -> some View {
-        DSCard {
-            VStack(alignment: .leading, spacing: DS.Spacing.lg) {
-                accentBar(color: DS.Color.error)
-
-                HStack(spacing: DS.Spacing.md) {
-                    iconCircle(icon: "bolt.heart.fill", color: DS.Color.error)
-
-                    VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                        Text(L10n.t("طلب لـ: \(request.member?.fullName ?? "عضو جديد")", "Request for: \(request.member?.fullName ?? "New Member")"))
-                            .font(DS.Font.calloutBold)
-                            .foregroundColor(DS.Color.textPrimary)
-                        Text(request.details ?? L10n.t("لا توجد تفاصيل إضافية", "No additional details"))
-                            .font(DS.Font.caption1)
-                            .foregroundColor(DS.Color.textSecondary)
-                    }
-                    Spacer()
-                }
-
-                DSApproveRejectButtons(
-                    approveTitle: L10n.t("موافقة وتحديث الشجرة", "Approve & Update Tree"),
-                    rejectTitle: L10n.t("رفض", "Reject"),
-                    isLoading: adminRequestVM.isLoading
-                ) {
-                    Task { await adminRequestVM.approveDeceasedRequest(request: request) }
-                } onReject: {
-                    Task { await adminRequestVM.rejectDeceasedRequest(request: request) }
-                }
-            }
-            .padding(DS.Spacing.lg)
-        }
-    }
-
-    // MARK: - Child Card
-
-    private func childCard(for request: AdminRequest) -> some View {
-        DSCard {
-            VStack(alignment: .leading, spacing: DS.Spacing.lg) {
-                accentBar(color: DS.Color.info)
-
-                HStack(spacing: DS.Spacing.md) {
-                    iconCircle(icon: "person.badge.plus", color: DS.Color.info)
-
-                    VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                        Text(L10n.t("طلب من: \(request.member?.fullName ?? "عضو")", "Request from: \(request.member?.fullName ?? "Member")"))
-                            .font(DS.Font.calloutBold)
-                            .foregroundColor(DS.Color.textPrimary)
-                        Text(request.details ?? L10n.t("لا توجد تفاصيل إضافية", "No additional details"))
-                            .font(DS.Font.caption1)
-                            .foregroundColor(DS.Color.textSecondary)
-                        if let createdAt = request.createdAt {
-                            Text(createdAt.prefix(10))
-                                .font(DS.Font.caption2)
-                                .foregroundColor(DS.Color.textSecondary.opacity(0.7))
-                        }
-                    }
-                    Spacer()
-                }
-
-                DSApproveRejectButtons(
-                    approveTitle: L10n.t("تأكيد الإضافة", "Confirm Addition"),
-                    rejectTitle: L10n.t("رفض وحذف", "Reject & Delete"),
-                    isLoading: adminRequestVM.isLoading
-                ) {
-                    Task { await adminRequestVM.acknowledgeChildAddRequest(request: request) }
-                } onReject: {
-                    Task { await adminRequestVM.rejectChildAddRequest(request: request) }
-                }
-            }
-            .padding(DS.Spacing.lg)
-        }
-    }
-
-    // MARK: - Photo Card
-
-    private func photoCard(for request: AdminRequest) -> some View {
-        DSCard {
-            VStack(alignment: .leading, spacing: DS.Spacing.lg) {
-                accentBar(color: DS.Color.neonBlue)
-
-                HStack(spacing: DS.Spacing.md) {
-                    iconCircle(icon: "camera.badge.ellipsis", color: DS.Color.primary)
-
-                    VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                        Text(L10n.t(
-                            "اقتراح صورة لـ: \(request.member?.fullName ?? "عضو")",
-                            "Photo suggestion for: \(request.member?.fullName ?? "Member")"
-                        ))
-                            .font(DS.Font.calloutBold)
-                            .foregroundColor(DS.Color.textPrimary)
-                        Text(request.details ?? L10n.t("لا توجد تفاصيل", "No details"))
-                            .font(DS.Font.caption1)
-                            .foregroundColor(DS.Color.textSecondary)
-                    }
-                    Spacer()
-                }
-
-                if let photoUrl = request.newValue, let url = URL(string: photoUrl) {
-                    CachedAsyncImage(url: url) { img in
-                        img.resizable()
-                            .scaledToFill()
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 200)
-                            .clipped()
-                            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
-                    } placeholder: {
-                        RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                            .fill(DS.Color.surface)
-                            .frame(height: 200)
-                            .overlay(ProgressView().tint(DS.Color.primary))
-                    }
-                }
-
-                DSApproveRejectButtons(
-                    approveTitle: L10n.t("موافقة وتحديث الصورة", "Approve & Update Photo"),
-                    rejectTitle: L10n.t("رفض", "Reject"),
-                    isLoading: adminRequestVM.isLoading
-                ) {
-                    Task { await adminRequestVM.approvePhotoSuggestion(request: request) }
-                } onReject: {
-                    Task { await adminRequestVM.rejectPhotoSuggestion(request: request) }
-                }
-            }
-            .padding(DS.Spacing.lg)
         }
     }
 
@@ -651,7 +1077,7 @@ struct AdminAllRequestsView: View {
         .cornerRadius(DS.Radius.full)
     }
 
-    private func iconCircle(icon: String, color: Color) -> some View {
+    private func iconCircle(icon: String, color: Color, size: CGFloat = 44) -> some View {
         ZStack {
             Circle()
                 .fill(
@@ -660,10 +1086,10 @@ struct AdminAllRequestsView: View {
                         startPoint: .topLeading, endPoint: .bottomTrailing
                     )
                 )
-                .frame(width: 44, height: 44)
+                .frame(width: size, height: size)
             Image(systemName: icon)
                 .foregroundColor(color)
-                .font(DS.Font.scaled(18, weight: .semibold))
+                .font(DS.Font.scaled(size * 0.4, weight: .semibold))
         }
     }
 

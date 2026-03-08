@@ -21,29 +21,37 @@ struct AdminDashboardView: View {
         memberVM.allMembers.filter { $0.role == .pending }.count
     }
     private var inactiveCount: Int {
-        memberVM.allMembers.filter { $0.role != .pending && ($0.status == nil || $0.status == .pending) && $0.isDeceased != true }.count
+        memberVM.allMembers
+            .filter { $0.role != .pending && $0.isDeceased != true }
+            .filter { member in
+                let isNotActivated = member.status == nil || member.status == .pending
+                let hasNoPhone = member.phoneNumber == nil || (member.phoneNumber ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                return isNotActivated || hasNoPhone
+            }
+            .count
     }
     private var moderatorCount: Int {
         memberVM.allMembers.filter { $0.role == .admin || $0.role == .supervisor }.count
     }
     private var totalReviewRequestsCount: Int {
-        newsVM.pendingNewsRequests.count
+        pendingCount
+        + newsVM.pendingNewsRequests.count
         + adminRequestVM.newsReportRequests.count
         + adminRequestVM.phoneChangeRequests.count
         + diwaniyaVM.pendingDiwaniyas.count
         + adminRequestVM.deceasedRequests.count
         + adminRequestVM.childAddRequests.count
         + adminRequestVM.photoSuggestionRequests.count
+        + adminRequestVM.treeEditRequests.count
     }
     private var incompleteMembersCount: Int {
         memberVM.allMembers
             .filter { $0.role != .pending && $0.isDeceased != true }
             .filter { member in
-                let noPhone = member.phoneNumber == nil || (member.phoneNumber ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 let noBirth = member.birthDate == nil || (member.birthDate ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 let noFather = member.fatherId == nil
                 let noGender = member.gender == nil || (member.gender ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                return noPhone || noBirth || noFather || noGender
+                return noBirth || noFather || noGender
             }
             .count
     }
@@ -88,37 +96,23 @@ struct AdminDashboardView: View {
                                     iconColor: DS.Color.error
                                 )
 
-                                    NavigationLink(destination: AdminPendingRequestsView()) {
-                                        DSActionRow(title: L10n.t("طلبات انضمام جديدة", "New Join Requests"), subtitle: L10n.t("مراجعة هويات المنضمين الجدد", "Review new member identities"), icon: "person.badge.plus", color: DS.Color.info, badge: pendingCount)
-                                    }
-                                    DSDivider()
-                                    NavigationLink(destination: AdminActivateAccountsView()) {
-                                        DSActionRow(
-                                            title: L10n.t("حسابات غير مفعلة", "Inactive Accounts"),
-                                            subtitle: L10n.t("تفعيل حسابات الأعضاء المعلقة", "Activate pending member accounts"),
-                                            icon: "person.badge.clock",
-                                            color: DS.Color.warning,
-                                            badge: inactiveCount
-                                        )
-                                    }
-                                    DSDivider()
                                     NavigationLink(destination: AdminAllRequestsView()) {
                                         DSActionRow(
                                             title: L10n.t("طلبات المراجعة", "Review Requests"),
-                                            subtitle: L10n.t("أخبار، بلاغات، جوال، ديوانيات، وفاة، أبناء، صور", "News, reports, phone, diwaniyas, deceased, children, photos"),
+                                            subtitle: L10n.t("انضمام، أخبار، بلاغات، جوال، ديوانيات، وفاة، أبناء، صور، تعديل", "Join, news, reports, phone, diwaniyas, deceased, children, photos, edits"),
                                             icon: "tray.full.fill",
                                             color: DS.Color.warning,
                                             badge: totalReviewRequestsCount
                                         )
                                     }
                                     DSDivider()
-                                    NavigationLink(destination: AdminIncompleteMembersView()) {
+                                    NavigationLink(destination: AdminMembersManagementView()) {
                                         DSActionRow(
-                                            title: L10n.t("تحديث البيانات", "Update Data"),
-                                            subtitle: L10n.t("أعضاء تحتاج بياناتهم تحديث", "Members that need data updates"),
-                                            icon: "exclamationmark.triangle.fill",
+                                            title: L10n.t("إدارة الأعضاء", "Members Management"),
+                                            subtitle: L10n.t("تفعيل حسابات وتحديث بيانات ناقصة", "Activate accounts & update incomplete data"),
+                                            icon: "person.2.badge.gearshape",
                                             color: DS.Color.warning,
-                                            badge: incompleteMembersCount
+                                            badge: inactiveCount + incompleteMembersCount
                                         )
                                     }
                                 }
@@ -150,6 +144,10 @@ struct AdminDashboardView: View {
                                     DSDivider()
                                     NavigationLink(destination: AdminAnalyticsView()) {
                                         DSActionRow(title: L10n.t("إحصائيات متقدمة", "Analytics"), subtitle: L10n.t("رسوم بيانية وتحليلات مفصلة", "Charts and detailed analysis"), icon: "chart.bar.xaxis", color: DS.Color.neonBlue)
+                                    }
+                                    DSDivider()
+                                    NavigationLink(destination: AdminDevicesView()) {
+                                        DSActionRow(title: L10n.t("إدارة الأجهزة", "Device Management"), subtitle: L10n.t("عرض وإزالة أجهزة الأعضاء المرتبطة", "View and remove members' linked devices"), icon: "iphone.gen3", color: DS.Color.neonBlue)
                                     }
                                     DSDivider()
                                     NavigationLink(destination: AdminAppSettingsView()) {
@@ -226,7 +224,8 @@ struct AdminDashboardView: View {
             async let childAdds: () = adminRequestVM.fetchChildAddRequests()
             async let photoSuggestions: () = adminRequestVM.fetchPhotoSuggestionRequests()
             async let diwaniyas: () = diwaniyaVM.fetchPendingDiwaniyas()
-            _ = await (members, deceased, pendingNews, newsReports, phoneChanges, childAdds, photoSuggestions, diwaniyas)
+            async let treeEdits: () = adminRequestVM.fetchTreeEditRequests()
+            _ = await (members, deceased, pendingNews, newsReports, phoneChanges, childAdds, photoSuggestions, diwaniyas, treeEdits)
         }
     }
 

@@ -11,7 +11,25 @@ class DiwaniyasViewModel: ObservableObject {
     @Published var errorMessage: String?
     
     let supabase = SupabaseConfig.client
-    
+
+    weak var notificationVM: NotificationViewModel?
+
+    // MARK: - Local Removal Helper
+
+    private func removeLocallyThenRefresh<T: Identifiable>(
+        from array: inout [T],
+        id: T.ID,
+        refresh: @escaping () async -> Void
+    ) {
+        withAnimation(DS.Anim.snappy) {
+            array.removeAll { $0.id as AnyHashable == id as AnyHashable }
+        }
+        Task {
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            await refresh()
+        }
+    }
+
     func fetchDiwaniyas() async {
         isLoading = true
         errorMessage = nil
@@ -24,6 +42,10 @@ class DiwaniyasViewModel: ObservableObject {
                 .value
             
             self.diwaniyas = response
+        } catch is CancellationError {
+            Log.info("جلب الديوانيات تم إلغاؤه")
+        } catch let urlError as URLError where urlError.code == .cancelled {
+            Log.info("جلب الديوانيات تم إلغاؤه (URL)")
         } catch {
             self.errorMessage = L10n.t("تعذر تحميل الديوانيات. حاول مرة أخرى.", "Failed to load diwaniyas. Please try again.")
             Log.error("خطأ جلب الديوانيات: \(error.localizedDescription)")
@@ -43,6 +65,10 @@ class DiwaniyasViewModel: ObservableObject {
                 .value
             
             self.pendingDiwaniyas = response
+        } catch is CancellationError {
+            Log.info("جلب الديوانيات المعلقة تم إلغاؤه")
+        } catch let urlError as URLError where urlError.code == .cancelled {
+            Log.info("جلب الديوانيات المعلقة تم إلغاؤه (URL)")
         } catch {
             self.errorMessage = L10n.t("تعذر تحميل الطلبات المعلقة. حاول مرة أخرى.", "Failed to load pending requests. Please try again.")
             Log.error("خطأ جلب الديوانيات المعلقة: \(error.localizedDescription)")
@@ -124,7 +150,6 @@ class DiwaniyasViewModel: ObservableObject {
     }
     
     func approveDiwaniya(id: UUID, adminId: UUID) async {
-        isLoading = true
         do {
             struct UpdateData: Codable {
                 let approval_status: String
@@ -135,11 +160,24 @@ class DiwaniyasViewModel: ObservableObject {
                 .update(UpdateData(approval_status: "approved", approved_by: adminId))
                 .eq("id", value: id.uuidString)
                 .execute()
-            await fetchPendingDiwaniyas()
+
+            // Find the owner to notify them
+            if let diwaniya = pendingDiwaniyas.first(where: { $0.id == id }) {
+                await notificationVM?.sendNotification(
+                    title: L10n.t("تم تنفيذ طلبك", "Request Completed"),
+                    body: L10n.t("تم اعتماد الديوانية", "Your diwaniya was approved"),
+                    targetMemberIds: [diwaniya.ownerId]
+                )
+            }
+
+            removeLocallyThenRefresh(from: &pendingDiwaniyas, id: id) { [weak self] in
+                await self?.fetchPendingDiwaniyas()
+            }
+
+            Log.info("تم اعتماد الديوانية بنجاح")
         } catch {
             self.errorMessage = L10n.t("فشل اعتماد الديوانية. حاول مرة أخرى.", "Failed to approve diwaniya. Please try again.")
             Log.error("خطأ اعتماد ديوانية: \(error.localizedDescription)")
-            isLoading = false
         }
     }
     
@@ -204,7 +242,21 @@ class DiwaniyasViewModel: ObservableObject {
     }
 
     func rejectDiwaniya(id: UUID) async {
-        await deleteDiwaniya(id: id)
-        await fetchPendingDiwaniyas()
+        do {
+            try await supabase
+                .from("diwaniyas")
+                .delete()
+                .eq("id", value: id.uuidString)
+                .execute()
+
+            removeLocallyThenRefresh(from: &pendingDiwaniyas, id: id) { [weak self] in
+                await self?.fetchPendingDiwaniyas()
+            }
+
+            Log.info("تم رفض الديوانية بنجاح")
+        } catch {
+            self.errorMessage = L10n.t("فشل رفض الديوانية. حاول مرة أخرى.", "Failed to reject diwaniya. Please try again.")
+            Log.error("خطأ رفض ديوانية: \(error.localizedDescription)")
+        }
     }
 }

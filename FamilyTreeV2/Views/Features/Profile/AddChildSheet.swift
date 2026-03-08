@@ -130,11 +130,36 @@ struct AddChildSheet: View {
                             Text(L10n.t("الجنس", "Gender"))
                                 .font(DS.Font.caption1)
                                 .foregroundColor(DS.Color.textSecondary)
-                            Picker("", selection: $selectedGender) {
-                                Text(L10n.t("ذكر", "Male")).tag("male")
-                                Text(L10n.t("أنثى", "Female")).tag("female")
+                            HStack(spacing: 0) {
+                                Button {
+                                    withAnimation(DS.Anim.snappy) { selectedGender = "male" }
+                                } label: {
+                                    Text(L10n.t("ذكر", "Male"))
+                                        .font(DS.Font.caption1)
+                                        .fontWeight(.bold)
+                                        .foregroundColor(selectedGender == "male" ? .white : DS.Color.textSecondary)
+                                        .frame(maxWidth: .infinity)
+                                        .padding(.vertical, DS.Spacing.sm)
+                                        .background(selectedGender == "male" ? DS.Color.primary : DS.Color.surface)
+                                }
+
+                                Button {
+                                    withAnimation(DS.Anim.snappy) { selectedGender = "female" }
+                                } label: {
+                                    Text(L10n.t("أنثى", "Female"))
+                                        .font(DS.Font.caption1)
+                                        .fontWeight(.bold)
+                                        .foregroundColor(selectedGender == "female" ? .white : DS.Color.textSecondary)
+                                        .frame(maxWidth: .infinity)
+                                        .padding(.vertical, DS.Spacing.sm)
+                                        .background(selectedGender == "female" ? DS.Color.neonPink : DS.Color.surface)
+                                }
                             }
-                            .pickerStyle(.segmented)
+                            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: DS.Radius.sm)
+                                    .stroke(DS.Color.textTertiary.opacity(0.2), lineWidth: 1)
+                            )
                         }
                         Spacer()
                     }

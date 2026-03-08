@@ -43,7 +43,15 @@ struct FamilyTreeV2App: App {
                 .preferredColorScheme(preferredScheme)
                 .id(langManager.selectedLanguage)
                 .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
-                    Task { try? await UNUserNotificationCenter.current().setBadgeCount(0) }
+                    Task {
+                        try? await UNUserNotificationCenter.current().setBadgeCount(0)
+                        await self.appState.notificationVM.verifyDeviceAuthorization()
+                    }
+                }
+                .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+                    Task {
+                        await self.appState.notificationVM.verifyDeviceAuthorization()
+                    }
                 }
                 .onReceive(NotificationCenter.default.publisher(for: .didReceiveAPNSToken)) { note in
                     guard let token = note.object as? String else { return }

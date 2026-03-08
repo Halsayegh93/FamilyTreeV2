@@ -488,8 +488,15 @@ class AuthViewModel: ObservableObject {
             self.phoneNumber = normalizedPhone
         }
         
-        // تسجيل الجهاز عند تسجيل الدخول
+        // التحقق من تصريح الجهاز ثم تسجيله
         if access.status == .fullyAuthenticated {
+            // فحص: هل الجهاز كان مسجّل سابقاً وتم حذفه؟
+            let wasRevoked = await notificationVM?.checkIfDeviceWasRevoked() ?? false
+            if wasRevoked {
+                Log.warning("[AUTH] الجهاز تم إلغاء تصريحه — تسجيل خروج")
+                await signOut()
+                return
+            }
             await notificationVM?.registerDevice()
         }
     }
