@@ -11,8 +11,10 @@ enum TreeDisplayMode: Hashable {
 struct TreeView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var memberVM: MemberViewModel
+    @EnvironmentObject var adminRequestVM: AdminRequestViewModel
     @Binding var selectedTab: Int
     @State private var showingNotifications = false
+    @State private var showingTreeEditRequest = false
     @State private var selectedMember: FamilyMember? = nil
     @State private var scrollTarget: UUID? = nil
     @State private var scrollCounter: Int = 0
@@ -172,6 +174,24 @@ struct TreeView: View {
                             subtitle: "\(cachedVisibleMembers.count) " + L10n.t("عضو", "members") + " • " + "\(cachedRootMembers.count) " + L10n.t("جذور", "roots"),
                             icon: "leaf.fill"
                         ) {
+                            // زر طلب تعديل الشجرة
+                            Button(action: {
+                                showingTreeEditRequest = true
+                            }) {
+                                ZStack {
+                                    Circle()
+                                        .fill(Color.white.opacity(0.15))
+                                        .frame(width: 44, height: 44)
+                                        .overlay(Circle().stroke(Color.white.opacity(0.3), lineWidth: 1))
+                                    Image(systemName: "pencil.line")
+                                        .font(DS.Font.scaled(16, weight: .bold))
+                                        .foregroundColor(.white)
+                                }
+                                .contentShape(Circle())
+                            }
+                            .buttonStyle(BounceButtonStyle())
+                            .accessibilityLabel(L10n.t("طلب تعديل الشجرة", "Request tree edit"))
+
                             // زر تحديث الشجرة
                             Button(action: {
                                 guard !isRefreshing else { return }
@@ -249,6 +269,9 @@ struct TreeView: View {
             .sheet(item: $selectedMember) { member in
                 MemberDetailsView(member: member)
                     .presentationDetents([.medium, .large])
+            }
+            .fullScreenCover(isPresented: $showingTreeEditRequest) {
+                TreeEditRequestView()
             }
             .onAppear {
                 let isFirstLoad = cachedVisibleMembers.isEmpty
