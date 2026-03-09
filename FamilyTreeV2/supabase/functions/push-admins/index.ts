@@ -1,4 +1,3 @@
-import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 
 type PushRequest = {
@@ -73,7 +72,7 @@ async function createApnsJwt(teamId: string, keyId: string, privateKeyPem: strin
   return `${data}.${signatureUrl}`;
 }
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -101,7 +100,7 @@ serve(async (req) => {
   let payload: PushRequest;
   try {
     payload = await req.json();
-  } catch {
+  } catch (_e) {
     return json(400, { ok: false, message: "Invalid JSON body" });
   }
 
@@ -139,7 +138,9 @@ serve(async (req) => {
     return json(500, { ok: false, message: `Failed loading tokens: ${tokenErr.message}` });
   }
 
+  // Filter out null/empty tokens (token can be null after device_id migration)
   const tokens = (tokenRows ?? [])
+    .filter((r) => r.token != null)
     .map((r) => (r.token as string).trim())
     .filter((t) => t.length > 20);
 

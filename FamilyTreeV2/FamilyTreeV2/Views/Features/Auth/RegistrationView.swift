@@ -143,7 +143,7 @@ struct RegistrationView: View {
 
                 Image(systemName: "person.badge.plus")
                     .font(DS.Font.scaled(42, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundColor(DS.Color.textOnPrimary)
             }
             .dsGlowShadow()
 
@@ -176,7 +176,7 @@ struct RegistrationView: View {
                         }
                 }
                 .padding(.horizontal, DS.Spacing.md)
-                .padding(.vertical, DS.Spacing.sm)
+                .padding(.vertical, DS.Spacing.xs)
             }
         }
     }
@@ -198,7 +198,7 @@ struct RegistrationView: View {
                         }
                 }
                 .padding(.horizontal, DS.Spacing.md)
-                .padding(.vertical, DS.Spacing.sm)
+                .padding(.vertical, DS.Spacing.xs)
             }
         }
     }
@@ -220,7 +220,7 @@ struct RegistrationView: View {
                         .environment(\.locale, Locale(identifier: "en_US"))
                 }
                 .padding(.horizontal, DS.Spacing.md)
-                .padding(.vertical, DS.Spacing.sm)
+                .padding(.vertical, DS.Spacing.xs)
             }
         }
     }
@@ -267,7 +267,7 @@ struct RegistrationView: View {
                     }
                 }
                 .padding(.horizontal, DS.Spacing.md)
-                .padding(.vertical, DS.Spacing.sm)
+                .padding(.vertical, DS.Spacing.xs)
             }
         }
     }

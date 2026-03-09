@@ -121,7 +121,7 @@ struct LinkedDevicesSheet: View {
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.horizontal, DS.Spacing.lg)
-                            .padding(.vertical, DS.Spacing.sm)
+                            .padding(.vertical, DS.Spacing.xs)
 
                             DSDivider()
 
@@ -216,7 +216,7 @@ struct LinkedDevicesSheet: View {
             .disabled(isRemoving)
         }
         .padding(.horizontal, DS.Spacing.lg)
-        .padding(.vertical, DS.Spacing.md)
+        .padding(.vertical, DS.Spacing.xs)
     }
 
     private func formattedDate(_ isoString: String) -> String {

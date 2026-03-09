@@ -131,7 +131,7 @@ struct FamilyPhotoAlbumsView: View {
                 .foregroundColor(DS.Color.textSecondary)
         }
         .padding(.horizontal, DS.Spacing.lg)
-        .padding(.vertical, DS.Spacing.sm)
+        .padding(.vertical, DS.Spacing.xs)
         .background(DS.Color.surface)
         .clipShape(Capsule())
         .overlay(
@@ -159,7 +159,7 @@ struct FamilyPhotoAlbumsView: View {
                     }
                     .foregroundColor(viewMode == mode ? .white : DS.Color.textSecondary)
                     .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.vertical, DS.Spacing.sm)
+                    .padding(.vertical, DS.Spacing.xs)
                     .background(viewMode == mode ? DS.Color.gradientPrimary : LinearGradient(colors: [DS.Color.surface], startPoint: .leading, endPoint: .trailing))
                     .clipShape(Capsule())
                     .overlay(
@@ -186,7 +186,7 @@ struct FamilyPhotoAlbumsView: View {
                         .fontWeight(.bold)
                         .foregroundColor(DS.Color.primary)
                     Text("(\(filteredPhotos.count))")
-                        .font(DS.Font.caption2)
+                        .font(DS.Font.caption1)
                         .foregroundColor(DS.Color.textSecondary)
                     Button {
                         withAnimation(DS.Anim.snappy) { selectedMemberId = nil }
@@ -197,7 +197,7 @@ struct FamilyPhotoAlbumsView: View {
                     }
                 }
                 .padding(.horizontal, DS.Spacing.md)
-                .padding(.vertical, DS.Spacing.sm)
+                .padding(.vertical, DS.Spacing.xs)
                 .background(DS.Color.primary.opacity(0.08))
                 .clipShape(Capsule())
             }
@@ -269,14 +269,14 @@ struct FamilyPhotoAlbumsView: View {
                            let member = memberVM.member(byId: photo.memberId) {
                             Text(member.firstName)
                                 .font(DS.Font.scaled(10, weight: .bold))
-                                .foregroundColor(.white)
+                                .foregroundColor(DS.Color.textOnPrimary)
                                 .lineLimit(1)
                                 .padding(.horizontal, DS.Spacing.xs)
                                 .padding(.vertical, 2)
                                 .frame(maxWidth: .infinity)
                                 .background(
                                     LinearGradient(
-                                        colors: [.clear, .black.opacity(0.6)],
+                                        colors: [.clear, DS.Color.shadowDense],
                                         startPoint: .top, endPoint: .bottom
                                     )
                                 )
@@ -365,7 +365,7 @@ struct FamilyPhotoAlbumsView: View {
                 RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
                     .stroke(DS.Color.primary.opacity(0.08), lineWidth: 1)
             )
-            .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 2)
+            .shadow(color: DS.Color.shadowLight, radius: 8, x: 0, y: 2)
         }
         .buttonStyle(DSScaleButtonStyle())
     }
@@ -374,7 +374,7 @@ struct FamilyPhotoAlbumsView: View {
 
     private func familyPhotoViewer(photo: MemberGalleryPhoto) -> some View {
         ZStack(alignment: .top) {
-            Color.black.ignoresSafeArea()
+            DS.Color.overlayDark.ignoresSafeArea()
                 .onTapGesture { showPhotoViewer = false }
 
             if let url = URL(string: photo.photoURL) {
@@ -388,10 +388,10 @@ struct FamilyPhotoAlbumsView: View {
                         VStack(spacing: DS.Spacing.md) {
                             Image(systemName: "photo.trianglebadge.exclamationmark")
                                 .font(DS.Font.scaled(40))
-                                .foregroundColor(.white.opacity(0.5))
+                                .foregroundColor(DS.Color.overlayHalf)
                             Text(L10n.t("تعذر تحميل الصورة", "Failed to load photo"))
                                 .font(DS.Font.callout)
-                                .foregroundColor(.white.opacity(0.7))
+                                .foregroundColor(DS.Color.overlayTextMuted)
                         }
                     } else {
                         ProgressView()
@@ -405,7 +405,7 @@ struct FamilyPhotoAlbumsView: View {
                 Button { showPhotoViewer = false } label: {
                     Image(systemName: "xmark")
                         .font(DS.Font.scaled(16, weight: .bold))
-                        .foregroundColor(.white)
+                        .foregroundColor(DS.Color.textOnPrimary)
                         .frame(width: 36, height: 36)
                         .background(.ultraThinMaterial)
                         .clipShape(Circle())
@@ -419,10 +419,10 @@ struct FamilyPhotoAlbumsView: View {
                         Text(member.firstName)
                             .font(DS.Font.caption1)
                             .fontWeight(.bold)
-                            .foregroundColor(.white)
+                            .foregroundColor(DS.Color.textOnPrimary)
                     }
                     .padding(.horizontal, DS.Spacing.md)
-                    .padding(.vertical, DS.Spacing.sm)
+                    .padding(.vertical, DS.Spacing.xs)
                     .background(.ultraThinMaterial)
                     .clipShape(Capsule())
                 }
@@ -478,10 +478,10 @@ struct FamilyPhotoAlbumsView: View {
     private var emptyStateView: some View {
         VStack(spacing: DS.Spacing.lg) {
             Image(systemName: "photo.on.rectangle.angled")
-                .font(DS.Font.scaled(50))
+                .font(DS.Font.scaled(40))
                 .foregroundColor(DS.Color.textTertiary)
             Text(L10n.t("لا توجد صور حالياً", "No photos yet"))
-                .font(DS.Font.headline)
+                .font(DS.Font.title3)
                 .foregroundColor(DS.Color.textSecondary)
             Text(L10n.t("يمكن لأفراد العائلة إضافة صور من ملفاتهم الشخصية", "Family members can add photos from their profiles"))
                 .font(DS.Font.subheadline)
@@ -494,10 +494,10 @@ struct FamilyPhotoAlbumsView: View {
     private var errorStateView: some View {
         VStack(spacing: DS.Spacing.lg) {
             Image(systemName: "exclamationmark.triangle")
-                .font(DS.Font.scaled(50))
+                .font(DS.Font.scaled(40))
                 .foregroundColor(DS.Color.warning)
             Text(L10n.t("تعذر تحميل الصور", "Failed to load photos"))
-                .font(DS.Font.headline)
+                .font(DS.Font.title3)
                 .foregroundColor(DS.Color.textSecondary)
             DSSecondaryButton(L10n.t("إعادة المحاولة", "Retry"), icon: "arrow.clockwise") {
                 Task { await loadPhotos() }

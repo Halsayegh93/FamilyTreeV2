@@ -16,7 +16,6 @@ struct SettingsView: View {
     private func t(_ ar: String, _ en: String) -> String { isArabic ? ar : en }
 
     var body: some View {
-        NavigationStack {
             ZStack {
                 DS.Color.background.ignoresSafeArea()
 
@@ -55,7 +54,7 @@ struct SettingsView: View {
                                     .tint(DS.Color.gridTree)
                                 }
                                 .padding(.horizontal, DS.Spacing.lg)
-                                .padding(.vertical, DS.Spacing.md)
+                                .padding(.vertical, DS.Spacing.xs)
 
                                 DSDivider()
 
@@ -81,7 +80,7 @@ struct SettingsView: View {
                                     .tint(DS.Color.primary)
                                 }
                                 .padding(.horizontal, DS.Spacing.lg)
-                                .padding(.vertical, DS.Spacing.md)
+                                .padding(.vertical, DS.Spacing.xs)
 
                                 DSDivider()
 
@@ -158,7 +157,7 @@ struct SettingsView: View {
                                             .foregroundColor(DS.Color.textTertiary)
                                     }
                                     .padding(.horizontal, DS.Spacing.lg)
-                                    .padding(.vertical, DS.Spacing.md)
+                                    .padding(.vertical, DS.Spacing.xs)
                                 }
                                 .buttonStyle(DSBoldButtonStyle())
                             }
@@ -178,14 +177,6 @@ struct SettingsView: View {
             }
             .navigationTitle(t("الإعدادات", "Settings"))
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button(t("إغلاق", "Close")) { dismiss() }
-                        .font(DS.Font.calloutBold)
-                        .foregroundColor(DS.Color.primary)
-                }
-            }
-        }
         .environment(\.layoutDirection, langManager.layoutDirection)
         .alert(
             t("حذف الحساب", "Delete Account"),
@@ -252,7 +243,7 @@ struct SettingsView: View {
                 .foregroundColor(DS.Color.textTertiary)
         }
         .padding(.horizontal, DS.Spacing.lg)
-        .padding(.vertical, DS.Spacing.md)
+        .padding(.vertical, DS.Spacing.xs)
         .contentShape(Rectangle())
     }
 
@@ -297,7 +288,7 @@ struct AboutView: View {
 
                         Image(systemName: "tree.fill")
                             .font(DS.Font.scaled(38, weight: .bold))
-                            .foregroundColor(.white)
+                            .foregroundColor(DS.Color.textOnPrimary)
                     }
 
                     VStack(spacing: DS.Spacing.md) {
@@ -483,7 +474,7 @@ struct LinkedDevicesSettingsSheet: View {
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.horizontal, DS.Spacing.lg)
-                            .padding(.vertical, DS.Spacing.sm)
+                            .padding(.vertical, DS.Spacing.xs)
 
                             DSDivider()
 
@@ -503,7 +494,7 @@ struct LinkedDevicesSettingsSheet: View {
                                 }
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(.horizontal, DS.Spacing.lg)
-                                .padding(.vertical, DS.Spacing.md)
+                                .padding(.vertical, DS.Spacing.xs)
                             } else {
                                 VStack(spacing: 0) {
                                     ForEach(Array(notificationVM.linkedDevices.enumerated()), id: \.element.id) { index, device in
@@ -577,7 +568,7 @@ struct LinkedDevicesSettingsSheet: View {
                         Text(t("الحالي", "Current"))
                             .font(DS.Font.caption2)
                             .fontWeight(.bold)
-                            .foregroundColor(.white)
+                            .foregroundColor(DS.Color.textOnPrimary)
                             .padding(.horizontal, DS.Spacing.sm)
                             .padding(.vertical, 2)
                             .background(DS.Color.success)
@@ -613,7 +604,7 @@ struct LinkedDevicesSettingsSheet: View {
             }
         }
         .padding(.horizontal, DS.Spacing.lg)
-        .padding(.vertical, DS.Spacing.md)
+        .padding(.vertical, DS.Spacing.xs)
     }
 
     private func formattedDate(_ isoString: String) -> String {

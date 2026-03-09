@@ -83,7 +83,7 @@ struct AdminPendingRequestsView: View {
                             .frame(width: 66, height: 66)
                         Image(systemName: "person.badge.shield.checkmark.fill")
                             .font(DS.Font.scaled(28, weight: .semibold))
-                            .foregroundColor(.white)
+                            .foregroundColor(DS.Color.textOnPrimary)
                     }
                     Text(L10n.t("لا توجد طلبات معلقة حالياً", "No pending requests"))
                         .font(DS.Font.headline)
@@ -255,7 +255,7 @@ struct AdminPendingRequestsView: View {
                         }
                         .foregroundColor(DS.Color.info)
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, DS.Spacing.md)
+                        .padding(.vertical, DS.Spacing.xs)
                         .background(DS.Color.info.opacity(0.08))
                         .cornerRadius(DS.Radius.md)
                         .overlay(
@@ -296,7 +296,7 @@ struct AdminPendingRequestsView: View {
                                 }
                             }
                             .padding(.horizontal, DS.Spacing.md)
-                            .padding(.vertical, DS.Spacing.sm)
+                            .padding(.vertical, DS.Spacing.xs)
                             .background(DS.Color.info.opacity(0.08))
                             .cornerRadius(DS.Radius.md)
 
@@ -337,7 +337,7 @@ struct AdminPendingRequestsView: View {
                             }
                         }
                         .padding(.horizontal, DS.Spacing.md)
-                        .padding(.vertical, DS.Spacing.sm)
+                        .padding(.vertical, DS.Spacing.xs)
                         .background(DS.Color.success.opacity(0.08))
                         .cornerRadius(DS.Radius.md)
                     }
@@ -440,7 +440,7 @@ struct AdminPendingRequestsView: View {
                 // بادج قوة التطابق
                 Text(matchStrengthLabel(ratio: matchRatio))
                     .font(DS.Font.scaled(10, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundColor(DS.Color.textOnPrimary)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 3)
                     .background(strengthColor)
@@ -459,9 +459,9 @@ struct AdminPendingRequestsView: View {
                         Text(L10n.t("دمج", "Merge"))
                             .font(DS.Font.scaled(12, weight: .bold))
                     }
-                    .foregroundColor(.white)
+                    .foregroundColor(DS.Color.textOnPrimary)
                     .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.vertical, DS.Spacing.sm)
+                    .padding(.vertical, DS.Spacing.xs)
                     .background(DS.Color.gradientPrimary)
                     .clipShape(Capsule())
                 }
@@ -542,7 +542,7 @@ struct FatherLinkApprovalSheet: View {
                         .frame(width: 56, height: 56)
                     Image(systemName: "link.badge.plus")
                         .font(DS.Font.scaled(22, weight: .semibold))
-                        .foregroundColor(.white)
+                        .foregroundColor(DS.Color.textOnPrimary)
                 }
                 .dsGlowShadow()
                 .padding(.top, DS.Spacing.sm)
@@ -577,7 +577,7 @@ struct FatherLinkApprovalSheet: View {
                         Spacer()
                     }
                     .padding(.horizontal, DS.Spacing.md)
-                    .padding(.vertical, DS.Spacing.sm)
+                    .padding(.vertical, DS.Spacing.xs)
                     .background(DS.Color.success.opacity(0.08))
                     .cornerRadius(DS.Radius.md)
                 } else {
@@ -591,7 +591,7 @@ struct FatherLinkApprovalSheet: View {
                         Spacer()
                     }
                     .padding(.horizontal, DS.Spacing.md)
-                    .padding(.vertical, DS.Spacing.sm)
+                    .padding(.vertical, DS.Spacing.xs)
                     .background(DS.Color.warning.opacity(0.08))
                     .cornerRadius(DS.Radius.md)
                 }
@@ -604,7 +604,7 @@ struct FatherLinkApprovalSheet: View {
                             .frame(width: 32, height: 32)
                         Image(systemName: "magnifyingglass")
                             .font(DS.Font.scaled(12, weight: .semibold))
-                            .foregroundColor(.white)
+                            .foregroundColor(DS.Color.textOnPrimary)
                     }
 
                     TextField(L10n.t("ابحث عن الأب...", "Search for father..."), text: $searchText)
@@ -617,7 +617,7 @@ struct FatherLinkApprovalSheet: View {
                 .cornerRadius(DS.Radius.md)
                 .overlay(
                     RoundedRectangle(cornerRadius: DS.Radius.md)
-                        .stroke(isSearchFocused ? DS.Color.primary : Color.gray.opacity(0.12), lineWidth: isSearchFocused ? 2 : 1)
+                        .stroke(isSearchFocused ? DS.Color.primary : DS.Color.inactiveBorder, lineWidth: isSearchFocused ? 2 : 1)
                 )
                 .animation(.easeInOut(duration: 0.2), value: isSearchFocused)
 

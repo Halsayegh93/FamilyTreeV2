@@ -176,7 +176,7 @@ struct AdminMemberDetailSheet: View {
                 Circle()
                     .fill(DS.Color.surface)
                     .frame(width: 70, height: 70)
-                    .shadow(color: .black.opacity(0.08), radius: 6, y: 3)
+                    .shadow(color: DS.Color.shadowMedium, radius: 6, y: 3)
 
                 if let urlStr = member.avatarUrl, let url = URL(string: urlStr) {
                     CachedAsyncImage(url: url) { img in img.resizable().scaledToFill() }
@@ -269,7 +269,7 @@ struct AdminMemberDetailSheet: View {
                     )
                 }
                 .padding(.horizontal, DS.Spacing.md)
-                .padding(.vertical, DS.Spacing.sm)
+                .padding(.vertical, DS.Spacing.xs)
             }
         }
         .padding(.horizontal, DS.Spacing.lg)
@@ -286,9 +286,9 @@ struct AdminMemberDetailSheet: View {
                 Text(title)
                     .font(DS.Font.calloutBold)
             }
-            .foregroundColor(isSelected ? .white : DS.Color.textPrimary)
+            .foregroundColor(isSelected ? DS.Color.textOnPrimary : DS.Color.textPrimary)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, DS.Spacing.md)
+            .padding(.vertical, DS.Spacing.xs)
             .background(
                 isSelected
                     ? AnyShapeStyle(DS.Color.gradientPrimary)
@@ -319,7 +319,7 @@ struct AdminMemberDetailSheet: View {
 
                         VStack(alignment: .leading, spacing: 2) {
                             Text(L10n.t("الأب في الشجرة", "Father in Tree"))
-                                .font(DS.Font.caption2)
+                                .font(DS.Font.caption1)
                                 .foregroundColor(DS.Color.textTertiary)
 
                             if let fId = selectedFatherId, let father = memberVM.member(byId: fId) {
@@ -343,7 +343,7 @@ struct AdminMemberDetailSheet: View {
                             .clipShape(Circle())
                     }
                     .padding(.horizontal, DS.Spacing.md)
-                    .padding(.vertical, DS.Spacing.sm)
+                    .padding(.vertical, DS.Spacing.xs)
                 }
                 .buttonStyle(DSBoldButtonStyle())
             }
@@ -404,7 +404,7 @@ struct AdminMemberDetailSheet: View {
                     DSIcon("phone.fill", color: DS.Color.success, size: iconSm, iconSize: iconFontSm)
                 }
                 .padding(.horizontal, DS.Spacing.md)
-                .padding(.vertical, DS.Spacing.sm)
+                .padding(.vertical, DS.Spacing.xs)
                 .environment(\.layoutDirection, .leftToRight)
                 .onChange(of: phoneNumber) { _, newValue in
                     phoneNumber = KuwaitPhone.userTypedDigits(newValue, maxDigits: selectedPhoneCountry.maxDigits)
@@ -471,7 +471,7 @@ struct AdminMemberDetailSheet: View {
                             }
                             .foregroundColor(DS.Color.success)
                             .padding(.horizontal, DS.Spacing.lg)
-                            .padding(.vertical, DS.Spacing.sm)
+                            .padding(.vertical, DS.Spacing.xs)
                             .background(DS.Color.success.opacity(0.1))
                             .clipShape(Capsule())
                             .overlay(
@@ -582,7 +582,7 @@ struct AdminMemberDetailSheet: View {
 
                 if let birth = child.birthDate, !birth.isEmpty {
                     Text(birth)
-                        .font(DS.Font.caption2)
+                        .font(DS.Font.caption1)
                         .foregroundColor(DS.Color.textSecondary)
                         .lineLimit(1)
                 }
@@ -601,7 +601,7 @@ struct AdminMemberDetailSheet: View {
             }
         }
         .padding(.horizontal, DS.Spacing.md)
-        .padding(.vertical, DS.Spacing.sm)
+        .padding(.vertical, DS.Spacing.xs)
         .background(
             RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
                 .fill(draggedChild?.id == child.id ? DS.Color.primary.opacity(0.08) : DS.Color.surface)
@@ -648,7 +648,7 @@ struct AdminMemberDetailSheet: View {
 
                         if let birth = child.birthDate, !birth.isEmpty {
                             Text(birth)
-                                .font(DS.Font.caption2)
+                                .font(DS.Font.caption1)
                                 .foregroundColor(DS.Color.textSecondary)
                                 .lineLimit(1)
                         }
@@ -710,7 +710,7 @@ struct AdminMemberDetailSheet: View {
                         .tint(DS.Color.primary)
                 }
                 .padding(.horizontal, DS.Spacing.md)
-                .padding(.vertical, DS.Spacing.sm)
+                .padding(.vertical, DS.Spacing.xs)
                 .animation(.default, value: hasBirthDate)
 
                 if hasBirthDate {
@@ -729,7 +729,7 @@ struct AdminMemberDetailSheet: View {
                             .foregroundColor(DS.Color.textSecondary)
                     }
                     .padding(.horizontal, DS.Spacing.md)
-                    .padding(.vertical, DS.Spacing.sm)
+                    .padding(.vertical, DS.Spacing.xs)
                 }
 
                 DSDivider()
@@ -749,7 +749,7 @@ struct AdminMemberDetailSheet: View {
                         .tint(DS.Color.error)
                 }
                 .padding(.horizontal, DS.Spacing.md)
-                .padding(.vertical, DS.Spacing.sm)
+                .padding(.vertical, DS.Spacing.xs)
                 .animation(.default, value: isDeceased)
 
                 if isDeceased {
@@ -769,7 +769,7 @@ struct AdminMemberDetailSheet: View {
                             .tint(DS.Color.error)
                     }
                     .padding(.horizontal, DS.Spacing.md)
-                    .padding(.vertical, DS.Spacing.sm)
+                    .padding(.vertical, DS.Spacing.xs)
                     .animation(.default, value: hasDeathDate)
 
                     if hasDeathDate {
@@ -788,7 +788,7 @@ struct AdminMemberDetailSheet: View {
                                 .foregroundColor(DS.Color.textSecondary)
                         }
                         .padding(.horizontal, DS.Spacing.md)
-                        .padding(.vertical, DS.Spacing.sm)
+                        .padding(.vertical, DS.Spacing.xs)
                     }
                 }
             }
@@ -814,7 +814,7 @@ struct AdminMemberDetailSheet: View {
                 .pickerStyle(.segmented)
                 .tint(DS.Color.primary)
                 .padding(.horizontal, DS.Spacing.md)
-                .padding(.vertical, DS.Spacing.sm)
+                .padding(.vertical, DS.Spacing.xs)
             }
         }
         .padding(.horizontal, DS.Spacing.lg)
@@ -835,7 +835,7 @@ struct AdminMemberDetailSheet: View {
                 Spacer()
             }
             .padding(.horizontal, DS.Spacing.md)
-            .padding(.vertical, DS.Spacing.sm)
+            .padding(.vertical, DS.Spacing.xs)
             .background(DS.Color.error.opacity(0.06))
             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
             .overlay(
@@ -861,7 +861,7 @@ struct AdminMemberDetailSheet: View {
                 .multilineTextAlignment(.leading)
         }
         .padding(.horizontal, DS.Spacing.md)
-        .padding(.vertical, DS.Spacing.sm)
+        .padding(.vertical, DS.Spacing.xs)
     }
 
     private func setupLocalChildren() {
@@ -1037,7 +1037,7 @@ struct FatherPickerSheet: View {
                                     }
                                 }
                                 .padding(.horizontal, DS.Spacing.md)
-                                .padding(.vertical, DS.Spacing.sm)
+                                .padding(.vertical, DS.Spacing.xs)
                             }
                             .buttonStyle(DSBoldButtonStyle())
                         }
@@ -1083,7 +1083,7 @@ struct FatherPickerSheet: View {
                                                     .lineLimit(1)
 
                                                 Text(m.roleName)
-                                                    .font(DS.Font.caption2)
+                                                    .font(DS.Font.caption1)
                                                     .foregroundColor(DS.Color.textSecondary)
                                             }
 
@@ -1096,7 +1096,7 @@ struct FatherPickerSheet: View {
                                             }
                                         }
                                         .padding(.horizontal, DS.Spacing.md)
-                                        .padding(.vertical, DS.Spacing.sm)
+                                        .padding(.vertical, DS.Spacing.xs)
                                     }
                                     .buttonStyle(DSBoldButtonStyle())
 

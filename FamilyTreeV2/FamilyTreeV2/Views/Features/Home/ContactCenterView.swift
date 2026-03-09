@@ -11,7 +11,6 @@ struct ContactCenterView: View {
     @State private var showSuccessAlert = false
     @State private var showErrorAlert = false
     @State private var showCharacterLimitWarning = false
-    @State private var appeared = false
 
     private let categoryItems: [(key: String, icon: String, labelAr: String, labelEn: String, color: Color)] = [
         ("اقتراح", "lightbulb.fill", "اقتراح", "Suggestion", DS.Color.warning),
@@ -28,19 +27,15 @@ struct ContactCenterView: View {
             ZStack {
                 DS.Color.background.ignoresSafeArea()
 
-                DSDecorativeBackground()
-
                 ScrollView(showsIndicators: false) {
-                    VStack(spacing: DS.Spacing.xl) {
-                        headerCard
+                    VStack(spacing: DS.Spacing.xxl) {
                         categorySection
                         messageSection
                         submitButton
-
-                        Spacer().frame(height: DS.Spacing.xxxl)
                     }
                     .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.top, DS.Spacing.md)
+                    .padding(.top, DS.Spacing.lg)
+                    .padding(.bottom, DS.Spacing.xxxxl)
                 }
             }
             .navigationTitle(L10n.t("التواصل", "Contact"))
@@ -68,53 +63,17 @@ struct ContactCenterView: View {
                 Text(L10n.t("تم الوصول إلى الحد الأقصى للرسالة (1000 حرف).", "You've reached the maximum message length (1000 characters)."))
             }
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-            .onAppear {
-                withAnimation(DS.Anim.smooth) { appeared = true }
-            }
         }
-    }
-
-    // MARK: - Header Card
-    private var headerCard: some View {
-        DSGradientCard(gradient: DS.Color.gradientOcean) {
-            VStack(spacing: DS.Spacing.lg) {
-                ZStack {
-                    Circle()
-                        .fill(.white.opacity(0.12))
-                        .frame(width: 64, height: 64)
-                    Circle()
-                        .fill(.white.opacity(0.08))
-                        .frame(width: 80, height: 80)
-                    Image(systemName: "envelope.open.fill")
-                        .font(DS.Font.scaled(28, weight: .bold))
-                        .foregroundColor(.white)
-                }
-
-                VStack(spacing: DS.Spacing.xs) {
-                    Text(L10n.t("مركز التواصل", "Contact Center"))
-                        .font(DS.Font.title2)
-                        .foregroundColor(.white)
-
-                    Text(L10n.t("نسعد بتواصلك معنا، أرسل اقتراحك أو استفسارك", "We're happy to hear from you — send us your feedback"))
-                        .font(DS.Font.footnote)
-                        .foregroundColor(.white.opacity(0.8))
-                        .multilineTextAlignment(.center)
-                }
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, DS.Spacing.xxl)
-            .padding(.horizontal, DS.Spacing.lg)
-        }
-        .opacity(appeared ? 1 : 0)
-        .offset(y: appeared ? 0 : 12)
     }
 
     // MARK: - Category Section
     private var categorySection: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            DSSectionHeader(title: L10n.t("نوع الرسالة", "Message Type"), icon: "tag.fill")
+            Text(L10n.t("نوع الرسالة", "Message Type"))
+                .font(DS.Font.calloutBold)
+                .foregroundColor(DS.Color.textPrimary)
 
-            HStack(spacing: DS.Spacing.md) {
+            HStack(spacing: DS.Spacing.sm) {
                 ForEach(categoryItems, id: \.key) { item in
                     let isSelected = selectedCategory == item.key
                     Button {
@@ -122,53 +81,41 @@ struct ContactCenterView: View {
                             selectedCategory = item.key
                         }
                     } label: {
-                        VStack(spacing: DS.Spacing.sm) {
-                            ZStack {
-                                Circle()
-                                    .fill(isSelected ? item.color : item.color.opacity(0.10))
-                                    .frame(width: 44, height: 44)
-
-                                Image(systemName: item.icon)
-                                    .font(DS.Font.scaled(18, weight: .semibold))
-                                    .foregroundColor(isSelected ? .white : item.color)
-                            }
-
+                        HStack(spacing: DS.Spacing.sm) {
+                            Image(systemName: item.icon)
+                                .font(DS.Font.scaled(14, weight: .semibold))
                             Text(L10n.t(item.labelAr, item.labelEn))
                                 .font(DS.Font.caption1)
-                                .fontWeight(isSelected ? .bold : .medium)
-                                .foregroundColor(isSelected ? DS.Color.textPrimary : DS.Color.textSecondary)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.8)
+                                .fontWeight(.semibold)
                         }
+                        .foregroundColor(isSelected ? DS.Color.textOnPrimary : item.color)
+                        .padding(.horizontal, DS.Spacing.md)
+                        .padding(.vertical, DS.Spacing.sm)
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, DS.Spacing.md)
-                        .background(
-                            RoundedRectangle(cornerRadius: DS.Radius.lg)
-                                .fill(isSelected ? item.color.opacity(0.08) : DS.Color.surface)
-                        )
+                        .background(isSelected ? item.color : item.color.opacity(0.08))
+                        .clipShape(Capsule())
                         .overlay(
-                            RoundedRectangle(cornerRadius: DS.Radius.lg)
-                                .stroke(isSelected ? item.color.opacity(0.4) : Color.clear, lineWidth: 1.5)
+                            Capsule()
+                                .stroke(isSelected ? Color.clear : item.color.opacity(0.25), lineWidth: 1)
                         )
                     }
                     .buttonStyle(DSScaleButtonStyle())
                 }
             }
         }
-        .opacity(appeared ? 1 : 0)
-        .offset(y: appeared ? 0 : 12)
-        .animation(DS.Anim.smooth.delay(0.05), value: appeared)
     }
 
     // MARK: - Message Section
     private var messageSection: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            DSSectionHeader(title: L10n.t("تفاصيل الرسالة", "Message Details"), icon: "text.alignright")
+            Text(L10n.t("رسالتك", "Your Message"))
+                .font(DS.Font.calloutBold)
+                .foregroundColor(DS.Color.textPrimary)
 
             VStack(spacing: 0) {
                 ZStack(alignment: .topTrailing) {
                     TextEditor(text: $message)
-                        .frame(minHeight: 150)
+                        .frame(minHeight: 160)
                         .focused($isMessageFocused)
                         .scrollContentBackground(.hidden)
                         .font(DS.Font.body)
@@ -190,7 +137,6 @@ struct ContactCenterView: View {
                 }
                 .padding(DS.Spacing.md)
 
-                // Character count
                 HStack {
                     Spacer()
                     Text("\(message.count)/1000")
@@ -206,18 +152,13 @@ struct ContactCenterView: View {
                 RoundedRectangle(cornerRadius: DS.Radius.lg)
                     .stroke(isMessageFocused ? DS.Color.primary.opacity(0.4) : DS.Color.textTertiary.opacity(0.15), lineWidth: isMessageFocused ? 1.5 : 1)
             )
-            .shadow(color: isMessageFocused ? DS.Color.primary.opacity(0.08) : .clear, radius: 8, y: 2)
-            .animation(DS.Anim.quick, value: isMessageFocused)
         }
-        .opacity(appeared ? 1 : 0)
-        .offset(y: appeared ? 0 : 12)
-        .animation(DS.Anim.smooth.delay(0.1), value: appeared)
     }
 
     // MARK: - Submit Button
     private var submitButton: some View {
         DSPrimaryButton(
-            L10n.t("إرسال الرسالة", "Send Message"),
+            L10n.t("إرسال", "Send"),
             icon: "paperplane.fill",
             isLoading: authVM.isLoading,
             useGradient: canSubmit,
@@ -227,9 +168,6 @@ struct ContactCenterView: View {
         }
         .disabled(!canSubmit)
         .opacity(canSubmit ? 1.0 : DS.Opacity.disabled)
-        .opacity(appeared ? 1 : 0)
-        .offset(y: appeared ? 0 : 12)
-        .animation(DS.Anim.smooth.delay(0.15), value: appeared)
     }
 
     // MARK: - Submit Logic

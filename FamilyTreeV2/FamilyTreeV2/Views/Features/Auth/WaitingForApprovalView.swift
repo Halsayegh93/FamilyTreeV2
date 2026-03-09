@@ -120,11 +120,11 @@ struct WaitingForApprovalView: View {
                     )
                 )
                 .frame(width: 110, height: 110)
-                .overlay(Circle().stroke(Color.white.opacity(0.2), lineWidth: 0.5))
+                .overlay(Circle().stroke(DS.Color.overlayIcon, lineWidth: 0.5))
 
             Image(systemName: "clock.badge.checkmark.fill")
                 .font(DS.Font.scaled(48, weight: .bold))
-                .foregroundColor(.white)
+                .foregroundColor(DS.Color.textOnPrimary)
         }
         .dsGlowShadow()
     }

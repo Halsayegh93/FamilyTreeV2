@@ -131,6 +131,50 @@ enum DS {
         static func glassDivider(_ cs: ColorScheme) -> SwiftUI.Color {
             cs == .dark ? SwiftUI.Color.white.opacity(0.08) : SwiftUI.Color.white.opacity(0.15)
         }
+
+        // Overlay Colors — ألوان مستخدمة فوق الخلفيات الداكنة/المتدرجة
+        /// أيقونة شفافة فوق تدرج (مثل header icons)
+        static let overlayIcon = SwiftUI.Color.white.opacity(0.15)
+        /// حدود أيقونة شفافة فوق تدرج
+        static let overlayIconBorder = SwiftUI.Color.white.opacity(0.3)
+        /// نص فوق تدرج (أقل سطوعاً من textOnPrimary)
+        static let overlayText = SwiftUI.Color.white.opacity(0.85)
+        /// نص/أيقونة فاتحة فوق خلفية داكنة (opacity 0.7)
+        static let overlayTextMuted = SwiftUI.Color.white.opacity(0.7)
+        /// نص/أيقونة فاتحة فوق خلفية داكنة (opacity 0.8)
+        static let overlayTextBright = SwiftUI.Color.white.opacity(0.8)
+        /// نص أبيض شبه كامل (opacity 0.92)
+        static let overlayTextFull = SwiftUI.Color.white.opacity(0.92)
+        /// خلفية شفافة فاتحة (opacity 0.12)
+        static let overlayFill = SwiftUI.Color.white.opacity(0.12)
+        /// خلفية شفافة فاتحة خفيفة (opacity 0.08)
+        static let overlayFillSubtle = SwiftUI.Color.white.opacity(0.08)
+        /// أيقونة نصف شفافة (opacity 0.5)
+        static let overlayHalf = SwiftUI.Color.white.opacity(0.5)
+        /// غلاف أسود شفاف (fullscreen overlays)
+        static let overlayDark = SwiftUI.Color.black
+        /// ظل خفيف (بديل عن Color.black.opacity)
+        static let shadowSubtle = SwiftUI.Color.black.opacity(0.05)
+        static let shadowLight = SwiftUI.Color.black.opacity(0.06)
+        static let shadowMedium = SwiftUI.Color.black.opacity(0.08)
+        static let shadowRegular = SwiftUI.Color.black.opacity(0.15)
+        static let shadowMediumDark = SwiftUI.Color.black.opacity(0.2)
+        static let shadowStrong = SwiftUI.Color.black.opacity(0.3)
+        static let shadowHeavy = SwiftUI.Color.black.opacity(0.5)
+        static let shadowOverlay = SwiftUI.Color.black.opacity(0.55)
+        static let shadowDense = SwiftUI.Color.black.opacity(0.6)
+        /// نص داكن مرئي فوق خلفيات فاتحة
+        static let textDark = SwiftUI.Color.black.opacity(0.85)
+        /// تدرج ثانوي شفاف (icon hierarchical rendering)
+        static let hierarchicalSecondary = SwiftUI.Color.black.opacity(0.35)
+        /// حالة غير نشطة
+        static let inactive = SwiftUI.Color.gray
+        /// حدود حالة غير نشطة
+        static let inactiveBorder = SwiftUI.Color.gray.opacity(0.12)
+        /// لون ثانوي خافت
+        static let muted = SwiftUI.Color.gray.opacity(0.7)
+        /// خلفية ثانوية خافتة
+        static let mutedBackground = SwiftUI.Color.gray.opacity(0.2)
     }
 
     // MARK: Typography — خطوط حديثة ونظيفة مع دعم Dynamic Type

@@ -42,10 +42,10 @@ struct NewsCommentsSheet: View {
                 } else {
                     VStack {
                         Image(systemName: "bubble.left.and.bubble.right.fill")
-                            .font(DS.Font.scaled(44))
+                            .font(DS.Font.scaled(40))
                             .foregroundColor(DS.Color.textTertiary)
                         Text(L10n.t("لا توجد تعليقات بعد", "No comments yet"))
-                            .font(DS.Font.callout)
+                            .font(DS.Font.title3)
                             .foregroundColor(DS.Color.textSecondary)
                             .padding(.top, DS.Spacing.sm)
                     }
@@ -70,7 +70,7 @@ struct NewsCommentsSheet: View {
                     }) {
                         Image(systemName: "paperplane.fill")
                             .font(DS.Font.scaled(15, weight: .bold))
-                            .foregroundColor(.white)
+                            .foregroundColor(DS.Color.textOnPrimary)
                             .frame(width: 42, height: 42)
                             .background(DS.Color.gradientPrimary)
                             .clipShape(Circle())

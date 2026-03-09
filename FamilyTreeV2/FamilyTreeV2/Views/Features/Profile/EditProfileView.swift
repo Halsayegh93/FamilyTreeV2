@@ -44,7 +44,7 @@ struct EditProfileView: View {
                 DSDecorativeBackground()
 
                 ScrollView(showsIndicators: false) {
-                    VStack(spacing: DS.Spacing.xxxl) {
+                    VStack(spacing: DS.Spacing.md) {
 
                         // 1. قسم الصورة الشخصية (تصميم دائري مع ظل فخم)
                         imagePickerHeader
@@ -82,7 +82,7 @@ struct EditProfileView: View {
                                             .tint(DS.Color.primary)
                                     }
                                     .padding(.horizontal, DS.Spacing.lg)
-                                    .padding(.vertical, DS.Spacing.sm)
+                                    .padding(.vertical, DS.Spacing.xs)
                         }
                         .padding(.horizontal, DS.Spacing.lg)
 
@@ -93,7 +93,7 @@ struct EditProfileView: View {
                         saveButton
 
                     }
-                    .padding(.vertical, DS.Spacing.xxl)
+                    .padding(.vertical, DS.Spacing.xs)
                 }
             }
             .navigationTitle(editScreenTitle)
@@ -129,7 +129,12 @@ struct EditProfileView: View {
     private var imagePickerHeader: some View {
         DSProfilePhotoPicker(
             selectedImage: $localPreviewImage,
-            existingURL: member.avatarUrl
+            existingURL: member.avatarUrl,
+            onDeleteExisting: {
+                Task {
+                    await memberVM.deleteAvatar(for: member.id)
+                }
+            }
         )
         .padding(.horizontal, DS.Spacing.lg)
     }
@@ -149,7 +154,7 @@ struct EditProfileView: View {
             Spacer()
         }
         .padding(.horizontal, DS.Spacing.lg)
-        .padding(.vertical, DS.Spacing.md)
+        .padding(.vertical, DS.Spacing.xs)
     }
 
     private var modernPhoneField: some View {
@@ -201,7 +206,7 @@ struct EditProfileView: View {
             Spacer()
         }
         .padding(.horizontal, DS.Spacing.lg)
-        .padding(.vertical, DS.Spacing.md)
+        .padding(.vertical, DS.Spacing.xs)
     }
 
     private func modernDatePicker(label: String, selection: Binding<Date>, icon: String) -> some View {
@@ -214,7 +219,7 @@ struct EditProfileView: View {
             DatePicker("", selection: selection, in: ...Date(), displayedComponents: .date).labelsHidden()
         }
         .padding(.horizontal, DS.Spacing.lg)
-        .padding(.vertical, DS.Spacing.sm)
+        .padding(.vertical, DS.Spacing.xs)
     }
 
     private var aiBioSection: some View {
@@ -264,7 +269,7 @@ struct EditProfileView: View {
                         }
                         .foregroundColor(DS.Color.error)
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, DS.Spacing.md)
+                        .padding(.vertical, DS.Spacing.xs)
                         .background(DS.Color.error.opacity(0.08))
                         .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
                     }
@@ -328,7 +333,7 @@ struct EditProfileView: View {
                                 Text(L10n.t("اعتماد السيرة", "Apply Bio"))
                             }
                             .font(DS.Font.calloutBold)
-                            .foregroundColor(.white)
+                            .foregroundColor(DS.Color.textOnPrimary)
                             .frame(maxWidth: .infinity)
                             .frame(height: 44)
                             .background(DS.Color.gradientPrimary)
@@ -337,7 +342,7 @@ struct EditProfileView: View {
                         .buttonStyle(DSBoldButtonStyle())
                         .padding(.horizontal, DS.Spacing.lg)
                     }
-                    .padding(.vertical, DS.Spacing.sm)
+                    .padding(.vertical, DS.Spacing.xs)
                     .background(DS.Color.warning.opacity(0.05))
                     .cornerRadius(DS.Radius.md)
                 }
@@ -481,7 +486,7 @@ struct GalleryPhotoViewer: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            Color.black.ignoresSafeArea()
+            DS.Color.overlayDark.ignoresSafeArea()
                 .onTapGesture { onClose() }
 
             if let url = URL(string: photoURL) {
@@ -540,7 +545,7 @@ struct GalleryPhotoViewer: View {
                     } else if phase.error != nil {
                         Image(systemName: "photo")
                             .font(DS.Font.scaled(42))
-                            .foregroundColor(.white.opacity(0.7))
+                            .foregroundColor(DS.Color.overlayTextMuted)
                     } else {
                         ProgressView()
                             .tint(.white)
@@ -553,7 +558,7 @@ struct GalleryPhotoViewer: View {
                 Button(action: onClose) {
                     Image(systemName: "xmark.circle.fill")
                         .font(DS.Font.scaled(30))
-                        .foregroundStyle(.white, .black.opacity(0.35))
+                        .foregroundStyle(DS.Color.textOnPrimary, DS.Color.hierarchicalSecondary)
                 }
 
                 Spacer()
@@ -561,7 +566,7 @@ struct GalleryPhotoViewer: View {
                 Button(role: .destructive, action: onDelete) {
                     Image(systemName: "trash.circle.fill")
                         .font(DS.Font.scaled(30))
-                        .foregroundStyle(DS.Color.error, .black.opacity(0.35))
+                        .foregroundStyle(DS.Color.error, DS.Color.hierarchicalSecondary)
                 }
             }
             .padding(.horizontal, 20)

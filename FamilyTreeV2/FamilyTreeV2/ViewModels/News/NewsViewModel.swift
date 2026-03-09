@@ -52,6 +52,22 @@ class NewsViewModel: ObservableObject {
         self.notificationVM = notificationVM
     }
 
+    // MARK: - Local Removal Helper
+
+    private func removeLocallyThenRefresh<T: Identifiable>(
+        from array: inout [T],
+        id: T.ID,
+        refresh: @escaping () async -> Void
+    ) {
+        withAnimation(DS.Anim.snappy) {
+            array.removeAll { $0.id as AnyHashable == id as AnyHashable }
+        }
+        Task {
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            await refresh()
+        }
+    }
+
     // MARK: - Computed Properties
 
     var canAutoPublishNews: Bool { authVM?.canModerate ?? false }
@@ -151,12 +167,14 @@ class NewsViewModel: ObservableObject {
                 }
             }
 
+            // تجنب إطلاق طلبات فرعية إذا تم إلغاء المهمة
+            guard !Task.isCancelled else { return }
+            
             let pollPostIds = allNews.filter { $0.hasPoll }.map(\.id)
             let allPostIds = allNews.map(\.id)
-            async let fetchVotes: () = fetchNewsPollVotes(for: pollPostIds)
-            async let fetchLikes: () = fetchNewsLikes(for: allPostIds)
-            async let fetchComments: () = fetchNewsComments(for: allPostIds)
-            _ = await (fetchVotes, fetchLikes, fetchComments)
+            await fetchNewsPollVotes(for: pollPostIds)
+            await fetchNewsLikes(for: allPostIds)
+            await fetchNewsComments(for: allPostIds)
         } catch {
             Log.error("خطأ جلب الأخبار: \(error)")
         }
@@ -636,7 +654,6 @@ class NewsViewModel: ObservableObject {
     func approveNewsPost(postId: UUID) async {
         guard canModerate, let approverId = currentUser?.id else { return }
         guard newsApprovalFeatureAvailable else { return }
-        self.isLoading = true
 
         do {
             let payload: [String: AnyEncodable] = [
@@ -651,13 +668,21 @@ class NewsViewModel: ObservableObject {
                 .eq("id", value: postId.uuidString)
                 .execute()
 
-            await fetchPendingNewsRequests(force: true)
-            await fetchNews(force: true)
-            await notificationVM?.notifyAdmins(
-                title: "خبر جديد",
-                body: "تم نشر خبر جديد في الأخبار.",
-                kind: "news_add"
-            )
+            // إشعار صاحب الخبر
+            if let authorId = pendingNewsRequests.first(where: { $0.id == postId })?.author_id ?? allNews.first(where: { $0.id == postId })?.author_id {
+                await notificationVM?.sendNotification(
+                    title: L10n.t("تم تنفيذ طلبك", "Request Completed"),
+                    body: L10n.t("تم اعتماد خبرك ونشره", "Your news post was approved and published"),
+                    targetMemberIds: [authorId]
+                )
+            }
+
+            removeLocallyThenRefresh(from: &pendingNewsRequests, id: postId) { [weak self] in
+                await self?.fetchPendingNewsRequests(force: true)
+                await self?.fetchNews(force: true)
+            }
+
+            Log.info("تم اعتماد الخبر بنجاح")
         } catch {
             if isMissingNewsApprovalColumnError(error) {
                 newsApprovalFeatureAvailable = false
@@ -665,15 +690,12 @@ class NewsViewModel: ObservableObject {
                 Log.error("خطأ اعتماد الخبر: \(error.localizedDescription)")
             }
         }
-
-        self.isLoading = false
     }
 
     // MARK: - Reject News Post
 
     func rejectNewsPost(postId: UUID) async {
         guard canModerate else { return }
-        self.isLoading = true
 
         do {
             try await supabase
@@ -682,19 +704,15 @@ class NewsViewModel: ObservableObject {
                 .eq("id", value: postId.uuidString)
                 .execute()
 
-            await fetchPendingNewsRequests(force: true)
-            await fetchNews(force: true)
+            removeLocallyThenRefresh(from: &pendingNewsRequests, id: postId) { [weak self] in
+                await self?.fetchPendingNewsRequests(force: true)
+                await self?.fetchNews(force: true)
+            }
 
-            await notificationVM?.notifyAdmins(
-                title: "رفض خبر",
-                body: "تم رفض خبر بانتظار المراجعة.",
-                kind: "news_add"
-            )
+            Log.info("تم رفض الخبر بنجاح")
         } catch {
             Log.error("خطأ رفض الخبر: \(error.localizedDescription)")
         }
-
-        self.isLoading = false
     }
 
     // MARK: - Delete News Post

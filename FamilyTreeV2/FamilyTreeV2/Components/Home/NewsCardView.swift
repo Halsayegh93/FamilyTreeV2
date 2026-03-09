@@ -40,7 +40,7 @@ struct NewsCardView: View {
             Rectangle()
                 .fill(DS.Color.glassDivider(colorScheme))
                 .frame(height: 1)
-                .padding(.vertical, DS.Spacing.sm)
+                .padding(.vertical, DS.Spacing.xs)
 
             // 5. Footer (Time + Interactions)
             footerView
@@ -124,7 +124,7 @@ extension NewsCardView {
 
                 Text(String(authorName.first ?? "U"))
                     .font(DS.Font.scaled(18, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundColor(DS.Color.textOnPrimary)
             }
             .overlay(
                 Circle()
@@ -228,7 +228,7 @@ extension NewsCardView {
                             RoundedRectangle(cornerRadius: DS.Radius.md)
                                 .stroke(selectedPollOption == index ? DS.Color.primary.opacity(0.5) : DS.Color.glassMedium(colorScheme), lineWidth: 1)
                         )
-                        .shadow(color: Color.black.opacity(0.04), radius: 3, x: 0, y: 1)
+                        .shadow(color: DS.Color.shadowLight, radius: 3, x: 0, y: 1)
                     }
                 }
             }
@@ -265,7 +265,7 @@ extension NewsCardView {
                             }
                         )
                         .overlay(Circle().stroke(DS.Color.glassBorder(colorScheme), lineWidth: 1.5))
-                        .shadow(color: Color.black.opacity(0.08), radius: 4, x: 0, y: 2)
+                        .shadow(color: DS.Color.shadowMedium, radius: 4, x: 0, y: 2)
                 }
             }
         }

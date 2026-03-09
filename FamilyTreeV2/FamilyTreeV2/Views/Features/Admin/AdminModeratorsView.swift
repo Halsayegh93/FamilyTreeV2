@@ -171,7 +171,7 @@ struct AdminModeratorsView: View {
                     Text(member.role == .admin ? L10n.t("مدير", "Admin") : L10n.t("مشرف", "Supervisor"))
                         .font(DS.Font.caption2)
                         .fontWeight(.bold)
-                        .foregroundColor(.white)
+                        .foregroundColor(DS.Color.textOnPrimary)
                         .padding(.horizontal, DS.Spacing.sm)
                         .padding(.vertical, 2)
                         .background(member.role == .admin ? DS.Color.neonPurple : DS.Color.warning)
@@ -181,7 +181,7 @@ struct AdminModeratorsView: View {
                         Text(L10n.t("أنت", "You"))
                             .font(DS.Font.caption2)
                             .fontWeight(.bold)
-                            .foregroundColor(.white)
+                            .foregroundColor(DS.Color.textOnPrimary)
                             .padding(.horizontal, DS.Spacing.sm)
                             .padding(.vertical, 2)
                             .background(DS.Color.info)
@@ -297,9 +297,9 @@ struct AdminModeratorsView: View {
                         Text(L10n.t("إضافة", "Add"))
                     }
                     .font(DS.Font.calloutBold)
-                    .foregroundColor(.white)
+                    .foregroundColor(DS.Color.textOnPrimary)
                     .padding(.horizontal, DS.Spacing.xl)
-                    .padding(.vertical, DS.Spacing.md)
+                    .padding(.vertical, DS.Spacing.xs)
                     .background(DS.Color.primary)
                     .clipShape(Capsule())
                 }
@@ -338,7 +338,7 @@ struct AddModeratorSheet: View {
                     }
                     .pickerStyle(.segmented)
                     .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.vertical, DS.Spacing.md)
+                    .padding(.vertical, DS.Spacing.xs)
 
                     // البحث
                     HStack(spacing: DS.Spacing.sm) {

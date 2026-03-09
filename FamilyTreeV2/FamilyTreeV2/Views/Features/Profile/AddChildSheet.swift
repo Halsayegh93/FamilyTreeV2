@@ -29,14 +29,14 @@ struct AddChildSheet: View {
                 DSDecorativeBackground()
 
                 ScrollView(showsIndicators: false) {
-                    VStack(spacing: DS.Spacing.xxl) {
+                    VStack(spacing: DS.Spacing.md) {
                         heroHeader
                         basicInfoCard
+                            .padding(.horizontal, DS.Spacing.lg)
                         submitButton
+                            .padding(.horizontal, DS.Spacing.lg)
                     }
-                    .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.top, DS.Spacing.md)
-                    .padding(.bottom, DS.Spacing.xxl)
+                    .padding(.vertical, DS.Spacing.xs)
                 }
             }
             .navigationTitle(L10n.t("إضافة ابن", "Add Child"))
@@ -72,7 +72,7 @@ struct AddChildSheet: View {
     private var basicInfoCard: some View {
         DSCard(padding: 0) {
             DSSectionHeader(
-                title: L10n.t("البيانات الأساسية", "Basic Info"),
+                title: L10n.t("المعلومات الشخصية", "Personal Info"),
                 icon: "person.text.rectangle"
             )
 
@@ -96,7 +96,7 @@ struct AddChildSheet: View {
                         Spacer()
                     }
                     .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.vertical, DS.Spacing.md)
+                    .padding(.vertical, DS.Spacing.xs)
 
                     DSDivider()
 
@@ -119,7 +119,7 @@ struct AddChildSheet: View {
                         Spacer()
                     }
                     .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.vertical, DS.Spacing.md)
+                    .padding(.vertical, DS.Spacing.xs)
 
                     DSDivider()
 
@@ -130,16 +130,41 @@ struct AddChildSheet: View {
                             Text(L10n.t("الجنس", "Gender"))
                                 .font(DS.Font.caption1)
                                 .foregroundColor(DS.Color.textSecondary)
-                            Picker("", selection: $selectedGender) {
-                                Text(L10n.t("ذكر", "Male")).tag("male")
-                                Text(L10n.t("أنثى", "Female")).tag("female")
+                            HStack(spacing: 0) {
+                                Button {
+                                    withAnimation(DS.Anim.snappy) { selectedGender = "male" }
+                                } label: {
+                                    Text(L10n.t("ذكر", "Male"))
+                                        .font(DS.Font.caption1)
+                                        .fontWeight(.bold)
+                                        .foregroundColor(selectedGender == "male" ? .white : DS.Color.textSecondary)
+                                        .frame(maxWidth: .infinity)
+                                        .padding(.vertical, DS.Spacing.sm)
+                                        .background(selectedGender == "male" ? DS.Color.primary : DS.Color.surface)
+                                }
+
+                                Button {
+                                    withAnimation(DS.Anim.snappy) { selectedGender = "female" }
+                                } label: {
+                                    Text(L10n.t("أنثى", "Female"))
+                                        .font(DS.Font.caption1)
+                                        .fontWeight(.bold)
+                                        .foregroundColor(selectedGender == "female" ? .white : DS.Color.textSecondary)
+                                        .frame(maxWidth: .infinity)
+                                        .padding(.vertical, DS.Spacing.sm)
+                                        .background(selectedGender == "female" ? DS.Color.neonPink : DS.Color.surface)
+                                }
                             }
-                            .pickerStyle(.segmented)
+                            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: DS.Radius.sm)
+                                    .stroke(DS.Color.textTertiary.opacity(0.2), lineWidth: 1)
+                            )
                         }
                         Spacer()
                     }
                     .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.vertical, DS.Spacing.md)
+                    .padding(.vertical, DS.Spacing.xs)
 
                     DSDivider()
 
@@ -162,7 +187,7 @@ struct AddChildSheet: View {
                                 } label: {
                                     HStack(spacing: 6) {
                                         Text(selectedPhoneCountry.flag)
-                                        Text(selectedPhoneCountry.dialingCode).font(DS.Font.callout)
+                                        Text(selectedPhoneCountry.dialingCode).font(DS.Font.caption1)
                                         Image(systemName: "chevron.down")
                                             .font(DS.Font.scaled(10, weight: .semibold))
                                     }
@@ -187,7 +212,7 @@ struct AddChildSheet: View {
                         Spacer()
                     }
                     .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.vertical, DS.Spacing.md)
+                    .padding(.vertical, DS.Spacing.xs)
 
                     DSDivider()
 
@@ -198,7 +223,7 @@ struct AddChildSheet: View {
                             .environment(\.locale, Locale(identifier: L10n.isArabic ? "ar" : "en_US"))
                     }
                     .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.vertical, DS.Spacing.sm)
+                    .padding(.vertical, DS.Spacing.xs)
 
                     DSDivider()
 
@@ -210,7 +235,7 @@ struct AddChildSheet: View {
                             .tint(DS.Color.error)
                     }
                     .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.vertical, DS.Spacing.sm)
+                    .padding(.vertical, DS.Spacing.xs)
                     .animation(.default, value: isDeceased)
 
                     if isDeceased {
@@ -221,7 +246,7 @@ struct AddChildSheet: View {
                                 .environment(\.locale, Locale(identifier: L10n.isArabic ? "ar" : "en_US"))
                         }
                         .padding(.horizontal, DS.Spacing.lg)
-                        .padding(.vertical, DS.Spacing.sm)
+                        .padding(.vertical, DS.Spacing.xs)
                     }
                 }
             }

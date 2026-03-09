@@ -20,7 +20,7 @@ struct TrialExpiredView: View {
                 Spacer()
 
                 Image(systemName: "hourglass.bottomhalf.filled")
-                    .font(DS.Font.scaled(54, weight: .bold))
+                    .font(DS.Font.scaled(48, weight: .bold))
                     .foregroundColor(DS.Color.warning)
 
                 VStack(spacing: DS.Spacing.sm) {

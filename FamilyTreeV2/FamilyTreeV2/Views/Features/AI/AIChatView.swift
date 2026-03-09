@@ -49,7 +49,7 @@ struct AIChatView: View {
                     if let error = aiVM.errorMessage {
                         Text(error)
                             .font(DS.Font.caption1)
-                            .foregroundColor(.white)
+                            .foregroundColor(DS.Color.textOnPrimary)
                             .padding(DS.Spacing.md)
                             .frame(maxWidth: .infinity)
                             .background(DS.Color.error)
@@ -93,7 +93,7 @@ struct AIChatView: View {
                     .dsGlowShadow()
                 Image(systemName: "brain.head.profile")
                     .font(DS.Font.scaled(28, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundColor(DS.Color.textOnPrimary)
             }
 
             Text(L10n.t("مرحباً! أنا المساعد الذكي", "Hello! I'm the AI Assistant"))
@@ -118,7 +118,7 @@ struct AIChatView: View {
                             .font(DS.Font.caption1)
                             .foregroundColor(DS.Color.primary)
                             .padding(.horizontal, DS.Spacing.md)
-                            .padding(.vertical, DS.Spacing.sm)
+                            .padding(.vertical, DS.Spacing.xs)
                             .background(DS.Color.primary.opacity(0.08))
                             .cornerRadius(DS.Radius.full)
                     }
@@ -197,7 +197,7 @@ struct AIChatView: View {
             )
         }
         .padding(.horizontal, DS.Spacing.lg)
-        .padding(.vertical, DS.Spacing.md)
+        .padding(.vertical, DS.Spacing.xs)
         .background(DS.Color.surfaceElevated)
     }
 

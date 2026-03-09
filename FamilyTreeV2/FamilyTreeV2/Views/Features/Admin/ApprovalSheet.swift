@@ -24,7 +24,7 @@ struct ApprovalSheet: View {
                             .frame(width: 66, height: 66)
                         Image(systemName: "person.badge.plus")
                             .font(DS.Font.scaled(28, weight: .semibold))
-                            .foregroundColor(.white)
+                            .foregroundColor(DS.Color.textOnPrimary)
                     }
                     .dsGlowShadow()
 
@@ -56,7 +56,7 @@ struct ApprovalSheet: View {
                                 .frame(width: 32, height: 32)
                             Image(systemName: "magnifyingglass")
                                 .font(DS.Font.scaled(12, weight: .semibold))
-                                .foregroundColor(.white)
+                                .foregroundColor(DS.Color.textOnPrimary)
                         }
 
                         TextField(L10n.t("اكتب الاسم الخماسي للأب...", "Type the father's full name..."), text: $searchText)
@@ -74,7 +74,7 @@ struct ApprovalSheet: View {
                     .cornerRadius(DS.Radius.md)
                     .overlay(
                         RoundedRectangle(cornerRadius: DS.Radius.md)
-                            .stroke(isSearchFocused ? DS.Color.primary : Color.gray.opacity(0.12), lineWidth: isSearchFocused ? 2 : 1)
+                            .stroke(isSearchFocused ? DS.Color.primary : DS.Color.inactiveBorder, lineWidth: isSearchFocused ? 2 : 1)
                     )
                     .animation(.easeInOut(duration: 0.2), value: isSearchFocused)
                 }

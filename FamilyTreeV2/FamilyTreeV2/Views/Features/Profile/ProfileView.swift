@@ -8,7 +8,7 @@ struct ProfileView: View {
     @ObservedObject private var langManager = LanguageManager.shared
 
     @State private var showEditProfile = false
-    @State private var showSettings = false
+
     @State private var showAddChild = false
     @State private var editingChild: FamilyMember? = nil
     @State private var isReorderingChildren = false
@@ -31,14 +31,17 @@ struct ProfileView: View {
                             icon: "person.fill"
                         ) {
                             Button(action: { showEditProfile = true }) {
-                                Image(systemName: "pencil")
-                                    .font(DS.Font.scaled(18, weight: .bold))
-                                    .foregroundColor(.white)
-                                    .frame(width: 44, height: 44)
-                                    .background(Color.white.opacity(0.15))
-                                    .accessibilityLabel(L10n.t("تعديل الملف الشخصي", "Edit profile"))
-                                    .clipShape(Circle())
-                                    .overlay(Circle().stroke(Color.white.opacity(0.3), lineWidth: 1.5))
+                                ZStack {
+                                    Circle()
+                                        .fill(DS.Color.overlayIcon)
+                                        .frame(width: 44, height: 44)
+                                        .overlay(Circle().stroke(DS.Color.overlayIconBorder, lineWidth: 1.5))
+                                    Image(systemName: "pencil")
+                                        .font(DS.Font.scaled(18, weight: .bold))
+                                        .foregroundColor(DS.Color.textOnPrimary)
+                                }
+                                .contentShape(Circle())
+                                .accessibilityLabel(L10n.t("تعديل الملف الشخصي", "Edit profile"))
                             }
                             .buttonStyle(BounceButtonStyle())
                         }
@@ -68,7 +71,7 @@ struct ProfileView: View {
             }
             .navigationBarHidden(true)
             .sheet(isPresented: $showEditProfile) { if let c = user { EditProfileView(member: c) } }
-            .sheet(isPresented: $showSettings) { SettingsView() }
+
             .sheet(isPresented: $showAddChild) { if let c = user { AddChildSheet(member: c) } }
             .sheet(item: $editingChild) { child in EditChildSheet(member: child) }
             .onChange(of: showAddChild) { _, isPresented in
@@ -162,7 +165,7 @@ struct ProfileView: View {
                         .padding(.vertical, DS.Spacing.xs)
                         .background(DS.Color.surface)
                         .clipShape(Capsule())
-                        .overlay(Capsule().stroke(Color.gray.opacity(0.15), lineWidth: 1))
+                        .overlay(Capsule().stroke(DS.Color.inactiveBorder, lineWidth: 1))
                     }
                     
                     // عدد الأبناء
@@ -227,7 +230,7 @@ struct ProfileView: View {
                             .clipShape(Circle())
                     }
                     .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.vertical, DS.Spacing.md)
+                    .padding(.vertical, DS.Spacing.xs)
                 }
                 .buttonStyle(DSBoldButtonStyle())
             }
@@ -484,7 +487,7 @@ struct ProfileView: View {
                     if isDeceased {
                         Text(L10n.t("متوفى", "Deceased"))
                             .font(DS.Font.scaled(8, weight: .bold))
-                            .foregroundColor(.white)
+                            .foregroundColor(DS.Color.textOnPrimary)
                             .padding(.horizontal, 4)
                             .padding(.vertical, 1)
                             .background(DS.Color.error.opacity(0.8))
@@ -522,7 +525,7 @@ struct ProfileView: View {
                     // رقم الترتيب
                     Text("\(index + 1)")
                         .font(DS.Font.scaled(13, weight: .bold))
-                        .foregroundColor(.white)
+                        .foregroundColor(DS.Color.textOnPrimary)
                         .frame(width: 28, height: 28)
                         .background(iconColor.opacity(0.8))
                         .clipShape(Circle())
@@ -594,7 +597,7 @@ struct ProfileView: View {
                     }
                 }
                 .padding(.horizontal, DS.Spacing.lg)
-                .padding(.vertical, DS.Spacing.sm)
+                .padding(.vertical, DS.Spacing.xs)
             }
         }
         .padding(.vertical, DS.Spacing.xs)
@@ -630,7 +633,7 @@ struct ProfileView: View {
                                 .clipShape(Circle())
                         }
                         .padding(.horizontal, DS.Spacing.lg)
-                        .padding(.vertical, DS.Spacing.md)
+                        .padding(.vertical, DS.Spacing.xs)
                     }
                     .buttonStyle(DSBoldButtonStyle())
 
@@ -655,14 +658,14 @@ struct ProfileView: View {
                                 .clipShape(Circle())
                         }
                         .padding(.horizontal, DS.Spacing.lg)
-                        .padding(.vertical, DS.Spacing.md)
+                        .padding(.vertical, DS.Spacing.xs)
                     }
                     .buttonStyle(DSBoldButtonStyle())
 
                     DSDivider()
 
                     // Settings Row
-                    Button(action: { showSettings = true }) {
+                    NavigationLink(destination: SettingsView()) {
                         HStack(spacing: DS.Spacing.md) {
                             DSIcon("gearshape.fill", color: DS.Color.warning)
 
@@ -680,7 +683,7 @@ struct ProfileView: View {
                                 .clipShape(Circle())
                         }
                         .padding(.horizontal, DS.Spacing.lg)
-                        .padding(.vertical, DS.Spacing.md)
+                        .padding(.vertical, DS.Spacing.xs)
                     }
                     .buttonStyle(DSBoldButtonStyle())
 
@@ -698,7 +701,7 @@ struct ProfileView: View {
                             Spacer()
                         }
                         .padding(.horizontal, DS.Spacing.lg)
-                        .padding(.vertical, DS.Spacing.md)
+                        .padding(.vertical, DS.Spacing.xs)
                     }
                     .buttonStyle(DSBoldButtonStyle())
                 }

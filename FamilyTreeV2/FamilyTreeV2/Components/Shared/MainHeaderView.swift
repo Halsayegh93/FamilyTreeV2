@@ -45,14 +45,14 @@ struct MainHeaderView<TrailingContent: View>: View {
                     if let icon = customIcon {
                         ZStack {
                             Circle()
-                                .fill(Color.white.opacity(0.15))
+                                .fill(DS.Color.overlayIcon)
                                 .frame(width: 48, height: 48)
                                 .overlay(
-                                    Circle().stroke(Color.white.opacity(0.3), lineWidth: 1.5)
+                                    Circle().stroke(DS.Color.overlayIconBorder, lineWidth: 1.5)
                                 )
                             Image(systemName: icon)
                                 .font(DS.Font.scaled(18, weight: .bold))
-                                .foregroundColor(.white)
+                                .foregroundColor(DS.Color.textOnPrimary)
                         }
                         .scaleEffect(isAnimating ? 1.0 : 0.8)
                         .opacity(isAnimating ? 1.0 : 0.0)
@@ -60,11 +60,11 @@ struct MainHeaderView<TrailingContent: View>: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(customTitle)
                             .font(DS.Font.title3)
-                            .foregroundColor(.white)
+                            .foregroundColor(DS.Color.textOnPrimary)
                         if let customSubtitle = customSubtitle, !customSubtitle.isEmpty {
                             Text(customSubtitle)
                                 .font(DS.Font.scaled(13, weight: .medium))
-                                .foregroundColor(Color.white.opacity(0.85))
+                                .foregroundColor(DS.Color.overlayText)
                         }
                     }
                     .offset(x: isAnimating ? 0 : 15)
@@ -76,14 +76,14 @@ struct MainHeaderView<TrailingContent: View>: View {
                     HStack(spacing: DS.Spacing.md) {
                         ZStack {
                             Circle()
-                                .fill(Color.white.opacity(0.15))
+                                .fill(DS.Color.overlayIcon)
                                 .frame(width: 48, height: 48)
                                 .overlay(
-                                    Circle().stroke(Color.white.opacity(0.3), lineWidth: 1.5)
+                                    Circle().stroke(DS.Color.overlayIconBorder, lineWidth: 1.5)
                                 )
                             Text(String(authVM.currentUser?.fullName.first ?? "U"))
                                 .font(DS.Font.scaled(18, weight: .bold))
-                                .foregroundColor(.white)
+                                .foregroundColor(DS.Color.textOnPrimary)
                         }
                         .scaleEffect(isAnimating ? 1.0 : 0.8)
                         .opacity(isAnimating ? 1.0 : 0.0)
@@ -91,10 +91,10 @@ struct MainHeaderView<TrailingContent: View>: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(L10n.t("مرحباً 👋", "Hello 👋"))
                                 .font(DS.Font.scaled(13, weight: .medium))
-                                .foregroundColor(Color.white.opacity(0.85))
+                                .foregroundColor(DS.Color.overlayText)
                             Text(authVM.currentUser?.firstName ?? "Member")
                                 .font(DS.Font.title3)
-                                .foregroundColor(.white)
+                                .foregroundColor(DS.Color.textOnPrimary)
                         }
                         .offset(x: isAnimating ? 0 : 15)
                         .opacity(isAnimating ? 1.0 : 0.0)
@@ -112,16 +112,15 @@ struct MainHeaderView<TrailingContent: View>: View {
                 if customTitle == nil {
                     if authVM.currentUser?.role == .admin || authVM.currentUser?.role == .supervisor {
                         Button(action: { selectedTab = 4 }) {
-                            headerIconView(icon: "shield.fill", color: .white)
+                            headerIconView(icon: "shield.fill")
                         }
                         .buttonStyle(BounceButtonStyle())
                         .accessibilityLabel(L10n.t("لوحة الإدارة", "Admin Dashboard"))
                     }
-                    Button(action: { showingNotifications = true }) {
+                    NavigationLink(destination: NotificationsCenterView()) {
                         ZStack(alignment: .topTrailing) {
                             headerIconView(
-                                icon: notificationVM.unreadNotificationsCount > 0 ? "bell.badge.fill" : "bell.fill",
-                                color: .white
+                                icon: notificationVM.unreadNotificationsCount > 0 ? "bell.badge.fill" : "bell.fill"
                             )
                             
                             if notificationVM.unreadNotificationsCount > 0 {
@@ -151,11 +150,8 @@ struct MainHeaderView<TrailingContent: View>: View {
         .background(
             (backgroundGradient ?? DS.Color.gradientPrimary)
                 .ignoresSafeArea(edges: .top)
-                .shadow(color: hasDropShadow ? .black.opacity(0.15) : .clear, radius: 8, x: 0, y: 4)
+                .shadow(color: hasDropShadow ? DS.Color.shadowRegular : .clear, radius: 8, x: 0, y: 4)
         )
-        .sheet(isPresented: $showingNotifications) {
-            NotificationsCenterView()
-        }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .onAppear {
             withAnimation(.spring(response: 0.5, dampingFraction: 0.7, blendDuration: 0.2)) {
@@ -164,15 +160,15 @@ struct MainHeaderView<TrailingContent: View>: View {
         }
     }
     
-    private func headerIconView(icon: String, color: Color) -> some View {
+    private func headerIconView(icon: String) -> some View {
         ZStack {
             Circle()
-                .fill(Color.white.opacity(0.15))
+                .fill(DS.Color.overlayIcon)
                 .frame(width: 44, height: 44)
-                .overlay(Circle().stroke(Color.white.opacity(0.3), lineWidth: 1))
+                .overlay(Circle().stroke(DS.Color.overlayIconBorder, lineWidth: 1.5))
             Image(systemName: icon)
                 .font(DS.Font.scaled(18, weight: .bold))
-                .foregroundColor(color)
+                .foregroundColor(DS.Color.textOnPrimary)
         }
         .contentShape(Circle())
     }

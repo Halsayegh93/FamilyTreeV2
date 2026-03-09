@@ -109,7 +109,7 @@ struct AdminRegisterMemberView: View {
 
                 Image(systemName: "person.badge.plus")
                     .font(DS.Font.scaled(42, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundColor(DS.Color.textOnPrimary)
             }
             .dsGlowShadow()
 
@@ -141,7 +141,7 @@ struct AdminRegisterMemberView: View {
                     }
             }
             .padding(.horizontal, DS.Spacing.md)
-            .padding(.vertical, DS.Spacing.sm)
+            .padding(.vertical, DS.Spacing.xs)
         }
     }
 
@@ -161,7 +161,7 @@ struct AdminRegisterMemberView: View {
                     }
             }
             .padding(.horizontal, DS.Spacing.md)
-            .padding(.vertical, DS.Spacing.sm)
+            .padding(.vertical, DS.Spacing.xs)
         }
     }
 
@@ -206,7 +206,7 @@ struct AdminRegisterMemberView: View {
                 }
             }
             .padding(.horizontal, DS.Spacing.md)
-            .padding(.vertical, DS.Spacing.sm)
+            .padding(.vertical, DS.Spacing.xs)
         }
     }
 
@@ -227,7 +227,7 @@ struct AdminRegisterMemberView: View {
                         .tint(DS.Color.primary)
                 }
                 .padding(.horizontal, DS.Spacing.md)
-                .padding(.vertical, DS.Spacing.sm)
+                .padding(.vertical, DS.Spacing.xs)
                 .animation(.default, value: hasBirthDate)
 
                 if hasBirthDate {
@@ -243,7 +243,7 @@ struct AdminRegisterMemberView: View {
                             .environment(\.locale, Locale(identifier: "en_US"))
                     }
                     .padding(.horizontal, DS.Spacing.md)
-                    .padding(.vertical, DS.Spacing.sm)
+                    .padding(.vertical, DS.Spacing.xs)
                 }
             }
         }
@@ -282,7 +282,7 @@ struct AdminRegisterMemberView: View {
                     .multilineTextAlignment(.leading)
             }
             .padding(.horizontal, DS.Spacing.md)
-            .padding(.vertical, DS.Spacing.sm)
+            .padding(.vertical, DS.Spacing.xs)
             .onChange(of: phoneNumber) { _, newValue in
                 phoneNumber = KuwaitPhone.userTypedDigits(newValue, maxDigits: selectedPhoneCountry.maxDigits)
             }

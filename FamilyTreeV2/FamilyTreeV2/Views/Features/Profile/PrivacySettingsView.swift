@@ -115,7 +115,7 @@ struct PrivacySettingsView: View {
                         .tint(DS.Color.success)
                 }
                 .padding(.horizontal, DS.Spacing.lg)
-                .padding(.vertical, DS.Spacing.md)
+                .padding(.vertical, DS.Spacing.xs)
 
 
             }
@@ -145,7 +145,7 @@ struct PrivacySettingsView: View {
                         .tint(DS.Color.error)
                 }
                 .padding(.horizontal, DS.Spacing.lg)
-                .padding(.vertical, DS.Spacing.md)
+                .padding(.vertical, DS.Spacing.xs)
             }
         }
     }
@@ -178,7 +178,7 @@ struct PrivacySettingsView: View {
                         .tint(DS.Color.warning)
                 }
                 .padding(.horizontal, DS.Spacing.lg)
-                .padding(.vertical, DS.Spacing.md)
+                .padding(.vertical, DS.Spacing.xs)
             }
         }
     }
@@ -211,7 +211,7 @@ struct PrivacySettingsView: View {
                         .tint(DS.Color.primary)
                 }
                 .padding(.horizontal, DS.Spacing.lg)
-                .padding(.vertical, DS.Spacing.md)
+                .padding(.vertical, DS.Spacing.xs)
             }
         }
     }

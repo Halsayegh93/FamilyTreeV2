@@ -23,20 +23,20 @@ struct AIAdminSummaryView: View {
                                 VStack(alignment: .leading, spacing: DS.Spacing.sm) {
                                     Text(L10n.t("التحليل الذكي", "AI Analysis"))
                                         .font(DS.Font.title2)
-                                        .foregroundColor(.white)
+                                        .foregroundColor(DS.Color.textOnPrimary)
                                     Text(L10n.t("ملخص إداري مدعوم بالذكاء الاصطناعي", "AI-powered admin summary"))
                                         .font(DS.Font.subheadline)
-                                        .foregroundColor(.white.opacity(0.85))
+                                        .foregroundColor(DS.Color.overlayText)
                                 }
                                 .frame(maxWidth: .infinity, alignment: .leading)
 
                                 ZStack {
                                     Circle()
-                                        .fill(.white.opacity(0.15))
+                                        .fill(DS.Color.overlayIcon)
                                         .frame(width: 50, height: 50)
                                     Image(systemName: "sparkles")
                                         .font(DS.Font.scaled(22, weight: .bold))
-                                        .foregroundColor(.white)
+                                        .foregroundColor(DS.Color.textOnPrimary)
                                 }
                             }
                             .padding(DS.Spacing.xl)
@@ -74,10 +74,10 @@ struct AIAdminSummaryView: View {
                             && aiVM.adminError == nil && aiVM.treeAnalysisError == nil {
                             VStack(spacing: DS.Spacing.lg) {
                                 Image(systemName: "sparkles")
-                                    .font(DS.Font.scaled(44))
+                                    .font(DS.Font.scaled(40))
                                     .foregroundColor(DS.Color.textTertiary)
                                 Text(L10n.t("لا تتوفر بيانات للتحليل حالياً", "No data available for analysis"))
-                                    .font(DS.Font.callout)
+                                    .font(DS.Font.title3)
                                     .foregroundColor(DS.Color.textSecondary)
                                 DSSecondaryButton(L10n.t("إعادة المحاولة", "Retry"), icon: "arrow.clockwise") {
                                     Task {

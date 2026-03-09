@@ -65,7 +65,6 @@ struct AddNewsView: View {
     }
 
     // MARK: - Type Selector
-    private let gridColumns = Array(repeating: GridItem(.flexible(), spacing: DS.Spacing.sm), count: 3)
 
     private var addNewsTypeSelector: some View {
         DSCard(padding: 0) {
@@ -75,45 +74,43 @@ struct AddNewsView: View {
                 iconColor: DS.Color.primary
             )
 
-            LazyVGrid(columns: gridColumns, spacing: DS.Spacing.sm) {
-                ForEach(NewsTypeHelper.allTypes, id: \.self) { type in
-                    let isSelected = selectedType == type
-                    let typeColor = NewsTypeHelper.color(for: type)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: DS.Spacing.sm) {
+                    ForEach(NewsTypeHelper.mainTypes, id: \.self) { type in
+                        let isSelected = selectedType == type
+                        let typeColor = NewsTypeHelper.color(for: type)
 
-                    Button(action: {
-                        withAnimation(DS.Anim.snappy) { selectedType = type }
-                    }) {
-                        VStack(spacing: DS.Spacing.xs) {
-                            ZStack {
-                                Circle()
-                                    .fill(isSelected ? typeColor : typeColor.opacity(0.12))
-                                    .frame(width: 42, height: 42)
-
+                        Button(action: {
+                            withAnimation(DS.Anim.snappy) { selectedType = type }
+                        }) {
+                            HStack(spacing: DS.Spacing.sm) {
                                 Image(systemName: NewsTypeHelper.icon(for: type))
-                                    .font(DS.Font.scaled(16, weight: .semibold))
-                                    .foregroundColor(isSelected ? .white : typeColor)
-                            }
+                                    .font(DS.Font.scaled(14, weight: .semibold))
+                                    .foregroundColor(isSelected ? DS.Color.textOnPrimary : typeColor)
+                                    .frame(width: 28, height: 28)
+                                    .background(isSelected ? typeColor : typeColor.opacity(0.12))
+                                    .clipShape(Circle())
 
-                            Text(NewsTypeHelper.displayName(for: type))
-                                .font(DS.Font.caption1)
-                                .fontWeight(.bold)
-                                .foregroundColor(isSelected ? typeColor : DS.Color.textSecondary)
+                                Text(NewsTypeHelper.displayName(for: type))
+                                    .font(DS.Font.scaled(13, weight: .bold))
+                                    .foregroundColor(isSelected ? typeColor : DS.Color.textSecondary)
+                            }
+                            .padding(.horizontal, DS.Spacing.md)
+                            .padding(.vertical, DS.Spacing.xs)
+                            .background(
+                                Capsule()
+                                    .fill(isSelected ? typeColor.opacity(0.1) : DS.Color.surface.opacity(0.5))
+                            )
+                            .overlay(
+                                Capsule()
+                                    .stroke(isSelected ? typeColor.opacity(0.4) : DS.Color.primary.opacity(0.08), lineWidth: 1.5)
+                            )
                         }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, DS.Spacing.sm)
-                        .background(
-                            RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                                .fill(isSelected ? typeColor.opacity(0.1) : Color.clear)
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                                .stroke(isSelected ? typeColor.opacity(0.4) : Color.clear, lineWidth: 1.5)
-                        )
+                        .buttonStyle(DSBoldButtonStyle())
                     }
-                    .buttonStyle(DSBoldButtonStyle())
                 }
+                .padding(.horizontal, DS.Spacing.md)
             }
-            .padding(.horizontal, DS.Spacing.md)
             .padding(.bottom, DS.Spacing.md)
         }
     }
@@ -218,7 +215,7 @@ struct AddNewsView: View {
                 .foregroundColor(DS.Color.textPrimary)
         }
         .padding(.horizontal, DS.Spacing.md)
-        .padding(.vertical, DS.Spacing.sm)
+        .padding(.vertical, DS.Spacing.xs)
         .background(DS.Color.surface)
         .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
         .overlay(
