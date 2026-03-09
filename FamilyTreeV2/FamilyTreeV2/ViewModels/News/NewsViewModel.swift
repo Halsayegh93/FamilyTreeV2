@@ -1,0 +1,787 @@
+import Foundation
+import Supabase
+import SwiftUI
+import Combine
+
+@MainActor
+class NewsViewModel: ObservableObject {
+
+    // MARK: - Private Types
+
+    private struct NewsPollVoteRecord: Decodable {
+        let news_id: UUID
+        let member_id: UUID
+        let option_index: Int
+    }
+
+    // MARK: - Supabase Client
+
+    let supabase = SupabaseConfig.client
+
+    // MARK: - Published Properties
+
+    @Published var allNews: [NewsPost] = []
+    @Published var pendingNewsRequests: [NewsPost] = []
+    @Published var pollVotesByPost: [UUID: [Int: Int]] = [:]
+    @Published var userVoteByPost: [UUID: Int] = [:]
+    @Published var likedPosts: Set<UUID> = []
+    @Published var likesCountByPost: [UUID: Int] = [:]
+    @Published var commentsCountByPost: [UUID: Int] = [:]
+    @Published var commentsByPost: [UUID: [NewsCommentRecord]] = [:]
+    @Published var newsApprovalFeatureAvailable: Bool = true
+    @Published var newsPollFeatureAvailable: Bool = true
+    @Published var newsPostErrorMessage: String?
+    @Published var isLoading: Bool = false
+
+    // MARK: - Fetch Throttle Timestamps
+
+    private var lastNewsFetchDate: Date?
+    private var lastPendingNewsFetchDate: Date?
+
+    // MARK: - Dependencies
+
+    weak var authVM: AuthViewModel?
+    weak var memberVM: MemberViewModel?
+    weak var notificationVM: NotificationViewModel?
+
+    // MARK: - Configure
+
+    func configure(authVM: AuthViewModel, memberVM: MemberViewModel, notificationVM: NotificationViewModel) {
+        self.authVM = authVM
+        self.memberVM = memberVM
+        self.notificationVM = notificationVM
+    }
+
+    // MARK: - Local Removal Helper
+
+    private func removeLocallyThenRefresh<T: Identifiable>(
+        from array: inout [T],
+        id: T.ID,
+        refresh: @escaping () async -> Void
+    ) {
+        withAnimation(DS.Anim.snappy) {
+            array.removeAll { $0.id as AnyHashable == id as AnyHashable }
+        }
+        Task {
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            await refresh()
+        }
+    }
+
+    // MARK: - Computed Properties
+
+    var canAutoPublishNews: Bool { authVM?.canModerate ?? false }
+
+    private var currentUser: FamilyMember? { authVM?.currentUser }
+
+    private var canModerate: Bool { authVM?.canModerate ?? false }
+
+    // MARK: - Auth Helper
+
+    private func authenticatedUserId() async -> UUID? {
+        if let sessionUser = try? await supabase.auth.session.user {
+            return sessionUser.id
+        }
+        return currentUser?.id
+    }
+
+    // MARK: - Schema Error Helpers
+
+    private func schemaErrorDescription(_ error: Error) -> String {
+        let raw = String(describing: error)
+        return "\(raw) \(error.localizedDescription)".lowercased()
+    }
+
+    private func isCancellationError(_ error: Error) -> Bool {
+        if error is CancellationError { return true }
+
+        let nsError = error as NSError
+        if nsError.domain == NSURLErrorDomain && nsError.code == NSURLErrorCancelled {
+            return true
+        }
+
+        let desc = schemaErrorDescription(error)
+        return desc.contains("cancelled") || desc.contains("canceled") || desc.contains("مُلغى")
+    }
+
+    private func isMissingNewsApprovalColumnError(_ error: Error) -> Bool {
+        let desc = schemaErrorDescription(error)
+        return (desc.contains("news.approval_status") && desc.contains("does not exist")) ||
+        (desc.contains("42703") && desc.contains("approval_status"))
+    }
+
+    private func isMissingNewsRichContentColumnError(_ error: Error) -> Bool {
+        let desc = schemaErrorDescription(error)
+        let mentionsRichColumns =
+            desc.contains("image_urls") ||
+            desc.contains("poll_question") ||
+            desc.contains("poll_options")
+
+        return (desc.contains("42703") && mentionsRichColumns) ||
+        (mentionsRichColumns && (
+            desc.contains("could not find") ||
+            desc.contains("schema cache") ||
+            desc.contains("pgrst")
+        ))
+    }
+
+    private func isMissingNewsSchemaColumnError(_ error: Error) -> Bool {
+        let desc = schemaErrorDescription(error)
+        guard desc.contains("42703") else { return false }
+
+        return desc.contains("approved_by") ||
+        desc.contains("approved_at") ||
+        desc.contains("author_id") ||
+        desc.contains("author_name") ||
+        desc.contains("author_role") ||
+        desc.contains("role_color") ||
+        desc.contains("content") ||
+        desc.contains("image_url") ||
+        desc.contains("type")
+    }
+
+    private func isMissingNewsPollVotesTableError(_ error: Error) -> Bool {
+        let desc = schemaErrorDescription(error)
+        return desc.contains("news_poll_votes") &&
+        (desc.contains("does not exist") || desc.contains("42p01"))
+    }
+
+    // MARK: - Fetch News
+
+    func fetchNews(force: Bool = false) async {
+        if !force, let last = lastNewsFetchDate, Date().timeIntervalSince(last) < 10, !allNews.isEmpty { return }
+        lastNewsFetchDate = Date()
+        do {
+            let response: [NewsPost] = try await supabase.from("news")
+                .select()
+                .order("created_at", ascending: false)
+                .execute()
+                .value
+
+            let userId = currentUser?.id
+            if canModerate {
+                self.allNews = response
+            } else {
+                self.allNews = response.filter { post in
+                    post.isApproved || post.author_id == userId
+                }
+            }
+
+            // تجنب إطلاق طلبات فرعية إذا تم إلغاء المهمة
+            guard !Task.isCancelled else { return }
+            
+            let pollPostIds = allNews.filter { $0.hasPoll }.map(\.id)
+            let allPostIds = allNews.map(\.id)
+            await fetchNewsPollVotes(for: pollPostIds)
+            await fetchNewsLikes(for: allPostIds)
+            await fetchNewsComments(for: allPostIds)
+        } catch {
+            Log.error("خطأ جلب الأخبار: \(error)")
+        }
+    }
+
+    // MARK: - Fetch Poll Votes
+
+    func fetchNewsPollVotes(for postIds: [UUID]) async {
+        guard newsPollFeatureAvailable else {
+            pollVotesByPost = [:]
+            userVoteByPost = [:]
+            return
+        }
+        guard !postIds.isEmpty else {
+            pollVotesByPost = [:]
+            userVoteByPost = [:]
+            return
+        }
+
+        do {
+            let postIdSet = Set(postIds)
+            let votes: [NewsPollVoteRecord] = try await supabase
+                .from("news_poll_votes")
+                .select("news_id,member_id,option_index")
+                .execute()
+                .value
+
+            var aggregated: [UUID: [Int: Int]] = [:]
+            var userSelection: [UUID: Int] = [:]
+            let currentUserId = currentUser?.id
+
+            for vote in votes where postIdSet.contains(vote.news_id) {
+                aggregated[vote.news_id, default: [:]][vote.option_index, default: 0] += 1
+                if let currentUserId, vote.member_id == currentUserId {
+                    userSelection[vote.news_id] = vote.option_index
+                }
+            }
+
+            pollVotesByPost = aggregated
+            userVoteByPost = userSelection
+            newsPollFeatureAvailable = true
+        } catch {
+            if isMissingNewsPollVotesTableError(error) {
+                newsPollFeatureAvailable = false
+                pollVotesByPost = [:]
+                userVoteByPost = [:]
+            } else {
+                Log.error("خطأ جلب أصوات التصويت: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    // MARK: - Fetch Likes
+
+    func fetchNewsLikes(for postIds: [UUID]) async {
+        guard !postIds.isEmpty else {
+            likesCountByPost = [:]
+            likedPosts = []
+            return
+        }
+
+        do {
+            let postIdSet = Set(postIds)
+            let likes: [NewsLikeRecord] = try await supabase
+                .from("news_likes")
+                .select()
+                .execute()
+                .value
+
+            var counts: [UUID: Int] = [:]
+            var userLikes: Set<UUID> = []
+            let currentUserId = await authenticatedUserId()
+
+            for like in likes where postIdSet.contains(like.news_id) {
+                counts[like.news_id, default: 0] += 1
+                if let currentUserId, like.member_id == currentUserId {
+                    userLikes.insert(like.news_id)
+                }
+            }
+
+            self.likesCountByPost = counts
+            self.likedPosts = userLikes
+        } catch {
+            if isCancellationError(error) { return }
+            Log.error("خطأ جلب الاعجابات: \(error.localizedDescription)")
+        }
+    }
+
+    // MARK: - Fetch Comments
+
+    func fetchNewsComments(for postIds: [UUID]) async {
+        guard !postIds.isEmpty else {
+            commentsByPost = [:]
+            commentsCountByPost = [:]
+            return
+        }
+
+        do {
+            let postIdSet = Set(postIds)
+            let commentsData: [NewsCommentRecord] = try await supabase
+                .from("news_comments")
+                .select()
+                .order("created_at", ascending: true)
+                .execute()
+                .value
+
+            var aggregated: [UUID: [NewsCommentRecord]] = [:]
+            var counts: [UUID: Int] = [:]
+
+            for comment in commentsData where postIdSet.contains(comment.news_id) {
+                aggregated[comment.news_id, default: []].append(comment)
+                counts[comment.news_id, default: 0] += 1
+            }
+
+            self.commentsByPost = aggregated
+            self.commentsCountByPost = counts
+        } catch {
+            if isCancellationError(error) { return }
+            Log.error("خطأ جلب التعليقات: \(error.localizedDescription)")
+        }
+    }
+
+    // MARK: - Toggle Like
+
+    func toggleNewsLike(for postId: UUID) async {
+        guard let memberId = await authenticatedUserId() else { return }
+
+        let isCurrentlyLiked = likedPosts.contains(postId)
+
+        // Optimistic update
+        if isCurrentlyLiked {
+            likedPosts.remove(postId)
+            likesCountByPost[postId, default: 1] -= 1
+        } else {
+            likedPosts.insert(postId)
+            likesCountByPost[postId, default: 0] += 1
+        }
+
+        do {
+            if isCurrentlyLiked {
+                try await supabase
+                    .from("news_likes")
+                    .delete()
+                    .eq("news_id", value: postId.uuidString)
+                    .eq("member_id", value: memberId.uuidString)
+                    .execute()
+            } else {
+                let likeRecord: [String: AnyEncodable] = [
+                    "news_id": AnyEncodable(postId.uuidString),
+                    "member_id": AnyEncodable(memberId.uuidString)
+                ]
+                try await supabase
+                    .from("news_likes")
+                    .insert(likeRecord)
+                    .execute()
+            }
+        } catch {
+            Log.error("خطأ تحديث الاعجاب: \(error.localizedDescription)")
+            // Revert on error
+            if isCurrentlyLiked {
+                likedPosts.insert(postId)
+                likesCountByPost[postId, default: 0] += 1
+            } else {
+                likedPosts.remove(postId)
+                likesCountByPost[postId, default: 1] -= 1
+            }
+        }
+    }
+
+    // MARK: - Add Comment
+
+    func addNewsComment(to postId: UUID, text: String) async -> Bool {
+        guard let memberId = await authenticatedUserId(),
+              let authorName = currentUser?.fullName else { return false }
+
+        let normalizedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedText.isEmpty else { return false }
+
+        do {
+            let commentRecord: [String: AnyEncodable] = [
+                "news_id": AnyEncodable(postId.uuidString),
+                "author_id": AnyEncodable(memberId.uuidString),
+                "author_name": AnyEncodable(authorName),
+                "content": AnyEncodable(normalizedText)
+            ]
+
+            try await supabase
+                .from("news_comments")
+                .insert(commentRecord)
+                .execute()
+
+            // Refresh comments to get new data
+            await fetchNewsComments(for: allNews.map(\.id))
+            return true
+        } catch {
+            Log.error("خطأ إضافة تعليق: \(error.localizedDescription)")
+            return false
+        }
+    }
+
+    // MARK: - Fetch Pending News Requests
+
+    func fetchPendingNewsRequests(force: Bool = false) async {
+        if !force, let last = lastPendingNewsFetchDate, Date().timeIntervalSince(last) < 20, !pendingNewsRequests.isEmpty { return }
+        lastPendingNewsFetchDate = Date()
+        guard canModerate else {
+            pendingNewsRequests = []
+            return
+        }
+        guard newsApprovalFeatureAvailable else {
+            pendingNewsRequests = []
+            return
+        }
+
+        do {
+            let response: [NewsPost] = try await supabase.from("news")
+                .select()
+                .eq("approval_status", value: "pending")
+                .order("created_at", ascending: false)
+                .execute()
+                .value
+            newsApprovalFeatureAvailable = true
+            self.pendingNewsRequests = response
+        } catch {
+            if isMissingNewsApprovalColumnError(error) {
+                newsApprovalFeatureAvailable = false
+                pendingNewsRequests = []
+            } else {
+                Log.error("خطأ جلب طلبات الأخبار: \(error)")
+            }
+        }
+    }
+
+    // MARK: - Upload News Image
+
+    func uploadNewsImage(image: UIImage, for authorId: UUID) async -> String? {
+        guard let imageData = image.jpegData(compressionQuality: 0.7) else { return nil }
+
+        let imageId = UUID()
+        let safeAuthorName = memberVM?.getSafeMemberName(for: authorId) ?? authorId.uuidString
+        let filePath = "news/\(safeAuthorName)/\(imageId.uuidString).jpg"
+
+        do {
+            try await supabase.storage
+                .from("news")
+                .upload(
+                    filePath,
+                    data: imageData,
+                    options: FileOptions(contentType: "image/jpeg", upsert: true)
+                )
+
+            let publicURL = try supabase.storage
+                .from("news")
+                .getPublicURL(path: filePath)
+                .absoluteString
+
+            return publicURL
+        } catch {
+            Log.error("خطأ رفع صورة الخبر: \(error.localizedDescription)")
+            return nil
+        }
+    }
+
+    // MARK: - Submit Poll Vote
+
+    func submitNewsPollVote(postId: UUID, optionIndex: Int) async {
+        guard let memberId = currentUser?.id else { return }
+        guard newsPollFeatureAvailable else { return }
+
+        do {
+            let payload: [String: AnyEncodable] = [
+                "news_id": AnyEncodable(postId.uuidString),
+                "member_id": AnyEncodable(memberId.uuidString),
+                "option_index": AnyEncodable(optionIndex)
+            ]
+
+            try await supabase
+                .from("news_poll_votes")
+                .upsert(payload, onConflict: "news_id,member_id")
+                .execute()
+
+            var counts = pollVotesByPost[postId] ?? [:]
+            if let old = userVoteByPost[postId] {
+                if old != optionIndex {
+                    counts[old] = max(0, (counts[old] ?? 1) - 1)
+                    counts[optionIndex] = (counts[optionIndex] ?? 0) + 1
+                    userVoteByPost[postId] = optionIndex
+                }
+            } else {
+                counts[optionIndex] = (counts[optionIndex] ?? 0) + 1
+                userVoteByPost[postId] = optionIndex
+            }
+            pollVotesByPost[postId] = counts
+        } catch {
+            if isMissingNewsPollVotesTableError(error) {
+                newsPollFeatureAvailable = false
+            } else {
+                Log.error("خطأ إرسال التصويت: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    // MARK: - Post News
+
+    func postNews(
+        content: String,
+        type: String,
+        imageURLs: [String] = [],
+        pollQuestion: String? = nil,
+        pollOptions: [String] = []
+    ) async -> Bool {
+        guard let user = currentUser else {
+            Log.error("لا يوجد مستخدم مسجل دخول")
+            newsPostErrorMessage = "لا يوجد مستخدم مسجل دخول."
+            return false
+        }
+
+        self.isLoading = true
+        newsPostErrorMessage = nil
+
+        let shouldAutoApprove = canAutoPublishNews
+
+        let newPost: [String: AnyEncodable] = [
+            "author_id": AnyEncodable(user.id.uuidString),
+            "author_name": AnyEncodable(user.fullName),
+            "author_role": AnyEncodable(user.roleName),
+            "role_color": AnyEncodable(user.role == .admin ? "purple" : (user.role == .supervisor ? "orange" : "blue")),
+            "content": AnyEncodable(content),
+            "type": AnyEncodable(type),
+            "image_url": AnyEncodable(imageURLs.first),
+            "image_urls": AnyEncodable(imageURLs),
+            "poll_question": AnyEncodable(pollQuestion),
+            "poll_options": AnyEncodable(pollOptions),
+            "approval_status": AnyEncodable(shouldAutoApprove ? "approved" : "pending"),
+            "approved_by": AnyEncodable(shouldAutoApprove ? user.id.uuidString : Optional<String>.none)
+        ]
+
+        do {
+            try await supabase.from("news").insert(newPost).execute()
+            if !shouldAutoApprove, currentUser?.role == .member {
+                await notificationVM?.notifyAdminsWithPush(
+                    title: "خبر جديد بانتظار المراجعة",
+                    body: "قام عضو بإضافة خبر جديد ويحتاج موافقة الإدارة.",
+                    kind: "news_add"
+                )
+            }
+            if shouldAutoApprove {
+                await notificationVM?.notifyAdmins(
+                    title: "خبر جديد",
+                    body: "تم نشر خبر جديد.",
+                    kind: "news_add"
+                )
+            }
+            Log.info(shouldAutoApprove ? "تم نشر الخبر بنجاح" : "تم إرسال الخبر للمراجعة")
+            await fetchNews(force: true)
+            if canModerate {
+                await fetchPendingNewsRequests(force: true)
+            }
+            self.isLoading = false
+            return true
+        } catch {
+            if isMissingNewsApprovalColumnError(error) ||
+                isMissingNewsRichContentColumnError(error) ||
+                isMissingNewsSchemaColumnError(error) {
+                newsApprovalFeatureAvailable = false
+                let legacyPost: [String: AnyEncodable] = [
+                    "author_id": AnyEncodable(user.id.uuidString),
+                    "author_name": AnyEncodable(user.fullName),
+                    "author_role": AnyEncodable(user.roleName),
+                    "role_color": AnyEncodable(user.role == .admin ? "purple" : (user.role == .supervisor ? "orange" : "blue")),
+                    "content": AnyEncodable(content),
+                    "type": AnyEncodable(type),
+                    "image_url": AnyEncodable(imageURLs.first),
+                    "image_urls": AnyEncodable(imageURLs)
+                ]
+
+                do {
+                    try await supabase.from("news").insert(legacyPost).execute()
+                    Log.info("تم نشر الخبر (وضع التوافق)")
+                    await fetchNews(force: true)
+                    self.isLoading = false
+                    return true
+                } catch {
+                    Log.error("خطأ في نشر الخبر (وضع التوافق): \(error.localizedDescription)")
+                    newsPostErrorMessage = "تعذر نشر الخبر: \(error.localizedDescription)"
+                }
+            } else {
+                Log.error("خطأ في نشر الخبر: \(error.localizedDescription)")
+                newsPostErrorMessage = "تعذر نشر الخبر: \(error.localizedDescription)"
+            }
+        }
+
+        self.isLoading = false
+        return false
+    }
+
+    // MARK: - Update News Post
+
+    func updateNewsPost(
+        postId: UUID,
+        content: String,
+        type: String,
+        imageURLs: [String] = [],
+        pollQuestion: String? = nil,
+        pollOptions: [String] = []
+    ) async -> Bool {
+        guard currentUser?.role != .pending else {
+            newsPostErrorMessage = "غير مصرح لك بتعديل الخبر."
+            return false
+        }
+
+        self.isLoading = true
+        newsPostErrorMessage = nil
+
+        let payload: [String: AnyEncodable] = [
+            "content": AnyEncodable(content),
+            "type": AnyEncodable(type),
+            "image_url": AnyEncodable(imageURLs.first),
+            "image_urls": AnyEncodable(imageURLs),
+            "poll_question": AnyEncodable(pollQuestion),
+            "poll_options": AnyEncodable(pollOptions)
+        ]
+
+        do {
+            try await supabase
+                .from("news")
+                .update(payload)
+                .eq("id", value: postId.uuidString)
+                .execute()
+
+            await fetchNews(force: true)
+            if canModerate {
+                await fetchPendingNewsRequests(force: true)
+            }
+
+            self.isLoading = false
+            return true
+        } catch {
+            if isMissingNewsRichContentColumnError(error) ||
+                isMissingNewsSchemaColumnError(error) {
+                let legacyPayload: [String: AnyEncodable] = [
+                    "content": AnyEncodable(content),
+                    "type": AnyEncodable(type),
+                    "image_url": AnyEncodable(imageURLs.first)
+                ]
+
+                do {
+                    try await supabase
+                        .from("news")
+                        .update(legacyPayload)
+                        .eq("id", value: postId.uuidString)
+                        .execute()
+
+                    await fetchNews(force: true)
+                    if canModerate {
+                        await fetchPendingNewsRequests(force: true)
+                    }
+
+                    self.isLoading = false
+                    return true
+                } catch {
+                    Log.error("خطأ تعديل الخبر (وضع التوافق): \(error.localizedDescription)")
+                    newsPostErrorMessage = "تعذر تعديل الخبر: \(error.localizedDescription)"
+                }
+            } else {
+                Log.error("خطأ تعديل الخبر: \(error.localizedDescription)")
+                newsPostErrorMessage = "تعذر تعديل الخبر: \(error.localizedDescription)"
+            }
+        }
+
+        self.isLoading = false
+        return false
+    }
+
+    // MARK: - Approve News Post
+
+    func approveNewsPost(postId: UUID) async {
+        guard canModerate, let approverId = currentUser?.id else { return }
+        guard newsApprovalFeatureAvailable else { return }
+
+        do {
+            let payload: [String: AnyEncodable] = [
+                "approval_status": AnyEncodable("approved"),
+                "approved_by": AnyEncodable(approverId.uuidString),
+                "approved_at": AnyEncodable(ISO8601DateFormatter().string(from: Date()))
+            ]
+
+            try await supabase
+                .from("news")
+                .update(payload)
+                .eq("id", value: postId.uuidString)
+                .execute()
+
+            // إشعار صاحب الخبر
+            if let authorId = pendingNewsRequests.first(where: { $0.id == postId })?.author_id ?? allNews.first(where: { $0.id == postId })?.author_id {
+                await notificationVM?.sendNotification(
+                    title: L10n.t("تم تنفيذ طلبك", "Request Completed"),
+                    body: L10n.t("تم اعتماد خبرك ونشره", "Your news post was approved and published"),
+                    targetMemberIds: [authorId]
+                )
+            }
+
+            removeLocallyThenRefresh(from: &pendingNewsRequests, id: postId) { [weak self] in
+                await self?.fetchPendingNewsRequests(force: true)
+                await self?.fetchNews(force: true)
+            }
+
+            Log.info("تم اعتماد الخبر بنجاح")
+        } catch {
+            if isMissingNewsApprovalColumnError(error) {
+                newsApprovalFeatureAvailable = false
+            } else {
+                Log.error("خطأ اعتماد الخبر: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    // MARK: - Reject News Post
+
+    func rejectNewsPost(postId: UUID) async {
+        guard canModerate else { return }
+
+        do {
+            try await supabase
+                .from("news")
+                .delete()
+                .eq("id", value: postId.uuidString)
+                .execute()
+
+            removeLocallyThenRefresh(from: &pendingNewsRequests, id: postId) { [weak self] in
+                await self?.fetchPendingNewsRequests(force: true)
+                await self?.fetchNews(force: true)
+            }
+
+            Log.info("تم رفض الخبر بنجاح")
+        } catch {
+            Log.error("خطأ رفض الخبر: \(error.localizedDescription)")
+        }
+    }
+
+    // MARK: - Delete News Post
+
+    func deleteNewsPost(postId: UUID) async {
+        guard currentUser?.role == .admin else { return }
+        self.isLoading = true
+
+        do {
+            try await supabase
+                .from("news")
+                .delete()
+                .eq("id", value: postId.uuidString)
+                .execute()
+
+            await fetchNews(force: true)
+            if canModerate {
+                await fetchPendingNewsRequests(force: true)
+            }
+
+            await notificationVM?.notifyAdmins(
+                title: "حذف خبر",
+                body: "تم حذف خبر منشور.",
+                kind: "news_add"
+            )
+        } catch {
+            Log.error("خطأ حذف الخبر: \(error.localizedDescription)")
+        }
+
+        self.isLoading = false
+    }
+
+    // MARK: - Report News Post
+
+    func reportNewsPost(postId: UUID, reason: String = "بلاغ على محتوى خبر") async {
+        guard let userId = currentUser?.id else { return }
+        guard currentUser?.role == .member else { return }
+        self.isLoading = true
+
+        do {
+            let payload: [String: AnyEncodable] = [
+                "member_id": AnyEncodable(userId.uuidString),
+                "requester_id": AnyEncodable(userId.uuidString),
+                "request_type": AnyEncodable("news_report"),
+                "new_value": AnyEncodable(postId.uuidString),
+                "status": AnyEncodable("pending"),
+                "details": AnyEncodable(reason)
+            ]
+
+            try await supabase
+                .from("admin_requests")
+                .insert(payload)
+                .execute()
+
+            await notificationVM?.notifyAdminsWithPush(
+                title: "بلاغ جديد على خبر",
+                body: "وصل بلاغ جديد ويحتاج مراجعة الإدارة.",
+                kind: "news_report"
+            )
+
+            await notificationVM?.sendNotification(
+                title: "تم استلام البلاغ",
+                body: "تم استلام بلاغك بنجاح.",
+                targetMemberIds: [userId]
+            )
+        } catch {
+            Log.error("خطأ إرسال البلاغ: \(error.localizedDescription)")
+        }
+
+        self.isLoading = false
+    }
+}

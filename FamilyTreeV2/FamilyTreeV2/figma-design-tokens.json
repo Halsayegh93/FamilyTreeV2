@@ -1,0 +1,113 @@
+{
+  "colors": {
+    "brand": {
+      "primary": { "value": "#2B7A9F", "type": "color", "description": "Ocean Blue" },
+      "primary-dark": { "value": "#1E5474", "type": "color", "description": "Deep Ocean" },
+      "primary-light": { "value": "#78ACC3", "type": "color", "description": "Light Ocean" },
+      "accent": { "value": "#516F80", "type": "color", "description": "Slate Blue" },
+      "accent-dark": { "value": "#344B59", "type": "color", "description": "Dark Slate" },
+      "accent-light": { "value": "#8A9EA9", "type": "color", "description": "Light Slate" }
+    },
+    "classic-accents": {
+      "neon-blue": { "value": "#5D8AA8", "type": "color", "description": "Air Force Blue" },
+      "neon-purple": { "value": "#89A6B1", "type": "color", "description": "Soft Blue Grey" },
+      "neon-cyan": { "value": "#A3C4D3", "type": "color", "description": "Powder Blue" },
+      "neon-pink": { "value": "#D3AEB1", "type": "color", "description": "Soft Rose" }
+    },
+    "semantic": {
+      "success": { "value": "#2F5C3E", "type": "color", "description": "Deep green success" },
+      "warning": { "value": "#B88E33", "type": "color", "description": "Dull gold warning" },
+      "error": { "value": "#8C2A2A", "type": "color", "description": "Classic dark red" },
+      "info": { "value": "#496885", "type": "color", "description": "Slate blue info" }
+    },
+    "grid": {
+      "tree": { "value": "#344B59", "type": "color", "description": "Dark Slate" },
+      "alerts": { "value": "#8C2A2A", "type": "color", "description": "Red" },
+      "diwaniya": { "value": "#2B7A9F", "type": "color", "description": "Ocean Blue" },
+      "contact": { "value": "#516F80", "type": "color", "description": "Slate Blue" }
+    },
+    "gradient-extras": {
+      "warm-start": { "value": "#D3AEB1", "type": "color" },
+      "warm-end": { "value": "#B88A8D", "type": "color" },
+      "dark-1": { "value": "#2E2E2E", "type": "color" },
+      "dark-2": { "value": "#1A1A1A", "type": "color" },
+      "dark-3": { "value": "#0D0D0D", "type": "color" },
+      "auth-1": { "value": "#11181C", "type": "color" },
+      "auth-2": { "value": "#050B0D", "type": "color" },
+      "fire-start": { "value": "#A0522D", "type": "color" },
+      "fire-end": { "value": "#8B4513", "type": "color" }
+    },
+    "shadows": {
+      "glow": { "value": "#C8A165", "type": "color" },
+      "glow-accent": { "value": "#213B2E", "type": "color" },
+      "neon": { "value": "#D4AF37", "type": "color" }
+    }
+  },
+  "spacing": {
+    "xs": { "value": 4, "type": "spacing" },
+    "sm": { "value": 8, "type": "spacing" },
+    "md": { "value": 12, "type": "spacing" },
+    "lg": { "value": 16, "type": "spacing" },
+    "xl": { "value": 20, "type": "spacing" },
+    "xxl": { "value": 24, "type": "spacing" },
+    "xxxl": { "value": 32, "type": "spacing" },
+    "xxxxl": { "value": 40, "type": "spacing" }
+  },
+  "radius": {
+    "sm": { "value": 6, "type": "borderRadius" },
+    "md": { "value": 10, "type": "borderRadius" },
+    "lg": { "value": 14, "type": "borderRadius" },
+    "xl": { "value": 18, "type": "borderRadius" },
+    "xxl": { "value": 22, "type": "borderRadius" },
+    "xxxl": { "value": 26, "type": "borderRadius" },
+    "full": { "value": 999, "type": "borderRadius" }
+  },
+  "icon": {
+    "size": { "value": 46, "type": "sizing" },
+    "size-sm": { "value": 38, "type": "sizing" },
+    "size-lg": { "value": 58, "type": "sizing" },
+    "bg-opacity": { "value": "15%", "type": "opacity" }
+  },
+  "typography": {
+    "hero": { "fontFamily": "SF Pro Rounded", "fontWeight": "Bold", "textStyle": "Large Title" },
+    "title-1": { "fontFamily": "SF Pro Rounded", "fontWeight": "Bold", "textStyle": "Title" },
+    "title-2": { "fontFamily": "SF Pro Rounded", "fontWeight": "Bold", "textStyle": "Title 2" },
+    "title-3": { "fontFamily": "SF Pro Rounded", "fontWeight": "Semibold", "textStyle": "Title 3" },
+    "headline": { "fontFamily": "SF Pro Rounded", "fontWeight": "Bold", "textStyle": "Headline" },
+    "body": { "fontFamily": "SF Pro Rounded", "fontWeight": "Regular", "textStyle": "Body" },
+    "body-bold": { "fontFamily": "SF Pro Rounded", "fontWeight": "Semibold", "textStyle": "Body" },
+    "callout": { "fontFamily": "SF Pro Rounded", "fontWeight": "Regular", "textStyle": "Callout" },
+    "callout-bold": { "fontFamily": "SF Pro Rounded", "fontWeight": "Bold", "textStyle": "Callout" },
+    "subheadline": { "fontFamily": "SF Pro Rounded", "fontWeight": "Regular", "textStyle": "Subheadline" },
+    "footnote": { "fontFamily": "SF Pro Rounded", "fontWeight": "Regular", "textStyle": "Footnote" },
+    "caption-1": { "fontFamily": "SF Pro Rounded", "fontWeight": "Regular", "textStyle": "Caption" },
+    "caption-2": { "fontFamily": "SF Pro Rounded", "fontWeight": "Regular", "textStyle": "Caption 2" }
+  },
+  "shadows": {
+    "card": { "color": "#000000", "opacity": 0.06, "radius": 10, "x": 0, "y": 3 },
+    "subtle": { "color": "#000000", "opacity": 0.03, "radius": 5, "x": 0, "y": 2 },
+    "glow": { "color": "#C8A165", "opacity": 0.15, "radius": 12, "x": 0, "y": 4 },
+    "glow-accent": { "color": "#213B2E", "opacity": 0.12, "radius": 10, "x": 0, "y": 4 },
+    "neon": { "color": "#D4AF37", "opacity": 0.15, "radius": 12, "x": 0, "y": 3 }
+  },
+  "components": {
+    "DSCard": { "cornerRadius": 18, "background": "surface", "borderColor": "gray", "borderOpacity": 0.12 },
+    "DSGradientCard": { "cornerRadius": 18, "background": "gradientPrimary", "borderColor": "white", "borderOpacity": 0.30 },
+    "DSGlowCard": { "cornerRadius": 18, "background": "surface", "borderColor": "primary", "borderOpacity": 0.30 },
+    "DSPrimaryButton": { "cornerRadius": 14, "background": "gradientPrimary", "borderColor": "white", "borderOpacity": 0.25, "height": 58 },
+    "DSSecondaryButton": { "cornerRadius": 14, "background": "surface", "borderColor": "primary", "borderOpacity": 0.30, "height": 52 },
+    "DSTextField": { "cornerRadius": 10, "background": "surface", "borderColor": "gray", "borderOpacity": 0.15, "focusBorderOpacity": 0.50 },
+    "DSIcon": { "cornerRadius": 6, "size": 46, "bgOpacity": 0.15 }
+  },
+  "gradients": {
+    "primary": { "colors": ["#78ACC3", "#2B7A9F", "#1E5474"], "direction": "topLeading-bottomTrailing" },
+    "accent": { "colors": ["#8A9EA9", "#516F80", "#344B59"], "direction": "topLeading-bottomTrailing" },
+    "warm": { "colors": ["#D3AEB1", "#B88A8D"], "direction": "leading-trailing" },
+    "cool": { "colors": ["#A3C4D3", "#78ACC3"], "direction": "leading-trailing" },
+    "dark": { "colors": ["#2E2E2E", "#1A1A1A", "#0D0D0D"], "direction": "top-bottom" },
+    "auth": { "colors": ["#11181C", "#1E5474", "#344B59", "#050B0D"], "direction": "topLeading-bottomTrailing" },
+    "fire": { "colors": ["#A0522D", "#8B4513"], "direction": "topLeading-bottomTrailing" },
+    "ocean": { "colors": ["#2B7A9F", "#344B59"], "direction": "topLeading-bottomTrailing" },
+    "neon": { "colors": ["#78ACC3", "#5D8AA8"], "direction": "leading-trailing" }
+  }
+}

@@ -1,0 +1,46 @@
+# SwiftLint Configuration for FamilyTreeV2
+
+included:
+  - FamilyTreeV2
+
+excluded:
+  - FamilyTreeV2/FamilyTreeV2/Assets.xcassets
+  - Pods
+  - .build
+  - DerivedData
+
+# Rules
+disabled_rules:
+  - trailing_whitespace
+  - line_length
+  - type_body_length
+  - file_length
+  - function_body_length
+  - cyclomatic_complexity
+  - nesting
+  - identifier_name
+  - large_tuple
+  - force_cast
+
+opt_in_rules:
+  - empty_count
+  - closure_spacing
+  - contains_over_first_not_nil
+  - discouraged_optional_boolean
+  - empty_string
+  - first_where
+  - modifier_order
+  - redundant_nil_coalescing
+  - toggle_bool
+  - unused_import
+
+# Configurations
+type_name:
+  min_length: 2
+  max_length: 60
+
+function_parameter_count:
+  warning: 8
+  error: 12
+
+warning_threshold: 50

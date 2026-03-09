@@ -1,0 +1,37 @@
+{
+  "permissions": {
+    "allow": [
+      "Skill(claude-developer-platform)",
+      "Skill(claude-developer-platform:*)",
+      "Bash(wc:*)",
+      "Bash(find:*)",
+      "Bash(supabase --version:*)",
+      "Bash(supabase projects list:*)",
+      "mcp__mcp-registry__search_mcp_registry",
+      "Bash(claude mcp add:*)",
+      "Bash(echo:*)",
+      "Bash(supabase functions list:*)",
+      "Bash(xcodebuild:*)",
+      "Bash(open:*)",
+      "Bash(/Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild:*)",
+      "Bash(xcrun simctl boot:*)",
+      "Bash(/Applications/Xcode.app/Contents/Developer/usr/bin/xcrun simctl boot:*)",
+      "Bash(/usr/bin/xcrun simctl boot:*)",
+      "Bash(DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer /usr/bin/xcrun simctl boot:*)",
+      "Bash(DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer /usr/bin/xcrun simctl install:*)",
+      "Bash(DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer /usr/bin/xcrun simctl launch:*)",
+      "Bash(DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild:*)",
+      "Bash(git -C /Users/macmini/Desktop/Xcode/FamilyTreeV2 status --short)",
+      "Bash(sudo xcode-select:*)",
+      "Bash(python3:*)",
+      "WebFetch(domain:www.figma.com)",
+      "Bash(claude mcp:*)",
+      "Bash(ls:*)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(supabase status:*)",
+      "Bash(mdfind:*)",
+      "mcp__MCP_DOCKER__mcp-find",
+      "Bash(git status -u)"
+    ]
+  }
+}

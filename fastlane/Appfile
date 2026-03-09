@@ -1,0 +1,4 @@
+# App Store Connect
+# app_identifier("com.yourteam.FamilyTreeV2")  # Update with your bundle ID
+# apple_id("your@email.com")                    # Update with your Apple ID
+# team_id("XXXXXXXXXX")                         # Update with your Team ID
