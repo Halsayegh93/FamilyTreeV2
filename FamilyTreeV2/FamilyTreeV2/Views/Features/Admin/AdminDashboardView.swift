@@ -215,17 +215,27 @@ struct AdminDashboardView: View {
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .task {
-            // تحميل البيانات بالتوازي لتسريع الأداء
-            async let members: () = memberVM.fetchAllMembers()
+            // تأخير بسيط لأن هذا التاب ليس مرئياً عند الفتح
+            try? await Task.sleep(nanoseconds: 800_000_000)
+            // تحميل البيانات على دفعات لتجنب إغراق اتصال الشبكة
+            // الدفعة 1: البيانات الأساسية (الأعضاء أولاً)
+            await memberVM.fetchAllMembers()
+
+            // الدفعة 2: الطلبات الإدارية (3 طلبات بالتوازي)
             async let deceased: () = adminRequestVM.fetchDeceasedRequests()
             async let pendingNews: () = newsVM.fetchPendingNewsRequests()
+            async let childAdds: () = adminRequestVM.fetchChildAddRequests()
+            _ = await (deceased, pendingNews, childAdds)
+
+            // الدفعة 3: بقية الطلبات (4 طلبات بالتوازي)
             async let newsReports: () = adminRequestVM.fetchNewsReportRequests()
             async let phoneChanges: () = adminRequestVM.fetchPhoneChangeRequests()
-            async let childAdds: () = adminRequestVM.fetchChildAddRequests()
             async let photoSuggestions: () = adminRequestVM.fetchPhotoSuggestionRequests()
             async let diwaniyas: () = diwaniyaVM.fetchPendingDiwaniyas()
-            async let treeEdits: () = adminRequestVM.fetchTreeEditRequests()
-            _ = await (members, deceased, pendingNews, newsReports, phoneChanges, childAdds, photoSuggestions, diwaniyas, treeEdits)
+            _ = await (newsReports, phoneChanges, photoSuggestions, diwaniyas)
+
+            // الدفعة 4: طلبات تعديل الشجرة
+            await adminRequestVM.fetchTreeEditRequests()
         }
     }
 

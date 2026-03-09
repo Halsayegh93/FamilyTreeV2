@@ -4,9 +4,22 @@ struct MainTabView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @State private var selectedTab = 0
 
+    private var tabSelection: Binding<Int> {
+        Binding(
+            get: { selectedTab },
+            set: { newValue in
+                if newValue == selectedTab {
+                    // Tapped the same tab — post notification to reset sub-pages
+                    NotificationCenter.default.post(name: .didReselectTab, object: nil, userInfo: ["tab": newValue])
+                }
+                selectedTab = newValue
+            }
+        )
+    }
+    
     var body: some View {
         ZStack(alignment: .bottomLeading) {
-        TabView(selection: $selectedTab) {
+        TabView(selection: tabSelection) {
             HomeNewsView(selectedTab: $selectedTab)
                 .tabItem {
                     Image(systemName: selectedTab == 0 ? "house.fill" : "house")
@@ -72,4 +85,8 @@ struct MainTabView: View {
         }
         .ignoresSafeArea()
     }
+}
+
+extension Notification.Name {
+    static let didReselectTab = Notification.Name("didReselectTab")
 }

@@ -501,6 +501,6 @@ struct PersonalGalleryView: View {
 
     private func legacyPreviewPhoto(url: String) -> MemberGalleryPhoto? {
         guard !url.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
-        return MemberGalleryPhoto(id: UUID(), memberId: member.id, photoURL: url, createdAt: nil)
+        return MemberGalleryPhoto(id: UUID(), memberId: member.id, photoURL: url, caption: nil, createdAt: nil)
     }
 }

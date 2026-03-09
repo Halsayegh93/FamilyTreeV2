@@ -13,6 +13,7 @@
 /* Begin PBXFileReference section */
 		9A8DF20B2F406AEB000B2DD7 /* FamilyTreeV2.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FamilyTreeV2.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		9AA8863A2F524EBB001B4183 /* FamilyTreeV2.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = FamilyTreeV2.xcodeproj; sourceTree = "<group>"; };
+		9AEB37E22F5E54D10086CE6F /* FamilyTreeV2.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = FamilyTreeV2.xcodeproj; sourceTree = "<group>"; };
 		9F71E7492F0D83E20001F8B7 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -20,36 +21,6 @@
 		9F71E6A62F0B04F70001F8B7 /* FamilyTreeV2 */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = FamilyTreeV2;
-			sourceTree = "<group>";
-		};
-		9F71E6CE2F0B05150001F8B7 /* Core */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = Core;
-			sourceTree = "<group>";
-		};
-		9F71E6CF2F0B05220001F8B7 /* Models */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = Models;
-			sourceTree = "<group>";
-		};
-		9F71E6D12F0B052E0001F8B7 /* ViewModels */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = ViewModels;
-			sourceTree = "<group>";
-		};
-		9F71E6D42F0B054A0001F8B7 /* Views */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = Views;
-			sourceTree = "<group>";
-		};
-		9F71E6D62F0B05550001F8B7 /* Services */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = Services;
-			sourceTree = "<group>";
-		};
-		9F71E6D82F0B05610001F8B7 /* Components */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = Components;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -73,17 +44,18 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
+		9AEB37E92F5E54D10086CE6F /* Products */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
 		9F71E69B2F0B04F70001F8B7 = {
 			isa = PBXGroup;
 			children = (
 				9F71E7492F0D83E20001F8B7 /* Localizable.xcstrings */,
 				9F71E6A62F0B04F70001F8B7 /* FamilyTreeV2 */,
-				9F71E6CE2F0B05150001F8B7 /* Core */,
-				9F71E6CF2F0B05220001F8B7 /* Models */,
-				9F71E6D12F0B052E0001F8B7 /* ViewModels */,
-				9F71E6D42F0B054A0001F8B7 /* Views */,
-				9F71E6D62F0B05550001F8B7 /* Services */,
-				9F71E6D82F0B05610001F8B7 /* Components */,
 				9A8DF20B2F406AEB000B2DD7 /* FamilyTreeV2.app */,
 			);
 			sourceTree = "<group>";
@@ -105,12 +77,6 @@
 			);
 			fileSystemSynchronizedGroups = (
 				9F71E6A62F0B04F70001F8B7 /* FamilyTreeV2 */,
-				9F71E6CE2F0B05150001F8B7 /* Core */,
-				9F71E6CF2F0B05220001F8B7 /* Models */,
-				9F71E6D12F0B052E0001F8B7 /* ViewModels */,
-				9F71E6D42F0B054A0001F8B7 /* Views */,
-				9F71E6D62F0B05550001F8B7 /* Services */,
-				9F71E6D82F0B05610001F8B7 /* Components */,
 			);
 			name = FamilyTreeV2;
 			packageProductDependencies = (
@@ -128,7 +94,7 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 2620;
-				LastUpgradeCheck = 2620;
+				LastUpgradeCheck = 2630;
 				TargetAttributes = {
 					9A8DF20A2F406AEB000B2DD7 = {
 						CreatedOnToolsVersion = 26.2;
@@ -152,6 +118,10 @@
 			productRefGroup = 9F71E69B2F0B04F70001F8B7;
 			projectDirPath = "";
 			projectReferences = (
+				{
+					ProductGroup = 9AEB37E92F5E54D10086CE6F /* Products */;
+					ProjectRef = 9AEB37E22F5E54D10086CE6F /* FamilyTreeV2.xcodeproj */;
+				},
 				{
 					ProductGroup = 9AA886402F524EBB001B4183 /* Products */;
 					ProjectRef = 9AA8863A2F524EBB001B4183 /* FamilyTreeV2.xcodeproj */;
@@ -270,6 +240,7 @@
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
@@ -324,6 +295,7 @@
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
@@ -335,6 +307,7 @@
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
@@ -382,6 +355,7 @@
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				VALIDATE_PRODUCT = YES;

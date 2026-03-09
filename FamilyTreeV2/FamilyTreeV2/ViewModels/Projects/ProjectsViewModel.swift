@@ -9,6 +9,8 @@ class ProjectsViewModel: ObservableObject {
     let supabase = SupabaseConfig.client
     
     @Published var projects: [Project] = []
+    @Published var pendingProjects: [Project] = []
+    @Published var myPendingProjects: [Project] = []
     @Published var isLoading = false
     @Published var errorMessage: String?
     
@@ -58,7 +60,8 @@ class ProjectsViewModel: ObservableObject {
                 tiktokUrl: tiktokUrl,
                 snapchatUrl: snapchatUrl,
                 whatsappNumber: whatsappNumber,
-                phoneNumber: phoneNumber
+                phoneNumber: phoneNumber,
+                approvalStatus: "pending"
             )
             
             try await supabase
@@ -75,6 +78,81 @@ class ProjectsViewModel: ObservableObject {
             Log.error("خطأ إضافة المشروع: \(error.localizedDescription)")
             isLoading = false
             return false
+        }
+    }
+    
+    // MARK: - Fetch Pending (Admin)
+    
+    func fetchPendingProjects() async {
+        do {
+            let response: [Project] = try await supabase
+                .from("projects")
+                .select()
+                .eq("approval_status", value: "pending")
+                .order("created_at", ascending: false)
+                .execute()
+                .value
+            
+            self.pendingProjects = response
+        } catch {
+            Log.error("خطأ جلب المشاريع المعلقة: \(error.localizedDescription)")
+        }
+    }
+    
+    // MARK: - Fetch My Pending
+    
+    func fetchMyPendingProjects(ownerId: UUID) async {
+        do {
+            let response: [Project] = try await supabase
+                .from("projects")
+                .select()
+                .eq("owner_id", value: ownerId.uuidString)
+                .eq("approval_status", value: "pending")
+                .order("created_at", ascending: false)
+                .execute()
+                .value
+            
+            self.myPendingProjects = response
+        } catch {
+            Log.error("خطأ جلب مشاريعي المعلقة: \(error.localizedDescription)")
+        }
+    }
+    
+    // MARK: - Approve
+    
+    func approveProject(id: UUID, approvedBy: UUID) async {
+        do {
+            try await supabase
+                .from("projects")
+                .update([
+                    "approval_status": "approved",
+                    "approved_by": approvedBy.uuidString
+                ])
+                .eq("id", value: id.uuidString)
+                .execute()
+            
+            pendingProjects.removeAll { $0.id == id }
+            await fetchProjects()
+        } catch {
+            self.errorMessage = L10n.t("تعذر اعتماد المشروع.", "Failed to approve project.")
+            Log.error("خطأ اعتماد المشروع: \(error.localizedDescription)")
+        }
+    }
+    
+    // MARK: - Reject
+    
+    func rejectProject(id: UUID) async {
+        do {
+            try await supabase
+                .from("projects")
+                .update(["approval_status": "rejected"])
+                .eq("id", value: id.uuidString)
+                .execute()
+            
+            pendingProjects.removeAll { $0.id == id }
+        } catch {
+            self.errorMessage = L10n.t("تعذر رفض المشروع.", "Failed to reject project.")
+            Log.error("خطأ رفض المشروع: \(error.localizedDescription)")
         }
     }
     

@@ -162,7 +162,7 @@ struct TreeEditRequestView: View {
         .sheet(isPresented: $showMemberPicker) {
             memberPickerSheet
         }
-        .onChange(of: selectedAction) { _ in
+        .onChange(of: selectedAction) {
             // Reset selection when action type changes
             selectedMember = nil
             memberName = ""

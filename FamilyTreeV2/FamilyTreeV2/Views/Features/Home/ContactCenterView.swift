@@ -11,6 +11,7 @@ struct ContactCenterView: View {
     @State private var showSuccessAlert = false
     @State private var showErrorAlert = false
     @State private var showCharacterLimitWarning = false
+    @State private var messageSent = false
 
     private let categoryItems: [(key: String, icon: String, labelAr: String, labelEn: String, color: Color)] = [
         ("اقتراح", "lightbulb.fill", "اقتراح", "Suggestion", DS.Color.warning),
@@ -23,10 +24,42 @@ struct ContactCenterView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                DS.Color.background.ignoresSafeArea()
+        ZStack {
+            DS.Color.background.ignoresSafeArea()
 
+            if messageSent {
+                // Success state
+                VStack(spacing: DS.Spacing.xl) {
+                    Spacer()
+                    
+                    ZStack {
+                        Circle()
+                            .fill(DS.Color.success.opacity(0.1))
+                            .frame(width: 120, height: 120)
+                        Circle()
+                            .fill(DS.Color.success.opacity(0.18))
+                            .frame(width: 88, height: 88)
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(DS.Font.scaled(44, weight: .bold))
+                            .foregroundColor(DS.Color.success)
+                    }
+                    
+                    VStack(spacing: DS.Spacing.sm) {
+                        Text(L10n.t("تم الإرسال بنجاح", "Sent Successfully"))
+                            .font(DS.Font.title3)
+                            .fontWeight(.black)
+                            .foregroundColor(DS.Color.textPrimary)
+                        Text(L10n.t("تم إرسال رسالتك وسيتم التواصل معك قريباً.", "Your message has been sent. We'll get back to you soon."))
+                            .font(DS.Font.callout)
+                            .foregroundColor(DS.Color.textSecondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, DS.Spacing.xxxl)
+                    }
+                    
+                    Spacer()
+                }
+                .transition(.opacity.combined(with: .scale(scale: 0.95)))
+            } else {
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: DS.Spacing.xxl) {
                         categorySection
@@ -38,32 +71,18 @@ struct ContactCenterView: View {
                     .padding(.bottom, DS.Spacing.xxxxl)
                 }
             }
-            .navigationTitle(L10n.t("التواصل", "Contact"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button(L10n.t("إلغاء", "Cancel")) { dismiss() }
-                        .font(DS.Font.calloutBold)
-                        .foregroundColor(DS.Color.error)
-                }
-            }
-            .alert(L10n.t("تم الإرسال", "Sent Successfully"), isPresented: $showSuccessAlert) {
-                Button(L10n.t("حسناً", "OK")) { dismiss() }
-            } message: {
-                Text(L10n.t("تم إرسال رسالتك بنجاح وسيتم التواصل معك قريباً.", "Your message has been sent successfully."))
-            }
-            .alert(L10n.t("تعذر الإرسال", "Failed to Send"), isPresented: $showErrorAlert) {
-                Button(L10n.t("حسناً", "OK"), role: .cancel) {}
-            } message: {
-                Text(authVM.contactMessageError ?? L10n.t("تعذر إرسال الرسالة حالياً. حاول مرة أخرى.", "Failed to send message. Please try again."))
-            }
-            .alert(L10n.t("الحد الأقصى", "Character Limit"), isPresented: $showCharacterLimitWarning) {
-                Button(L10n.t("حسناً", "OK"), role: .cancel) {}
-            } message: {
-                Text(L10n.t("تم الوصول إلى الحد الأقصى للرسالة (1000 حرف).", "You've reached the maximum message length (1000 characters)."))
-            }
-            .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         }
+        .alert(L10n.t("تعذر الإرسال", "Failed to Send"), isPresented: $showErrorAlert) {
+            Button(L10n.t("حسناً", "OK"), role: .cancel) {}
+        } message: {
+            Text(authVM.contactMessageError ?? L10n.t("تعذر إرسال الرسالة حالياً. حاول مرة أخرى.", "Failed to send message. Please try again."))
+        }
+        .alert(L10n.t("الحد الأقصى", "Character Limit"), isPresented: $showCharacterLimitWarning) {
+            Button(L10n.t("حسناً", "OK"), role: .cancel) {}
+        } message: {
+            Text(L10n.t("تم الوصول إلى الحد الأقصى للرسالة (1000 حرف).", "You've reached the maximum message length (1000 characters)."))
+        }
+        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
 
     // MARK: - Category Section
@@ -158,7 +177,7 @@ struct ContactCenterView: View {
     // MARK: - Submit Button
     private var submitButton: some View {
         DSPrimaryButton(
-            L10n.t("إرسال", "Send"),
+            L10n.t("إرسال الرسالة", "Send Message"),
             icon: "paperplane.fill",
             isLoading: authVM.isLoading,
             useGradient: canSubmit,
@@ -179,7 +198,9 @@ struct ContactCenterView: View {
                 preferredContact: ""
             )
             if sent {
-                showSuccessAlert = true
+                withAnimation(DS.Anim.smooth) {
+                    messageSent = true
+                }
             } else {
                 showErrorAlert = true
             }

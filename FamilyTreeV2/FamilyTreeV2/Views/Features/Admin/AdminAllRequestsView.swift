@@ -6,10 +6,11 @@ struct AdminAllRequestsView: View {
     @EnvironmentObject var adminRequestVM: AdminRequestViewModel
     @EnvironmentObject var memberVM: MemberViewModel
     @EnvironmentObject var notificationVM: NotificationViewModel
+    @EnvironmentObject var projectsVM: ProjectsViewModel
     @StateObject private var diwaniyaVM = DiwaniyasViewModel()
 
     enum RequestTab: String, CaseIterable, Identifiable {
-        case joinRequests, news, reports, phone, diwaniya, deceased, children, photos, treeEdit
+        case joinRequests, news, reports, phone, diwaniya, deceased, children, photos, treeEdit, projects
 
         var id: String { rawValue }
 
@@ -24,6 +25,7 @@ struct AdminAllRequestsView: View {
             case .children: return L10n.t("أبناء", "Children")
             case .photos: return L10n.t("صور", "Photos")
             case .treeEdit: return L10n.t("تعديل", "Edit")
+            case .projects: return L10n.t("مشاريع", "Projects")
             }
         }
 
@@ -38,6 +40,7 @@ struct AdminAllRequestsView: View {
             case .children: return "person.badge.plus"
             case .photos: return "camera.badge.ellipsis"
             case .treeEdit: return "pencil.and.list.clipboard"
+            case .projects: return "briefcase.fill"
             }
         }
 
@@ -52,6 +55,7 @@ struct AdminAllRequestsView: View {
             case .children: return DS.Color.info
             case .photos: return DS.Color.neonBlue
             case .treeEdit: return DS.Color.accent
+            case .projects: return DS.Color.neonPurple
             }
         }
     }
@@ -81,12 +85,14 @@ struct AdminAllRequestsView: View {
             DSDecorativeBackground()
 
             VStack(spacing: 0) {
-                // شريط التابات الأفقي
-                tabBar
-                    .padding(.top, DS.Spacing.sm)
+                // شريط التابات الأفقي (يظهر فقط إذا في طلبات)
+                if totalCount > 0 {
+                    tabBar
+                        .padding(.top, DS.Spacing.sm)
+                }
 
                 // المحتوى
-                if itemCount(for: selectedTab) == 0 {
+                if totalCount == 0 || itemCount(for: selectedTab) == 0 {
                     Spacer()
                     emptyState
                     Spacer()
@@ -121,6 +127,7 @@ struct AdminAllRequestsView: View {
             await adminRequestVM.fetchChildAddRequests()
             await adminRequestVM.fetchPhotoSuggestionRequests()
             await adminRequestVM.fetchTreeEditRequests()
+            await projectsVM.fetchPendingProjects()
             await fetchAllRegistrationMatches()
 
             // اختيار أول تاب فيه طلبات
@@ -230,6 +237,7 @@ struct AdminAllRequestsView: View {
         case .children: return adminRequestVM.childAddRequests.count
         case .photos: return adminRequestVM.photoSuggestionRequests.count
         case .treeEdit: return adminRequestVM.treeEditRequests.count
+        case .projects: return projectsVM.pendingProjects.count
         }
     }
 
@@ -239,34 +247,26 @@ struct AdminAllRequestsView: View {
 
     // MARK: - Tab Bar
 
-    private var topRowTabs: [RequestTab] {
-        [.joinRequests, .news, .reports, .phone, .diwaniya]
-    }
-
-    private var bottomRowTabs: [RequestTab] {
-        [.deceased, .children, .photos, .treeEdit]
+    private var availableTabs: [RequestTab] {
+        [.joinRequests, .news, .reports, .phone, .diwaniya, .deceased, .children, .photos, .treeEdit, .projects].filter { itemCount(for: $0) > 0 }
     }
 
     private var tabBar: some View {
-        VStack(spacing: DS.Spacing.xs) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: DS.Spacing.sm) {
-                    ForEach(topRowTabs) { tab in
-                        tabButton(for: tab)
-                    }
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: DS.Spacing.sm) {
+                ForEach(availableTabs) { tab in
+                    tabButton(for: tab)
                 }
-                .padding(.horizontal, DS.Spacing.lg)
             }
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: DS.Spacing.sm) {
-                    ForEach(bottomRowTabs) { tab in
-                        tabButton(for: tab)
-                    }
-                }
-                .padding(.horizontal, DS.Spacing.lg)
-            }
+            .padding(.horizontal, DS.Spacing.lg)
         }
         .padding(.vertical, DS.Spacing.xs)
+        .onChange(of: totalCount) { _, _ in
+            // إذا التاب المحدد صار فارغ، انقل لأول تاب متاح
+            if itemCount(for: selectedTab) == 0, let first = availableTabs.first {
+                withAnimation(DS.Anim.snappy) { selectedTab = first }
+            }
+        }
     }
 
     private func tabButton(for tab: RequestTab) -> some View {
@@ -485,6 +485,26 @@ struct AdminAllRequestsView: View {
                         }
                         .swipeActions(edge: .leading, allowsFullSwipe: false) {
                             Button(role: .destructive) { Task { await adminRequestVM.rejectTreeEditRequest(request: request) } } label: {
+                                Label(L10n.t("رفض", "Reject"), systemImage: "xmark.circle.fill")
+                            }
+                        }
+                }
+            case .projects:
+                ForEach(projectsVM.pendingProjects) { project in
+                    projectRow(for: project)
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            Button {
+                                if let adminId = authVM.currentUser?.id {
+                                    Task { await projectsVM.approveProject(id: project.id, approvedBy: adminId) }
+                                }
+                            } label: {
+                                Label(L10n.t("اعتماد", "Approve"), systemImage: "checkmark.circle.fill")
+                            }.tint(DS.Color.success)
+                        }
+                        .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                            Button(role: .destructive) {
+                                Task { await projectsVM.rejectProject(id: project.id) }
+                            } label: {
                                 Label(L10n.t("رفض", "Reject"), systemImage: "xmark.circle.fill")
                             }
                         }
@@ -1064,6 +1084,56 @@ struct AdminAllRequestsView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
+    }
+
+    // MARK: - Project Row
+
+    private func projectRow(for project: Project) -> some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.md) {
+            HStack(spacing: DS.Spacing.sm) {
+                // Logo or placeholder
+                if let logoUrl = project.logoUrl, let url = URL(string: logoUrl) {
+                    CachedAsyncImage(url: url) { img in
+                        img.resizable().scaledToFill()
+                    } placeholder: {
+                        iconCircle(icon: "briefcase.fill", color: DS.Color.neonPurple, size: 40)
+                    }
+                    .frame(width: 40, height: 40)
+                    .clipShape(Circle())
+                } else {
+                    iconCircle(icon: "briefcase.fill", color: DS.Color.neonPurple, size: 40)
+                }
+
+                VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                    Text(project.title)
+                        .font(DS.Font.calloutBold)
+                        .foregroundColor(DS.Color.textPrimary)
+                        .lineLimit(2)
+
+                    Text(project.ownerName)
+                        .font(DS.Font.caption1)
+                        .foregroundColor(DS.Color.textSecondary)
+
+                    if let date = project.createdAt?.prefix(10) {
+                        Text(L10n.t("أُضيف: \(date)", "Added: \(date)"))
+                            .font(DS.Font.caption2)
+                            .foregroundColor(DS.Color.textTertiary)
+                    }
+                }
+
+                Spacer()
+            }
+
+            if let desc = project.description, !desc.isEmpty {
+                Text(desc)
+                    .font(DS.Font.caption1)
+                    .foregroundColor(DS.Color.textSecondary)
+                    .lineLimit(3)
+            }
+        }
+        .padding(.vertical, DS.Spacing.xs)
+        .listRowBackground(Color.clear)
+        .listRowSeparator(.hidden)
     }
 
     // MARK: - Shared Components

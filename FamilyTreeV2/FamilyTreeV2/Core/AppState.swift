@@ -14,6 +14,7 @@ class AppState: ObservableObject {
     let notificationVM: NotificationViewModel
     let adminRequestVM: AdminRequestViewModel
     let projectsVM: ProjectsViewModel
+    let appSettingsVM: AppSettingsViewModel
     
     init() {
         // 1. Create all VMs independently
@@ -23,10 +24,13 @@ class AppState: ObservableObject {
         let notification = NotificationViewModel()
         let admin = AdminRequestViewModel()
         let projects = ProjectsViewModel()
+        let appSettings = AppSettingsViewModel()
         
         // 2. Wire dependencies after creation (avoids circular init)
         auth.notificationVM = notification
+        auth.appSettingsVM = appSettings
         notification.configure(authVM: auth)
+        notification.appSettingsVM = appSettings
         member.configure(authVM: auth, notificationVM: notification)
         news.configure(authVM: auth, memberVM: member, notificationVM: notification)
         admin.configure(authVM: auth, memberVM: member, notificationVM: notification, newsVM: news)
@@ -38,5 +42,6 @@ class AppState: ObservableObject {
         self.notificationVM = notification
         self.adminRequestVM = admin
         self.projectsVM = projects
+        self.appSettingsVM = appSettings
     }
 }

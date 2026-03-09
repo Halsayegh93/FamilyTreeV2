@@ -1,5 +1,100 @@
 import SwiftUI
 
+// MARK: - Social Platform Brand Icons
+enum SocialPlatform {
+    case website, instagram, twitter, tiktok, snapchat, whatsapp, phone
+
+    var label: String {
+        switch self {
+        case .website: return L10n.t("الموقع الإلكتروني", "Website")
+        case .instagram: return "Instagram"
+        case .twitter: return "X"
+        case .tiktok: return "TikTok"
+        case .snapchat: return "Snapchat"
+        case .whatsapp: return "WhatsApp"
+        case .phone: return L10n.t("الهاتف", "Phone")
+        }
+    }
+
+    var brandColor: Color {
+        switch self {
+        case .website: return DS.Color.primary
+        case .instagram: return Color(hex: "#E1306C")
+        case .twitter: return Color(hex: "#000000")
+        case .tiktok: return Color(hex: "#010101")
+        case .snapchat: return Color(hex: "#FFFC00")
+        case .whatsapp: return Color(hex: "#25D366")
+        case .phone: return DS.Color.success
+        }
+    }
+
+    var bgColor: Color {
+        switch self {
+        case .snapchat: return Color(hex: "#FFFC00")
+        case .twitter, .tiktok: return Color(hex: "#000000")
+        case .instagram: return Color(hex: "#E1306C")
+        case .whatsapp: return Color(hex: "#25D366")
+        case .website: return DS.Color.primary
+        case .phone: return DS.Color.success
+        }
+    }
+
+    @ViewBuilder
+    func iconView(size: CGFloat = 40) -> some View {
+        let iconSize = size * 0.45
+        ZStack {
+            Circle()
+                .fill(DS.Color.primary.opacity(0.10))
+                .frame(width: size, height: size)
+            
+            switch self {
+            case .website:
+                Image(systemName: "globe")
+                    .font(.system(size: iconSize, weight: .bold))
+                    .foregroundColor(DS.Color.primary)
+            case .instagram:
+                // Instagram camera icon
+                Image(systemName: "camera.fill")
+                    .font(.system(size: iconSize, weight: .bold))
+                    .foregroundColor(DS.Color.primary)
+            case .twitter:
+                Text("𝕏")
+                    .font(.system(size: iconSize + 2, weight: .black))
+                    .foregroundColor(DS.Color.primary)
+            case .tiktok:
+                Image(systemName: "music.note")
+                    .font(.system(size: iconSize, weight: .bold))
+                    .foregroundColor(DS.Color.primary)
+            case .snapchat:
+                Image(systemName: "ghost.fill")
+                    .font(.system(size: iconSize, weight: .bold))
+                    .foregroundColor(DS.Color.primary)
+            case .whatsapp:
+                Image(systemName: "phone.bubble.fill")
+                    .font(.system(size: iconSize, weight: .bold))
+                    .foregroundColor(DS.Color.primary)
+            case .phone:
+                Image(systemName: "phone.fill")
+                    .font(.system(size: iconSize, weight: .bold))
+                    .foregroundColor(DS.Color.primary)
+            }
+        }
+    }
+
+    /// SF Symbol name for use in DSTextField
+    var sfSymbol: String {
+        switch self {
+        case .website: return "globe"
+        case .instagram: return "camera.fill"
+        case .twitter: return "xmark"
+        case .tiktok: return "music.note"
+        case .snapchat: return "ghost.fill"
+        case .whatsapp: return "phone.bubble.fill"
+        case .phone: return "phone.fill"
+        }
+    }
+}
+
 struct ProjectDetailView: View {
     let project: Project
     @EnvironmentObject var authVM: AuthViewModel
@@ -8,6 +103,8 @@ struct ProjectDetailView: View {
     @Environment(\.openURL) private var openURL
     
     @State private var showDeleteAlert = false
+    @State private var showEditSheet = false
+    @State private var didEdit = false
     
     private var isOwnerOrAdmin: Bool {
         guard let user = authVM.currentUser else { return false }
@@ -21,7 +118,7 @@ struct ProjectDetailView: View {
                 DSDecorativeBackground()
                 
                 ScrollView(showsIndicators: false) {
-                    VStack(spacing: DS.Spacing.xxl) {
+                    VStack(spacing: DS.Spacing.md) {
                         // Logo + Title
                         projectHeader
                         
@@ -52,6 +149,29 @@ struct ProjectDetailView: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(L10n.t("إغلاق", "Close")) { dismiss() }
                 }
+                if isOwnerOrAdmin {
+                    ToolbarItem(placement: .primaryAction) {
+                        Button {
+                            showEditSheet = true
+                        } label: {
+                            HStack(spacing: DS.Spacing.xs) {
+                                Image(systemName: "pencil")
+                                    .font(DS.Font.scaled(14, weight: .bold))
+                                Text(L10n.t("تعديل", "Edit"))
+                                    .font(DS.Font.callout)
+                                    .fontWeight(.bold)
+                            }
+                            .foregroundColor(DS.Color.primary)
+                        }
+                    }
+                }
+            }
+            .sheet(isPresented: $showEditSheet, onDismiss: {
+                if didEdit { dismiss() }
+            }) {
+                EditProjectView(project: project, didEdit: $didEdit)
+                    .environmentObject(projectsVM)
+                    .environmentObject(authVM)
             }
             .alert(
                 L10n.t("حذف المشروع", "Delete Project"),
@@ -188,54 +308,37 @@ struct ProjectDetailView: View {
             
             VStack(spacing: DS.Spacing.sm) {
                 if let url = project.websiteUrl, !url.isEmpty {
-                    socialLinkRow(icon: "globe", label: L10n.t("الموقع الإلكتروني", "Website"),
-                                  value: url, color: DS.Color.primary)
+                    socialLinkRow(platform: .website, value: url)
                 }
                 if let url = project.instagramUrl, !url.isEmpty {
-                    socialLinkRow(icon: "camera.fill", label: "Instagram",
-                                  value: url, color: Color(hex: "#E1306C"))
+                    socialLinkRow(platform: .instagram, value: url)
                 }
                 if let url = project.twitterUrl, !url.isEmpty {
-                    socialLinkRow(icon: "at", label: "X / Twitter",
-                                  value: url, color: DS.Color.textPrimary)
+                    socialLinkRow(platform: .twitter, value: url)
                 }
                 if let url = project.tiktokUrl, !url.isEmpty {
-                    socialLinkRow(icon: "play.rectangle.fill", label: "TikTok",
-                                  value: url, color: DS.Color.textPrimary)
-                }
-                if let url = project.snapchatUrl, !url.isEmpty {
-                    socialLinkRow(icon: "camera.metering.spot", label: "Snapchat",
-                                  value: url, color: Color(hex: "#FFFC00"))
+                    socialLinkRow(platform: .tiktok, value: url)
                 }
                 if let number = project.whatsappNumber, !number.isEmpty {
-                    socialLinkRow(icon: "message.fill", label: "WhatsApp",
-                                  value: number, color: Color(hex: "#25D366"))
+                    socialLinkRow(platform: .whatsapp, value: number)
                 }
                 if let number = project.phoneNumber, !number.isEmpty {
-                    socialLinkRow(icon: "phone.fill", label: L10n.t("الهاتف", "Phone"),
-                                  value: number, color: DS.Color.success)
+                    socialLinkRow(platform: .phone, value: number)
                 }
             }
         }
     }
     
-    private func socialLinkRow(icon: String, label: String, value: String, color: Color) -> some View {
+    private func socialLinkRow(platform: SocialPlatform, value: String) -> some View {
         Button {
-            openSocialLink(value)
+            openSocialLink(platform: platform, value: value)
         } label: {
             DSCard {
                 HStack(spacing: DS.Spacing.md) {
-                    ZStack {
-                        Circle()
-                            .fill(color.opacity(0.12))
-                            .frame(width: 40, height: 40)
-                        Image(systemName: icon)
-                            .font(DS.Font.scaled(16, weight: .bold))
-                            .foregroundColor(color)
-                    }
+                    platform.iconView(size: 40)
                     
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(label)
+                        Text(platform.label)
                             .font(DS.Font.caption1)
                             .foregroundColor(DS.Color.textSecondary)
                         Text(value)
@@ -275,25 +378,234 @@ struct ProjectDetailView: View {
     }
     
     // MARK: - Helpers
-    private func openSocialLink(_ value: String) {
-        var urlString = value.trimmingCharacters(in: .whitespacesAndNewlines)
+    private func openSocialLink(platform: SocialPlatform, value: String) {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
         
-        // If it looks like a phone number, use tel:
-        if urlString.hasPrefix("+") || urlString.allSatisfy({ $0.isNumber || $0 == "+" || $0 == " " || $0 == "-" }) {
-            let cleaned = urlString.filter { $0.isNumber || $0 == "+" }
-            if let url = URL(string: "tel:\(cleaned)") {
+        switch platform {
+        case .phone:
+            let cleaned = trimmed.filter { $0.isNumber || $0 == "+" }
+            if let url = URL(string: "tel:\(cleaned)") { openURL(url) }
+            
+        case .whatsapp:
+            let cleaned = trimmed.filter { $0.isNumber || $0 == "+" }
+            let number = cleaned.hasPrefix("+") ? String(cleaned.dropFirst()) : cleaned
+            if let url = URL(string: "https://wa.me/\(number)") { openURL(url) }
+            
+        case .instagram:
+            let username = trimmed.replacingOccurrences(of: "@", with: "")
+            if trimmed.contains("instagram.com") || trimmed.hasPrefix("http") {
+                openWebURL(trimmed)
+            } else if let url = URL(string: "https://instagram.com/\(username)") {
                 openURL(url)
             }
-            return
+            
+        case .twitter:
+            let username = trimmed.replacingOccurrences(of: "@", with: "")
+            if trimmed.contains("x.com") || trimmed.contains("twitter.com") || trimmed.hasPrefix("http") {
+                openWebURL(trimmed)
+            } else if let url = URL(string: "https://x.com/\(username)") {
+                openURL(url)
+            }
+            
+        case .tiktok:
+            let username = trimmed.hasPrefix("@") ? trimmed : "@\(trimmed)"
+            if trimmed.contains("tiktok.com") || trimmed.hasPrefix("http") {
+                openWebURL(trimmed)
+            } else if let url = URL(string: "https://tiktok.com/\(username)") {
+                openURL(url)
+            }
+            
+        case .snapchat:
+            let username = trimmed.replacingOccurrences(of: "@", with: "")
+            if trimmed.contains("snapchat.com") || trimmed.hasPrefix("http") {
+                openWebURL(trimmed)
+            } else if let url = URL(string: "https://snapchat.com/add/\(username)") {
+                openURL(url)
+            }
+            
+        case .website:
+            openWebURL(trimmed)
         }
-        
-        // Add https:// if missing
+    }
+    
+    private func openWebURL(_ value: String) {
+        var urlString = value
         if !urlString.hasPrefix("http://") && !urlString.hasPrefix("https://") {
             urlString = "https://\(urlString)"
         }
-        
         if let url = URL(string: urlString) {
             openURL(url)
+        }
+    }
+}
+
+// MARK: - Edit Project View
+struct EditProjectView: View {
+    let project: Project
+    @Binding var didEdit: Bool
+    @EnvironmentObject var authVM: AuthViewModel
+    @EnvironmentObject var projectsVM: ProjectsViewModel
+    @Environment(\.dismiss) private var dismiss
+    
+    @State private var title: String
+    @State private var description: String
+    @State private var websiteUrl: String
+    @State private var instagramUrl: String
+    @State private var twitterUrl: String
+    @State private var tiktokUrl: String
+    @State private var whatsappNumber: String
+    @State private var phoneNumber: String
+    @State private var logoImage: UIImage? = nil
+    @State private var isSaving = false
+    
+    init(project: Project, didEdit: Binding<Bool>) {
+        self.project = project
+        _didEdit = didEdit
+        _title = State(initialValue: project.title)
+        _description = State(initialValue: project.description ?? "")
+        _websiteUrl = State(initialValue: project.websiteUrl ?? "")
+        _instagramUrl = State(initialValue: project.instagramUrl ?? "")
+        _twitterUrl = State(initialValue: project.twitterUrl ?? "")
+        _tiktokUrl = State(initialValue: project.tiktokUrl ?? "")
+        _whatsappNumber = State(initialValue: project.whatsappNumber ?? "")
+        _phoneNumber = State(initialValue: project.phoneNumber ?? "")
+    }
+    
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                DS.Color.background.ignoresSafeArea()
+                
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: DS.Spacing.md) {
+                        // Logo picker
+                        DSProfilePhotoPicker(
+                            selectedImage: $logoImage,
+                            existingURL: project.logoUrl,
+                            enableCrop: true,
+                            cropShape: .circle,
+                            title: L10n.t("شعار المشروع", "Project Logo"),
+                            trailing: L10n.t("اختياري", "Optional")
+                        )
+                        
+                        DSSectionHeader(title: L10n.t("معلومات المشروع", "Project Info"), icon: "briefcase.fill")
+                        
+                        DSTextField(
+                            label: L10n.t("اسم المشروع", "Project Name"),
+                            placeholder: L10n.t("اسم المشروع", "Project Name"),
+                            text: $title,
+                            icon: "briefcase.fill"
+                        )
+                        
+                        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                            Text(L10n.t("وصف المشروع", "Description"))
+                                .font(DS.Font.caption1)
+                                .foregroundColor(DS.Color.textSecondary)
+                            TextEditor(text: $description)
+                                .font(DS.Font.body)
+                                .frame(minHeight: 80)
+                                .padding(DS.Spacing.sm)
+                                .background(DS.Color.surface)
+                                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                                        .stroke(DS.Color.textTertiary.opacity(0.3), lineWidth: 1)
+                                )
+                        }
+                        
+                        DSSectionHeader(title: L10n.t("حسابات التواصل", "Social Accounts"), icon: "link")
+                        
+                        socialTextField(platform: .website, placeholder: "https://...", text: $websiteUrl)
+                        socialTextField(platform: .instagram, placeholder: "@username", text: $instagramUrl)
+                        socialTextField(platform: .twitter, placeholder: "@username", text: $twitterUrl)
+                        socialTextField(platform: .tiktok, placeholder: "@username", text: $tiktokUrl)
+                        socialTextField(platform: .whatsapp, placeholder: "+965...", text: $whatsappNumber)
+                        socialTextField(platform: .phone, placeholder: "+965...", text: $phoneNumber)
+                        
+                        DSPrimaryButton(
+                            L10n.t("حفظ التعديلات", "Save Changes"),
+                            isLoading: isSaving
+                        ) {
+                            Task { await saveChanges() }
+                        }
+                        .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        .opacity(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.5 : 1)
+                        .padding(.top, DS.Spacing.md)
+                    }
+                    .padding(DS.Spacing.lg)
+                    .padding(.bottom, DS.Spacing.xxxl)
+                }
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(L10n.t("إلغاء", "Cancel")) { dismiss() }
+                }
+            }
+            .navigationTitle(L10n.t("تعديل المشروع", "Edit Project"))
+            .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+        }
+    }
+    
+    private func socialTextField(platform: SocialPlatform, placeholder: String, text: Binding<String>) -> some View {
+        HStack(spacing: DS.Spacing.md) {
+            platform.iconView(size: 38)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(platform.label)
+                    .font(DS.Font.caption1)
+                    .foregroundColor(DS.Color.textSecondary)
+                TextField(placeholder, text: text)
+                    .font(DS.Font.body)
+            }
+        }
+        .padding(DS.Spacing.md)
+        .background(DS.Color.surface)
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                .stroke(DS.Color.textTertiary.opacity(0.15), lineWidth: 1)
+        )
+    }
+    
+    private func saveChanges() async {
+        isSaving = true
+        
+        // Upload new logo if selected
+        var finalLogoUrl = project.logoUrl
+        if let logoImage {
+            if let data = logoImage.jpegData(compressionQuality: 0.8) {
+                if let uploaded = await projectsVM.uploadLogo(imageData: data, projectId: project.id) {
+                    finalLogoUrl = uploaded
+                }
+            }
+        }
+        
+        let success = await projectsVM.updateProject(
+            id: project.id,
+            title: title.trimmingCharacters(in: .whitespacesAndNewlines),
+            description: description.isEmpty ? nil : description,
+            logoUrl: finalLogoUrl,
+            websiteUrl: websiteUrl.isEmpty ? nil : websiteUrl,
+            instagramUrl: instagramUrl.isEmpty ? nil : instagramUrl,
+            twitterUrl: twitterUrl.isEmpty ? nil : twitterUrl,
+            tiktokUrl: tiktokUrl.isEmpty ? nil : tiktokUrl,
+            snapchatUrl: nil,
+            whatsappNumber: whatsappNumber.isEmpty ? nil : whatsappNumber,
+            phoneNumber: phoneNumber.isEmpty ? nil : phoneNumber
+        )
+        
+        if success {
+            await projectsVM.fetchProjects()
+            if let userId = authVM.currentUser?.id {
+                await projectsVM.fetchMyPendingProjects(ownerId: userId)
+            }
+            isSaving = false
+            didEdit = true
+            dismiss()
+        } else {
+            isSaving = false
         }
     }
 }

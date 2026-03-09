@@ -12,39 +12,59 @@ struct HomeNewsView: View {
     @State private var postToDelete: NewsPost? = nil
     @State private var postToReport: NewsPost? = nil
     @State private var postToEdit: NewsPost? = nil
-    @State private var showingContactCenter = false
     @State private var showNewNewsAlert = false
     @State private var newNewsCount = 0
     @State private var selectedMemberForDetails: FamilyMember? = nil
     @State private var lastRefreshDate: Date? = nil
-    @State private var showingPhotoAlbums = false
-    @State private var showingProjects = false
+    @State private var activeSubPage: HomeSubPage? = nil
+
+    private enum HomeSubPage {
+        case photos, projects, contact
+    }
 
     var body: some View {
         NavigationStack {
             ZStack {
                 DS.Color.background.ignoresSafeArea()
 
-                VStack(spacing: 0) {
-                    MainHeaderView(selectedTab: $selectedTab, showingNotifications: $showingNotifications)
-
-                    ScrollView(showsIndicators: false) {
-                        VStack(spacing: DS.Spacing.xl) {
-                            // الوصول السريع
-                            quickActionsSection
-
-                            // أخبار العائلة
-                            newsFeedSection
+                if let subPage = activeSubPage {
+                    // Sub-page content
+                    VStack(spacing: 0) {
+                        subPageHeader(for: subPage)
+                        
+                        switch subPage {
+                        case .photos:
+                            FamilyPhotoAlbumsView()
+                        case .projects:
+                            FamilyProjectsView()
+                        case .contact:
+                            ContactCenterView()
                         }
-                        .padding(.top, DS.Spacing.md)
-                        .padding(.bottom, 120)
                     }
-                    .refreshable { await refreshNews(notifyIfNew: true, force: true) }
+                    .transition(.move(edge: L10n.isArabic ? .leading : .trailing))
+                } else {
+                    // Main home content
+                    VStack(spacing: 0) {
+                        MainHeaderView(selectedTab: $selectedTab, showingNotifications: $showingNotifications)
+
+                        ScrollView(showsIndicators: false) {
+                            VStack(spacing: DS.Spacing.xl) {
+                                // الوصول السريع
+                                quickActionsSection
+
+                                // أخبار العائلة
+                                newsFeedSection
+                            }
+                            .padding(.top, DS.Spacing.md)
+                            .padding(.bottom, 120)
+                        }
+                        .refreshable { await refreshNews(notifyIfNew: true, force: true) }
+                    }
+                    .transition(.move(edge: L10n.isArabic ? .trailing : .leading))
                 }
-
-
             }
             .navigationBarHidden(true)
+            .animation(DS.Anim.snappy, value: activeSubPage == nil)
             .task { await refreshNews(notifyIfNew: false) }
             .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
                 Task { await refreshNews(notifyIfNew: true) }
@@ -54,10 +74,6 @@ struct HomeNewsView: View {
                     .presentationDetents([.medium, .large])
                     .presentationDragIndicator(.visible)
             }
-            .sheet(isPresented: $showingContactCenter) { ContactCenterView() }
-
-            .sheet(isPresented: $showingPhotoAlbums) { FamilyPhotoAlbumsView() }
-            .sheet(isPresented: $showingProjects) { FamilyProjectsView() }
             .sheet(item: $selectedNewsForComments) { news in
                 NewsCommentsSheet(news: news)
             }
@@ -98,15 +114,60 @@ struct HomeNewsView: View {
                 .presentationDragIndicator(.visible)
             }
         }
+        .onChange(of: selectedTab) {
+            if selectedTab != 0, activeSubPage != nil {
+                activeSubPage = nil
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .didReselectTab)) { notification in
+            if let tab = notification.userInfo?["tab"] as? Int, tab == 0, activeSubPage != nil {
+                withAnimation(DS.Anim.snappy) { activeSubPage = nil }
+            }
+        }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+    }
+
+    // MARK: - Sub-page Header
+    private func subPageHeader(for page: HomeSubPage) -> some View {
+        let title: String = {
+            switch page {
+            case .photos: return L10n.t("صور العائلة", "Family Photos")
+            case .projects: return L10n.t("مشاريع العائلة", "Family Projects")
+            case .contact: return L10n.t("التواصل", "Contact")
+            }
+        }()
+
+        return HStack(spacing: DS.Spacing.md) {
+            Button {
+                withAnimation(DS.Anim.snappy) { activeSubPage = nil }
+            } label: {
+                Image(systemName: L10n.isArabic ? "chevron.right" : "chevron.left")
+                    .font(DS.Font.scaled(18, weight: .bold))
+                    .foregroundColor(DS.Color.textPrimary)
+                    .frame(width: 44, height: 44)
+                    .background(DS.Color.surface)
+                    .clipShape(Circle())
+                    .overlay(Circle().stroke(DS.Color.primary.opacity(0.08), lineWidth: 1))
+            }
+
+            Text(title)
+                .font(DS.Font.title3)
+                .fontWeight(.black)
+                .foregroundColor(DS.Color.textPrimary)
+
+            Spacer()
+        }
+        .padding(.horizontal, DS.Spacing.lg)
+        .padding(.vertical, DS.Spacing.sm)
+        .background(DS.Color.background)
     }
 
     // MARK: - Quick Actions Section
     private var quickActionsSection: some View {
         HStack(spacing: DS.Spacing.md) {
-            quickActionItem(icon: "photo.on.rectangle.angled.fill", title: L10n.t("الصور", "Photos"), color: DS.Color.gridDiwaniya) { showingPhotoAlbums = true }
-            quickActionItem(icon: "briefcase.fill", title: L10n.t("مشاريع", "Projects"), color: DS.Color.neonBlue) { showingProjects = true }
-            quickActionItem(icon: "bubble.left.and.bubble.right.fill", title: L10n.t("تواصل", "Contact"), color: DS.Color.gridContact) { showingContactCenter = true }
+            quickActionItem(icon: "photo.on.rectangle.angled.fill", title: L10n.t("الصور", "Photos"), color: DS.Color.gridDiwaniya) { withAnimation(DS.Anim.snappy) { activeSubPage = .photos } }
+            quickActionItem(icon: "briefcase.fill", title: L10n.t("مشاريع", "Projects"), color: DS.Color.neonBlue) { withAnimation(DS.Anim.snappy) { activeSubPage = .projects } }
+            quickActionItem(icon: "bubble.left.and.bubble.right.fill", title: L10n.t("تواصل", "Contact"), color: DS.Color.gridContact) { withAnimation(DS.Anim.snappy) { activeSubPage = .contact } }
         }
         .padding(.horizontal, DS.Spacing.lg)
     }
@@ -115,9 +176,9 @@ struct HomeNewsView: View {
         Button(action: action) {
             VStack(spacing: DS.Spacing.xs) {
                 Image(systemName: icon)
-                    .font(DS.Font.scaled(20, weight: .semibold))
+                    .font(DS.Font.scaled(26, weight: .semibold))
                     .foregroundColor(color)
-                    .frame(width: 52, height: 52)
+                    .frame(width: 64, height: 64)
                     .background(color.opacity(0.1))
                     .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
                     .overlay(

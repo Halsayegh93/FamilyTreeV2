@@ -109,6 +109,7 @@ class AuthViewModel: ObservableObject {
     private let trialDurationDays = 7
     
     weak var notificationVM: NotificationViewModel?
+    weak var appSettingsVM: AppSettingsViewModel?
     
     var canModerate: Bool {
         currentUser?.role == .admin || currentUser?.role == .supervisor
@@ -484,6 +485,9 @@ class AuthViewModel: ObservableObject {
         self.status = access.status
         self.trialStartedAt = access.trialStart
         self.trialEndsAt = access.trialEnd
+        
+        // جلب إعدادات التطبيق من السيرفر
+        await appSettingsVM?.fetchSettings()
         if let normalizedPhone, normalizedPhone.count == 8 {
             self.phoneNumber = normalizedPhone
         }

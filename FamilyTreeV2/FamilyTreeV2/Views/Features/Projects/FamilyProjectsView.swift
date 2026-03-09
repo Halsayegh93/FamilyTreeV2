@@ -3,10 +3,11 @@ import SwiftUI
 struct FamilyProjectsView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var projectsVM: ProjectsViewModel
-    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject var memberVM: MemberViewModel
     
     @State private var showingAddProject = false
     @State private var selectedProject: Project?
+    @State private var showAddedAlert = false
     
     private let columns = [
         GridItem(.flexible(), spacing: DS.Spacing.md),
@@ -14,80 +15,115 @@ struct FamilyProjectsView: View {
     ]
     
     var body: some View {
-        NavigationStack {
-            ZStack {
-                DS.Color.background.ignoresSafeArea()
-                DSDecorativeBackground()
-                
-                VStack(spacing: 0) {
-                    // Header
-                    HStack {
-                        Button(action: { dismiss() }) {
-                            Image(systemName: L10n.isArabic ? "chevron.right" : "chevron.left")
-                                .font(DS.Font.scaled(18, weight: .bold))
-                                .foregroundColor(DS.Color.textPrimary)
-                                .frame(width: 44, height: 44)
+        ZStack {
+            DS.Color.background.ignoresSafeArea()
+            DSDecorativeBackground()
+            
+            if projectsVM.isLoading && projectsVM.projects.isEmpty && projectsVM.myPendingProjects.isEmpty {
+                VStack(spacing: DS.Spacing.lg) {
+                    ProgressView()
+                        .scaleEffect(1.2)
+                    Text(L10n.t("جاري التحميل...", "Loading..."))
+                        .font(DS.Font.callout)
+                        .foregroundColor(DS.Color.textSecondary)
+                }
+            } else if projectsVM.projects.isEmpty && projectsVM.myPendingProjects.isEmpty {
+                emptyStateView
+            } else {
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: DS.Spacing.lg) {
+                        // مشاريع المستخدم المعلقة
+                        if !projectsVM.myPendingProjects.isEmpty {
+                            VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                                DSSectionHeader(
+                                    title: L10n.t("بانتظار الموافقة", "Pending Approval"),
+                                    icon: "clock.badge.checkmark"
+                                )
+                                
+                                LazyVGrid(columns: columns, spacing: DS.Spacing.md) {
+                                    ForEach(projectsVM.myPendingProjects) { project in
+                                        pendingProjectCard(project)
+                                            .onTapGesture {
+                                                selectedProject = project
+                                            }
+                                    }
+                                }
+                            }
                         }
                         
-                        Spacer()
+                        // المشاريع المعتمدة
+                        if !projectsVM.projects.isEmpty {
+                            DSSectionHeader(
+                                title: L10n.t("المشاريع", "Projects"),
+                                icon: "briefcase.fill"
+                            )
+                        }
                         
-                        Text(L10n.t("مشاريع العائلة", "Family Projects"))
-                            .font(DS.Font.title2)
-                            .fontWeight(.black)
-                            .foregroundColor(DS.Color.textPrimary)
-                        
-                        Spacer()
-                        
-                        Button(action: { showingAddProject = true }) {
-                            Image(systemName: "plus")
-                                .font(DS.Font.scaled(18, weight: .bold))
-                                .foregroundColor(DS.Color.textPrimary)
-                                .frame(width: 44, height: 44)
+                        LazyVGrid(columns: columns, spacing: DS.Spacing.md) {
+                            ForEach(projectsVM.projects) { project in
+                                projectCard(project)
+                                    .onTapGesture {
+                                        selectedProject = project
+                                    }
+                            }
                         }
                     }
                     .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.top, DS.Spacing.sm)
-                    .padding(.bottom, DS.Spacing.md)
-                    
-                    if projectsVM.isLoading && projectsVM.projects.isEmpty {
-                        Spacer()
-                        ProgressView(L10n.t("جاري التحميل...", "Loading..."))
-                        Spacer()
-                    } else if projectsVM.projects.isEmpty {
-                        emptyStateView
-                    } else {
-                        ScrollView(showsIndicators: false) {
-                            LazyVGrid(columns: columns, spacing: DS.Spacing.md) {
-                                ForEach(projectsVM.projects) { project in
-                                    projectCard(project)
-                                        .onTapGesture {
-                                            selectedProject = project
-                                        }
-                                }
-                            }
-                            .padding(.horizontal, DS.Spacing.lg)
-                            .padding(.bottom, DS.Spacing.xxxl)
-                        }
-                        .refreshable {
-                            await projectsVM.fetchProjects()
-                        }
+                    .padding(.top, DS.Spacing.md)
+                    .padding(.bottom, 100)
+                }
+                .refreshable {
+                    await projectsVM.fetchProjects()
+                    if let userId = authVM.currentUser?.id {
+                        await projectsVM.fetchMyPendingProjects(ownerId: userId)
                     }
                 }
             }
-            .navigationBarHidden(true)
-            .task { await projectsVM.fetchProjects() }
-            .sheet(isPresented: $showingAddProject) {
-                AddProjectView()
-                    .environmentObject(projectsVM)
-                    .environmentObject(authVM)
+            
+            // FAB - Add Project
+            VStack {
+                Spacer()
+                HStack {
+                    Spacer()
+                    DSFloatingButton(
+                        icon: "plus"
+                    ) {
+                        showingAddProject = true
+                    }
+                    .padding(.trailing, DS.Spacing.xl)
+                    .padding(.bottom, DS.Spacing.xxl)
+                }
             }
-            .sheet(item: $selectedProject) { project in
-                ProjectDetailView(project: project)
-                    .environmentObject(projectsVM)
-                    .environmentObject(authVM)
-            }
-            .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         }
+        .task {
+            await projectsVM.fetchProjects()
+            if let userId = authVM.currentUser?.id {
+                await projectsVM.fetchMyPendingProjects(ownerId: userId)
+            }
+        }
+        .sheet(isPresented: $showingAddProject) {
+            AddProjectView(showAddedAlert: $showAddedAlert)
+                .environmentObject(projectsVM)
+                .environmentObject(authVM)
+                .environmentObject(memberVM)
+        }
+        .alert(
+            L10n.t("تم إرسال المشروع", "Project Submitted"),
+            isPresented: $showAddedAlert
+        ) {
+            Button(L10n.t("حسناً", "OK"), role: .cancel) {}
+        } message: {
+            Text(L10n.t(
+                "تم إرسال مشروعك للمراجعة. سيظهر بعد موافقة الإدارة.",
+                "Your project has been submitted for review. It will appear after admin approval."
+            ))
+        }
+        .sheet(item: $selectedProject) { project in
+            ProjectDetailView(project: project)
+                .environmentObject(projectsVM)
+                .environmentObject(authVM)
+        }
+        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
     
     // MARK: - Empty State
@@ -122,10 +158,31 @@ struct FamilyProjectsView: View {
                     .font(DS.Font.title3)
                     .fontWeight(.black)
                     .foregroundColor(DS.Color.textPrimary)
-                Text(L10n.t("اضغط + لإضافة مشروع جديد", "Tap + to add a new project"))
+                Text(L10n.t("أضف مشروعك ليراه أفراد العائلة", "Add your project for family members to see"))
                     .font(DS.Font.callout)
                     .foregroundColor(DS.Color.textSecondary)
+                    .multilineTextAlignment(.center)
             }
+            
+            Button {
+                showingAddProject = true
+            } label: {
+                HStack(spacing: DS.Spacing.sm) {
+                    Image(systemName: "plus.circle.fill")
+                        .font(DS.Font.scaled(20, weight: .bold))
+                    Text(L10n.t("إضافة مشروع", "Add Project"))
+                        .font(DS.Font.callout)
+                        .fontWeight(.bold)
+                }
+                .foregroundColor(.white)
+                .padding(.horizontal, DS.Spacing.xxl)
+                .padding(.vertical, DS.Spacing.md)
+                .background(DS.Color.gradientPrimary)
+                .clipShape(Capsule())
+            }
+            .buttonStyle(DSBoldButtonStyle())
+            .padding(.top, DS.Spacing.sm)
+            
             Spacer()
         }
     }
@@ -174,6 +231,59 @@ struct FamilyProjectsView: View {
         }
     }
     
+    // MARK: - Pending Project Card
+    private func pendingProjectCard(_ project: Project) -> some View {
+        DSCard(padding: 0) {
+            VStack(spacing: DS.Spacing.sm) {
+                // Logo
+                if let logoUrl = project.logoUrl, let url = URL(string: logoUrl) {
+                    AsyncImage(url: url) { phase in
+                        switch phase {
+                        case .success(let image):
+                            image
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .frame(width: 64, height: 64)
+                                .clipShape(Circle())
+                        case .failure:
+                            projectPlaceholderIcon
+                        default:
+                            ProgressView()
+                                .frame(width: 64, height: 64)
+                        }
+                    }
+                } else {
+                    projectPlaceholderIcon
+                }
+                
+                // Title
+                Text(project.title)
+                    .font(DS.Font.callout)
+                    .fontWeight(.bold)
+                    .foregroundColor(DS.Color.textPrimary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.center)
+                
+                // Pending badge
+                HStack(spacing: DS.Spacing.xs) {
+                    Image(systemName: "clock.fill")
+                        .font(DS.Font.scaled(10, weight: .bold))
+                    Text(L10n.t("بانتظار الموافقة", "Pending"))
+                        .font(DS.Font.caption2)
+                        .fontWeight(.bold)
+                }
+                .foregroundColor(DS.Color.warning)
+                .padding(.horizontal, DS.Spacing.sm)
+                .padding(.vertical, DS.Spacing.xs)
+                .background(DS.Color.warning.opacity(0.12))
+                .clipShape(Capsule())
+            }
+            .padding(DS.Spacing.lg)
+            .frame(maxWidth: .infinity)
+        }
+        .opacity(0.75)
+    }
+    
     private var projectPlaceholderIcon: some View {
         ZStack {
             Circle()
@@ -196,7 +306,9 @@ struct FamilyProjectsView: View {
 struct AddProjectView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var projectsVM: ProjectsViewModel
+    @EnvironmentObject var memberVM: MemberViewModel
     @Environment(\.dismiss) private var dismiss
+    @Binding var showAddedAlert: Bool
     
     @State private var title = ""
     @State private var description = ""
@@ -204,11 +316,13 @@ struct AddProjectView: View {
     @State private var instagramUrl = ""
     @State private var twitterUrl = ""
     @State private var tiktokUrl = ""
-    @State private var snapchatUrl = ""
     @State private var whatsappNumber = ""
     @State private var phoneNumber = ""
     @State private var logoImage: UIImage? = nil
     @State private var isSaving = false
+    @State private var selectedOwnerId: UUID?
+    @State private var showMemberPicker = false
+    @State private var memberSearchText = ""
     
     var body: some View {
         NavigationStack {
@@ -216,13 +330,13 @@ struct AddProjectView: View {
                 DS.Color.background.ignoresSafeArea()
                 
                 ScrollView(showsIndicators: false) {
-                    VStack(spacing: DS.Spacing.xl) {
+                    VStack(spacing: DS.Spacing.md) {
                         // Logo picker
                         DSProfilePhotoPicker(
                             selectedImage: $logoImage,
                             enableCrop: true,
                             cropShape: .circle,
-                            title: L10n.t("لوقو المشروع", "Project Logo"),
+                            title: L10n.t("شعار المشروع", "Project Logo"),
                             trailing: L10n.t("اختياري", "Optional")
                         )
                         
@@ -232,8 +346,60 @@ struct AddProjectView: View {
                             label: L10n.t("اسم المشروع", "Project Name"),
                             placeholder: L10n.t("اسم المشروع", "Project Name"),
                             text: $title,
-                            icon: "textformat"
+                            icon: "briefcase.fill"
                         )
+                        
+                        // Owner picker — admin/supervisor only
+                        if authVM.canModerate {
+                            VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                                Text(L10n.t("صاحب المشروع", "Project Owner"))
+                                    .font(DS.Font.caption1)
+                                    .foregroundColor(DS.Color.textSecondary)
+                                
+                                Button {
+                                    showMemberPicker = true
+                                } label: {
+                                    HStack(spacing: DS.Spacing.md) {
+                                        Image(systemName: "person.fill")
+                                            .font(DS.Font.body)
+                                            .foregroundColor(DS.Color.primary)
+                                            .frame(width: 24)
+                                        
+                                        if let ownerId = selectedOwnerId,
+                                           let member = memberVM.member(byId: ownerId) {
+                                            Text(member.fullName)
+                                                .font(DS.Font.body)
+                                                .foregroundColor(DS.Color.textPrimary)
+                                        } else {
+                                            Text(authVM.currentUser?.fullName ?? "")
+                                                .font(DS.Font.body)
+                                                .foregroundColor(DS.Color.textPrimary)
+                                            
+                                            Text(L10n.t("(أنت)", "(You)"))
+                                                .font(DS.Font.caption1)
+                                                .foregroundColor(DS.Color.textTertiary)
+                                        }
+                                        
+                                        Spacer()
+                                        
+                                        Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
+                                            .font(DS.Font.caption1)
+                                            .foregroundColor(DS.Color.textTertiary)
+                                    }
+                                    .padding(DS.Spacing.md)
+                                    .background(DS.Color.surface)
+                                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                                            .stroke(DS.Color.textTertiary.opacity(0.15), lineWidth: 1)
+                                    )
+                                }
+                                .buttonStyle(.plain)
+                            }
+                            .sheet(isPresented: $showMemberPicker) {
+                                memberPickerSheet
+                            }
+                        }
                         
                         VStack(alignment: .leading, spacing: DS.Spacing.xs) {
                             Text(L10n.t("وصف المشروع", "Description"))
@@ -253,13 +419,12 @@ struct AddProjectView: View {
                         
                         DSSectionHeader(title: L10n.t("حسابات التواصل", "Social Accounts"), icon: "link")
                         
-                        DSTextField(label: L10n.t("الموقع الإلكتروني", "Website"), placeholder: "https://...", text: $websiteUrl, icon: "globe")
-                        DSTextField(label: "Instagram", placeholder: "@username", text: $instagramUrl, icon: "camera.fill")
-                        DSTextField(label: "Twitter / X", placeholder: "@username", text: $twitterUrl, icon: "at")
-                        DSTextField(label: "TikTok", placeholder: "@username", text: $tiktokUrl, icon: "play.rectangle.fill")
-                        DSTextField(label: "Snapchat", placeholder: "@username", text: $snapchatUrl, icon: "camera.metering.spot")
-                        DSTextField(label: "WhatsApp", placeholder: "+965...", text: $whatsappNumber, icon: "message.fill")
-                        DSTextField(label: L10n.t("رقم الهاتف", "Phone"), placeholder: "+965...", text: $phoneNumber, icon: "phone.fill")
+                        socialTextField(platform: .website, placeholder: "https://...", text: $websiteUrl)
+                        socialTextField(platform: .instagram, placeholder: "@username", text: $instagramUrl)
+                        socialTextField(platform: .twitter, placeholder: "@username", text: $twitterUrl)
+                        socialTextField(platform: .tiktok, placeholder: "@username", text: $tiktokUrl)
+                        socialTextField(platform: .whatsapp, placeholder: "+965...", text: $whatsappNumber)
+                        socialTextField(platform: .phone, placeholder: "+965...", text: $phoneNumber)
                         
                         DSPrimaryButton(
                             L10n.t("إضافة المشروع", "Add Project"),
@@ -286,11 +451,153 @@ struct AddProjectView: View {
         }
     }
     
+    private func socialTextField(platform: SocialPlatform, placeholder: String, text: Binding<String>) -> some View {
+        HStack(spacing: DS.Spacing.md) {
+            platform.iconView(size: 38)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(platform.label)
+                    .font(DS.Font.caption1)
+                    .foregroundColor(DS.Color.textSecondary)
+                TextField(placeholder, text: text)
+                    .font(DS.Font.body)
+            }
+        }
+        .padding(DS.Spacing.md)
+        .background(DS.Color.surface)
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                .stroke(DS.Color.textTertiary.opacity(0.15), lineWidth: 1)
+        )
+    }
+
+    // MARK: - Member Picker Sheet
+    
+    private var memberPickerSheet: some View {
+        NavigationStack {
+            ZStack {
+                DS.Color.background.ignoresSafeArea()
+                
+                VStack(spacing: 0) {
+                    // Search bar
+                    HStack(spacing: DS.Spacing.sm) {
+                        Image(systemName: "magnifyingglass")
+                            .foregroundColor(DS.Color.textTertiary)
+                        TextField(L10n.t("بحث عن عضو...", "Search member..."), text: $memberSearchText)
+                            .font(DS.Font.body)
+                    }
+                    .padding(DS.Spacing.md)
+                    .background(DS.Color.surface)
+                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+                    .padding(.horizontal, DS.Spacing.lg)
+                    .padding(.top, DS.Spacing.sm)
+                    
+                    List {
+                        ForEach(filteredMembers) { member in
+                            Button {
+                                selectedOwnerId = member.id
+                                showMemberPicker = false
+                                memberSearchText = ""
+                            } label: {
+                                HStack(spacing: DS.Spacing.md) {
+                                    // Avatar
+                                    if let avatarUrl = member.avatarUrl, let url = URL(string: avatarUrl) {
+                                        AsyncImage(url: url) { phase in
+                                            switch phase {
+                                            case .success(let image):
+                                                image
+                                                    .resizable()
+                                                    .aspectRatio(contentMode: .fill)
+                                                    .frame(width: 40, height: 40)
+                                                    .clipShape(Circle())
+                                            default:
+                                                memberPlaceholderAvatar
+                                            }
+                                        }
+                                    } else {
+                                        memberPlaceholderAvatar
+                                    }
+                                    
+                                    Text(member.fullName)
+                                        .font(DS.Font.body)
+                                        .foregroundColor(DS.Color.textPrimary)
+                                    
+                                    Spacer()
+                                    
+                                    if selectedOwnerId == member.id {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .foregroundColor(DS.Color.primary)
+                                    }
+                                }
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .listStyle(.plain)
+                }
+            }
+            .navigationTitle(L10n.t("اختيار صاحب المشروع", "Select Project Owner"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(L10n.t("إلغاء", "Cancel")) {
+                        showMemberPicker = false
+                        memberSearchText = ""
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(L10n.t("إعادة تعيين", "Reset")) {
+                        selectedOwnerId = nil
+                        showMemberPicker = false
+                        memberSearchText = ""
+                    }
+                    .foregroundColor(DS.Color.textSecondary)
+                }
+            }
+            .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+        }
+    }
+    
+    private var memberPlaceholderAvatar: some View {
+        ZStack {
+            Circle()
+                .fill(DS.Color.primary.opacity(0.10))
+                .frame(width: 40, height: 40)
+            Image(systemName: "person.fill")
+                .font(DS.Font.caption1)
+                .foregroundColor(DS.Color.primary)
+        }
+    }
+    
+    private var filteredMembers: [FamilyMember] {
+        let active = memberVM.allMembers.filter { $0.status == .active }
+        let query = memberSearchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if query.isEmpty {
+            return Array(active.prefix(20))
+        }
+        return active.filter {
+            $0.fullName.lowercased().contains(query)
+        }
+    }
+    
     private func saveProject() async {
         guard let currentUser = authVM.currentUser else { return }
         isSaving = true
         
-        let ownerName = currentUser.firstName.isEmpty ? currentUser.fullName : currentUser.firstName
+        // Determine owner: selected member or current user
+        let ownerId: UUID
+        let ownerName: String
+        
+        if let selectedId = selectedOwnerId,
+           let selectedMember = memberVM.member(byId: selectedId) {
+            ownerId = selectedMember.id
+            ownerName = selectedMember.fullName
+        } else {
+            ownerId = currentUser.id
+            ownerName = currentUser.fullName
+        }
         
         // Upload logo if selected
         var uploadedLogoUrl: String? = nil
@@ -302,7 +609,7 @@ struct AddProjectView: View {
         }
         
         let success = await projectsVM.addProject(
-            ownerId: currentUser.id,
+            ownerId: ownerId,
             ownerName: ownerName,
             title: title.trimmingCharacters(in: .whitespacesAndNewlines),
             description: description.isEmpty ? nil : description,
@@ -311,12 +618,20 @@ struct AddProjectView: View {
             instagramUrl: instagramUrl.isEmpty ? nil : instagramUrl,
             twitterUrl: twitterUrl.isEmpty ? nil : twitterUrl,
             tiktokUrl: tiktokUrl.isEmpty ? nil : tiktokUrl,
-            snapchatUrl: snapchatUrl.isEmpty ? nil : snapchatUrl,
+            snapchatUrl: nil,
             whatsappNumber: whatsappNumber.isEmpty ? nil : whatsappNumber,
             phoneNumber: phoneNumber.isEmpty ? nil : phoneNumber
         )
         
-        isSaving = false
-        if success { dismiss() }
+        if success {
+            if let userId = authVM.currentUser?.id {
+                await projectsVM.fetchMyPendingProjects(ownerId: userId)
+            }
+            isSaving = false
+            showAddedAlert = true
+            dismiss()
+        } else {
+            isSaving = false
+        }
     }
 }

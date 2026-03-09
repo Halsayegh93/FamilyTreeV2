@@ -94,7 +94,11 @@ struct DiwaniyasView: View {
                     "Are you sure you want to delete \"\(diwaniyaToDelete?.title ?? "")\"?"
                 ))
             }
-            .task { await viewModel.fetchDiwaniyas() }
+            .task {
+                // تأخير بسيط لتجنب إغراق اتصال QUIC عند فتح التطبيق
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                await viewModel.fetchDiwaniyas()
+            }
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
             .alert(L10n.t("خطأ", "Error"), isPresented: .init(
                 get: { viewModel.errorMessage != nil },

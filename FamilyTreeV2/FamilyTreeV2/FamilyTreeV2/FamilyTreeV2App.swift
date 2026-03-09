@@ -36,6 +36,7 @@ struct FamilyTreeV2App: App {
                 .environmentObject(appState.notificationVM)
                 .environmentObject(appState.adminRequestVM)
                 .environmentObject(appState.projectsVM)
+                .environmentObject(appState.appSettingsVM)
                 .environment(\.locale, langManager.locale)
                 .environment(\.layoutDirection, langManager.layoutDirection)
                 .environment(\.multilineTextAlignment, langManager.selectedLanguage == "ar" ? .leading : .trailing)

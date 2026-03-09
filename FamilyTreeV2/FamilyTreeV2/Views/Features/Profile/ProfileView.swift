@@ -63,7 +63,11 @@ struct ProfileView: View {
                             }
                             .padding(.bottom, DS.Spacing.xxl)
                         } // closes ScrollView
-                        .task { await memberVM.fetchChildren(for: currentUser.id) }
+                        .task {
+                            // تأخير بسيط لتجنب إغراق اتصال QUIC عند فتح التطبيق
+                            try? await Task.sleep(nanoseconds: 300_000_000)
+                            await memberVM.fetchChildren(for: currentUser.id)
+                        }
                     } // closes VStack
                 } else {
                     ProgressView(L10n.t("جاري تحميل الملف...", "Loading profile..."))

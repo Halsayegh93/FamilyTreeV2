@@ -607,7 +607,7 @@ class MemberViewModel: ObservableObject {
         }
     }
     
-    func uploadMemberGalleryPhotoMulti(image: UIImage, for memberId: UUID) async -> MemberGalleryPhoto? {
+    func uploadMemberGalleryPhotoMulti(image: UIImage, for memberId: UUID, caption: String? = nil) async -> MemberGalleryPhoto? {
         self.isLoading = true
         
         guard let imageData = image.jpegData(compressionQuality: 0.6) else {
@@ -633,12 +633,15 @@ class MemberViewModel: ObservableObject {
                 .getPublicURL(path: filePath)
                 .absoluteString
             
-            let payload: [String: AnyEncodable] = [
+            var payload: [String: AnyEncodable] = [
                 "id": AnyEncodable(photoId.uuidString),
                 "member_id": AnyEncodable(memberId.uuidString),
                 "photo_url": AnyEncodable(publicURL),
                 "created_by": AnyEncodable(currentUser?.id.uuidString)
             ]
+            if let caption, !caption.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                payload["caption"] = AnyEncodable(caption)
+            }
             
             let inserted: [MemberGalleryPhoto] = try await supabase
                 .from("member_gallery_photos")
@@ -672,6 +675,23 @@ class MemberViewModel: ObservableObject {
         }
     }
     
+    func updateGalleryPhotoCaption(photoId: UUID, caption: String?) async -> Bool {
+        do {
+            let payload: [String: AnyEncodable] = [
+                "caption": AnyEncodable(caption)
+            ]
+            try await supabase
+                .from("member_gallery_photos")
+                .update(payload)
+                .eq("id", value: photoId.uuidString)
+                .execute()
+            return true
+        } catch {
+            Log.error("خطأ تحديث تعليق الصورة: \(error.localizedDescription)")
+            return false
+        }
+    }
+
     func deleteMemberGalleryPhotoMulti(photoId: UUID, photoURL: String) async -> Bool {
         self.isLoading = true
         Log.info("بدء حذف صورة المعرض: id=\(photoId), url=\(photoURL)")
@@ -1108,6 +1128,25 @@ class MemberViewModel: ObservableObject {
             Log.info("تم تحديث الجنس")
         } catch {
             Log.error("خطأ تحديث الجنس: \(error.localizedDescription)")
+        }
+        self.isLoading = false
+    }
+
+    // MARK: - Update Member Birth Date (simple string)
+
+    func updateMemberBirthDate(memberId: UUID, birthDate: String) async {
+        self.isLoading = true
+        do {
+            try await supabase
+                .from("profiles")
+                .update(["birth_date": AnyEncodable(birthDate)])
+                .eq("id", value: memberId.uuidString)
+                .execute()
+
+            await fetchAllMembers()
+            Log.info("تم تحديث تاريخ الميلاد")
+        } catch {
+            Log.error("خطأ تحديث تاريخ الميلاد: \(error.localizedDescription)")
         }
         self.isLoading = false
     }

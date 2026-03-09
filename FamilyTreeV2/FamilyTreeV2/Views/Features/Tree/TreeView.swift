@@ -276,6 +276,8 @@ struct TreeView: View {
             .onAppear {
                 let isFirstLoad = cachedVisibleMembers.isEmpty
                 Task {
+                    // تأخير بسيط لتجنب إغراق اتصال QUIC عند فتح التطبيق
+                    try? await Task.sleep(nanoseconds: 300_000_000)
                     await memberVM.fetchAllMembers()
                     rebuildCache()
                     if isFirstLoad {

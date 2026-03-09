@@ -139,7 +139,7 @@ class AdminRequestViewModel: ObservableObject {
                 }
             }
 
-            let requesterName = user.firstName ?? "عضو"
+            let requesterName = user.firstName
             await notificationVM?.notifyAdminsWithPush(
                 title: L10n.t("طلب تعديل الشجرة", "Tree Edit Request"),
                 body: L10n.t(
@@ -1159,7 +1159,7 @@ class AdminRequestViewModel: ObservableObject {
 
             // 2. إنشاء طلب إداري
             let memberName = memberById(memberId)?.fullName ?? "عضو"
-            let requesterName = user.firstName ?? "عضو"
+            let requesterName = user.firstName
 
             let basePayload: [String: AnyEncodable] = [
                 "member_id": AnyEncodable(memberId.uuidString),

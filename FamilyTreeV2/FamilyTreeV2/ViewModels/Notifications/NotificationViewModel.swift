@@ -131,6 +131,12 @@ class NotificationViewModel: ObservableObject {
     private var lastNotificationsFetchDate: Date?
     
     weak var authVM: AuthViewModel?
+    weak var appSettingsVM: AppSettingsViewModel?
+
+    /// الحد الأقصى للأجهزة — يُقرأ من إعدادات التطبيق أو القيمة الافتراضية
+    private var maxDevicesAllowed: Int {
+        appSettingsVM?.settings.maxDevicesPerUser ?? AuthViewModel.maxDevicesPerAccount
+    }
     
     // MARK: - Computed Properties
     
@@ -200,8 +206,8 @@ class NotificationViewModel: ObservableObject {
             
             let isAlreadyRegistered = existingDevices.contains { $0.deviceId == deviceId }
             
-            if !isAlreadyRegistered && existingDevices.count >= AuthViewModel.maxDevicesPerAccount {
-                Log.warning("[DEVICE] تجاوز الحد: \(existingDevices.count) أجهزة مسجلة، الحد \(AuthViewModel.maxDevicesPerAccount)")
+            if !isAlreadyRegistered && existingDevices.count >= maxDevicesAllowed {
+                Log.warning("[DEVICE] تجاوز الحد: \(existingDevices.count) أجهزة مسجلة، الحد \(maxDevicesAllowed)")
                 self.linkedDevices = existingDevices
                 self.isDeviceLimitExceeded = true
                 authVM?.status = .deviceLimitExceeded
@@ -321,8 +327,8 @@ class NotificationViewModel: ObservableObject {
             }
             
             // إذا وصل الحد الأقصى وهذا جهاز جديد
-            if devices.count >= AuthViewModel.maxDevicesPerAccount {
-                Log.warning("[DEVICE] تجاوز الحد الأقصى للأجهزة: \(devices.count)/\(AuthViewModel.maxDevicesPerAccount)")
+            if devices.count >= maxDevicesAllowed {
+                Log.warning("[DEVICE] تجاوز الحد الأقصى للأجهزة: \(devices.count)/\(maxDevicesAllowed)")
                 self.isDeviceLimitExceeded = true
                 self.linkedDevices = devices
                 authVM?.status = .deviceLimitExceeded

@@ -4,13 +4,7 @@ import SwiftUI
 struct AdminAppSettingsView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var memberVM: MemberViewModel
-
-    // إعدادات محلية (AppStorage) يمكن للمدير تغييرها
-    @AppStorage("admin_newsRequiresApproval") private var newsRequiresApproval = true
-    @AppStorage("admin_allowNewRegistrations") private var allowNewRegistrations = true
-    @AppStorage("admin_trialEnabled") private var trialEnabled = true
-    @AppStorage("admin_maintenanceMode") private var maintenanceMode = false
-    @AppStorage("admin_maxDevicesPerUser") private var maxDevicesPerUser = 3
+    @EnvironmentObject var appSettingsVM: AppSettingsViewModel
 
     @State private var showResetConfirmation = false
 
@@ -45,13 +39,18 @@ struct AdminAppSettingsView: View {
         .navigationTitle(L10n.t("إعدادات التطبيق", "App Settings"))
         .navigationBarTitleDisplayMode(.inline)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+        .task {
+            await appSettingsVM.fetchSettings()
+        }
         .alert(
             L10n.t("إعادة تعيين", "Reset Settings"),
             isPresented: $showResetConfirmation
         ) {
             Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
             Button(L10n.t("إعادة تعيين", "Reset"), role: .destructive) {
-                resetToDefaults()
+                Task {
+                    await appSettingsVM.resetToDefaults(updatedBy: authVM.currentUser?.id)
+                }
             }
         } message: {
             Text(L10n.t(
@@ -76,7 +75,8 @@ struct AdminAppSettingsView: View {
                 color: DS.Color.success,
                 title: L10n.t("السماح بالتسجيل", "Allow Registrations"),
                 subtitle: L10n.t("السماح لأعضاء جدد بالتسجيل في التطبيق", "Allow new members to register in the app"),
-                isOn: $allowNewRegistrations
+                isOn: appSettingsVM.settings.allowNewRegistrations,
+                key: "allow_new_registrations"
             )
 
             DSDivider()
@@ -87,7 +87,8 @@ struct AdminAppSettingsView: View {
                 color: DS.Color.warning,
                 title: L10n.t("الفترة التجريبية", "Trial Period"),
                 subtitle: L10n.t("تفعيل فترة ٧ أيام تجريبية للأعضاء الجدد", "Enable 7-day trial for new members"),
-                isOn: $trialEnabled
+                isOn: appSettingsVM.settings.trialEnabled,
+                key: "trial_enabled"
             )
 
             DSDivider()
@@ -108,14 +109,26 @@ struct AdminAppSettingsView: View {
                 Spacer()
 
                 Stepper(
-                    "\(maxDevicesPerUser)",
-                    value: $maxDevicesPerUser,
+                    "\(appSettingsVM.settings.maxDevicesPerUser)",
+                    value: Binding(
+                        get: { appSettingsVM.settings.maxDevicesPerUser },
+                        set: { newVal in
+                            appSettingsVM.settings.maxDevicesPerUser = newVal
+                            Task {
+                                await appSettingsVM.updateSetting(
+                                    "max_devices_per_user",
+                                    value: newVal,
+                                    updatedBy: authVM.currentUser?.id
+                                )
+                            }
+                        }
+                    ),
                     in: 1...10
                 )
                 .labelsHidden()
                 .frame(width: 100)
 
-                Text("\(maxDevicesPerUser)")
+                Text("\(appSettingsVM.settings.maxDevicesPerUser)")
                     .font(DS.Font.headline)
                     .fontWeight(.black)
                     .foregroundColor(DS.Color.primary)
@@ -142,7 +155,8 @@ struct AdminAppSettingsView: View {
                 color: DS.Color.warning,
                 title: L10n.t("موافقة الأخبار", "News Approval"),
                 subtitle: L10n.t("يتطلب موافقة المدير قبل نشر الأخبار", "Require admin approval before publishing news"),
-                isOn: $newsRequiresApproval
+                isOn: appSettingsVM.settings.newsRequiresApproval,
+                key: "news_requires_approval"
             )
         }
         .padding(.horizontal, DS.Spacing.lg)
@@ -163,7 +177,8 @@ struct AdminAppSettingsView: View {
                 color: DS.Color.error,
                 title: L10n.t("وضع الصيانة", "Maintenance Mode"),
                 subtitle: L10n.t("إيقاف التطبيق مؤقتاً للصيانة (المدراء فقط)", "Temporarily disable app for maintenance (admins only)"),
-                isOn: $maintenanceMode
+                isOn: appSettingsVM.settings.maintenanceMode,
+                key: "maintenance_mode"
             )
         }
         .padding(.horizontal, DS.Spacing.lg)
@@ -195,17 +210,13 @@ struct AdminAppSettingsView: View {
                 )
                 DSDivider()
                 infoRow(
-                    label: L10n.t("الإشعارات", "Notifications"),
-                    value: authVM.notificationsFeatureAvailable
-                        ? L10n.t("مفعّلة", "Enabled")
-                        : L10n.t("معطّلة", "Disabled")
+                    label: L10n.t("الحد الأقصى للأجهزة", "Max Devices"),
+                    value: "\(appSettingsVM.settings.maxDevicesPerUser)"
                 )
                 DSDivider()
                 infoRow(
-                    label: L10n.t("موافقات الأخبار", "News Approvals"),
-                    value: authVM.newsApprovalFeatureAvailable
-                        ? L10n.t("مفعّلة", "Enabled")
-                        : L10n.t("معطّلة", "Disabled")
+                    label: L10n.t("آخر تحديث للإعدادات", "Last Settings Update"),
+                    value: formatDate(appSettingsVM.settings.updatedAt)
                 )
             }
         }
@@ -244,7 +255,8 @@ struct AdminAppSettingsView: View {
         color: Color,
         title: String,
         subtitle: String,
-        isOn: Binding<Bool>
+        isOn: Bool,
+        key: String
     ) -> some View {
         HStack(spacing: DS.Spacing.md) {
             DSIcon(icon, color: color)
@@ -261,9 +273,20 @@ struct AdminAppSettingsView: View {
 
             Spacer()
 
-            Toggle("", isOn: isOn)
-                .labelsHidden()
-                .tint(DS.Color.primary)
+            Toggle("", isOn: Binding(
+                get: { isOn },
+                set: { newVal in
+                    Task {
+                        await appSettingsVM.updateSetting(
+                            key,
+                            value: newVal,
+                            updatedBy: authVM.currentUser?.id
+                        )
+                    }
+                }
+            ))
+            .labelsHidden()
+            .tint(DS.Color.primary)
         }
         .padding(.horizontal, DS.Spacing.lg)
         .padding(.vertical, DS.Spacing.sm)
@@ -283,11 +306,28 @@ struct AdminAppSettingsView: View {
         .padding(.vertical, DS.Spacing.sm)
     }
 
-    private func resetToDefaults() {
-        newsRequiresApproval = true
-        allowNewRegistrations = true
-        trialEnabled = true
-        maintenanceMode = false
-        maxDevicesPerUser = 3
+    private func formatDate(_ isoString: String?) -> String {
+        guard let isoString, !isoString.isEmpty else {
+            return L10n.t("غير محدد", "N/A")
+        }
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        guard let date = formatter.date(from: isoString) else {
+            // try without fractional seconds
+            formatter.formatOptions = [.withInternetDateTime]
+            guard let date = formatter.date(from: isoString) else {
+                return isoString
+            }
+            return formatDisplayDate(date)
+        }
+        return formatDisplayDate(date)
+    }
+
+    private func formatDisplayDate(_ date: Date) -> String {
+        let df = DateFormatter()
+        df.locale = Locale(identifier: L10n.isArabic ? "ar" : "en")
+        df.dateStyle = .medium
+        df.timeStyle = .short
+        return df.string(from: date)
     }
 }

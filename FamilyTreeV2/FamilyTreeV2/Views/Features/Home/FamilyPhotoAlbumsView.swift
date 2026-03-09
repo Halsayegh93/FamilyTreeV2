@@ -1,18 +1,34 @@
 import SwiftUI
+import PhotosUI
+import Photos
 
 struct FamilyPhotoAlbumsView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var memberVM: MemberViewModel
-    @Environment(\.dismiss) var dismiss
     @ObservedObject private var langManager = LanguageManager.shared
 
     @State private var allPhotos: [MemberGalleryPhoto] = []
     @State private var isLoading = true
     @State private var selectedMemberId: UUID? = nil
     @State private var selectedPhoto: MemberGalleryPhoto? = nil
+    @State private var selectedPhotoIndex: Int = 0
     @State private var showPhotoViewer = false
     @State private var loadError = false
     @State private var viewMode: ViewMode = .grid
+
+    // Photo upload states
+    @State private var selectedGalleryItems: [PhotosPickerItem] = []
+    @State private var pendingImages: [UIImage] = []
+    @State private var showPendingPreview = false
+    @State private var pendingPreviewIndex = 0
+    @State private var isUploading = false
+    @State private var showPermissionDenied = false
+    @State private var showDeletePhotoAlert = false
+    @State private var pendingDeletePhoto: MemberGalleryPhoto? = nil
+    @State private var pendingCaptions: [String] = []
+    @State private var isEditingCaption = false
+    @State private var editingCaptionText: String = ""
+    @State private var isSheetLoading = true
 
     enum ViewMode: String, CaseIterable {
         case grid, albums
@@ -50,127 +66,200 @@ struct FamilyPhotoAlbumsView: View {
         return allPhotos
     }
 
+    /// Group photos by month for section headers
+    private var photosByMonth: [(title: String, photos: [MemberGalleryPhoto])] {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: L10n.isArabic ? "ar" : "en")
+        formatter.dateFormat = "MMMM yyyy"
+
+        let isoFormatter = ISO8601DateFormatter()
+        isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let isoFallback = ISO8601DateFormatter()
+        isoFallback.formatOptions = [.withInternetDateTime]
+
+        let grouped = Dictionary(grouping: filteredPhotos) { photo -> String in
+            guard let dateStr = photo.createdAt,
+                  let date = isoFormatter.date(from: dateStr) ?? isoFallback.date(from: dateStr) else {
+                return L10n.t("غير محدد", "Unknown")
+            }
+            return formatter.string(from: date)
+        }
+
+        return grouped.map { (title: $0.key, photos: $0.value) }
+            .sorted { first, second in
+                guard let d1 = first.photos.first?.createdAt,
+                      let d2 = second.photos.first?.createdAt else { return false }
+                return d1 > d2
+            }
+    }
+
+    /// Admin/supervisor can delete any photo, owner can delete their own
+    private var canDeleteCurrentPhoto: Bool {
+        guard let currentPhoto = filteredPhotos[safe: selectedPhotoIndex] else { return false }
+        if authVM.canModerate { return true }
+        if let currentUser = authVM.currentUser, currentPhoto.memberId == currentUser.id { return true }
+        return false
+    }
+
+    /// Only the photo owner can edit caption
+    private var isCurrentPhotoOwner: Bool {
+        guard let currentPhoto = filteredPhotos[safe: selectedPhotoIndex],
+              let currentUser = authVM.currentUser else { return false }
+        return currentPhoto.memberId == currentUser.id
+    }
+
     var body: some View {
-        NavigationStack {
-            ZStack {
-                DS.Color.background.ignoresSafeArea()
-                DSDecorativeBackground()
+        ZStack {
+            DS.Color.background.ignoresSafeArea()
 
-                if isLoading {
-                    loadingView
-                } else if loadError {
-                    errorStateView
-                } else if allPhotos.isEmpty {
-                    emptyStateView
-                } else {
-                    ScrollView(showsIndicators: false) {
-                        VStack(spacing: DS.Spacing.xl) {
-                            statsBar
-                            viewModePicker
-                            
-                            if viewMode == .grid {
-                                if selectedMemberId != nil {
-                                    memberFilterChip
-                                }
-                                photoGridView
-                            } else {
-                                albumsListView
-                            }
-                        }
-                        .padding(.bottom, DS.Spacing.xxxxl)
+            if isLoading {
+                loadingView
+            } else if loadError {
+                errorStateView
+            } else if allPhotos.isEmpty {
+                emptyStateView
+            } else {
+                VStack(spacing: 0) {
+                    // Top bar with mode picker and stats
+                    topBar
+                    
+                    // Member filter chip
+                    if selectedMemberId != nil && viewMode == .grid {
+                        memberFilterChip
+                    }
+
+                    // Content
+                    if viewMode == .grid {
+                        photoGridView
+                    } else {
+                        albumsListView
                     }
                 }
             }
-            .navigationTitle(L10n.t("صور العائلة", "Family Photos"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button(L10n.t("إغلاق", "Close")) { dismiss() }
-                        .foregroundColor(DS.Color.primary)
-                }
-            }
-            .environment(\.layoutDirection, langManager.layoutDirection)
-            .task { await loadPhotos() }
-            .fullScreenCover(isPresented: $showPhotoViewer) {
-                if let photo = selectedPhoto {
-                    familyPhotoViewer(photo: photo)
-                }
-            }
-        }
-    }
 
-    // MARK: - Stats Bar
-
-    private var statsBar: some View {
-        HStack(spacing: DS.Spacing.lg) {
-            statPill(
-                icon: "photo.fill",
-                value: "\(allPhotos.count)",
-                label: L10n.t("صورة", "photos")
-            )
-            statPill(
-                icon: "person.2.fill",
-                value: "\(membersWithPhotos.count)",
-                label: L10n.t("عضو", "members")
-            )
-        }
-        .padding(.horizontal, DS.Spacing.lg)
-        .padding(.top, DS.Spacing.md)
-    }
-
-    private func statPill(icon: String, value: String, label: String) -> some View {
-        HStack(spacing: DS.Spacing.sm) {
-            Image(systemName: icon)
-                .font(DS.Font.scaled(14, weight: .semibold))
-                .foregroundColor(DS.Color.primary)
-            Text(value)
-                .font(DS.Font.calloutBold)
-                .foregroundColor(DS.Color.textPrimary)
-            Text(label)
-                .font(DS.Font.caption1)
-                .foregroundColor(DS.Color.textSecondary)
-        }
-        .padding(.horizontal, DS.Spacing.lg)
-        .padding(.vertical, DS.Spacing.xs)
-        .background(DS.Color.surface)
-        .clipShape(Capsule())
-        .overlay(
-            Capsule().stroke(DS.Color.primary.opacity(0.1), lineWidth: 1)
-        )
-    }
-
-    // MARK: - View Mode Picker
-
-    private var viewModePicker: some View {
-        HStack(spacing: DS.Spacing.sm) {
-            ForEach(ViewMode.allCases, id: \.self) { mode in
-                Button {
-                    withAnimation(DS.Anim.snappy) {
-                        viewMode = mode
-                        if mode == .albums { selectedMemberId = nil }
+            // Upload progress overlay
+            if isUploading {
+                VStack {
+                    Spacer()
+                    HStack(spacing: DS.Spacing.sm) {
+                        ProgressView()
+                            .tint(.white)
+                        Text(L10n.t("جاري رفع الصور...", "Uploading photos..."))
+                            .font(DS.Font.calloutBold)
+                            .foregroundColor(.white)
                     }
-                } label: {
-                    HStack(spacing: DS.Spacing.xs) {
-                        Image(systemName: mode.icon)
-                            .font(DS.Font.scaled(13, weight: .semibold))
-                        Text(mode.label)
-                            .font(DS.Font.caption1)
-                            .fontWeight(.bold)
-                    }
-                    .foregroundColor(viewMode == mode ? .white : DS.Color.textSecondary)
-                    .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.vertical, DS.Spacing.xs)
-                    .background(viewMode == mode ? DS.Color.gradientPrimary : LinearGradient(colors: [DS.Color.surface], startPoint: .leading, endPoint: .trailing))
+                    .padding(.horizontal, DS.Spacing.xl)
+                    .padding(.vertical, DS.Spacing.md)
+                    .background(DS.Color.primary)
                     .clipShape(Capsule())
-                    .overlay(
-                        Capsule().stroke(viewMode == mode ? Color.clear : DS.Color.primary.opacity(0.1), lineWidth: 1)
-                    )
+                    .dsCardShadow()
+                    .padding(.bottom, 80)
                 }
-                .buttonStyle(DSScaleButtonStyle())
             }
-            Spacer()
+
+            // FAB for adding photos
+            if !allPhotos.isEmpty && !isLoading {
+                VStack {
+                    Spacer()
+                    HStack {
+                        Spacer()
+                        addPhotoButton
+                            .padding(.trailing, DS.Spacing.xl)
+                            .padding(.bottom, DS.Spacing.xl)
+                    }
+                }
+            }
         }
-        .padding(.horizontal, DS.Spacing.lg)
+        .environment(\.layoutDirection, langManager.layoutDirection)
+        .task {
+            await loadPhotos()
+        }
+        .sheet(isPresented: $showPhotoViewer) {
+            if let photo = selectedPhoto {
+                familyPhotoViewer(photo: photo)
+            }
+        }
+        .alert(L10n.t("حذف الصورة؟", "Delete photo?"), isPresented: $showDeletePhotoAlert) {
+            Button(L10n.t("حذف", "Delete"), role: .destructive) {
+                if let photo = pendingDeletePhoto {
+                    pendingDeletePhoto = nil
+                    Task { await deletePhoto(photo) }
+                }
+            }
+            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { pendingDeletePhoto = nil }
+        }
+        .photosPicker(isPresented: Binding(
+            get: { false },
+            set: { _ in }
+        ), selection: $selectedGalleryItems, maxSelectionCount: 5, matching: .images)
+        .onChange(of: selectedGalleryItems) { _, items in
+            handleGalleryImagesChange(items)
+        }
+        .sheet(isPresented: $showPendingPreview) {
+            pendingPreviewSheet
+        }
+        .alert(
+            L10n.t("الوصول للصور مطلوب", "Photo Access Required"),
+            isPresented: $showPermissionDenied
+        ) {
+            Button(L10n.t("فتح الإعدادات", "Open Settings")) {
+                if let url = URL(string: UIApplication.openSettingsURLString) {
+                    UIApplication.shared.open(url)
+                }
+            }
+            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
+        } message: {
+            Text(L10n.t(
+                "يحتاج التطبيق إذن الوصول لمكتبة الصور لاختيار صور. يرجى السماح من الإعدادات.",
+                "The app needs access to your photo library to select photos. Please allow access in Settings."
+            ))
+        }
+    }
+
+    // MARK: - Top Bar
+
+    private var topBar: some View {
+        VStack(spacing: DS.Spacing.sm) {
+            HStack(spacing: DS.Spacing.md) {
+                // View mode picker
+                HStack(spacing: 2) {
+                    ForEach(ViewMode.allCases, id: \.self) { mode in
+                        Button {
+                            withAnimation(DS.Anim.snappy) {
+                                viewMode = mode
+                                if mode == .albums { selectedMemberId = nil }
+                            }
+                        } label: {
+                            HStack(spacing: DS.Spacing.xs) {
+                                Image(systemName: mode.icon)
+                                    .font(DS.Font.scaled(12, weight: .semibold))
+                                Text(mode.label)
+                                    .font(DS.Font.scaled(13, weight: .bold))
+                            }
+                            .foregroundColor(viewMode == mode ? .white : DS.Color.textSecondary)
+                            .padding(.horizontal, DS.Spacing.md)
+                            .padding(.vertical, DS.Spacing.sm)
+                            .background(viewMode == mode ? DS.Color.primary : Color.clear)
+                            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(2)
+                .background(DS.Color.surface)
+                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+
+                Spacer()
+
+                // Photo count
+                Text("\(allPhotos.count) " + L10n.t("صورة", "photos"))
+                    .font(DS.Font.caption1)
+                    .foregroundColor(DS.Color.textSecondary)
+            }
+            .padding(.horizontal, DS.Spacing.lg)
+            .padding(.vertical, DS.Spacing.sm)
+        }
+        .background(DS.Color.background)
     }
 
     // MARK: - Member Filter Chip
@@ -180,11 +269,11 @@ struct FamilyPhotoAlbumsView: View {
             if let memberId = selectedMemberId,
                let member = memberVM.member(byId: memberId) {
                 HStack(spacing: DS.Spacing.sm) {
-                    memberAvatar(member, size: 24)
+                    memberAvatar(member, size: 22)
                     Text(member.fullName)
-                        .font(DS.Font.caption1)
-                        .fontWeight(.bold)
+                        .font(DS.Font.scaled(13, weight: .bold))
                         .foregroundColor(DS.Color.primary)
+                        .lineLimit(1)
                     Text("(\(filteredPhotos.count))")
                         .font(DS.Font.caption1)
                         .foregroundColor(DS.Color.textSecondary)
@@ -204,15 +293,16 @@ struct FamilyPhotoAlbumsView: View {
             Spacer()
         }
         .padding(.horizontal, DS.Spacing.lg)
+        .padding(.bottom, DS.Spacing.xs)
     }
 
-    // MARK: - Photo Grid
+    // MARK: - Photo Grid (Native Phone Style)
 
     private var photoGridView: some View {
         let columns = [
-            GridItem(.flexible(), spacing: DS.Spacing.xs),
-            GridItem(.flexible(), spacing: DS.Spacing.xs),
-            GridItem(.flexible(), spacing: DS.Spacing.xs)
+            GridItem(.flexible(), spacing: 1.5),
+            GridItem(.flexible(), spacing: 1.5),
+            GridItem(.flexible(), spacing: 1.5)
         ]
 
         return Group {
@@ -225,22 +315,27 @@ struct FamilyPhotoAlbumsView: View {
                         .font(DS.Font.callout)
                         .foregroundColor(DS.Color.textSecondary)
                 }
-                .frame(maxWidth: .infinity)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .padding(.top, DS.Spacing.xxxxl)
             } else {
-                LazyVGrid(columns: columns, spacing: DS.Spacing.xs) {
-                    ForEach(filteredPhotos) { photo in
-                        photoCell(photo)
+                ScrollView(showsIndicators: false) {
+                    LazyVGrid(columns: columns, spacing: 1.5) {
+                        ForEach(filteredPhotos) { photo in
+                            nativePhotoCell(photo)
+                        }
                     }
+                    .padding(.bottom, 100) // Space for FAB
                 }
-                .padding(.horizontal, DS.Spacing.sm)
             }
         }
     }
 
-    private func photoCell(_ photo: MemberGalleryPhoto) -> some View {
+    private func nativePhotoCell(_ photo: MemberGalleryPhoto) -> some View {
         Button {
             selectedPhoto = photo
+            if let idx = filteredPhotos.firstIndex(where: { $0.id == photo.id }) {
+                selectedPhotoIndex = idx
+            }
             showPhotoViewer = true
         } label: {
             Color.clear
@@ -256,34 +351,36 @@ struct FamilyPhotoAlbumsView: View {
                                     .foregroundColor(DS.Color.textTertiary)
                             }
                         } else {
-                            ZStack { DS.Color.surface; ProgressView() }
+                            ZStack {
+                                DS.Color.surface
+                                VStack(spacing: DS.Spacing.xs) {
+                                    ProgressView()
+                                        .tint(DS.Color.primary)
+                                    Text(L10n.t("جاري التحميل", "Loading"))
+                                        .font(DS.Font.caption2)
+                                        .foregroundColor(DS.Color.textTertiary)
+                                }
+                            }
                         }
                     }
                 )
-                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
-                .overlay(
-                    // Member name overlay at bottom
-                    VStack {
-                        Spacer()
-                        if selectedMemberId == nil,
-                           let member = memberVM.member(byId: photo.memberId) {
-                            Text(member.firstName)
-                                .font(DS.Font.scaled(10, weight: .bold))
-                                .foregroundColor(DS.Color.textOnPrimary)
-                                .lineLimit(1)
-                                .padding(.horizontal, DS.Spacing.xs)
-                                .padding(.vertical, 2)
-                                .frame(maxWidth: .infinity)
-                                .background(
-                                    LinearGradient(
-                                        colors: [.clear, DS.Color.shadowDense],
-                                        startPoint: .top, endPoint: .bottom
-                                    )
-                                )
+                .clipped()
+                .overlay(alignment: .topTrailing) {
+                    if authVM.canModerate {
+                        Button {
+                            pendingDeletePhoto = photo
+                            showDeletePhotoAlert = true
+                        } label: {
+                            Image(systemName: "trash.fill")
+                                .font(DS.Font.scaled(11, weight: .bold))
+                                .foregroundColor(.white)
+                                .frame(width: 26, height: 26)
+                                .background(DS.Color.error.opacity(0.85))
+                                .clipShape(Circle())
                         }
+                        .padding(DS.Spacing.xs)
                     }
-                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
-                )
+                }
         }
         .buttonStyle(.plain)
     }
@@ -291,145 +388,437 @@ struct FamilyPhotoAlbumsView: View {
     // MARK: - Albums List
 
     private var albumsListView: some View {
-        LazyVStack(spacing: DS.Spacing.lg) {
-            ForEach(membersWithPhotos, id: \.member.id) { item in
-                albumCard(member: item.member, photos: item.photos)
+        ScrollView(showsIndicators: false) {
+            let columns = [
+                GridItem(.flexible(), spacing: DS.Spacing.lg),
+                GridItem(.flexible(), spacing: DS.Spacing.lg)
+            ]
+
+            LazyVGrid(columns: columns, spacing: DS.Spacing.lg) {
+                ForEach(membersWithPhotos, id: \.member.id) { item in
+                    albumThumbnail(member: item.member, photos: item.photos)
+                }
             }
+            .padding(.horizontal, DS.Spacing.lg)
+            .padding(.top, DS.Spacing.sm)
+            .padding(.bottom, 100)
         }
-        .padding(.horizontal, DS.Spacing.lg)
     }
 
-    private func albumCard(member: FamilyMember, photos: [MemberGalleryPhoto]) -> some View {
+    private func albumThumbnail(member: FamilyMember, photos: [MemberGalleryPhoto]) -> some View {
         Button {
             withAnimation(DS.Anim.snappy) {
                 selectedMemberId = member.id
                 viewMode = .grid
             }
         } label: {
-            VStack(spacing: 0) {
-                // Album cover — show first 4 photos in grid
+            VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                // Album cover — 2x2 grid preview
                 let coverPhotos = Array(photos.prefix(4))
-                let gridColumns = [GridItem(.flexible(), spacing: 2), GridItem(.flexible(), spacing: 2)]
+                let gridColumns = [GridItem(.flexible(), spacing: 1.5), GridItem(.flexible(), spacing: 1.5)]
 
-                LazyVGrid(columns: gridColumns, spacing: 2) {
-                    ForEach(coverPhotos) { photo in
-                        Color.clear
-                            .aspectRatio(1, contentMode: .fit)
-                            .overlay(
-                                CachedAsyncPhaseImage(url: URL(string: photo.photoURL)) { phase in
+                GeometryReader { geo in
+                    LazyVGrid(columns: gridColumns, spacing: 1.5) {
+                        ForEach(0..<4, id: \.self) { idx in
+                            if idx < coverPhotos.count {
+                                CachedAsyncPhaseImage(url: URL(string: coverPhotos[idx].photoURL)) { phase in
                                     if let image = phase.image {
                                         image.resizable().scaledToFill()
                                     } else {
                                         DS.Color.surface
                                     }
                                 }
-                            )
-                            .clipped()
-                    }
-                    
-                    // Fill empty slots
-                    if coverPhotos.count < 4 {
-                        ForEach(0..<(4 - coverPhotos.count), id: \.self) { _ in
-                            DS.Color.surface
-                                .aspectRatio(1, contentMode: .fit)
+                                .frame(
+                                    width: (geo.size.width - 1.5) / 2,
+                                    height: (geo.size.width - 1.5) / 2
+                                )
+                                .clipped()
+                            } else {
+                                DS.Color.surface
+                                    .frame(
+                                        width: (geo.size.width - 1.5) / 2,
+                                        height: (geo.size.width - 1.5) / 2
+                                    )
+                            }
                         }
                     }
                 }
-                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+                .aspectRatio(1, contentMode: .fit)
+                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
 
-                // Member info
-                HStack(spacing: DS.Spacing.sm) {
-                    memberAvatar(member, size: 36)
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(member.fullName)
-                            .font(DS.Font.calloutBold)
-                            .foregroundColor(DS.Color.textPrimary)
-                            .lineLimit(1)
-                        Text("\(photos.count) " + L10n.t("صورة", "photos"))
-                            .font(DS.Font.caption1)
-                            .foregroundColor(DS.Color.textSecondary)
-                    }
-
-                    Spacer()
-
-                    Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
-                        .font(DS.Font.scaled(14, weight: .semibold))
-                        .foregroundColor(DS.Color.textTertiary)
+                // Member info below cover
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(member.fullName)
+                        .font(DS.Font.scaled(13, weight: .bold))
+                        .foregroundColor(DS.Color.textPrimary)
+                        .lineLimit(1)
+                    Text("\(photos.count)")
+                        .font(DS.Font.caption1)
+                        .foregroundColor(DS.Color.textSecondary)
                 }
-                .padding(DS.Spacing.md)
             }
-            .background(DS.Color.surface)
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
-                    .stroke(DS.Color.primary.opacity(0.08), lineWidth: 1)
-            )
-            .shadow(color: DS.Color.shadowLight, radius: 8, x: 0, y: 2)
         }
-        .buttonStyle(DSScaleButtonStyle())
+        .buttonStyle(.plain)
     }
 
     // MARK: - Photo Viewer
 
     private func familyPhotoViewer(photo: MemberGalleryPhoto) -> some View {
-        ZStack(alignment: .top) {
-            DS.Color.overlayDark.ignoresSafeArea()
-                .onTapGesture { showPhotoViewer = false }
-
-            if let url = URL(string: photo.photoURL) {
-                CachedAsyncPhaseImage(url: url) { phase in
-                    if let image = phase.image {
-                        image
-                            .resizable()
-                            .scaledToFit()
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    } else if phase.error != nil {
-                        VStack(spacing: DS.Spacing.md) {
-                            Image(systemName: "photo.trianglebadge.exclamationmark")
-                                .font(DS.Font.scaled(40))
-                                .foregroundColor(DS.Color.overlayHalf)
-                            Text(L10n.t("تعذر تحميل الصورة", "Failed to load photo"))
-                                .font(DS.Font.callout)
-                                .foregroundColor(DS.Color.overlayTextMuted)
-                        }
-                    } else {
+        NavigationStack {
+            VStack(spacing: 0) {
+                if isSheetLoading {
+                    Spacer()
+                    VStack(spacing: DS.Spacing.md) {
                         ProgressView()
-                            .tint(.white)
+                            .scaleEffect(1.3)
+                            .tint(DS.Color.primary)
+                        Text(L10n.t("جاري تحميل الصورة...", "Loading photo..."))
+                            .font(DS.Font.callout)
+                            .foregroundColor(DS.Color.textSecondary)
+                    }
+                    Spacer()
+                } else {
+                // Photo display
+                TabView(selection: $selectedPhotoIndex) {
+                    ForEach(Array(filteredPhotos.enumerated()), id: \.element.id) { index, p in
+                        Group {
+                            if let url = URL(string: p.photoURL) {
+                                CachedAsyncPhaseImage(url: url) { phase in
+                                    if let image = phase.image {
+                                        image
+                                            .resizable()
+                                            .scaledToFit()
+                                            .frame(maxWidth: .infinity)
+                                            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+                                            .padding(.horizontal, DS.Spacing.sm)
+                                    } else if phase.error != nil {
+                                        VStack(spacing: DS.Spacing.md) {
+                                            Image(systemName: "photo.trianglebadge.exclamationmark")
+                                                .font(DS.Font.scaled(40))
+                                                .foregroundColor(DS.Color.textTertiary)
+                                            Text(L10n.t("تعذر تحميل الصورة", "Failed to load photo"))
+                                                .font(DS.Font.callout)
+                                                .foregroundColor(DS.Color.textSecondary)
+                                        }
+                                    } else {
+                                        VStack(spacing: DS.Spacing.sm) {
+                                            ProgressView()
+                                                .scaleEffect(1.2)
+                                                .tint(DS.Color.primary)
+                                            Text(L10n.t("جاري تحميل الصورة...", "Loading photo..."))
+                                                .font(DS.Font.caption1)
+                                                .foregroundColor(DS.Color.textSecondary)
+                                        }
+                                    }
+                                }
+                            } else {
+                                Color.clear
+                            }
+                        }
+                        .tag(index)
+                    }
+                }
+                .tabViewStyle(.page(indexDisplayMode: filteredPhotos.count > 1 ? .automatic : .never))
+
+                // Caption + member info
+                if let currentPhoto = filteredPhotos[safe: selectedPhotoIndex],
+                   let member = memberVM.member(byId: currentPhoto.memberId) {
+                    VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                        // Caption — editable for owner
+                        if isEditingCaption {
+                            HStack(spacing: DS.Spacing.sm) {
+                                TextField(L10n.t("أضف تعليق...", "Add a caption..."), text: $editingCaptionText)
+                                    .font(DS.Font.callout)
+                                    .foregroundColor(DS.Color.textPrimary)
+                                Button {
+                                    Task {
+                                        let newCaption = editingCaptionText.trimmingCharacters(in: .whitespacesAndNewlines)
+                                        let success = await memberVM.updateGalleryPhotoCaption(
+                                            photoId: currentPhoto.id,
+                                            caption: newCaption.isEmpty ? nil : newCaption
+                                        )
+                                        if success { await loadPhotos() }
+                                        isEditingCaption = false
+                                    }
+                                } label: {
+                                    Text(L10n.t("حفظ", "Save"))
+                                        .font(DS.Font.scaled(13, weight: .bold))
+                                        .foregroundColor(.white)
+                                        .padding(.horizontal, DS.Spacing.md)
+                                        .padding(.vertical, DS.Spacing.xs)
+                                        .background(DS.Color.primary)
+                                        .clipShape(Capsule())
+                                }
+                            }
+                            .padding(.horizontal, DS.Spacing.xl)
+                        } else if let caption = currentPhoto.caption, !caption.isEmpty {
+                            HStack(spacing: DS.Spacing.sm) {
+                                Text(caption)
+                                    .font(DS.Font.callout)
+                                    .foregroundColor(DS.Color.textPrimary)
+                                    .multilineTextAlignment(.leading)
+                                if isCurrentPhotoOwner {
+                                    Button {
+                                        editingCaptionText = caption
+                                        isEditingCaption = true
+                                    } label: {
+                                        Image(systemName: "pencil.circle.fill")
+                                            .font(DS.Font.scaled(18))
+                                            .foregroundColor(DS.Color.textTertiary)
+                                    }
+                                }
+                            }
+                            .padding(.horizontal, DS.Spacing.xl)
+                        } else if isCurrentPhotoOwner {
+                            Button {
+                                editingCaptionText = ""
+                                isEditingCaption = true
+                            } label: {
+                                HStack(spacing: DS.Spacing.xs) {
+                                    Image(systemName: "text.bubble")
+                                        .font(DS.Font.scaled(14))
+                                    Text(L10n.t("أضف تعليق", "Add caption"))
+                                        .font(DS.Font.scaled(13, weight: .semibold))
+                                }
+                                .foregroundColor(DS.Color.textTertiary)
+                            }
+                            .padding(.horizontal, DS.Spacing.xl)
+                        }
+
+                        // Member info
+                        HStack(spacing: DS.Spacing.sm) {
+                            memberAvatar(member, size: 30)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(member.fullName)
+                                    .font(DS.Font.scaled(13, weight: .bold))
+                                    .foregroundColor(DS.Color.textPrimary)
+                                    .lineLimit(1)
+                                if filteredPhotos.count > 1 {
+                                    Text("\(selectedPhotoIndex + 1) / \(filteredPhotos.count)")
+                                        .font(DS.Font.caption2)
+                                        .foregroundColor(DS.Color.textSecondary)
+                                }
+                            }
+                            Spacer()
+                        }
+                        .padding(.horizontal, DS.Spacing.xl)
+                    }
+                    .padding(.vertical, DS.Spacing.md)
+                }
+                } // end else (not loading)
+            }
+            .background(DS.Color.background)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(L10n.t("إغلاق", "Close")) {
+                        showPhotoViewer = false
+                    }
+                    .font(DS.Font.calloutBold)
+                    .foregroundColor(DS.Color.primary)
+                }
+
+                ToolbarItem(placement: .topBarTrailing) {
+                    if canDeleteCurrentPhoto {
+                        Button {
+                            if let currentPhoto = filteredPhotos[safe: selectedPhotoIndex] {
+                                pendingDeletePhoto = currentPhoto
+                                showPhotoViewer = false
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                                    showDeletePhotoAlert = true
+                                }
+                            }
+                        } label: {
+                            HStack(spacing: DS.Spacing.xs) {
+                                Image(systemName: "trash")
+                                    .font(DS.Font.scaled(13, weight: .semibold))
+                                Text(L10n.t("حذف", "Delete"))
+                                    .font(DS.Font.scaled(13, weight: .bold))
+                            }
+                            .foregroundColor(DS.Color.error)
+                        }
                     }
                 }
             }
-
-            // Top bar
-            HStack {
-                Button { showPhotoViewer = false } label: {
-                    Image(systemName: "xmark")
-                        .font(DS.Font.scaled(16, weight: .bold))
-                        .foregroundColor(DS.Color.textOnPrimary)
-                        .frame(width: 36, height: 36)
-                        .background(.ultraThinMaterial)
-                        .clipShape(Circle())
+        }
+        .environment(\.layoutDirection, langManager.layoutDirection)
+        .presentationDetents([.fraction(0.65), .large])
+        .presentationDragIndicator(.visible)
+        .onAppear {
+            isSheetLoading = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                withAnimation(DS.Anim.smooth) {
+                    isSheetLoading = false
                 }
+            }
+        }
+        .onChange(of: selectedPhotoIndex) { _, newIndex in
+            isEditingCaption = false
+            if let photo = filteredPhotos[safe: newIndex] {
+                selectedPhoto = photo
+            }
+        }
+    }
+
+    // MARK: - Add Photo Button (FAB)
+
+    @State private var showPhotoPicker = false
+
+    private var addPhotoButton: some View {
+        Button {
+            checkPhotoPermission {
+                showPhotoPicker = true
+            }
+        } label: {
+            Image(systemName: "plus")
+                .font(DS.Font.scaled(22, weight: .bold))
+                .foregroundColor(.white)
+                .frame(width: 56, height: 56)
+                .background(DS.Color.gradientPrimary)
+                .clipShape(Circle())
+                .dsCardShadow()
+        }
+        .buttonStyle(DSBoldButtonStyle())
+        .photosPicker(isPresented: $showPhotoPicker, selection: $selectedGalleryItems, maxSelectionCount: 5, matching: .images)
+    }
+
+    // MARK: - Pending Preview Sheet
+
+    private var pendingPreviewSheet: some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                ZStack(alignment: .top) {
+                    TabView(selection: $pendingPreviewIndex) {
+                        ForEach(Array(pendingImages.enumerated()), id: \.offset) { idx, image in
+                            ZStack(alignment: .topTrailing) {
+                                Image(uiImage: image)
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(maxWidth: .infinity)
+                                    .clipped()
+
+                                Button {
+                                    withAnimation {
+                                        pendingImages.remove(at: idx)
+                                        if idx < pendingCaptions.count {
+                                            pendingCaptions.remove(at: idx)
+                                        }
+                                        if pendingPreviewIndex >= pendingImages.count {
+                                            pendingPreviewIndex = max(0, pendingImages.count - 1)
+                                        }
+                                        if pendingImages.isEmpty { showPendingPreview = false }
+                                    }
+                                } label: {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .font(DS.Font.scaled(24, weight: .bold))
+                                        .foregroundColor(.white)
+                                        .shadow(color: DS.Color.shadowDense, radius: 4, x: 0, y: 2)
+                                }
+                                .padding(DS.Spacing.md)
+                            }
+                            .tag(idx)
+                        }
+                    }
+                    .aspectRatio(4/5, contentMode: .fit)
+                    .clipped()
+                    .tabViewStyle(.page(indexDisplayMode: .never))
+
+                    if pendingImages.count > 1 {
+                        HStack {
+                            Spacer()
+                            Text("\(pendingPreviewIndex + 1)/\(pendingImages.count)")
+                                .font(DS.Font.caption1)
+                                .fontWeight(.bold)
+                                .foregroundColor(.white)
+                                .padding(.horizontal, DS.Spacing.sm)
+                                .padding(.vertical, DS.Spacing.xs)
+                                .background(DS.Color.shadowOverlay)
+                                .clipShape(Capsule())
+                                .padding(DS.Spacing.md)
+                        }
+                    }
+                }
+
+                // Thumbnail strip
+                if pendingImages.count > 1 {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: DS.Spacing.sm) {
+                            ForEach(Array(pendingImages.enumerated()), id: \.offset) { idx, image in
+                                Button {
+                                    withAnimation { pendingPreviewIndex = idx }
+                                } label: {
+                                    Image(uiImage: image)
+                                        .resizable()
+                                        .scaledToFill()
+                                        .frame(width: 56, height: 56)
+                                        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous)
+                                                .stroke(pendingPreviewIndex == idx ? DS.Color.primary : Color.clear, lineWidth: 2.5)
+                                        )
+                                        .opacity(pendingPreviewIndex == idx ? 1 : 0.6)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .padding(.horizontal, DS.Spacing.md)
+                        .padding(.vertical, DS.Spacing.xs)
+                    }
+                }
+
+                // Caption input per photo
+                HStack(spacing: DS.Spacing.sm) {
+                    Image(systemName: "text.bubble")
+                        .font(DS.Font.scaled(16, weight: .semibold))
+                        .foregroundColor(DS.Color.textTertiary)
+                    TextField(
+                        L10n.t("تعليق الصورة \(pendingPreviewIndex + 1)...", "Caption for photo \(pendingPreviewIndex + 1)..."),
+                        text: Binding(
+                            get: { pendingCaptions[safe: pendingPreviewIndex] ?? "" },
+                            set: { newValue in
+                                if pendingPreviewIndex < pendingCaptions.count {
+                                    pendingCaptions[pendingPreviewIndex] = newValue
+                                }
+                            }
+                        )
+                    )
+                    .font(DS.Font.callout)
+                    .foregroundColor(DS.Color.textPrimary)
+                    .id(pendingPreviewIndex)
+                }
+                .padding(.horizontal, DS.Spacing.lg)
+                .padding(.vertical, DS.Spacing.md)
+                .background(DS.Color.surface)
+                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+                .padding(.horizontal, DS.Spacing.lg)
 
                 Spacer()
 
-                if let member = memberVM.member(byId: photo.memberId) {
-                    HStack(spacing: DS.Spacing.sm) {
-                        memberAvatar(member, size: 28)
-                        Text(member.firstName)
-                            .font(DS.Font.caption1)
-                            .fontWeight(.bold)
-                            .foregroundColor(DS.Color.textOnPrimary)
+                DSPrimaryButton(
+                    L10n.t("رفع \(pendingImages.count) صور", "Upload \(pendingImages.count) Photos"),
+                    icon: "arrow.up.circle.fill"
+                ) {
+                    uploadPendingImages()
+                }
+                .padding(.horizontal, DS.Spacing.lg)
+                .padding(.bottom, DS.Spacing.xxl)
+            }
+            .background(DS.Color.background)
+            .navigationTitle(L10n.t("معاينة الصور", "Preview Photos"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(L10n.t("إلغاء", "Cancel")) {
+                        pendingImages = []
+                        pendingCaptions = []
+                        showPendingPreview = false
                     }
-                    .padding(.horizontal, DS.Spacing.md)
-                    .padding(.vertical, DS.Spacing.xs)
-                    .background(.ultraThinMaterial)
-                    .clipShape(Capsule())
+                    .font(DS.Font.calloutBold)
+                    .foregroundColor(DS.Color.error)
                 }
             }
-            .padding(.horizontal, DS.Spacing.lg)
-            .padding(.top, DS.Spacing.xl)
         }
+        .environment(\.layoutDirection, langManager.layoutDirection)
     }
 
     // MARK: - Helper Views
@@ -476,18 +865,53 @@ struct FamilyPhotoAlbumsView: View {
     }
 
     private var emptyStateView: some View {
-        VStack(spacing: DS.Spacing.lg) {
-            Image(systemName: "photo.on.rectangle.angled")
-                .font(DS.Font.scaled(40))
-                .foregroundColor(DS.Color.textTertiary)
-            Text(L10n.t("لا توجد صور حالياً", "No photos yet"))
-                .font(DS.Font.title3)
-                .foregroundColor(DS.Color.textSecondary)
-            Text(L10n.t("يمكن لأفراد العائلة إضافة صور من ملفاتهم الشخصية", "Family members can add photos from their profiles"))
-                .font(DS.Font.subheadline)
-                .foregroundColor(DS.Color.textTertiary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, DS.Spacing.xxxxl)
+        VStack(spacing: DS.Spacing.xl) {
+            Spacer()
+            
+            ZStack {
+                Circle()
+                    .fill(DS.Color.primary.opacity(0.08))
+                    .frame(width: 140, height: 140)
+                Circle()
+                    .fill(DS.Color.primary.opacity(0.15))
+                    .frame(width: 100, height: 100)
+                Image(systemName: "photo.on.rectangle.angled")
+                    .font(DS.Font.scaled(44, weight: .bold))
+                    .foregroundColor(DS.Color.primary)
+            }
+            
+            VStack(spacing: DS.Spacing.sm) {
+                Text(L10n.t("لا توجد صور حالياً", "No photos yet"))
+                    .font(DS.Font.title3)
+                    .fontWeight(.black)
+                    .foregroundColor(DS.Color.textPrimary)
+                Text(L10n.t("كن أول من يضيف صوراً لمعرض العائلة", "Be the first to add photos to the family gallery"))
+                    .font(DS.Font.subheadline)
+                    .foregroundColor(DS.Color.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, DS.Spacing.xxxl)
+            }
+
+            // Add photos button
+            Button {
+                checkPhotoPermission { showPhotoPicker = true }
+            } label: {
+                HStack(spacing: DS.Spacing.sm) {
+                    Image(systemName: "plus.circle.fill")
+                        .font(DS.Font.scaled(18, weight: .bold))
+                    Text(L10n.t("إضافة صور", "Add Photos"))
+                        .font(DS.Font.calloutBold)
+                }
+                .foregroundColor(.white)
+                .padding(.horizontal, DS.Spacing.xxl)
+                .padding(.vertical, DS.Spacing.md)
+                .background(DS.Color.gradientPrimary)
+                .clipShape(Capsule())
+            }
+            .buttonStyle(DSBoldButtonStyle())
+            .photosPicker(isPresented: $showPhotoPicker, selection: $selectedGalleryItems, maxSelectionCount: 5, matching: .images)
+            
+            Spacer()
         }
     }
 
@@ -516,5 +940,80 @@ struct FamilyPhotoAlbumsView: View {
             allPhotos = photos
             isLoading = false
         }
+    }
+
+    // MARK: - Photo Upload Logic
+
+    private func checkPhotoPermission(action: @escaping () -> Void) {
+        let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
+        switch status {
+        case .authorized, .limited:
+            action()
+        case .notDetermined:
+            PHPhotoLibrary.requestAuthorization(for: .readWrite) { newStatus in
+                DispatchQueue.main.async {
+                    if newStatus == .authorized || newStatus == .limited {
+                        action()
+                    } else {
+                        showPermissionDenied = true
+                    }
+                }
+            }
+        default:
+            showPermissionDenied = true
+        }
+    }
+
+    private func handleGalleryImagesChange(_ items: [PhotosPickerItem]) {
+        Task {
+            guard !items.isEmpty else { return }
+            var loaded: [UIImage] = []
+            for item in items {
+                guard let data = try? await item.loadTransferable(type: Data.self),
+                      let uiImg = UIImage(data: data) else { continue }
+                loaded.append(uiImg)
+            }
+            await MainActor.run {
+                pendingImages = loaded
+                pendingPreviewIndex = 0
+                pendingCaptions = Array(repeating: "", count: loaded.count)
+                if !loaded.isEmpty { showPendingPreview = true }
+                self.selectedGalleryItems = []
+            }
+        }
+    }
+
+    private func uploadPendingImages() {
+        guard let currentUser = authVM.currentUser else { return }
+        let captions = pendingCaptions
+        Task {
+            await MainActor.run { isUploading = true; showPendingPreview = false }
+            for (index, image) in pendingImages.enumerated() {
+                let captionText = (captions[safe: index] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                let caption: String? = captionText.isEmpty ? nil : captionText
+                _ = await memberVM.uploadMemberGalleryPhotoMulti(image: image, for: currentUser.id, caption: caption)
+            }
+            await MainActor.run {
+                pendingImages = []
+                pendingCaptions = []
+                isUploading = false
+            }
+            await loadPhotos()
+        }
+    }
+
+    private func deletePhoto(_ photo: MemberGalleryPhoto) async {
+        let success = await memberVM.deleteMemberGalleryPhotoMulti(photoId: photo.id, photoURL: photo.photoURL)
+        if success {
+            await loadPhotos()
+        }
+    }
+}
+
+// MARK: - Safe Array Subscript
+
+private extension Array {
+    subscript(safe index: Int) -> Element? {
+        indices.contains(index) ? self[index] : nil
     }
 }
