@@ -20,11 +20,11 @@ echo "Verifying project structure..."
 
 REQUIRED_FILES=(
     "FamilyTreeV2.xcodeproj/project.pbxproj"
-    "FamilyTreeV2/FamilyTreeV2/FamilyTreeV2App.swift"
-    "Core/SupabaseConfig.swift"
-    "Components/Shared/DesignSystem.swift"
-    "ViewModels/Auth/AuthViewModel.swift"
-    "Models/Tree/FamilyMember.swift"
+    "FamilyTreeV2/FamilyTreeV2/FamilyTreeV2/FamilyTreeV2App.swift"
+    "FamilyTreeV2/FamilyTreeV2/Core/SupabaseConfig.swift"
+    "FamilyTreeV2/FamilyTreeV2/Components/Shared/DesignSystem.swift"
+    "FamilyTreeV2/FamilyTreeV2/ViewModels/Auth/AuthViewModel.swift"
+    "FamilyTreeV2/FamilyTreeV2/Models/Tree/FamilyMember.swift"
 )
 
 MISSING=0

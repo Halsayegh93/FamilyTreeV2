@@ -31,16 +31,9 @@ echo "Swift packages resolved."
 # --------------------------------------------------
 if [ -n "$CI_BUILD_NUMBER" ]; then
     echo "Setting build number to $CI_BUILD_NUMBER..."
-
-    PLIST_PATH="$CI_PRIMARY_REPOSITORY_PATH/FamilyTreeV2/FamilyTreeV2/Info.plist"
-
-    if [ -f "$PLIST_PATH" ]; then
-        /usr/libexec/PlistBuddy -c "Add :CFBundleVersion string $CI_BUILD_NUMBER" "$PLIST_PATH" 2>/dev/null \
-            || /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $CI_BUILD_NUMBER" "$PLIST_PATH"
-        echo "Build number set to $CI_BUILD_NUMBER"
-    else
-        echo "Info.plist not found at $PLIST_PATH — skipping build number update"
-    fi
+    cd "$CI_PRIMARY_REPOSITORY_PATH"
+    agvtool new-version -all "$CI_BUILD_NUMBER"
+    echo "Build number set to $CI_BUILD_NUMBER"
 fi
 
 echo "Post-clone setup complete."
