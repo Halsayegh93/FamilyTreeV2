@@ -544,6 +544,7 @@ class NotificationViewModel: ObservableObject {
                 .select()
                 .eq("target_member_id", value: userId.uuidString)
                 .order("created_at", ascending: false)
+                .limit(10000)
                 .execute()
                 .value
             
@@ -688,16 +689,16 @@ class NotificationViewModel: ObservableObject {
         
         do {
             if let ids = targetMemberIds, !ids.isEmpty {
-                for memberId in ids {
-                    let payload: [String: AnyEncodable] = [
+                let payloads = ids.map { memberId in
+                    [
                         "target_member_id": AnyEncodable(memberId.uuidString),
                         "title": AnyEncodable(title),
                         "body": AnyEncodable(body),
                         "kind": AnyEncodable("admin"),
                         "created_by": AnyEncodable(creator.uuidString)
                     ]
-                    try await supabase.from("notifications").insert(payload).execute()
                 }
+                try await supabase.from("notifications").insert(payloads).execute()
             } else {
                 let payload: [String: AnyEncodable] = [
                     "target_member_id": AnyEncodable(Optional<String>.none),

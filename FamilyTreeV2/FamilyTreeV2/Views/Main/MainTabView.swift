@@ -22,15 +22,14 @@ struct MainTabView: View {
         TabView(selection: tabSelection) {
             HomeNewsView(selectedTab: $selectedTab)
                 .tabItem {
-                    Image(systemName: selectedTab == 0 ? "house.fill" : "house")
+                    Image(systemName: selectedTab == 0 ? "newspaper.fill" : "newspaper")
                     Text(L10n.t("الرئيسية", "Home"))
                 }
                 .tag(0)
 
             TreeView(selectedTab: $selectedTab)
                 .tabItem {
-                    Image(systemName: selectedTab == 1 ? "person.3.fill" : "person.3")
-                        .environment(\.symbolVariants, .none)
+                    Image(systemName: selectedTab == 1 ? "tree.fill" : "tree")
                     Text(L10n.t("الشجرة", "Tree"))
                 }
                 .tag(1)
@@ -44,7 +43,7 @@ struct MainTabView: View {
 
             ProfileView(selectedTab: $selectedTab)
                 .tabItem {
-                    Image(systemName: selectedTab == 3 ? "person.fill" : "person")
+                    Image(systemName: selectedTab == 3 ? "person.crop.circle.fill" : "person.crop.circle")
                     Text(L10n.t("حسابي", "Profile"))
                 }
                 .tag(3)
@@ -52,7 +51,7 @@ struct MainTabView: View {
             if authVM.canModerate {
                 AdminDashboardView(selectedTab: $selectedTab)
                     .tabItem {
-                        Image(systemName: selectedTab == 4 ? "shield.fill" : "shield")
+                        Image(systemName: selectedTab == 4 ? "gearshape.2.fill" : "gearshape.2")
                         Text(L10n.t("الإدارة", "Admin"))
                     }
                     .tag(4)

@@ -169,6 +169,15 @@ struct FamilyMember: Identifiable, Codable, Equatable {
         }
     }
 
+    /// الاسم الأول + الأخير
+    var displayName: String {
+        let parts = fullName.split(separator: " ")
+        if parts.count >= 2 {
+            return "\(parts.first!) \(parts.last!)"
+        }
+        return fullName
+    }
+
     enum CodingKeys: String, CodingKey {
         case id, role, status
         case firstName = "first_name"

@@ -70,6 +70,7 @@ class MemberViewModel: ObservableObject {
             let response = try await supabase
                 .from("profiles")
                 .select()
+                .limit(10000)
                 .execute()
             
             let members = try JSONDecoder().decode([FamilyMember].self, from: response.data)
@@ -597,7 +598,7 @@ class MemberViewModel: ObservableObject {
                 .from("member_gallery_photos")
                 .select()
                 .order("created_at", ascending: false)
-                .limit(200)
+                .limit(10000)
                 .execute()
                 .value
             return photos

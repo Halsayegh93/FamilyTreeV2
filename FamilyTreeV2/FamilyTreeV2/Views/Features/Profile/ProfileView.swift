@@ -618,31 +618,6 @@ struct ProfileView: View {
                     iconColor: DS.Color.warning
                 )
                 VStack(spacing: 0) {
-                    // Gallery Row
-                    NavigationLink(destination: PersonalGalleryView(member: user, isEditable: true)) {
-                        HStack(spacing: DS.Spacing.md) {
-                            DSIcon("photo.on.rectangle.angled", color: DS.Color.neonBlue)
-
-                            Text(L10n.t("معرض الصور الشخصي", "Personal Gallery"))
-                                .font(DS.Font.calloutBold)
-                                .foregroundColor(DS.Color.textPrimary)
-
-                            Spacer()
-
-                            Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
-                                .font(DS.Font.scaled(11, weight: .bold))
-                                .foregroundColor(DS.Color.textTertiary)
-                                .frame(width: 26, height: 26)
-                                .background(DS.Color.textTertiary.opacity(0.1))
-                                .clipShape(Circle())
-                        }
-                        .padding(.horizontal, DS.Spacing.lg)
-                        .padding(.vertical, DS.Spacing.xs)
-                    }
-                    .buttonStyle(DSBoldButtonStyle())
-
-                    DSDivider()
-
                     // Privacy Row
                     NavigationLink(destination: PrivacySettingsView()) {
                         HStack(spacing: DS.Spacing.md) {

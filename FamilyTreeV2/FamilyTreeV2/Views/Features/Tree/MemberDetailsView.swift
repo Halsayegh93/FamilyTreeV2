@@ -50,9 +50,6 @@ struct MemberDetailsView: View {
                             // قسم السيرة
                             bioTimelineSection
 
-                            // قسم المعرض
-                            gallerySection
-
                             Spacer(minLength: 60)
                         }
                     }
@@ -449,41 +446,6 @@ struct MemberDetailsView: View {
                 ))
             }
         }
-    }
-
-    // MARK: - قسم المعرض
-
-    private var gallerySection: some View {
-        DSCard(padding: 0) {
-            NavigationLink(destination: PersonalGalleryView(member: member, isEditable: isAdminOrSupervisor)) {
-                HStack(spacing: DS.Spacing.md) {
-                    DSIcon("photo.on.rectangle.angled", color: DS.Color.neonBlue)
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(L10n.t("معرض الصور الشخصي", "Personal Gallery"))
-                            .font(DS.Font.calloutBold)
-                            .foregroundColor(DS.Color.textPrimary)
-                        Text(L10n.t("عرض صور العضو", "View member photos"))
-                            .font(DS.Font.caption1)
-                            .foregroundColor(DS.Color.textSecondary)
-                    }
-
-                    Spacer()
-
-                    Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
-                        .font(DS.Font.scaled(11, weight: .bold))
-                        .foregroundColor(DS.Color.textTertiary)
-                        .frame(width: 26, height: 26)
-                        .background(DS.Color.textTertiary.opacity(0.1))
-                        .clipShape(Circle())
-                }
-                .padding(.horizontal, DS.Spacing.lg)
-                .padding(.vertical, DS.Spacing.lg)
-            }
-            .buttonStyle(DSBoldButtonStyle())
-        }
-        .padding(.horizontal, DS.Spacing.lg)
-        .padding(.top, DS.Spacing.lg)
     }
 
     // MARK: - أزرار عائمة

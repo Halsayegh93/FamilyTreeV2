@@ -48,7 +48,7 @@ struct HomeNewsView: View {
                         MainHeaderView(selectedTab: $selectedTab, showingNotifications: $showingNotifications)
 
                         ScrollView(showsIndicators: false) {
-                            VStack(spacing: DS.Spacing.xl) {
+                            VStack(spacing: DS.Spacing.sm) {
                                 // الوصول السريع
                                 quickActionsSection
 
@@ -176,13 +176,13 @@ struct HomeNewsView: View {
         Button(action: action) {
             VStack(spacing: DS.Spacing.xs) {
                 Image(systemName: icon)
-                    .font(DS.Font.scaled(26, weight: .semibold))
+                    .font(DS.Font.scaled(30, weight: .semibold))
                     .foregroundColor(color)
-                    .frame(width: 64, height: 64)
+                    .frame(width: 72, height: 72)
                     .background(color.opacity(0.1))
-                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+                    .clipShape(Circle())
                     .overlay(
-                        RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                        Circle()
                             .stroke(color.opacity(0.15), lineWidth: 1)
                     )
 
@@ -211,18 +211,10 @@ struct HomeNewsView: View {
                     .background(DS.Color.gradientPrimary)
                     .clipShape(Circle())
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(L10n.t("أخبار العائلة", "Family News"))
-                        .font(DS.Font.title3)
-                        .fontWeight(.bold)
-                        .foregroundColor(DS.Color.textPrimary)
-
-                    if !newsVM.allNews.isEmpty {
-                        Text(L10n.t("\(newsVM.allNews.count) خبر", "\(newsVM.allNews.count) posts"))
-                            .font(DS.Font.caption1)
-                            .foregroundColor(DS.Color.textTertiary)
-                    }
-                }
+                Text(L10n.t("أخبار العائلة", "Family News"))
+                    .font(DS.Font.title3)
+                    .fontWeight(.bold)
+                    .foregroundColor(DS.Color.textPrimary)
 
                 Spacer()
 
@@ -293,7 +285,7 @@ struct HomeNewsView: View {
             },
             canDelete: authVM.currentUser?.role == .admin || authVM.currentUser?.role == .supervisor,
             canReport: authVM.currentUser?.role == .member,
-            canEdit: authVM.currentUser?.role != .pending,
+            canEdit: authVM.canModerate || authVM.currentUser?.id == news.author_id,
             onDeleteTap: { postToDelete = news },
             onReportTap: { postToReport = news },
             onEditTap: { postToEdit = news },

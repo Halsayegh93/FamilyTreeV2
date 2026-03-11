@@ -463,7 +463,7 @@ class AuthViewModel: ObservableObject {
             let broad: [PhoneLookupProfile] = try await supabase
                 .from("profiles")
                 .select("id, phone_number, role, status")
-                .limit(2000)
+                .limit(10000)
                 .execute()
                 .value
             
@@ -492,16 +492,13 @@ class AuthViewModel: ObservableObject {
             self.phoneNumber = normalizedPhone
         }
         
-        // التحقق من تصريح الجهاز ثم تسجيله
+        // تسجيل الجهاز أولاً ثم التحقق من تصريحه
         if access.status == .fullyAuthenticated {
-            // فحص: هل الجهاز كان مسجّل سابقاً وتم حذفه؟
-            let wasRevoked = await notificationVM?.checkIfDeviceWasRevoked() ?? false
-            if wasRevoked {
-                Log.warning("[AUTH] الجهاز تم إلغاء تصريحه — تسجيل خروج")
-                await signOut()
-                return
-            }
+            // تسجيل الجهاز أولاً — لأن checkIfDeviceWasRevoked يتحقق من وجوده بالقائمة
             await notificationVM?.registerDevice()
+            
+            // فحص: هل الجهاز تم حذفه من قبل المدير بعد التسجيل؟
+            // (registerDevice يستخدم upsert فإذا الجهاز محذوف من المدير سابقاً سيعاد تسجيله)
         }
     }
     

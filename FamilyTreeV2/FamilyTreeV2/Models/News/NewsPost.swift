@@ -83,7 +83,7 @@ struct NewsLikeRecord: Identifiable, Codable {
     let id: UUID
     let news_id: UUID
     let member_id: UUID
-    let created_at: String
+    let created_at: String?
 }
 
 struct NewsCommentRecord: Identifiable, Codable {

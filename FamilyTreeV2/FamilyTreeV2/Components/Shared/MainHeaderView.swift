@@ -92,7 +92,7 @@ struct MainHeaderView<TrailingContent: View>: View {
                             Text(L10n.t("مرحباً 👋", "Hello 👋"))
                                 .font(DS.Font.scaled(13, weight: .medium))
                                 .foregroundColor(DS.Color.overlayText)
-                            Text(authVM.currentUser?.firstName ?? "Member")
+                            Text(authVM.currentUser?.displayName ?? "Member")
                                 .font(DS.Font.title3)
                                 .foregroundColor(DS.Color.textOnPrimary)
                         }

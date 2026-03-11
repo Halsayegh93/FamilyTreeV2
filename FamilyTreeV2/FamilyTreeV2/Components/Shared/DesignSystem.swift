@@ -103,7 +103,7 @@ enum DS {
 
         // Status Colors
         static let deceased         = SwiftUI.Color(hex: "#8A8A8E")
-        static let currentLocation  = SwiftUI.Color(hex: "#34C759") // Active Green
+        static let currentLocation  = SwiftUI.Color(hex: "#007AFF") // Vibrant Blue
         static let likeAction       = SwiftUI.Color(hex: "#E8425A") // Like Red
 
         // Quick Access Grid Colors

@@ -155,6 +155,7 @@ class NewsViewModel: ObservableObject {
             let response: [NewsPost] = try await supabase.from("news")
                 .select()
                 .order("created_at", ascending: false)
+                .limit(10000)
                 .execute()
                 .value
 
@@ -199,6 +200,7 @@ class NewsViewModel: ObservableObject {
             let votes: [NewsPollVoteRecord] = try await supabase
                 .from("news_poll_votes")
                 .select("news_id,member_id,option_index")
+                .limit(10000)
                 .execute()
                 .value
 
@@ -240,7 +242,9 @@ class NewsViewModel: ObservableObject {
             let postIdSet = Set(postIds)
             let likes: [NewsLikeRecord] = try await supabase
                 .from("news_likes")
-                .select()
+                .select("id,news_id,member_id")
+                .order("news_id")
+                .limit(10000)
                 .execute()
                 .value
 
@@ -278,6 +282,7 @@ class NewsViewModel: ObservableObject {
                 .from("news_comments")
                 .select()
                 .order("created_at", ascending: true)
+                .limit(10000)
                 .execute()
                 .value
 
