@@ -90,15 +90,14 @@ jobs:
             CODE_SIGN_STYLE=Manual \
             CODE_SIGN_IDENTITY="Apple Distribution" \
             DEVELOPMENT_TEAM=G8GVN83P97 \
-            | xcpretty --color
+            PROVISIONING_PROFILE_SPECIFIER="FamilyTreeV2 App Store Distribution"
 
       - name: Export IPA
         run: |
           xcodebuild -exportArchive \
             -archivePath $RUNNER_TEMP/FamilyTreeV2.xcarchive \
             -exportPath $RUNNER_TEMP/export \
-            -exportOptionsPlist ExportOptions.plist \
-            | xcpretty --color
+            -exportOptionsPlist ExportOptions.plist
 
       - name: Upload to TestFlight
         env:
