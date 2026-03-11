@@ -80,6 +80,9 @@ jobs:
             -scheme FamilyTreeV2
 
       - name: Archive
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
         run: |
           xcodebuild archive \
             -project FamilyTreeV2.xcodeproj \
@@ -88,8 +91,9 @@ jobs:
             -configuration Release \
             -destination "generic/platform=iOS" \
             -allowProvisioningUpdates \
-            CODE_SIGN_STYLE=Automatic \
-            DEVELOPMENT_TEAM=G8GVN83P97
+            -authenticationKeyPath ~/.private_keys/AuthKey_${ASC_KEY_ID}.p8 \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID"
 
       - name: Export IPA
         run: |
