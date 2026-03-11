@@ -97,10 +97,7 @@ jobs:
             -allowProvisioningUpdates \
             -authenticationKeyPath ~/.private_keys/AuthKey_${ASC_KEY_ID}.p8 \
             -authenticationKeyID "$ASC_KEY_ID" \
-            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
-            CODE_SIGN_STYLE=Manual \
-            CODE_SIGN_IDENTITY="Apple Distribution" \
-            DEVELOPMENT_TEAM=G8GVN83P97
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID"
 
       - name: Export IPA
         env:
