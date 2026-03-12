@@ -11,10 +11,6 @@ struct LoginView: View {
 
 
 
-    private var phoneCaretOffset: CGFloat {
-        CGFloat(min(authVM.phoneNumber.count, 15)) * 15.5
-    }
-
     private var phoneBinding: Binding<String> {
         Binding(
             get: { authVM.phoneNumber },
@@ -95,13 +91,12 @@ struct LoginView: View {
             }
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-        .animation(.spring(response: 0.45, dampingFraction: 0.75), value: authVM.isOtpSent)
+        .animation(DS.Anim.bouncy, value: authVM.isOtpSent)
         .onAppear {
-            withAnimation(.spring(response: 0.7, dampingFraction: 0.55).delay(0.15)) {
+            withAnimation(DS.Anim.elastic.delay(0.15)) {
                 logoScale = 1.0
                 logoOpacity = 1.0
             }
-
         }
         .task(id: timeRemaining) {
             guard timeRemaining > 0 else { return }
@@ -113,21 +108,31 @@ struct LoginView: View {
 
     // MARK: - Background
     private var backgroundView: some View {
-        DS.Color.background.ignoresSafeArea()
+        ZStack {
+            DS.Color.background.ignoresSafeArea()
+            DSDecorativeBackground()
+        }
     }
 
-    // MARK: - Logo — Minimal
+    // MARK: - Logo — Royal Gradient
     private var logoSection: some View {
         VStack(spacing: DS.Spacing.lg) {
             ZStack {
+                // Outer glow ring
                 Circle()
-                    .fill(DS.Color.surface)
+                    .fill(DS.Color.primary.opacity(0.08))
+                    .frame(width: 120, height: 120)
+
+                // Gradient circle
+                Circle()
+                    .fill(DS.Color.gradientRoyal)
                     .frame(width: 100, height: 100)
 
-                Text("🌳")
-                    .font(DS.Font.scaled(48))
+                Image(systemName: "leaf.fill")
+                    .font(DS.Font.scaled(42, weight: .bold))
+                    .foregroundColor(DS.Color.textOnPrimary)
             }
-            .shadow(color: DS.Color.shadowSubtle, radius: 10, x: 0, y: 5)
+            .dsGlowShadow()
             .padding(.bottom, DS.Spacing.sm)
 
             VStack(spacing: DS.Spacing.xs) {
@@ -168,29 +173,22 @@ struct LoginView: View {
                     .frame(width: 1, height: 24)
                     .padding(.horizontal, DS.Spacing.xs)
 
-                ZStack(alignment: .leading) {
-                    if authVM.phoneNumber.isEmpty {
-                        Text(L10n.t("رقم الهاتف المحمول", "Mobile Number"))
-                            .font(DS.Font.subheadline)
-                            .foregroundStyle(DS.Color.textTertiary)
-                    } else {
-                        Text(authVM.phoneNumber)
-                            .font(DS.Font.scaled(20, weight: .bold))
-                            .foregroundColor(DS.Color.textPrimary)
-                            .allowsHitTesting(false)
-                    }
-
-                    TextField("", text: phoneBinding)
-                        .keyboardType(.numberPad)
-                        .font(DS.Font.scaled(20, weight: .bold))
-                        .foregroundColor(.clear)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .multilineTextAlignment(.leading)
-                        .lineLimit(1)
-                        .tint(DS.Color.accent)
-                        .focused($isFieldFocused)
-                }
+                TextField(
+                    "",
+                    text: phoneBinding,
+                    prompt: Text(L10n.t("رقم الهاتف المحمول", "Mobile Number"))
+                        .font(DS.Font.subheadline)
+                        .foregroundStyle(DS.Color.textTertiary)
+                )
+                .keyboardType(.numberPad)
+                .font(DS.Font.scaled(20, weight: .bold))
+                .foregroundColor(DS.Color.textPrimary)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .multilineTextAlignment(.leading)
+                .lineLimit(1)
+                .tint(DS.Color.primary)
+                .focused($isFieldFocused)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .layoutPriority(1)
             }
@@ -203,50 +201,42 @@ struct LoginView: View {
                 RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
                     .stroke(
                         isFieldFocused
-                            ? DS.Color.accent
-                            : Color.clear,
-                        lineWidth: isFieldFocused ? 1.5 : 0
+                            ? DS.Color.primary.opacity(0.5)
+                            : Color.gray.opacity(0.15),
+                        lineWidth: isFieldFocused ? 1.5 : 1
                     )
             )
+            .shadow(color: isFieldFocused ? DS.Color.primary.opacity(0.15) : .clear, radius: 12, x: 0, y: 4)
             .animation(DS.Anim.quick, value: isFieldFocused)
 
-            // زر الإرسال — Compact
-            Button {
+            // زر الإرسال — DSPrimaryButton
+            DSPrimaryButton(
+                timeRemaining > 0
+                    ? L10n.t("إعادة الطلب بعد \(timeRemaining)ث", "Resend in \(timeRemaining)s")
+                    : L10n.t("متابعة", "Continue"),
+                icon: timeRemaining > 0 ? nil : "arrow.right",
+                isLoading: authVM.isLoading,
+                useGradient: !isDisabled,
+                color: isDisabled ? .gray : DS.Color.primary
+            ) {
                 isFieldFocused = false
                 timeRemaining = 60
                 Task {
                     await authVM.sendOTP()
                     if !authVM.isOtpSent { timeRemaining = 0 }
                 }
-            } label: {
-                HStack(spacing: DS.Spacing.sm) {
-                    if authVM.isLoading {
-                        ProgressView().tint(.white)
-                    } else {
-                        Text(timeRemaining > 0
-                             ? L10n.t("إعادة الطلب بعد \(timeRemaining)ث", "Resend in \(timeRemaining)s")
-                             : L10n.t("متابعة", "Continue"))
-                            .font(DS.Font.calloutBold)
-                        Image(systemName: "arrow.left")
-                            .font(DS.Font.scaled(14, weight: .bold))
-                            .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-                    }
-                }
-                .foregroundColor(DS.Color.textOnPrimary)
-                .frame(maxWidth: .infinity)
-                .frame(height: 58)
-                .background(DS.Color.accent.opacity(isDisabled ? DS.Opacity.disabled : 1.0))
-                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
             }
-            .buttonStyle(DSScaleButtonStyle())
             .disabled(isDisabled)
-
 
         }
         .padding(DS.Spacing.lg)
-        .background(DS.Color.background)
-        .cornerRadius(DS.Radius.lg)
-        .dsSubtleShadow()
+        .background(DS.Color.surface)
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
+                .stroke(DS.Color.primary.opacity(0.3), lineWidth: 1.5)
+        )
+        .shadow(color: DS.Color.primary.opacity(0.15), radius: 12, x: 0, y: 4)
     }
 
     // MARK: - OTP Input — Compact Card
@@ -258,29 +248,21 @@ struct LoginView: View {
 
         VStack(spacing: DS.Spacing.xl) {
             VStack(spacing: DS.Spacing.sm) {
-                // أيقونة القفل — Subtle
-                ZStack {
-                    Circle()
-                        .fill(DS.Color.surface)
-                        .frame(width: 46, height: 46)
-
-                    Image(systemName: "lock.shield")
-                        .font(DS.Font.scaled(20, weight: .light))
-                        .foregroundColor(DS.Color.textPrimary)
-                }
+                // أيقونة القفل — DSIcon
+                DSIcon("lock.shield", color: DS.Color.primary, size: DS.Icon.size, iconSize: 20)
 
                 Text(L10n.t("رمز التحقق", "Verification Code"))
                     .font(DS.Font.headline)
                     .foregroundColor(DS.Color.textPrimary)
-                
+
                 HStack(spacing: DS.Spacing.xs) {
                     Text(L10n.t("أرسلنا رمزاً إلى", "Code sent to"))
                         .font(DS.Font.caption1)
                         .foregroundColor(DS.Color.textSecondary)
-                    Text("\(authVM.dialingCode)\(authVM.phoneNumber)")
+                    Text("\(authVM.dialingCode) \(authVM.phoneNumber)")
                         .font(DS.Font.scaled(14, weight: .bold))
                         .foregroundColor(DS.Color.accent)
-                    
+
                     Button(action: {
                         withAnimation(DS.Anim.smooth) {
                             authVM.isOtpSent = false
@@ -298,7 +280,7 @@ struct LoginView: View {
                 }
             }
 
-            // حقل OTP — Clean minimal style
+            // حقل OTP — مع تأثير التركيز
             TextField("------", text: otpBinding)
                 .keyboardType(.numberPad)
                 .font(DS.Font.scaled(32, weight: .bold))
@@ -311,10 +293,12 @@ struct LoginView: View {
                 .overlay(
                     RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
                         .stroke(
-                            isFieldFocused ? DS.Color.accent : Color.clear,
-                            lineWidth: isFieldFocused ? 1.5 : 0
+                            isFieldFocused ? DS.Color.primary.opacity(0.5) : Color.gray.opacity(0.15),
+                            lineWidth: isFieldFocused ? 1.5 : 1
                         )
                 )
+                .shadow(color: isFieldFocused ? DS.Color.primary.opacity(0.15) : .clear, radius: 12, x: 0, y: 4)
+                .animation(DS.Anim.quick, value: isFieldFocused)
                 .focused($isFieldFocused)
                 .accessibilityLabel(L10n.t("رمز التحقق", "Verification Code"))
                 .onAppear { isFieldFocused = true }
@@ -323,33 +307,29 @@ struct LoginView: View {
                 }
 
             VStack(spacing: DS.Spacing.md) {
-                // زر التأكيد — Elegant
-                Button {
+                // زر التأكيد — DSPrimaryButton
+                DSPrimaryButton(
+                    L10n.t("تأكيد الدخول", "Verify"),
+                    icon: "checkmark.shield.fill",
+                    isLoading: authVM.isLoading,
+                    useGradient: !otpDisabled,
+                    color: otpDisabled ? .gray : DS.Color.primary
+                ) {
                     Task { await authVM.verifyOTP() }
-                } label: {
-                    HStack {
-                        if authVM.isLoading { ProgressView().tint(.white) }
-                        else {
-                            Text(L10n.t("تأكيد الدخول", "Verify"))
-                                .font(DS.Font.calloutBold)
-                        }
-                    }
-                    .foregroundColor(DS.Color.textOnPrimary)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 58)
-                    .background(DS.Color.accent.opacity(otpDisabled ? DS.Opacity.disabled : 1.0))
-                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
                 }
-                .buttonStyle(DSScaleButtonStyle())
                 .disabled(otpDisabled)
             }
 
             statusMessage
         }
         .padding(DS.Spacing.lg)
-        .background(DS.Color.background)
-        .cornerRadius(DS.Radius.lg)
-        .dsSubtleShadow()
+        .background(DS.Color.surface)
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
+                .stroke(DS.Color.primary.opacity(0.3), lineWidth: 1.5)
+        )
+        .shadow(color: DS.Color.primary.opacity(0.15), radius: 12, x: 0, y: 4)
     }
 
     @ViewBuilder

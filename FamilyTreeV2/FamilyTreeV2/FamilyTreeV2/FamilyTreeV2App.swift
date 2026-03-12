@@ -46,11 +46,7 @@ struct FamilyTreeV2App: App {
                 .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
                     Task {
                         try? await UNUserNotificationCenter.current().setBadgeCount(0)
-                        await self.appState.notificationVM.verifyDeviceAuthorization()
-                    }
-                }
-                .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
-                    Task {
+                        // فحص تصريح الجهاز فقط هنا — لا نكرره في didBecomeActive
                         await self.appState.notificationVM.verifyDeviceAuthorization()
                     }
                 }

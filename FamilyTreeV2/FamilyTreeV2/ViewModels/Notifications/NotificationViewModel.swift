@@ -118,6 +118,10 @@ class NotificationViewModel: ObservableObject {
             "iPad16,1": "iPad mini (A17 Pro)", "iPad16,2": "iPad mini (A17 Pro)",
             "iPad16,3": "iPad Pro 11\" (M4)", "iPad16,4": "iPad Pro 11\" (M4)",
             "iPad16,5": "iPad Pro 13\" (M4)", "iPad16,6": "iPad Pro 13\" (M4)",
+            // 2025 iPads
+            "iPad15,3": "iPad Air 11\" (M3)", "iPad15,4": "iPad Air 11\" (M3)",
+            "iPad15,5": "iPad Air 13\" (M3)", "iPad15,6": "iPad Air 13\" (M3)",
+            "iPad15,7": "iPad (A16)", "iPad15,8": "iPad (A16)",
         ]
         
         return map[id] ?? UIDevice.current.model
@@ -189,12 +193,20 @@ class NotificationViewModel: ObservableObject {
     
     /// تسجيل الجهاز عند تسجيل الدخول (بغض النظر عن الإشعارات)
     func registerDevice() async {
-        guard let memberId = currentUser?.id else { return }
+        guard let memberId = currentUser?.id else {
+            Log.warning("[DEVICE] لا يوجد مستخدم حالي — تخطي تسجيل الجهاز")
+            return
+        }
         guard let deviceId = currentDeviceId else {
             Log.warning("[DEVICE] لا يمكن الحصول على معرّف الجهاز")
             return
         }
-        
+
+        let deviceModelName = NotificationViewModel.deviceModelName
+        let platform = UIDevice.current.userInterfaceIdiom == .pad ? "ipados" : "ios"
+
+        Log.info("[DEVICE] بدء تسجيل الجهاز: \(deviceModelName) (\(platform)), deviceId=\(deviceId.prefix(8))...")
+
         // فحص حد الأجهزة
         do {
             let existingDevices: [LinkedDevice] = try await supabase
@@ -203,9 +215,9 @@ class NotificationViewModel: ObservableObject {
                 .eq("member_id", value: memberId.uuidString)
                 .execute()
                 .value
-            
+
             let isAlreadyRegistered = existingDevices.contains { $0.deviceId == deviceId }
-            
+
             if !isAlreadyRegistered && existingDevices.count >= maxDevicesAllowed {
                 Log.warning("[DEVICE] تجاوز الحد: \(existingDevices.count) أجهزة مسجلة، الحد \(maxDevicesAllowed)")
                 self.linkedDevices = existingDevices
@@ -214,27 +226,29 @@ class NotificationViewModel: ObservableObject {
                 return
             }
         } catch {
-            Log.error("خطأ فحص حد الأجهزة: \(error.localizedDescription)")
+            Log.error("[DEVICE] خطأ فحص حد الأجهزة: \(error.localizedDescription)")
         }
-        
-        // تسجيل الجهاز
+
+        // تسجيل الجهاز — نرسل token فارغ احتياطاً لتفادي خطأ NOT NULL
         do {
-            let deviceModelName = NotificationViewModel.deviceModelName
+            let isoNow = ISO8601DateFormatter().string(from: Date())
             let payload: [String: AnyEncodable] = [
                 "member_id": AnyEncodable(memberId.uuidString),
                 "device_id": AnyEncodable(deviceId),
-                "platform": AnyEncodable("ios"),
-                "device_name": AnyEncodable(deviceModelName)
+                "platform": AnyEncodable(platform),
+                "device_name": AnyEncodable(deviceModelName),
+                "token": AnyEncodable(pushToken ?? ""),
+                "updated_at": AnyEncodable(isoNow)
             ]
-            
+
             try await supabase
                 .from("device_tokens")
                 .upsert(payload, onConflict: "member_id,device_id")
                 .execute()
-            
-            Log.info("[DEVICE] تم تسجيل الجهاز: \(deviceModelName)")
+
+            Log.info("[DEVICE] تم تسجيل الجهاز بنجاح: \(deviceModelName)")
         } catch {
-            Log.error("خطأ تسجيل الجهاز: \(error.localizedDescription)")
+            Log.error("[DEVICE] خطأ تسجيل الجهاز: \(error.localizedDescription) — deviceId=\(deviceId.prefix(8)), model=\(deviceModelName)")
         }
     }
     
@@ -442,6 +456,11 @@ class NotificationViewModel: ObservableObject {
         }
     }
     
+    /// عدّاد محاولات فحص الجهاز الفاشلة — لمنع الخروج من أول محاولة
+    private var deviceVerifyFailCount = 0
+    /// الحد الأقصى لمحاولات الفشل قبل تسجيل الخروج (3 = يعني بعد 3 رجعات للتطبيق بنفس المشكلة)
+    private let deviceVerifyMaxFails = 3
+
     /// التحقق من أن الجهاز الحالي لا يزال مصرّح — إذا تم حذفه من القائمة يتم تسجيل الخروج
     func verifyDeviceAuthorization() async {
         guard let memberId = currentUser?.id else {
@@ -452,9 +471,15 @@ class NotificationViewModel: ObservableObject {
             Log.info("[DEVICE-VERIFY] تخطي — لا يوجد معرّف جهاز")
             return
         }
-        
+
+        // تأكد أن authVM موصول — إذا لا، ممكن race condition مع init
+        guard authVM != nil else {
+            Log.info("[DEVICE-VERIFY] تخطي — authVM غير موصول بعد")
+            return
+        }
+
         Log.info("[DEVICE-VERIFY] التحقق من تصريح الجهاز: \(deviceId.prefix(8))… للعضو: \(memberId.uuidString.prefix(8))…")
-        
+
         do {
             let devices: [LinkedDevice] = try await supabase
                 .from("device_tokens")
@@ -463,12 +488,37 @@ class NotificationViewModel: ObservableObject {
                 .eq("device_id", value: deviceId)
                 .execute()
                 .value
-            
+
             if devices.isEmpty {
-                Log.warning("[DEVICE-VERIFY] الجهاز الحالي غير مصرّح — تسجيل خروج تلقائي")
-                await authVM?.signOut()
+                deviceVerifyFailCount += 1
+                Log.warning("[DEVICE-VERIFY] الجهاز غير موجود بالقائمة (محاولة \(deviceVerifyFailCount)/\(deviceVerifyMaxFails))")
+
+                if deviceVerifyFailCount >= deviceVerifyMaxFails {
+                    // محاولة أخيرة: إعادة تسجيل الجهاز بدل تسجيل خروج
+                    Log.warning("[DEVICE-VERIFY] محاولة إعادة تسجيل الجهاز قبل تسجيل الخروج…")
+                    await registerDevice()
+
+                    // فحص مرة ثانية بعد إعادة التسجيل
+                    let recheck: [LinkedDevice] = (try? await supabase
+                        .from("device_tokens")
+                        .select()
+                        .eq("member_id", value: memberId.uuidString)
+                        .eq("device_id", value: deviceId)
+                        .execute()
+                        .value) ?? []
+
+                    if recheck.isEmpty {
+                        Log.warning("[DEVICE-VERIFY] الجهاز لا يزال غير مصرّح بعد إعادة التسجيل — تسجيل خروج")
+                        deviceVerifyFailCount = 0
+                        await authVM?.signOut()
+                    } else {
+                        Log.info("[DEVICE-VERIFY] الجهاز تم تسجيله بنجاح ✓")
+                        deviceVerifyFailCount = 0
+                    }
+                }
             } else {
                 Log.info("[DEVICE-VERIFY] الجهاز مصرّح ✓")
+                deviceVerifyFailCount = 0
             }
         } catch {
             // لا نسجّل خروج عند خطأ شبكة — فقط عند التأكد من الحذف

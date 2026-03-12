@@ -567,7 +567,7 @@ private enum MembersPDFBuilder {
 
         let rows: [(name: String, age: String, phone: String)] = members.map { member in
             let ageText = ageResolver(member).map(String.init) ?? "—"
-            let phoneText = (member.phoneNumber?.isEmpty == false) ? (member.phoneNumber ?? "—") : "—"
+            let phoneText = KuwaitPhone.display(member.phoneNumber)
             return (member.fullName, ageText, phoneText)
         }
 

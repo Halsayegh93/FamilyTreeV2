@@ -1100,16 +1100,39 @@ class MemberViewModel: ObservableObject {
     func clearMemberPhone(memberId: UUID) async {
         self.isLoading = true
         do {
-            try await supabase
-                .from("profiles")
-                .update(["phone_number": AnyEncodable(String?.none)])
-                .eq("id", value: memberId.uuidString)
-                .execute()
-
+            // استدعاء edge function لحذف الرقم + auth user بالكامل
+            // هذا يضمن فك ارتباط الرقم نهائياً من العضو
+            try await supabase.functions.invoke(
+                "admin-unlink-phone",
+                options: .init(body: ["memberId": memberId.uuidString.lowercased()])
+            )
+            
             await fetchAllMembers()
-            Log.info("تم حذف رقم الهاتف للعضو")
+            Log.info("تم حذف رقم الهاتف وفك ارتباط حساب المصادقة بالكامل")
         } catch {
             Log.error("خطأ حذف الهاتف: \(error.localizedDescription)")
+            // fallback: محاولة التنظيف المحلي في حالة فشل الـ edge function
+            do {
+                try await supabase
+                    .from("profiles")
+                    .update([
+                        "phone_number": AnyEncodable(String?.none),
+                        "status": AnyEncodable("pending")
+                    ])
+                    .eq("id", value: memberId.uuidString)
+                    .execute()
+                
+                _ = try? await supabase
+                    .from("device_tokens")
+                    .delete()
+                    .eq("user_id", value: memberId.uuidString)
+                    .execute()
+                
+                await fetchAllMembers()
+                Log.info("تم حذف رقم الهاتف محلياً (بدون حذف auth user)")
+            } catch {
+                Log.error("فشل التنظيف المحلي أيضاً: \(error.localizedDescription)")
+            }
         }
         self.isLoading = false
     }

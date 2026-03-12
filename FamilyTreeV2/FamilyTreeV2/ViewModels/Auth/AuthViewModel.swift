@@ -236,7 +236,25 @@ class AuthViewModel: ObservableObject {
             return (.pendingApproval, nil, nil)
         }
 
-        // تم إلغاء نظام انتهاء التجربة: أي مستخدم غير معلق يُسمح له بالدخول مباشرة.
+        // العضو المجمد لا يُسمح له بالدخول
+        if profile.status == .frozen {
+            Log.info("[AUTH] العضو \(profile.fullName) حالته frozen → تسجيل خروج")
+            return (.unauthenticated, nil, nil)
+        }
+
+        // العضو المعلق (status = pending) يظهر له شاشة انتظار الموافقة
+        if profile.status == .pending {
+            Log.info("[AUTH] العضو \(profile.fullName) حالته pending → شاشة انتظار الموافقة")
+            return (.pendingApproval, nil, nil)
+        }
+
+        // تحذير: العضو بدون رقم — نسمح بالدخول لكن نسجل تحذير
+        // (عدم وجود رقم ممكن يكون بسبب خطأ بالسيرفر أو المدير مسحه مؤقتاً)
+        let phone = profile.phoneNumber?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if phone.isEmpty {
+            Log.warning("[AUTH] العضو \(profile.fullName) بدون رقم هاتف — نسمح بالدخول مع تحذير")
+        }
+
         return (.fullyAuthenticated, nil, nil)
     }
     
@@ -430,14 +448,35 @@ class AuthViewModel: ObservableObject {
         let normalized = digitsOnly(rawPhone)
         guard normalized.count >= 6 else { return nil }
         
-        let candidates = [
-            rawPhone.trimmingCharacters(in: .whitespacesAndNewlines),
-            normalized,
-            "+965\(normalized)",
-            "965\(normalized)",
-            "00965\(normalized)",
-            "+\(normalized)"
-        ]
+        // استخراج الرقم المحلي (8 أرقام) للمقارنة مع التنسيق الكويتي
+        let local8 = KuwaitPhone.localEightDigits(rawPhone)
+        
+        // بناء قائمة المرشحين مع تجنب التكرار
+        var seen = Set<String>()
+        var candidates: [String] = []
+        func addCandidate(_ c: String) {
+            let trimmed = c.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty, seen.insert(trimmed).inserted else { return }
+            candidates.append(trimmed)
+        }
+        
+        // الصيغ الأساسية
+        addCandidate(rawPhone)                          // الإدخال الأصلي
+        addCandidate(normalized)                        // أرقام فقط
+        if local8.count == 8 {
+            addCandidate(local8)                        // 8 أرقام محلية (التنسيق المخزن للكويت)
+            addCandidate("+965\(local8)")               // E.164 كويتي
+            addCandidate("965\(local8)")                // بدون +
+            addCandidate("00965\(local8)")              // صيغة دولية
+        }
+        // صيغ إضافية إذا كان الرقم يبدأ بكود دولة
+        if normalized != local8 {
+            addCandidate("+\(normalized)")
+            addCandidate("+965\(normalized)")
+            addCandidate("965\(normalized)")
+        }
+        
+        Log.info("[AUTH] findProfileByPhone: rawPhone=\(rawPhone), normalized=\(normalized), local8=\(local8), candidates=\(candidates)")
         
         // 1) محاولة مطابقة مباشرة على أكثر من صيغة شائعة
         for candidate in candidates {
@@ -451,6 +490,7 @@ class AuthViewModel: ObservableObject {
                     .value
                 if let profileId = pickBestProfileId(from: response),
                    let profile = await loadProfile(by: profileId) {
+                    Log.info("[AUTH] تم العثور على بروفايل بالمطابقة المباشرة: \(profile.fullName) (candidate: \(candidate))")
                     return profile
                 }
             } catch {
@@ -467,11 +507,17 @@ class AuthViewModel: ObservableObject {
                 .execute()
                 .value
             
+            Log.info("[AUTH] بحث موسع: تم جلب \(broad.count) بروفايل")
+            
             let matchedRows = broad.filter { phonesMatch(stored: $0.phoneNumber, targetRaw: normalized) }
             if let profileId = pickBestProfileId(from: matchedRows) {
-                return await loadProfile(by: profileId)
+                if let profile = await loadProfile(by: profileId) {
+                    Log.info("[AUTH] تم العثور على بروفايل بالبحث الموسع: \(profile.fullName)")
+                    return profile
+                }
             }
 
+            Log.warning("[AUTH] لم يتم العثور على أي مطابقة للهاتف: \(rawPhone)")
             return nil
         } catch {
             Log.warning("فشل المطابقة الموسعة بالهاتف: \(error)")
@@ -479,8 +525,145 @@ class AuthViewModel: ObservableObject {
         }
     }
     
+    /// ربط بروفايل موجود بـ auth.uid الجديد — يُستخدم عندما يُعثر على بروفايل بالرقم بدلاً من UUID
+    /// يتم تحديث المعرف الأساسي + جميع مراجع father_id التي تشير للمعرف القديم
+    private func linkProfileToAuthUser(oldProfileId: UUID, newAuthUserId: UUID) async {
+        guard oldProfileId != newAuthUserId else { return } // لا حاجة إذا كانا متطابقين
+        
+        let oldId = oldProfileId.uuidString.lowercased()
+        let newId = newAuthUserId.uuidString.lowercased()
+        
+        Log.info("[AUTH] ربط البروفايل: \(oldId) → \(newId)")
+        
+        do {
+            // 1) تحديث father_id لجميع الأبناء الذين يشيرون للمعرف القديم
+            try await supabase
+                .from("profiles")
+                .update(["father_id": AnyEncodable(newId)])
+                .eq("father_id", value: oldId)
+                .execute()
+            
+            // 2) نسخ بيانات البروفايل القديم إلى صف جديد بالمعرف الجديد
+            //    (لأن id هو primary key ولا يمكن تحديثه مباشرة)
+            let oldProfiles: [FamilyMember] = try await supabase
+                .from("profiles")
+                .select()
+                .eq("id", value: oldId)
+                .limit(1)
+                .execute()
+                .value
+            
+            guard let oldProfile = oldProfiles.first else {
+                Log.warning("[AUTH] لم يُعثر على البروفايل القديم أثناء الربط")
+                return
+            }
+            
+            // بناء payload بالبيانات الموجودة
+            var payload: [String: AnyEncodable] = [
+                "id": AnyEncodable(newId),
+                "full_name": AnyEncodable(oldProfile.fullName),
+                "first_name": AnyEncodable(oldProfile.firstName),
+                "phone_number": AnyEncodable(oldProfile.phoneNumber),
+                "is_deceased": AnyEncodable(oldProfile.isDeceased),
+                "role": AnyEncodable(oldProfile.role.rawValue),
+                "status": AnyEncodable(oldProfile.status?.rawValue ?? "active"),
+                "is_phone_hidden": AnyEncodable(oldProfile.isPhoneHidden),
+                "is_hidden_from_tree": AnyEncodable(oldProfile.isHiddenFromTree),
+                "sort_order": AnyEncodable(oldProfile.sortOrder),
+                "is_married": AnyEncodable(oldProfile.isMarried)
+            ]
+            
+            if let fatherId = oldProfile.fatherId {
+                payload["father_id"] = AnyEncodable(fatherId.uuidString.lowercased())
+            }
+            if let birthDate = oldProfile.birthDate {
+                payload["birth_date"] = AnyEncodable(birthDate)
+            }
+            if let deathDate = oldProfile.deathDate {
+                payload["death_date"] = AnyEncodable(deathDate)
+            }
+            if let avatarUrl = oldProfile.avatarUrl {
+                payload["avatar_url"] = AnyEncodable(avatarUrl)
+            }
+            if let photoURL = oldProfile.photoURL {
+                payload["photo_url"] = AnyEncodable(photoURL)
+            }
+            if let gender = oldProfile.gender {
+                payload["gender"] = AnyEncodable(gender)
+            }
+            if let bio = oldProfile.bio, !bio.isEmpty {
+                let encoder = JSONEncoder()
+                if let bioData = try? encoder.encode(bio),
+                   let bioString = String(data: bioData, encoding: .utf8) {
+                    payload["bio_json"] = AnyEncodable(bioString)
+                }
+            }
+            
+            // إدخال البروفايل الجديد (upsert لتجنب الخطأ إذا كان موجوداً)
+            try await supabase
+                .from("profiles")
+                .upsert(payload)
+                .execute()
+            
+            // 3) حذف البروفايل القديم
+            try await supabase
+                .from("profiles")
+                .delete()
+                .eq("id", value: oldId)
+                .execute()
+            
+            // 4) تحديث device_tokens إذا كانت موجودة
+            _ = try? await supabase
+                .from("device_tokens")
+                .update(["user_id": AnyEncodable(newId)])
+                .eq("user_id", value: oldId)
+                .execute()
+            
+            // 5) تحديث admin_requests
+            _ = try? await supabase
+                .from("admin_requests")
+                .update(["member_id": AnyEncodable(newId)])
+                .eq("member_id", value: oldId)
+                .execute()
+            
+            // 6) تحديث notifications
+            _ = try? await supabase
+                .from("notifications")
+                .update(["target_member_id": AnyEncodable(newId)])
+                .eq("target_member_id", value: oldId)
+                .execute()
+            
+            // 7) تحديث news
+            _ = try? await supabase
+                .from("news")
+                .update(["author_id": AnyEncodable(newId)])
+                .eq("author_id", value: oldId)
+                .execute()
+            
+            // 8) تحديث member_gallery_photos
+            _ = try? await supabase
+                .from("member_gallery_photos")
+                .update(["member_id": AnyEncodable(newId)])
+                .eq("member_id", value: oldId)
+                .execute()
+            
+            Log.info("[AUTH] ✅ تم ربط البروفايل بنجاح: \(oldProfile.fullName) → auth.uid: \(newId)")
+        } catch {
+            Log.error("[AUTH] ❌ فشل ربط البروفايل: \(error.localizedDescription)")
+            // في حالة الفشل، نستمر بالبروفايل الأصلي — لا نوقف عملية الدخول
+        }
+    }
+    
     private func applyAuthenticatedProfile(_ profile: FamilyMember, normalizedPhone: String?) async {
         let access = self.resolveAuthAccess(for: profile)
+        
+        // إذا العضو ما عنده رقم أو حالته معلقة → تسجيل خروج تلقائي
+        if access.status == .unauthenticated {
+            Log.info("[AUTH] العضو \(profile.fullName) غير مصرح له بالدخول → تسجيل خروج")
+            await signOut()
+            return
+        }
+        
         self.currentUser = profile
         self.status = access.status
         self.trialStartedAt = access.trialStart
@@ -646,11 +829,27 @@ class AuthViewModel: ObservableObject {
     // MARK: - Profile Check
     
     func checkUserProfile() async {
-        guard let user = try? await supabase.auth.session.user else {
-            Log.info("[AUTH] No session found → unauthenticated")
-            self.status = .unauthenticated
-            self.trialStartedAt = nil
-            self.trialEndsAt = nil
+        let user: Supabase.User
+        do {
+            user = try await supabase.auth.session.user
+        } catch {
+            let errorDesc = error.localizedDescription.lowercased()
+            // فقط نعتبره "لا يوجد جلسة" إذا كانت الجلسة فعلاً غير موجودة
+            let isReallyNoSession = errorDesc.contains("session not found")
+                || errorDesc.contains("no session")
+                || errorDesc.contains("not authenticated")
+                || errorDesc.contains("auth session missing")
+                || errorDesc.contains("refresh_token")
+
+            if isReallyNoSession {
+                Log.info("[AUTH] No session found → unauthenticated: \(error.localizedDescription)")
+                self.status = .unauthenticated
+                self.trialStartedAt = nil
+                self.trialEndsAt = nil
+            } else {
+                // خطأ شبكة أو خطأ مؤقت — لا نسجل خروج، نحتفظ بالحالة الحالية
+                Log.warning("[AUTH] خطأ مؤقت في جلب الجلسة (لن نسجل خروج): \(error.localizedDescription)")
+            }
             return
         }
 
@@ -679,10 +878,24 @@ class AuthViewModel: ObservableObject {
                 .execute()
                 .value
 
-            if let profile = response.first {
+            if var profile = response.first {
                 Log.info("[AUTH] Found profile by UUID: \(profile.fullName), role: \(profile.role), status: \(profile.status?.rawValue ?? "nil")")
-                await applyAuthenticatedProfile(profile, normalizedPhone: normalizedSessionPhone)
-                return
+                
+                let existingPhone = profile.phoneNumber?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                
+                // بروفايل يتيم: المدير حذف رقمه → نتخطاه ويدخل كمستخدم جديد
+                if existingPhone.isEmpty && profile.status == .pending {
+                    Log.info("[AUTH] بروفايل يتيم (بدون رقم + معلق) — تخطي لشاشة التسجيل الجديد")
+                    // لا نربط الرقم — نترك البروفايل كما هو ونكمل للتسجيل الجديد
+                } else {
+                    // لا نسوي مزامنة تلقائية للرقم — إذا المدير مسح الرقم نحترم قراره
+                    if existingPhone.isEmpty {
+                        Log.info("[AUTH] البروفايل بدون رقم (ممكن المدير مسحه) — لا نرجعه تلقائياً")
+                    }
+
+                    await applyAuthenticatedProfile(profile, normalizedPhone: normalizedSessionPhone)
+                    return
+                }
             } else {
                 Log.warning("[AUTH] UUID lookup returned 0 results for: \(userIdString)")
             }
@@ -692,16 +905,29 @@ class AuthViewModel: ObservableObject {
 
         // المحاولة 2: البحث بالرقم
         if let phoneProfile = await findProfileByPhone(normalizedSessionPhone) {
-            Log.info("[AUTH] Found profile by phone: \(phoneProfile.fullName)")
-            await applyAuthenticatedProfile(phoneProfile, normalizedPhone: normalizedSessionPhone)
+            Log.info("[AUTH] Found profile by phone: \(phoneProfile.fullName), profileId: \(phoneProfile.id), authUid: \(user.id)")
+            // ربط البروفايل بـ auth.uid الجديد حتى يعمل تسجيل الدخول مستقبلاً بدون بحث
+            await linkProfileToAuthUser(oldProfileId: phoneProfile.id, newAuthUserId: user.id)
+            // إعادة تحميل البروفايل بالمعرف الجديد
+            if let updatedProfile = await loadProfile(by: user.id) {
+                await applyAuthenticatedProfile(updatedProfile, normalizedPhone: normalizedSessionPhone)
+            } else {
+                // fallback: استخدام البروفايل الأصلي
+                await applyAuthenticatedProfile(phoneProfile, normalizedPhone: normalizedSessionPhone)
+            }
             return
         }
 
         // المحاولة 3: البحث بالرقم المحلي
         let local8 = KuwaitPhone.localEightDigits(normalizedSessionPhone)
         if local8.count == 8, let directPhoneProfile = await findProfileByPhone(local8) {
-            Log.info("[AUTH] Found profile by local phone: \(directPhoneProfile.fullName)")
-            await applyAuthenticatedProfile(directPhoneProfile, normalizedPhone: local8)
+            Log.info("[AUTH] Found profile by local phone: \(directPhoneProfile.fullName), profileId: \(directPhoneProfile.id), authUid: \(user.id)")
+            await linkProfileToAuthUser(oldProfileId: directPhoneProfile.id, newAuthUserId: user.id)
+            if let updatedProfile = await loadProfile(by: user.id) {
+                await applyAuthenticatedProfile(updatedProfile, normalizedPhone: local8)
+            } else {
+                await applyAuthenticatedProfile(directPhoneProfile, normalizedPhone: local8)
+            }
             return
         }
 
@@ -716,9 +942,15 @@ class AuthViewModel: ObservableObject {
                 .execute()
                 .value
             if let retryProfile = retryResponse.first {
-                Log.info("[AUTH] Found profile on retry by UUID: \(retryProfile.fullName)")
-                await applyAuthenticatedProfile(retryProfile, normalizedPhone: normalizedSessionPhone)
-                return
+                let retryPhone = retryProfile.phoneNumber?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                // بروفايل يتيم: تخطي
+                if retryPhone.isEmpty && retryProfile.status == .pending {
+                    Log.info("[AUTH] بروفايل يتيم في المحاولة 4 — تخطي")
+                } else {
+                    Log.info("[AUTH] Found profile on retry by UUID: \(retryProfile.fullName)")
+                    await applyAuthenticatedProfile(retryProfile, normalizedPhone: normalizedSessionPhone)
+                    return
+                }
             }
         } catch {
             Log.warning("[AUTH] Retry check failed: \(error.localizedDescription)")

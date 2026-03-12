@@ -29,10 +29,10 @@ struct TreeView: View {
     @State private var isSearchFocused = false
     @State private var searchedMemberID: UUID? = nil
 
-    @State private var scale: CGFloat = 0.75
+    @State private var scale: CGFloat = 0.70
     @State private var treeID = UUID()
     @State private var currentAnchor: UnitPoint = .center
-    @State private var baseScale: CGFloat = 0.75
+    @State private var baseScale: CGFloat = 0.70
 
     @Environment(\.verticalSizeClass) var verticalSizeClass
     @Environment(\.colorScheme) var colorScheme
@@ -59,9 +59,9 @@ struct TreeView: View {
         return 200
     }
 
-    private var preferredBaseScale: CGFloat { 0.75 }
+    private var preferredBaseScale: CGFloat { 0.70 }
 
-    private func preferredScaleForCurrentExpansion() -> CGFloat { 0.75 }
+    private func preferredScaleForCurrentExpansion() -> CGFloat { 0.70 }
 
     private var currentZoomPercentText: String {
         let zoom = Int((scale * 100).rounded())
@@ -133,10 +133,11 @@ struct TreeView: View {
                     } else {
                         ScrollViewReader { proxy in
                             ScrollView([.horizontal, .vertical], showsIndicators: false) {
-                                ZStack(alignment: .center) {
+                                VStack(spacing: 0) {
                                     if let root = primaryRootMember {
                                         rootBranch(for: root)
                                             .id(treeID)
+                                            .frame(maxWidth: .infinity, alignment: .center)
                                     }
                                 }
                                 .scaleEffect(scale, anchor: .center)
@@ -144,7 +145,8 @@ struct TreeView: View {
                                     minWidth: geometry.size.width,
                                     minHeight: geometry.size.height
                                 )
-                                .padding(.vertical, DS.Spacing.xxxxl * 3)
+                                .padding(.top, DS.Spacing.xxxxl * 3)
+                                .padding(.bottom, DS.Spacing.xxxxl * 4)
                                 .padding(.horizontal, DS.Spacing.xxxxl)
                             }
                             .simultaneousGesture(
@@ -162,7 +164,7 @@ struct TreeView: View {
                             .onChange(of: scrollCounter) { _, _ in
                                 if let id = scrollTarget {
                                     withAnimation(.easeInOut(duration: 0.3)) {
-                                        proxy.scrollTo(id, anchor: .center)
+                                        proxy.scrollTo(id, anchor: currentAnchor)
                                     }
                                 }
                             }
@@ -245,6 +247,7 @@ struct TreeView: View {
             .fullScreenCover(isPresented: $showingTreeEditRequest) {
                 TreeEditRequestView()
             }
+
             .onAppear {
                 let isFirstLoad = cachedVisibleMembers.isEmpty
                 Task {
@@ -475,7 +478,7 @@ struct TreeView: View {
                         }
                         .foregroundColor(DS.Color.textTertiary)
                     }
-                    
+
                     if member.isDeceased ?? false {
                         Text(L10n.t("متوفى", "Deceased"))
                             .font(DS.Font.scaled(9, weight: .medium))
@@ -550,6 +553,7 @@ struct TreeView: View {
         
         Task {
             try? await Task.sleep(nanoseconds: 250_000_000)
+            currentAnchor = .center
             scrollTarget = member.id
             scrollCounter += 1
         }
@@ -565,12 +569,19 @@ struct TreeView: View {
 
     private func resetToTopRoot(animated: Bool = true) {
         if let root = primaryRootMember {
+            // فتح مستويين: الجذر + أبنائه
+            var expandedIds: Set<UUID> = [root.id]
+            let level2 = cachedChildrenByFatherId[root.id] ?? []
+            for child in level2 {
+                expandedIds.insert(child.id)
+            }
             let updates = {
                 scale = preferredBaseScale
                 baseScale = preferredBaseScale
-                activePath = [root.id]
+                activePath = expandedIds
                 searchedMemberID = nil
                 treeID = UUID()
+                currentAnchor = .center
                 scrollTarget = root.id
                 scrollCounter += 1
             }
@@ -586,35 +597,26 @@ struct TreeView: View {
     private var overlayTools: some View {
         VStack {
             Spacer()
-            HStack(alignment: .bottom) {
+            HStack {
                 Spacer()
                 VStack(spacing: 0) {
                     Text(currentZoomPercentText)
-                        .font(DS.Font.scaled(12, weight: .bold))
+                        .font(DS.Font.scaled(13, weight: .bold))
                         .foregroundColor(DS.Color.primary)
                         .frame(width: 44, height: 44)
-                        .background(Color.white.opacity(0.1))
 
-                    Divider()
-                        .frame(width: 30)
-                        .background(Color.gray.opacity(0.2))
+                    Divider().frame(width: 30)
 
-                    // زر تكبير
                     Button(action: { withAnimation(.easeInOut(duration: 0.2)) { scale = min(scale + 0.05, 3.0); baseScale = scale } }) {
                         Image(systemName: "plus")
                             .font(DS.Font.scaled(16, weight: .bold))
                             .foregroundColor(DS.Color.primary)
                             .frame(width: 44, height: 44)
-                            .background(Color.white.opacity(0.1))
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel(L10n.t("تكبير", "Zoom in"))
 
-                    Divider()
-                        .frame(width: 30)
-                        .background(Color.gray.opacity(0.2))
+                    Divider().frame(width: 30)
 
-                    // زر إعادة + تحديث
                     Button(action: {
                         guard !isRefreshing else { return }
                         isRefreshing = true
@@ -630,43 +632,36 @@ struct TreeView: View {
                                 .tint(DS.Color.primary)
                                 .scaleEffect(0.7)
                                 .frame(width: 44, height: 44)
-                                .background(Color.white.opacity(0.1))
                         } else {
                             Image(systemName: "arrow.counterclockwise")
                                 .font(DS.Font.scaled(15, weight: .bold))
                                 .foregroundColor(DS.Color.primary)
                                 .frame(width: 44, height: 44)
-                                .background(Color.white.opacity(0.1))
                         }
                     }
                     .buttonStyle(.plain)
                     .disabled(isRefreshing)
-                    .accessibilityLabel(L10n.t("تحديث وإعادة ضبط", "Refresh & reset"))
 
-                    Divider()
-                        .frame(width: 30)
-                        .background(Color.gray.opacity(0.2))
+                    Divider().frame(width: 30)
 
-                    // زر تصغير
                     Button(action: { withAnimation(.easeInOut(duration: 0.2)) { scale = max(scale - 0.05, 0.2); baseScale = scale } }) {
                         Image(systemName: "minus")
                             .font(DS.Font.scaled(16, weight: .bold))
                             .foregroundColor(DS.Color.primary)
                             .frame(width: 44, height: 44)
-                            .background(Color.white.opacity(0.1))
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel(L10n.t("تصغير", "Zoom out"))
                 }
                 .background(.ultraThinMaterial)
-                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
                 .overlay(
-                    RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                    RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
                         .stroke(Color.gray.opacity(0.2), lineWidth: 1)
                 )
-                .shadow(color: Color.black.opacity(0.08), radius: 8, y: 4)
-                .padding(.bottom, DS.Spacing.xxl)
-            }.padding(.horizontal, DS.Spacing.xl)
+                .shadow(color: Color.black.opacity(0.06), radius: 6, y: 3)
+                .padding(.bottom, DS.Spacing.xl)
+            }
+            .padding(.horizontal, DS.Spacing.lg)
         }
     }
 
@@ -802,9 +797,10 @@ struct RecursiveTreeBranch: View {
             return allChildren
         }
 
-        // إذا فيه فرع مفتوح، نعرض بس الفرع المفتوح
-        if let focusedChild = allChildren.first(where: { activePath.contains($0.id) }) {
-            return [focusedChild]
+        // إذا فيه فروع مفتوحة، نعرض كل الفروع المفتوحة
+        let focusedChildren = allChildren.filter { activePath.contains($0.id) }
+        if !focusedChildren.isEmpty {
+            return focusedChildren
         }
         return allChildren
     }
@@ -833,20 +829,28 @@ struct RecursiveTreeBranch: View {
                 let willExpand = !isExpanded
                 withAnimation(.easeInOut(duration: 0.2)) {
                     if willExpand {
-                        // نفتح هالعقدة ونحتفظ بالأجداد فقط
-                        activePath = ancestorIDs.union([member.id])
+                        // نضيف العقدة للمسار بدون ما نشيل الإخوان المفتوحين
+                        activePath.insert(member.id)
                     } else {
-                        // نقفل هالعقدة وكل أبنائها — نشيل كل شي ماعدا الأجداد
-                        activePath = ancestorIDs
+                        // نقفل هالعقدة وكل ذريتها
+                        var idsToRemove: Set<UUID> = [member.id]
+                        func collectDescendants(of parentId: UUID) {
+                            for child in childrenByFatherId[parentId] ?? [] {
+                                idsToRemove.insert(child.id)
+                                collectDescendants(of: child.id)
+                            }
+                        }
+                        collectDescendants(of: member.id)
+                        activePath.subtract(idsToRemove)
                         searchedMemberID = nil
                     }
                 }
-                if willExpand {
-                    Task {
-                        try? await Task.sleep(nanoseconds: 200_000_000)
-                        scrollTarget = member.id
-                        scrollCounter += 1
-                    }
+                Task {
+                    try? await Task.sleep(nanoseconds: 200_000_000)
+                    scrollAnchor = .center
+                    // عند الفتح نركز على العقدة، عند الإغلاق نركز على الأب لعرض الإخوان
+                    scrollTarget = willExpand ? member.id : (member.fatherId ?? member.id)
+                    scrollCounter += 1
                 }
             }.id(member.id)
             .onAppear { renderedCount += 1 }
@@ -1273,4 +1277,5 @@ private struct HexagonShape: Shape {
         return path
     }
 }
+
 

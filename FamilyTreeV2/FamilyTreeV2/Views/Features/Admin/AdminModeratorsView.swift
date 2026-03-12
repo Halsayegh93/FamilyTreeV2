@@ -193,7 +193,7 @@ struct AdminModeratorsView: View {
                     HStack(spacing: DS.Spacing.xs) {
                         Image(systemName: "phone.fill")
                             .font(DS.Font.scaled(10))
-                        Text(phone)
+                        Text(KuwaitPhone.display(phone))
                             .font(DS.Font.caption1)
                             .monospacedDigit()
                     }
@@ -390,7 +390,7 @@ struct AddModeratorSheet: View {
                                                 .lineLimit(1)
 
                                             if let phone = member.phoneNumber, !phone.isEmpty {
-                                                Text(phone)
+                                                Text(KuwaitPhone.display(phone))
                                                     .font(DS.Font.caption1)
                                                     .foregroundColor(DS.Color.textTertiary)
                                                     .monospacedDigit()

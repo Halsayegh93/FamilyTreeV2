@@ -385,7 +385,7 @@ struct AdminActivateAccountsView: View {
                     HStack(spacing: DS.Spacing.xs) {
                         Image(systemName: "phone.fill")
                             .font(DS.Font.scaled(10))
-                        Text(phone)
+                        Text(KuwaitPhone.display(phone))
                             .font(DS.Font.caption1)
                             .monospacedDigit()
                     }

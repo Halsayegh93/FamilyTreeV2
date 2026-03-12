@@ -164,7 +164,7 @@ struct HomeNewsView: View {
 
     // MARK: - Quick Actions Section
     private var quickActionsSection: some View {
-        HStack(spacing: DS.Spacing.md) {
+        HStack(spacing: DS.Spacing.sm) {
             quickActionItem(icon: "photo.on.rectangle.angled.fill", title: L10n.t("الصور", "Photos"), color: DS.Color.gridDiwaniya) { withAnimation(DS.Anim.snappy) { activeSubPage = .photos } }
             quickActionItem(icon: "briefcase.fill", title: L10n.t("مشاريع", "Projects"), color: DS.Color.neonBlue) { withAnimation(DS.Anim.snappy) { activeSubPage = .projects } }
             quickActionItem(icon: "bubble.left.and.bubble.right.fill", title: L10n.t("تواصل", "Contact"), color: DS.Color.gridContact) { withAnimation(DS.Anim.snappy) { activeSubPage = .contact } }
@@ -174,27 +174,30 @@ struct HomeNewsView: View {
 
     private func quickActionItem(icon: String, title: String, color: Color, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            VStack(spacing: DS.Spacing.xs) {
+            HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: icon)
-                    .font(DS.Font.scaled(30, weight: .semibold))
+                    .font(DS.Font.scaled(16, weight: .semibold))
                     .foregroundColor(color)
-                    .frame(width: 72, height: 72)
+                    .frame(width: 36, height: 36)
                     .background(color.opacity(0.1))
                     .clipShape(Circle())
-                    .overlay(
-                        Circle()
-                            .stroke(color.opacity(0.15), lineWidth: 1)
-                    )
 
                 Text(title)
                     .font(DS.Font.caption1)
-                    .fontWeight(.medium)
-                    .foregroundColor(DS.Color.textSecondary)
+                    .fontWeight(.semibold)
+                    .foregroundColor(DS.Color.textPrimary)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.8)
             }
+            .padding(.horizontal, DS.Spacing.md)
+            .padding(.vertical, DS.Spacing.sm)
+            .background(DS.Color.surface)
+            .clipShape(Capsule())
+            .overlay(
+                Capsule()
+                    .stroke(color.opacity(0.15), lineWidth: 1)
+            )
         }
-        .buttonStyle(DSBoldButtonStyle())
+        .buttonStyle(DSScaleButtonStyle())
         .frame(maxWidth: .infinity)
     }
 
@@ -203,42 +206,44 @@ struct HomeNewsView: View {
         VStack(alignment: .leading, spacing: 0) {
             // Section header
             HStack(spacing: DS.Spacing.sm) {
-                // أيقونة بدائرة gradient
                 Image(systemName: "newspaper.fill")
-                    .font(DS.Font.scaled(16, weight: .semibold))
+                    .font(DS.Font.scaled(14, weight: .semibold))
                     .foregroundColor(.white)
-                    .frame(width: 36, height: 36)
+                    .frame(width: 30, height: 30)
                     .background(DS.Color.gradientPrimary)
                     .clipShape(Circle())
 
                 Text(L10n.t("أخبار العائلة", "Family News"))
-                    .font(DS.Font.title3)
-                    .fontWeight(.bold)
+                    .font(DS.Font.headline)
                     .foregroundColor(DS.Color.textPrimary)
 
                 Spacer()
 
                 if authVM.currentUser?.role != .pending {
                     Button(action: { showingAddNews = true }) {
-                        HStack(spacing: DS.Spacing.sm) {
-                            Image(systemName: "plus.circle.fill")
-                                .font(DS.Font.scaled(18, weight: .semibold))
-                            Text(L10n.t("إضافة خبر", "Add Post"))
-                                .font(DS.Font.callout)
+                        HStack(spacing: DS.Spacing.xs) {
+                            Image(systemName: "plus")
+                                .font(DS.Font.scaled(14, weight: .bold))
+                            Text(L10n.t("خبر جديد", "New Post"))
+                                .font(DS.Font.caption1)
                                 .fontWeight(.bold)
                         }
                         .foregroundColor(DS.Color.primary)
-                        .padding(.horizontal, DS.Spacing.lg)
-                        .padding(.vertical, DS.Spacing.sm + 2)
-                        .background(DS.Color.primary.opacity(0.15))
+                        .padding(.horizontal, DS.Spacing.md)
+                        .padding(.vertical, DS.Spacing.xs + 2)
+                        .background(DS.Color.primary.opacity(0.1))
                         .clipShape(Capsule())
+                        .overlay(
+                            Capsule()
+                                .stroke(DS.Color.primary.opacity(0.15), lineWidth: 1)
+                        )
                     }
                     .buttonStyle(DSScaleButtonStyle())
                     .accessibilityLabel(L10n.t("إضافة خبر جديد", "Add new post"))
                 }
             }
             .padding(.horizontal, DS.Spacing.lg)
-            .padding(.vertical, DS.Spacing.md)
+            .padding(.vertical, DS.Spacing.sm)
 
             if newsVM.allNews.isEmpty {
                 emptyNewsView
