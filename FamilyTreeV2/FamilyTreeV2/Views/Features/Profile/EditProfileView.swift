@@ -146,23 +146,20 @@ struct EditProfileView: View {
             HStack(spacing: DS.Spacing.md) {
                 DSIcon("person.fill", color: DS.Color.primary)
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(L10n.t("الاسم الكامل", "Full Name"))
-                        .font(DS.Font.caption1)
-                        .foregroundColor(DS.Color.textSecondary)
-                    Text(fullName)
-                        .font(DS.Font.callout)
-                        .foregroundColor(DS.Color.textPrimary)
-                }
+                Text(L10n.t("الاسم الكامل", "Full Name"))
+                    .font(DS.Font.caption2)
+                    .foregroundColor(DS.Color.textTertiary)
+
                 Spacer()
 
-                Text(L10n.t("طلب تغيير", "Request Change"))
-                    .font(DS.Font.scaled(11, weight: .bold))
+                Text(fullName)
+                    .font(DS.Font.callout)
+                    .foregroundColor(DS.Color.textPrimary)
+                    .lineLimit(1)
+
+                Image(systemName: "pencil.circle.fill")
+                    .font(DS.Font.scaled(16, weight: .medium))
                     .foregroundColor(DS.Color.primary)
-                    .padding(.horizontal, DS.Spacing.sm)
-                    .padding(.vertical, DS.Spacing.xs)
-                    .background(DS.Color.primary.opacity(0.1))
-                    .clipShape(Capsule())
             }
             .padding(.horizontal, DS.Spacing.lg)
             .padding(.vertical, DS.Spacing.xs)
