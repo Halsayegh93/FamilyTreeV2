@@ -1,91 +1,103 @@
 import SwiftUI
 
 struct SplashScreenView: View {
-    @State private var isActive = false
-    @State private var logoScale: CGFloat = 0.6
+    @State private var logoScale: CGFloat = 0.5
     @State private var logoOpacity: Double = 0
-    @State private var titleOffset: CGFloat = 30
-    @State private var titleOpacity: Double = 0
-    @State private var subtitleOpacity: Double = 0
-    @State private var versionOpacity: Double = 0
-
+    @State private var textOpacity: Double = 0
+    @State private var dotCount = 0
+    @State private var pulseScale: CGFloat = 1.0
 
     var body: some View {
         ZStack {
-            // MARK: - Background
+            // خلفية
             DS.Color.background.ignoresSafeArea()
+            DSDecorativeBackground()
 
-            // MARK: - Content
-            VStack(spacing: DS.Spacing.lg) {
+            VStack(spacing: DS.Spacing.xxl) {
                 Spacer()
 
-                // Logo — Minimalist
+                // اللوقو مع حلقة متحركة
                 ZStack {
+                    // حلقة نبض خارجية
                     Circle()
-                        .fill(DS.Color.surface)
+                        .stroke(DS.Color.primary.opacity(0.15), lineWidth: 3)
+                        .frame(width: 140, height: 140)
+                        .scaleEffect(pulseScale)
+
+                    // دائرة خارجية
+                    Circle()
+                        .fill(DS.Color.primary.opacity(0.08))
                         .frame(width: 120, height: 120)
-                        
-                    Text("🌳")
-                        .font(DS.Font.scaled(70))
+
+                    // الدائرة الرئيسية
+                    Circle()
+                        .fill(DS.Color.gradientRoyal)
+                        .frame(width: 100, height: 100)
+
+                    Image(systemName: "leaf.fill")
+                        .font(DS.Font.scaled(42, weight: .bold))
+                        .foregroundColor(DS.Color.textOnPrimary)
                 }
-                .dsSubtleShadow()
+                .dsGlowShadow()
                 .scaleEffect(logoScale)
                 .opacity(logoOpacity)
 
-                // App Name
-                Text(L10n.t("شجرة العائلة", "Family Tree"))
-                    .font(DS.Font.largeTitle)
-                    .foregroundColor(DS.Color.textPrimary)
-                    .offset(y: titleOffset)
-                    .opacity(titleOpacity)
+                // النصوص
+                VStack(spacing: DS.Spacing.sm) {
+                    Text(L10n.t("عائلة المحمد علي", "Al-Muhammad Ali Family"))
+                        .font(DS.Font.title1)
+                        .foregroundColor(DS.Color.textPrimary)
 
-                // Family Name
-                Text(L10n.t("عائلة المحمد علي", "Al-Muhammad Ali Family"))
-                    .font(DS.Font.title3)
-                    .foregroundColor(DS.Color.textSecondary)
-                    .opacity(subtitleOpacity)
+                    Text(L10n.t("شجرة العائلة", "Family Tree"))
+                        .font(DS.Font.title3)
+                        .foregroundColor(DS.Color.textSecondary)
+                }
+                .opacity(textOpacity)
 
                 Spacer()
 
-                // Version
-                Text(L10n.t("الإصدار", "Version") + " \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "2.0")")
-                    .font(DS.Font.scaled(12))
-                    .foregroundColor(DS.Color.textTertiary)
-                    .opacity(versionOpacity)
-                    .padding(.bottom, DS.Spacing.xxl)
+                // مؤشر التحميل
+                VStack(spacing: DS.Spacing.md) {
+                    ProgressView()
+                        .progressViewStyle(.circular)
+                        .tint(DS.Color.primary)
+                        .scaleEffect(1.2)
+
+                    Text(L10n.t("جاري التحقق", "Verifying") + String(repeating: ".", count: dotCount))
+                        .font(DS.Font.callout)
+                        .fontWeight(.medium)
+                        .foregroundColor(DS.Color.textSecondary)
+                        .frame(width: 140)
+                }
+                .opacity(textOpacity)
+
+                Spacer()
+                    .frame(height: 60)
             }
         }
         .onAppear {
-            // Staggered animations
-            withAnimation(.easeOut(duration: 0.8)) {
+            // أنيميشن اللوقو
+            withAnimation(DS.Anim.elastic) {
                 logoScale = 1.0
                 logoOpacity = 1.0
             }
 
-            withAnimation(.easeOut(duration: 0.7).delay(0.3)) {
-                titleOffset = 0
-                titleOpacity = 1.0
+            // أنيميشن النص
+            withAnimation(DS.Anim.smooth.delay(0.2)) {
+                textOpacity = 1.0
             }
 
-            withAnimation(.easeOut(duration: 0.5).delay(0.6)) {
-                subtitleOpacity = 1.0
-            }
-
-            withAnimation(.easeOut(duration: 0.4).delay(0.9)) {
-                versionOpacity = 1.0
-            }
-
-            // Transition to app after 2.2 seconds
-            Task {
-                try? await Task.sleep(nanoseconds: 2_200_000_000)
-                withAnimation(.easeInOut(duration: 0.5)) {
-                    isActive = true
-                }
+            // أنيميشن النبض المتكرر
+            withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
+                pulseScale = 1.15
             }
         }
-    }
-
-    var shouldTransition: Bool {
-        isActive
+        // أنيميشن النقاط المتحركة
+        .task {
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                dotCount = (dotCount % 3) + 1
+            }
+        }
     }
 }

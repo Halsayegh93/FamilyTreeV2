@@ -5,6 +5,7 @@ struct LoginView: View {
     @FocusState private var isFieldFocused: Bool
 
     @State private var timeRemaining = 0
+    @State private var otpTimeRemaining = 0
     @State private var logoScale: CGFloat = 0.6
     @State private var logoOpacity: CGFloat = 0
 
@@ -82,12 +83,6 @@ struct LoginView: View {
                 .padding(.horizontal, DS.Spacing.xl)
 
                 Spacer()
-
-                // فوتر
-                Text(L10n.t("تطبيق خاص لأفراد العائلة فقط", "Private app for family members only"))
-                    .font(DS.Font.caption1)
-                    .foregroundColor(DS.Color.textSecondary)
-                    .padding(.bottom, DS.Spacing.xxxl)
             }
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
@@ -102,6 +97,11 @@ struct LoginView: View {
             guard timeRemaining > 0 else { return }
             try? await Task.sleep(nanoseconds: 1_000_000_000)
             if !Task.isCancelled { timeRemaining -= 1 }
+        }
+        .task(id: otpTimeRemaining) {
+            guard otpTimeRemaining > 0, authVM.isOtpSent else { return }
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            if !Task.isCancelled { otpTimeRemaining -= 1 }
         }
 
     }
@@ -164,7 +164,7 @@ struct LoginView: View {
                         .keyboardType(.phonePad)
                         .font(DS.Font.scaled(16, weight: .bold))
                         .multilineTextAlignment(.center)
-                        .foregroundColor(DS.Color.textPrimary)
+                        .foregroundStyle(Color(UIColor.label))
                 }
                 .frame(width: 80)
 
@@ -182,7 +182,7 @@ struct LoginView: View {
                 )
                 .keyboardType(.numberPad)
                 .font(DS.Font.scaled(20, weight: .bold))
-                .foregroundColor(DS.Color.textPrimary)
+                .foregroundStyle(Color(UIColor.label))
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .multilineTextAlignment(.leading)
@@ -205,9 +205,8 @@ struct LoginView: View {
                             : Color.gray.opacity(0.15),
                         lineWidth: isFieldFocused ? 1.5 : 1
                     )
+                    .animation(DS.Anim.quick, value: isFieldFocused)
             )
-            .shadow(color: isFieldFocused ? DS.Color.primary.opacity(0.15) : .clear, radius: 12, x: 0, y: 4)
-            .animation(DS.Anim.quick, value: isFieldFocused)
 
             // زر الإرسال — DSPrimaryButton
             DSPrimaryButton(
@@ -221,6 +220,7 @@ struct LoginView: View {
             ) {
                 isFieldFocused = false
                 timeRemaining = 60
+                authVM.otpCode = ""
                 Task {
                     await authVM.sendOTP()
                     if !authVM.isOtpSent { timeRemaining = 0 }
@@ -261,7 +261,7 @@ struct LoginView: View {
                         .foregroundColor(DS.Color.textSecondary)
                     Text("\(authVM.dialingCode) \(authVM.phoneNumber)")
                         .font(DS.Font.scaled(14, weight: .bold))
-                        .foregroundColor(DS.Color.accent)
+                        .foregroundStyle(DS.Color.primary)
 
                     Button(action: {
                         withAnimation(DS.Anim.smooth) {
@@ -278,13 +278,36 @@ struct LoginView: View {
                     }
                     .padding(.leading, DS.Spacing.xs)
                 }
+
+                // مؤقت الرمز — 5 دقائق
+                if otpTimeRemaining > 0 {
+                    HStack(spacing: DS.Spacing.xs) {
+                        Image(systemName: "timer")
+                            .font(DS.Font.caption1)
+                            .foregroundStyle(otpTimeRemaining <= 60 ? DS.Color.error : DS.Color.primary)
+                        Text(L10n.t(
+                            "ينتهي الرمز خلال \(otpTimeRemaining / 60):\(String(format: "%02d", otpTimeRemaining % 60))",
+                            "Code expires in \(otpTimeRemaining / 60):\(String(format: "%02d", otpTimeRemaining % 60))"
+                        ))
+                            .font(DS.Font.caption1)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(otpTimeRemaining <= 60 ? DS.Color.error : DS.Color.primary)
+                    }
+                    .padding(.top, DS.Spacing.xs)
+                } else {
+                    Text(L10n.t("انتهت صلاحية الرمز", "Code has expired"))
+                        .font(DS.Font.caption1)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(DS.Color.error)
+                        .padding(.top, DS.Spacing.xs)
+                }
             }
 
             // حقل OTP — مع تأثير التركيز
             TextField("------", text: otpBinding)
                 .keyboardType(.numberPad)
                 .font(DS.Font.scaled(32, weight: .bold))
-                .foregroundColor(DS.Color.textPrimary)
+                .foregroundStyle(Color(UIColor.label))
                 .multilineTextAlignment(.center)
                 .tracking(12)
                 .frame(height: 60)
@@ -296,14 +319,20 @@ struct LoginView: View {
                             isFieldFocused ? DS.Color.primary.opacity(0.5) : Color.gray.opacity(0.15),
                             lineWidth: isFieldFocused ? 1.5 : 1
                         )
+                        .animation(DS.Anim.quick, value: isFieldFocused)
                 )
-                .shadow(color: isFieldFocused ? DS.Color.primary.opacity(0.15) : .clear, radius: 12, x: 0, y: 4)
-                .animation(DS.Anim.quick, value: isFieldFocused)
                 .focused($isFieldFocused)
                 .accessibilityLabel(L10n.t("رمز التحقق", "Verification Code"))
-                .onAppear { isFieldFocused = true }
+                .onAppear {
+                    isFieldFocused = true
+                    authVM.otpCode = ""
+                    otpTimeRemaining = 300
+                }
                 .onChange(of: authVM.otpCode) { _, newValue in
-                    if newValue.count == 6 { Task { await authVM.verifyOTP() } }
+                    if newValue.count == 6 {
+                        isFieldFocused = false
+                        Task { await authVM.verifyOTP() }
+                    }
                 }
 
             VStack(spacing: DS.Spacing.md) {
@@ -321,6 +350,21 @@ struct LoginView: View {
             }
 
             statusMessage
+
+            // إعادة طلب الرمز
+            Button(action: {
+                authVM.otpCode = ""
+                authVM.otpErrorMessage = nil
+                authVM.otpStatusMessage = ""
+                otpTimeRemaining = 300
+                Task { await authVM.sendOTP() }
+            }) {
+                Text(L10n.t("إعادة طلب الرمز", "Resend Code"))
+                    .font(DS.Font.callout)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(DS.Color.primary)
+            }
+            .disabled(authVM.isLoading)
         }
         .padding(DS.Spacing.lg)
         .background(DS.Color.surface)

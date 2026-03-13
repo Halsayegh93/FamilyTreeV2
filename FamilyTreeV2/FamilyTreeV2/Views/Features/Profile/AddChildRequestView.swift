@@ -118,6 +118,7 @@ struct AddChildRequestView: View {
 
                                 TextField(L10n.t("رقم الهاتف (اختياري)", "Phone (optional)"), text: $phoneNumber)
                                     .keyboardType(.phonePad)
+                                    .foregroundStyle(Color(UIColor.label))
                             }
                             .onChange(of: phoneNumber) { _, newValue in
                                 phoneNumber = KuwaitPhone.userTypedDigits(newValue, maxDigits: selectedPhoneCountry.maxDigits)

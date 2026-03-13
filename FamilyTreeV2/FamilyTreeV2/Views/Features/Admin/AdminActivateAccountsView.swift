@@ -746,6 +746,7 @@ struct EditPhoneSheet: View {
                                 .keyboardType(.phonePad)
                                 .multilineTextAlignment(.leading)
                                 .monospacedDigit()
+                                .foregroundStyle(Color(UIColor.label))
                         }
                         .padding(DS.Spacing.md)
                         .background(DS.Color.surface)

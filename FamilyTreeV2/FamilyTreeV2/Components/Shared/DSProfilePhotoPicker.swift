@@ -21,6 +21,8 @@ struct DSProfilePhotoPicker: View {
     var showDeleteForExisting: Bool = false
     /// Called when user wants to delete the existing photo
     var onDeleteExisting: (() -> Void)? = nil
+    /// When true, empty state shows only a tappable circle with camera overlay (no button below)
+    var compactEmptyState: Bool = false
 
     @State private var pickerItem: PhotosPickerItem? = nil
     @State private var isLoading = false
@@ -445,31 +447,57 @@ struct DSProfilePhotoPicker: View {
 
     private var emptyState: some View {
         VStack(spacing: DS.Spacing.sm) {
-            // دائرة فارغة مع أيقونة
-            emptyCirclePlaceholder
+            if compactEmptyState {
+                // وضع مختصر: الدائرة مع كاميرا — بدون زر تحتها
+                Button {
+                    checkPermissionAndProceed { showPicker = true }
+                } label: {
+                    ZStack(alignment: .bottomTrailing) {
+                        emptyCirclePlaceholder
 
-            // زر اختيار الصورة
-            Button {
-                checkPermissionAndProceed { showPicker = true }
-            } label: {
-                HStack(spacing: DS.Spacing.xs) {
-                    Image(systemName: "arrow.triangle.2.circlepath.camera")
-                        .font(DS.Font.scaled(12, weight: .bold))
-                    Text(L10n.t("اختر صورة", "Choose Photo"))
-                        .font(DS.Font.scaled(13, weight: .bold))
+                        // أيقونة الكاميرا
+                        Image(systemName: "camera.fill")
+                            .font(DS.Font.scaled(12, weight: .bold))
+                            .foregroundColor(DS.Color.textOnPrimary)
+                            .frame(width: 32, height: 32)
+                            .background(DS.Color.primary)
+                            .clipShape(Circle())
+                            .overlay(Circle().stroke(DS.Color.background, lineWidth: 2.5))
+                    }
                 }
-                .foregroundColor(DS.Color.primary)
-                .padding(.horizontal, DS.Spacing.lg)
-                .padding(.vertical, DS.Spacing.sm)
-                .background(DS.Color.primary.opacity(0.08))
-                .clipShape(Capsule())
-            }
-            .buttonStyle(DSBoldButtonStyle())
+                .buttonStyle(DSScaleButtonStyle())
 
-            if let trailing {
-                Text(trailing)
-                    .font(DS.Font.caption1)
-                    .foregroundColor(DS.Color.textTertiary)
+                if let trailing {
+                    Text(trailing)
+                        .font(DS.Font.caption1)
+                        .foregroundColor(DS.Color.textTertiary)
+                }
+            } else {
+                // الوضع العادي: دائرة + زر اختيار
+                emptyCirclePlaceholder
+
+                Button {
+                    checkPermissionAndProceed { showPicker = true }
+                } label: {
+                    HStack(spacing: DS.Spacing.xs) {
+                        Image(systemName: "arrow.triangle.2.circlepath.camera")
+                            .font(DS.Font.scaled(12, weight: .bold))
+                        Text(L10n.t("اختر صورة", "Choose Photo"))
+                            .font(DS.Font.scaled(13, weight: .bold))
+                    }
+                    .foregroundColor(DS.Color.primary)
+                    .padding(.horizontal, DS.Spacing.lg)
+                    .padding(.vertical, DS.Spacing.sm)
+                    .background(DS.Color.primary.opacity(0.08))
+                    .clipShape(Capsule())
+                }
+                .buttonStyle(DSBoldButtonStyle())
+
+                if let trailing {
+                    Text(trailing)
+                        .font(DS.Font.caption1)
+                        .foregroundColor(DS.Color.textTertiary)
+                }
             }
         }
         .frame(maxWidth: .infinity)

@@ -193,7 +193,7 @@ struct EditProfileView: View {
                     TextField("9xxxxxxx", text: $phoneNumber)
                         .keyboardType(.phonePad)
                         .font(DS.Font.callout)
-                        .foregroundColor(DS.Color.textPrimary)
+                        .foregroundStyle(Color(UIColor.label))
                 }
                 .onChange(of: phoneNumber) { _, newValue in
                     phoneNumber = KuwaitPhone.userTypedDigits(newValue, maxDigits: selectedPhoneCountry.maxDigits)

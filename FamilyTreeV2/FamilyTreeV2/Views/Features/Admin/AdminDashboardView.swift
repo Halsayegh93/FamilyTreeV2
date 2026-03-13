@@ -150,6 +150,16 @@ struct AdminDashboardView: View {
                                         DSActionRow(title: L10n.t("إدارة الأجهزة", "Device Management"), subtitle: L10n.t("عرض وإزالة أجهزة الأعضاء المرتبطة", "View and remove members' linked devices"), icon: "iphone.gen3", color: DS.Color.neonBlue)
                                     }
                                     DSDivider()
+                                    NavigationLink(destination: AdminBannedPhonesView()) {
+                                        DSActionRow(
+                                            title: L10n.t("الأرقام المحظورة", "Banned Numbers"),
+                                            subtitle: L10n.t("حظر أرقام من تسجيل الدخول", "Block numbers from logging in"),
+                                            icon: "phone.down.fill",
+                                            color: DS.Color.error,
+                                            badge: authVM.bannedPhones.count > 0 ? authVM.bannedPhones.count : nil
+                                        )
+                                    }
+                                    DSDivider()
                                     NavigationLink(destination: AdminAppSettingsView()) {
                                         DSActionRow(title: L10n.t("إعدادات التطبيق", "App Settings"), subtitle: L10n.t("تحكم بإعدادات التسجيل والأمان", "Manage registration and security settings"), icon: "gearshape.fill", color: DS.Color.gridContact)
                                     }
@@ -234,8 +244,10 @@ struct AdminDashboardView: View {
             async let diwaniyas: () = diwaniyaVM.fetchPendingDiwaniyas()
             _ = await (newsReports, phoneChanges, photoSuggestions, diwaniyas)
 
-            // الدفعة 4: طلبات تعديل الشجرة
-            await adminRequestVM.fetchTreeEditRequests()
+            // الدفعة 4: طلبات تعديل الشجرة + الأرقام المحظورة
+            async let treeEdits: () = adminRequestVM.fetchTreeEditRequests()
+            async let bannedPhones: () = authVM.fetchBannedPhones()
+            _ = await (treeEdits, bannedPhones)
         }
     }
 

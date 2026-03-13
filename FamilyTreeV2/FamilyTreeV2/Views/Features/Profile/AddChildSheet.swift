@@ -200,6 +200,7 @@ struct AddChildSheet: View {
 
                                 TextField(L10n.t("اختياري", "Optional"), text: $phoneNumber)
                                     .keyboardType(.phonePad)
+                                    .foregroundStyle(Color(UIColor.label))
                             }
                             .onChange(of: phoneNumber) { _, newValue in
                                 phoneNumber = KuwaitPhone.userTypedDigits(newValue, maxDigits: selectedPhoneCountry.maxDigits)

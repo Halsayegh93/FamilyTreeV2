@@ -234,6 +234,7 @@ struct AddSonByAdminSheet: View {
                         .keyboardType(.numberPad)
                         .multilineTextAlignment(.leading)
                         .font(DS.Font.callout)
+                        .foregroundStyle(Color(UIColor.label))
 
                     DSIcon("phone.fill", color: DS.Color.success, size: iconSm, iconSize: iconFontSm)
                 }

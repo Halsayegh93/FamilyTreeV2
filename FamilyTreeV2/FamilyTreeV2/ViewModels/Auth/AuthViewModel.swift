@@ -93,7 +93,8 @@ class AuthViewModel: ObservableObject {
     @Published private(set) var trialStartedAt: Date?
     @Published private(set) var trialEndsAt: Date?
     @Published var deleteAccountError: String?
-    
+    @Published var bannedPhones: [BannedPhone] = []
+
     enum AuthStatus {
         case unauthenticated
         case checking
@@ -102,6 +103,7 @@ class AuthViewModel: ObservableObject {
         case pendingApproval
         case trialExpired
         case deviceLimitExceeded
+        case accountFrozen
     }
     
     static let maxDevicesPerAccount = 3
@@ -236,10 +238,10 @@ class AuthViewModel: ObservableObject {
             return (.pendingApproval, nil, nil)
         }
 
-        // العضو المجمد لا يُسمح له بالدخول
+        // العضو المجمد — يظهر له شاشة تجميد الحساب (بدون تسجيل خروج)
         if profile.status == .frozen {
-            Log.info("[AUTH] العضو \(profile.fullName) حالته frozen → تسجيل خروج")
-            return (.unauthenticated, nil, nil)
+            Log.info("[AUTH] العضو \(profile.fullName) حالته frozen → شاشة الحساب المجمد")
+            return (.accountFrozen, nil, nil)
         }
 
         // العضو المعلق (status = pending) يظهر له شاشة انتظار الموافقة
@@ -248,11 +250,11 @@ class AuthViewModel: ObservableObject {
             return (.pendingApproval, nil, nil)
         }
 
-        // تحذير: العضو بدون رقم — نسمح بالدخول لكن نسجل تحذير
-        // (عدم وجود رقم ممكن يكون بسبب خطأ بالسيرفر أو المدير مسحه مؤقتاً)
+        // العضو بدون رقم — المدير حذف رقمه → يسجّل من جديد
         let phone = profile.phoneNumber?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         if phone.isEmpty {
-            Log.warning("[AUTH] العضو \(profile.fullName) بدون رقم هاتف — نسمح بالدخول مع تحذير")
+            Log.info("[AUTH] العضو \(profile.fullName) بدون رقم هاتف (المدير حذفه) → شاشة التسجيل")
+            return (.authenticatedNoProfile, nil, nil)
         }
 
         return (.fullyAuthenticated, nil, nil)
@@ -747,6 +749,17 @@ class AuthViewModel: ObservableObject {
         self.otpErrorMessage = nil
         self.otpStatusMessage = L10n.t("جاري إرسال رمز التحقق...", "Sending verification code...")
 
+        // فحص الحظر قبل إرسال OTP
+        if await isPhoneBanned(finalPhone) {
+            self.otpErrorMessage = L10n.t(
+                "هذا الرقم محظور من استخدام التطبيق.",
+                "This phone number is banned from using the app."
+            )
+            self.otpStatusMessage = ""
+            self.isLoading = false
+            return
+        }
+
         let maxAttempts = 2
         var lastError: Error?
         
@@ -761,7 +774,7 @@ class AuthViewModel: ObservableObject {
                         self.isOtpSent = true
                     }
                     self.otpErrorMessage = nil
-                    self.otpStatusMessage = L10n.t("تم إرسال الرمز عبر SMS إلى \(finalPhone)", "Code sent via SMS to \(finalPhone)")
+                    self.otpStatusMessage = L10n.t("تم إرسال الرمز عبر SMS", "Code sent via SMS")
                     self.isLoading = false
                     return
             } catch {
@@ -773,7 +786,7 @@ class AuthViewModel: ObservableObject {
                     break
                 }
                 
-                try? await Task.sleep(nanoseconds: 1_200_000_000)
+                try? await Task.sleep(nanoseconds: 200_000_000)
             }
         }
         
@@ -867,6 +880,20 @@ class AuthViewModel: ObservableObject {
         }
         Log.info("[AUTH] Session found. UUID: \(user.id), Phone: \(normalizedSessionPhone)")
 
+        // فحص الحظر — حماية مزدوجة
+        if !normalizedSessionPhone.isEmpty, await isPhoneBanned(normalizedSessionPhone) {
+            Log.info("[BAN] الرقم محظور بعد التحقق — تسجيل خروج: \(normalizedSessionPhone)")
+            _ = try? await supabase.auth.signOut()
+            self.status = .unauthenticated
+            self.otpErrorMessage = L10n.t(
+                "هذا الرقم محظور من استخدام التطبيق.",
+                "This phone number is banned from using the app."
+            )
+            self.isOtpSent = false
+            self.isLoading = false
+            return
+        }
+
         // المحاولة 1: البحث بـ auth.uid مباشرة
         let userIdString = user.id.uuidString.lowercased()
         do {
@@ -883,16 +910,14 @@ class AuthViewModel: ObservableObject {
                 
                 let existingPhone = profile.phoneNumber?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
                 
-                // بروفايل يتيم: المدير حذف رقمه → نتخطاه ويدخل كمستخدم جديد
-                if existingPhone.isEmpty && profile.status == .pending {
-                    Log.info("[AUTH] بروفايل يتيم (بدون رقم + معلق) — تخطي لشاشة التسجيل الجديد")
-                    // لا نربط الرقم — نترك البروفايل كما هو ونكمل للتسجيل الجديد
+                // المدير حذف الرقم من البروفايل → مباشرة لشاشة التسجيل
+                if existingPhone.isEmpty {
+                    Log.info("[AUTH] البروفايل بدون رقم (المدير حذفه) — توجيه مباشر للتسجيل الجديد")
+                    self.status = .authenticatedNoProfile
+                    self.trialStartedAt = nil
+                    self.trialEndsAt = nil
+                    return
                 } else {
-                    // لا نسوي مزامنة تلقائية للرقم — إذا المدير مسح الرقم نحترم قراره
-                    if existingPhone.isEmpty {
-                        Log.info("[AUTH] البروفايل بدون رقم (ممكن المدير مسحه) — لا نرجعه تلقائياً")
-                    }
-
                     await applyAuthenticatedProfile(profile, normalizedPhone: normalizedSessionPhone)
                     return
                 }
@@ -932,7 +957,7 @@ class AuthViewModel: ObservableObject {
         }
 
         // المحاولة 4: إعادة محاولة بعد تأخير قصير (لحالات التأخر في الشبكة)
-        try? await Task.sleep(nanoseconds: 1_500_000_000)
+        try? await Task.sleep(nanoseconds: 200_000_000)
         do {
             let retryResponse: [FamilyMember] = try await supabase
                 .from("profiles")
@@ -943,9 +968,13 @@ class AuthViewModel: ObservableObject {
                 .value
             if let retryProfile = retryResponse.first {
                 let retryPhone = retryProfile.phoneNumber?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                // بروفايل يتيم: تخطي
-                if retryPhone.isEmpty && retryProfile.status == .pending {
-                    Log.info("[AUTH] بروفايل يتيم في المحاولة 4 — تخطي")
+                // المدير حذف الرقم → مباشرة للتسجيل
+                if retryPhone.isEmpty {
+                    Log.info("[AUTH] بروفايل بدون رقم في المحاولة 4 — توجيه مباشر للتسجيل")
+                    self.status = .authenticatedNoProfile
+                    self.trialStartedAt = nil
+                    self.trialEndsAt = nil
+                    return
                 } else {
                     Log.info("[AUTH] Found profile on retry by UUID: \(retryProfile.fullName)")
                     await applyAuthenticatedProfile(retryProfile, normalizedPhone: normalizedSessionPhone)
@@ -961,7 +990,94 @@ class AuthViewModel: ObservableObject {
         self.trialStartedAt = nil
         self.trialEndsAt = nil
     }
-    
+
+    // MARK: - Banned Phones (حظر الأرقام)
+
+    /// فحص هل الرقم محظور — يبحث بالرقم المحلي والدولي
+    func isPhoneBanned(_ phone: String) async -> Bool {
+        let local = KuwaitPhone.localEightDigits(phone)
+        let candidates = Set([phone, local, "+965\(local)"].filter { !$0.isEmpty })
+
+        for candidate in candidates {
+            do {
+                let result: [BannedPhone] = try await supabase
+                    .from("banned_phones")
+                    .select()
+                    .eq("phone_number", value: candidate)
+                    .eq("is_active", value: true)
+                    .limit(1)
+                    .execute()
+                    .value
+                if !result.isEmpty {
+                    Log.info("[BAN] الرقم محظور: \(candidate)")
+                    return true
+                }
+            } catch {
+                // لو الجدول ما موجود بعد — نتجاهل الخطأ ونسمح بالدخول
+                Log.warning("[BAN] خطأ في فحص الحظر: \(error.localizedDescription)")
+                return false
+            }
+        }
+        return false
+    }
+
+    /// جلب جميع الأرقام المحظورة
+    func fetchBannedPhones() async {
+        do {
+            let result: [BannedPhone] = try await supabase
+                .from("banned_phones")
+                .select()
+                .eq("is_active", value: true)
+                .order("created_at", ascending: false)
+                .execute()
+                .value
+            self.bannedPhones = result
+        } catch {
+            Log.error("[BAN] خطأ في جلب الأرقام المحظورة: \(error.localizedDescription)")
+        }
+    }
+
+    /// حظر رقم هاتف
+    func banPhone(_ phone: String, reason: String?) async -> Bool {
+        guard let adminId = currentUser?.id else { return false }
+        let local = KuwaitPhone.localEightDigits(phone)
+        let normalizedPhone = local.count >= 6 ? local : phone
+
+        do {
+            try await supabase
+                .from("banned_phones")
+                .insert([
+                    "phone_number": normalizedPhone,
+                    "reason": reason ?? "",
+                    "banned_by": adminId.uuidString
+                ])
+                .execute()
+            Log.info("[BAN] تم حظر الرقم: \(normalizedPhone)")
+            await fetchBannedPhones()
+            return true
+        } catch {
+            Log.error("[BAN] خطأ في حظر الرقم: \(error.localizedDescription)")
+            return false
+        }
+    }
+
+    /// إلغاء حظر رقم
+    func unbanPhone(_ bannedPhoneId: UUID) async -> Bool {
+        do {
+            try await supabase
+                .from("banned_phones")
+                .update(["is_active": false])
+                .eq("id", value: bannedPhoneId.uuidString)
+                .execute()
+            Log.info("[BAN] تم إلغاء حظر الرقم: \(bannedPhoneId)")
+            await fetchBannedPhones()
+            return true
+        } catch {
+            Log.error("[BAN] خطأ في إلغاء الحظر: \(error.localizedDescription)")
+            return false
+        }
+    }
+
     // MARK: - Sign Out
     
     func signOut() async {
@@ -1010,7 +1126,7 @@ class AuthViewModel: ObservableObject {
     
     // MARK: - Registration
     
-    func registerNewUser(firstName: String, familyName: String, birthDate: Date, gender: String, fatherId: UUID? = nil) async {
+    func registerNewUser(firstName: String, familyName: String, birthDate: Date, gender: String, fatherId: UUID? = nil, avatarImage: UIImage? = nil) async {
         self.isLoading = true
         guard let user = try? await supabase.auth.session.user else { return }
         
@@ -1061,6 +1177,33 @@ class AuthViewModel: ObservableObject {
                 Log.info("[REGISTER] ✅ تم إنشاء البروفايل بنجاح: \(vp.fullName), UUID: \(user.id), role: \(vp.role)")
             } else {
                 Log.error("[REGISTER] ⚠️ الـ upsert لم يُنشئ السجل! UUID: \(user.id). قد يكون RLS يمنع الإنشاء.")
+            }
+
+            // رفع الصورة الشخصية إذا اختارها المستخدم
+            if let avatarImage, let imageData = avatarImage.jpegData(compressionQuality: 0.5) {
+                let fileName = "\(user.id.uuidString.lowercased()).jpg"
+                do {
+                    try await supabase.storage
+                        .from("avatars")
+                        .upload(fileName, data: imageData, options: FileOptions(contentType: "image/jpeg", upsert: true))
+
+                    let publicUrl = try supabase.storage
+                        .from("avatars")
+                        .getPublicURL(path: fileName)
+
+                    let timestamp = Int(Date().timeIntervalSince1970)
+                    let urlString = "\(publicUrl.absoluteString)?v=\(timestamp)"
+
+                    try await supabase
+                        .from("profiles")
+                        .update(["avatar_url": AnyEncodable(urlString)])
+                        .eq("id", value: user.id.uuidString)
+                        .execute()
+
+                    Log.info("[REGISTER] ✅ تم رفع الصورة الشخصية: \(fileName)")
+                } catch {
+                    Log.warning("[REGISTER] ⚠️ فشل رفع الصورة: \(error.localizedDescription)")
+                }
             }
             
             // بناء تفاصيل الطلب مع المطابقات المحتملة

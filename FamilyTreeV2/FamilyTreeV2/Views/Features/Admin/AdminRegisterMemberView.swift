@@ -280,6 +280,7 @@ struct AdminRegisterMemberView: View {
                 TextField(L10n.t("رقم الهاتف", "Phone Number"), text: $phoneNumber)
                     .keyboardType(.phonePad)
                     .multilineTextAlignment(.leading)
+                    .foregroundStyle(Color(UIColor.label))
             }
             .padding(.horizontal, DS.Spacing.md)
             .padding(.vertical, DS.Spacing.xs)

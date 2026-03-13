@@ -7,6 +7,7 @@ struct RegistrationView: View {
     @State private var familyName: String = ""
     @State private var birthDate: Date = Calendar.current.date(byAdding: .year, value: -20, to: Date()) ?? Date()
     @State private var selectedGender: String = "male"
+    @State private var selectedImage: UIImage? = nil
 
     // Animation states
     @State private var headerScale: CGFloat = 0.8
@@ -17,59 +18,53 @@ struct RegistrationView: View {
     var body: some View {
         ZStack {
             DS.Color.background.ignoresSafeArea()
-
-            // Decorative gradient background
-            decorativeBackground
+            DSDecorativeBackground()
 
             VStack(spacing: 0) {
                 // Top bar
-                HStack {
-                    Button(action: { Task { await authVM.signOut() } }) {
-                        HStack(spacing: DS.Spacing.xs) {
-                            Image(systemName: L10n.isArabic ? "chevron.right" : "chevron.left")
-                                .font(DS.Font.scaled(13, weight: .bold))
-                            Text(L10n.t("رجوع", "Back"))
-                        }
-                        .font(DS.Font.subheadline)
-                        .foregroundColor(DS.Color.primary)
-                    }
-                    Spacer()
-                }
-                .padding(DS.Spacing.lg)
-                .background(DS.Color.surface.opacity(0.95))
-                .dsSubtleShadow()
+                topBar
 
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: DS.Spacing.xl) {
-                        // Header with gradient icon
-                        headerSection
+                        // الصورة الشخصية — في الأعلى مثل حسابي
+                        photoSection
                             .scaleEffect(headerScale)
                             .opacity(headerOpacity)
 
+                        // العنوان
+                        VStack(spacing: DS.Spacing.xs) {
+                            Text(L10n.t("إنشاء ملف تعريف", "Create Profile"))
+                                .font(DS.Font.title1)
+                                .foregroundColor(DS.Color.textPrimary)
+
+                            Text(L10n.t("أكمل بياناتك للانضمام إلى العائلة", "Complete your info to join the family"))
+                                .font(DS.Font.subheadline)
+                                .foregroundColor(DS.Color.textSecondary)
+                                .multilineTextAlignment(.center)
+                        }
+                        .opacity(headerOpacity)
+
+                        // الحقول
                         VStack(spacing: DS.Spacing.md) {
-                            // Full name field
                             nameFieldSection
                                 .opacity(cardsAppeared ? 1 : 0)
                                 .offset(y: cardsAppeared ? 0 : 20)
 
-                            // Family name field
                             familyNameSection
                                 .opacity(cardsAppeared ? 1 : 0)
                                 .offset(y: cardsAppeared ? 0 : 25)
 
-                            // Birth date field
                             birthDateSection
                                 .opacity(cardsAppeared ? 1 : 0)
                                 .offset(y: cardsAppeared ? 0 : 30)
 
-                            // Gender selection
                             genderSection
                                 .opacity(cardsAppeared ? 1 : 0)
                                 .offset(y: cardsAppeared ? 0 : 35)
                         }
                         .padding(.horizontal, DS.Spacing.lg)
 
-                        // Submit button
+                        // زر الإرسال
                         submitButton
                             .opacity(cardsAppeared ? 1 : 0)
                             .offset(y: cardsAppeared ? 0 : 40)
@@ -91,49 +86,44 @@ struct RegistrationView: View {
         }
     }
 
-    // MARK: - Decorative Background
-    private var decorativeBackground: some View {
-        DSDecorativeBackground()
-    }
-
-    // MARK: - Header Section
-    private var headerSection: some View {
-        VStack(spacing: DS.Spacing.md) {
-            ZStack {
-                // Outer glow ring
-                Circle()
-                    .fill(DS.Color.primary.opacity(0.08))
-                    .frame(width: 120, height: 120)
-
-                // Gradient circle
-                Circle()
-                    .fill(DS.Color.gradientPrimary)
-                    .frame(width: 100, height: 100)
-
-                Image(systemName: "person.badge.plus")
-                    .font(DS.Font.scaled(42, weight: .bold))
-                    .foregroundColor(DS.Color.textOnPrimary)
-            }
-            .dsGlowShadow()
-
-            Text(L10n.t("إنشاء ملف تعريف", "Create Profile"))
-                .font(DS.Font.title1)
-                .foregroundColor(DS.Color.textPrimary)
-
-            Text(L10n.t("يرجى إكمال بياناتك للانضمام إلى العائلة", "Complete your info to join the family"))
+    // MARK: - Top Bar
+    private var topBar: some View {
+        HStack {
+            Button(action: { Task { await authVM.signOut() } }) {
+                HStack(spacing: DS.Spacing.xs) {
+                    Image(systemName: L10n.isArabic ? "chevron.right" : "chevron.left")
+                        .font(DS.Font.scaled(13, weight: .bold))
+                    Text(L10n.t("رجوع", "Back"))
+                }
                 .font(DS.Font.subheadline)
-                .foregroundColor(DS.Color.textSecondary)
-                .multilineTextAlignment(.center)
+                .foregroundColor(DS.Color.primary)
+            }
+            Spacer()
         }
-        .padding(.top, DS.Spacing.md)
+        .padding(DS.Spacing.lg)
+        .background(DS.Color.surface.opacity(0.95))
+        .dsSubtleShadow()
     }
 
-    // MARK: - Name Field Section
+    // MARK: - Photo Section — كاميرا على الصورة مباشرة
+    private var photoSection: some View {
+        DSProfilePhotoPicker(
+            selectedImage: $selectedImage,
+            enableCrop: true,
+            cropShape: .circle,
+            title: L10n.t("الصورة الشخصية", "Profile Photo"),
+            trailing: L10n.t("اختياري", "Optional"),
+            compactEmptyState: true
+        )
+        .padding(.top, DS.Spacing.xl)
+    }
+
+    // MARK: - Name Field — الاسم الرباعي
     private var nameFieldSection: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.xs) {
             DSTextField(
-                label: L10n.t("الاسم الخماسي", "Full Name (5 parts)"),
-                placeholder: L10n.t("مثال: حسن أحمد علي محمد السالم", "e.g. John Edward James Smith Jr"),
+                label: L10n.t("الاسم الرباعي", "Full Name (4 parts)"),
+                placeholder: L10n.t("اسمك الرباعي", "Your full name"),
                 text: $fullName,
                 icon: "person.fill",
                 iconColor: DS.Color.primary
@@ -144,21 +134,22 @@ struct RegistrationView: View {
                 }
             }
 
+            // توضيح الاسم بالعربي
+            Text(L10n.t(
+                "مثال: محمد عبدالله علي أحمد",
+                "Example: Mohammad Abdullah Ali Ahmad"
+            ))
+            .font(DS.Font.caption1)
+            .foregroundColor(DS.Color.textTertiary)
+            .padding(.leading, DS.Spacing.sm)
+
             if hasAttemptedSubmit && fullName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                HStack(spacing: DS.Spacing.xs) {
-                    Image(systemName: "exclamationmark.circle.fill")
-                        .font(DS.Font.caption2)
-                    Text(L10n.t("الاسم مطلوب", "Name is required"))
-                        .font(DS.Font.caption1)
-                }
-                .foregroundColor(DS.Color.error)
-                .padding(.leading, DS.Spacing.sm)
-                .transition(.opacity.combined(with: .move(edge: .top)))
+                validationError(L10n.t("الاسم مطلوب", "Name is required"))
             }
         }
     }
 
-    // MARK: - Family Name Section
+    // MARK: - Family Name
     private var familyNameSection: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.xs) {
             DSTextField(
@@ -175,53 +166,43 @@ struct RegistrationView: View {
             }
 
             if hasAttemptedSubmit && familyName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                HStack(spacing: DS.Spacing.xs) {
-                    Image(systemName: "exclamationmark.circle.fill")
-                        .font(DS.Font.caption2)
-                    Text(L10n.t("اسم العائلة مطلوب", "Family name is required"))
-                        .font(DS.Font.caption1)
-                }
-                .foregroundColor(DS.Color.error)
-                .padding(.leading, DS.Spacing.sm)
-                .transition(.opacity.combined(with: .move(edge: .top)))
+                validationError(L10n.t("اسم العائلة مطلوب", "Family name is required"))
             }
         }
     }
 
-    // MARK: - Birth Date Section
+    // MARK: - Birth Date
     private var birthDateSection: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-            HStack(spacing: DS.Spacing.md) {
-                DSIcon("calendar", color: DS.Color.neonPurple)
+        HStack(spacing: DS.Spacing.md) {
+            DSIcon("calendar", color: DS.Color.neonPurple)
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(L10n.t("تاريخ الميلاد", "Birth Date"))
-                        .font(DS.Font.caption1)
-                        .foregroundColor(DS.Color.textSecondary)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(L10n.t("تاريخ الميلاد", "Birth Date"))
+                    .font(DS.Font.caption1)
+                    .foregroundColor(DS.Color.textSecondary)
 
-                    Text(L10n.t("اختر التاريخ", "Pick Date"))
-                        .font(DS.Font.body)
-                        .foregroundColor(DS.Color.textSecondary)
-                }
-
-                Spacer()
-
-                DatePicker("", selection: $birthDate, in: ...Date(), displayedComponents: .date)
-                    .labelsHidden()
-                    .environment(\.locale, Locale(identifier: L10n.isArabic ? "ar" : "en_US"))
+                Text(L10n.t("اختر التاريخ", "Pick Date"))
+                    .font(DS.Font.body)
+                    .foregroundColor(DS.Color.textSecondary)
             }
-            .padding(.horizontal, DS.Spacing.lg)
-            .padding(.vertical, DS.Spacing.md)
-            .background(DS.Color.surface)
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                    .stroke(Color.gray.opacity(0.15), lineWidth: 1)
-            )
+
+            Spacer()
+
+            DatePicker("", selection: $birthDate, in: ...Date(), displayedComponents: .date)
+                .labelsHidden()
+                .environment(\.locale, Locale(identifier: L10n.isArabic ? "ar" : "en_US"))
         }
+        .padding(.horizontal, DS.Spacing.lg)
+        .padding(.vertical, DS.Spacing.md)
+        .background(DS.Color.surface)
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                .stroke(Color.gray.opacity(0.15), lineWidth: 1)
+        )
     }
 
-    // MARK: - Gender Section
+    // MARK: - Gender
     private var genderSection: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             HStack(spacing: DS.Spacing.md) {
@@ -237,73 +218,21 @@ struct RegistrationView: View {
             .padding(.top, DS.Spacing.md)
 
             HStack(spacing: DS.Spacing.sm) {
-                // ذكر
-                Button {
-                    withAnimation(DS.Anim.snappy) { selectedGender = "male" }
-                } label: {
-                    HStack(spacing: DS.Spacing.sm) {
-                        Image(systemName: "figure.stand")
-                            .font(DS.Font.scaled(16, weight: .bold))
-                        Text(L10n.t("ذكر", "Male"))
-                            .font(DS.Font.calloutBold)
-                    }
-                    .foregroundColor(selectedGender == "male" ? .white : DS.Color.textPrimary)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 48)
-                    .background(
-                        Group {
-                            if selectedGender == "male" {
-                                AnyView(DS.Color.gradientPrimary)
-                            } else {
-                                AnyView(DS.Color.surface)
-                            }
-                        }
-                    )
-                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                            .stroke(
-                                selectedGender == "male" ? Color.clear : Color.gray.opacity(0.15),
-                                lineWidth: 1
-                            )
-                    )
-                    .shadow(color: selectedGender == "male" ? DS.Color.primary.opacity(0.2) : .clear, radius: 8, x: 0, y: 3)
-                }
-                .buttonStyle(DSScaleButtonStyle())
+                genderButton(
+                    title: L10n.t("ذكر", "Male"),
+                    icon: "figure.stand",
+                    value: "male",
+                    gradient: DS.Color.gradientPrimary,
+                    shadowColor: DS.Color.primary
+                )
 
-                // أنثى
-                Button {
-                    withAnimation(DS.Anim.snappy) { selectedGender = "female" }
-                } label: {
-                    HStack(spacing: DS.Spacing.sm) {
-                        Image(systemName: "figure.stand.dress")
-                            .font(DS.Font.scaled(16, weight: .bold))
-                        Text(L10n.t("أنثى", "Female"))
-                            .font(DS.Font.calloutBold)
-                    }
-                    .foregroundColor(selectedGender == "female" ? .white : DS.Color.textPrimary)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 48)
-                    .background(
-                        Group {
-                            if selectedGender == "female" {
-                                AnyView(DS.Color.gradientAccent)
-                            } else {
-                                AnyView(DS.Color.surface)
-                            }
-                        }
-                    )
-                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                            .stroke(
-                                selectedGender == "female" ? Color.clear : Color.gray.opacity(0.15),
-                                lineWidth: 1
-                            )
-                    )
-                    .shadow(color: selectedGender == "female" ? DS.Color.accent.opacity(0.2) : .clear, radius: 8, x: 0, y: 3)
-                }
-                .buttonStyle(DSScaleButtonStyle())
+                genderButton(
+                    title: L10n.t("أنثى", "Female"),
+                    icon: "figure.stand.dress",
+                    value: "female",
+                    gradient: DS.Color.gradientAccent,
+                    shadowColor: DS.Color.accent
+                )
             }
             .padding(.horizontal, DS.Spacing.lg)
             .padding(.bottom, DS.Spacing.md)
@@ -314,6 +243,41 @@ struct RegistrationView: View {
             RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
                 .stroke(Color.gray.opacity(0.15), lineWidth: 1)
         )
+    }
+
+    private func genderButton(title: String, icon: String, value: String, gradient: LinearGradient, shadowColor: Color) -> some View {
+        Button {
+            withAnimation(DS.Anim.snappy) { selectedGender = value }
+        } label: {
+            HStack(spacing: DS.Spacing.sm) {
+                Image(systemName: icon)
+                    .font(DS.Font.scaled(16, weight: .bold))
+                Text(title)
+                    .font(DS.Font.calloutBold)
+            }
+            .foregroundColor(selectedGender == value ? .white : DS.Color.textPrimary)
+            .frame(maxWidth: .infinity)
+            .frame(height: 48)
+            .background(
+                Group {
+                    if selectedGender == value {
+                        AnyView(gradient)
+                    } else {
+                        AnyView(DS.Color.surface)
+                    }
+                }
+            )
+            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                    .stroke(
+                        selectedGender == value ? Color.clear : Color.gray.opacity(0.15),
+                        lineWidth: 1
+                    )
+            )
+            .shadow(color: selectedGender == value ? shadowColor.opacity(0.2) : .clear, radius: 8, x: 0, y: 3)
+        }
+        .buttonStyle(DSScaleButtonStyle())
     }
 
     // MARK: - Submit Button
@@ -341,7 +305,8 @@ struct RegistrationView: View {
                         firstName: trimmedFull,
                         familyName: trimmedFamily,
                         birthDate: birthDate,
-                        gender: selectedGender
+                        gender: selectedGender,
+                        avatarImage: selectedImage
                     )
                 }
             }
@@ -349,5 +314,18 @@ struct RegistrationView: View {
             .padding(.horizontal, DS.Spacing.lg)
             .padding(.bottom, DS.Spacing.xxl)
         }
+    }
+
+    // MARK: - Validation Error
+    private func validationError(_ text: String) -> some View {
+        HStack(spacing: DS.Spacing.xs) {
+            Image(systemName: "exclamationmark.circle.fill")
+                .font(DS.Font.caption2)
+            Text(text)
+                .font(DS.Font.caption1)
+        }
+        .foregroundColor(DS.Color.error)
+        .padding(.leading, DS.Spacing.sm)
+        .transition(.opacity.combined(with: .move(edge: .top)))
     }
 }

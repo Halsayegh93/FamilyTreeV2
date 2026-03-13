@@ -389,6 +389,7 @@ struct AdminMemberDetailSheet: View {
                         .keyboardType(.numberPad)
                         .multilineTextAlignment(.leading)
                         .font(DS.Font.callout)
+                        .foregroundStyle(Color(UIColor.label))
 
                     if !phoneNumber.isEmpty {
                         Button {

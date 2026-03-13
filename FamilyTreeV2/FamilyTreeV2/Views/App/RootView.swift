@@ -11,8 +11,7 @@ struct RootView: View {
                 LoginView()
 
             case .checking:
-                ProgressView(L10n.t("جاري التحقق...", "Checking..."))
-                    .tint(DS.Color.primary)
+                SplashScreenView()
 
             case .authenticatedNoProfile:
                 RegistrationView()
@@ -25,6 +24,9 @@ struct RootView: View {
 
             case .deviceLimitExceeded:
                 DeviceLimitView()
+
+            case .accountFrozen:
+                FrozenAccountView()
 
             case .fullyAuthenticated:
                 if appSettingsVM.settings.maintenanceMode && !authVM.canModerate {
