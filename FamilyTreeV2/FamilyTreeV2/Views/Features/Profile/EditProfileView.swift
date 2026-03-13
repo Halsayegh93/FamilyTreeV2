@@ -146,16 +146,17 @@ struct EditProfileView: View {
             HStack(spacing: DS.Spacing.md) {
                 DSIcon("person.fill", color: DS.Color.primary)
 
-                Text(L10n.t("الاسم الكامل", "Full Name"))
-                    .font(DS.Font.caption2)
-                    .foregroundColor(DS.Color.textTertiary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(L10n.t("الاسم الكامل", "Full Name"))
+                        .font(DS.Font.caption2)
+                        .foregroundColor(DS.Color.textTertiary)
+                    Text(fullName)
+                        .font(DS.Font.callout)
+                        .foregroundColor(DS.Color.textPrimary)
+                        .lineLimit(1)
+                }
 
                 Spacer()
-
-                Text(fullName)
-                    .font(DS.Font.callout)
-                    .foregroundColor(DS.Color.textPrimary)
-                    .lineLimit(1)
 
                 Image(systemName: "pencil.circle.fill")
                     .font(DS.Font.scaled(16, weight: .medium))
@@ -265,22 +266,20 @@ struct EditProfileView: View {
         HStack(spacing: DS.Spacing.md) {
             DSIcon("phone.fill", color: DS.Color.success)
 
-            Text(L10n.t("رقم الجوال", "Phone Number"))
-                .font(DS.Font.caption2)
-                .foregroundColor(DS.Color.textTertiary)
-
+            VStack(alignment: .leading, spacing: 2) {
+                Text(L10n.t("رقم الجوال", "Phone Number"))
+                    .font(DS.Font.caption2)
+                    .foregroundColor(DS.Color.textTertiary)
+                PhoneNumberTextField(
+                    text: $phoneNumber,
+                    placeholder: "9xxxxxxx",
+                    font: .systemFont(ofSize: 15),
+                    keyboardType: .phonePad,
+                    maxLength: selectedPhoneCountry.maxDigits
+                )
+                .frame(height: 30)
+            }
             Spacer()
-
-            PhoneNumberTextField(
-                text: $phoneNumber,
-                placeholder: "9xxxxxxx",
-                font: .systemFont(ofSize: 15),
-                keyboardType: .phonePad,
-                textAlignment: .right,
-                maxLength: selectedPhoneCountry.maxDigits
-            )
-            .frame(height: 30)
-            .frame(maxWidth: 160)
         }
         .padding(.horizontal, DS.Spacing.lg)
         .padding(.vertical, DS.Spacing.xs)
@@ -289,11 +288,15 @@ struct EditProfileView: View {
     private func modernDatePicker(label: String, selection: Binding<Date>, icon: String) -> some View {
         HStack(spacing: DS.Spacing.md) {
             DSIcon(icon, color: DS.Color.info)
-            Text(label)
-                .font(DS.Font.caption2)
-                .foregroundColor(DS.Color.textTertiary)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(label)
+                    .font(DS.Font.caption2)
+                    .foregroundColor(DS.Color.textTertiary)
+                DatePicker("", selection: selection, in: ...Date(), displayedComponents: .date)
+                    .labelsHidden()
+            }
             Spacer()
-            DatePicker("", selection: selection, in: ...Date(), displayedComponents: .date).labelsHidden()
         }
         .padding(.horizontal, DS.Spacing.lg)
         .padding(.vertical, DS.Spacing.xs)
