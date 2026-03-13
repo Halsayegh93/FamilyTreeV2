@@ -48,6 +48,8 @@ struct FamilyTreeV2App: App {
                         try? await UNUserNotificationCenter.current().setBadgeCount(0)
                         // فحص تصريح الجهاز فقط هنا — لا نكرره في didBecomeActive
                         await self.appState.notificationVM.verifyDeviceAuthorization()
+                        // تحديث بيانات المستخدم (اسم، صلاحيات، إلخ) عند العودة للتطبيق
+                        await self.appState.authVM.checkUserProfile()
                     }
                 }
                 .onReceive(NotificationCenter.default.publisher(for: .didReceiveAPNSToken)) { note in
