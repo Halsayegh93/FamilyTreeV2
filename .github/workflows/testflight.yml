@@ -16,6 +16,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Unlock Keychain
+        env:
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" ~/Library/Keychains/login.keychain-db
+          security set-keychain-settings -t 3600 ~/Library/Keychains/login.keychain-db
+
       - name: Setup API Key
         env:
           API_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
