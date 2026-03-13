@@ -268,21 +268,22 @@ struct EditProfileView: View {
         HStack(spacing: DS.Spacing.md) {
             DSIcon("phone.fill", color: DS.Color.success)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(L10n.t("رقم الجوال", "Phone Number"))
-                    .font(DS.Font.caption2)
-                    .foregroundColor(DS.Color.textTertiary)
+            Text(L10n.t("رقم الجوال", "Phone Number"))
+                .font(DS.Font.caption2)
+                .foregroundColor(DS.Color.textTertiary)
 
-                PhoneNumberTextField(
-                    text: $phoneNumber,
-                    placeholder: "9xxxxxxx",
-                    font: .systemFont(ofSize: 15),
-                    keyboardType: .phonePad,
-                    maxLength: selectedPhoneCountry.maxDigits
-                )
-                .frame(height: 30)
-            }
             Spacer()
+
+            PhoneNumberTextField(
+                text: $phoneNumber,
+                placeholder: "9xxxxxxx",
+                font: .systemFont(ofSize: 15),
+                keyboardType: .phonePad,
+                textAlignment: .right,
+                maxLength: selectedPhoneCountry.maxDigits
+            )
+            .frame(height: 30)
+            .frame(maxWidth: 160)
         }
         .padding(.horizontal, DS.Spacing.lg)
         .padding(.vertical, DS.Spacing.xs)
