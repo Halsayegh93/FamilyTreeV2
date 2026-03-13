@@ -291,14 +291,14 @@ struct EditProfileView: View {
         HStack(spacing: DS.Spacing.md) {
             DSIcon(icon, color: DS.Color.info)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(label)
-                    .font(DS.Font.caption2)
-                    .foregroundColor(DS.Color.textTertiary)
-                DatePicker("", selection: selection, in: ...Date(), displayedComponents: .date)
-                    .labelsHidden()
-            }
+            Text(label)
+                .font(DS.Font.caption2)
+                .foregroundColor(DS.Color.textTertiary)
+
             Spacer()
+
+            DatePicker("", selection: selection, in: ...Date(), displayedComponents: .date)
+                .labelsHidden()
         }
         .padding(.horizontal, DS.Spacing.lg)
         .padding(.vertical, DS.Spacing.xs)
