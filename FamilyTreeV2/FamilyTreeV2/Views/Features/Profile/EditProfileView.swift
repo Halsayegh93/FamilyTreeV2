@@ -293,8 +293,8 @@ struct EditProfileView: View {
         HStack(spacing: DS.Spacing.md) {
             DSIcon(icon, color: DS.Color.info)
             Text(label)
-                .font(DS.Font.calloutBold)
-                .foregroundColor(DS.Color.textPrimary)
+                .font(DS.Font.caption2)
+                .foregroundColor(DS.Color.textTertiary)
             Spacer()
             DatePicker("", selection: selection, in: ...Date(), displayedComponents: .date).labelsHidden()
         }
