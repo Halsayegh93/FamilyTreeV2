@@ -12,6 +12,7 @@ struct AddSonByAdminSheet: View {
 
     @State private var firstName: String = ""
     @State private var selectedGender: String = "male"
+    @AppStorage("lastAuthDialingCode") private var lastAuthDialingCode: String = ""
     @State private var selectedPhoneCountry: KuwaitPhone.Country = KuwaitPhone.defaultCountry
     @State private var phoneNumber: String = ""
     @State private var hasBirthDate: Bool = false
@@ -112,6 +113,12 @@ struct AddSonByAdminSheet: View {
             }
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+        .onAppear {
+            // في وضع الإضافة: استخدم رمز الدولة من تسجيل الدخول
+            if editingChild == nil, !lastAuthDialingCode.isEmpty {
+                selectedPhoneCountry = KuwaitPhone.countryForDialingCode(lastAuthDialingCode)
+            }
+        }
     }
 
     // MARK: - Helpers
@@ -196,57 +203,36 @@ struct AddSonByAdminSheet: View {
         .padding(.horizontal, DS.Spacing.lg)
     }
 
-    // MARK: - Phone Section
+    // MARK: - Phone Section — بدون رمز الدولة
     private var phoneSection: some View {
         VStack(alignment: .leading, spacing: 0) {
             DSCard(padding: 0) {
                 DSSectionHeader(
-                    title: L10n.t("رقم الهاتف", "Phone Number"),
+                    title: L10n.t("رقم الهاتف (اختياري)", "Phone Number (Optional)"),
                     icon: "phone.fill",
                     iconColor: DS.Color.success
                 )
 
                 HStack(spacing: DS.Spacing.sm) {
-                    Menu {
-                        ForEach(KuwaitPhone.supportedCountries) { country in
-                            Button {
-                                selectedPhoneCountry = country
-                            } label: {
-                                Text("\(country.flag) \(country.nameArabic) \(country.dialingCode)")
-                            }
-                        }
-                    } label: {
-                        HStack(spacing: 4) {
-                            Text(selectedPhoneCountry.flag)
-                            Text(selectedPhoneCountry.dialingCode)
-                                .font(DS.Font.caption1)
-                            Image(systemName: "chevron.down")
-                                .font(DS.Font.scaled(9, weight: .semibold))
-                        }
-                        .foregroundColor(DS.Color.textSecondary)
-                        .padding(.horizontal, DS.Spacing.sm)
-                        .padding(.vertical, DS.Spacing.xs)
-                        .background(DS.Color.surfaceElevated.opacity(0.5))
-                        .clipShape(Capsule())
-                    }
-
-                    TextField(L10n.t("رقم الهاتف (اختياري)", "Phone (optional)"), text: $phoneNumber)
-                        .keyboardType(.numberPad)
-                        .multilineTextAlignment(.leading)
-                        .font(DS.Font.callout)
-                        .foregroundStyle(Color(UIColor.label))
-
                     DSIcon("phone.fill", color: DS.Color.success, size: iconSm, iconSize: iconFontSm)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(L10n.t("رقم الهاتف", "Phone Number"))
+                            .font(DS.Font.caption1)
+                            .foregroundColor(DS.Color.textSecondary)
+                        PhoneNumberTextField(
+                            text: $phoneNumber,
+                            placeholder: L10n.t("اختياري", "Optional"),
+                            font: .systemFont(ofSize: 15),
+                            keyboardType: .phonePad,
+                            maxLength: selectedPhoneCountry.maxDigits
+                        )
+                        .frame(height: 30)
+                    }
+                    Spacer()
                 }
                 .padding(.horizontal, DS.Spacing.md)
                 .padding(.vertical, DS.Spacing.xs)
-                .environment(\.layoutDirection, .leftToRight)
-                .onChange(of: phoneNumber) { _, newValue in
-                    phoneNumber = KuwaitPhone.userTypedDigits(newValue, maxDigits: selectedPhoneCountry.maxDigits)
-                }
-                .onChange(of: selectedPhoneCountry) { _, newCountry in
-                    phoneNumber = KuwaitPhone.userTypedDigits(phoneNumber, maxDigits: newCountry.maxDigits)
-                }
             }
         }
         .padding(.horizontal, DS.Spacing.lg)

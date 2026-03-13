@@ -245,6 +245,12 @@ enum KuwaitPhone {
         supportedCountries.first { $0.isoCode == "KW" } ?? supportedCountries[0]
     }
 
+    /// إيجاد الدولة من رمز الاتصال (مثل "+965")
+    static func countryForDialingCode(_ code: String) -> Country {
+        let clean = code.trimmingCharacters(in: .whitespacesAndNewlines)
+        return supportedCountries.first { $0.dialingCode == clean } ?? defaultCountry
+    }
+
     static func userTypedDigits(_ raw: String, maxDigits: Int) -> String {
         String(raw.filter(\.isNumber).prefix(maxDigits))
     }

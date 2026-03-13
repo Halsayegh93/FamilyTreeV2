@@ -20,11 +20,12 @@ struct EditProfileView: View {
     @State private var isPhoneHidden: Bool = false
     // متغيرات الصورة
     @State private var localPreviewImage: UIImage? = nil
-    // AI Bio
-    @State private var aiVM: AIViewModel? = nil
-    @State private var showBioResult = false
+    // Bio
+    @State private var bioText: String = ""
     @State private var showDeleteBioAlert = false
     @State private var showSaveError = false
+    @State private var showNameChangeSheet = false
+    @State private var newNameRequest: String = ""
 
 
 
@@ -56,7 +57,7 @@ struct EditProfileView: View {
                             )
 
                                 VStack(spacing: 0) {
-                                    modernTextField(label: L10n.t("الاسم الكامل", "Full Name"), text: $fullName, icon: "person.fill", placeholder: L10n.t("أدخل الاسم الرباعي", "Enter full name"))
+                                    nameFieldWithChangeRequest
                                     DSDivider()
                                     modernPhoneField
 
@@ -107,9 +108,6 @@ struct EditProfileView: View {
             }
             .onAppear {
                 setupData()
-                if aiVM == nil, let userId = authVM.currentUser?.id.uuidString {
-                    aiVM = AIViewModel(userId: userId)
-                }
             }
             .onChange(of: localPreviewImage) { _, newImage in
                 guard let newImage else { return }
@@ -139,6 +137,115 @@ struct EditProfileView: View {
         .padding(.horizontal, DS.Spacing.lg)
     }
 
+    // MARK: - Name with Change Request
+    private var nameFieldWithChangeRequest: some View {
+        Button {
+            newNameRequest = fullName
+            showNameChangeSheet = true
+        } label: {
+            HStack(spacing: DS.Spacing.md) {
+                DSIcon("person.fill", color: DS.Color.primary)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(L10n.t("الاسم الكامل", "Full Name"))
+                        .font(DS.Font.caption1)
+                        .foregroundColor(DS.Color.textSecondary)
+                    Text(fullName)
+                        .font(DS.Font.callout)
+                        .foregroundColor(DS.Color.textPrimary)
+                }
+                Spacer()
+
+                Text(L10n.t("طلب تغيير", "Request Change"))
+                    .font(DS.Font.scaled(11, weight: .bold))
+                    .foregroundColor(DS.Color.primary)
+                    .padding(.horizontal, DS.Spacing.sm)
+                    .padding(.vertical, DS.Spacing.xs)
+                    .background(DS.Color.primary.opacity(0.1))
+                    .clipShape(Capsule())
+            }
+            .padding(.horizontal, DS.Spacing.lg)
+            .padding(.vertical, DS.Spacing.xs)
+        }
+        .buttonStyle(.plain)
+        .sheet(isPresented: $showNameChangeSheet) {
+            nameChangeRequestSheet
+        }
+    }
+
+    private var nameChangeRequestSheet: some View {
+        NavigationStack {
+            VStack(spacing: DS.Spacing.xl) {
+                DSTextField(
+                    label: L10n.t("الاسم الجديد", "New Name"),
+                    placeholder: L10n.t("اسمك الرباعي", "Your full name"),
+                    text: $newNameRequest,
+                    icon: "person.fill",
+                    iconColor: DS.Color.primary
+                )
+                .padding(.horizontal, DS.Spacing.lg)
+
+                Text(L10n.t(
+                    "سيتم إرسال طلب تغيير الاسم للإدارة للموافقة عليه.",
+                    "A name change request will be sent to admin for approval."
+                ))
+                .font(DS.Font.caption1)
+                .foregroundColor(DS.Color.textTertiary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, DS.Spacing.xxl)
+
+                DSPrimaryButton(
+                    L10n.t("إرسال الطلب", "Send Request"),
+                    icon: "paperplane.fill"
+                ) {
+                    let trimmed = newNameRequest.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !trimmed.isEmpty, trimmed != fullName else { return }
+                    Task {
+                        await adminRequestVM.requestNameChange(memberId: member.id, newName: trimmed)
+                        showNameChangeSheet = false
+                    }
+                }
+                .disabled(newNameRequest.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+                          newNameRequest.trimmingCharacters(in: .whitespacesAndNewlines) == fullName)
+                .padding(.horizontal, DS.Spacing.lg)
+
+                Spacer()
+            }
+            .padding(.top, DS.Spacing.xl)
+            .navigationTitle(L10n.t("طلب تغيير الاسم", "Request Name Change"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button(L10n.t("إلغاء", "Cancel")) { showNameChangeSheet = false }
+                        .foregroundColor(DS.Color.primary)
+                }
+            }
+        }
+        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+    }
+
+    private func modernReadOnlyField(label: String, value: String, icon: String) -> some View {
+        HStack(spacing: DS.Spacing.md) {
+            DSIcon(icon, color: DS.Color.primary)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(label)
+                    .font(DS.Font.caption1)
+                    .foregroundColor(DS.Color.textSecondary)
+                Text(value)
+                    .font(DS.Font.callout)
+                    .foregroundColor(DS.Color.textTertiary)
+            }
+            Spacer()
+
+            Image(systemName: "lock.fill")
+                .font(DS.Font.scaled(12, weight: .semibold))
+                .foregroundColor(DS.Color.textTertiary)
+        }
+        .padding(.horizontal, DS.Spacing.lg)
+        .padding(.vertical, DS.Spacing.xs)
+    }
+
     private func modernTextField(label: String, text: Binding<String>, icon: String, placeholder: String) -> some View {
         HStack(spacing: DS.Spacing.md) {
             DSIcon(icon, color: DS.Color.primary)
@@ -166,42 +273,14 @@ struct EditProfileView: View {
                     .font(DS.Font.caption2)
                     .foregroundColor(DS.Color.textTertiary)
 
-                HStack(spacing: DS.Spacing.sm) {
-                    Menu {
-                        ForEach(KuwaitPhone.supportedCountries) { country in
-                            Button {
-                                selectedPhoneCountry = country
-                            } label: {
-                                Text("\(country.flag) \(country.nameArabic) \(country.dialingCode)")
-                            }
-                        }
-                    } label: {
-                        HStack(spacing: 6) {
-                            Text(selectedPhoneCountry.flag)
-                            Text(selectedPhoneCountry.dialingCode)
-                                .font(DS.Font.callout)
-                            Image(systemName: "chevron.down")
-                                .font(DS.Font.scaled(10, weight: .semibold))
-                        }
-                        .foregroundColor(DS.Color.textSecondary)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(DS.Color.surface)
-                        .cornerRadius(DS.Radius.sm)
-                    }
-
-                    TextField("9xxxxxxx", text: $phoneNumber)
-                        .keyboardType(.phonePad)
-                        .font(DS.Font.callout)
-                        .foregroundStyle(Color(UIColor.label))
-                }
-                .onChange(of: phoneNumber) { _, newValue in
-                    phoneNumber = KuwaitPhone.userTypedDigits(newValue, maxDigits: selectedPhoneCountry.maxDigits)
-                }
-                .onChange(of: selectedPhoneCountry) { _, newCountry in
-                    phoneNumber = KuwaitPhone.userTypedDigits(phoneNumber, maxDigits: newCountry.maxDigits)
-                }
-                .environment(\.layoutDirection, .leftToRight)
+                PhoneNumberTextField(
+                    text: $phoneNumber,
+                    placeholder: "9xxxxxxx",
+                    font: .systemFont(ofSize: 15),
+                    keyboardType: .phonePad,
+                    maxLength: selectedPhoneCountry.maxDigits
+                )
+                .frame(height: 30)
             }
             Spacer()
         }
@@ -226,38 +305,46 @@ struct EditProfileView: View {
         DSCard(padding: 0) {
             DSSectionHeader(
                 title: L10n.t("السيرة الذاتية", "Bio"),
-                icon: "sparkles",
-                iconColor: DS.Color.neonCyan
+                icon: "text.quote",
+                iconColor: DS.Color.primary
             )
 
             VStack(spacing: DS.Spacing.md) {
-                // Current bio stations
-                if let bioStations = member.bio, !bioStations.isEmpty {
-                    ForEach(bioStations) { station in
-                        HStack(alignment: .top, spacing: DS.Spacing.md) {
-                            if let year = station.year, !year.isEmpty {
-                                Text(year)
-                                    .font(DS.Font.caption1)
-                                    .fontWeight(.bold)
-                                    .foregroundColor(DS.Color.primary)
-                                    .frame(width: 44)
-                            }
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(station.title)
-                                    .font(DS.Font.calloutBold)
-                                    .foregroundColor(DS.Color.textPrimary)
-                                if !station.details.isEmpty {
-                                    Text(station.details)
-                                        .font(DS.Font.caption1)
-                                        .foregroundColor(DS.Color.textSecondary)
-                                }
-                            }
-                            Spacer()
-                        }
-                        .padding(.horizontal, DS.Spacing.lg)
-                    }
+                // حقل كتابة السيرة
+                TextEditor(text: $bioText)
+                    .font(DS.Font.callout)
+                    .foregroundStyle(Color(UIColor.label))
+                    .frame(minHeight: 120, maxHeight: 200)
+                    .scrollContentBackground(.hidden)
+                    .padding(DS.Spacing.sm)
+                    .background(DS.Color.surface)
+                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                            .stroke(Color.gray.opacity(0.15), lineWidth: 1)
+                    )
+                    .padding(.horizontal, DS.Spacing.lg)
 
-                    // زر حذف السيرة
+                // عداد الحروف + توضيح
+                HStack {
+                    Text(L10n.t(
+                        "اكتب نبذة عن نفسك",
+                        "Write about yourself"
+                    ))
+                    .font(DS.Font.caption1)
+                    .foregroundColor(DS.Color.textTertiary)
+
+                    Spacer()
+
+                    Text("\(bioText.count)/500")
+                        .font(DS.Font.caption2)
+                        .foregroundColor(bioText.count > 500 ? DS.Color.error : DS.Color.textTertiary)
+                        .monospacedDigit()
+                }
+                .padding(.horizontal, DS.Spacing.lg + DS.Spacing.xs)
+
+                // زر حذف السيرة (إذا فيه نص)
+                if !bioText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     Button {
                         showDeleteBioAlert = true
                     } label: {
@@ -274,118 +361,14 @@ struct EditProfileView: View {
                         .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
                     }
                     .padding(.horizontal, DS.Spacing.lg)
-
-                    DSDivider()
                 }
-
-                // Generated bio preview
-                if showBioResult, let vm = aiVM, !vm.generatedBioStations.isEmpty {
-                    VStack(spacing: DS.Spacing.sm) {
-                        HStack {
-                            Image(systemName: "sparkles")
-                                .font(DS.Font.caption1)
-                                .foregroundColor(DS.Color.warning)
-                            Text(L10n.t("سيرة مقترحة بالذكاء الاصطناعي", "AI Suggested Bio"))
-                                .font(DS.Font.caption1)
-                                .fontWeight(.semibold)
-                                .foregroundColor(DS.Color.warning)
-                            Spacer()
-                        }
-                        .padding(.horizontal, DS.Spacing.lg)
-
-                        ForEach(vm.generatedBioStations) { station in
-                            HStack(alignment: .top, spacing: DS.Spacing.md) {
-                                if let year = station.year, !year.isEmpty {
-                                    Text(year)
-                                        .font(DS.Font.caption1)
-                                        .fontWeight(.bold)
-                                        .foregroundColor(DS.Color.neonCyan)
-                                        .frame(width: 44)
-                                }
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(station.title)
-                                        .font(DS.Font.calloutBold)
-                                        .foregroundColor(DS.Color.textPrimary)
-                                    if !station.details.isEmpty {
-                                        Text(station.details)
-                                            .font(DS.Font.caption1)
-                                            .foregroundColor(DS.Color.textSecondary)
-                                    }
-                                }
-                                Spacer()
-                            }
-                            .padding(.horizontal, DS.Spacing.lg)
-                        }
-
-                        // Accept button
-                        Button {
-                            Task {
-                                await memberVM.updateMemberBio(
-                                    memberId: member.id,
-                                    bio: vm.generatedBioStations
-                                )
-                                member.bio = vm.generatedBioStations
-                                showBioResult = false
-                            }
-                        } label: {
-                            HStack(spacing: DS.Spacing.sm) {
-                                Image(systemName: "checkmark.circle.fill")
-                                Text(L10n.t("اعتماد السيرة", "Apply Bio"))
-                            }
-                            .font(DS.Font.calloutBold)
-                            .foregroundColor(DS.Color.textOnPrimary)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 44)
-                            .background(DS.Color.gradientPrimary)
-                            .cornerRadius(DS.Radius.lg)
-                        }
-                        .buttonStyle(DSBoldButtonStyle())
-                        .padding(.horizontal, DS.Spacing.lg)
-                    }
-                    .padding(.vertical, DS.Spacing.xs)
-                    .background(DS.Color.warning.opacity(0.05))
-                    .cornerRadius(DS.Radius.md)
-                }
-
-                // Error message
-                if let error = aiVM?.bioError {
-                    Text(error)
-                        .font(DS.Font.caption1)
-                        .foregroundColor(DS.Color.error)
-                        .padding(.horizontal, DS.Spacing.lg)
-                }
-
-                // Generate button
-                Button {
-                    Task {
-                        guard let vm = aiVM else { return }
-                        await vm.generateBio(memberId: member.id.uuidString)
-                        if !vm.generatedBioStations.isEmpty {
-                            withAnimation(DS.Anim.bouncy) { showBioResult = true }
-                        }
-                    }
-                } label: {
-                    HStack(spacing: DS.Spacing.sm) {
-                        if aiVM?.isBioLoading == true {
-                            ProgressView()
-                                .tint(.white)
-                        } else {
-                            Image(systemName: "sparkles")
-                        }
-                        Text(L10n.t("إنشاء سيرة ذاتية بالذكاء الاصطناعي", "Generate Bio with AI"))
-                    }
-                    .font(DS.Font.calloutBold)
-                    .foregroundColor(DS.Color.primary)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 44)
-                    .background(DS.Color.primary.opacity(0.1))
-                    .cornerRadius(DS.Radius.lg)
-                }
-                .buttonStyle(DSBoldButtonStyle())
-                .disabled(aiVM?.isBioLoading == true)
-                .padding(.horizontal, DS.Spacing.lg)
             }
             .padding(.bottom, DS.Spacing.md)
+            .onChange(of: bioText) {
+                if bioText.count > 500 {
+                    bioText = String(bioText.prefix(500))
+                }
+            }
         }
         .padding(.horizontal, DS.Spacing.lg)
         .alert(
@@ -393,6 +376,7 @@ struct EditProfileView: View {
             isPresented: $showDeleteBioAlert
         ) {
             Button(L10n.t("حذف", "Delete"), role: .destructive) {
+                bioText = ""
                 let memberId = member.id
                 member.bio = nil
                 Task { await memberVM.updateMemberBio(memberId: memberId, bio: []) }
@@ -428,6 +412,15 @@ struct EditProfileView: View {
         self.phoneNumber = detectedPhone.localDigits
         self.isMarried = member.isMarried ?? false
         self.isDeceased = member.isDeceased ?? false
+        // تحميل السيرة الذاتية الحالية
+        if let bioStations = member.bio, !bioStations.isEmpty {
+            self.bioText = bioStations.map { station in
+                [station.year, station.title, station.details]
+                    .compactMap { $0 }
+                    .filter { !$0.isEmpty }
+                    .joined(separator: " - ")
+            }.joined(separator: "\n")
+        }
         let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"
         if let b = member.birthDate, let date = f.date(from: b) { self.birthDate = date }
         if let d = member.deathDate, let date = f.date(from: d) { self.deathDate = date }
@@ -452,6 +445,18 @@ struct EditProfileView: View {
 
             if isPhoneChanged {
                 await adminRequestVM.requestPhoneNumberChange(memberId: member.id, newPhoneNumber: normalizedPhone)
+            }
+
+            // حفظ السيرة الذاتية
+            let trimmedBio = bioText.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmedBio.isEmpty {
+                let station = FamilyMember.BioStation(title: "", details: trimmedBio)
+                await memberVM.updateMemberBio(memberId: member.id, bio: [station])
+                member.bio = [station]
+            } else if member.bio != nil && !member.bio!.isEmpty && trimmedBio.isEmpty {
+                // المستخدم حذف النص — نحذف السيرة
+                await memberVM.updateMemberBio(memberId: member.id, bio: [])
+                member.bio = nil
             }
 
             let success = await memberVM.updateMemberData(

@@ -558,6 +558,40 @@ class AdminRequestViewModel: ObservableObject {
         self.isLoading = false
     }
 
+    // MARK: - Name Change Requests
+
+    func requestNameChange(memberId: UUID, newName: String) async {
+        self.isLoading = true
+        do {
+            let requestData: [String: AnyEncodable] = [
+                "member_id": AnyEncodable(memberId.uuidString),
+                "requester_id": AnyEncodable(currentUser?.id.uuidString),
+                "request_type": AnyEncodable("name_change"),
+                "new_value": AnyEncodable(newName),
+                "status": AnyEncodable("pending"),
+                "details": AnyEncodable("طلب تغيير الاسم إلى: \(newName)")
+            ]
+
+            try await supabase
+                .from("admin_requests")
+                .insert(requestData)
+                .execute()
+
+            let requesterName = currentUser?.firstName ?? "عضو"
+            let body = "طلب تغيير اسم\nالعضو: \(requesterName)\nالاسم الجديد: \(newName)"
+            await notificationVM?.notifyAdminsWithPush(
+                title: "طلب تغيير اسم",
+                body: body,
+                kind: "name_change"
+            )
+
+            Log.info("تم إرسال طلب تغيير الاسم للإدارة: \(newName)")
+        } catch {
+            Log.error("خطأ في إرسال طلب تغيير الاسم: \(error.localizedDescription)")
+        }
+        self.isLoading = false
+    }
+
     func fetchPhoneChangeRequests(force: Bool = false) async {
         if !force, let last = lastPhoneChangeFetchDate, Date().timeIntervalSince(last) < 20, !phoneChangeRequests.isEmpty { return }
         lastPhoneChangeFetchDate = Date()

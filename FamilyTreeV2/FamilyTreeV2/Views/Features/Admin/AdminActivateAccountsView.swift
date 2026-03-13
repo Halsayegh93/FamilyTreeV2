@@ -741,12 +741,14 @@ struct EditPhoneSheet: View {
                                 .background(DS.Color.info)
                                 .cornerRadius(DS.Radius.sm)
 
-                            TextField(L10n.t("أدخل رقم الجوال", "Enter phone number"), text: $phoneInput)
-                                .font(DS.Font.body)
-                                .keyboardType(.phonePad)
-                                .multilineTextAlignment(.leading)
-                                .monospacedDigit()
-                                .foregroundStyle(Color(UIColor.label))
+                            PhoneNumberTextField(
+                                text: $phoneInput,
+                                placeholder: L10n.t("أدخل رقم الجوال", "Enter phone number"),
+                                font: .monospacedDigitSystemFont(ofSize: 17, weight: .regular),
+                                keyboardType: .phonePad,
+                                maxLength: 15
+                            )
+                            .frame(height: 30)
                         }
                         .padding(DS.Spacing.md)
                         .background(DS.Color.surface)

@@ -11,6 +11,7 @@ struct AdminRegisterMemberView: View {
     @State private var hasBirthDate: Bool = false
     @State private var birthDate: Date = Calendar.current.date(byAdding: .year, value: -20, to: Date()) ?? Date()
     @State private var phoneNumber: String = ""
+    @AppStorage("lastAuthDialingCode") private var lastAuthDialingCode: String = ""
     @State private var selectedPhoneCountry: KuwaitPhone.Country = KuwaitPhone.defaultCountry
     @State private var showingSuccess = false
     @State private var showingError = false
@@ -85,6 +86,9 @@ struct AdminRegisterMemberView: View {
             Text(L10n.t("تعذر إضافة العضو. حاول مرة أخرى.", "Failed to add member. Please try again."))
         }
         .onAppear {
+            if !lastAuthDialingCode.isEmpty {
+                selectedPhoneCountry = KuwaitPhone.countryForDialingCode(lastAuthDialingCode)
+            }
             withAnimation(.spring(response: 0.8, dampingFraction: 0.6).delay(0.2)) {
                 headerScale = 1.0
                 headerOpacity = 1.0
@@ -249,48 +253,21 @@ struct AdminRegisterMemberView: View {
         }
     }
 
-    // MARK: - Phone Section
+    // MARK: - Phone Section — بدون رمز الدولة
     private var phoneSection: some View {
         DSCard(padding: 0) {
             DSSectionHeader(title: L10n.t("رقم الهاتف (اختياري)", "Phone Number (Optional)"), icon: "phone.fill")
 
-            HStack(spacing: DS.Spacing.sm) {
-                Menu {
-                    ForEach(KuwaitPhone.supportedCountries) { country in
-                        Button {
-                            selectedPhoneCountry = country
-                        } label: {
-                            Text("\(country.flag) \(country.nameArabic) \(country.dialingCode)")
-                        }
-                    }
-                } label: {
-                    HStack(spacing: 6) {
-                        Text(selectedPhoneCountry.flag)
-                        Text(selectedPhoneCountry.dialingCode).font(DS.Font.caption1)
-                        Image(systemName: "chevron.down")
-                            .font(DS.Font.scaled(10, weight: .semibold))
-                    }
-                    .foregroundColor(DS.Color.textSecondary)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 8)
-                    .background(DS.Color.surface)
-                    .cornerRadius(DS.Radius.sm)
-                }
-
-                TextField(L10n.t("رقم الهاتف", "Phone Number"), text: $phoneNumber)
-                    .keyboardType(.phonePad)
-                    .multilineTextAlignment(.leading)
-                    .foregroundStyle(Color(UIColor.label))
-            }
+            PhoneNumberTextField(
+                text: $phoneNumber,
+                placeholder: L10n.t("رقم الهاتف", "Phone Number"),
+                font: .systemFont(ofSize: 15),
+                keyboardType: .phonePad,
+                maxLength: selectedPhoneCountry.maxDigits
+            )
+            .frame(height: 30)
             .padding(.horizontal, DS.Spacing.md)
             .padding(.vertical, DS.Spacing.xs)
-            .onChange(of: phoneNumber) { _, newValue in
-                phoneNumber = KuwaitPhone.userTypedDigits(newValue, maxDigits: selectedPhoneCountry.maxDigits)
-            }
-            .onChange(of: selectedPhoneCountry) { _, newCountry in
-                phoneNumber = KuwaitPhone.userTypedDigits(phoneNumber, maxDigits: newCountry.maxDigits)
-            }
-            .environment(\.layoutDirection, .leftToRight)
         }
     }
 

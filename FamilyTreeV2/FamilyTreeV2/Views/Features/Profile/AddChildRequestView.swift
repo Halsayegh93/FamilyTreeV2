@@ -9,6 +9,7 @@ struct AddChildRequestView: View {
     let member: FamilyMember
 
     @State private var firstName: String = ""
+    @AppStorage("lastAuthDialingCode") private var lastAuthDialingCode: String = ""
     @State private var selectedPhoneCountry: KuwaitPhone.Country = KuwaitPhone.defaultCountry
     @State private var phoneNumber: String = ""
     @State private var hasBirthDate: Bool = true
@@ -52,6 +53,11 @@ struct AddChildRequestView: View {
         } message: {
             Text(L10n.t("تمت إضافة الابن بنجاح.", "Child added successfully."))
         }
+        .onAppear {
+            if !lastAuthDialingCode.isEmpty {
+                selectedPhoneCountry = KuwaitPhone.countryForDialingCode(lastAuthDialingCode)
+            }
+        }
     }
 
     private var basicInfoCard: some View {
@@ -93,40 +99,14 @@ struct AddChildRequestView: View {
                             Text(L10n.t("رقم الهاتف", "Phone Number"))
                                 .font(DS.Font.caption1)
                                 .foregroundColor(DS.Color.textSecondary)
-                            HStack(spacing: DS.Spacing.sm) {
-                                Menu {
-                                    ForEach(KuwaitPhone.supportedCountries) { country in
-                                        Button {
-                                            selectedPhoneCountry = country
-                                        } label: {
-                                            Text("\(country.flag) \(country.nameArabic) \(country.dialingCode)")
-                                        }
-                                    }
-                                } label: {
-                                    HStack(spacing: 6) {
-                                        Text(selectedPhoneCountry.flag)
-                                        Text(selectedPhoneCountry.dialingCode).font(DS.Font.caption1)
-                                        Image(systemName: "chevron.down")
-                                            .font(DS.Font.scaled(10, weight: .semibold))
-                                    }
-                                    .foregroundColor(DS.Color.textSecondary)
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 6)
-                                    .background(DS.Color.surface)
-                                    .cornerRadius(DS.Radius.sm)
-                                }
-
-                                TextField(L10n.t("رقم الهاتف (اختياري)", "Phone (optional)"), text: $phoneNumber)
-                                    .keyboardType(.phonePad)
-                                    .foregroundStyle(Color(UIColor.label))
-                            }
-                            .onChange(of: phoneNumber) { _, newValue in
-                                phoneNumber = KuwaitPhone.userTypedDigits(newValue, maxDigits: selectedPhoneCountry.maxDigits)
-                            }
-                            .onChange(of: selectedPhoneCountry) { _, newCountry in
-                                phoneNumber = KuwaitPhone.userTypedDigits(phoneNumber, maxDigits: newCountry.maxDigits)
-                            }
-                            .environment(\.layoutDirection, .leftToRight)
+                            PhoneNumberTextField(
+                                text: $phoneNumber,
+                                placeholder: L10n.t("رقم الهاتف (اختياري)", "Phone (optional)"),
+                                font: .systemFont(ofSize: 15),
+                                keyboardType: .phonePad,
+                                maxLength: selectedPhoneCountry.maxDigits
+                            )
+                            .frame(height: 30)
                         }
                         Spacer()
                     }

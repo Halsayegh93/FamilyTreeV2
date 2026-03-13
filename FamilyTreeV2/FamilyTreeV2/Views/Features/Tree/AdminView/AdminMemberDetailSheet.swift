@@ -385,11 +385,14 @@ struct AdminMemberDetailSheet: View {
                         .clipShape(Capsule())
                     }
 
-                    TextField(L10n.t("رقم الهاتف", "Phone Number"), text: $phoneNumber)
-                        .keyboardType(.numberPad)
-                        .multilineTextAlignment(.leading)
-                        .font(DS.Font.callout)
-                        .foregroundStyle(Color(UIColor.label))
+                    PhoneNumberTextField(
+                        text: $phoneNumber,
+                        placeholder: L10n.t("رقم الهاتف", "Phone Number"),
+                        font: .systemFont(ofSize: 15),
+                        keyboardType: .numberPad,
+                        maxLength: 15
+                    )
+                    .frame(height: 30)
 
                     if !phoneNumber.isEmpty {
                         Button {

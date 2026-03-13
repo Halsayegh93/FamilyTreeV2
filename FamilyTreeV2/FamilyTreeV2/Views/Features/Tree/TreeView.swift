@@ -105,16 +105,49 @@ struct TreeView: View {
     var filteredMembers: [FamilyMember] {
         let normalizedSearch = debouncedSearchText.trimmingCharacters(in: .whitespacesAndNewlines)
         if normalizedSearch.isEmpty { return [] }
-        let folded = normalizedSearch.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+
+        // تقسيم البحث إلى كلمات مستقلة
+        let searchWords = normalizedSearch
+            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+            .components(separatedBy: .whitespaces)
+            .filter { !$0.isEmpty }
+
+        if searchWords.isEmpty { return [] }
+
+        let firstWord = searchWords[0]
+        let remainingWords = Array(searchWords.dropFirst())
 
         var results: [FamilyMember] = []
         for member in cachedVisibleMembers {
             guard results.count < 20 else { break }
 
-            if getFullLineage(for: member, lookup: cachedMemberById)
+            let memberFirstName = member.firstName
+                .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+
+            if searchWords.count == 1 {
+                // كلمة وحدة → نبحث في كل شي (الاسم الكامل + النسب)
+                let lineage = getFullLineage(for: member, lookup: cachedMemberById)
+                let combinedText = "\(member.fullName) \(lineage)"
                     .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
-                    .contains(folded) {
-                results.append(member)
+                if combinedText.contains(firstWord) {
+                    results.append(member)
+                }
+            } else {
+                // كلمتين أو أكثر → الكلمة الأولى لازم تكون بالاسم الأول
+                guard memberFirstName.contains(firstWord) else { continue }
+
+                // باقي الكلمات تُبحث في الاسم الكامل + النسب
+                let lineage = getFullLineage(for: member, lookup: cachedMemberById)
+                let combinedText = "\(member.fullName) \(lineage)"
+                    .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+
+                let restMatch = remainingWords.allSatisfy { word in
+                    combinedText.contains(word)
+                }
+
+                if restMatch {
+                    results.append(member)
+                }
             }
         }
         return results
@@ -315,7 +348,7 @@ struct TreeView: View {
                             .foregroundColor(DS.Color.primary)
                     }
 
-                    TextField(L10n.t("ابحث بالاسم أو النسب...", "Search by name or lineage..."), text: $searchText, onEditingChanged: { focused in
+                    TextField(L10n.t("ابحث بالاسم...", "Search by name..."), text: $searchText, onEditingChanged: { focused in
                         isSearchFocused = focused
                     })
                     .font(DS.Font.body)

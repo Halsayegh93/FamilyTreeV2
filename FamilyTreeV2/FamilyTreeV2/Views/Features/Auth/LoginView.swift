@@ -173,24 +173,15 @@ struct LoginView: View {
                     .frame(width: 1, height: 24)
                     .padding(.horizontal, DS.Spacing.xs)
 
-                TextField(
-                    "",
-                    text: phoneBinding,
-                    prompt: Text(L10n.t("رقم الهاتف المحمول", "Mobile Number"))
-                        .font(DS.Font.subheadline)
-                        .foregroundStyle(DS.Color.textTertiary)
+                PhoneNumberTextField(
+                    text: $authVM.phoneNumber,
+                    placeholder: L10n.t("رقم الهاتف المحمول", "Mobile Number"),
+                    font: .systemFont(ofSize: 20, weight: .bold),
+                    keyboardType: .numberPad,
+                    maxLength: 15
                 )
-                .keyboardType(.numberPad)
-                .font(DS.Font.scaled(20, weight: .bold))
-                .foregroundStyle(Color(UIColor.label))
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .multilineTextAlignment(.leading)
-                .lineLimit(1)
-                .tint(DS.Color.primary)
-                .focused($isFieldFocused)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .layoutPriority(1)
+                .frame(maxWidth: .infinity)
+                .frame(height: 40)
             }
             .environment(\.layoutDirection, .leftToRight)
             .padding(.horizontal, DS.Spacing.md)
