@@ -10,7 +10,7 @@ struct AdminAllRequestsView: View {
     @StateObject private var diwaniyaVM = DiwaniyasViewModel()
 
     enum RequestTab: String, CaseIterable, Identifiable {
-        case joinRequests, news, reports, phone, diwaniya, deceased, children, photos, treeEdit, projects
+        case joinRequests, news, reports, phone, nameChange, diwaniya, deceased, children, photos, treeEdit, projects
 
         var id: String { rawValue }
 
@@ -20,6 +20,7 @@ struct AdminAllRequestsView: View {
             case .news: return L10n.t("أخبار", "News")
             case .reports: return L10n.t("بلاغات", "Reports")
             case .phone: return L10n.t("جوال", "Phone")
+            case .nameChange: return L10n.t("أسماء", "Names")
             case .diwaniya: return L10n.t("ديوانيات", "Diwaniyas")
             case .deceased: return L10n.t("وفاة", "Deceased")
             case .children: return L10n.t("أبناء", "Children")
@@ -35,6 +36,7 @@ struct AdminAllRequestsView: View {
             case .news: return "newspaper.fill"
             case .reports: return "exclamationmark.bubble.fill"
             case .phone: return "phone.badge.checkmark"
+            case .nameChange: return "character.cursor.ibeam"
             case .diwaniya: return "tent.fill"
             case .deceased: return "bolt.heart.fill"
             case .children: return "person.badge.plus"
@@ -50,6 +52,7 @@ struct AdminAllRequestsView: View {
             case .news: return DS.Color.warning
             case .reports: return DS.Color.error
             case .phone: return DS.Color.primary
+            case .nameChange: return DS.Color.neonPurple
             case .diwaniya: return DS.Color.gridDiwaniya
             case .deceased: return DS.Color.error
             case .children: return DS.Color.info
@@ -127,6 +130,7 @@ struct AdminAllRequestsView: View {
             await adminRequestVM.fetchChildAddRequests()
             await adminRequestVM.fetchPhotoSuggestionRequests()
             await adminRequestVM.fetchTreeEditRequests()
+            await adminRequestVM.fetchNameChangeRequests()
             await projectsVM.fetchPendingProjects()
             await fetchAllRegistrationMatches()
 
@@ -232,6 +236,7 @@ struct AdminAllRequestsView: View {
         case .news: return newsVM.pendingNewsRequests.count
         case .reports: return adminRequestVM.newsReportRequests.count
         case .phone: return adminRequestVM.phoneChangeRequests.count
+        case .nameChange: return adminRequestVM.nameChangeRequests.count
         case .diwaniya: return diwaniyaVM.pendingDiwaniyas.count
         case .deceased: return adminRequestVM.deceasedRequests.count
         case .children: return adminRequestVM.childAddRequests.count
@@ -248,7 +253,7 @@ struct AdminAllRequestsView: View {
     // MARK: - Tab Bar
 
     private var availableTabs: [RequestTab] {
-        [.joinRequests, .news, .reports, .phone, .diwaniya, .deceased, .children, .photos, .treeEdit, .projects].filter { itemCount(for: $0) > 0 }
+        [.joinRequests, .news, .reports, .phone, .nameChange, .diwaniya, .deceased, .children, .photos, .treeEdit, .projects].filter { itemCount(for: $0) > 0 }
     }
 
     private var tabBar: some View {
@@ -411,6 +416,20 @@ struct AdminAllRequestsView: View {
                         }
                         .swipeActions(edge: .leading, allowsFullSwipe: false) {
                             Button(role: .destructive) { Task { await adminRequestVM.rejectPhoneChangeRequest(request: request) } } label: {
+                                Label(L10n.t("رفض", "Reject"), systemImage: "xmark.circle.fill")
+                            }
+                        }
+                }
+            case .nameChange:
+                ForEach(adminRequestVM.nameChangeRequests) { request in
+                    nameChangeRow(for: request)
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            Button { Task { await adminRequestVM.approveNameChangeRequest(request: request) } } label: {
+                                Label(L10n.t("موافقة", "Approve"), systemImage: "checkmark.circle.fill")
+                            }.tint(DS.Color.success)
+                        }
+                        .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                            Button(role: .destructive) { Task { await adminRequestVM.rejectNameChangeRequest(request: request) } } label: {
                                 Label(L10n.t("رفض", "Reject"), systemImage: "xmark.circle.fill")
                             }
                         }
@@ -1048,6 +1067,55 @@ struct AdminAllRequestsView: View {
                         .overlay(ProgressView().tint(DS.Color.primary))
                 }
             }
+        }
+    }
+
+    // MARK: - Tree Edit Row
+
+    // MARK: - Name Change Row
+
+    private func nameChangeRow(for request: AdminRequest) -> some View {
+        let currentName = request.member?.fullName ?? L10n.t("عضو", "Member")
+        let newName = request.newValue ?? "—"
+
+        return VStack(alignment: .leading, spacing: DS.Spacing.md) {
+            HStack(spacing: DS.Spacing.sm) {
+                iconCircle(icon: "character.cursor.ibeam", color: DS.Color.neonPurple, size: 36)
+
+                VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                    Text(currentName)
+                        .font(DS.Font.calloutBold)
+                        .foregroundColor(DS.Color.textPrimary)
+                    if let createdAt = request.createdAt {
+                        Text(createdAt.prefix(10))
+                            .font(DS.Font.caption2)
+                            .foregroundColor(DS.Color.textSecondary)
+                    }
+                }
+
+                Spacer()
+
+                typeBadge(text: L10n.t("تغيير اسم", "Name Change"), color: DS.Color.neonPurple)
+            }
+
+            // الاسم الحالي → الاسم الجديد
+            VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                HStack(spacing: DS.Spacing.sm) {
+                    Image(systemName: "arrow.right")
+                        .font(DS.Font.scaled(12, weight: .bold))
+                        .foregroundColor(DS.Color.success)
+                    Text(L10n.t("الاسم الجديد:", "New name:"))
+                        .font(DS.Font.caption1)
+                        .foregroundColor(DS.Color.textSecondary)
+                    Text(newName)
+                        .font(DS.Font.calloutBold)
+                        .foregroundColor(DS.Color.success)
+                }
+            }
+            .padding(DS.Spacing.sm)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(DS.Color.success.opacity(0.06))
+            .cornerRadius(DS.Radius.sm)
         }
     }
 

@@ -43,6 +43,7 @@ struct AdminDashboardView: View {
         + adminRequestVM.childAddRequests.count
         + adminRequestVM.photoSuggestionRequests.count
         + adminRequestVM.treeEditRequests.count
+        + adminRequestVM.nameChangeRequests.count
     }
     private var incompleteMembersCount: Int {
         memberVM.allMembers
@@ -246,8 +247,9 @@ struct AdminDashboardView: View {
 
             // الدفعة 4: طلبات تعديل الشجرة + الأرقام المحظورة
             async let treeEdits: () = adminRequestVM.fetchTreeEditRequests()
+            async let nameChanges: () = adminRequestVM.fetchNameChangeRequests()
             async let bannedPhones: () = authVM.fetchBannedPhones()
-            _ = await (treeEdits, bannedPhones)
+            _ = await (treeEdits, nameChanges, bannedPhones)
         }
     }
 

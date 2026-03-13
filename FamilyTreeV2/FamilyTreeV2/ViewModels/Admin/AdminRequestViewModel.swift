@@ -20,6 +20,7 @@ class AdminRequestViewModel: ObservableObject {
     @Published var phoneChangeRequests: [PhoneChangeRequest] = []
     @Published var newsReportRequests: [AdminRequest] = []
     @Published var treeEditRequests: [AdminRequest] = []
+    @Published var nameChangeRequests: [AdminRequest] = []
     @Published var isLoading: Bool = false
     @Published var mergeResult: MergeResult? = nil
     
@@ -35,6 +36,7 @@ class AdminRequestViewModel: ObservableObject {
     private var lastPhoneChangeFetchDate: Date?
     private var lastNewsReportFetchDate: Date?
     private var lastTreeEditFetchDate: Date?
+    private var lastNameChangeFetchDate: Date?
 
     // MARK: - Dependencies (weak to avoid retain cycles)
 
@@ -590,6 +592,102 @@ class AdminRequestViewModel: ObservableObject {
             Log.error("خطأ في إرسال طلب تغيير الاسم: \(error.localizedDescription)")
         }
         self.isLoading = false
+    }
+
+    // MARK: - Fetch / Approve / Reject Name Change Requests
+
+    func fetchNameChangeRequests(force: Bool = false) async {
+        if !force, let last = lastNameChangeFetchDate, Date().timeIntervalSince(last) < 20, !nameChangeRequests.isEmpty { return }
+        lastNameChangeFetchDate = Date()
+        guard canModerate else {
+            nameChangeRequests = []
+            return
+        }
+
+        do {
+            let requests: [AdminRequest] = try await supabase
+                .from("admin_requests")
+                .select("*, member:profiles!member_id(*)")
+                .eq("request_type", value: "name_change")
+                .eq("status", value: "pending")
+                .order("created_at", ascending: false)
+                .execute()
+                .value
+
+            self.nameChangeRequests = requests
+        } catch {
+            Log.error("فشل جلب طلبات تغيير الاسم: \(error)")
+        }
+    }
+
+    func approveNameChangeRequest(request: AdminRequest) async {
+        guard let newName = request.newValue, !newName.isEmpty else {
+            Log.error("[NameChange] الاسم الجديد غير موجود في الطلب")
+            return
+        }
+
+        do {
+            // تحديث الاسم في profiles
+            let nameParts = newName.split(whereSeparator: \.isWhitespace).map(String.init)
+            let newFirstName = nameParts.first ?? newName
+
+            try await supabase
+                .from("profiles")
+                .update([
+                    "full_name": AnyEncodable(newName),
+                    "first_name": AnyEncodable(newFirstName)
+                ])
+                .eq("id", value: request.memberId.uuidString)
+                .execute()
+
+            // تحديث حالة الطلب
+            try await supabase
+                .from("admin_requests")
+                .update(["status": AnyEncodable("approved")])
+                .eq("id", value: request.id.uuidString)
+                .execute()
+
+            removeLocallyThenRefresh(from: &nameChangeRequests, id: request.id) { [weak self] in
+                await self?.fetchNameChangeRequests(force: true)
+                await self?.memberVM?.fetchAllMembers(force: true)
+            }
+
+            // إشعار العضو
+            await notificationVM?.sendNotification(
+                title: L10n.t("تم تغيير الاسم", "Name Changed"),
+                body: L10n.t("تمت الموافقة على طلب تغيير اسمك إلى: \(newName)", "Your name change request to: \(newName) was approved"),
+                targetMemberIds: [request.requesterId]
+            )
+
+            Log.info("[NameChange] تم قبول طلب تغيير الاسم → \(newName)")
+        } catch {
+            Log.error("[NameChange] فشل قبول طلب تغيير الاسم: \(error)")
+        }
+    }
+
+    func rejectNameChangeRequest(request: AdminRequest) async {
+        do {
+            try await supabase
+                .from("admin_requests")
+                .update(["status": AnyEncodable("rejected")])
+                .eq("id", value: request.id.uuidString)
+                .execute()
+
+            removeLocallyThenRefresh(from: &nameChangeRequests, id: request.id) { [weak self] in
+                await self?.fetchNameChangeRequests(force: true)
+            }
+
+            // إشعار العضو بالرفض
+            await notificationVM?.sendNotification(
+                title: L10n.t("تم رفض الطلب", "Request Rejected"),
+                body: L10n.t("تم رفض طلب تغيير الاسم", "Your name change request was rejected"),
+                targetMemberIds: [request.requesterId]
+            )
+
+            Log.info("[NameChange] تم رفض طلب تغيير الاسم")
+        } catch {
+            Log.error("[NameChange] فشل رفض طلب تغيير الاسم: \(error)")
+        }
     }
 
     func fetchPhoneChangeRequests(force: Bool = false) async {
