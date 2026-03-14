@@ -9,7 +9,6 @@ struct AppSettings: Codable {
     let id: UUID
     var newsRequiresApproval: Bool
     var allowNewRegistrations: Bool
-    var trialEnabled: Bool
     var maintenanceMode: Bool
     var maxDevicesPerUser: Int
     var updatedAt: String?
@@ -19,7 +18,6 @@ struct AppSettings: Codable {
         case id
         case newsRequiresApproval = "news_requires_approval"
         case allowNewRegistrations = "allow_new_registrations"
-        case trialEnabled = "trial_enabled"
         case maintenanceMode = "maintenance_mode"
         case maxDevicesPerUser = "max_devices_per_user"
         case updatedAt = "updated_at"
@@ -37,7 +35,6 @@ class AppSettingsViewModel: ObservableObject {
         id: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!,
         newsRequiresApproval: true,
         allowNewRegistrations: true,
-        trialEnabled: true,
         maintenanceMode: false,
         maxDevicesPerUser: 3
     )
@@ -102,7 +99,6 @@ class AppSettingsViewModel: ObservableObject {
             let updateData: [String: AnyEncodable] = [
                 "news_requires_approval": AnyEncodable(true),
                 "allow_new_registrations": AnyEncodable(true),
-                "trial_enabled": AnyEncodable(true),
                 "maintenance_mode": AnyEncodable(false),
                 "max_devices_per_user": AnyEncodable(3),
                 "updated_at": AnyEncodable(ISO8601DateFormatter().string(from: Date())),

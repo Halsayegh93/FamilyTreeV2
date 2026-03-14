@@ -607,6 +607,8 @@ struct DSTextField: View {
     var iconColor: Color = DS.Color.primary
     var keyboard: UIKeyboardType = .default
     var isSecure: Bool = false
+    var required: Bool = false
+    var hint: String? = nil
 
     @FocusState private var isFocused: Bool
 
@@ -616,10 +618,20 @@ struct DSTextField: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 if !label.isEmpty {
-                    Text(label)
-                        .font(DS.Font.caption1)
-                        .foregroundColor(isFocused ? iconColor : DS.Color.textSecondary)
-                        .animation(DS.Anim.quick, value: isFocused)
+                    HStack(spacing: 2) {
+                        Text(label)
+                            .foregroundColor(isFocused ? iconColor : DS.Color.textSecondary)
+                        if required {
+                            Text("*")
+                                .foregroundColor(DS.Color.error)
+                        }
+                        if let hint {
+                            Text(hint)
+                                .foregroundColor(DS.Color.textTertiary)
+                        }
+                    }
+                    .font(DS.Font.caption1)
+                    .animation(DS.Anim.quick, value: isFocused)
                 }
                 if isSecure {
                     SecureField(placeholder, text: $text)

@@ -70,7 +70,11 @@ struct AddChildSheet: View {
 
     private var heroHeader: some View {
         DSProfilePhotoPicker(
-            selectedImage: $selectedUIImage
+            selectedImage: $selectedUIImage,
+            enableCrop: true,
+            cropShape: .circle,
+            trailing: L10n.t("اختياري", "Optional"),
+            compactEmptyState: true
         )
         .padding(.horizontal, DS.Spacing.lg)
     }

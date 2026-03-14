@@ -8,6 +8,10 @@ struct AdminAllRequestsView: View {
     @EnvironmentObject var notificationVM: NotificationViewModel
     @EnvironmentObject var projectsVM: ProjectsViewModel
     @StateObject private var diwaniyaVM = DiwaniyasViewModel()
+    @State private var nameEditRequest: AdminRequest? = nil
+    @State private var editedName: String = ""
+    @State private var phoneEditRequest: PhoneChangeRequest? = nil
+    @State private var editedPhone: String = ""
 
     enum RequestTab: String, CaseIterable, Identifiable {
         case joinRequests, news, reports, phone, nameChange, diwaniya, deceased, children, photos, treeEdit, projects
@@ -413,12 +417,22 @@ struct AdminAllRequestsView: View {
                             Button { Task { await adminRequestVM.approvePhoneChangeRequest(request: request) } } label: {
                                 Label(L10n.t("اعتماد", "Approve"), systemImage: "checkmark.circle.fill")
                             }.tint(DS.Color.success)
+
+                            Button {
+                                editedPhone = request.newValue ?? ""
+                                phoneEditRequest = request
+                            } label: {
+                                Label(L10n.t("تعديل", "Edit"), systemImage: "pencil.circle.fill")
+                            }.tint(DS.Color.primary)
                         }
                         .swipeActions(edge: .leading, allowsFullSwipe: false) {
                             Button(role: .destructive) { Task { await adminRequestVM.rejectPhoneChangeRequest(request: request) } } label: {
                                 Label(L10n.t("رفض", "Reject"), systemImage: "xmark.circle.fill")
                             }
                         }
+                }
+                .sheet(item: $phoneEditRequest) { request in
+                    adminPhoneEditSheet(request: request)
                 }
             case .nameChange:
                 ForEach(adminRequestVM.nameChangeRequests) { request in
@@ -427,12 +441,22 @@ struct AdminAllRequestsView: View {
                             Button { Task { await adminRequestVM.approveNameChangeRequest(request: request) } } label: {
                                 Label(L10n.t("موافقة", "Approve"), systemImage: "checkmark.circle.fill")
                             }.tint(DS.Color.success)
+
+                            Button {
+                                editedName = request.newValue ?? ""
+                                nameEditRequest = request
+                            } label: {
+                                Label(L10n.t("تعديل", "Edit"), systemImage: "pencil.circle.fill")
+                            }.tint(DS.Color.primary)
                         }
                         .swipeActions(edge: .leading, allowsFullSwipe: false) {
                             Button(role: .destructive) { Task { await adminRequestVM.rejectNameChangeRequest(request: request) } } label: {
                                 Label(L10n.t("رفض", "Reject"), systemImage: "xmark.circle.fill")
                             }
                         }
+                }
+                .sheet(item: $nameEditRequest) { request in
+                    adminNameEditSheet(request: request)
                 }
             case .diwaniya:
                 ForEach(diwaniyaVM.pendingDiwaniyas) { diwaniya in
@@ -1117,6 +1141,149 @@ struct AdminAllRequestsView: View {
             .background(DS.Color.success.opacity(0.06))
             .cornerRadius(DS.Radius.sm)
         }
+    }
+
+    // MARK: - Admin Name Edit Sheet
+    private func adminNameEditSheet(request: AdminRequest) -> some View {
+        NavigationStack {
+            VStack(spacing: DS.Spacing.xl) {
+                // الاسم الحالي
+                HStack(spacing: DS.Spacing.sm) {
+                    Text(L10n.t("الاسم الحالي:", "Current name:"))
+                        .font(DS.Font.caption1)
+                        .foregroundColor(DS.Color.textSecondary)
+                    Text(request.member?.fullName ?? "—")
+                        .font(DS.Font.calloutBold)
+                        .foregroundColor(DS.Color.textPrimary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, DS.Spacing.lg)
+
+                // حقل تعديل الاسم
+                DSTextField(
+                    label: L10n.t("الاسم المعدّل", "Modified Name"),
+                    placeholder: L10n.t("اكتب الاسم الصحيح", "Enter correct name"),
+                    text: $editedName,
+                    icon: "pencil",
+                    iconColor: DS.Color.primary
+                )
+                .padding(.horizontal, DS.Spacing.lg)
+
+                Text(L10n.t(
+                    "يمكنك تعديل الاسم قبل الموافقة عليه.",
+                    "You can modify the name before approving."
+                ))
+                .font(DS.Font.caption1)
+                .foregroundColor(DS.Color.textTertiary)
+                .padding(.horizontal, DS.Spacing.xxl)
+
+                DSPrimaryButton(
+                    L10n.t("موافقة بالاسم المعدّل", "Approve with Modified Name"),
+                    icon: "checkmark.circle.fill"
+                ) {
+                    let trimmed = editedName.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !trimmed.isEmpty else { return }
+                    Task {
+                        var modifiedRequest = request
+                        modifiedRequest.newValue = trimmed
+                        await adminRequestVM.approveNameChangeRequest(request: modifiedRequest)
+                        nameEditRequest = nil
+                    }
+                }
+                .disabled(editedName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .padding(.horizontal, DS.Spacing.lg)
+
+                Spacer()
+            }
+            .padding(.top, DS.Spacing.xl)
+            .navigationTitle(L10n.t("تعديل الاسم", "Edit Name"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button(L10n.t("إلغاء", "Cancel")) { nameEditRequest = nil }
+                        .foregroundColor(DS.Color.primary)
+                }
+            }
+        }
+        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+    }
+
+    // MARK: - Admin Phone Edit Sheet
+    private func adminPhoneEditSheet(request: PhoneChangeRequest) -> some View {
+        NavigationStack {
+            VStack(spacing: DS.Spacing.xl) {
+                // الرقم الحالي
+                HStack(spacing: DS.Spacing.sm) {
+                    Text(L10n.t("الرقم الحالي:", "Current number:"))
+                        .font(DS.Font.caption1)
+                        .foregroundColor(DS.Color.textSecondary)
+                    Text(KuwaitPhone.display(request.member?.phoneNumber))
+                        .font(DS.Font.calloutBold)
+                        .foregroundColor(DS.Color.textPrimary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, DS.Spacing.lg)
+
+                // الرقم المطلوب
+                HStack(spacing: DS.Spacing.sm) {
+                    Text(L10n.t("الرقم المطلوب:", "Requested number:"))
+                        .font(DS.Font.caption1)
+                        .foregroundColor(DS.Color.textSecondary)
+                    Text(KuwaitPhone.display(request.newValue))
+                        .font(DS.Font.calloutBold)
+                        .foregroundColor(DS.Color.success)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, DS.Spacing.lg)
+
+                // حقل تعديل الرقم
+                DSTextField(
+                    label: L10n.t("الرقم المعدّل", "Modified Number"),
+                    placeholder: L10n.t("اكتب الرقم الصحيح", "Enter correct number"),
+                    text: $editedPhone,
+                    icon: "phone",
+                    iconColor: DS.Color.primary
+                )
+                .keyboardType(.phonePad)
+                .padding(.horizontal, DS.Spacing.lg)
+
+                Text(L10n.t(
+                    "يمكنك تعديل الرقم قبل الموافقة عليه.",
+                    "You can modify the number before approving."
+                ))
+                .font(DS.Font.caption1)
+                .foregroundColor(DS.Color.textTertiary)
+                .padding(.horizontal, DS.Spacing.xxl)
+
+                DSPrimaryButton(
+                    L10n.t("موافقة بالرقم المعدّل", "Approve with Modified Number"),
+                    icon: "checkmark.circle.fill"
+                ) {
+                    let trimmed = editedPhone.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !trimmed.isEmpty else { return }
+                    Task {
+                        var modifiedRequest = request
+                        modifiedRequest.newValue = trimmed
+                        await adminRequestVM.approvePhoneChangeRequest(request: modifiedRequest)
+                        phoneEditRequest = nil
+                    }
+                }
+                .disabled(editedPhone.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .padding(.horizontal, DS.Spacing.lg)
+
+                Spacer()
+            }
+            .padding(.top, DS.Spacing.xl)
+            .navigationTitle(L10n.t("تعديل الرقم", "Edit Number"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button(L10n.t("إلغاء", "Cancel")) { phoneEditRequest = nil }
+                        .foregroundColor(DS.Color.primary)
+                }
+            }
+        }
+        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
 
     // MARK: - Tree Edit Row

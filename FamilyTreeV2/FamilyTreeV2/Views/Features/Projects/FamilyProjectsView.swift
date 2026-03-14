@@ -337,7 +337,8 @@ struct AddProjectView: View {
                             enableCrop: true,
                             cropShape: .circle,
                             title: L10n.t("شعار المشروع", "Project Logo"),
-                            trailing: L10n.t("اختياري", "Optional")
+                            trailing: L10n.t("اختياري", "Optional"),
+                            compactEmptyState: true
                         )
                         
                         DSSectionHeader(title: L10n.t("معلومات المشروع", "Project Info"), icon: "briefcase.fill")

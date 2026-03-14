@@ -6,39 +6,43 @@ struct WaitingForApprovalView: View {
     // Animation states
     @State private var pulseScale: CGFloat = 1.0
     @State private var pulseOpacity: CGFloat = 0.6
-    @State private var iconRotation: Double = 0
-    @State private var dotOffset: CGFloat = 0
+    @State private var ringRotation: Double = 0
+    @State private var dotPhase: CGFloat = 0
     @State private var cardAppeared = false
     @State private var contentOpacity: CGFloat = 0
+    @State private var iconBounce: CGFloat = 0
+    @State private var buttonsAppeared = false
 
     var body: some View {
         ZStack {
             DS.Color.background.ignoresSafeArea()
+            DSDecorativeBackground()
 
-            // Decorative gradient background
-            decorativeBackground
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: DS.Spacing.xxl) {
+                    Spacer().frame(height: DS.Spacing.xxxxl)
 
-            VStack(spacing: DS.Spacing.xxl) {
-                Spacer()
+                    // أيقونة الانتظار مع الحركة
+                    waitingIcon
+                        .opacity(contentOpacity)
+                        .scaleEffect(contentOpacity)
 
-                // Animated waiting icon with gradient circle and pulse
-                waitingIcon
-                    .opacity(contentOpacity)
+                    // نقاط التحميل
+                    animatedDots
+                        .opacity(contentOpacity)
 
-                // Animated progress dots
-                animatedDots
-                    .opacity(contentOpacity)
+                    // بطاقة المعلومات
+                    infoCard
+                        .opacity(cardAppeared ? 1 : 0)
+                        .offset(y: cardAppeared ? 0 : 30)
 
-                // Info card with gradient accent
-                infoCard
-                    .opacity(cardAppeared ? 1 : 0)
-                    .offset(y: cardAppeared ? 0 : 30)
+                    // الأزرار
+                    actionButtons
+                        .opacity(buttonsAppeared ? 1 : 0)
+                        .offset(y: buttonsAppeared ? 0 : 20)
 
-                Spacer()
-
-                // Action buttons
-                actionButtons
-                    .opacity(contentOpacity)
+                    Spacer().frame(height: DS.Spacing.xxl)
+                }
             }
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         }
@@ -47,86 +51,60 @@ struct WaitingForApprovalView: View {
         }
     }
 
-    // MARK: - Decorative Background
-    private var decorativeBackground: some View {
-        ZStack {
-            // Blue gradient from top — مطابق للـ Figma
-            LinearGradient(
-                colors: [
-                    DS.Color.primary.opacity(0.12),
-                    DS.Color.accent.opacity(0.06),
-                    .clear
-                ],
-                startPoint: .top,
-                endPoint: .center
-            )
-            .ignoresSafeArea()
-
-            // Decorative circles
-            Circle()
-                .fill(DS.Color.primary.opacity(0.06))
-                .frame(width: 300, height: 300)
-                .blur(radius: 40)
-                .offset(x: -120, y: -300)
-
-            Circle()
-                .fill(DS.Color.accent.opacity(0.05))
-                .frame(width: 200, height: 200)
-                .blur(radius: 30)
-                .offset(x: 150, y: -200)
-
-            Circle()
-                .fill(DS.Color.primary.opacity(0.04))
-                .frame(width: 180, height: 180)
-                .blur(radius: 30)
-                .offset(x: -100, y: 400)
-
-            Circle()
-                .fill(DS.Color.gridDiwaniya.opacity(0.04))
-                .frame(width: 120, height: 120)
-                .blur(radius: 20)
-                .offset(x: 160, y: 300)
-        }
-    }
-
     // MARK: - Waiting Icon
     private var waitingIcon: some View {
         ZStack {
-            // Animated pulse rings
+            // حلقة خارجية متقطعة دوّارة
             Circle()
-                .stroke(DS.Color.gradientPrimary, lineWidth: 2)
-                .frame(width: 160, height: 160)
+                .trim(from: 0, to: 0.7)
+                .stroke(
+                    DS.Color.gradientPrimary,
+                    style: StrokeStyle(lineWidth: 2.5, lineCap: .round)
+                )
+                .frame(width: 150, height: 150)
+                .rotationEffect(.degrees(ringRotation))
+
+            // حلقة نبض
+            Circle()
+                .stroke(DS.Color.warning.opacity(0.3), lineWidth: 1.5)
+                .frame(width: 140, height: 140)
                 .scaleEffect(pulseScale)
                 .opacity(pulseOpacity)
 
+            // الخلفية المتدرجة
             Circle()
-                .stroke(DS.Color.gradientPrimary, lineWidth: 1.5)
-                .frame(width: 140, height: 140)
-                .scaleEffect(pulseScale * 0.9)
-                .opacity(pulseOpacity * 0.7)
-
-            // Outer glow ring
-            Circle()
-                .fill(DS.Color.warning.opacity(0.08))
+                .fill(
+                    RadialGradient(
+                        colors: [
+                            DS.Color.warning.opacity(0.12),
+                            DS.Color.warning.opacity(0.04),
+                            .clear
+                        ],
+                        center: .center,
+                        startRadius: 20,
+                        endRadius: 70
+                    )
+                )
                 .frame(width: 130, height: 130)
 
-            // Gradient circle
+            // الدائرة الرئيسية
             Circle()
                 .fill(
                     LinearGradient(
-                        colors: [DS.Color.warning, DS.Color.warning.opacity(0.7), DS.Color.primary],
+                        colors: [DS.Color.warning, DS.Color.warning.opacity(0.75), DS.Color.primary],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
                 )
-                .frame(width: 110, height: 110)
-                .overlay(Circle().stroke(DS.Color.overlayIcon, lineWidth: 0.5))
+                .frame(width: 100, height: 100)
+                .shadow(color: DS.Color.warning.opacity(0.25), radius: 16, y: 6)
 
-            Image(systemName: "clock.badge.checkmark.fill")
-                .font(DS.Font.scaled(48, weight: .bold))
+            // الأيقونة
+            Image(systemName: "hourglass")
+                .font(DS.Font.scaled(40, weight: .semibold))
                 .foregroundColor(DS.Color.textOnPrimary)
+                .offset(y: iconBounce)
         }
-        .dsGlowShadow()
     }
 
     // MARK: - Animated Dots
@@ -134,74 +112,84 @@ struct WaitingForApprovalView: View {
         HStack(spacing: DS.Spacing.sm) {
             ForEach(0..<3, id: \.self) { index in
                 Circle()
-                    .fill(DS.Color.gradientPrimary)
-                    .frame(width: 8, height: 8)
-                    .scaleEffect(dotOffset == CGFloat(index) ? 1.4 : 0.8)
-                    .opacity(dotOffset == CGFloat(index) ? 1.0 : 0.4)
+                    .fill(DS.Color.warning.opacity(dotPhase == CGFloat(index) ? 1.0 : 0.3))
+                    .frame(width: 7, height: 7)
+                    .scaleEffect(dotPhase == CGFloat(index) ? 1.3 : 0.8)
                     .animation(
                         .easeInOut(duration: 0.5)
                             .repeatForever(autoreverses: true)
                             .delay(Double(index) * 0.2),
-                        value: dotOffset
+                        value: dotPhase
                     )
             }
         }
-        .padding(.top, DS.Spacing.sm)
+        .padding(.top, DS.Spacing.xs)
     }
 
     // MARK: - Info Card
     private var infoCard: some View {
-        VStack(spacing: 0) {
-            // Gradient accent bar on top
-            RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
-                .fill(DS.Color.gradientPrimary)
-                .frame(height: 4)
-                .padding(.horizontal, DS.Spacing.xxxl)
+        VStack(spacing: DS.Spacing.lg) {
+            // العنوان
+            Text(L10n.t("طلبك قيد المراجعة", "Request Under Review"))
+                .font(DS.Font.title2)
+                .foregroundColor(DS.Color.textPrimary)
 
-            DSCard {
-                VStack(spacing: DS.Spacing.md) {
-                    Text(L10n.t("طلبك قيد المراجعة", "Request Under Review"))
-                        .font(DS.Font.title2)
-                        .foregroundColor(DS.Color.textPrimary)
-                        .multilineTextAlignment(.center)
+            // الوصف
+            Text(L10n.t(
+                "تم إرسال بياناتك إلى إدارة شجرة العائلة.\nيرجى الانتظار حتى يتم تفعيل الحساب.",
+                "Your information has been submitted.\nPlease wait for account activation."
+            ))
+            .font(DS.Font.body)
+            .foregroundColor(DS.Color.textPrimary.opacity(0.75))
+            .multilineTextAlignment(.center)
+            .lineSpacing(4)
 
-                    Text(L10n.t(
-                        "تم إرسال بياناتك إلى إدارة شجرة العائلة. يرجى الانتظار حتى يتم تفعيل الحساب من المدير أو المشرف.",
-                        "Your information has been submitted. Please wait for an admin or supervisor to activate your account."
-                    ))
-                    .font(DS.Font.body)
-                    .foregroundColor(DS.Color.textSecondary)
-                    .multilineTextAlignment(.center)
-
-                    // Status badge
-                    HStack(spacing: DS.Spacing.xs) {
-                        Circle()
-                            .fill(DS.Color.warning)
-                            .frame(width: 8, height: 8)
-                        Text(L10n.t("قيد الانتظار", "Pending"))
-                            .font(DS.Font.caption1)
-                            .foregroundColor(DS.Color.warning)
-                    }
-                    .padding(.horizontal, DS.Spacing.md)
-                    .padding(.vertical, DS.Spacing.xs)
-                    .background(DS.Color.warning.opacity(0.10))
-                    .cornerRadius(DS.Radius.full)
-                }
-                .padding(DS.Spacing.xl)
+            // شارة الحالة
+            HStack(spacing: DS.Spacing.xs) {
+                Circle()
+                    .fill(DS.Color.warning)
+                    .frame(width: 8, height: 8)
+                    .scaleEffect(pulseScale > 1.05 ? 1.2 : 1.0)
+                Text(L10n.t("قيد الانتظار", "Pending"))
+                    .font(DS.Font.caption1)
+                    .foregroundColor(DS.Color.warning)
             }
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.xl)
-                    .stroke(DS.Color.gradientPrimary, lineWidth: 1)
-                    .opacity(0.2)
-            )
+            .padding(.horizontal, DS.Spacing.lg)
+            .padding(.vertical, DS.Spacing.sm)
+            .background(DS.Color.warning.opacity(0.08))
+            .cornerRadius(DS.Radius.full)
+
+            DSDivider()
+
+            // ملاحظة الإشعار
+            HStack(spacing: DS.Spacing.sm) {
+                Image(systemName: "bell.badge.fill")
+                    .font(DS.Font.scaled(14, weight: .medium))
+                    .foregroundColor(DS.Color.primary)
+
+                Text(L10n.t(
+                    "سيصلك إشعار فور الموافقة على طلبك",
+                    "You'll be notified once your request is approved"
+                ))
+                .font(DS.Font.footnote)
+                .foregroundColor(DS.Color.textSecondary)
+            }
         }
+        .padding(DS.Spacing.xl)
+        .padding(.vertical, DS.Spacing.xs)
+        .background(DS.Color.surface)
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
+                .stroke(DS.Color.warning.opacity(0.15), lineWidth: 1)
+        )
+        .dsSubtleShadow()
         .padding(.horizontal, DS.Spacing.xl)
     }
 
     // MARK: - Action Buttons
     private var actionButtons: some View {
         VStack(spacing: DS.Spacing.md) {
-            // Refresh button with gradient
             DSPrimaryButton(
                 L10n.t("تحديث حالة الطلب", "Refresh Status"),
                 icon: "arrow.clockwise",
@@ -211,7 +199,6 @@ struct WaitingForApprovalView: View {
             }
             .padding(.horizontal, DS.Spacing.xl)
 
-            // Sign out button with border stroke style
             Button(action: {
                 Task { await authVM.signOut() }
             }) {
@@ -224,11 +211,11 @@ struct WaitingForApprovalView: View {
                 .foregroundColor(DS.Color.error)
                 .frame(maxWidth: .infinity)
                 .frame(height: 50)
-                .background(DS.Color.error.opacity(0.08))
+                .background(DS.Color.error.opacity(0.06))
                 .cornerRadius(DS.Radius.lg)
                 .overlay(
                     RoundedRectangle(cornerRadius: DS.Radius.lg)
-                        .stroke(DS.Color.error.opacity(0.3), lineWidth: 1.5)
+                        .stroke(DS.Color.error.opacity(0.2), lineWidth: 1)
                 )
             }
             .padding(.horizontal, DS.Spacing.xl)
@@ -238,28 +225,50 @@ struct WaitingForApprovalView: View {
 
     // MARK: - Animations
     private func startAnimations() {
-        // Content fade in
-        withAnimation(.easeOut(duration: 0.6).delay(0.2)) {
+        // ظهور المحتوى
+        withAnimation(DS.Anim.elastic.delay(0.2)) {
             contentOpacity = 1.0
         }
 
-        // Card slide up
-        withAnimation(.spring(response: 0.7, dampingFraction: 0.7).delay(0.4)) {
+        // ظهور البطاقة
+        withAnimation(DS.Anim.elastic.delay(0.5)) {
             cardAppeared = true
         }
 
-        // Pulse animation
+        // ظهور الأزرار
+        withAnimation(DS.Anim.smooth.delay(0.7)) {
+            buttonsAppeared = true
+        }
+
+        // دوران الحلقة
         withAnimation(
-            .easeInOut(duration: 2.0)
+            .linear(duration: 3.0)
+                .repeatForever(autoreverses: false)
+        ) {
+            ringRotation = 360
+        }
+
+        // نبض الحلقة
+        withAnimation(
+            .easeInOut(duration: 1.8)
                 .repeatForever(autoreverses: true)
         ) {
-            pulseScale = 1.15
+            pulseScale = 1.12
             pulseOpacity = 0.0
         }
 
-        // Dot animation trigger
+        // حركة الأيقونة
+        withAnimation(
+            .easeInOut(duration: 1.5)
+                .repeatForever(autoreverses: true)
+                .delay(0.3)
+        ) {
+            iconBounce = -4
+        }
+
+        // نقاط التحميل
         withAnimation(.easeInOut(duration: 0.5).repeatForever(autoreverses: true)) {
-            dotOffset = 2
+            dotPhase = 2
         }
     }
 }

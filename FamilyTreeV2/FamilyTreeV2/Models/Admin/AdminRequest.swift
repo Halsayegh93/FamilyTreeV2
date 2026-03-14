@@ -5,7 +5,7 @@ struct AdminRequest: Identifiable, Codable {
     let memberId: UUID
     let requesterId: UUID
     let requestType: String
-    let newValue: String?
+    var newValue: String?
     var status: String
     let details: String?
     let createdAt: String? // نخليه String ليتوافق مع نظام السيرفر عندك

@@ -28,20 +28,19 @@ struct ImageCropperView: View {
             let cropSize = max(min(screenW - 40, screenH * 0.55), 44)
 
             ZStack {
-                // خلفية شفافة مع blur
+                // خلفية
                 Color(uiColor: .systemBackground).ignoresSafeArea()
                 Rectangle()
                     .fill(.ultraThinMaterial)
                     .ignoresSafeArea()
 
                 ZStack {
-                    // Image layer
+                    // Image layer — بدون clipped عشان الصورة الكاملة متاحة
                     if let img = displayImage {
                         Image(uiImage: img)
                             .resizable()
                             .scaledToFill()
                             .frame(width: cropSize * 1.5, height: cropSize * 1.5)
-                            .clipped()
                             .scaleEffect(scale)
                             .offset(offset)
                     } else {
@@ -54,6 +53,7 @@ struct ImageCropperView: View {
                 }
                 .frame(width: screenW, height: screenH)
                 .contentShape(Rectangle())
+                .clipped()
                 .gesture(dragGesture)
                 .gesture(pinchGesture)
                 .simultaneousGesture(doubleTapGesture)
@@ -207,67 +207,41 @@ struct ImageCropperView: View {
 
     // MARK: - Crop
 
+    /// تصحيح اتجاه الصورة بحيث يتطابق cgImage مع UIImage.size
+    private func normalizeOrientation(_ source: UIImage) -> UIImage {
+        guard source.imageOrientation != .up else { return source }
+        let renderer = UIGraphicsImageRenderer(size: source.size)
+        return renderer.image { _ in
+            source.draw(in: CGRect(origin: .zero, size: source.size))
+        }
+    }
+
+    @MainActor
     private func performCrop() -> UIImage {
-        let sourceImage = image
-        let imageSize = sourceImage.size
-        guard imageSize.width > 0, imageSize.height > 0 else { return sourceImage }
+        let sourceImage = normalizeOrientation(image)
+        guard sourceImage.size.width > 0, sourceImage.size.height > 0 else { return sourceImage }
 
-        // مطابقة حسابات العرض بالضبط
         let viewCropSize = max(min(containerSize.width - 40, containerSize.height * 0.55), 44)
-        let frameSize = viewCropSize * 1.5
 
-        // scaledToFill: الصورة تملأ الإطار بالكامل (البعد الأصغر يطابق الإطار)
-        let imageAspect = imageSize.width / imageSize.height
-        let frameAspect: CGFloat = 1.0 // الإطار مربع
+        // نرسم نفس الـ View بالضبط — نفس الـ frame + scale + offset — ثم نقص بحجم الدائرة
+        let cropView = Image(uiImage: sourceImage)
+            .resizable()
+            .scaledToFill()
+            .frame(width: viewCropSize * 1.5, height: viewCropSize * 1.5)
+            .scaleEffect(scale)
+            .offset(offset)
+            .frame(width: viewCropSize, height: viewCropSize)
+            .clipped()
 
-        var renderedWidth: CGFloat
-        var renderedHeight: CGFloat
+        // جودة عالية — على الأقل 1500 بكسل
+        let outputScale = min(max(1500 / viewCropSize, UIScreen.main.scale), 8)
 
-        if imageAspect > frameAspect {
-            // الصورة أعرض — الارتفاع يطابق الإطار
-            renderedHeight = frameSize
-            renderedWidth = frameSize * imageAspect
-        } else {
-            // الصورة أطول — العرض يطابق الإطار
-            renderedWidth = frameSize
-            renderedHeight = frameSize / imageAspect
+        let renderer = ImageRenderer(content: cropView)
+        renderer.scale = outputScale
+
+        if let uiImage = renderer.uiImage {
+            return uiImage
         }
-
-        // تطبيق الـ scale
-        renderedWidth *= scale
-        renderedHeight *= scale
-
-        // مركز الصورة المعروضة يتوسط الشاشة
-        // الـ offset يحرك الصورة، لذا مركز القص بالنسبة للصورة هو:
-        // (نصف حجم الصورة المعروضة - الإزاحة)
-        let cropCenterInImageViewX = renderedWidth / 2 - offset.width
-        let cropCenterInImageViewY = renderedHeight / 2 - offset.height
-
-        // تحويل من إحداثيات العرض إلى إحداثيات الصورة الأصلية
-        let ratioX = imageSize.width / renderedWidth
-        let ratioY = imageSize.height / renderedHeight
-
-        let realCenterX = cropCenterInImageViewX * ratioX
-        let realCenterY = cropCenterInImageViewY * ratioY
-        let realCropSize = viewCropSize * ratioX
-
-        var cropRect = CGRect(
-            x: realCenterX - realCropSize / 2,
-            y: realCenterY - realCropSize / 2,
-            width: realCropSize,
-            height: realCropSize
-        )
-
-        // ضمان عدم الخروج عن حدود الصورة
-        cropRect = cropRect.intersection(CGRect(origin: .zero, size: imageSize))
-
-        guard !cropRect.isEmpty,
-              let cgImage = sourceImage.cgImage?.cropping(to: cropRect) else {
-            return sourceImage
-        }
-
-        let croppedImage = UIImage(cgImage: cgImage, scale: sourceImage.scale, orientation: sourceImage.imageOrientation)
-
-        return croppedImage
+        return sourceImage
     }
 }

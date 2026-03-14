@@ -761,6 +761,17 @@ class AdminRequestViewModel: ObservableObject {
             removeLocallyThenRefresh(from: &phoneChangeRequests, id: request.id) { [weak self] in
                 await self?.fetchPhoneChangeRequests(force: true)
             }
+
+            // إشعار العضو بالرفض
+            if let requesterId = request.requesterId {
+                await notificationVM?.sendNotification(
+                    title: L10n.t("تم رفض الطلب", "Request Rejected"),
+                    body: L10n.t("تم رفض طلب تغيير رقم الجوال", "Your phone change request was rejected"),
+                    targetMemberIds: [requesterId]
+                )
+            }
+
+            Log.info("[PhoneChange] تم رفض طلب تغيير الرقم")
         } catch {
             Log.error("خطأ رفض تغيير الرقم: \(error.localizedDescription)")
         }
@@ -784,6 +795,28 @@ class AdminRequestViewModel: ObservableObject {
             }
 
             let memberName = getSafeMemberName(for: memberId)
+
+            // إشعار المستخدم بالتفعيل
+            let userTitle = "تم تفعيل حسابك"
+            let userBody = "تم تفعيل حسابك بنجاح. يمكنك الآن استخدام التطبيق."
+            if let creator = currentUser?.id {
+                let payload: [String: AnyEncodable] = [
+                    "target_member_id": AnyEncodable(memberId.uuidString),
+                    "title": AnyEncodable(userTitle),
+                    "body": AnyEncodable(userBody),
+                    "kind": AnyEncodable("account_activated"),
+                    "created_by": AnyEncodable(creator.uuidString)
+                ]
+                try? await supabase.from("notifications").insert(payload).execute()
+            }
+            await notificationVM?.sendPushToMembers(
+                title: userTitle,
+                body: userBody,
+                kind: "account_activated",
+                targetMemberIds: [memberId]
+            )
+
+            // إشعار المدراء
             await notificationVM?.notifyAdmins(
                 title: "تفعيل حساب",
                 body: "تم تفعيل حساب \(memberName).",

@@ -20,6 +20,7 @@ struct AddSonByAdminSheet: View {
     @State private var isDeceased: Bool = false
     @State private var hasDeathDate: Bool = false
     @State private var deathDate: Date = Date()
+    @State private var isSaving = false
 
     init(parent: FamilyMember, editingChild: FamilyMember? = nil) {
         self.parent = parent
@@ -103,7 +104,7 @@ struct AddSonByAdminSheet: View {
                             .fontWeight(.bold)
                             .foregroundColor(DS.Color.primary)
                     }
-                    .disabled(firstName.isEmpty)
+                    .disabled(firstName.isEmpty || isSaving)
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(L10n.t("إلغاء", "Cancel")) { dismiss() }
@@ -351,6 +352,8 @@ struct AddSonByAdminSheet: View {
 
     // MARK: - Save Action
     private func saveAction() {
+        guard !isSaving else { return }
+        isSaving = true
         // Capture values before dismiss
         let capturedFirstName = firstName
         let capturedPhone = KuwaitPhone.normalizedForStorage(
@@ -369,8 +372,26 @@ struct AddSonByAdminSheet: View {
         // Dismiss immediately for snappy UX
         dismiss()
 
+        let adminName = authVM.currentUser?.firstName ?? "مدير"
+        let parentName = parent.firstName
+
         if let child = editingChild {
-            // Edit mode: update existing child
+            // Edit mode: detect what actually changed
+            let origPhone = KuwaitPhone.normalizedForStorage(
+                country: KuwaitPhone.detectCountryAndLocal(child.phoneNumber).country,
+                rawLocalDigits: KuwaitPhone.detectCountryAndLocal(child.phoneNumber).localDigits
+            ) ?? ""
+            let nameChanged = capturedFirstName != child.firstName
+            let phoneChanged = capturedPhone != origPhone
+            let birthChanged = capturedBirthDate != child.birthDate
+            let deceasedChanged = capturedIsDeceased != (child.isDeceased ?? false)
+            let deathChanged = capturedDeathDate != child.deathDate
+            let genderChanged = capturedGender != (child.gender ?? "male")
+
+            let somethingChanged = nameChanged || phoneChanged || birthChanged || deceasedChanged || deathChanged || genderChanged
+
+            guard somethingChanged else { return }
+
             Task {
                 await vm.updateChildData(
                     member: child,
@@ -381,6 +402,25 @@ struct AddSonByAdminSheet: View {
                     deathDate: capturedDeathDate,
                     gender: capturedGender
                 )
+
+                // بناء قائمة الحقول المتغيرة فقط
+                var changedFields: [String] = []
+                if nameChanged { changedFields.append(L10n.t("الاسم", "Name")) }
+                if phoneChanged { changedFields.append(L10n.t("الهاتف", "Phone")) }
+                if birthChanged { changedFields.append(L10n.t("تاريخ الميلاد", "Birth date")) }
+                if deceasedChanged || deathChanged { changedFields.append(L10n.t("حالة الوفاة", "Deceased status")) }
+                if genderChanged { changedFields.append(L10n.t("الجنس", "Gender")) }
+
+                let fieldsList = changedFields.joined(separator: "، ")
+                await vm.notificationVM?.notifyAdminsWithPush(
+                    title: L10n.t("تعديل بيانات ابن", "Child Data Updated"),
+                    body: L10n.t(
+                        "قام \(adminName) بتعديل \(capturedFirstName) ابن \(parentName): \(fieldsList)",
+                        "\(adminName) updated \(capturedFirstName) son of \(parentName): \(fieldsList)"
+                    ),
+                    kind: "admin_edit"
+                )
+                Log.info("[Admin] \(adminName) عدّل بيانات الابن \(capturedFirstName): \(fieldsList)")
             }
         } else {
             // Add mode: create new child
@@ -396,6 +436,16 @@ struct AddSonByAdminSheet: View {
                     gender: capturedGender,
                     silent: true
                 )
+                // إشعار: أي مدير أضاف الابن
+                await vm.notificationVM?.notifyAdminsWithPush(
+                    title: L10n.t("إضافة ابن بواسطة المدير", "Child Added by Admin"),
+                    body: L10n.t(
+                        "قام \(adminName) بإضافة \(capturedFirstName) للسيد \(parentName)",
+                        "\(adminName) added \(capturedFirstName) to \(parentName)"
+                    ),
+                    kind: "admin_child_add"
+                )
+                Log.info("[Admin] \(adminName) أضاف الابن \(capturedFirstName) لـ \(parentName)")
             }
         }
     }

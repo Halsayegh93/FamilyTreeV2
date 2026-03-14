@@ -7,6 +7,8 @@ struct AdminAppSettingsView: View {
     @EnvironmentObject var appSettingsVM: AppSettingsViewModel
 
     @State private var showResetConfirmation = false
+    @State private var showResetCooldownAlert = false
+    @State private var cooldownDisabled = ProfileEditCooldown.shared.isDisabled
 
     var body: some View {
         ZStack {
@@ -25,6 +27,9 @@ struct AdminAppSettingsView: View {
 
                     // الأمان
                     securitySection
+
+                    // عداد التعديل
+                    cooldownSection
 
                     // معلومات النظام
                     systemInfoSection
@@ -58,6 +63,20 @@ struct AdminAppSettingsView: View {
                 "All settings will be restored to default values"
             ))
         }
+        .alert(
+            L10n.t("تصفير العداد", "Reset Cooldown"),
+            isPresented: $showResetCooldownAlert
+        ) {
+            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
+            Button(L10n.t("تصفير", "Reset"), role: .destructive) {
+                ProfileEditCooldown.shared.resetAllCooldowns()
+            }
+        } message: {
+            Text(L10n.t(
+                "سيتم إعادة تعيين جميع فترات الانتظار وسيصبح بإمكانك التعديل فوراً",
+                "All cooldown timers will be reset and you can edit immediately"
+            ))
+        }
     }
 
     // MARK: - Registration & Membership
@@ -77,18 +96,6 @@ struct AdminAppSettingsView: View {
                 subtitle: L10n.t("السماح لأعضاء جدد بالتسجيل في التطبيق", "Allow new members to register in the app"),
                 isOn: appSettingsVM.settings.allowNewRegistrations,
                 key: "allow_new_registrations"
-            )
-
-            DSDivider()
-
-            // الفترة التجريبية
-            settingToggle(
-                icon: "clock.badge.checkmark",
-                color: DS.Color.warning,
-                title: L10n.t("الفترة التجريبية", "Trial Period"),
-                subtitle: L10n.t("تفعيل فترة ٧ أيام تجريبية للأعضاء الجدد", "Enable 7-day trial for new members"),
-                isOn: appSettingsVM.settings.trialEnabled,
-                key: "trial_enabled"
             )
 
             DSDivider()
@@ -180,6 +187,67 @@ struct AdminAppSettingsView: View {
                 isOn: appSettingsVM.settings.maintenanceMode,
                 key: "maintenance_mode"
             )
+        }
+        .padding(.horizontal, DS.Spacing.lg)
+    }
+
+    // MARK: - Edit Cooldown
+    private var cooldownSection: some View {
+        DSCard(padding: 0) {
+            DSSectionHeader(
+                title: L10n.t("عداد التعديل", "Edit Cooldown"),
+                icon: "timer",
+                iconColor: DS.Color.warning
+            )
+
+            // إيقاف / تشغيل العداد
+            HStack(spacing: DS.Spacing.md) {
+                DSIcon("pause.circle.fill", color: DS.Color.warning)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(L10n.t("إيقاف العداد", "Disable Cooldown"))
+                        .font(DS.Font.calloutBold)
+                        .foregroundColor(DS.Color.textPrimary)
+                    Text(L10n.t("السماح بالتعديل بدون فترة انتظار", "Allow edits without waiting period"))
+                        .font(DS.Font.caption1)
+                        .foregroundColor(DS.Color.textSecondary)
+                }
+
+                Spacer()
+
+                Toggle("", isOn: $cooldownDisabled)
+                    .labelsHidden()
+                    .tint(DS.Color.warning)
+                    .onChange(of: cooldownDisabled) { _, newValue in
+                        ProfileEditCooldown.shared.isDisabled = newValue
+                    }
+            }
+            .padding(.horizontal, DS.Spacing.lg)
+            .padding(.vertical, DS.Spacing.sm)
+
+            DSDivider()
+
+            // تصفير العداد
+            Button { showResetCooldownAlert = true } label: {
+                HStack(spacing: DS.Spacing.md) {
+                    DSIcon("arrow.counterclockwise.circle.fill", color: DS.Color.warning)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(L10n.t("تصفير العداد", "Reset Cooldown"))
+                            .font(DS.Font.calloutBold)
+                            .foregroundColor(DS.Color.warning)
+                        Text(L10n.t("إعادة تعيين جميع فترات الانتظار", "Reset all edit cooldown timers"))
+                            .font(DS.Font.caption1)
+                            .foregroundColor(DS.Color.textSecondary)
+                    }
+
+                    Spacer()
+                }
+                .padding(.horizontal, DS.Spacing.lg)
+                .padding(.vertical, DS.Spacing.sm)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(DSBoldButtonStyle())
         }
         .padding(.horizontal, DS.Spacing.lg)
     }

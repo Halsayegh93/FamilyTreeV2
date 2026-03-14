@@ -24,7 +24,106 @@ struct AdminActivateAccountsView: View {
     // MARK: - Combined Filter
 
     enum MemberFilter: String, CaseIterable {
-        case notActivated, noPhone, noBirthDate, noFather, noGender
+        case notActivated, missingInfo, noFather, noGender
+
+        var label: String {
+            switch self {
+            case .notActivated: return L10n.t("غير مفعل", "Not Activated")
+            case .missingInfo:  return L10n.t("هاتف / ميلاد", "Phone / Birth")
+            case .noFather:     return L10n.t("بدون أب", "No Father")
+            case .noGender:     return L10n.t("بدون جنس", "No Gender")
+            }
+        }
+
+        var icon: String {
+            switch self {
+            case .notActivated: return "person.badge.minus"
+            case .missingInfo:  return "doc.badge.plus"
+            case .noFather:     return "person.line.dotted.person"
+            case .noGender:     return "person.fill.questionmark"
+            }
+        }
+
+        var color: Color {
+            switch self {
+            case .notActivated: return DS.Color.textTertiary
+            case .missingInfo:  return DS.Color.warning
+            case .noFather:     return DS.Color.info
+            case .noGender:     return DS.Color.neonPurple
+            }
+        }
+    }
+
+    // MARK: - Data
+
+    /// All living non-pending members that have at least one issue
+    private var allIssueMembers: [FamilyMember] {
+        memberVM.allMembers
+            .filter { $0.role != .pending && $0.isDeceased != true }
+            .filter { memberHasAnyIssue($0) }
+            .sorted { $0.fullName < $1.fullName }
+    }
+
+    private func memberHasAnyIssue(_ m: FamilyMember) -> Bool {
+        isNotActivated(m) || hasMissingInfo(m) || isMissingFather(m) || isMissingGender(m)
+    }
+
+    /// بدون هاتف (للأحياء فقط) أو بدون ميلاد
+    private func hasMissingInfo(_ m: FamilyMember) -> Bool {
+        hasNoPhone(m) || isMissingBirthDate(m)
+    }
+
+    // Individual checks
+    private func isNotActivated(_ m: FamilyMember) -> Bool {
+        m.status == nil || m.status == .pending
+    }
+
+    private func hasNoPhone(_ m: FamilyMember) -> Bool {
+        m.phoneNumber == nil || (m.phoneNumber ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func isMissingBirthDate(_ m: FamilyMember) -> Bool {
+        m.birthDate == nil || (m.birthDate ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func isMissingFather(_ m: FamilyMember) -> Bool {
+        m.fatherId == nil
+    }
+
+    private func isMissingGender(_ m: FamilyMember) -> Bool {
+        m.gender == nil || (m.gender ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    // Counts per filter
+    private func count(for filter: MemberFilter) -> Int {
+        allIssueMembers.filter { matches(member: $0, filter: filter) }.count
+    }
+
+    private func matches(member: FamilyMember, filter: MemberFilter) -> Bool {
+        switch filter {
+        case .notActivated: return isNotActivated(member)
+        case .missingInfo:  return hasMissingInfo(member)
+        case .noFather:     return isMissingFather(member)
+        case .noGender:     return isMissingGender(member)
+        }
+    }
+
+    private var filteredMembers: [FamilyMember] {
+        var members = allIssueMembers.filter { matches(member: $0, filter: selectedFilter) }
+        if !searchText.isEmpty {
+            let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+            members = members.filter { $0.fullName.localizedCaseInsensitiveContains(query) }
+        }
+        return members
+    }
+
+    /// نوع المشكلة التفصيلية (لعرض التاقات على كل عضو)
+    enum IssueTag: Hashable {
+        case notActivated
+        case noPhone
+        case noBirthDate
+        case noFather
+        case noGender
 
         var label: String {
             switch self {
@@ -57,73 +156,14 @@ struct AdminActivateAccountsView: View {
         }
     }
 
-    // MARK: - Data
-
-    /// All living non-pending members that have at least one issue
-    private var allIssueMembers: [FamilyMember] {
-        memberVM.allMembers
-            .filter { $0.role != .pending && $0.isDeceased != true }
-            .filter { memberHasAnyIssue($0) }
-            .sorted { $0.fullName < $1.fullName }
-    }
-
-    private func memberHasAnyIssue(_ m: FamilyMember) -> Bool {
-        isNotActivated(m) || hasNoPhone(m) || isMissingBirthDate(m) || isMissingFather(m) || isMissingGender(m)
-    }
-
-    // Individual checks
-    private func isNotActivated(_ m: FamilyMember) -> Bool {
-        m.status == nil || m.status == .pending
-    }
-
-    private func hasNoPhone(_ m: FamilyMember) -> Bool {
-        m.phoneNumber == nil || (m.phoneNumber ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
-
-    private func isMissingBirthDate(_ m: FamilyMember) -> Bool {
-        m.birthDate == nil || (m.birthDate ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
-
-    private func isMissingFather(_ m: FamilyMember) -> Bool {
-        m.fatherId == nil
-    }
-
-    private func isMissingGender(_ m: FamilyMember) -> Bool {
-        m.gender == nil || (m.gender ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
-
-    // Counts per filter
-    private func count(for filter: MemberFilter) -> Int {
-        allIssueMembers.filter { matches(member: $0, filter: filter) }.count
-    }
-
-    private func matches(member: FamilyMember, filter: MemberFilter) -> Bool {
-        switch filter {
-        case .notActivated: return isNotActivated(member)
-        case .noPhone:      return hasNoPhone(member)
-        case .noBirthDate:  return isMissingBirthDate(member)
-        case .noFather:     return isMissingFather(member)
-        case .noGender:     return isMissingGender(member)
-        }
-    }
-
-    private var filteredMembers: [FamilyMember] {
-        var members = allIssueMembers.filter { matches(member: $0, filter: selectedFilter) }
-        if !searchText.isEmpty {
-            let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-            members = members.filter { $0.fullName.localizedCaseInsensitiveContains(query) }
-        }
-        return members
-    }
-
     /// Returns all issue tags for a given member
-    private func issueLabels(for m: FamilyMember) -> [MemberFilter] {
-        var issues: [MemberFilter] = []
-        if isNotActivated(m)    { issues.append(.notActivated) }
-        if hasNoPhone(m)        { issues.append(.noPhone) }
+    private func issueLabels(for m: FamilyMember) -> [IssueTag] {
+        var issues: [IssueTag] = []
+        if isNotActivated(m)     { issues.append(.notActivated) }
+        if hasNoPhone(m)         { issues.append(.noPhone) }
         if isMissingBirthDate(m) { issues.append(.noBirthDate) }
-        if isMissingFather(m)   { issues.append(.noFather) }
-        if isMissingGender(m)   { issues.append(.noGender) }
+        if isMissingFather(m)    { issues.append(.noFather) }
+        if isMissingGender(m)    { issues.append(.noGender) }
         return issues
     }
 
@@ -140,16 +180,17 @@ struct AdminActivateAccountsView: View {
                         .padding(.top, DS.Spacing.sm)
                         .padding(.bottom, DS.Spacing.xs)
 
-                    // Member count
-                    HStack {
+                    // Swipe hint
+                    HStack(spacing: DS.Spacing.xs) {
+                        Image(systemName: "hand.draw")
+                            .font(DS.Font.scaled(10, weight: .medium))
                         Text(L10n.t(
-                            "\(filteredMembers.count) عضو",
-                            "\(filteredMembers.count) members"
+                            "← سحب يمين: هاتف / ميلاد  •  سحب يسار: ربط أب / تفعيل →",
+                            "← Swipe right: Phone / Birth  •  Swipe left: Father / Activate →"
                         ))
-                        .font(DS.Font.caption1)
-                        .foregroundColor(DS.Color.textTertiary)
-                        Spacer()
+                        .font(DS.Font.caption2)
                     }
+                    .foregroundColor(DS.Color.textTertiary)
                     .padding(.horizontal, DS.Spacing.lg)
 
                     // Search
@@ -177,7 +218,14 @@ struct AdminActivateAccountsView: View {
                                 } else {
                                     memberRow(member: member, index: index)
                                         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                            // Right swipe: birthdate & father
+                                            if hasNoPhone(member) {
+                                                Button {
+                                                    memberToEditPhone = member
+                                                } label: {
+                                                    Label(L10n.t("هاتف", "Phone"), systemImage: "phone.badge.plus")
+                                                }
+                                                .tint(DS.Color.primary)
+                                            }
                                             if isMissingBirthDate(member) {
                                                 Button {
                                                     memberToEditBirthDate = member
@@ -186,6 +234,8 @@ struct AdminActivateAccountsView: View {
                                                 }
                                                 .tint(DS.Color.warning)
                                             }
+                                        }
+                                        .swipeActions(edge: .leading, allowsFullSwipe: false) {
                                             if isMissingFather(member) {
                                                 Button {
                                                     memberToEdit = member
@@ -194,9 +244,6 @@ struct AdminActivateAccountsView: View {
                                                 }
                                                 .tint(DS.Color.info)
                                             }
-                                        }
-                                        .swipeActions(edge: .leading, allowsFullSwipe: false) {
-                                            // Left swipe: activate & phone
                                             if isNotActivated(member) {
                                                 Button {
                                                     memberToActivate = member
@@ -205,14 +252,6 @@ struct AdminActivateAccountsView: View {
                                                     Label(L10n.t("تفعيل", "Activate"), systemImage: "checkmark.circle.fill")
                                                 }
                                                 .tint(DS.Color.success)
-                                            }
-                                            if hasNoPhone(member) {
-                                                Button {
-                                                    memberToEditPhone = member
-                                                } label: {
-                                                    Label(L10n.t("هاتف", "Phone"), systemImage: "phone.badge.plus")
-                                                }
-                                                .tint(DS.Color.primary)
                                             }
                                         }
                                 }

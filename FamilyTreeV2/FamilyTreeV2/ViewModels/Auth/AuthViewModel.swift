@@ -90,8 +90,6 @@ class AuthViewModel: ObservableObject {
     @Published var contactMessageError: String?
     @Published var otpErrorMessage: String?
     @Published var otpStatusMessage: String = ""
-    @Published private(set) var trialStartedAt: Date?
-    @Published private(set) var trialEndsAt: Date?
     @Published var deleteAccountError: String?
     @Published var bannedPhones: [BannedPhone] = []
 
@@ -101,15 +99,12 @@ class AuthViewModel: ObservableObject {
         case authenticatedNoProfile
         case fullyAuthenticated
         case pendingApproval
-        case trialExpired
         case deviceLimitExceeded
         case accountFrozen
     }
     
     static let maxDevicesPerAccount = 3
 
-    private let trialDurationDays = 7
-    
     weak var notificationVM: NotificationViewModel?
     weak var appSettingsVM: AppSettingsViewModel?
     
@@ -122,18 +117,6 @@ class AuthViewModel: ObservableObject {
         canModerate
     }
 
-    var trialDaysRemaining: Int? {
-        guard let trialEndsAt else { return nil }
-        let remainingSeconds = trialEndsAt.timeIntervalSinceNow
-        if remainingSeconds <= 0 { return 0 }
-        return Int(ceil(remainingSeconds / 86_400))
-    }
-
-    var hasActiveTrial: Bool {
-        guard let trialEndsAt else { return false }
-        return Date() < trialEndsAt
-    }
-    
     // MARK: - Schema Error Helpers
     
     private func schemaErrorDescription(_ error: Error) -> String {
@@ -233,31 +216,31 @@ class AuthViewModel: ObservableObject {
         return fallback.date(from: raw)
     }
 
-    private func resolveAuthAccess(for profile: FamilyMember) -> (status: AuthStatus, trialStart: Date?, trialEnd: Date?) {
+    private func resolveAuthAccess(for profile: FamilyMember) -> AuthStatus {
         guard profile.role != .pending else {
-            return (.pendingApproval, nil, nil)
+            return .pendingApproval
         }
 
         // العضو المجمد — يظهر له شاشة تجميد الحساب (بدون تسجيل خروج)
         if profile.status == .frozen {
             Log.info("[AUTH] العضو \(profile.fullName) حالته frozen → شاشة الحساب المجمد")
-            return (.accountFrozen, nil, nil)
+            return .accountFrozen
         }
 
         // العضو المعلق (status = pending) يظهر له شاشة انتظار الموافقة
         if profile.status == .pending {
             Log.info("[AUTH] العضو \(profile.fullName) حالته pending → شاشة انتظار الموافقة")
-            return (.pendingApproval, nil, nil)
+            return .pendingApproval
         }
 
         // العضو بدون رقم — المدير حذف رقمه → يسجّل من جديد
         let phone = profile.phoneNumber?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         if phone.isEmpty {
             Log.info("[AUTH] العضو \(profile.fullName) بدون رقم هاتف (المدير حذفه) → شاشة التسجيل")
-            return (.authenticatedNoProfile, nil, nil)
+            return .authenticatedNoProfile
         }
 
-        return (.fullyAuthenticated, nil, nil)
+        return .fullyAuthenticated
     }
     
     // MARK: - Init
@@ -658,18 +641,16 @@ class AuthViewModel: ObservableObject {
     
     private func applyAuthenticatedProfile(_ profile: FamilyMember, normalizedPhone: String?) async {
         let access = self.resolveAuthAccess(for: profile)
-        
+
         // إذا العضو ما عنده رقم أو حالته معلقة → تسجيل خروج تلقائي
-        if access.status == .unauthenticated {
+        if access == .unauthenticated {
             Log.info("[AUTH] العضو \(profile.fullName) غير مصرح له بالدخول → تسجيل خروج")
             await signOut()
             return
         }
-        
+
         self.currentUser = profile
-        self.status = access.status
-        self.trialStartedAt = access.trialStart
-        self.trialEndsAt = access.trialEnd
+        self.status = access
         
         // جلب إعدادات التطبيق من السيرفر
         await appSettingsVM?.fetchSettings()
@@ -677,13 +658,9 @@ class AuthViewModel: ObservableObject {
             self.phoneNumber = normalizedPhone
         }
         
-        // تسجيل الجهاز أولاً ثم التحقق من تصريحه
-        if access.status == .fullyAuthenticated {
-            // تسجيل الجهاز أولاً — لأن checkIfDeviceWasRevoked يتحقق من وجوده بالقائمة
+        // تسجيل الجهاز — حتى لو pendingApproval عشان يوصله إشعار الموافقة
+        if access == .fullyAuthenticated || access == .pendingApproval {
             await notificationVM?.registerDevice()
-            
-            // فحص: هل الجهاز تم حذفه من قبل المدير بعد التسجيل؟
-            // (registerDevice يستخدم upsert فإذا الجهاز محذوف من المدير سابقاً سيعاد تسجيله)
         }
     }
     
@@ -857,8 +834,6 @@ class AuthViewModel: ObservableObject {
             if isReallyNoSession {
                 Log.info("[AUTH] No session found → unauthenticated: \(error.localizedDescription)")
                 self.status = .unauthenticated
-                self.trialStartedAt = nil
-                self.trialEndsAt = nil
             } else {
                 // خطأ شبكة أو خطأ مؤقت — لا نسجل خروج، نحتفظ بالحالة الحالية
                 Log.warning("[AUTH] خطأ مؤقت في جلب الجلسة (لن نسجل خروج): \(error.localizedDescription)")
@@ -914,8 +889,6 @@ class AuthViewModel: ObservableObject {
                 if existingPhone.isEmpty {
                     Log.info("[AUTH] البروفايل بدون رقم (المدير حذفه) — توجيه مباشر للتسجيل الجديد")
                     self.status = .authenticatedNoProfile
-                    self.trialStartedAt = nil
-                    self.trialEndsAt = nil
                     return
                 } else {
                     await applyAuthenticatedProfile(profile, normalizedPhone: normalizedSessionPhone)
@@ -972,8 +945,6 @@ class AuthViewModel: ObservableObject {
                 if retryPhone.isEmpty {
                     Log.info("[AUTH] بروفايل بدون رقم في المحاولة 4 — توجيه مباشر للتسجيل")
                     self.status = .authenticatedNoProfile
-                    self.trialStartedAt = nil
-                    self.trialEndsAt = nil
                     return
                 } else {
                     Log.info("[AUTH] Found profile on retry by UUID: \(retryProfile.fullName)")
@@ -987,8 +958,6 @@ class AuthViewModel: ObservableObject {
 
         Log.warning("[AUTH] ⚠️ لم يتم العثور على بروفايل بعد 4 محاولات. Phone: \(normalizedSessionPhone), UUID: \(userIdString), lastAuthPhone: \(lastAuthPhone)")
         self.status = .authenticatedNoProfile
-        self.trialStartedAt = nil
-        self.trialEndsAt = nil
     }
 
     // MARK: - Banned Phones (حظر الأرقام)
@@ -1088,8 +1057,6 @@ class AuthViewModel: ObservableObject {
             self.currentUser = nil
             self.isOtpSent = false
             self.phoneNumber = ""
-            self.trialStartedAt = nil
-            self.trialEndsAt = nil
         }
         // مسح الرقم المحفوظ
         self.lastAuthPhone = ""

@@ -26,6 +26,10 @@ struct EditProfileView: View {
     @State private var showSaveError = false
     @State private var showNameChangeSheet = false
     @State private var newNameRequest: String = ""
+    @State private var isSubmittingName = false
+    @State private var showAvatarCooldownAlert = false
+
+    private let cooldown = ProfileEditCooldown.shared
 
 
 
@@ -48,7 +52,11 @@ struct EditProfileView: View {
                     VStack(spacing: DS.Spacing.md) {
 
                         // 1. قسم الصورة الشخصية (تصميم دائري مع ظل فخم)
-                        imagePickerHeader
+                        VStack(spacing: DS.Spacing.xs) {
+                            imagePickerHeader
+                                .opacity(cooldown.canEdit(.avatar) ? 1 : 0.5)
+                            cooldownLabel(.avatar)
+                        }
 
                         DSCard(padding: 0) {
                             DSSectionHeader(
@@ -60,9 +68,15 @@ struct EditProfileView: View {
                                     nameFieldWithChangeRequest
                                     DSDivider()
                                     modernPhoneField
+                                        .disabled(!cooldown.canEdit(.phoneNumber))
+                                        .opacity(cooldown.canEdit(.phoneNumber) ? 1 : 0.5)
+                                    cooldownLabel(.phoneNumber)
 
                                     DSDivider()
                                     modernDatePicker(label: L10n.t("تاريخ الميلاد", "Birth Date"), selection: $birthDate, icon: "calendar")
+                                        .disabled(!cooldown.canEdit(.birthDate))
+                                        .opacity(cooldown.canEdit(.birthDate) ? 1 : 0.5)
+                                    cooldownLabel(.birthDate)
                                 }
                         }
                         .padding(.horizontal, DS.Spacing.lg)
@@ -75,20 +89,28 @@ struct EditProfileView: View {
                                 iconColor: DS.Color.neonPink
                             )
 
-                                    HStack(spacing: DS.Spacing.md) {
-                                        DSIcon("heart.fill", color: DS.Color.neonPink)
-                                        Toggle(L10n.t("متزوج", "Married"), isOn: $isMarried)
-                                            .font(DS.Font.callout)
-                                            .foregroundColor(DS.Color.textPrimary)
-                                            .tint(DS.Color.primary)
+                                    VStack(spacing: 0) {
+                                        HStack(spacing: DS.Spacing.md) {
+                                            DSIcon("heart.fill", color: DS.Color.neonPink)
+                                            Toggle(L10n.t("متزوج", "Married"), isOn: $isMarried)
+                                                .font(DS.Font.callout)
+                                                .foregroundColor(DS.Color.textPrimary)
+                                                .tint(DS.Color.primary)
+                                        }
+                                        .padding(.horizontal, DS.Spacing.lg)
+                                        .padding(.vertical, DS.Spacing.xs)
+                                        .disabled(!cooldown.canEdit(.isMarried))
+                                        .opacity(cooldown.canEdit(.isMarried) ? 1 : 0.5)
+
+                                        cooldownLabel(.isMarried)
                                     }
-                                    .padding(.horizontal, DS.Spacing.lg)
-                                    .padding(.vertical, DS.Spacing.xs)
                         }
                         .padding(.horizontal, DS.Spacing.lg)
 
-                        // 4. السيرة الذاتية بالذكاء الاصطناعي
+                        // 4. السيرة الذاتية
                         aiBioSection
+                            .disabled(!cooldown.canEdit(.bio))
+                            .opacity(cooldown.canEdit(.bio) ? 1 : 0.5)
 
                         // 5. زر الحفظ (تصميم عائم)
                         saveButton
@@ -111,7 +133,26 @@ struct EditProfileView: View {
             }
             .onChange(of: localPreviewImage) { _, newImage in
                 guard let newImage else { return }
-                Task { await memberVM.uploadAvatar(image: newImage, for: member.id) }
+                if cooldown.canEdit(.avatar) {
+                    Task {
+                        await memberVM.uploadAvatar(image: newImage, for: member.id)
+                        cooldown.recordEdit(.avatar)
+                    }
+                } else {
+                    localPreviewImage = nil
+                    showAvatarCooldownAlert = true
+                }
+            }
+            .alert(
+                L10n.t("غير متاح حالياً", "Not Available"),
+                isPresented: $showAvatarCooldownAlert
+            ) {
+                Button(L10n.t("حسناً", "OK"), role: .cancel) {}
+            } message: {
+                Text(L10n.t(
+                    "غير متاح تعديل الصورة حالياً",
+                    "Photo edit not available now"
+                ))
             }
             .alert(L10n.t("خطأ", "Error"), isPresented: $showSaveError) {
                 Button(L10n.t("حسناً", "OK"), role: .cancel) {}
@@ -128,59 +169,93 @@ struct EditProfileView: View {
         DSProfilePhotoPicker(
             selectedImage: $localPreviewImage,
             existingURL: member.avatarUrl,
+            enableCrop: true,
+            cropShape: .circle,
+            trailing: nil,
+            showDeleteForExisting: member.avatarUrl != nil,
             onDeleteExisting: {
                 Task {
                     await memberVM.deleteAvatar(for: member.id)
                 }
-            }
+            },
+            compactEmptyState: true
         )
         .padding(.horizontal, DS.Spacing.lg)
     }
 
     // MARK: - Name with Change Request
     private var nameFieldWithChangeRequest: some View {
-        Button {
-            newNameRequest = fullName
-            showNameChangeSheet = true
-        } label: {
-            HStack(spacing: DS.Spacing.md) {
-                DSIcon("person.fill", color: DS.Color.primary)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(L10n.t("الاسم الكامل", "Full Name"))
-                        .font(DS.Font.caption2)
-                        .foregroundColor(DS.Color.textTertiary)
-                    Text(fullName)
-                        .font(DS.Font.callout)
-                        .foregroundColor(DS.Color.textPrimary)
-                        .lineLimit(1)
+        VStack(spacing: 0) {
+            Button {
+                if cooldown.canEdit(.fullName) {
+                    newNameRequest = fullName
+                    showNameChangeSheet = true
                 }
+            } label: {
+                HStack(spacing: DS.Spacing.md) {
+                    DSIcon("person.fill", color: DS.Color.primary)
 
-                Spacer()
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(L10n.t("الاسم الكامل", "Full Name"))
+                            .font(DS.Font.caption2)
+                            .foregroundColor(DS.Color.textTertiary)
+                        Text(fullName)
+                            .font(DS.Font.callout)
+                            .foregroundColor(DS.Color.textPrimary)
+                    }
 
-                Image(systemName: "pencil.circle.fill")
-                    .font(DS.Font.scaled(16, weight: .medium))
-                    .foregroundColor(DS.Color.primary)
+                    Spacer()
+
+                    if cooldown.canEdit(.fullName) {
+                        Image(systemName: "pencil.circle.fill")
+                            .font(DS.Font.scaled(16, weight: .medium))
+                            .foregroundColor(DS.Color.primary)
+                    } else {
+                        Image(systemName: "lock.fill")
+                            .font(DS.Font.scaled(12, weight: .semibold))
+                            .foregroundColor(DS.Color.textTertiary)
+                    }
+                }
+                .padding(.horizontal, DS.Spacing.lg)
+                .padding(.vertical, DS.Spacing.xs)
+                .opacity(cooldown.canEdit(.fullName) ? 1 : 0.5)
             }
-            .padding(.horizontal, DS.Spacing.lg)
-            .padding(.vertical, DS.Spacing.xs)
-        }
-        .buttonStyle(.plain)
-        .sheet(isPresented: $showNameChangeSheet) {
-            nameChangeRequestSheet
+            .buttonStyle(.plain)
+            .disabled(!cooldown.canEdit(.fullName))
+            .sheet(isPresented: $showNameChangeSheet) {
+                nameChangeRequestSheet
+            }
+
+            cooldownLabel(.fullName)
         }
     }
 
     private var nameChangeRequestSheet: some View {
         NavigationStack {
-            VStack(spacing: DS.Spacing.xl) {
-                DSTextField(
-                    label: L10n.t("الاسم الجديد", "New Name"),
-                    placeholder: L10n.t("اسمك الرباعي", "Your full name"),
-                    text: $newNameRequest,
-                    icon: "person.fill",
-                    iconColor: DS.Color.primary
-                )
+            VStack(spacing: DS.Spacing.lg) {
+                // خانة الاسم قابلة للتعديل — سطر كبير يعرض الاسم كامل
+                VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                    HStack(spacing: DS.Spacing.xs) {
+                        Image(systemName: "person.fill")
+                            .font(DS.Font.scaled(13, weight: .bold))
+                            .foregroundColor(DS.Color.primary)
+                        Text(L10n.t("الاسم", "Name"))
+                            .font(DS.Font.caption1)
+                            .foregroundColor(DS.Color.textSecondary)
+                    }
+
+                    TextField(L10n.t("اسمك الرباعي", "Your full name"), text: $newNameRequest, axis: .vertical)
+                        .font(DS.Font.body)
+                        .lineLimit(1...2)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(DS.Spacing.md)
+                        .background(DS.Color.surface)
+                        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                                .stroke(DS.Color.primary.opacity(0.3), lineWidth: 1)
+                        )
+                }
                 .padding(.horizontal, DS.Spacing.lg)
 
                 Text(L10n.t(
@@ -194,22 +269,26 @@ struct EditProfileView: View {
 
                 DSPrimaryButton(
                     L10n.t("إرسال الطلب", "Send Request"),
-                    icon: "paperplane.fill"
+                    icon: "paperplane.fill",
+                    isLoading: isSubmittingName
                 ) {
+                    guard !isSubmittingName else { return }
                     let trimmed = newNameRequest.trimmingCharacters(in: .whitespacesAndNewlines)
                     guard !trimmed.isEmpty, trimmed != fullName else { return }
+                    isSubmittingName = true
                     Task {
                         await adminRequestVM.requestNameChange(memberId: member.id, newName: trimmed)
+                        cooldown.recordEdit(.fullName)
+                        isSubmittingName = false
                         showNameChangeSheet = false
                     }
                 }
-                .disabled(newNameRequest.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+                .disabled(isSubmittingName ||
+                          newNameRequest.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
                           newNameRequest.trimmingCharacters(in: .whitespacesAndNewlines) == fullName)
                 .padding(.horizontal, DS.Spacing.lg)
-
-                Spacer()
             }
-            .padding(.top, DS.Spacing.xl)
+            .padding(.top, DS.Spacing.lg)
             .navigationTitle(L10n.t("طلب تغيير الاسم", "Request Name Change"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -219,6 +298,7 @@ struct EditProfileView: View {
                 }
             }
         }
+        .presentationDetents([.height(320)])
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
 
@@ -263,10 +343,10 @@ struct EditProfileView: View {
     }
 
     private var modernPhoneField: some View {
-        HStack(spacing: DS.Spacing.md) {
+        HStack(spacing: DS.Spacing.sm) {
             DSIcon("phone.fill", color: DS.Color.success)
 
-            Text(L10n.t("رقم الجوال", "Phone Number"))
+            Text(L10n.t("رقم الهاتف", "Phone Number"))
                 .font(DS.Font.caption2)
                 .foregroundColor(DS.Color.textTertiary)
 
@@ -275,13 +355,17 @@ struct EditProfileView: View {
             PhoneNumberTextField(
                 text: $phoneNumber,
                 placeholder: "9xxxxxxx",
-                font: .systemFont(ofSize: 15),
+                font: .monospacedDigitSystemFont(ofSize: 15, weight: .regular),
                 keyboardType: .phonePad,
-                textAlignment: .right,
+                textAlignment: .left,
                 maxLength: selectedPhoneCountry.maxDigits
             )
             .frame(height: 30)
-            .frame(maxWidth: 160)
+            .frame(maxWidth: 130)
+
+            Text("\(selectedPhoneCountry.flag) \(selectedPhoneCountry.dialingCode)")
+                .font(.system(size: 13, weight: .medium, design: .rounded))
+                .foregroundColor(DS.Color.textSecondary)
         }
         .padding(.horizontal, DS.Spacing.lg)
         .padding(.vertical, DS.Spacing.xs)
@@ -372,6 +456,8 @@ struct EditProfileView: View {
                     bioText = String(bioText.prefix(500))
                 }
             }
+
+            cooldownLabel(.bio)
         }
         .padding(.horizontal, DS.Spacing.lg)
         .alert(
@@ -406,6 +492,27 @@ struct EditProfileView: View {
         .padding(.horizontal, DS.Spacing.lg)
     }
 
+    // MARK: - Cooldown Label
+
+    @ViewBuilder
+    private func cooldownLabel(_ field: EditableField) -> some View {
+        if !cooldown.canEdit(field) {
+            HStack(spacing: DS.Spacing.xs) {
+                Image(systemName: "lock.fill")
+                    .font(DS.Font.caption2)
+                Text(L10n.t(
+                    "غير متاح حالياً",
+                    "Not available now"
+                ))
+                .font(DS.Font.caption2)
+            }
+            .foregroundColor(DS.Color.warning)
+            .padding(.horizontal, DS.Spacing.xl + DS.Spacing.lg)
+            .padding(.vertical, DS.Spacing.xs)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
     // MARK: - Logic (الوظائف)
 
     private func setupData() {
@@ -436,11 +543,20 @@ struct EditProfileView: View {
             let oldStoredPhone = KuwaitPhone.normalizeForStorageFromInput(member.phoneNumber) ?? ""
             guard phoneNumber.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !normalizedPhone.isEmpty else { return }
 
-            // 1. فحص إذا تم تغيير رقم الهاتف
-            let isPhoneChanged = !normalizedPhone.isEmpty && (normalizedPhone != oldStoredPhone)
-
-            // 2. فحص إذا تم تغيير حالة الوفاة
+            // تحديد الحقول المتغيرة
+            let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"
+            let oldBirthStr = member.birthDate ?? ""
+            let newBirthStr = f.string(from: birthDate)
+            let birthChanged = newBirthStr != oldBirthStr && cooldown.canEdit(.birthDate)
+            let marriedChanged = isMarried != (member.isMarried ?? false) && cooldown.canEdit(.isMarried)
+            let phoneHiddenChanged = isPhoneHidden != (member.isPhoneHidden ?? false) && cooldown.canEdit(.isPhoneHidden)
+            let isPhoneChanged = !normalizedPhone.isEmpty && (normalizedPhone != oldStoredPhone) && cooldown.canEdit(.phoneNumber)
             let isDeceasedChanged = (isDeceased && !(member.isDeceased ?? false))
+
+            // السيرة
+            let trimmedBio = bioText.trimmingCharacters(in: .whitespacesAndNewlines)
+            let oldBioText = (member.bio ?? []).map { [$0.title, $0.details].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " - ") }.joined(separator: "\n")
+            let bioChanged = trimmedBio != oldBioText && cooldown.canEdit(.bio)
 
             if isDeceasedChanged {
                 await adminRequestVM.requestDeceasedStatus(memberId: member.id, deathDate: deathDate)
@@ -451,15 +567,15 @@ struct EditProfileView: View {
             }
 
             // حفظ السيرة الذاتية
-            let trimmedBio = bioText.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !trimmedBio.isEmpty {
-                let station = FamilyMember.BioStation(title: "", details: trimmedBio)
-                await memberVM.updateMemberBio(memberId: member.id, bio: [station])
-                member.bio = [station]
-            } else if member.bio != nil && !member.bio!.isEmpty && trimmedBio.isEmpty {
-                // المستخدم حذف النص — نحذف السيرة
-                await memberVM.updateMemberBio(memberId: member.id, bio: [])
-                member.bio = nil
+            if bioChanged {
+                if !trimmedBio.isEmpty {
+                    let station = FamilyMember.BioStation(title: "", details: trimmedBio)
+                    await memberVM.updateMemberBio(memberId: member.id, bio: [station])
+                    member.bio = [station]
+                } else {
+                    await memberVM.updateMemberBio(memberId: member.id, bio: [])
+                    member.bio = nil
+                }
             }
 
             let success = await memberVM.updateMemberData(
@@ -472,7 +588,14 @@ struct EditProfileView: View {
                 deathDate: member.isDeceased ?? false ? deathDate : nil,
                 isPhoneHidden: isPhoneHidden
             )
+
             if success {
+                // تسجيل cooldown للحقول المتغيرة فقط
+                if birthChanged { cooldown.recordEdit(.birthDate) }
+                if marriedChanged { cooldown.recordEdit(.isMarried) }
+                if phoneHiddenChanged { cooldown.recordEdit(.isPhoneHidden) }
+                if bioChanged { cooldown.recordEdit(.bio) }
+                if isPhoneChanged { cooldown.recordEdit(.phoneNumber) }
                 dismiss()
             } else {
                 showSaveError = true

@@ -107,14 +107,23 @@ struct RegistrationView: View {
 
     // MARK: - Photo Section — كاميرا على الصورة مباشرة
     private var photoSection: some View {
-        DSProfilePhotoPicker(
-            selectedImage: $selectedImage,
-            enableCrop: true,
-            cropShape: .circle,
-            title: L10n.t("الصورة الشخصية", "Profile Photo"),
-            trailing: L10n.t("اختياري", "Optional"),
-            compactEmptyState: true
-        )
+        VStack(spacing: DS.Spacing.xs) {
+            DSProfilePhotoPicker(
+                selectedImage: $selectedImage,
+                enableCrop: true,
+                cropShape: .circle,
+                title: L10n.t("الصورة الشخصية", "Profile Photo"),
+                trailing: L10n.t("اختياري", "Optional"),
+                compactEmptyState: true
+            )
+
+            Text(L10n.t(
+                "سوف تُستخدم كصورة في شجرة العائلة",
+                "Will be used as your photo in the family tree"
+            ))
+            .font(DS.Font.caption1)
+            .foregroundColor(DS.Color.textTertiary)
+        }
         .padding(.top, DS.Spacing.xl)
     }
 
@@ -123,25 +132,18 @@ struct RegistrationView: View {
         VStack(alignment: .leading, spacing: DS.Spacing.xs) {
             DSTextField(
                 label: L10n.t("الاسم الرباعي", "Full Name (4 parts)"),
-                placeholder: L10n.t("اسمك الرباعي", "Your full name"),
+                placeholder: L10n.t("محمد عبدالله علي أحمد", "Mohammad Abdullah Ali Ahmad"),
                 text: $fullName,
                 icon: "person.fill",
-                iconColor: DS.Color.primary
+                iconColor: DS.Color.primary,
+                required: true,
+                hint: L10n.t("(باللغة العربية)", "(in Arabic)")
             )
             .onChange(of: fullName) {
                 if fullName.count > 100 {
                     fullName = String(fullName.prefix(100))
                 }
             }
-
-            // توضيح الاسم بالعربي
-            Text(L10n.t(
-                "مثال: محمد عبدالله علي أحمد",
-                "Example: Mohammad Abdullah Ali Ahmad"
-            ))
-            .font(DS.Font.caption1)
-            .foregroundColor(DS.Color.textTertiary)
-            .padding(.leading, DS.Spacing.sm)
 
             if hasAttemptedSubmit && fullName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 validationError(L10n.t("الاسم مطلوب", "Name is required"))
@@ -157,7 +159,8 @@ struct RegistrationView: View {
                 placeholder: L10n.t("مثال: آل محمد علي", "e.g. Al-Mohammad Ali"),
                 text: $familyName,
                 icon: "person.2.fill",
-                iconColor: DS.Color.accent
+                iconColor: DS.Color.accent,
+                required: true
             )
             .onChange(of: familyName) {
                 if familyName.count > 50 {
@@ -204,7 +207,7 @@ struct RegistrationView: View {
 
     // MARK: - Gender
     private var genderSection: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
             HStack(spacing: DS.Spacing.md) {
                 DSIcon("figure.dress.line.vertical.figure", color: DS.Color.neonPurple)
 
@@ -213,71 +216,32 @@ struct RegistrationView: View {
                     .foregroundColor(DS.Color.textSecondary)
 
                 Spacer()
-            }
-            .padding(.horizontal, DS.Spacing.lg)
-            .padding(.top, DS.Spacing.md)
 
-            HStack(spacing: DS.Spacing.sm) {
-                genderButton(
-                    title: L10n.t("ذكر", "Male"),
-                    icon: "figure.stand",
-                    value: "male",
-                    gradient: DS.Color.gradientPrimary,
-                    shadowColor: DS.Color.primary
-                )
-
-                genderButton(
-                    title: L10n.t("أنثى", "Female"),
-                    icon: "figure.stand.dress",
-                    value: "female",
-                    gradient: DS.Color.gradientAccent,
-                    shadowColor: DS.Color.accent
-                )
-            }
-            .padding(.horizontal, DS.Spacing.lg)
-            .padding(.bottom, DS.Spacing.md)
-        }
-        .background(DS.Color.surface)
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                .stroke(Color.gray.opacity(0.15), lineWidth: 1)
-        )
-    }
-
-    private func genderButton(title: String, icon: String, value: String, gradient: LinearGradient, shadowColor: Color) -> some View {
-        Button {
-            withAnimation(DS.Anim.snappy) { selectedGender = value }
-        } label: {
-            HStack(spacing: DS.Spacing.sm) {
-                Image(systemName: icon)
-                    .font(DS.Font.scaled(16, weight: .bold))
-                Text(title)
-                    .font(DS.Font.calloutBold)
-            }
-            .foregroundColor(selectedGender == value ? .white : DS.Color.textPrimary)
-            .frame(maxWidth: .infinity)
-            .frame(height: 48)
-            .background(
-                Group {
-                    if selectedGender == value {
-                        AnyView(gradient)
-                    } else {
-                        AnyView(DS.Color.surface)
-                    }
+                Picker("", selection: $selectedGender) {
+                    Text(L10n.t("ذكر", "Male")).tag("male")
+                    Text(L10n.t("أنثى", "Female")).tag("female")
                 }
-            )
+                .pickerStyle(.menu)
+                .tint(DS.Color.primary)
+            }
+            .padding(.horizontal, DS.Spacing.lg)
+            .padding(.vertical, DS.Spacing.md)
+            .background(DS.Color.surface)
             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                    .stroke(
-                        selectedGender == value ? Color.clear : Color.gray.opacity(0.15),
-                        lineWidth: 1
-                    )
+                    .stroke(Color.gray.opacity(0.15), lineWidth: 1)
             )
-            .shadow(color: selectedGender == value ? shadowColor.opacity(0.2) : .clear, radius: 8, x: 0, y: 3)
+
+            // ملاحظة الربط
+            Text(L10n.t(
+                "سيتم إضافة اسم العائلة (المحمدعلي) تلقائياً كاسم أخير",
+                "The family name (Al-Mohammad Ali) will be added automatically as last name"
+            ))
+            .font(DS.Font.caption1)
+            .foregroundColor(DS.Color.textTertiary)
+            .padding(.leading, DS.Spacing.sm)
         }
-        .buttonStyle(DSScaleButtonStyle())
     }
 
     // MARK: - Submit Button

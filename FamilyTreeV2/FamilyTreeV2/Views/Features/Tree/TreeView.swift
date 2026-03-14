@@ -74,7 +74,12 @@ struct TreeView: View {
 
     /// يُعاد حساب البيانات المُخزنة عند تغيّر الأعضاء فقط
     private func rebuildCache() {
-        let visible = memberVM.allMembers.filter { !$0.isHiddenFromTree && $0.role != .pending }
+        let visible = memberVM.allMembers.filter {
+            !$0.isHiddenFromTree
+            && $0.role != .pending
+            && !$0.fullName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && $0.status != .frozen
+        }
         let byId = Dictionary(uniqueKeysWithValues: visible.map { ($0.id, $0) })
 
         let roots = sortedMembers(visible.filter { member in

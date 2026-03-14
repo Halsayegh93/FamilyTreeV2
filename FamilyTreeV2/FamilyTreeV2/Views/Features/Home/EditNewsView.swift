@@ -12,16 +12,15 @@ struct EditNewsView: View {
     @State private var selectedType: String
     @State private var existingImageURLs: [String]
     @State private var selectedImages: [UIImage] = []
-    @State private var editPickerItems: [PhotosPickerItem] = []
-    @State private var isLoadingEditImages = false
+    @State private var pickerItems: [PhotosPickerItem] = []
+    @State private var isLoadingPhotos = false
     @State private var pollQuestion: String
     @State private var pollOption1: String
     @State private var pollOption2: String
     @State private var pollOption3: String
     @State private var pollOption4: String
     @State private var showEditErrorAlert = false
-    @State private var showEditPicker = false
-    @State private var showPermissionDenied = false
+    @State private var isSubmitting = false
 
     init(news: NewsPost) {
         self.news = news
@@ -47,170 +46,36 @@ struct EditNewsView: View {
         selectedType != "تصويت" || normalizedPollOptions.count >= 2
     }
 
+    private var isPoll: Bool { selectedType == "تصويت" }
+
     private var canSubmit: Bool {
-        !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && isPollValid && !authVM.isLoading
+        if isPoll {
+            return isPollValid && !isSubmitting
+        } else {
+            return !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isSubmitting
+        }
     }
 
     var body: some View {
         NavigationStack {
             ScrollView(showsIndicators: false) {
-                VStack(spacing: DS.Spacing.md) {
-                    DSCard(padding: 0) {
-                        DSSectionHeader(
-                            title: L10n.t("نوع الخبر", "Post Type"),
-                            icon: "tag.fill",
-                            iconColor: DS.Color.primary
-                        )
+                VStack(spacing: DS.Spacing.lg) {
+                    editTypeSelector
 
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: DS.Spacing.sm) {
-                                ForEach(NewsTypeHelper.mainTypes, id: \.self) { type in
-                                    let isSelected = selectedType == type
-                                    let typeColor = NewsTypeHelper.color(for: type)
-
-                                    Button(action: {
-                                        withAnimation(DS.Anim.snappy) { selectedType = type }
-                                    }) {
-                                        HStack(spacing: DS.Spacing.sm) {
-                                            Image(systemName: NewsTypeHelper.icon(for: type))
-                                                .font(DS.Font.scaled(14, weight: .semibold))
-                                                .foregroundColor(isSelected ? DS.Color.textOnPrimary : typeColor)
-                                                .frame(width: 28, height: 28)
-                                                .background(isSelected ? typeColor : typeColor.opacity(0.12))
-                                                .clipShape(Circle())
-
-                                            Text(NewsTypeHelper.displayName(for: type))
-                                                .font(DS.Font.scaled(13, weight: .bold))
-                                                .foregroundColor(isSelected ? typeColor : DS.Color.textSecondary)
-                                        }
-                                        .padding(.horizontal, DS.Spacing.md)
-                                        .padding(.vertical, DS.Spacing.xs)
-                                        .background(
-                                            Capsule()
-                                                .fill(isSelected ? typeColor.opacity(0.1) : DS.Color.surface.opacity(0.5))
-                                        )
-                                        .overlay(
-                                            Capsule()
-                                                .stroke(isSelected ? typeColor.opacity(0.4) : DS.Color.primary.opacity(0.08), lineWidth: 1.5)
-                                        )
-                                    }
-                                    .buttonStyle(DSBoldButtonStyle())
-                                }
-                            }
-                            .padding(.horizontal, DS.Spacing.md)
-                        }
-                        .padding(.bottom, DS.Spacing.md)
+                    if isPoll {
+                        editPollSection
+                    } else {
+                        editContentSection
                     }
 
-                    TextEditor(text: $content)
-                        .frame(minHeight: 120, maxHeight: 150)
-                        .padding(DS.Spacing.sm)
-                        .background(DS.Color.surface.opacity(0.55))
-                        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                                .stroke(DS.Color.primary.opacity(0.10), lineWidth: 1)
-                        )
-
-                    Button {
-                        checkPhotoPermission { showEditPicker = true }
-                    } label: {
-                        HStack(spacing: DS.Spacing.sm) {
-                            if isLoadingEditImages {
-                                ProgressView().tint(DS.Color.primary)
-                            } else {
-                                Image(systemName: "photo.on.rectangle.angled")
-                            }
-                            Text(L10n.t("إضافة صور جديدة", "Add new photos"))
-                        }
-                        .font(DS.Font.calloutBold)
-                        .foregroundColor(DS.Color.primary)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, DS.Spacing.xs)
-                        .background(DS.Color.primary.opacity(0.08))
-                        .cornerRadius(DS.Radius.md)
-                    }
-                    .disabled(isLoadingEditImages)
-
-                    if !existingImageURLs.isEmpty || !selectedImages.isEmpty {
-                        let allImages: [(isExisting: Bool, index: Int, urlOrNil: String?)] =
-                            existingImageURLs.enumerated().map { (true, $0.offset, $0.element) } +
-                            selectedImages.enumerated().map { (false, $0.offset, nil) }
-
-                        TabView {
-                            ForEach(Array(allImages.enumerated()), id: \.offset) { _, item in
-                                ZStack(alignment: .topTrailing) {
-                                    if item.isExisting, let url = item.urlOrNil {
-                                        CachedAsyncImage(url: URL(string: url)) { image in
-                                            image.resizable().scaledToFill()
-                                                .frame(maxWidth: .infinity)
-                                                .clipped()
-                                        } placeholder: {
-                                            ZStack {
-                                                DS.Color.surface
-                                                ProgressView().tint(DS.Color.primary)
-                                            }
-                                        }
-                                    } else if !item.isExisting, selectedImages.indices.contains(item.index) {
-                                        Image(uiImage: selectedImages[item.index])
-                                            .resizable()
-                                            .scaledToFill()
-                                            .frame(maxWidth: .infinity)
-                                            .clipped()
-                                    }
-
-                                    Button {
-                                        withAnimation {
-                                            if item.isExisting {
-                                                existingImageURLs.remove(at: item.index)
-                                            } else {
-                                                selectedImages.remove(at: item.index)
-                                            }
-                                        }
-                                    } label: {
-                                        Image(systemName: "xmark.circle.fill")
-                                            .font(DS.Font.scaled(22, weight: .bold))
-                                            .foregroundColor(DS.Color.textOnPrimary)
-                                            .shadow(color: DS.Color.shadowHeavy, radius: 4, x: 0, y: 2)
-                                    }
-                                    .padding(DS.Spacing.sm)
-                                }
-                            }
-                        }
-                        .aspectRatio(4/5, contentMode: .fit)
-                        .clipped()
-                        .tabViewStyle(.page(indexDisplayMode: allImages.count > 1 ? .automatic : .never))
-                    }
-
-                    if selectedType == "تصويت" {
-                        VStack(spacing: DS.Spacing.sm) {
-                            TextField(L10n.t("سؤال التصويت (اختياري)", "Poll question (optional)"), text: $pollQuestion)
-                                .textFieldStyle(.roundedBorder)
-                            TextField(L10n.t("الخيار الأول", "Option 1"), text: $pollOption1)
-                                .textFieldStyle(.roundedBorder)
-                            TextField(L10n.t("الخيار الثاني", "Option 2"), text: $pollOption2)
-                                .textFieldStyle(.roundedBorder)
-                            TextField(L10n.t("الخيار الثالث (اختياري)", "Option 3 (optional)"), text: $pollOption3)
-                                .textFieldStyle(.roundedBorder)
-                            TextField(L10n.t("الخيار الرابع (اختياري)", "Option 4 (optional)"), text: $pollOption4)
-                                .textFieldStyle(.roundedBorder)
-                        }
-                    }
-
-                    DSPrimaryButton(
-                        L10n.t("حفظ التعديلات", "Save Changes"),
-                        icon: "checkmark.circle.fill",
-                        isLoading: authVM.isLoading,
-                        useGradient: canSubmit,
-                        color: canSubmit ? DS.Color.primary : .gray
-                    ) {
-                        Task { await submitEdits() }
-                    }
-                    .disabled(!canSubmit)
-                    .opacity(canSubmit ? 1.0 : 0.6)
+                    editSubmitSection
                 }
-                .padding(DS.Spacing.lg)
+                .animation(DS.Anim.snappy, value: isPoll)
+                .padding(.horizontal, DS.Spacing.lg)
+                .padding(.top, DS.Spacing.sm)
+                .padding(.bottom, DS.Spacing.xxxl)
             }
+            .background(.ultraThinMaterial)
             .navigationTitle(L10n.t("تعديل الخبر", "Edit Post"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -223,89 +88,317 @@ struct EditNewsView: View {
             .alert(L10n.t("تعذر التعديل", "Edit Failed"), isPresented: $showEditErrorAlert) {
                 Button(L10n.t("حسناً", "OK"), role: .cancel) {}
             } message: { Text(newsVM.newsPostErrorMessage ?? L10n.t("حدث خطأ أثناء تعديل الخبر.", "An error occurred while updating.")) }
-            .photosPicker(isPresented: $showEditPicker, selection: $editPickerItems, maxSelectionCount: 5, matching: .images)
-            .alert(
-                L10n.t("الوصول للصور مطلوب", "Photo Access Required"),
-                isPresented: $showPermissionDenied
-            ) {
-                Button(L10n.t("فتح الإعدادات", "Open Settings")) {
-                    if let url = URL(string: UIApplication.openSettingsURLString) {
-                        UIApplication.shared.open(url)
-                    }
-                }
-                Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
-            } message: {
-                Text(L10n.t(
-                    "يحتاج التطبيق إذن الوصول لمكتبة الصور لاختيار صور. يرجى السماح من الإعدادات.",
-                    "The app needs access to your photo library to select photos. Please allow access in Settings."
-                ))
-            }
-            .onChange(of: editPickerItems) { _, items in
-                Task {
-                    await MainActor.run { isLoadingEditImages = true }
-                    var loaded: [UIImage] = []
-                    for item in items {
-                        if let data = try? await item.loadTransferable(type: Data.self),
-                           let image = UIImage(data: data) { loaded.append(image) }
-                    }
-                    let generator = UIImpactFeedbackGenerator(style: .medium)
-                    generator.impactOccurred()
-                    await MainActor.run {
-                        selectedImages = loaded
-                        isLoadingEditImages = false
-                    }
-                }
+            .onChange(of: pickerItems) { _, items in
+                guard !items.isEmpty else { return }
+                loadImages(from: items)
             }
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         }
     }
 
-    private func submitEdits() async {
-        guard canSubmit else { return }
+    // MARK: - Type Selector
+    private var editTypeSelector: some View {
+        DSCard(padding: 0) {
+            DSSectionHeader(
+                title: L10n.t("نوع الخبر", "Post Type"),
+                icon: "tag.fill",
+                iconColor: DS.Color.primary
+            )
 
-        var imageURLs = existingImageURLs
-        if let authorId = authVM.currentUser?.id {
-            for image in selectedImages {
-                if let url = await newsVM.uploadNewsImage(image: image, for: authorId) {
-                    imageURLs.append(url)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: DS.Spacing.sm) {
+                    ForEach(NewsTypeHelper.mainTypes, id: \.self) { type in
+                        let isSelected = selectedType == type
+                        let typeColor = NewsTypeHelper.color(for: type)
+
+                        Button(action: {
+                            withAnimation(DS.Anim.snappy) { selectedType = type }
+                        }) {
+                            HStack(spacing: DS.Spacing.sm) {
+                                Image(systemName: NewsTypeHelper.icon(for: type))
+                                    .font(DS.Font.scaled(14, weight: .semibold))
+                                    .foregroundColor(isSelected ? DS.Color.textOnPrimary : typeColor)
+                                    .frame(width: 28, height: 28)
+                                    .background(isSelected ? typeColor : typeColor.opacity(0.12))
+                                    .clipShape(Circle())
+
+                                Text(NewsTypeHelper.displayName(for: type))
+                                    .font(DS.Font.scaled(13, weight: .bold))
+                                    .foregroundColor(isSelected ? typeColor : DS.Color.textSecondary)
+                            }
+                            .padding(.horizontal, DS.Spacing.md)
+                            .padding(.vertical, DS.Spacing.xs)
+                            .background(
+                                Capsule()
+                                    .fill(isSelected ? typeColor.opacity(0.1) : DS.Color.surface.opacity(0.5))
+                            )
+                            .overlay(
+                                Capsule()
+                                    .stroke(isSelected ? typeColor.opacity(0.4) : DS.Color.primary.opacity(0.08), lineWidth: 1.5)
+                            )
+                        }
+                        .buttonStyle(DSBoldButtonStyle())
+                    }
                 }
+                .padding(.horizontal, DS.Spacing.md)
             }
-        }
-
-        let question = pollQuestion.trimmingCharacters(in: .whitespacesAndNewlines)
-        let isUpdated = await newsVM.updateNewsPost(
-            postId: news.id,
-            content: content.trimmingCharacters(in: .whitespacesAndNewlines),
-            type: selectedType,
-            imageURLs: imageURLs,
-            pollQuestion: selectedType == "تصويت" && !question.isEmpty ? question : nil,
-            pollOptions: selectedType == "تصويت" ? normalizedPollOptions : []
-        )
-
-        if isUpdated {
-            dismiss()
-        } else {
-            showEditErrorAlert = true
+            .padding(.bottom, DS.Spacing.md)
         }
     }
 
-    private func checkPhotoPermission(action: @escaping () -> Void) {
-        let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
-        switch status {
-        case .authorized, .limited:
-            action()
-        case .notDetermined:
-            PHPhotoLibrary.requestAuthorization(for: .readWrite) { newStatus in
-                DispatchQueue.main.async {
-                    if newStatus == .authorized || newStatus == .limited {
-                        action()
+    // MARK: - Content Section (مع شريط الأدوات والصور)
+    private var editContentSection: some View {
+        DSCard(padding: 0) {
+            DSSectionHeader(
+                title: L10n.t("محتوى الخبر", "Post Content"),
+                icon: "text.alignright",
+                iconColor: DS.Color.accent
+            )
+
+            // حقل النص
+            ZStack(alignment: .topTrailing) {
+                TextEditor(text: $content)
+                    .frame(minHeight: 60, maxHeight: .infinity)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .scrollContentBackground(.hidden)
+                    .font(DS.Font.callout)
+                    .foregroundColor(DS.Color.textPrimary)
+                    .padding(DS.Spacing.sm)
+
+                if content.isEmpty {
+                    Text(L10n.t("اكتب الخبر هنا...", "Write your post here..."))
+                        .font(DS.Font.callout)
+                        .foregroundColor(DS.Color.textTertiary)
+                        .padding(.top, DS.Spacing.md)
+                        .padding(.trailing, DS.Spacing.md)
+                        .allowsHitTesting(false)
+                }
+            }
+
+            // الصور الحالية والجديدة
+            if !existingImageURLs.isEmpty || !selectedImages.isEmpty {
+                photosPreview
+            }
+
+            // شريط الأدوات (أيقونة الصور)
+            contentToolbar
+        }
+    }
+
+    // MARK: - Content Toolbar
+    private var contentToolbar: some View {
+        let totalPhotos = existingImageURLs.count + selectedImages.count
+        return HStack(spacing: DS.Spacing.md) {
+            PhotosPicker(
+                selection: $pickerItems,
+                maxSelectionCount: max(1, 5 - existingImageURLs.count),
+                matching: .images
+            ) {
+                HStack(spacing: DS.Spacing.xs) {
+                    if isLoadingPhotos {
+                        ProgressView()
+                            .scaleEffect(0.7)
+                            .tint(DS.Color.primary)
                     } else {
-                        showPermissionDenied = true
+                        Image(systemName: "photo.on.rectangle.angled")
+                            .font(DS.Font.scaled(16, weight: .medium))
+                    }
+
+                    if totalPhotos > 0 {
+                        Text("\(totalPhotos)/5")
+                            .font(DS.Font.caption2)
+                            .fontWeight(.bold)
+                    }
+                }
+                .foregroundColor(DS.Color.primary)
+                .padding(.horizontal, DS.Spacing.md)
+                .padding(.vertical, DS.Spacing.sm)
+                .background(DS.Color.primary.opacity(0.06))
+                .clipShape(Capsule())
+            }
+            .disabled(isLoadingPhotos || totalPhotos >= 5)
+
+            Spacer()
+        }
+        .padding(.horizontal, DS.Spacing.md)
+        .padding(.bottom, DS.Spacing.md)
+    }
+
+    // MARK: - Photos Preview
+    private var photosPreview: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: DS.Spacing.sm) {
+                // الصور الموجودة (URLs)
+                ForEach(Array(existingImageURLs.enumerated()), id: \.offset) { idx, url in
+                    ZStack(alignment: .topTrailing) {
+                        CachedAsyncImage(url: URL(string: url)) { image in
+                            image.resizable().scaledToFill()
+                        } placeholder: {
+                            ZStack {
+                                DS.Color.surface
+                                ProgressView().tint(DS.Color.primary).scaleEffect(0.7)
+                            }
+                        }
+                        .frame(width: 72, height: 72)
+                        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
+
+                        Button {
+                            let generator = UIImpactFeedbackGenerator(style: .light)
+                            generator.impactOccurred()
+                            withAnimation(DS.Anim.snappy) {
+                                existingImageURLs.remove(at: idx)
+                            }
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(DS.Font.scaled(18, weight: .bold))
+                                .foregroundStyle(.white, DS.Color.error)
+                                .shadow(color: .black.opacity(0.3), radius: 2, y: 1)
+                        }
+                        .offset(x: 6, y: -6)
+                    }
+                }
+
+                // الصور الجديدة (UIImage)
+                ForEach(Array(selectedImages.enumerated()), id: \.offset) { idx, image in
+                    ZStack(alignment: .topTrailing) {
+                        Image(uiImage: image)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: 72, height: 72)
+                            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
+
+                        Button {
+                            let generator = UIImpactFeedbackGenerator(style: .light)
+                            generator.impactOccurred()
+                            withAnimation(DS.Anim.snappy) {
+                                selectedImages.remove(at: idx)
+                            }
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(DS.Font.scaled(18, weight: .bold))
+                                .foregroundStyle(.white, DS.Color.error)
+                                .shadow(color: .black.opacity(0.3), radius: 2, y: 1)
+                        }
+                        .offset(x: 6, y: -6)
                     }
                 }
             }
-        default:
-            showPermissionDenied = true
+            .padding(.horizontal, DS.Spacing.md)
+            .padding(.vertical, DS.Spacing.sm)
         }
+    }
+
+    // MARK: - Poll Section
+    private var editPollSection: some View {
+        DSCard(padding: 0) {
+            DSSectionHeader(
+                title: L10n.t("خيارات التصويت", "Poll Options"),
+                icon: "chart.bar.fill",
+                iconColor: DS.Color.newsVote
+            )
+
+            VStack(spacing: DS.Spacing.sm) {
+                pollField(placeholder: L10n.t("سؤال التصويت (اختياري)", "Poll question (optional)"), text: $pollQuestion, icon: "questionmark.circle")
+                pollField(placeholder: L10n.t("الخيار الأول", "Option 1"), text: $pollOption1, icon: "1.circle.fill")
+                pollField(placeholder: L10n.t("الخيار الثاني", "Option 2"), text: $pollOption2, icon: "2.circle.fill")
+                pollField(placeholder: L10n.t("الخيار الثالث (اختياري)", "Option 3 (optional)"), text: $pollOption3, icon: "3.circle.fill")
+                pollField(placeholder: L10n.t("الخيار الرابع (اختياري)", "Option 4 (optional)"), text: $pollOption4, icon: "4.circle.fill")
+            }
+            .padding(.horizontal, DS.Spacing.md)
+            .padding(.bottom, DS.Spacing.md)
+        }
+    }
+
+    // MARK: - Submit Section
+    private var editSubmitSection: some View {
+        DSPrimaryButton(
+            L10n.t("حفظ التعديلات", "Save Changes"),
+            icon: "checkmark.circle.fill",
+            isLoading: isSubmitting,
+            useGradient: canSubmit,
+            color: canSubmit ? DS.Color.primary : .gray
+        ) {
+            Task { await submitEdits() }
+        }
+        .disabled(!canSubmit)
+        .opacity(canSubmit ? 1.0 : 0.6)
+    }
+
+    private func pollField(placeholder: String, text: Binding<String>, icon: String) -> some View {
+        HStack(spacing: DS.Spacing.sm) {
+            Image(systemName: icon)
+                .font(DS.Font.scaled(14, weight: .medium))
+                .foregroundColor(DS.Color.newsVote)
+                .frame(width: 24)
+
+            TextField(placeholder, text: text)
+                .font(DS.Font.callout)
+                .foregroundColor(DS.Color.textPrimary)
+        }
+        .padding(.horizontal, DS.Spacing.md)
+        .padding(.vertical, DS.Spacing.xs)
+        .background(DS.Color.surface)
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                .stroke(DS.Color.textTertiary.opacity(0.15), lineWidth: 1)
+        )
+    }
+
+    // MARK: - Load Images
+    private func loadImages(from items: [PhotosPickerItem]) {
+        Task {
+            isLoadingPhotos = true
+            var loaded: [UIImage] = []
+            for item in items {
+                if let data = try? await item.loadTransferable(type: Data.self),
+                   let image = UIImage(data: data) {
+                    loaded.append(image)
+                }
+            }
+            let generator = UIImpactFeedbackGenerator(style: .medium)
+            generator.impactOccurred()
+            withAnimation(DS.Anim.snappy) {
+                selectedImages = loaded
+                isLoadingPhotos = false
+            }
+        }
+    }
+
+    // MARK: - Submit
+    private func submitEdits() async {
+        guard canSubmit, !isSubmitting else { return }
+        isSubmitting = true
+        defer { isSubmitting = false }
+
+        let question = pollQuestion.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        var imageURLs: [String] = []
+        let finalContent: String
+
+        if isPoll {
+            finalContent = L10n.t("تصويت", "Poll")
+        } else {
+            finalContent = content.trimmingCharacters(in: .whitespacesAndNewlines)
+            imageURLs = existingImageURLs
+            if let authorId = authVM.currentUser?.id {
+                for image in selectedImages {
+                    if let url = await newsVM.uploadNewsImage(image: image, for: authorId) {
+                        imageURLs.append(url)
+                    }
+                }
+            }
+        }
+
+        let isUpdated = await newsVM.updateNewsPost(
+            postId: news.id,
+            content: finalContent,
+            type: selectedType,
+            imageURLs: imageURLs,
+            pollQuestion: isPoll && !question.isEmpty ? question : nil,
+            pollOptions: isPoll ? normalizedPollOptions : []
+        )
+
+        if isUpdated { dismiss() } else { showEditErrorAlert = true }
     }
 }

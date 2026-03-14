@@ -31,7 +31,14 @@
       "Bash(supabase status:*)",
       "Bash(mdfind:*)",
       "mcp__MCP_DOCKER__mcp-find",
-      "Bash(git status -u)"
+      "Bash(git status -u)",
+      "Bash(npx supabase functions deploy admin-unlink-phone --no-verify-jwt)",
+      "Bash(npx supabase link --project-ref poxyxsgvzwmnmewytsiw)",
+      "Bash(npx supabase --version)",
+      "Bash(xcode-select -p)",
+      "Bash(git add FamilyTreeV2/FamilyTreeV2.xcodeproj/project.pbxproj FamilyTreeV2/FamilyTreeV2/FamilyTreeV2/FamilyTreeV2App.swift FamilyTreeV2/FamilyTreeV2/ViewModels/Auth/AuthViewModel.swift FamilyTreeV2/FamilyTreeV2/ViewModels/Members/MemberViewModel.swift FamilyTreeV2/FamilyTreeV2/ViewModels/Notifications/NotificationViewModel.swift FamilyTreeV2/FamilyTreeV2/Views/Features/Admin/AdminActivateAccountsView.swift FamilyTreeV2/FamilyTreeV2/Views/Features/Admin/AdminModeratorsView.swift FamilyTreeV2/FamilyTreeV2/Views/Features/Admin/AdminReportsView.swift FamilyTreeV2/FamilyTreeV2/Views/Features/Auth/LoginView.swift FamilyTreeV2/FamilyTreeV2/Views/Features/Auth/RegistrationView.swift FamilyTreeV2/FamilyTreeV2/Views/Features/Home/HomeNewsView.swift FamilyTreeV2/FamilyTreeV2/Views/Features/Tree/TreeView.swift \"FamilyTreeV2/supabase/.gitignore 2\" \"FamilyTreeV2/supabase/config 2.toml\" \"FamilyTreeV2/supabase/migrations/20260309_001_gallery_caption.sql\" \"FamilyTreeV2/supabase/migrations/20260309_002_projects_default_pending.sql\" FamilyTreeV2/supabase/migrations/20260309110000_gallery_caption.sql FamilyTreeV2/supabase/migrations/20260309120000_projects_default_pending.sql FamilyTreeV2/supabase/migrations/20260312100000_device_tokens_admin_delete.sql FamilyTreeV2/supabase/functions/admin-unlink-phone/index.ts)",
+      "Bash(git commit:*)",
+      "Bash(curl -L -o runner.tar.gz \"https://github.com/actions/runner/releases/download/v2.332.0/actions-runner-osx-arm64-2.332.0.tar.gz\")"
     ]
   }
 }

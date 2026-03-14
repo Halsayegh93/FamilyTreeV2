@@ -14,6 +14,7 @@ struct AdminPendingRequestsView: View {
     @State private var showMergeConfirm = false
     @State private var showMergeSuccess = false
     @State private var mergeSuccessMessage = ""
+    @State private var expandedMatches: Set<UUID> = []
 
     // تصفية الأعضاء الذين حالتهم "Pending"
     var pendingMembers: [FamilyMember] {
@@ -21,33 +22,81 @@ struct AdminPendingRequestsView: View {
     }
 
     // MARK: - مطابقة الاسم المحلية
-    /// يقارن أجزاء اسم العضو الجديد مع أعضاء الشجرة الموجودين
-    /// يرجع التطابقات مع عدد الأجزاء المتطابقة (3 أو أكثر)
-    private func findNameMatches(for member: FamilyMember) -> [(member: FamilyMember, matchCount: Int, matchedParts: [String])] {
-        let newParts = member.fullName
+    /// تطبيع النص العربي: إزالة التشكيل + توحيد الألف والهمزة
+    private func normalizeArabic(_ text: String) -> String {
+        var s = text
+        // إزالة التشكيل (الفتحة، الكسرة، الضمة، السكون، الشدة، التنوين)
+        let diacritics: [Character] = [
+            "\u{064B}", "\u{064C}", "\u{064D}", "\u{064E}", "\u{064F}",
+            "\u{0650}", "\u{0651}", "\u{0652}", "\u{0670}"
+        ]
+        s.removeAll { diacritics.contains($0) }
+        // توحيد الألف: أ إ آ → ا
+        s = s.replacingOccurrences(of: "أ", with: "ا")
+            .replacingOccurrences(of: "إ", with: "ا")
+            .replacingOccurrences(of: "آ", with: "ا")
+        // توحيد: ة → ه
+        s = s.replacingOccurrences(of: "ة", with: "ه")
+        return s
+    }
+
+    /// تقسيم الاسم مع التعامل مع "عبد" المركبة + إزالة "ال"
+    private func splitName(_ name: String) -> [String] {
+        let raw = name
             .split(whereSeparator: \.isWhitespace)
             .map { String($0).trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty }
 
-        guard newParts.count >= 3 else { return [] }
+        var parts: [String] = []
+        var i = 0
+        while i < raw.count {
+            let normalized = normalizeArabic(raw[i])
+            // دمج "عبد" + الكلمة التالية (عبد الله → عبدالله)
+            if normalized == "عبد" && i + 1 < raw.count {
+                parts.append(normalizeArabic(raw[i] + raw[i + 1]))
+                i += 2
+            } else {
+                // إزالة "ال" التعريف
+                var clean = normalized
+                if clean.hasPrefix("ال") && clean.count > 2 {
+                    clean = String(clean.dropFirst(2))
+                }
+                parts.append(clean)
+                i += 1
+            }
+        }
+        return parts
+    }
+
+    /// مقارنة جزئين من الاسم (تطابق كامل أو يحتوي أحدهما الآخر)
+    private func partsMatch(_ a: String, _ b: String) -> Bool {
+        if a == b { return true }
+        // أحدهما يحتوي الآخر (عبدالله vs عبدالله، محمدعلي vs محمد)
+        if a.count >= 3 && b.count >= 3 {
+            if a.contains(b) || b.contains(a) { return true }
+        }
+        return false
+    }
+
+    /// يقارن أجزاء اسم العضو الجديد مع أعضاء الشجرة الموجودين
+    /// يرجع التطابقات مع عدد الأجزاء المتطابقة (2 أو أكثر)
+    private func findNameMatches(for member: FamilyMember) -> [(member: FamilyMember, matchCount: Int, matchedParts: [String])] {
+        let newParts = splitName(member.fullName)
+        guard newParts.count >= 2 else { return [] }
 
         let existingMembers = memberVM.allMembers.filter { $0.role != .pending && $0.id != member.id }
 
         var matches: [(member: FamilyMember, matchCount: Int, matchedParts: [String])] = []
 
         for existing in existingMembers {
-            let existingParts = existing.fullName
-                .split(whereSeparator: \.isWhitespace)
-                .map { String($0).trimmingCharacters(in: .whitespaces) }
-                .filter { !$0.isEmpty }
+            let existingParts = splitName(existing.fullName)
 
-            // نقارن كل جزء من الاسم الجديد مع أجزاء الاسم الموجود
             var matchedParts: [String] = []
             var usedIndices: Set<Int> = []
 
             for newPart in newParts {
                 for (idx, existingPart) in existingParts.enumerated() {
-                    if !usedIndices.contains(idx) && newPart.localizedCaseInsensitiveCompare(existingPart) == .orderedSame {
+                    if !usedIndices.contains(idx) && partsMatch(newPart, existingPart) {
                         matchedParts.append(newPart)
                         usedIndices.insert(idx)
                         break
@@ -55,12 +104,11 @@ struct AdminPendingRequestsView: View {
                 }
             }
 
-            if matchedParts.count >= 3 {
+            if matchedParts.count >= 2 {
                 matches.append((member: existing, matchCount: matchedParts.count, matchedParts: matchedParts))
             }
         }
 
-        // ترتيب حسب عدد التطابق (الأكثر أولاً)
         return matches.sorted { $0.matchCount > $1.matchCount }
     }
 
@@ -301,17 +349,31 @@ struct AdminPendingRequestsView: View {
                             .cornerRadius(DS.Radius.md)
 
                             // قائمة الأعضاء المتطابقين
-                            ForEach(nameMatches.prefix(3), id: \.member.id) { match in
+                            ForEach(
+                                expandedMatches.contains(member.id) ? nameMatches : Array(nameMatches.prefix(2)),
+                                id: \.member.id
+                            ) { match in
                                 nameMatchRow(match: match, pendingMember: member)
                             }
 
-                            if nameMatches.count > 3 {
-                                Text(L10n.t(
-                                    "+\(nameMatches.count - 3) تطابق آخر",
-                                    "+\(nameMatches.count - 3) more match(es)"
-                                ))
-                                .font(DS.Font.caption2)
-                                .foregroundColor(DS.Color.textTertiary)
+                            if nameMatches.count > 2 && !expandedMatches.contains(member.id) {
+                                Button {
+                                    withAnimation(DS.Anim.snappy) {
+                                        _ = expandedMatches.insert(member.id)
+                                    }
+                                } label: {
+                                    HStack(spacing: DS.Spacing.xs) {
+                                        Image(systemName: "chevron.down")
+                                            .font(DS.Font.caption2)
+                                        Text(L10n.t(
+                                            "عرض الكل (\(nameMatches.count))",
+                                            "Show All (\(nameMatches.count))"
+                                        ))
+                                        .font(DS.Font.caption1)
+                                    }
+                                    .foregroundColor(DS.Color.primary)
+                                    .padding(.top, DS.Spacing.xs)
+                                }
                             }
                         }
                     } else {

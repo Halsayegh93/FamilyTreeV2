@@ -37,8 +37,8 @@ struct DeviceLimitView: View {
                         .foregroundColor(DS.Color.textPrimary)
 
                     Text(t(
-                        "حسابك مرتبط بـ \(AuthViewModel.maxDevicesPerAccount) أجهزة.\nأزل جهاز من القائمة لتتمكن من استخدام هذا الجهاز.",
-                        "Your account is linked to \(AuthViewModel.maxDevicesPerAccount) devices.\nRemove a device from the list to use this device."
+                        "تم الوصول للعدد الأقصى من الأجهزة (\(AuthViewModel.maxDevicesPerAccount)).\nيرجى إزالة جهاز من القائمة للمتابعة.",
+                        "Maximum device limit reached (\(AuthViewModel.maxDevicesPerAccount)).\nPlease remove a device to continue."
                     ))
                         .font(DS.Font.body)
                         .foregroundColor(DS.Color.textSecondary)

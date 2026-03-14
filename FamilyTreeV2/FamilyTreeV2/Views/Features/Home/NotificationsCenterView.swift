@@ -73,6 +73,16 @@ struct NotificationsCenterView: View {
                 }
             }
 
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    Task { await notificationVM.fetchNotifications(force: true) }
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                        .font(DS.Font.scaled(16, weight: .medium))
+                        .foregroundStyle(DS.Color.primary)
+                }
+            }
+
             if !notificationVM.notifications.isEmpty {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
@@ -664,7 +674,7 @@ struct NotificationsCenterView: View {
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .refreshable {
-            await notificationVM.fetchNotifications()
+            await notificationVM.fetchNotifications(force: true)
         }
     }
 

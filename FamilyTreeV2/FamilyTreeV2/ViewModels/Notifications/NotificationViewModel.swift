@@ -456,12 +456,9 @@ class NotificationViewModel: ObservableObject {
         }
     }
     
-    /// عدّاد محاولات فحص الجهاز الفاشلة — لمنع الخروج من أول محاولة
-    private var deviceVerifyFailCount = 0
-    /// الحد الأقصى لمحاولات الفشل قبل تسجيل الخروج (3 = يعني بعد 3 رجعات للتطبيق بنفس المشكلة)
-    private let deviceVerifyMaxFails = 3
-
-    /// التحقق من أن الجهاز الحالي لا يزال مصرّح — إذا تم حذفه من القائمة يتم تسجيل الخروج
+    /// التحقق من أن الجهاز الحالي مسجّل
+    /// - إذا حذفه المدير (توجد أجهزة أخرى) → يمنع الوصول
+    /// - إذا ما في أجهزة مسجلة أصلاً → يسجله عادي
     func verifyDeviceAuthorization() async {
         guard let memberId = currentUser?.id else {
             Log.info("[DEVICE-VERIFY] تخطي — لا يوجد مستخدم حالي")
@@ -472,56 +469,34 @@ class NotificationViewModel: ObservableObject {
             return
         }
 
-        // تأكد أن authVM موصول — إذا لا، ممكن race condition مع init
-        guard authVM != nil else {
-            Log.info("[DEVICE-VERIFY] تخطي — authVM غير موصول بعد")
-            return
-        }
-
         Log.info("[DEVICE-VERIFY] التحقق من تصريح الجهاز: \(deviceId.prefix(8))… للعضو: \(memberId.uuidString.prefix(8))…")
 
         do {
-            let devices: [LinkedDevice] = try await supabase
+            // جلب كل أجهزة العضو (مو بس الجهاز الحالي)
+            let allDevices: [LinkedDevice] = try await supabase
                 .from("device_tokens")
                 .select()
                 .eq("member_id", value: memberId.uuidString)
-                .eq("device_id", value: deviceId)
                 .execute()
                 .value
 
-            if devices.isEmpty {
-                deviceVerifyFailCount += 1
-                Log.warning("[DEVICE-VERIFY] الجهاز غير موجود بالقائمة (محاولة \(deviceVerifyFailCount)/\(deviceVerifyMaxFails))")
+            let thisDeviceExists = allDevices.contains { $0.deviceId == deviceId }
 
-                if deviceVerifyFailCount >= deviceVerifyMaxFails {
-                    // محاولة أخيرة: إعادة تسجيل الجهاز بدل تسجيل خروج
-                    Log.warning("[DEVICE-VERIFY] محاولة إعادة تسجيل الجهاز قبل تسجيل الخروج…")
-                    await registerDevice()
-
-                    // فحص مرة ثانية بعد إعادة التسجيل
-                    let recheck: [LinkedDevice] = (try? await supabase
-                        .from("device_tokens")
-                        .select()
-                        .eq("member_id", value: memberId.uuidString)
-                        .eq("device_id", value: deviceId)
-                        .execute()
-                        .value) ?? []
-
-                    if recheck.isEmpty {
-                        Log.warning("[DEVICE-VERIFY] الجهاز لا يزال غير مصرّح بعد إعادة التسجيل — تسجيل خروج")
-                        deviceVerifyFailCount = 0
-                        await authVM?.signOut()
-                    } else {
-                        Log.info("[DEVICE-VERIFY] الجهاز تم تسجيله بنجاح ✓")
-                        deviceVerifyFailCount = 0
-                    }
-                }
-            } else {
+            if thisDeviceExists {
                 Log.info("[DEVICE-VERIFY] الجهاز مصرّح ✓")
-                deviceVerifyFailCount = 0
+            } else if allDevices.isEmpty {
+                // ما في أجهزة مسجلة أصلاً → تسجيل أول مرة
+                Log.info("[DEVICE-VERIFY] لا توجد أجهزة مسجلة — تسجيل تلقائي…")
+                await registerDevice()
+                Log.info("[DEVICE-VERIFY] تم تسجيل الجهاز ✓")
+            } else {
+                // توجد أجهزة أخرى لكن هذا محذوف → المدير حذفه
+                Log.warning("[DEVICE-VERIFY] الجهاز محذوف من قِبل المدير — منع الوصول")
+                self.linkedDevices = allDevices
+                self.isDeviceLimitExceeded = true
+                authVM?.status = .deviceLimitExceeded
             }
         } catch {
-            // لا نسجّل خروج عند خطأ شبكة — فقط عند التأكد من الحذف
             Log.error("[DEVICE-VERIFY] خطأ التحقق من تصريح الجهاز: \(error.localizedDescription)")
         }
     }

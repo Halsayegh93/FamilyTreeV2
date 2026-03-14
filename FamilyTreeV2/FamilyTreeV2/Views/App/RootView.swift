@@ -19,9 +19,6 @@ struct RootView: View {
             case .pendingApproval:
                 WaitingForApprovalView()
 
-            case .trialExpired:
-                TrialExpiredView()
-
             case .deviceLimitExceeded:
                 DeviceLimitView()
 

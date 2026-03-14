@@ -20,16 +20,6 @@ struct AdminDashboardView: View {
     private var pendingCount: Int {
         memberVM.allMembers.filter { $0.role == .pending }.count
     }
-    private var inactiveCount: Int {
-        memberVM.allMembers
-            .filter { $0.role != .pending && $0.isDeceased != true }
-            .filter { member in
-                let isNotActivated = member.status == nil || member.status == .pending
-                let hasNoPhone = member.phoneNumber == nil || (member.phoneNumber ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                return isNotActivated || hasNoPhone
-            }
-            .count
-    }
     private var moderatorCount: Int {
         memberVM.allMembers.filter { $0.role == .admin || $0.role == .supervisor }.count
     }
@@ -45,14 +35,17 @@ struct AdminDashboardView: View {
         + adminRequestVM.treeEditRequests.count
         + adminRequestVM.nameChangeRequests.count
     }
-    private var incompleteMembersCount: Int {
+    /// عدد الأعضاء اللي عندهم أي مشكلة (بدون تكرار)
+    private var issueMembersCount: Int {
         memberVM.allMembers
             .filter { $0.role != .pending && $0.isDeceased != true }
             .filter { member in
+                let isNotActivated = member.status == nil || member.status == .pending
+                let hasNoPhone = member.phoneNumber == nil || (member.phoneNumber ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 let noBirth = member.birthDate == nil || (member.birthDate ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 let noFather = member.fatherId == nil
                 let noGender = member.gender == nil || (member.gender ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                return noBirth || noFather || noGender
+                return isNotActivated || hasNoPhone || noBirth || noFather || noGender
             }
             .count
     }
@@ -113,7 +106,7 @@ struct AdminDashboardView: View {
                                             subtitle: L10n.t("تفعيل حسابات وتحديث بيانات ناقصة", "Activate accounts & update incomplete data"),
                                             icon: "person.2.badge.gearshape",
                                             color: DS.Color.warning,
-                                            badge: inactiveCount + incompleteMembersCount
+                                            badge: issueMembersCount
                                         )
                                     }
                                 }
@@ -312,10 +305,10 @@ struct AdminDashboardView: View {
                 color: DS.Color.error
             )
 
-            // Incomplete Members
+            // Issue Members
             adminColorfulStatCard(
                 title: L10n.t("ناقص", "Incomplete"),
-                value: "\(incompleteMembersCount)",
+                value: "\(issueMembersCount)",
                 icon: "exclamationmark.triangle.fill",
                 color: DS.Color.warning
             )

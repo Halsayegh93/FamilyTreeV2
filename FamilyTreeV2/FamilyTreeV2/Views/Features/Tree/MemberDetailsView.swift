@@ -82,7 +82,7 @@ struct MemberDetailsView: View {
             if let rawPickedImage {
                 ImageCropperView(
                     image: rawPickedImage,
-                    cropShape: .square,
+                    cropShape: .circle,
                     onCrop: { croppedImage in
                         showCropper = false
                         self.rawPickedImage = nil
@@ -209,7 +209,7 @@ struct MemberDetailsView: View {
             }
             .padding(.top, DS.Spacing.sm)
 
-            // زر طلب إضافة صورة — يظهر فقط إذا العضو ما عنده صورة ومو صاحب الحساب
+            // طلب إضافة صورة — يظهر فقط إذا العضو ما عنده صورة ومو صاحب الحساب
             if member.id != authVM.currentUser?.id && !member.isDeleted,
                member.avatarUrl == nil || (member.avatarUrl ?? "").isEmpty {
                 if isSubmittingPhotoSuggestion {
@@ -221,10 +221,7 @@ struct MemberDetailsView: View {
                     }
                     .padding(.top, DS.Spacing.md)
                 } else {
-                    PhotosPicker(
-                        selection: $photoPickerItem,
-                        matching: .images
-                    ) {
+                    PhotosPicker(selection: $photoPickerItem, matching: .images) {
                         HStack(spacing: DS.Spacing.sm) {
                             Image(systemName: "camera.badge.ellipsis")
                                 .font(DS.Font.scaled(13, weight: .semibold))

@@ -35,13 +35,8 @@ struct SettingsView: View {
                                 HStack(spacing: DS.Spacing.md) {
                                     DSIcon("circle.lefthalf.filled", color: DS.Color.gridTree)
 
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(t("مظهر التطبيق", "Appearance"))
-                                            .font(DS.Font.calloutBold)
-                                        Text(appearanceLabel)
-                                            .font(DS.Font.caption1)
-                                            .foregroundColor(DS.Color.textSecondary)
-                                    }
+                                    Text(t("مظهر التطبيق", "Appearance"))
+                                        .font(DS.Font.calloutBold)
 
                                     Spacer()
 
@@ -52,9 +47,10 @@ struct SettingsView: View {
                                     }
                                     .pickerStyle(.menu)
                                     .tint(DS.Color.gridTree)
+                                    .fixedSize()
                                 }
                                 .padding(.horizontal, DS.Spacing.lg)
-                                .padding(.vertical, DS.Spacing.xs)
+                                .padding(.vertical, DS.Spacing.md)
 
                                 DSDivider()
 
@@ -62,13 +58,8 @@ struct SettingsView: View {
                                 HStack(spacing: DS.Spacing.md) {
                                     DSIcon("character.bubble.fill", color: DS.Color.primary)
 
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(t("لغة التطبيق", "App Language"))
-                                            .font(DS.Font.calloutBold)
-                                        Text(languageLabel)
-                                            .font(DS.Font.caption1)
-                                            .foregroundColor(DS.Color.textSecondary)
-                                    }
+                                    Text(t("لغة التطبيق", "App Language"))
+                                        .font(DS.Font.calloutBold)
 
                                     Spacer()
 
@@ -78,9 +69,10 @@ struct SettingsView: View {
                                     }
                                     .pickerStyle(.menu)
                                     .tint(DS.Color.primary)
+                                    .fixedSize()
                                 }
                                 .padding(.horizontal, DS.Spacing.lg)
-                                .padding(.vertical, DS.Spacing.xs)
+                                .padding(.vertical, DS.Spacing.md)
 
                                 DSDivider()
 
@@ -132,7 +124,7 @@ struct SettingsView: View {
                         // MARK: - Danger Zone (Delete Account)
                             DSCard(padding: 0) {
                                 DSSectionHeader(
-                                    title: t("منطقة الخطر", "Danger Zone"),
+                                    title: t("إدارة الحساب", "Account Management"),
                                     icon: "exclamationmark.triangle.fill",
                                     iconColor: DS.Color.error
                                 )
@@ -157,7 +149,7 @@ struct SettingsView: View {
                                             .foregroundColor(DS.Color.textTertiary)
                                     }
                                     .padding(.horizontal, DS.Spacing.lg)
-                                    .padding(.vertical, DS.Spacing.xs)
+                                    .padding(.vertical, DS.Spacing.md)
                                 }
                                 .buttonStyle(DSBoldButtonStyle())
                             }
@@ -243,7 +235,7 @@ struct SettingsView: View {
                 .foregroundColor(DS.Color.textTertiary)
         }
         .padding(.horizontal, DS.Spacing.lg)
-        .padding(.vertical, DS.Spacing.xs)
+        .padding(.vertical, DS.Spacing.md)
         .contentShape(Rectangle())
     }
 
@@ -430,8 +422,6 @@ struct LinkedDevicesSettingsSheet: View {
     private var isArabic: Bool { LanguageManager.shared.selectedLanguage == "ar" }
     private func t(_ ar: String, _ en: String) -> String { isArabic ? ar : en }
 
-    @State private var deviceToRemove: NotificationViewModel.LinkedDevice?
-    @State private var isRemoving = false
 
     var body: some View {
         NavigationStack {
@@ -521,30 +511,6 @@ struct LinkedDevicesSettingsSheet: View {
             }
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-        .alert(
-            t("إزالة الجهاز", "Remove Device"),
-            isPresented: .init(
-                get: { deviceToRemove != nil },
-                set: { if !$0 { deviceToRemove = nil } }
-            )
-        ) {
-            Button(t("إلغاء", "Cancel"), role: .cancel) { deviceToRemove = nil }
-            Button(t("إزالة", "Remove"), role: .destructive) {
-                if let device = deviceToRemove {
-                    Task {
-                        isRemoving = true
-                        await notificationVM.removeDevice(device)
-                        isRemoving = false
-                    }
-                }
-                deviceToRemove = nil
-            }
-        } message: {
-            Text(t(
-                "سيتم إلغاء ربط هذا الجهاز وستتوقف الإشعارات عليه.",
-                "This device will be unlinked and will no longer receive notifications."
-            ))
-        }
         .task {
             await notificationVM.fetchLinkedDevices()
         }
@@ -582,26 +548,6 @@ struct LinkedDevicesSettingsSheet: View {
             }
 
             Spacer()
-
-            if !isCurrent {
-                Button {
-                    deviceToRemove = device
-                } label: {
-                    HStack(spacing: DS.Spacing.xs) {
-                        Image(systemName: "trash.fill")
-                            .font(DS.Font.scaled(11, weight: .bold))
-                        Text(t("إزالة", "Remove"))
-                            .font(DS.Font.scaled(11, weight: .bold))
-                    }
-                    .foregroundColor(DS.Color.error)
-                    .padding(.horizontal, DS.Spacing.md)
-                    .padding(.vertical, DS.Spacing.xs + 2)
-                    .background(DS.Color.error.opacity(0.1))
-                    .clipShape(Capsule())
-                }
-                .buttonStyle(.plain)
-                .disabled(isRemoving)
-            }
         }
         .padding(.horizontal, DS.Spacing.lg)
         .padding(.vertical, DS.Spacing.xs)

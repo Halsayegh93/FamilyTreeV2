@@ -34,7 +34,7 @@ struct DSProfilePhotoPicker: View {
     /// Stores the last raw (uncropped) image so user can re-edit crop
     @State private var lastRawImage: UIImage? = nil
 
-    private let avatarSize: CGFloat = 128
+    private let avatarSize: CGFloat = 110
 
     var body: some View {
         VStack(spacing: DS.Spacing.sm) {

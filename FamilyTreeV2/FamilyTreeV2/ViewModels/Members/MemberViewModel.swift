@@ -41,9 +41,20 @@ class MemberViewModel: ObservableObject {
     }
     
     // MARK: - Private Helpers
-    
+
     private var currentUser: FamilyMember? { authVM?.currentUser }
     private var canModerate: Bool { authVM?.canModerate ?? false }
+
+    /// يُرجع حقول التتبع الإداري (updated_by + updated_at) إذا كان المدير يعدل بيانات عضو آخر
+    private func adminAuditFields(for memberId: UUID) -> [String: AnyEncodable] {
+        guard canModerate, let adminId = currentUser?.id, adminId != memberId else { return [:] }
+        let isoFormatter = ISO8601DateFormatter()
+        isoFormatter.formatOptions = [.withInternetDateTime]
+        return [
+            "updated_by": AnyEncodable(adminId.uuidString),
+            "updated_at": AnyEncodable(isoFormatter.string(from: Date()))
+        ]
+    }
     
     func getSafeMemberName(for memberId: UUID) -> String {
         return memberId.uuidString
@@ -74,9 +85,17 @@ class MemberViewModel: ObservableObject {
                 .execute()
             
             let members = try JSONDecoder().decode([FamilyMember].self, from: response.data)
-            
+
             self.allMembers = members
             self.lastMembersFetchDate = Date()
+
+            // تحديث currentUser إذا تغيرت بياناته (مثلاً: تغيير الاسم من الإدارة)
+            if let userId = currentUser?.id,
+               let updatedUser = members.first(where: { $0.id == userId }),
+               updatedUser != currentUser {
+                authVM?.currentUser = updatedUser
+                Log.info("[Members] تم تحديث بيانات المستخدم الحالي من الشجرة")
+            }
         } catch {
             Log.error("خطأ برمجياً في الشجرة: \(error)")
         }
@@ -145,7 +164,7 @@ class MemberViewModel: ObservableObject {
 
         do {
             try await supabase.from("profiles").insert(memberData).execute()
-            await fetchAllMembers()
+            await fetchAllMembers(force: true)
             self.isLoading = false
             return true
         } catch {
@@ -231,7 +250,15 @@ class MemberViewModel: ObservableObject {
         if isDeceased, let dDate = cleanedDeathDate {
             newChild["death_date"] = AnyEncodable(dDate)
         }
-        
+
+        // تتبع المدير الذي أضاف العضو (إذا كان المدير يضيف)
+        if canModerate, let adminId = currentUser?.id {
+            let isoFormatter = ISO8601DateFormatter()
+            isoFormatter.formatOptions = [.withInternetDateTime]
+            newChild["updated_by"] = AnyEncodable(adminId.uuidString)
+            newChild["updated_at"] = AnyEncodable(isoFormatter.string(from: Date()))
+        }
+
         do {
             try await supabase.from("profiles").insert(newChild).execute()
             
@@ -290,7 +317,7 @@ class MemberViewModel: ObservableObject {
             }
             
             // تحديث البيانات فوراً
-            await fetchAllMembers()
+            await fetchAllMembers(force: true)
             await fetchChildren(for: fatherId)
             
             Log.info("تمت إضافة الابن بنجاح")
@@ -337,19 +364,24 @@ class MemberViewModel: ObservableObject {
             let timestamp = Int(Date().timeIntervalSince1970)
             let urlString = "\(publicUrl.absoluteString)?v=\(timestamp)"
             
-            // 4. تحديث رابط الصورة في جدول profiles
+            // 4. تحديث رابط الصورة في جدول profiles + تتبع المدير
+            var avatarUpdate: [String: AnyEncodable] = [
+                "avatar_url": AnyEncodable(urlString)
+            ]
+            avatarUpdate.merge(adminAuditFields(for: memberId)) { _, new in new }
+
             try await supabase
                 .from("profiles")
-                .update(["avatar_url": AnyEncodable(urlString)])
+                .update(avatarUpdate)
                 .eq("id", value: memberId.uuidString)
                 .execute()
             
             // 5. تحديث البيانات محلياً فوراً
-            await fetchAllMembers()
+            await fetchAllMembers(force: true)
             if memberId == currentUser?.id {
                 await authVM?.checkUserProfile()
             }
-            
+
             Log.info("تم رفع الصورة بنجاح: \(urlString)")
             
         } catch {
@@ -380,9 +412,10 @@ class MemberViewModel: ObservableObject {
                 .remove(paths: candidatePaths)
             
             // 1. إرسال قيمة فارغة (Optional.none) لتمثيل الـ NULL في قاعدة البيانات ✅
-            let updateData: [String: AnyEncodable] = [
+            var updateData: [String: AnyEncodable] = [
                 "avatar_url": AnyEncodable(Optional<String>.none)
             ]
+            updateData.merge(adminAuditFields(for: memberId)) { _, new in new }
             
             try await supabase
                 .from("profiles")
@@ -391,11 +424,11 @@ class MemberViewModel: ObservableObject {
                 .execute()
             
             // 2. تحديث البيانات محلياً
-            await fetchAllMembers()
+            await fetchAllMembers(force: true)
             if memberId == currentUser?.id {
                 await authVM?.checkUserProfile()
             }
-            
+
             Log.info("تم حذف رابط الصورة بنجاح")
             
         } catch {
@@ -439,7 +472,7 @@ class MemberViewModel: ObservableObject {
                 .eq("id", value: memberId.uuidString)
                 .execute()
             
-            await fetchAllMembers()
+            await fetchAllMembers(force: true)
             if memberId == currentUser?.id {
                 await authVM?.checkUserProfile()
             }
@@ -482,7 +515,7 @@ class MemberViewModel: ObservableObject {
                 .eq("id", value: memberId.uuidString)
                 .execute()
             
-            await fetchAllMembers()
+            await fetchAllMembers(force: true)
             if memberId == currentUser?.id {
                 await authVM?.checkUserProfile()
             }
@@ -526,7 +559,7 @@ class MemberViewModel: ObservableObject {
                 .eq("id", value: memberId.uuidString)
                 .execute()
             
-            await fetchAllMembers()
+            await fetchAllMembers(force: true)
             if memberId == currentUser?.id {
                 await authVM?.checkUserProfile()
             }
@@ -562,7 +595,7 @@ class MemberViewModel: ObservableObject {
                 .eq("id", value: memberId.uuidString)
                 .execute()
             
-            await fetchAllMembers()
+            await fetchAllMembers(force: true)
             if memberId == currentUser?.id {
                 await authVM?.checkUserProfile()
             }
@@ -762,6 +795,9 @@ class MemberViewModel: ObservableObject {
             updateData["death_date"] = AnyEncodable(formatter.string(from: dDate))
         }
 
+        // تتبع المدير إذا كان يعدل بيانات عضو آخر
+        updateData.merge(adminAuditFields(for: memberId)) { _, new in new }
+
         do {
             // 3. تنفيذ التحديث في Supabase
             try await supabase
@@ -771,7 +807,7 @@ class MemberViewModel: ObservableObject {
                 .execute()
 
             // 4. تحديث البيانات محلياً
-            await fetchAllMembers()
+            await fetchAllMembers(force: true)
 
             // إذا كان المستخدم يحدّث ملفه الشخصي "هو"
             if memberId == currentUser?.id {
@@ -798,7 +834,7 @@ class MemberViewModel: ObservableObject {
                 .eq("id", value: memberId.uuidString)
                 .execute()
 
-            await fetchAllMembers()
+            await fetchAllMembers(force: true)
             if memberId == currentUser?.id {
                 await authVM?.checkUserProfile()
             }
@@ -818,7 +854,7 @@ class MemberViewModel: ObservableObject {
                 .update(["is_phone_hidden": AnyEncodable(isHidden)])
                 .eq("id", value: userId.uuidString)
                 .execute()
-            await fetchAllMembers()
+            await fetchAllMembers(force: true)
             if let updated = _memberById[userId] {
                 authVM?.currentUser = updated
             }
@@ -839,7 +875,7 @@ class MemberViewModel: ObservableObject {
                 .update(["is_birth_date_hidden": AnyEncodable(isHidden)])
                 .eq("id", value: userId.uuidString)
                 .execute()
-            await fetchAllMembers()
+            await fetchAllMembers(force: true)
             if let updated = _memberById[userId] {
                 authVM?.currentUser = updated
             }
@@ -858,7 +894,7 @@ class MemberViewModel: ObservableObject {
                 .update(["badge_enabled": AnyEncodable(isEnabled)])
                 .eq("id", value: userId.uuidString)
                 .execute()
-            await fetchAllMembers()
+            await fetchAllMembers(force: true)
             if let updated = _memberById[userId] {
                 authVM?.currentUser = updated
             }
@@ -891,18 +927,21 @@ class MemberViewModel: ObservableObject {
     func updateMemberName(memberId: UUID, fullName: String) async {
         self.isLoading = true
         let firstName = fullName.components(separatedBy: " ").first ?? fullName
-        
+
+        var nameUpdate: [String: AnyEncodable] = [
+            "full_name": AnyEncodable(fullName),
+            "first_name": AnyEncodable(firstName)
+        ]
+        nameUpdate.merge(adminAuditFields(for: memberId)) { _, new in new }
+
         do {
             try await supabase
                 .from("profiles")
-                .update([
-                    "full_name": AnyEncodable(fullName),
-                    "first_name": AnyEncodable(firstName)
-                ])
+                .update(nameUpdate)
                 .eq("id", value: memberId.uuidString)
                 .execute()
                 
-            await fetchAllMembers()
+            await fetchAllMembers(force: true)
             Log.info("تم تحديث اسم العضو بنجاح")
         } catch {
             Log.error("فشل تحديث اسم العضو: \(error.localizedDescription)")
@@ -930,15 +969,20 @@ class MemberViewModel: ObservableObject {
         self.isLoading = true
         
         do {
-            // 1. تحديث حقل role في قاعدة البيانات
+            // 1. تحديث حقل role في قاعدة البيانات + تتبع المدير
+            var roleUpdate: [String: AnyEncodable] = [
+                "role": AnyEncodable(newRole.rawValue)
+            ]
+            roleUpdate.merge(adminAuditFields(for: memberId)) { _, new in new }
+
             try await supabase
                 .from("profiles")
-                .update(["role": AnyEncodable(newRole.rawValue)])
+                .update(roleUpdate)
                 .eq("id", value: memberId.uuidString)
                 .execute()
             
             // 2. تحديث البيانات محلياً لكي تظهر التغييرات فوراً في الشجرة
-            await fetchAllMembers()
+            await fetchAllMembers(force: true)
             
             let memberName = _memberById[memberId]?.firstName ?? "عضو"
             let roleName = newRole == .admin ? "مدير" : (newRole == .supervisor ? "مشرف" : "عضو")
@@ -1025,7 +1069,7 @@ class MemberViewModel: ObservableObject {
         }
         
         // 3) مزامنة نهائية مع الشجرة بعد الحفظ
-        await fetchAllMembers()
+        await fetchAllMembers(force: true)
         if fatherId == self.currentUser?.id {
             await fetchChildren(for: fatherId)
         }
@@ -1046,10 +1090,15 @@ class MemberViewModel: ObservableObject {
             return
         }
         do {
-            // 1) تحديث الهاتف
+            // 1) تحديث الهاتف + تتبع المدير
+            var phoneUpdate: [String: AnyEncodable] = [
+                "phone_number": AnyEncodable(normalizedPhone)
+            ]
+            phoneUpdate.merge(adminAuditFields(for: memberId)) { _, new in new }
+
             try await supabase
                 .from("profiles")
-                .update(["phone_number": AnyEncodable(normalizedPhone)])
+                .update(phoneUpdate)
                 .eq("id", value: memberId.uuidString)
                 .execute()
             
@@ -1087,7 +1136,7 @@ class MemberViewModel: ObservableObject {
                     .execute()
             }
             
-            await fetchAllMembers() // تحديث البيانات فوراً ✅
+            await fetchAllMembers(force: true) // تحديث البيانات فوراً ✅
             Log.info("تم تحديث الهاتف وتفعيل العضو للدخول المباشر")
         } catch {
             Log.error("خطأ تحديث الهاتف: \(error.localizedDescription)")
@@ -1107,18 +1156,21 @@ class MemberViewModel: ObservableObject {
                 options: .init(body: ["memberId": memberId.uuidString.lowercased()])
             )
             
-            await fetchAllMembers()
+            await fetchAllMembers(force: true)
             Log.info("تم حذف رقم الهاتف وفك ارتباط حساب المصادقة بالكامل")
         } catch {
             Log.error("خطأ حذف الهاتف: \(error.localizedDescription)")
             // fallback: محاولة التنظيف المحلي في حالة فشل الـ edge function
             do {
+                var fallbackUpdate: [String: AnyEncodable] = [
+                    "phone_number": AnyEncodable(String?.none),
+                    "status": AnyEncodable("pending")
+                ]
+                fallbackUpdate.merge(adminAuditFields(for: memberId)) { _, new in new }
+
                 try await supabase
                     .from("profiles")
-                    .update([
-                        "phone_number": AnyEncodable(String?.none),
-                        "status": AnyEncodable("pending")
-                    ])
+                    .update(fallbackUpdate)
                     .eq("id", value: memberId.uuidString)
                     .execute()
                 
@@ -1128,7 +1180,7 @@ class MemberViewModel: ObservableObject {
                     .eq("user_id", value: memberId.uuidString)
                     .execute()
                 
-                await fetchAllMembers()
+                await fetchAllMembers(force: true)
                 Log.info("تم حذف رقم الهاتف محلياً (بدون حذف auth user)")
             } catch {
                 Log.error("فشل التنظيف المحلي أيضاً: \(error.localizedDescription)")
@@ -1141,14 +1193,19 @@ class MemberViewModel: ObservableObject {
 
     func updateMemberGender(memberId: UUID, gender: String) async {
         self.isLoading = true
+        var genderUpdate: [String: AnyEncodable] = [
+            "gender": AnyEncodable(gender)
+        ]
+        genderUpdate.merge(adminAuditFields(for: memberId)) { _, new in new }
+
         do {
             try await supabase
                 .from("profiles")
-                .update(["gender": AnyEncodable(gender)])
+                .update(genderUpdate)
                 .eq("id", value: memberId.uuidString)
                 .execute()
 
-            await fetchAllMembers()
+            await fetchAllMembers(force: true)
             Log.info("تم تحديث الجنس")
         } catch {
             Log.error("خطأ تحديث الجنس: \(error.localizedDescription)")
@@ -1160,14 +1217,19 @@ class MemberViewModel: ObservableObject {
 
     func updateMemberBirthDate(memberId: UUID, birthDate: String) async {
         self.isLoading = true
+        var birthUpdate: [String: AnyEncodable] = [
+            "birth_date": AnyEncodable(birthDate)
+        ]
+        birthUpdate.merge(adminAuditFields(for: memberId)) { _, new in new }
+
         do {
             try await supabase
                 .from("profiles")
-                .update(["birth_date": AnyEncodable(birthDate)])
+                .update(birthUpdate)
                 .eq("id", value: memberId.uuidString)
                 .execute()
 
-            await fetchAllMembers()
+            await fetchAllMembers(force: true)
             Log.info("تم تحديث تاريخ الميلاد")
         } catch {
             Log.error("خطأ تحديث تاريخ الميلاد: \(error.localizedDescription)")
@@ -1181,17 +1243,18 @@ class MemberViewModel: ObservableObject {
         self.isLoading = true
         do {
             // نرسل الـ UUID كـ String، وإذا كان nil نرسل NULL للسيرفر
-            let updateData: [String: AnyEncodable] = [
+            var updateData: [String: AnyEncodable] = [
                 "father_id": AnyEncodable(fatherId?.uuidString)
             ]
-            
+            updateData.merge(adminAuditFields(for: memberId)) { _, new in new }
+
             try await supabase
                 .from("profiles")
                 .update(updateData)
                 .eq("id", value: memberId.uuidString)
                 .execute()
             
-            await fetchAllMembers() // تحديث البيانات فوراً لتظهر في الشجرة
+            await fetchAllMembers(force: true)
             Log.info("تم تحديث ربط الأب بنجاح")
         } catch {
             Log.error("خطأ في ربط الأب: \(error.localizedDescription)")
@@ -1231,7 +1294,10 @@ class MemberViewModel: ObservableObject {
         } else {
             updateData["death_date"] = AnyEncodable(Optional<String>.none)
         }
-        
+
+        // تتبع المدير إذا كان يعدل بيانات عضو آخر
+        updateData.merge(adminAuditFields(for: memberId)) { _, new in new }
+
         do {
             // 3. التحديث في قاعدة بيانات Supabase
             try await supabase
@@ -1241,7 +1307,7 @@ class MemberViewModel: ObservableObject {
                 .execute()
             
             // 4. تحديث القائمة المحلية فوراً
-            await fetchAllMembers()
+            await fetchAllMembers(force: true)
             Log.info("تم تحديث البيانات بنجاح (مع دعم التواريخ المفقودة)")
             
         } catch {
@@ -1285,6 +1351,9 @@ class MemberViewModel: ObservableObject {
             payload["death_date"] = AnyEncodable(Optional<String>.none)
         }
 
+        // تتبع المدير إذا كان يعدل بيانات عضو آخر
+        payload.merge(adminAuditFields(for: member.id)) { _, new in new }
+
         do {
             try await supabase
                 .from("profiles")
@@ -1299,10 +1368,13 @@ class MemberViewModel: ObservableObject {
 
         // تحديث الجنس بشكل منفصل (العمود قد لا يكون في schema cache)
         if let gender, !gender.isEmpty {
+            var genderPayload: [String: AnyEncodable] = ["gender": AnyEncodable(gender)]
+            genderPayload.merge(adminAuditFields(for: member.id)) { _, new in new }
+
             do {
                 try await supabase
                     .from("profiles")
-                    .update(["gender": AnyEncodable(gender)])
+                    .update(genderPayload)
                     .eq("id", value: member.id.uuidString)
                     .execute()
             } catch {
@@ -1310,7 +1382,7 @@ class MemberViewModel: ObservableObject {
             }
         }
 
-        await fetchAllMembers()
+        await fetchAllMembers(force: true)
         if let fatherId = member.fatherId {
             await fetchChildren(for: fatherId)
         }
@@ -1326,10 +1398,13 @@ class MemberViewModel: ObservableObject {
         var successCount = 0
 
         for id in memberIds {
+            var bulkUpdate: [String: AnyEncodable] = ["gender": AnyEncodable(gender)]
+            bulkUpdate.merge(adminAuditFields(for: id)) { _, new in new }
+
             do {
                 try await supabase
                     .from("profiles")
-                    .update(["gender": AnyEncodable(gender)])
+                    .update(bulkUpdate)
                     .eq("id", value: id.uuidString)
                     .execute()
                 successCount += 1
@@ -1338,7 +1413,7 @@ class MemberViewModel: ObservableObject {
             }
         }
 
-        await fetchAllMembers()
+        await fetchAllMembers(force: true)
         self.isLoading = false
         Log.info("تم تحديث الجنس لـ \(successCount)/\(memberIds.count) عضو")
         return successCount

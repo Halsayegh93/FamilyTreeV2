@@ -37,10 +37,10 @@ class DiwaniyasViewModel: ObservableObject {
             let response: [Diwaniya] = try await supabase
                 .from("diwaniyas")
                 .select()
-                .eq("approval_status", value: "approved")
+                .in("approval_status", values: ["approved", "pending"])
                 .execute()
                 .value
-            
+
             self.diwaniyas = response
         } catch is CancellationError {
             Log.info("جلب الديوانيات تم إلغاؤه")
@@ -76,7 +76,7 @@ class DiwaniyasViewModel: ObservableObject {
         isLoading = false
     }
     
-    func addDiwaniya(ownerId: UUID, ownerName: String, title: String, scheduleText: String?, contactPhone: String?, mapsUrl: String?, address: String? = nil) async -> Bool {
+    func addDiwaniya(ownerId: UUID, ownerName: String, title: String, scheduleText: String?, contactPhone: String?, mapsUrl: String?, address: String? = nil, autoApprove: Bool = false) async -> Bool {
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedOwner = ownerName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedTitle.isEmpty else {
@@ -99,8 +99,10 @@ class DiwaniyasViewModel: ObservableObject {
                 let contact_phone: String?
                 let maps_url: String?
                 let approval_status: String
+                let approved_by: UUID?
             }
             let newId = UUID()
+            let status = autoApprove ? "approved" : "pending"
             try await supabase
                 .from("diwaniyas")
                 .insert(InsertData(
@@ -111,10 +113,11 @@ class DiwaniyasViewModel: ObservableObject {
                     schedule_text: scheduleText,
                     contact_phone: contactPhone,
                     maps_url: mapsUrl,
-                    approval_status: "pending"
+                    approval_status: status,
+                    approved_by: autoApprove ? ownerId : nil
                 ))
                 .execute()
-            
+
             // Update optional columns that may not exist yet
             if let address, !address.isEmpty {
                 do {
@@ -122,7 +125,12 @@ class DiwaniyasViewModel: ObservableObject {
                     try await supabase.from("diwaniyas").update(AddrUpdate(address: address)).eq("id", value: newId.uuidString).execute()
                 } catch { Log.warning("address column not available: \(error.localizedDescription)") }
             }
-            
+
+            // Refresh the list so the new diwaniya appears
+            if autoApprove {
+                await fetchDiwaniyas()
+            }
+
             isLoading = false
             return true
         } catch {
@@ -173,6 +181,9 @@ class DiwaniyasViewModel: ObservableObject {
             removeLocallyThenRefresh(from: &pendingDiwaniyas, id: id) { [weak self] in
                 await self?.fetchPendingDiwaniyas()
             }
+
+            // تحديث القائمة الرئيسية عشان الديوانية المعتمدة تظهر
+            await fetchDiwaniyas()
 
             Log.info("تم اعتماد الديوانية بنجاح")
         } catch {

@@ -66,11 +66,16 @@ struct EditChildSheet: View {
         DSProfilePhotoPicker(
             selectedImage: $selectedUIImage,
             existingURL: member.avatarUrl,
+            enableCrop: true,
+            cropShape: .circle,
+            trailing: nil,
+            showDeleteForExisting: member.avatarUrl != nil,
             onDeleteExisting: {
                 Task {
                     await memberVM.deleteAvatar(for: member.id)
                 }
-            }
+            },
+            compactEmptyState: true
         )
         .padding(.horizontal, DS.Spacing.lg)
     }

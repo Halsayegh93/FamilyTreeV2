@@ -1,4 +1,5 @@
 import SwiftUI
+import PhotosUI
 import UniformTypeIdentifiers
 
 struct AdminMemberDetailSheet: View {
@@ -31,6 +32,8 @@ struct AdminMemberDetailSheet: View {
     @State private var isSortMode = false
     @State private var draggedChild: FamilyMember?
 
+    @State private var localAvatarPreview: UIImage? = nil
+    @State private var currentAvatarURL: String?
     @State private var showAddSonSheet = false
     @State private var showFatherPicker = false
     @State private var showDeleteConfirmation = false
@@ -43,6 +46,7 @@ struct AdminMemberDetailSheet: View {
 
     init(member: FamilyMember) {
         self.member = member
+        self._currentAvatarURL = State(initialValue: member.avatarUrl)
         self._selectedRole = State(initialValue: member.role)
         let detectedPhone = KuwaitPhone.detectCountryAndLocal(member.phoneNumber)
         self._selectedPhoneCountry = State(initialValue: detectedPhone.country)
@@ -172,25 +176,47 @@ struct AdminMemberDetailSheet: View {
     // MARK: - Member Header (Avatar + Name + Role)
     private var memberHeader: some View {
         VStack(spacing: DS.Spacing.xs) {
-            ZStack {
-                Circle()
-                    .fill(DS.Color.surface)
-                    .frame(width: 70, height: 70)
-                    .shadow(color: DS.Color.shadowMedium, radius: 6, y: 3)
-
-                if let urlStr = member.avatarUrl, let url = URL(string: urlStr) {
-                    CachedAsyncImage(url: url) { img in img.resizable().scaledToFill() }
-                    placeholder: { ProgressView() }
-                    .frame(width: 62, height: 62).clipShape(Circle())
-                } else {
-                    Circle()
-                        .fill(DS.Color.background)
-                        .frame(width: 62, height: 62)
-                        .overlay(
-                            Text(String(member.fullName.prefix(1)))
-                                .font(DS.Font.scaled(26, weight: .bold))
-                                .foregroundColor(DS.Color.primary)
+            DSProfilePhotoPicker(
+                selectedImage: $localAvatarPreview,
+                existingURL: currentAvatarURL,
+                enableCrop: true,
+                cropShape: .circle,
+                trailing: nil,
+                showDeleteForExisting: currentAvatarURL != nil,
+                onDeleteExisting: {
+                    Task {
+                        await memberVM.deleteAvatar(for: member.id)
+                        await MainActor.run { currentAvatarURL = nil }
+                        let adminName = authVM.currentUser?.firstName ?? "مدير"
+                        await memberVM.notificationVM?.notifyAdminsWithPush(
+                            title: L10n.t("تعديل بيانات عضو", "Member Data Updated"),
+                            body: L10n.t(
+                                "قام \(adminName) بحذف صورة \(member.firstName)",
+                                "\(adminName) deleted \(member.firstName)'s photo"
+                            ),
+                            kind: "admin_edit"
                         )
+                    }
+                }
+            )
+            .onChange(of: localAvatarPreview) { _, newImage in
+                guard let newImage else { return }
+                Task {
+                    await memberVM.uploadAvatar(image: newImage, for: member.id)
+                    // تحديث URL محلياً عشان يعرض الصورة الجديدة
+                    if let updated = memberVM.member(byId: member.id) {
+                        await MainActor.run { currentAvatarURL = updated.avatarUrl }
+                    }
+                    let adminName = authVM.currentUser?.firstName ?? "مدير"
+                    await memberVM.notificationVM?.notifyAdminsWithPush(
+                        title: L10n.t("تعديل بيانات عضو", "Member Data Updated"),
+                        body: L10n.t(
+                            "قام \(adminName) بتعديل صورة \(member.firstName)",
+                            "\(adminName) updated \(member.firstName)'s photo"
+                        ),
+                        kind: "admin_edit"
+                    )
+                    Log.info("[Admin] \(adminName) عدّل صورة \(member.firstName)")
                 }
             }
 
@@ -986,6 +1012,32 @@ struct AdminMemberDetailSheet: View {
                 }
                 await memberVM.updateChildrenOrder(for: capturedMemberId, newOrder: updatedChildren)
             }
+
+            // إشعار يوضح أي مدير عدّل + شنو عدّل
+            let adminName = authVM.currentUser?.firstName ?? "مدير"
+            let memberName = member.firstName
+            var changedFields: [String] = []
+            if nameChanged { changedFields.append(L10n.t("الاسم", "Name")) }
+            if roleChanged { changedFields.append(L10n.t("الرتبة", "Role")) }
+            if phoneChanged { changedFields.append(L10n.t("الهاتف", "Phone")) }
+            if fatherChanged { changedFields.append(L10n.t("الأب", "Father")) }
+            if genderChanged { changedFields.append(L10n.t("الجنس", "Gender")) }
+            if datesChanged { changedFields.append(L10n.t("التواريخ", "Dates")) }
+            if childrenOrderChanged { changedFields.append(L10n.t("ترتيب الأبناء", "Children order")) }
+
+            if !changedFields.isEmpty {
+                let fieldsList = changedFields.joined(separator: "، ")
+                await memberVM.notificationVM?.notifyAdminsWithPush(
+                    title: L10n.t("تعديل بيانات عضو", "Member Data Updated"),
+                    body: L10n.t(
+                        "قام \(adminName) بتعديل بيانات \(memberName): \(fieldsList)",
+                        "\(adminName) updated \(memberName)'s data: \(fieldsList)"
+                    ),
+                    kind: "admin_edit"
+                )
+                Log.info("[Admin] \(adminName) عدّل بيانات \(memberName): \(fieldsList)")
+            }
+
             isSaving = false
             dismiss()
         }

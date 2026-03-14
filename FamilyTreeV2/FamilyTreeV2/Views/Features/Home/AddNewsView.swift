@@ -1,4 +1,5 @@
 import SwiftUI
+import PhotosUI
 
 // MARK: - إضافة خبر
 struct AddNewsView: View {
@@ -8,12 +9,15 @@ struct AddNewsView: View {
     @State private var content = ""
     @State private var selectedType = "خبر"
     @State private var selectedImages: [UIImage] = []
+    @State private var pickerItems: [PhotosPickerItem] = []
     @State private var pollQuestion = ""
     @State private var pollOption1 = ""
     @State private var pollOption2 = ""
     @State private var pollOption3 = ""
     @State private var pollOption4 = ""
     @State private var showPostErrorAlert = false
+    @State private var isSubmitting = false
+    @State private var isLoadingPhotos = false
 
     private var normalizedPollOptions: [String] {
         [pollOption1, pollOption2, pollOption3, pollOption4]
@@ -25,8 +29,14 @@ struct AddNewsView: View {
         selectedType != "تصويت" || normalizedPollOptions.count >= 2
     }
 
+    private var isPoll: Bool { selectedType == "تصويت" }
+
     private var canSubmit: Bool {
-        !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && isPollValid && !authVM.isLoading
+        if isPoll {
+            return isPollValid && !isSubmitting
+        } else {
+            return !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isSubmitting
+        }
     }
 
     var body: some View {
@@ -34,15 +44,16 @@ struct AddNewsView: View {
             ScrollView(showsIndicators: false) {
                 VStack(spacing: DS.Spacing.lg) {
                     addNewsTypeSelector
-                    addNewsContentSection
-                    addNewsPhotosSection
 
-                    if selectedType == "تصويت" {
+                    if isPoll {
                         addNewsPollSection
+                    } else {
+                        addNewsContentSection
                     }
 
                     addNewsSubmitSection
                 }
+                .animation(DS.Anim.snappy, value: isPoll)
                 .padding(.horizontal, DS.Spacing.lg)
                 .padding(.top, DS.Spacing.sm)
                 .padding(.bottom, DS.Spacing.xxxl)
@@ -61,6 +72,10 @@ struct AddNewsView: View {
                 Button(L10n.t("حسناً", "OK"), role: .cancel) {}
             } message: { Text(newsVM.newsPostErrorMessage ?? L10n.t("حدث خطأ أثناء نشر الخبر.", "An error occurred.")) }
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+            .onChange(of: pickerItems) { _, items in
+                guard !items.isEmpty else { return }
+                loadImages(from: items)
+            }
         }
     }
 
@@ -115,7 +130,7 @@ struct AddNewsView: View {
         }
     }
 
-    // MARK: - Content Section
+    // MARK: - Content Section (مع شريط الأدوات والصور)
     private var addNewsContentSection: some View {
         DSCard(padding: 0) {
             DSSectionHeader(
@@ -124,6 +139,7 @@ struct AddNewsView: View {
                 iconColor: DS.Color.accent
             )
 
+            // حقل النص
             ZStack(alignment: .topTrailing) {
                 TextEditor(text: $content)
                     .frame(minHeight: 60, maxHeight: .infinity)
@@ -142,16 +158,88 @@ struct AddNewsView: View {
                         .allowsHitTesting(false)
                 }
             }
+
+            // الصور المختارة
+            if !selectedImages.isEmpty {
+                photosPreview
+            }
+
+            // شريط الأدوات (أيقونة الصور)
+            contentToolbar
         }
     }
 
-    // MARK: - Photos Section
-    private var addNewsPhotosSection: some View {
-        DSMultiPhotoPicker(
-            selectedImages: $selectedImages,
-            maxCount: 5,
-            enableCrop: false
-        )
+    // MARK: - Content Toolbar
+    private var contentToolbar: some View {
+        HStack(spacing: DS.Spacing.md) {
+            // زر إضافة صور
+            PhotosPicker(
+                selection: $pickerItems,
+                maxSelectionCount: 5,
+                matching: .images
+            ) {
+                HStack(spacing: DS.Spacing.xs) {
+                    if isLoadingPhotos {
+                        ProgressView()
+                            .scaleEffect(0.7)
+                            .tint(DS.Color.primary)
+                    } else {
+                        Image(systemName: "photo.on.rectangle.angled")
+                            .font(DS.Font.scaled(16, weight: .medium))
+                    }
+
+                    if !selectedImages.isEmpty {
+                        Text("\(selectedImages.count)/5")
+                            .font(DS.Font.caption2)
+                            .fontWeight(.bold)
+                    }
+                }
+                .foregroundColor(DS.Color.primary)
+                .padding(.horizontal, DS.Spacing.md)
+                .padding(.vertical, DS.Spacing.sm)
+                .background(DS.Color.primary.opacity(0.06))
+                .clipShape(Capsule())
+            }
+            .disabled(isLoadingPhotos)
+
+            Spacer()
+        }
+        .padding(.horizontal, DS.Spacing.md)
+        .padding(.bottom, DS.Spacing.md)
+    }
+
+    // MARK: - Photos Preview
+    private var photosPreview: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: DS.Spacing.sm) {
+                ForEach(Array(selectedImages.enumerated()), id: \.offset) { idx, image in
+                    ZStack(alignment: .topTrailing) {
+                        Image(uiImage: image)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: 72, height: 72)
+                            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
+
+                        // زر حذف الصورة
+                        Button {
+                            let generator = UIImpactFeedbackGenerator(style: .light)
+                            generator.impactOccurred()
+                            withAnimation(DS.Anim.snappy) {
+                                selectedImages.remove(at: idx)
+                            }
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(DS.Font.scaled(18, weight: .bold))
+                                .foregroundStyle(.white, DS.Color.error)
+                                .shadow(color: .black.opacity(0.3), radius: 2, y: 1)
+                        }
+                        .offset(x: 6, y: -6)
+                    }
+                }
+            }
+            .padding(.horizontal, DS.Spacing.md)
+            .padding(.vertical, DS.Spacing.sm)
+        }
     }
 
     // MARK: - Poll Section
@@ -181,7 +269,7 @@ struct AddNewsView: View {
             DSPrimaryButton(
                 newsVM.canAutoPublishNews ? L10n.t("نشر الخبر", "Publish Post") : L10n.t("إرسال للمراجعة", "Submit for Review"),
                 icon: "paperplane.fill",
-                isLoading: authVM.isLoading,
+                isLoading: isSubmitting,
                 useGradient: canSubmit,
                 color: canSubmit ? DS.Color.primary : .gray
             ) {
@@ -224,20 +312,52 @@ struct AddNewsView: View {
         )
     }
 
-    private func submitNews() async {
-        guard canSubmit, let authorId = authVM.currentUser?.id else { return }
-        var uploadedURLs: [String] = []
-        for image in selectedImages {
-            if let url = await newsVM.uploadNewsImage(image: image, for: authorId) { uploadedURLs.append(url) }
+    // MARK: - Load Images
+    private func loadImages(from items: [PhotosPickerItem]) {
+        Task {
+            isLoadingPhotos = true
+            var loaded: [UIImage] = []
+            for item in items {
+                if let data = try? await item.loadTransferable(type: Data.self),
+                   let image = UIImage(data: data) {
+                    loaded.append(image)
+                }
+            }
+            let generator = UIImpactFeedbackGenerator(style: .medium)
+            generator.impactOccurred()
+            withAnimation(DS.Anim.snappy) {
+                selectedImages = loaded
+                isLoadingPhotos = false
+            }
         }
+    }
+
+    // MARK: - Submit
+    private func submitNews() async {
+        guard canSubmit, !isSubmitting, let authorId = authVM.currentUser?.id else { return }
+        isSubmitting = true
+        defer { isSubmitting = false }
 
         let question = pollQuestion.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // التصويت: لا صور ولا محتوى — سؤال التصويت يصير المحتوى
+        var uploadedURLs: [String] = []
+        let finalContent: String
+        if isPoll {
+            finalContent = L10n.t("تصويت", "Poll")
+        } else {
+            finalContent = content.trimmingCharacters(in: .whitespacesAndNewlines)
+            for image in selectedImages {
+                if let url = await newsVM.uploadNewsImage(image: image, for: authorId) { uploadedURLs.append(url) }
+            }
+        }
+
         let isPosted = await newsVM.postNews(
-            content: content.trimmingCharacters(in: .whitespacesAndNewlines),
+            content: finalContent,
             type: selectedType,
             imageURLs: uploadedURLs,
-            pollQuestion: selectedType == "تصويت" && !question.isEmpty ? question : nil,
-            pollOptions: selectedType == "تصويت" ? normalizedPollOptions : []
+            pollQuestion: isPoll && !question.isEmpty ? question : nil,
+            pollOptions: isPoll ? normalizedPollOptions : []
         )
         if isPosted { dismiss() } else { showPostErrorAlert = true }
     }

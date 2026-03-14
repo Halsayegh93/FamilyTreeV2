@@ -6,6 +6,7 @@ struct NewsCommentsSheet: View {
     let news: NewsPost
     @State private var commentInput = ""
     @State private var isLoadingComments = false
+    @State private var isSendingComment = false
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -61,21 +62,32 @@ struct NewsCommentsSheet: View {
                         .glassBackground(radius: DS.Radius.md)
 
                     Button(action: {
+                        guard !isSendingComment else { return }
+                        isSendingComment = true
                         Task {
                             let success = await newsVM.addNewsComment(to: news.id, text: commentInput)
+                            isSendingComment = false
                             if success {
                                 await MainActor.run { commentInput = "" }
                             }
                         }
                     }) {
-                        Image(systemName: "paperplane.fill")
-                            .font(DS.Font.scaled(15, weight: .bold))
-                            .foregroundColor(DS.Color.textOnPrimary)
-                            .frame(width: 42, height: 42)
-                            .background(DS.Color.gradientPrimary)
-                            .clipShape(Circle())
+                        if isSendingComment {
+                            ProgressView()
+                                .tint(DS.Color.textOnPrimary)
+                                .frame(width: 42, height: 42)
+                                .background(DS.Color.gradientPrimary)
+                                .clipShape(Circle())
+                        } else {
+                            Image(systemName: "paperplane.fill")
+                                .font(DS.Font.scaled(15, weight: .bold))
+                                .foregroundColor(DS.Color.textOnPrimary)
+                                .frame(width: 42, height: 42)
+                                .background(DS.Color.gradientPrimary)
+                                .clipShape(Circle())
+                        }
                     }
-                    .disabled(commentInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(isSendingComment || commentInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
                 .padding(DS.Spacing.lg)
             }

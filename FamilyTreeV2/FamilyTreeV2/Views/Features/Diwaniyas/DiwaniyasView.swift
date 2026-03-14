@@ -1,6 +1,5 @@
 import SwiftUI
 
-
 // MARK: - DiwaniyasView
 struct DiwaniyasView: View {
     @EnvironmentObject var authVM: AuthViewModel
@@ -39,16 +38,16 @@ struct DiwaniyasView: View {
                         }
                     }
 
-                    if viewModel.isLoading && viewModel.diwaniyas.isEmpty {
+                    if viewModel.isLoading && filteredDiwaniyas.isEmpty {
                         Spacer()
                         ProgressView(L10n.t("جاري التحميل...", "Loading..."))
                         Spacer()
-                    } else if viewModel.diwaniyas.isEmpty {
+                    } else if filteredDiwaniyas.isEmpty {
                         emptyStateView
                     } else {
                         ScrollView(showsIndicators: false) {
                             LazyVStack(spacing: DS.Spacing.md) {
-                                ForEach(viewModel.diwaniyas) { diwaniya in
+                                ForEach(filteredDiwaniyas) { diwaniya in
                                     diwaniyaCard(for: diwaniya)
                                 }
                             }
@@ -99,6 +98,12 @@ struct DiwaniyasView: View {
                 try? await Task.sleep(nanoseconds: 500_000_000)
                 await viewModel.fetchDiwaniyas()
             }
+            .onAppear {
+                // تحديث القائمة كل ما يرجع المستخدم للتاب
+                if !viewModel.diwaniyas.isEmpty {
+                    Task { await viewModel.fetchDiwaniyas() }
+                }
+            }
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
             .alert(L10n.t("خطأ", "Error"), isPresented: .init(
                 get: { viewModel.errorMessage != nil },
@@ -112,6 +117,20 @@ struct DiwaniyasView: View {
     }
 
 
+
+    // MARK: - Filtered Diwaniyas
+    /// المعتمدة تظهر للكل، المعلقة تظهر بس للأدمن/المشرف وصاحب الديوانية
+    private var filteredDiwaniyas: [Diwaniya] {
+        let userId = authVM.currentUser?.id
+        let canModerate = authVM.currentUser?.role == .admin || authVM.currentUser?.role == .supervisor
+        return viewModel.diwaniyas.filter { diwaniya in
+            if diwaniya.approvalStatus == "approved" { return true }
+            if diwaniya.approvalStatus == "pending" {
+                return canModerate || diwaniya.ownerId == userId
+            }
+            return false
+        }
+    }
 
     // MARK: - Empty State
     private var emptyStateView: some View {
@@ -156,10 +175,25 @@ struct DiwaniyasView: View {
     // MARK: - Diwaniya Card
     private func diwaniyaCard(for item: Diwaniya) -> some View {
         let isClosed = item.isClosed == true
-        let cardColor = isClosed ? DS.Color.textTertiary : DS.Color.gridDiwaniya
-        
+        let isPending = item.approvalStatus == "pending"
+        let cardColor = isPending ? DS.Color.warning : (isClosed ? DS.Color.textTertiary : DS.Color.gridDiwaniya)
+
         return DSCard(padding: 0) {
             VStack(spacing: 0) {
+                // badge تحت المراجعة
+                if isPending {
+                    HStack(spacing: DS.Spacing.xs) {
+                        Image(systemName: "clock.badge.questionmark")
+                            .font(DS.Font.scaled(12, weight: .bold))
+                        Text(L10n.t("تحت المراجعة", "Under Review"))
+                            .font(DS.Font.scaled(12, weight: .bold))
+                    }
+                    .foregroundColor(DS.Color.warning)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, DS.Spacing.sm)
+                    .background(DS.Color.warning.opacity(0.08))
+                }
+
                 // شريط علوي ملون
                 HStack(spacing: DS.Spacing.md) {
                     // أيقونة بتدرج
@@ -167,25 +201,27 @@ struct DiwaniyasView: View {
                         Circle()
                             .fill(
                                 LinearGradient(
-                                    colors: isClosed
-                                        ? [DS.Color.textTertiary.opacity(0.3), DS.Color.textTertiary.opacity(0.1)]
-                                        : [DS.Color.gridDiwaniya.opacity(0.2), DS.Color.primary.opacity(0.1)],
+                                    colors: isPending
+                                        ? [DS.Color.warning.opacity(0.2), DS.Color.warning.opacity(0.1)]
+                                        : (isClosed
+                                            ? [DS.Color.textTertiary.opacity(0.3), DS.Color.textTertiary.opacity(0.1)]
+                                            : [DS.Color.gridDiwaniya.opacity(0.2), DS.Color.primary.opacity(0.1)]),
                                     startPoint: .topLeading, endPoint: .bottomTrailing
                                 )
                             )
-                            .frame(width: 48, height: 48)
+                            .frame(width: 52, height: 52)
                         Image(systemName: item.imageUrl ?? "map.fill")
-                            .font(DS.Font.scaled(20, weight: .bold))
+                            .font(DS.Font.scaled(22, weight: .bold))
                             .foregroundColor(cardColor)
                     }
 
-                    VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                    VStack(alignment: .leading, spacing: DS.Spacing.sm) {
                         HStack(spacing: DS.Spacing.sm) {
                             Text(item.title)
                                 .font(DS.Font.headline)
-                                .foregroundColor(isClosed ? DS.Color.textTertiary : DS.Color.textPrimary)
+                                .foregroundColor(isPending ? DS.Color.textSecondary : (isClosed ? DS.Color.textTertiary : DS.Color.textPrimary))
 
-                            if isClosed {
+                            if isClosed && !isPending {
                                 HStack(spacing: 3) {
                                     Image(systemName: "lock.fill")
                                         .font(DS.Font.caption2)
@@ -204,7 +240,7 @@ struct DiwaniyasView: View {
                                 .font(DS.Font.caption1)
                                 .foregroundColor(DS.Color.textTertiary)
                             Text(item.ownerName)
-                                .font(DS.Font.caption1)
+                                .font(DS.Font.callout)
                                 .foregroundColor(DS.Color.textSecondary)
                         }
                     }
@@ -223,14 +259,14 @@ struct DiwaniyasView: View {
                             Image(systemName: "ellipsis")
                                 .font(DS.Font.scaled(16, weight: .bold))
                                 .foregroundColor(DS.Color.textSecondary)
-                                .frame(width: 36, height: 36)
+                                .frame(width: 38, height: 38)
                                 .background(DS.Color.textTertiary.opacity(0.08))
                                 .clipShape(Circle())
                         }
                     }
                 }
                 .padding(.horizontal, DS.Spacing.lg)
-                .padding(.vertical, DS.Spacing.xs)
+                .padding(.vertical, DS.Spacing.md)
 
                 // معلومات مدمجة في شبكة
                 let infoItems = buildDiwaniyaInfoItems(item)
@@ -240,9 +276,9 @@ struct DiwaniyasView: View {
                         ForEach(Array(infoItems.enumerated()), id: \.offset) { index, info in
                             HStack(spacing: DS.Spacing.md) {
                                 Image(systemName: info.icon)
-                                    .font(DS.Font.scaled(13, weight: .semibold))
+                                    .font(DS.Font.scaled(14, weight: .semibold))
                                     .foregroundColor(info.color)
-                                    .frame(width: 20)
+                                    .frame(width: 22)
                                 Text(info.text)
                                     .font(DS.Font.callout)
                                     .foregroundColor(DS.Color.textPrimary)
@@ -250,8 +286,8 @@ struct DiwaniyasView: View {
                                 Spacer()
                             }
                             .padding(.horizontal, DS.Spacing.lg)
-                            .padding(.vertical, DS.Spacing.xs)
-                            
+                            .padding(.vertical, DS.Spacing.sm + 2)
+
                             if index < infoItems.count - 1 {
                                 DSDivider()
                             }
@@ -271,10 +307,10 @@ struct DiwaniyasView: View {
                                     Image(systemName: "location.fill")
                                     Text(L10n.t("الموقع", "Location"))
                                 }
-                                .font(DS.Font.caption1)
+                                .font(DS.Font.callout)
                                 .fontWeight(.bold)
                                 .frame(maxWidth: .infinity)
-                                .padding(.vertical, DS.Spacing.sm + 4)
+                                .padding(.vertical, DS.Spacing.md)
                                 .foregroundColor(DS.Color.textOnPrimary)
                                 .background(DS.Color.gradientPrimary)
                                 .clipShape(Capsule())
@@ -288,10 +324,10 @@ struct DiwaniyasView: View {
                                     Image(systemName: "phone.fill")
                                     Text(L10n.t("اتصال", "Call"))
                                 }
-                                .font(DS.Font.caption1)
+                                .font(DS.Font.callout)
                                 .fontWeight(.bold)
                                 .frame(maxWidth: .infinity)
-                                .padding(.vertical, DS.Spacing.sm + 4)
+                                .padding(.vertical, DS.Spacing.md)
                                 .foregroundColor(DS.Color.success)
                                 .background(DS.Color.success.opacity(0.08))
                                 .clipShape(Capsule())
@@ -301,7 +337,7 @@ struct DiwaniyasView: View {
                         }
                     }
                     .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.vertical, DS.Spacing.xs)
+                    .padding(.vertical, DS.Spacing.md)
                 }
             }
         }
@@ -337,14 +373,14 @@ private struct AddDiwaniyaRequestView: View {
     @State private var name = ""
     @State private var ownerName = ""
     @State private var selectedDays: Set<Int> = []
+    @State private var selectedTimes: Set<String> = []
     @State private var phoneNumber = ""
     @State private var locationURL = ""
     @State private var address = ""
     @State private var isSubmitting = false
     @State private var showError = false
 
-    // Days of the week (Saturday-first for Arabic locale)
-    private let weekDays: [(id: Int, ar: String, en: String)] = [
+    private static let weekDays: [(id: Int, ar: String, en: String)] = [
         (0, "السبت", "Saturday"),
         (1, "الأحد", "Sunday"),
         (2, "الإثنين", "Monday"),
@@ -354,25 +390,57 @@ private struct AddDiwaniyaRequestView: View {
         (6, "الجمعة", "Friday"),
     ]
 
+    private static let timeSlots: [String] = {
+        var slots: [String] = []
+        for hour in 6...11 {
+            slots.append("\(hour):00")
+            if hour < 11 { slots.append("\(hour):30") }
+        }
+        return slots
+    }()
+
     private var isFormValid: Bool {
         !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
         !ownerName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    /// Build schedule text from selected days
-    private var scheduleText: String {
+    private var daysDisplayText: String {
+        if selectedDays.count == 7 { return L10n.t("كل يوم", "Every day") }
         let sorted = selectedDays.sorted()
-        return sorted.map { id in
-            let day = weekDays.first { $0.id == id }
-            return L10n.t(day?.ar ?? "", day?.en ?? "")
+        return sorted.compactMap { id in
+            guard let day = Self.weekDays.first(where: { $0.id == id }) else { return nil }
+            return L10n.t("كل \(day.ar)", "Every \(day.en)")
         }.joined(separator: "، ")
+    }
+
+    private static func timeToMinutes(_ t: String) -> Int {
+        let parts = t.split(separator: ":").compactMap { Int($0) }
+        return (parts.first ?? 0) * 60 + (parts.last ?? 0)
+    }
+
+    private var timeDisplayText: String {
+        guard !selectedTimes.isEmpty else { return "" }
+        let sorted: [String] = selectedTimes.sorted { Self.timeToMinutes($0) < Self.timeToMinutes($1) }
+        let first = sorted.first!
+        let last = sorted.last!
+        if sorted.count == 1 {
+            return L10n.t("\(first) م", "\(first) PM")
+        }
+        return L10n.t("من \(first) إلى \(last) م", "\(first) - \(last) PM")
+    }
+
+    private var scheduleText: String {
+        let daysText = daysDisplayText
+        if daysText.isEmpty { return "" }
+        let timeText = timeDisplayText
+        if timeText.isEmpty { return daysText }
+        return "\(daysText) - \(timeText)"
     }
 
     var body: some View {
         NavigationStack {
             ZStack {
                 DS.Color.background.ignoresSafeArea()
-
                 DSDecorativeBackground()
 
                 ScrollView(showsIndicators: false) {
@@ -396,111 +464,136 @@ private struct AddDiwaniyaRequestView: View {
                         .padding(.top, DS.Spacing.lg)
 
                         // Basic info section
-                            DSCard(padding: 0) {
-                                DSSectionHeader(
-                                    title: L10n.t("بيانات الديوانية", "Diwaniya Info"),
-                                    icon: "info.circle.fill"
-                                )
+                        DSCard(padding: 0) {
+                            DSSectionHeader(
+                                title: L10n.t("بيانات الديوانية", "Diwaniya Info"),
+                                icon: "info.circle.fill"
+                            )
 
-                                formField(
-                                    icon: "building.columns.fill",
-                                    iconColors: [DS.Color.gridDiwaniya, DS.Color.primary],
-                                    placeholder: L10n.t("اسم الديوانية", "Diwaniya Name"),
-                                    text: $name
-                                )
-                                .onChange(of: name) {
-                                    if name.count > 100 {
-                                        name = String(name.prefix(100))
-                                    }
+                            formField(
+                                icon: "building.columns.fill",
+                                iconColors: [DS.Color.gridDiwaniya, DS.Color.primary],
+                                placeholder: L10n.t("اسم الديوانية", "Diwaniya Name"),
+                                text: $name
+                            )
+                            .onChange(of: name) {
+                                if name.count > 100 { name = String(name.prefix(100)) }
+                            }
+
+                            DSDivider()
+
+                            formField(
+                                icon: "person.fill",
+                                iconColors: [DS.Color.primary, DS.Color.accent],
+                                placeholder: L10n.t("صاحب الديوانية", "Diwaniya Owner"),
+                                text: $ownerName
+                            )
+                            .onChange(of: ownerName) {
+                                if ownerName.count > 100 { ownerName = String(ownerName.prefix(100)) }
+                            }
+
+                            DSDivider()
+
+                            formField(
+                                icon: "phone.fill",
+                                iconColors: [DS.Color.success, DS.Color.success],
+                                placeholder: L10n.t("رقم الهاتف (اختياري)", "Phone Number (optional)"),
+                                text: $phoneNumber,
+                                keyboard: .phonePad
+                            )
+
+                            DSDivider()
+
+                            // Schedule - Days
+                            VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                                HStack(spacing: DS.Spacing.sm) {
+                                    DSIcon("calendar", color: DS.Color.warning)
+                                    Text(L10n.t("أيام الديوانية", "Diwaniya Days"))
+                                        .font(DS.Font.callout)
+                                        .foregroundColor(DS.Color.textSecondary)
                                 }
 
-                                DSDivider()
-
-                                formField(
-                                    icon: "person.fill",
-                                    iconColors: [DS.Color.primary, DS.Color.accent],
-                                    placeholder: L10n.t("صاحب الديوانية", "Diwaniya Owner"),
-                                    text: $ownerName
-                                )
-                                .onChange(of: ownerName) {
-                                    if ownerName.count > 100 {
-                                        ownerName = String(ownerName.prefix(100))
-                                    }
-                                }
-
-                                DSDivider()
-
-                                // Schedule dropdown
-                                HStack(spacing: DS.Spacing.md) {
-                                    DSIcon("clock.fill", color: DS.Color.warning)
-
-                                    Menu {
-                                        ForEach(weekDays, id: \.id) { day in
-                                            Button {
-                                                if selectedDays.contains(day.id) {
-                                                    selectedDays.remove(day.id)
-                                                } else {
-                                                    selectedDays.insert(day.id)
-                                                }
-                                            } label: {
-                                                HStack {
-                                                    Text(L10n.t(day.ar, day.en))
-                                                    if selectedDays.contains(day.id) {
-                                                        Image(systemName: "checkmark")
-                                                    }
-                                                }
+                                LazyVGrid(columns: [GridItem(.adaptive(minimum: 75), spacing: DS.Spacing.xs)], spacing: DS.Spacing.xs) {
+                                    ForEach(Self.weekDays, id: \.id) { day in
+                                        let isOn = selectedDays.contains(day.id)
+                                        Button {
+                                            withAnimation(DS.Anim.snappy) {
+                                                if isOn { selectedDays.remove(day.id) }
+                                                else { selectedDays.insert(day.id) }
                                             }
+                                        } label: {
+                                            Text(L10n.t(day.ar, day.en))
+                                                .font(DS.Font.scaled(13, weight: isOn ? .bold : .medium))
+                                                .foregroundColor(isOn ? .white : DS.Color.textSecondary)
+                                                .frame(maxWidth: .infinity)
+                                                .padding(.vertical, 8)
+                                                .background(isOn ? DS.Color.warning : DS.Color.surface)
+                                                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm))
+                                                .overlay(RoundedRectangle(cornerRadius: DS.Radius.sm).stroke(isOn ? Color.clear : DS.Color.textTertiary.opacity(0.25), lineWidth: 1))
                                         }
-                                    } label: {
-                                        HStack {
-                                            Text(selectedDays.isEmpty
-                                                ? L10n.t("مواعيد الديوانية (اختياري)", "Schedule (optional)")
-                                                : scheduleText)
-                                                .font(DS.Font.body)
-                                                .foregroundColor(selectedDays.isEmpty ? DS.Color.textTertiary : DS.Color.textPrimary)
-                                                .lineLimit(1)
-
-                                            Spacer()
-
-                                            Image(systemName: "chevron.up.chevron.down")
-                                                .font(DS.Font.caption1)
-                                                .foregroundColor(DS.Color.textTertiary)
-                                        }
+                                        .buttonStyle(.plain)
                                     }
                                 }
-                                .padding(.horizontal, DS.Spacing.lg)
-                                .padding(.vertical, DS.Spacing.xs)
-
-                                DSDivider()
-
-                                formField(
-                                    icon: "phone.fill",
-                                    iconColors: [DS.Color.success, DS.Color.success],
-                                    placeholder: L10n.t("رقم الهاتف", "Phone Number"),
-                                    text: $phoneNumber,
-                                    keyboard: .phonePad
-                                )
-
-                                DSDivider()
-
-                                formField(
-                                    icon: "mappin.and.ellipse",
-                                    iconColors: [DS.Color.accent, DS.Color.primary],
-                                    placeholder: L10n.t("عنوان الديوانية (اختياري)", "Address (optional)"),
-                                    text: $address
-                                )
-
-                                DSDivider()
-
-                                formField(
-                                    icon: "link",
-                                    iconColors: [DS.Color.info, DS.Color.primary],
-                                    placeholder: L10n.t("رابط موقع الديوانية (اختياري)", "Map URL (optional)"),
-                                    text: $locationURL,
-                                    keyboard: .URL
-                                )
                             }
                             .padding(.horizontal, DS.Spacing.lg)
+                            .padding(.vertical, DS.Spacing.sm)
+
+                            DSDivider()
+
+                            // Schedule - Time
+                            VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                                HStack(spacing: DS.Spacing.sm) {
+                                    DSIcon("clock.fill", color: DS.Color.warning)
+                                    Text(L10n.t("أوقات الديوانية", "Diwaniya Times"))
+                                        .font(DS.Font.callout)
+                                        .foregroundColor(DS.Color.textSecondary)
+                                }
+
+                                LazyVGrid(columns: [GridItem(.adaptive(minimum: 72), spacing: DS.Spacing.xs)], spacing: DS.Spacing.xs) {
+                                    ForEach(Self.timeSlots, id: \.self) { time in
+                                        let isOn = selectedTimes.contains(time)
+                                        Button {
+                                            withAnimation(DS.Anim.snappy) {
+                                                if isOn { selectedTimes.remove(time) }
+                                                else { selectedTimes.insert(time) }
+                                            }
+                                        } label: {
+                                            Text(L10n.t("\(time) م", "\(time) PM"))
+                                                .font(DS.Font.scaled(13, weight: isOn ? .bold : .medium))
+                                                .foregroundColor(isOn ? .white : DS.Color.textSecondary)
+                                                .frame(maxWidth: .infinity)
+                                                .padding(.vertical, 8)
+                                                .background(isOn ? DS.Color.warning : DS.Color.surface)
+                                                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm))
+                                                .overlay(RoundedRectangle(cornerRadius: DS.Radius.sm).stroke(isOn ? Color.clear : DS.Color.textTertiary.opacity(0.25), lineWidth: 1))
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+                                }
+                            }
+                            .padding(.horizontal, DS.Spacing.lg)
+                            .padding(.vertical, DS.Spacing.sm)
+
+                            DSDivider()
+
+                            formField(
+                                icon: "mappin.and.ellipse",
+                                iconColors: [DS.Color.accent, DS.Color.primary],
+                                placeholder: L10n.t("عنوان الديوانية (اختياري)", "Address (optional)"),
+                                text: $address
+                            )
+
+                            DSDivider()
+
+                            formField(
+                                icon: "link",
+                                iconColors: [DS.Color.info, DS.Color.primary],
+                                placeholder: L10n.t("رابط موقع الديوانية (اختياري)", "Map URL (optional)"),
+                                text: $locationURL,
+                                keyboard: .URL
+                            )
+                        }
+                        .padding(.horizontal, DS.Spacing.lg)
 
                         // Review note
                         HStack(spacing: DS.Spacing.sm) {
@@ -520,6 +613,7 @@ private struct AddDiwaniyaRequestView: View {
                         DSPrimaryButton(
                             isSubmitting ? L10n.t("جاري الإرسال...", "Submitting...") : L10n.t("إضافة", "Add"),
                             icon: "paperplane.fill",
+                            isLoading: isSubmitting,
                             useGradient: false,
                             color: DS.Color.gridDiwaniya
                         ) {
@@ -536,10 +630,8 @@ private struct AddDiwaniyaRequestView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button(L10n.t("إلغاء", "Cancel")) {
-                        dismiss()
-                    }
-                    .foregroundColor(DS.Color.error)
+                    Button(L10n.t("إلغاء", "Cancel")) { dismiss() }
+                        .foregroundColor(DS.Color.error)
                 }
             }
             .alert(L10n.t("خطأ", "Error"), isPresented: $showError) {} message: {
@@ -550,10 +642,12 @@ private struct AddDiwaniyaRequestView: View {
     }
 
     private func submitDiwaniya() async {
-        guard let user = authVM.currentUser else { return }
+        guard let user = authVM.currentUser, !isSubmitting else { return }
         isSubmitting = true
+        defer { isSubmitting = false }
         let trimmedURL = locationURL.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedAddress = address.trimmingCharacters(in: .whitespacesAndNewlines)
+        let canAutoApprove = user.role == .admin || user.role == .supervisor
         let success = await viewModel.addDiwaniya(
             ownerId: user.id,
             ownerName: ownerName,
@@ -561,27 +655,18 @@ private struct AddDiwaniyaRequestView: View {
             scheduleText: selectedDays.isEmpty ? nil : scheduleText,
             contactPhone: phoneNumber,
             mapsUrl: trimmedURL.isEmpty ? nil : trimmedURL,
-            address: trimmedAddress.isEmpty ? nil : trimmedAddress
+            address: trimmedAddress.isEmpty ? nil : trimmedAddress,
+            autoApprove: canAutoApprove
         )
-        isSubmitting = false
-        if success {
-            dismiss()
-        } else {
-            showError = true
-        }
+        if success { dismiss() } else { showError = true }
     }
 
-    // MARK: - Form Field Helper
     private func formField(
-        icon: String,
-        iconColors: [Color],
-        placeholder: String,
-        text: Binding<String>,
-        keyboard: UIKeyboardType = .default
+        icon: String, iconColors: [Color], placeholder: String,
+        text: Binding<String>, keyboard: UIKeyboardType = .default
     ) -> some View {
         HStack(spacing: DS.Spacing.md) {
             DSIcon(icon, color: iconColors.first ?? DS.Color.primary)
-
             TextField(placeholder, text: text)
                 .font(DS.Font.body)
                 .foregroundColor(DS.Color.textPrimary)
@@ -606,6 +691,7 @@ private struct EditDiwaniyaView: View {
     @State private var name: String
     @State private var ownerName: String
     @State private var selectedDays: Set<Int>
+    @State private var selectedTimes: Set<String>
     @State private var phoneNumber: String
     @State private var locationURL: String
     @State private var address: String
@@ -613,7 +699,7 @@ private struct EditDiwaniyaView: View {
     @State private var isSubmitting = false
     @State private var showError = false
 
-    private let weekDays: [(id: Int, ar: String, en: String)] = [
+    private static let weekDays: [(id: Int, ar: String, en: String)] = [
         (0, "السبت", "Saturday"),
         (1, "الأحد", "Sunday"),
         (2, "الإثنين", "Monday"),
@@ -622,6 +708,15 @@ private struct EditDiwaniyaView: View {
         (5, "الخميس", "Thursday"),
         (6, "الجمعة", "Friday"),
     ]
+
+    private static let timeSlots: [String] = {
+        var slots: [String] = []
+        for hour in 6...11 {
+            slots.append("\(hour):00")
+            if hour < 11 { slots.append("\(hour):30") }
+        }
+        return slots
+    }()
 
     init(diwaniya: Diwaniya) {
         self.diwaniya = diwaniya
@@ -632,16 +727,14 @@ private struct EditDiwaniyaView: View {
         _address = State(initialValue: diwaniya.address ?? "")
         _isClosed = State(initialValue: diwaniya.isClosed ?? false)
 
-        // Parse existing schedule text back into selected days
+        // Parse existing schedule text back into selectedDays + selectedTimes
         var days = Set<Int>()
+        var parsedTimes = Set<String>()
         if let schedule = diwaniya.scheduleText {
             let allDays: [(id: Int, ar: String, en: String)] = [
-                (0, "السبت", "Saturday"),
-                (1, "الأحد", "Sunday"),
-                (2, "الإثنين", "Monday"),
-                (3, "الثلاثاء", "Tuesday"),
-                (4, "الأربعاء", "Wednesday"),
-                (5, "الخميس", "Thursday"),
+                (0, "السبت", "Saturday"), (1, "الأحد", "Sunday"),
+                (2, "الإثنين", "Monday"), (3, "الثلاثاء", "Tuesday"),
+                (4, "الأربعاء", "Wednesday"), (5, "الخميس", "Thursday"),
                 (6, "الجمعة", "Friday"),
             ]
             for day in allDays {
@@ -649,8 +742,18 @@ private struct EditDiwaniyaView: View {
                     days.insert(day.id)
                 }
             }
+            // Extract times
+            let timePattern = try? NSRegularExpression(pattern: #"(\d{1,2}:\d{2})"#)
+            if let matches = timePattern?.matches(in: schedule, range: NSRange(schedule.startIndex..., in: schedule)) {
+                for match in matches {
+                    if let range = Range(match.range(at: 1), in: schedule) {
+                        parsedTimes.insert(String(schedule[range]))
+                    }
+                }
+            }
         }
         _selectedDays = State(initialValue: days)
+        _selectedTimes = State(initialValue: parsedTimes)
     }
 
     private var isFormValid: Bool {
@@ -658,12 +761,37 @@ private struct EditDiwaniyaView: View {
         !ownerName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    private var scheduleText: String {
+    private var daysDisplayText: String {
+        if selectedDays.count == 7 { return L10n.t("كل يوم", "Every day") }
         let sorted = selectedDays.sorted()
-        return sorted.map { id in
-            let day = weekDays.first { $0.id == id }
-            return L10n.t(day?.ar ?? "", day?.en ?? "")
+        return sorted.compactMap { id in
+            guard let day = Self.weekDays.first(where: { $0.id == id }) else { return nil }
+            return L10n.t("كل \(day.ar)", "Every \(day.en)")
         }.joined(separator: "، ")
+    }
+
+    private static func timeToMinutes(_ t: String) -> Int {
+        let parts = t.split(separator: ":").compactMap { Int($0) }
+        return (parts.first ?? 0) * 60 + (parts.last ?? 0)
+    }
+
+    private var timeDisplayText: String {
+        guard !selectedTimes.isEmpty else { return "" }
+        let sorted: [String] = selectedTimes.sorted { Self.timeToMinutes($0) < Self.timeToMinutes($1) }
+        let first = sorted.first!
+        let last = sorted.last!
+        if sorted.count == 1 {
+            return L10n.t("\(first) م", "\(first) PM")
+        }
+        return L10n.t("من \(first) إلى \(last) م", "\(first) - \(last) PM")
+    }
+
+    private var scheduleText: String {
+        let daysText = daysDisplayText
+        if daysText.isEmpty { return "" }
+        let timeText = timeDisplayText
+        if timeText.isEmpty { return daysText }
+        return "\(daysText) - \(timeText)"
     }
 
     var body: some View {
@@ -717,56 +845,85 @@ private struct EditDiwaniyaView: View {
 
                             DSDivider()
 
-                            // Schedule dropdown
-                            HStack(spacing: DS.Spacing.md) {
-                                DSIcon("clock.fill", color: DS.Color.warning)
+                            formField(
+                                icon: "phone.fill",
+                                iconColors: [DS.Color.success, DS.Color.success],
+                                placeholder: L10n.t("رقم الهاتف (اختياري)", "Phone Number (optional)"),
+                                text: $phoneNumber,
+                                keyboard: .phonePad
+                            )
 
-                                Menu {
-                                    ForEach(weekDays, id: \.id) { day in
+                            DSDivider()
+
+                            // Schedule - Days
+                            VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                                HStack(spacing: DS.Spacing.sm) {
+                                    DSIcon("calendar", color: DS.Color.warning)
+                                    Text(L10n.t("أيام الديوانية", "Diwaniya Days"))
+                                        .font(DS.Font.callout)
+                                        .foregroundColor(DS.Color.textSecondary)
+                                }
+
+                                LazyVGrid(columns: [GridItem(.adaptive(minimum: 75), spacing: DS.Spacing.xs)], spacing: DS.Spacing.xs) {
+                                    ForEach(Self.weekDays, id: \.id) { day in
+                                        let isOn = selectedDays.contains(day.id)
                                         Button {
-                                            if selectedDays.contains(day.id) {
-                                                selectedDays.remove(day.id)
-                                            } else {
-                                                selectedDays.insert(day.id)
+                                            withAnimation(DS.Anim.snappy) {
+                                                if isOn { selectedDays.remove(day.id) }
+                                                else { selectedDays.insert(day.id) }
                                             }
                                         } label: {
-                                            HStack {
-                                                Text(L10n.t(day.ar, day.en))
-                                                if selectedDays.contains(day.id) {
-                                                    Image(systemName: "checkmark")
-                                                }
-                                            }
+                                            Text(L10n.t(day.ar, day.en))
+                                                .font(DS.Font.scaled(13, weight: isOn ? .bold : .medium))
+                                                .foregroundColor(isOn ? .white : DS.Color.textSecondary)
+                                                .frame(maxWidth: .infinity)
+                                                .padding(.vertical, 8)
+                                                .background(isOn ? DS.Color.warning : DS.Color.surface)
+                                                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm))
+                                                .overlay(RoundedRectangle(cornerRadius: DS.Radius.sm).stroke(isOn ? Color.clear : DS.Color.textTertiary.opacity(0.25), lineWidth: 1))
                                         }
-                                    }
-                                } label: {
-                                    HStack {
-                                        Text(selectedDays.isEmpty
-                                            ? L10n.t("مواعيد الديوانية (اختياري)", "Schedule (optional)")
-                                            : scheduleText)
-                                            .font(DS.Font.body)
-                                            .foregroundColor(selectedDays.isEmpty ? DS.Color.textTertiary : DS.Color.textPrimary)
-                                            .lineLimit(1)
-
-                                        Spacer()
-
-                                        Image(systemName: "chevron.up.chevron.down")
-                                            .font(DS.Font.caption1)
-                                            .foregroundColor(DS.Color.textTertiary)
+                                        .buttonStyle(.plain)
                                     }
                                 }
                             }
                             .padding(.horizontal, DS.Spacing.lg)
-                            .padding(.vertical, DS.Spacing.xs)
+                            .padding(.vertical, DS.Spacing.sm)
 
                             DSDivider()
 
-                            formField(
-                                icon: "phone.fill",
-                                iconColors: [DS.Color.success, DS.Color.success],
-                                placeholder: L10n.t("رقم الهاتف", "Phone Number"),
-                                text: $phoneNumber,
-                                keyboard: .phonePad
-                            )
+                            // Schedule - Time
+                            VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                                HStack(spacing: DS.Spacing.sm) {
+                                    DSIcon("clock.fill", color: DS.Color.warning)
+                                    Text(L10n.t("أوقات الديوانية", "Diwaniya Times"))
+                                        .font(DS.Font.callout)
+                                        .foregroundColor(DS.Color.textSecondary)
+                                }
+
+                                LazyVGrid(columns: [GridItem(.adaptive(minimum: 72), spacing: DS.Spacing.xs)], spacing: DS.Spacing.xs) {
+                                    ForEach(Self.timeSlots, id: \.self) { time in
+                                        let isOn = selectedTimes.contains(time)
+                                        Button {
+                                            withAnimation(DS.Anim.snappy) {
+                                                if isOn { selectedTimes.remove(time) }
+                                                else { selectedTimes.insert(time) }
+                                            }
+                                        } label: {
+                                            Text(L10n.t("\(time) م", "\(time) PM"))
+                                                .font(DS.Font.scaled(13, weight: isOn ? .bold : .medium))
+                                                .foregroundColor(isOn ? .white : DS.Color.textSecondary)
+                                                .frame(maxWidth: .infinity)
+                                                .padding(.vertical, 8)
+                                                .background(isOn ? DS.Color.warning : DS.Color.surface)
+                                                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm))
+                                                .overlay(RoundedRectangle(cornerRadius: DS.Radius.sm).stroke(isOn ? Color.clear : DS.Color.textTertiary.opacity(0.25), lineWidth: 1))
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+                                }
+                            }
+                            .padding(.horizontal, DS.Spacing.lg)
+                            .padding(.vertical, DS.Spacing.sm)
 
                             DSDivider()
 
@@ -820,6 +977,7 @@ private struct EditDiwaniyaView: View {
                         DSPrimaryButton(
                             isSubmitting ? L10n.t("جاري الحفظ...", "Saving...") : L10n.t("حفظ التعديلات", "Save Changes"),
                             icon: "checkmark.circle.fill",
+                            isLoading: isSubmitting,
                             useGradient: false,
                             color: DS.Color.gridDiwaniya
                         ) {
@@ -836,10 +994,8 @@ private struct EditDiwaniyaView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button(L10n.t("إلغاء", "Cancel")) {
-                        dismiss()
-                    }
-                    .foregroundColor(DS.Color.error)
+                    Button(L10n.t("إلغاء", "Cancel")) { dismiss() }
+                        .foregroundColor(DS.Color.error)
                 }
             }
             .alert(L10n.t("خطأ", "Error"), isPresented: $showError) {} message: {
@@ -850,7 +1006,9 @@ private struct EditDiwaniyaView: View {
     }
 
     private func saveChanges() async {
+        guard !isSubmitting else { return }
         isSubmitting = true
+        defer { isSubmitting = false }
         let trimmedURL = locationURL.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedAddress = address.trimmingCharacters(in: .whitespacesAndNewlines)
         let success = await viewModel.updateDiwaniya(
@@ -863,25 +1021,15 @@ private struct EditDiwaniyaView: View {
             address: trimmedAddress.isEmpty ? nil : trimmedAddress,
             isClosed: isClosed
         )
-        isSubmitting = false
-        if success {
-            dismiss()
-        } else {
-            showError = true
-        }
+        if success { dismiss() } else { showError = true }
     }
 
-    // MARK: - Form Field Helper
     private func formField(
-        icon: String,
-        iconColors: [Color],
-        placeholder: String,
-        text: Binding<String>,
-        keyboard: UIKeyboardType = .default
+        icon: String, iconColors: [Color], placeholder: String,
+        text: Binding<String>, keyboard: UIKeyboardType = .default
     ) -> some View {
         HStack(spacing: DS.Spacing.md) {
             DSIcon(icon, color: iconColors.first ?? DS.Color.primary)
-
             TextField(placeholder, text: text)
                 .font(DS.Font.body)
                 .foregroundColor(DS.Color.textPrimary)
