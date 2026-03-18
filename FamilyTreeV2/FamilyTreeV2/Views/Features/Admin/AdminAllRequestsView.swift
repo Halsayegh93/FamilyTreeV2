@@ -116,6 +116,8 @@ struct AdminAllRequestsView: View {
     @State private var mergeSuccessMessage = ""
     /// مطابقات التسجيل من السيرفر (matched_ids من admin_requests)
     @State private var registrationMatches: [UUID: [UUID]] = [:]
+    /// الأعضاء اللي المدير فتح كل المتطابقين حقهم
+    @State private var expandedMatchMembers: Set<UUID> = []
 
     private var pendingMembers: [FamilyMember] {
         memberVM.allMembers.filter { $0.role == .pending }
@@ -744,8 +746,33 @@ struct AdminAllRequestsView: View {
                         Spacer()
                     }
 
-                    ForEach(matches, id: \.member.id) { match in
+                    let isExpanded = expandedMatchMembers.contains(member.id)
+                    let visible = isExpanded ? matches : Array(matches.prefix(3))
+
+                    ForEach(visible, id: \.member.id) { match in
                         joinMatchRow(match: match, pendingMember: member)
+                    }
+
+                    if matches.count > 3 && !isExpanded {
+                        Button {
+                            withAnimation(DS.Anim.snappy) {
+                                expandedMatchMembers.insert(member.id)
+                            }
+                        } label: {
+                            HStack(spacing: DS.Spacing.xs) {
+                                Image(systemName: "ellipsis.circle.fill")
+                                    .font(DS.Font.scaled(12, weight: .semibold))
+                                Text(L10n.t(
+                                    "عرض الكل (\(matches.count))",
+                                    "Show all (\(matches.count))"
+                                ))
+                                .font(DS.Font.scaled(11, weight: .bold))
+                            }
+                            .foregroundColor(DS.Color.info)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, DS.Spacing.xs)
+                        }
+                        .buttonStyle(DSScaleButtonStyle())
                     }
                 }
                 .padding(DS.Spacing.sm)
