@@ -218,30 +218,21 @@ struct AdminDashboardView: View {
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .task {
-            // تأخير بسيط لأن هذا التاب ليس مرئياً عند الفتح
-            try? await Task.sleep(nanoseconds: 800_000_000)
-            // تحميل البيانات على دفعات لتجنب إغراق اتصال الشبكة
-            // الدفعة 1: البيانات الأساسية (الأعضاء أولاً)
+            // تحميل كل البيانات بالتوازي — بدون تأخير
             await memberVM.fetchAllMembers()
 
-            // الدفعة 2: الطلبات الإدارية (3 طلبات بالتوازي)
-            async let deceased: () = adminRequestVM.fetchDeceasedRequests()
-            async let pendingNews: () = newsVM.fetchPendingNewsRequests()
-            async let childAdds: () = adminRequestVM.fetchChildAddRequests()
-            _ = await (deceased, pendingNews, childAdds)
-
-            // الدفعة 3: بقية الطلبات (4 طلبات بالتوازي)
-            async let newsReports: () = adminRequestVM.fetchNewsReportRequests()
-            async let phoneChanges: () = adminRequestVM.fetchPhoneChangeRequests()
-            async let photoSuggestions: () = adminRequestVM.fetchPhotoSuggestionRequests()
-            async let diwaniyas: () = diwaniyaVM.fetchPendingDiwaniyas()
-            _ = await (newsReports, phoneChanges, photoSuggestions, diwaniyas)
-
-            // الدفعة 4: طلبات تعديل الشجرة + الأرقام المحظورة
-            async let treeEdits: () = adminRequestVM.fetchTreeEditRequests()
-            async let nameChanges: () = adminRequestVM.fetchNameChangeRequests()
-            async let bannedPhones: () = authVM.fetchBannedPhones()
-            _ = await (treeEdits, nameChanges, bannedPhones)
+            await withTaskGroup(of: Void.self) { group in
+                group.addTask { @MainActor in await adminRequestVM.fetchDeceasedRequests() }
+                group.addTask { @MainActor in await newsVM.fetchPendingNewsRequests() }
+                group.addTask { @MainActor in await adminRequestVM.fetchChildAddRequests() }
+                group.addTask { @MainActor in await adminRequestVM.fetchNewsReportRequests() }
+                group.addTask { @MainActor in await adminRequestVM.fetchPhoneChangeRequests() }
+                group.addTask { @MainActor in await adminRequestVM.fetchPhotoSuggestionRequests() }
+                group.addTask { @MainActor in await diwaniyaVM.fetchPendingDiwaniyas() }
+                group.addTask { @MainActor in await adminRequestVM.fetchTreeEditRequests() }
+                group.addTask { @MainActor in await adminRequestVM.fetchNameChangeRequests() }
+                group.addTask { @MainActor in await authVM.fetchBannedPhones() }
+            }
         }
     }
 

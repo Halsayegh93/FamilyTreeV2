@@ -94,15 +94,7 @@ struct DiwaniyasView: View {
                 ))
             }
             .task {
-                // تأخير بسيط لتجنب إغراق اتصال QUIC عند فتح التطبيق
-                try? await Task.sleep(nanoseconds: 500_000_000)
                 await viewModel.fetchDiwaniyas()
-            }
-            .onAppear {
-                // تحديث القائمة كل ما يرجع المستخدم للتاب
-                if !viewModel.diwaniyas.isEmpty {
-                    Task { await viewModel.fetchDiwaniyas() }
-                }
             }
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
             .alert(L10n.t("خطأ", "Error"), isPresented: .init(
