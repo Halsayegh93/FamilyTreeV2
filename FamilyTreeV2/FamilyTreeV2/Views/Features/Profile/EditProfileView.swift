@@ -364,7 +364,7 @@ struct EditProfileView: View {
             .frame(maxWidth: 130)
 
             Text("\(selectedPhoneCountry.flag) \(selectedPhoneCountry.dialingCode)")
-                .font(.system(size: 13, weight: .medium, design: .rounded))
+                .font(DS.Font.scaled(13, weight: .medium))
                 .foregroundColor(DS.Color.textSecondary)
         }
         .padding(.horizontal, DS.Spacing.lg)

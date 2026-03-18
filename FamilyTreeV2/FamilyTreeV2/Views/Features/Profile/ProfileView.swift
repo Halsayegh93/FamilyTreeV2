@@ -256,7 +256,7 @@ struct ProfileView: View {
             icon: "phone.fill",
             color: DS.Color.success,
             title: L10n.t("الهاتف", "Phone"),
-            value: user.phoneNumber?.isEmpty == false ? KuwaitPhone.display(user.phoneNumber!) : L10n.t("غير محدد", "N/A")
+            value: user.phoneNumber.flatMap { $0.isEmpty ? nil : KuwaitPhone.display($0) } ?? L10n.t("غير محدد", "N/A")
         ))
 
         if let birth = user.birthDate, !birth.isEmpty {
@@ -623,9 +623,14 @@ struct ProfileView: View {
                         HStack(spacing: DS.Spacing.md) {
                             DSIcon("lock.shield.fill", color: DS.Color.neonPurple)
 
-                            Text(L10n.t("الخصوصية", "Privacy"))
-                                .font(DS.Font.calloutBold)
-                                .foregroundColor(DS.Color.textPrimary)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(L10n.t("الإشعارات والخصوصية", "Notifications & Privacy"))
+                                    .font(DS.Font.calloutBold)
+                                    .foregroundColor(DS.Color.textPrimary)
+                                Text(L10n.t("إدارة الإشعارات وخصوصية بياناتك", "Manage notifications & data privacy"))
+                                    .font(DS.Font.caption1)
+                                    .foregroundColor(DS.Color.textSecondary)
+                            }
 
                             Spacer()
 
@@ -648,9 +653,14 @@ struct ProfileView: View {
                         HStack(spacing: DS.Spacing.md) {
                             DSIcon("gearshape.fill", color: DS.Color.warning)
 
-                            Text(L10n.t("الإعدادات", "Settings"))
-                                .font(DS.Font.calloutBold)
-                                .foregroundColor(DS.Color.textPrimary)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(L10n.t("الإعدادات", "Settings"))
+                                    .font(DS.Font.calloutBold)
+                                    .foregroundColor(DS.Color.textPrimary)
+                                Text(L10n.t("المظهر، اللغة، والأجهزة المرتبطة", "Appearance, language & linked devices"))
+                                    .font(DS.Font.caption1)
+                                    .foregroundColor(DS.Color.textSecondary)
+                            }
 
                             Spacer()
 
@@ -673,9 +683,14 @@ struct ProfileView: View {
                         HStack(spacing: DS.Spacing.md) {
                             DSIcon("rectangle.portrait.and.arrow.right", color: DS.Color.error)
 
-                            Text(L10n.t("تسجيل الخروج", "Sign Out"))
-                                .font(DS.Font.calloutBold)
-                                .foregroundColor(DS.Color.error)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(L10n.t("تسجيل الخروج", "Sign Out"))
+                                    .font(DS.Font.calloutBold)
+                                    .foregroundColor(DS.Color.error)
+                                Text(L10n.t("الخروج من حسابك في التطبيق", "Log out of your account"))
+                                    .font(DS.Font.caption1)
+                                    .foregroundColor(DS.Color.textSecondary)
+                            }
 
                             Spacer()
                         }

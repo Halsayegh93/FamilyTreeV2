@@ -9,6 +9,9 @@ struct PrivacySettingsView: View {
     @ObservedObject private var langManager = LanguageManager.shared
 
     @AppStorage("notificationsEnabled") private var notificationsEnabled: Bool = true
+    @AppStorage("notif_comments") private var notifComments: Bool = true
+    @AppStorage("notif_likes") private var notifLikes: Bool = true
+    @AppStorage("notif_profile_updates") private var notifProfileUpdates: Bool = true
     @State private var badgeEnabled: Bool = true
     @State private var isPhoneHidden: Bool = false
     @State private var isBirthDateHidden: Bool = false
@@ -18,21 +21,20 @@ struct PrivacySettingsView: View {
     var body: some View {
         ZStack {
             DS.Color.background.ignoresSafeArea()
-            DSDecorativeBackground()
 
             ScrollView(showsIndicators: false) {
                 VStack(spacing: DS.Spacing.md) {
-                    notificationsCard
-                    badgeCard
-                    phonePrivacyCard
-                    birthDatePrivacyCard
+                    // مجموعة الإشعارات
+                    allNotificationsCard
+                    // مجموعة البيانات الشخصية
+                    personalDataCard
                 }
                 .padding(.horizontal, DS.Spacing.lg)
                 .padding(.top, DS.Spacing.xl)
                 .padding(.bottom, DS.Spacing.xxxl)
             }
         }
-        .navigationTitle(L10n.t("الخصوصية", "Privacy"))
+        .navigationTitle(L10n.t("الإشعارات والخصوصية", "Notifications & Privacy"))
         .navigationBarTitleDisplayMode(.inline)
         .environment(\.layoutDirection, langManager.layoutDirection)
         .onAppear {
@@ -87,132 +89,130 @@ struct PrivacySettingsView: View {
         }
     }
 
-    // MARK: - Notifications Card
-    private var notificationsCard: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            DSCard(padding: 0) {
-                DSSectionHeader(
-                    title: L10n.t("الإشعارات", "Notifications"),
-                    icon: "bell.badge.fill"
+    // MARK: - All Notifications Card (مجموعة واحدة)
+    private var allNotificationsCard: some View {
+        DSCard(padding: 0) {
+            DSSectionHeader(
+                title: L10n.t("الإشعارات", "Notifications"),
+                icon: "bell.badge.fill"
+            )
+
+            // تفعيل الإشعارات — الزر الرئيسي
+            privacyToggleRow(
+                icon: "bell.badge.fill",
+                color: DS.Color.primary,
+                title: L10n.t("تفعيل الإشعارات", "Enable Notifications"),
+                subtitle: L10n.t("استقبال الإشعارات داخل وخارج التطبيق", "Receive push and in-app notifications"),
+                isOn: $notificationsEnabled
+            )
+
+            DSDivider()
+
+            // الخيارات الفرعية — تعتمد على الزر الرئيسي
+            Group {
+                // رقم الإشعارات على الأيقونة
+                privacyToggleRow(
+                    icon: "app.badge",
+                    color: DS.Color.primary,
+                    title: L10n.t("شارة الأيقونة", "App Badge"),
+                    subtitle: L10n.t("عدد الإشعارات غير المقروءة على الأيقونة", "Show unread count on app icon"),
+                    isOn: $badgeEnabled,
+                    disabled: !notificationsEnabled
                 )
 
-                HStack(spacing: DS.Spacing.md) {
-                    DSIcon("bell.badge.fill", color: DS.Color.success)
+                DSDivider()
 
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(L10n.t("تفعيل الإشعارات", "Enable Notifications"))
-                            .font(DS.Font.calloutBold)
-                            .foregroundColor(DS.Color.textPrimary)
-                        Text(notificationsEnabled ? L10n.t("مفعلة", "Enabled") : L10n.t("متوقفة", "Disabled"))
-                            .font(DS.Font.caption1)
-                            .foregroundColor(DS.Color.textSecondary)
-                    }
+                // التعليقات
+                privacyToggleRow(
+                    icon: "bubble.left.fill",
+                    color: DS.Color.primary,
+                    title: L10n.t("التعليقات", "Comments"),
+                    subtitle: L10n.t("عند تعليق أحد على أخبارك", "When someone comments on your post"),
+                    isOn: $notifComments,
+                    disabled: !notificationsEnabled
+                )
 
-                    Spacer()
+                DSDivider()
 
-                    Toggle("", isOn: $notificationsEnabled)
-                        .labelsHidden()
-                        .tint(DS.Color.success)
-                }
-                .padding(.horizontal, DS.Spacing.lg)
-                .padding(.vertical, DS.Spacing.xs)
+                // الإعجابات
+                privacyToggleRow(
+                    icon: "heart.fill",
+                    color: DS.Color.primary,
+                    title: L10n.t("الإعجابات", "Likes"),
+                    subtitle: L10n.t("عند إعجاب أحد بأخبارك", "When someone likes your post"),
+                    isOn: $notifLikes,
+                    disabled: !notificationsEnabled
+                )
 
+                DSDivider()
 
+                // تحديثات البيانات
+                privacyToggleRow(
+                    icon: "person.crop.circle.badge.checkmark",
+                    color: DS.Color.primary,
+                    title: L10n.t("التحديثات", "Updates"),
+                    subtitle: L10n.t("عند تعديل بياناتك من قِبل الإدارة", "When admin updates your profile"),
+                    isOn: $notifProfileUpdates,
+                    disabled: !notificationsEnabled
+                )
             }
+            .opacity(notificationsEnabled ? 1.0 : 0.45)
+            .animation(DS.Anim.snappy, value: notificationsEnabled)
         }
     }
 
-    // MARK: - Badge Card
-    private var badgeCard: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            DSCard(padding: 0) {
-                HStack(spacing: DS.Spacing.md) {
-                    DSIcon("app.badge", color: DS.Color.error)
+    // MARK: - Personal Data Card (مجموعة واحدة)
+    private var personalDataCard: some View {
+        DSCard(padding: 0) {
+            DSSectionHeader(
+                title: L10n.t("البيانات الشخصية", "Personal Data"),
+                icon: "lock.shield.fill"
+            )
 
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(L10n.t("رقم الإشعارات على الأيقونة", "App Icon Badge"))
-                            .font(DS.Font.calloutBold)
-                            .foregroundColor(DS.Color.textPrimary)
-                        Text(L10n.t("عرض عدد الإشعارات غير المقروءة على أيقونة التطبيق", "Show unread count on the app icon"))
-                            .font(DS.Font.caption1)
-                            .foregroundColor(DS.Color.textSecondary)
-                    }
+            // إخفاء رقم الهاتف
+            privacyToggleRow(
+                icon: "eye.slash.fill",
+                color: DS.Color.primary,
+                title: L10n.t("إخفاء رقم الهاتف", "Hide Phone Number"),
+                subtitle: L10n.t("لن يظهر رقمك للأعضاء الآخرين", "Your number won't be visible to others"),
+                isOn: $isPhoneHidden
+            )
 
-                    Spacer()
+            DSDivider()
 
-                    Toggle("", isOn: $badgeEnabled)
-                        .labelsHidden()
-                        .tint(DS.Color.error)
-                }
-                .padding(.horizontal, DS.Spacing.lg)
-                .padding(.vertical, DS.Spacing.xs)
-            }
+            // إخفاء تاريخ الميلاد
+            privacyToggleRow(
+                icon: "calendar.badge.minus",
+                color: DS.Color.primary,
+                title: L10n.t("إخفاء تاريخ الميلاد", "Hide Birth Date"),
+                subtitle: L10n.t("لن يظهر تاريخ ميلادك للأعضاء الآخرين", "Your birth date won't be visible to others"),
+                isOn: $isBirthDateHidden
+            )
         }
     }
 
-    // MARK: - Birth Date Privacy Card
-    private var birthDatePrivacyCard: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            DSCard(padding: 0) {
-                DSSectionHeader(
-                    title: L10n.t("تاريخ الميلاد", "Birth Date"),
-                    icon: "calendar"
-                )
+    // MARK: - Reusable Toggle Row
+    private func privacyToggleRow(icon: String, color: Color, title: String, subtitle: String, isOn: Binding<Bool>, disabled: Bool = false) -> some View {
+        HStack(spacing: DS.Spacing.md) {
+            DSIcon(icon, color: color)
 
-                HStack(spacing: DS.Spacing.md) {
-                    DSIcon("calendar.badge.minus", color: DS.Color.warning)
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(L10n.t("إخفاء تاريخ الميلاد", "Hide Birth Date"))
-                            .font(DS.Font.calloutBold)
-                            .foregroundColor(DS.Color.textPrimary)
-                        Text(L10n.t("إخفاء تاريخ ميلادك عن الأعضاء الآخرين", "Hide your birth date from other members"))
-                            .font(DS.Font.caption1)
-                            .foregroundColor(DS.Color.textSecondary)
-                    }
-
-                    Spacer()
-
-                    Toggle("", isOn: $isBirthDateHidden)
-                        .labelsHidden()
-                        .tint(DS.Color.warning)
-                }
-                .padding(.horizontal, DS.Spacing.lg)
-                .padding(.vertical, DS.Spacing.xs)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(DS.Font.calloutBold)
+                    .foregroundColor(DS.Color.textPrimary)
+                Text(subtitle)
+                    .font(DS.Font.caption1)
+                    .foregroundColor(DS.Color.textSecondary)
             }
+
+            Spacer()
+
+            Toggle("", isOn: isOn)
+                .labelsHidden()
+                .tint(color)
+                .disabled(disabled)
         }
-    }
-
-    // MARK: - Phone Privacy Card
-    private var phonePrivacyCard: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            DSCard(padding: 0) {
-                DSSectionHeader(
-                    title: L10n.t("رقم الهاتف", "Phone Number"),
-                    icon: "phone.fill"
-                )
-
-                HStack(spacing: DS.Spacing.md) {
-                    DSIcon("eye.slash.fill", color: DS.Color.primary)
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(L10n.t("إخفاء رقم الهاتف", "Hide Phone Number"))
-                            .font(DS.Font.calloutBold)
-                            .foregroundColor(DS.Color.textPrimary)
-                        Text(L10n.t("إخفاء رقمك عن الأعضاء الآخرين", "Hide your number from other members"))
-                            .font(DS.Font.caption1)
-                            .foregroundColor(DS.Color.textSecondary)
-                    }
-
-                    Spacer()
-
-                    Toggle("", isOn: $isPhoneHidden)
-                        .labelsHidden()
-                        .tint(DS.Color.primary)
-                }
-                .padding(.horizontal, DS.Spacing.lg)
-                .padding(.vertical, DS.Spacing.xs)
-            }
-        }
+        .padding(.horizontal, DS.Spacing.lg)
+        .padding(.vertical, DS.Spacing.xs)
     }
 }

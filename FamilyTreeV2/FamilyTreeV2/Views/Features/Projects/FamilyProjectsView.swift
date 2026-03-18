@@ -174,7 +174,7 @@ struct FamilyProjectsView: View {
                         .font(DS.Font.callout)
                         .fontWeight(.bold)
                 }
-                .foregroundColor(.white)
+                .foregroundColor(DS.Color.textOnPrimary)
                 .padding(.horizontal, DS.Spacing.xxl)
                 .padding(.vertical, DS.Spacing.md)
                 .background(DS.Color.gradientPrimary)

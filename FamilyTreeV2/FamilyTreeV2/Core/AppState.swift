@@ -15,7 +15,9 @@ class AppState: ObservableObject {
     let adminRequestVM: AdminRequestViewModel
     let projectsVM: ProjectsViewModel
     let appSettingsVM: AppSettingsViewModel
-    
+
+    private var cancellables = Set<AnyCancellable>()
+
     init() {
         // 1. Create all VMs independently
         let auth = AuthViewModel()
@@ -25,7 +27,7 @@ class AppState: ObservableObject {
         let admin = AdminRequestViewModel()
         let projects = ProjectsViewModel()
         let appSettings = AppSettingsViewModel()
-        
+
         // 2. Wire dependencies after creation (avoids circular init)
         auth.notificationVM = notification
         auth.appSettingsVM = appSettings
@@ -34,7 +36,7 @@ class AppState: ObservableObject {
         member.configure(authVM: auth, notificationVM: notification)
         news.configure(authVM: auth, memberVM: member, notificationVM: notification)
         admin.configure(authVM: auth, memberVM: member, notificationVM: notification, newsVM: news)
-        
+
         // 3. Store references
         self.authVM = auth
         self.memberVM = member
@@ -43,5 +45,16 @@ class AppState: ObservableObject {
         self.adminRequestVM = admin
         self.projectsVM = projects
         self.appSettingsVM = appSettings
+
+        // 4. تحميل بيانات الشجرة فوراً عند تسجيل الدخول — يمنع ظهور الشجرة فارغة
+        auth.$status
+            .removeDuplicates()
+            .sink { [weak member] status in
+                guard status == .fullyAuthenticated else { return }
+                Task { @MainActor in
+                    await member?.fetchAllMembers(force: true)
+                }
+            }
+            .store(in: &cancellables)
     }
 }

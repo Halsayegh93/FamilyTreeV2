@@ -121,38 +121,46 @@ class ProjectsViewModel: ObservableObject {
     // MARK: - Approve
     
     func approveProject(id: UUID, approvedBy: UUID) async {
-        do {
-            try await supabase
-                .from("projects")
-                .update([
-                    "approval_status": "approved",
-                    "approved_by": approvedBy.uuidString
-                ])
-                .eq("id", value: id.uuidString)
-                .execute()
-            
+        // حذف فوري محلياً
+        withAnimation(.snappy(duration: 0.25)) {
             pendingProjects.removeAll { $0.id == id }
-            await fetchProjects()
-        } catch {
-            self.errorMessage = L10n.t("تعذر اعتماد المشروع.", "Failed to approve project.")
-            Log.error("خطأ اعتماد المشروع: \(error.localizedDescription)")
+        }
+        Task { [weak self] in
+            do {
+                try await self?.supabase
+                    .from("projects")
+                    .update([
+                        "approval_status": "approved",
+                        "approved_by": approvedBy.uuidString
+                    ])
+                    .eq("id", value: id.uuidString)
+                    .execute()
+                await self?.fetchProjects()
+            } catch {
+                await MainActor.run { self?.errorMessage = L10n.t("تعذر اعتماد المشروع.", "Failed to approve project.") }
+                Log.error("خطأ اعتماد المشروع: \(error.localizedDescription)")
+            }
         }
     }
-    
+
     // MARK: - Reject
-    
+
     func rejectProject(id: UUID) async {
-        do {
-            try await supabase
-                .from("projects")
-                .update(["approval_status": "rejected"])
-                .eq("id", value: id.uuidString)
-                .execute()
-            
+        // حذف فوري محلياً
+        withAnimation(.snappy(duration: 0.25)) {
             pendingProjects.removeAll { $0.id == id }
-        } catch {
-            self.errorMessage = L10n.t("تعذر رفض المشروع.", "Failed to reject project.")
-            Log.error("خطأ رفض المشروع: \(error.localizedDescription)")
+        }
+        Task { [weak self] in
+            do {
+                try await self?.supabase
+                    .from("projects")
+                    .update(["approval_status": "rejected"])
+                    .eq("id", value: id.uuidString)
+                    .execute()
+            } catch {
+                await MainActor.run { self?.errorMessage = L10n.t("تعذر رفض المشروع.", "Failed to reject project.") }
+                Log.error("خطأ رفض المشروع: \(error.localizedDescription)")
+            }
         }
     }
     

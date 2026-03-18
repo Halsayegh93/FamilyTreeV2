@@ -7,7 +7,19 @@ struct MemberDetailsView: View {
     @EnvironmentObject var adminRequestVM: AdminRequestViewModel
     @Environment(\.dismiss) var dismiss
 
-    let member: FamilyMember
+    private let memberId: UUID
+    private let initialMember: FamilyMember
+
+    /// بيانات العضو الحية من memberVM — تتحدث تلقائياً عند أي تعديل
+    private var member: FamilyMember {
+        memberVM.allMembers.first(where: { $0.id == memberId }) ?? initialMember
+    }
+
+    init(member: FamilyMember) {
+        self.memberId = member.id
+        self.initialMember = member
+    }
+
     @State private var showAdminControl = false
     @State private var avatarPreviewScale: CGFloat = 1.0
     @State private var lastAvatarPreviewScale: CGFloat = 1.0
@@ -62,6 +74,12 @@ struct MemberDetailsView: View {
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
             .sheet(isPresented: $showAdminControl) {
                 AdminMemberDetailSheet(member: member)
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .memberDeleted)) { notification in
+            // إغلاق تفاصيل العضو تلقائياً بعد حذفه
+            if let deletedId = notification.object as? UUID, deletedId == member.id {
+                dismiss()
             }
         }
         .fullScreenCover(isPresented: $showAvatarPreview) {

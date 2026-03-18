@@ -59,16 +59,33 @@ class AdminRequestViewModel: ObservableObject {
     private var currentUser: FamilyMember? { authVM?.currentUser }
     private var canModerate: Bool { authVM?.canModerate ?? false }
 
-    /// حذف العنصر محلياً مع أنيميشن ثم تحديث من السيرفر بعد تأخير
+    /// حذف العنصر محلياً فوراً مع أنيميشن ثم تحديث من السيرفر بعد تأخير
     private func removeLocallyThenRefresh<T: Identifiable>(
         from array: inout [T],
         id: T.ID,
         refresh: @escaping () async -> Void
     ) {
-        withAnimation(DS.Anim.snappy) {
+        withAnimation(.snappy(duration: 0.25)) {
             array.removeAll { $0.id as AnyHashable == id as AnyHashable }
         }
         Task {
+            try? await Task.sleep(nanoseconds: 800_000_000)
+            await refresh()
+        }
+    }
+
+    /// حذف فوري ثم تنفيذ API + تحديث بالخلفية (optimistic)
+    private func optimisticRemove<T: Identifiable>(
+        from array: inout [T],
+        id: T.ID,
+        apiWork: @escaping () async -> Void,
+        refresh: @escaping () async -> Void
+    ) {
+        withAnimation(.snappy(duration: 0.25)) {
+            array.removeAll { $0.id as AnyHashable == id as AnyHashable }
+        }
+        Task {
+            await apiWork()
             try? await Task.sleep(nanoseconds: 500_000_000)
             await refresh()
         }
@@ -103,36 +120,38 @@ class AdminRequestViewModel: ObservableObject {
 
     // MARK: - Tree Edit Requests
 
-    /// إرسال طلب تعديل الشجرة (إضافة / تعديل اسم / حذف)
-    func submitTreeEditRequest(actionType: String, memberName: String, details: String) async -> Bool {
+    /// إرسال طلب تعديل الشجرة (إضافة / تعديل اسم / حذف) — v2 structured payload
+    func submitTreeEditRequest(payload: TreeEditPayload) async -> Bool {
         guard let user = currentUser else { return false }
         self.isLoading = true
         defer { self.isLoading = false }
 
-        let cleanDetails = details.trimmingCharacters(in: .whitespacesAndNewlines)
-        let cleanMemberName = memberName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !cleanMemberName.isEmpty else { return false }
-
-        let fullDetails = """
-        نوع التعديل: \(actionType)
-        الاسم المعني: \(cleanMemberName)
-        التفاصيل: \(cleanDetails.isEmpty ? "لا توجد تفاصيل إضافية" : cleanDetails)
-        بواسطة: \(user.fullName)
-        """
-
         do {
+            let jsonData = try JSONEncoder().encode(payload)
+            let jsonString = String(data: jsonData, encoding: .utf8) ?? ""
+
+            // member_id: target member for edit/delete, parent for add, fallback to requester
+            let targetId: String
+            if let tid = payload.targetMemberId, !tid.isEmpty {
+                targetId = tid
+            } else if let pid = payload.parentMemberId, !pid.isEmpty {
+                targetId = pid
+            } else {
+                targetId = user.id.uuidString
+            }
+
             let basePayload: [String: AnyEncodable] = [
-                "member_id": AnyEncodable(user.id.uuidString),
+                "member_id": AnyEncodable(targetId),
                 "requester_id": AnyEncodable(user.id.uuidString),
                 "request_type": AnyEncodable("tree_edit"),
                 "status": AnyEncodable("pending"),
-                "details": AnyEncodable(fullDetails)
+                "details": AnyEncodable(jsonString)
             ]
 
             do {
-                var payload = basePayload
-                payload["new_value"] = AnyEncodable(actionType)
-                try await supabase.from("admin_requests").insert(payload).execute()
+                var dbPayload = basePayload
+                dbPayload["new_value"] = AnyEncodable(payload.action)
+                try await supabase.from("admin_requests").insert(dbPayload).execute()
             } catch {
                 if isMissingAdminRequestNewValueColumnError(error) {
                     try await supabase.from("admin_requests").insert(basePayload).execute()
@@ -142,19 +161,20 @@ class AdminRequestViewModel: ObservableObject {
             }
 
             let requesterName = user.firstName
+            let memberName = payload.targetMemberName ?? payload.newMemberName ?? ""
             await notificationVM?.notifyAdminsWithPush(
                 title: L10n.t("طلب تعديل الشجرة", "Tree Edit Request"),
                 body: L10n.t(
-                    "طلب \(actionType) من \(requesterName): \(cleanMemberName)",
-                    "\(actionType) request from \(requesterName): \(cleanMemberName)"
+                    "طلب \(payload.action) من \(requesterName): \(memberName)",
+                    "\(payload.action) request from \(requesterName): \(memberName)"
                 ),
                 kind: "tree_edit"
             )
 
-            Log.info("[TreeEdit] تم إرسال طلب تعديل الشجرة: \(actionType) — \(cleanMemberName)")
+            Log.info("[TreeEdit] Submitted: \(payload.action) — \(memberName)")
             return true
         } catch {
-            Log.error("[TreeEdit] خطأ في إرسال طلب تعديل الشجرة: \(error.localizedDescription)")
+            Log.error("[TreeEdit] Submit failed: \(error.localizedDescription)")
             return false
         }
     }
@@ -181,44 +201,126 @@ class AdminRequestViewModel: ObservableObject {
     }
 
     func approveTreeEditRequest(request: AdminRequest) async {
-        do {
-            try await supabase
-                .from("admin_requests")
-                .update(["status": AnyEncodable("approved")])
-                .eq("id", value: request.id.uuidString)
-                .execute()
+        let payload = request.treeEditPayload
 
-            removeLocallyThenRefresh(from: &treeEditRequests, id: request.id) { [weak self] in
-                await self?.fetchTreeEditRequests(force: true)
+        optimisticRemove(from: &treeEditRequests, id: request.id, apiWork: { [weak self] in
+            do {
+                // 1. Perform actual tree edit based on action type
+                if let payload = payload {
+                    switch payload.action {
+                    case "تعديل اسم":
+                        if let targetId = payload.targetMemberId,
+                           let newName = payload.newName, !newName.isEmpty {
+                            let nameParts = newName.split(whereSeparator: \.isWhitespace).map(String.init)
+                            let newFirstName = nameParts.first ?? newName
+                            try await self?.supabase
+                                .from("profiles")
+                                .update([
+                                    "full_name": AnyEncodable(newName),
+                                    "first_name": AnyEncodable(newFirstName)
+                                ])
+                                .eq("id", value: targetId)
+                                .execute()
+                            Log.info("[TreeEdit] Name updated: \(newName)")
+                        }
+
+                    case "حذف":
+                        if let targetId = payload.targetMemberId {
+                            try await self?.supabase
+                                .from("profiles")
+                                .update(["is_hidden_from_tree": AnyEncodable(true)])
+                                .eq("id", value: targetId)
+                                .execute()
+                            Log.info("[TreeEdit] Member hidden from tree: \(targetId)")
+                        }
+
+                    case "إضافة":
+                        // Admin needs to add manually — context provided in notification
+                        Log.info("[TreeEdit] Add request approved — admin should add manually")
+
+                    default:
+                        break
+                    }
+                }
+
+                // 2. Mark request as approved
+                try await self?.supabase
+                    .from("admin_requests")
+                    .update(["status": AnyEncodable("approved")])
+                    .eq("id", value: request.id.uuidString)
+                    .execute()
+
+                // 3. Notify requester with action-specific message
+                let actionDesc = payload?.action ?? request.newValue ?? ""
+                let notifBody: String
+                switch payload?.action {
+                case "تعديل اسم":
+                    let newName = payload?.newName ?? ""
+                    notifBody = L10n.t(
+                        "تم تغيير الاسم إلى: \(newName)",
+                        "Name changed to: \(newName)"
+                    )
+                case "حذف":
+                    notifBody = L10n.t(
+                        "تم قبول طلب الحذف من الشجرة",
+                        "Your removal request was approved"
+                    )
+                case "إضافة":
+                    let childName = payload?.newMemberName ?? ""
+                    notifBody = L10n.t(
+                        "تم قبول طلب إضافة \(childName) للشجرة",
+                        "Request to add \(childName) was approved"
+                    )
+                default:
+                    notifBody = L10n.t("تم قبول طلب تعديل الشجرة", "Your tree edit request was approved")
+                }
+
+                await self?.notificationVM?.sendNotification(
+                    title: L10n.t("تم تنفيذ طلبك", "Request Completed"),
+                    body: notifBody,
+                    targetMemberIds: [request.requesterId]
+                )
+                Log.info("[TreeEdit] Approved: \(actionDesc)")
+            } catch {
+                Log.error("[TreeEdit] Approve failed: \(error)")
             }
-
-            await notificationVM?.sendNotification(
-                title: L10n.t("تم تنفيذ طلبك", "Request Completed"),
-                body: L10n.t("تم قبول طلب تعديل الشجرة", "Your tree edit request was approved"),
-                targetMemberIds: [request.requesterId]
-            )
-
-            Log.info("[TreeEdit] تم قبول طلب تعديل الشجرة")
-        } catch {
-            Log.error("[TreeEdit] فشل قبول طلب تعديل الشجرة: \(error)")
-        }
+        }, refresh: { [weak self] in
+            await self?.fetchTreeEditRequests(force: true)
+            await self?.memberVM?.fetchAllMembers(force: true)
+        })
     }
 
-    func rejectTreeEditRequest(request: AdminRequest) async {
-        do {
-            try await supabase
-                .from("admin_requests")
-                .update(["status": AnyEncodable("rejected")])
-                .eq("id", value: request.id.uuidString)
-                .execute()
+    func rejectTreeEditRequest(request: AdminRequest, reason: String? = nil) async {
+        optimisticRemove(from: &treeEditRequests, id: request.id, apiWork: { [weak self] in
+            do {
+                try await self?.supabase
+                    .from("admin_requests")
+                    .update(["status": AnyEncodable("rejected")])
+                    .eq("id", value: request.id.uuidString)
+                    .execute()
 
-            removeLocallyThenRefresh(from: &treeEditRequests, id: request.id) { [weak self] in
-                await self?.fetchTreeEditRequests(force: true)
+                // Notify requester about rejection
+                let actionDesc = request.newValue ?? ""
+                let reasonText = reason?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                let bodyAr = reasonText.isEmpty
+                    ? "تم رفض طلب \(actionDesc) في الشجرة"
+                    : "تم رفض طلب \(actionDesc) في الشجرة: \(reasonText)"
+                let bodyEn = reasonText.isEmpty
+                    ? "Your \(actionDesc) tree edit request was rejected"
+                    : "Your \(actionDesc) tree edit request was rejected: \(reasonText)"
+
+                await self?.notificationVM?.sendNotification(
+                    title: L10n.t("رُفض الطلب", "Request Rejected"),
+                    body: L10n.t(bodyAr, bodyEn),
+                    targetMemberIds: [request.requesterId]
+                )
+                Log.info("[TreeEdit] Rejected: \(actionDesc)")
+            } catch {
+                Log.error("[TreeEdit] Reject failed: \(error)")
             }
-            Log.info("[TreeEdit] تم رفض طلب تعديل الشجرة")
-        } catch {
-            Log.error("[TreeEdit] فشل رفض طلب تعديل الشجرة: \(error)")
-        }
+        }, refresh: { [weak self] in
+            await self?.fetchTreeEditRequests(force: true)
+        })
     }
 
     // MARK: - Deceased Status Requests
@@ -228,7 +330,7 @@ class AdminRequestViewModel: ObservableObject {
         do {
             let formatter = DateFormatter()
             formatter.dateFormat = "yyyy-MM-dd"
-            let dateString = deathDate != nil ? formatter.string(from: deathDate!) : "غير محدد"
+            let dateString = deathDate.map { formatter.string(from: $0) } ?? "غير محدد"
 
             let requestData: [String: AnyEncodable] = [
                 "member_id": AnyEncodable(memberId.uuidString),
@@ -245,7 +347,7 @@ class AdminRequestViewModel: ObservableObject {
 
             let deceasedMemberName = memberById(memberId)?.firstName ?? "عضو"
             let requesterDeceasedName = currentUser?.firstName ?? "عضو"
-            let deceasedBody = "طلب تأكيد وفاة: \(deceasedMemberName)\nتاريخ الوفاة: \(dateString)\nبواسطة: \(requesterDeceasedName)"
+            let deceasedBody = "تأكيد وفاة: \(deceasedMemberName)\nالتاريخ: \(dateString)\nمن: \(requesterDeceasedName)"
             await notificationVM?.notifyAdminsWithPush(
                 title: "طلب تأكيد وفاة",
                 body: deceasedBody,
@@ -278,51 +380,50 @@ class AdminRequestViewModel: ObservableObject {
     }
 
     func approveDeceasedRequest(request: AdminRequest) async {
-        do {
-            try await supabase
-                .from("profiles")
-                .update(["is_deceased": AnyEncodable(true)])
-                .eq("id", value: request.memberId.uuidString)
-                .execute()
+        optimisticRemove(from: &deceasedRequests, id: request.id, apiWork: { [weak self] in
+            do {
+                try await self?.supabase
+                    .from("profiles")
+                    .update(["is_deceased": AnyEncodable(true)])
+                    .eq("id", value: request.memberId.uuidString)
+                    .execute()
 
-            try await supabase
-                .from("admin_requests")
-                .update(["status": AnyEncodable("approved")])
-                .eq("id", value: request.id.uuidString)
-                .execute()
+                try await self?.supabase
+                    .from("admin_requests")
+                    .update(["status": AnyEncodable("approved")])
+                    .eq("id", value: request.id.uuidString)
+                    .execute()
 
-            removeLocallyThenRefresh(from: &deceasedRequests, id: request.id) { [weak self] in
-                await self?.fetchDeceasedRequests(force: true)
-                await self?.memberVM?.fetchAllMembers(force: true)
+                await self?.notificationVM?.sendNotification(
+                    title: L10n.t("تم تنفيذ طلبك", "Request Completed"),
+                    body: L10n.t("تم تأكيد الوفاة", "Deceased status confirmed"),
+                    targetMemberIds: [request.requesterId]
+                )
+                Log.info("تم قبول الطلب وتحديث الشجرة بنجاح")
+            } catch {
+                Log.error("فشل في تنفيذ عملية الموافقة: \(error)")
             }
-
-            await notificationVM?.sendNotification(
-                title: L10n.t("تم تنفيذ طلبك", "Request Completed"),
-                body: L10n.t("تم تأكيد حالة الوفاة", "Deceased status has been confirmed"),
-                targetMemberIds: [request.requesterId]
-            )
-
-            Log.info("تم قبول الطلب وتحديث الشجرة بنجاح")
-        } catch {
-            Log.error("فشل في تنفيذ عملية الموافقة: \(error)")
-        }
+        }, refresh: { [weak self] in
+            await self?.fetchDeceasedRequests(force: true)
+            await self?.memberVM?.fetchAllMembers(force: true)
+        })
     }
 
     func rejectDeceasedRequest(request: AdminRequest) async {
-        do {
-            try await supabase
-                .from("admin_requests")
-                .update(["status": AnyEncodable("rejected")])
-                .eq("id", value: request.id.uuidString)
-                .execute()
-
-            removeLocallyThenRefresh(from: &deceasedRequests, id: request.id) { [weak self] in
-                await self?.fetchDeceasedRequests(force: true)
+        optimisticRemove(from: &deceasedRequests, id: request.id, apiWork: { [weak self] in
+            do {
+                try await self?.supabase
+                    .from("admin_requests")
+                    .update(["status": AnyEncodable("rejected")])
+                    .eq("id", value: request.id.uuidString)
+                    .execute()
+                Log.info("تم رفض طلب تأكيد الوفاة")
+            } catch {
+                Log.error("فشل في رفض طلب الوفاة: \(error)")
             }
-            Log.info("تم رفض طلب تأكيد الوفاة")
-        } catch {
-            Log.error("فشل في رفض طلب الوفاة: \(error)")
-        }
+        }, refresh: { [weak self] in
+            await self?.fetchDeceasedRequests(force: true)
+        })
     }
 
     // MARK: - Child Add Requests
@@ -346,54 +447,52 @@ class AdminRequestViewModel: ObservableObject {
     }
 
     func rejectChildAddRequest(request: AdminRequest) async {
-        do {
-            if let childId = request.newValue {
-                try await supabase
-                    .from("profiles")
-                    .delete()
-                    .eq("id", value: childId)
+        optimisticRemove(from: &childAddRequests, id: request.id, apiWork: { [weak self] in
+            do {
+                if let childId = request.newValue {
+                    try await self?.supabase
+                        .from("profiles")
+                        .delete()
+                        .eq("id", value: childId)
+                        .execute()
+                }
+
+                try await self?.supabase
+                    .from("admin_requests")
+                    .update(["status": AnyEncodable("rejected")])
+                    .eq("id", value: request.id.uuidString)
                     .execute()
+                Log.info("تم رفض طلب إضافة الابن وحذفه من الشجرة")
+            } catch {
+                Log.error("فشل رفض طلب إضافة الابن: \(error)")
             }
-
-            try await supabase
-                .from("admin_requests")
-                .update(["status": AnyEncodable("rejected")])
-                .eq("id", value: request.id.uuidString)
-                .execute()
-
-            removeLocallyThenRefresh(from: &childAddRequests, id: request.id) { [weak self] in
-                await self?.fetchChildAddRequests(force: true)
-                await self?.memberVM?.fetchAllMembers(force: true)
-            }
-
-            Log.info("تم رفض طلب إضافة الابن وحذفه من الشجرة")
-        } catch {
-            Log.error("فشل رفض طلب إضافة الابن: \(error)")
-        }
+        }, refresh: { [weak self] in
+            await self?.fetchChildAddRequests(force: true)
+            await self?.memberVM?.fetchAllMembers(force: true)
+        })
     }
 
     func acknowledgeChildAddRequest(request: AdminRequest) async {
-        do {
-            try await supabase
-                .from("admin_requests")
-                .update(["status": AnyEncodable("approved")])
-                .eq("id", value: request.id.uuidString)
-                .execute()
+        optimisticRemove(from: &childAddRequests, id: request.id, apiWork: { [weak self] in
+            do {
+                try await self?.supabase
+                    .from("admin_requests")
+                    .update(["status": AnyEncodable("approved")])
+                    .eq("id", value: request.id.uuidString)
+                    .execute()
 
-            removeLocallyThenRefresh(from: &childAddRequests, id: request.id) { [weak self] in
-                await self?.fetchChildAddRequests(force: true)
+                await self?.notificationVM?.sendNotification(
+                    title: L10n.t("تم تنفيذ طلبك", "Request Completed"),
+                    body: L10n.t("تمت الموافقة على إضافة الابن", "Your child add request was approved"),
+                    targetMemberIds: [request.requesterId]
+                )
+                Log.info("تم تأكيد طلب إضافة الابن بنجاح")
+            } catch {
+                Log.error("فشل تأكيد طلب إضافة الابن: \(error)")
             }
-
-            await notificationVM?.sendNotification(
-                title: L10n.t("تم تنفيذ طلبك", "Request Completed"),
-                body: L10n.t("تم قبول طلب إضافة الابن", "Your child add request was approved"),
-                targetMemberIds: [request.requesterId]
-            )
-
-            Log.info("تم تأكيد طلب إضافة الابن بنجاح")
-        } catch {
-            Log.error("فشل تأكيد طلب إضافة الابن: \(error)")
-        }
+        }, refresh: { [weak self] in
+            await self?.fetchChildAddRequests(force: true)
+        })
     }
 
     /// الموافقة على جميع طلبات إضافة الأبناء المعلقة دفعة واحدة
@@ -546,7 +645,7 @@ class AdminRequestViewModel: ObservableObject {
                 .execute()
 
             let phoneRequesterName = currentUser?.firstName ?? "عضو"
-            let phoneChangeBody = "طلب تغيير رقم جوال\nالعضو: \(phoneRequesterName)\nالرقم الجديد: \(KuwaitPhone.display(normalizedPhone))"
+            let phoneChangeBody = "تغيير رقم جوال\n\(phoneRequesterName) — \(KuwaitPhone.display(normalizedPhone))"
             await notificationVM?.notifyAdminsWithPush(
                 title: "طلب تغيير رقم جوال",
                 body: phoneChangeBody,
@@ -580,7 +679,7 @@ class AdminRequestViewModel: ObservableObject {
                 .execute()
 
             let requesterName = currentUser?.firstName ?? "عضو"
-            let body = "طلب تغيير اسم\nالعضو: \(requesterName)\nالاسم الجديد: \(newName)"
+            let body = "تغيير اسم\n\(requesterName) → \(newName)"
             await notificationVM?.notifyAdminsWithPush(
                 title: "طلب تغيير اسم",
                 body: body,
@@ -626,68 +725,62 @@ class AdminRequestViewModel: ObservableObject {
             return
         }
 
-        do {
-            // تحديث الاسم في profiles
-            let nameParts = newName.split(whereSeparator: \.isWhitespace).map(String.init)
-            let newFirstName = nameParts.first ?? newName
+        optimisticRemove(from: &nameChangeRequests, id: request.id, apiWork: { [weak self] in
+            do {
+                let nameParts = newName.split(whereSeparator: \.isWhitespace).map(String.init)
+                let newFirstName = nameParts.first ?? newName
 
-            try await supabase
-                .from("profiles")
-                .update([
-                    "full_name": AnyEncodable(newName),
-                    "first_name": AnyEncodable(newFirstName)
-                ])
-                .eq("id", value: request.memberId.uuidString)
-                .execute()
+                try await self?.supabase
+                    .from("profiles")
+                    .update([
+                        "full_name": AnyEncodable(newName),
+                        "first_name": AnyEncodable(newFirstName)
+                    ])
+                    .eq("id", value: request.memberId.uuidString)
+                    .execute()
 
-            // تحديث حالة الطلب
-            try await supabase
-                .from("admin_requests")
-                .update(["status": AnyEncodable("approved")])
-                .eq("id", value: request.id.uuidString)
-                .execute()
+                try await self?.supabase
+                    .from("admin_requests")
+                    .update(["status": AnyEncodable("approved")])
+                    .eq("id", value: request.id.uuidString)
+                    .execute()
 
-            removeLocallyThenRefresh(from: &nameChangeRequests, id: request.id) { [weak self] in
-                await self?.fetchNameChangeRequests(force: true)
-                await self?.memberVM?.fetchAllMembers(force: true)
+                await self?.notificationVM?.sendNotification(
+                    title: L10n.t("تم تغيير الاسم", "Name Changed"),
+                    body: L10n.t("اسمك الجديد: \(newName)", "Your new name: \(newName)"),
+                    targetMemberIds: [request.requesterId]
+                )
+                Log.info("[NameChange] تم قبول طلب تغيير الاسم → \(newName)")
+            } catch {
+                Log.error("[NameChange] فشل قبول طلب تغيير الاسم: \(error)")
             }
-
-            // إشعار العضو
-            await notificationVM?.sendNotification(
-                title: L10n.t("تم تغيير الاسم", "Name Changed"),
-                body: L10n.t("تمت الموافقة على طلب تغيير اسمك إلى: \(newName)", "Your name change request to: \(newName) was approved"),
-                targetMemberIds: [request.requesterId]
-            )
-
-            Log.info("[NameChange] تم قبول طلب تغيير الاسم → \(newName)")
-        } catch {
-            Log.error("[NameChange] فشل قبول طلب تغيير الاسم: \(error)")
-        }
+        }, refresh: { [weak self] in
+            await self?.fetchNameChangeRequests(force: true)
+            await self?.memberVM?.fetchAllMembers(force: true)
+        })
     }
 
     func rejectNameChangeRequest(request: AdminRequest) async {
-        do {
-            try await supabase
-                .from("admin_requests")
-                .update(["status": AnyEncodable("rejected")])
-                .eq("id", value: request.id.uuidString)
-                .execute()
+        optimisticRemove(from: &nameChangeRequests, id: request.id, apiWork: { [weak self] in
+            do {
+                try await self?.supabase
+                    .from("admin_requests")
+                    .update(["status": AnyEncodable("rejected")])
+                    .eq("id", value: request.id.uuidString)
+                    .execute()
 
-            removeLocallyThenRefresh(from: &nameChangeRequests, id: request.id) { [weak self] in
-                await self?.fetchNameChangeRequests(force: true)
+                await self?.notificationVM?.sendNotification(
+                    title: L10n.t("رُفض الطلب", "Request Rejected"),
+                    body: L10n.t("طلب تغيير الاسم لم يُقبل", "Your name change request was not approved"),
+                    targetMemberIds: [request.requesterId]
+                )
+                Log.info("[NameChange] تم رفض طلب تغيير الاسم")
+            } catch {
+                Log.error("[NameChange] فشل رفض طلب تغيير الاسم: \(error)")
             }
-
-            // إشعار العضو بالرفض
-            await notificationVM?.sendNotification(
-                title: L10n.t("تم رفض الطلب", "Request Rejected"),
-                body: L10n.t("تم رفض طلب تغيير الاسم", "Your name change request was rejected"),
-                targetMemberIds: [request.requesterId]
-            )
-
-            Log.info("[NameChange] تم رفض طلب تغيير الاسم")
-        } catch {
-            Log.error("[NameChange] فشل رفض طلب تغيير الاسم: \(error)")
-        }
+        }, refresh: { [weak self] in
+            await self?.fetchNameChangeRequests(force: true)
+        })
     }
 
     func fetchPhoneChangeRequests(force: Bool = false) async {
@@ -718,63 +811,61 @@ class AdminRequestViewModel: ObservableObject {
         guard canModerate, let rawPhone = request.newValue, !rawPhone.isEmpty else { return }
         guard let newPhone = KuwaitPhone.normalizeForStorageFromInput(rawPhone) else { return }
 
-        do {
-            try await supabase
-                .from("profiles")
-                .update(["phone_number": AnyEncodable(newPhone)])
-                .eq("id", value: request.memberId.uuidString)
-                .execute()
+        optimisticRemove(from: &phoneChangeRequests, id: request.id, apiWork: { [weak self] in
+            do {
+                try await self?.supabase
+                    .from("profiles")
+                    .update(["phone_number": AnyEncodable(newPhone)])
+                    .eq("id", value: request.memberId.uuidString)
+                    .execute()
 
-            try await supabase
-                .from("admin_requests")
-                .update(["status": AnyEncodable("approved")])
-                .eq("id", value: request.id.uuidString)
-                .execute()
+                try await self?.supabase
+                    .from("admin_requests")
+                    .update(["status": AnyEncodable("approved")])
+                    .eq("id", value: request.id.uuidString)
+                    .execute()
 
-            removeLocallyThenRefresh(from: &phoneChangeRequests, id: request.id) { [weak self] in
-                await self?.fetchPhoneChangeRequests(force: true)
-                await self?.memberVM?.fetchAllMembers(force: true)
+                if let requesterId = request.requesterId {
+                    await self?.notificationVM?.sendNotification(
+                        title: L10n.t("تم تنفيذ طلبك", "Request Completed"),
+                        body: L10n.t("رقم جوالك الجديد تم اعتماده", "Your new phone number was approved"),
+                        targetMemberIds: [requesterId]
+                    )
+                }
+            } catch {
+                Log.error("خطأ اعتماد تغيير الرقم: \(error.localizedDescription)")
             }
-
-            if let requesterId = request.requesterId {
-                await notificationVM?.sendNotification(
-                    title: L10n.t("تم تنفيذ طلبك", "Request Completed"),
-                    body: L10n.t("تم اعتماد تغيير رقم الجوال", "Your phone change request was approved"),
-                    targetMemberIds: [requesterId]
-                )
-            }
-        } catch {
-            Log.error("خطأ اعتماد تغيير الرقم: \(error.localizedDescription)")
-        }
+        }, refresh: { [weak self] in
+            await self?.fetchPhoneChangeRequests(force: true)
+            await self?.memberVM?.fetchAllMembers(force: true)
+        })
     }
 
     func rejectPhoneChangeRequest(request: PhoneChangeRequest) async {
         guard canModerate else { return }
 
-        do {
-            try await supabase
-                .from("admin_requests")
-                .update(["status": AnyEncodable("rejected")])
-                .eq("id", value: request.id.uuidString)
-                .execute()
+        optimisticRemove(from: &phoneChangeRequests, id: request.id, apiWork: { [weak self] in
+            do {
+                try await self?.supabase
+                    .from("admin_requests")
+                    .update(["status": AnyEncodable("rejected")])
+                    .eq("id", value: request.id.uuidString)
+                    .execute()
 
-            removeLocallyThenRefresh(from: &phoneChangeRequests, id: request.id) { [weak self] in
-                await self?.fetchPhoneChangeRequests(force: true)
+                if let requesterId = request.requesterId {
+                    await self?.notificationVM?.sendNotification(
+                        title: L10n.t("رُفض الطلب", "Request Rejected"),
+                        body: L10n.t("طلب تغيير رقم الجوال لم يُقبل", "Your phone change request was not approved"),
+                        targetMemberIds: [requesterId]
+                    )
+                }
+                Log.info("[PhoneChange] تم رفض طلب تغيير الرقم")
+            } catch {
+                Log.error("خطأ رفض تغيير الرقم: \(error.localizedDescription)")
             }
-
-            // إشعار العضو بالرفض
-            if let requesterId = request.requesterId {
-                await notificationVM?.sendNotification(
-                    title: L10n.t("تم رفض الطلب", "Request Rejected"),
-                    body: L10n.t("تم رفض طلب تغيير رقم الجوال", "Your phone change request was rejected"),
-                    targetMemberIds: [requesterId]
-                )
-            }
-
-            Log.info("[PhoneChange] تم رفض طلب تغيير الرقم")
-        } catch {
-            Log.error("خطأ رفض تغيير الرقم: \(error.localizedDescription)")
-        }
+        }, refresh: { [weak self] in
+            await self?.fetchPhoneChangeRequests(force: true)
+        })
     }
 
     // MARK: - Account Activation & Member Approval
@@ -816,10 +907,10 @@ class AdminRequestViewModel: ObservableObject {
                 targetMemberIds: [memberId]
             )
 
-            // إشعار المدراء
-            await notificationVM?.notifyAdmins(
+            // إشعار المدراء (خارجي + داخلي)
+            await notificationVM?.notifyAdminsWithPush(
                 title: "تفعيل حساب",
-                body: "تم تفعيل حساب \(memberName).",
+                body: "حساب \(memberName) تم تفعيله.",
                 kind: "admin"
             )
         } catch {
@@ -1099,12 +1190,12 @@ class AdminRequestViewModel: ObservableObject {
 
         let body: String
         if let fatherName, !fatherName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            body = "تم قبول طلب انضمامك وربطك مع: \(fatherName)."
+            body = "انضمامك تم اعتماده وتم ربطك مع: \(fatherName)."
         } else {
-            body = "تم قبول طلب انضمامك بنجاح."
+            body = "انضمامك تم اعتماده بنجاح."
         }
 
-        let title = "تم اعتماد العضوية"
+        let title = "أهلاً بك في العائلة"
 
         let payload: [String: AnyEncodable] = [
             "target_member_id": AnyEncodable(memberId.uuidString),
@@ -1118,11 +1209,11 @@ class AdminRequestViewModel: ObservableObject {
             try await supabase.from("notifications").insert(payload).execute()
             // Send real push to the member
             await notificationVM?.sendPushToMembers(title: title, body: body, kind: "join_approved", targetMemberIds: [memberId])
-            // Notify admins and supervisors about the new member
+            // Notify admins and supervisors about the new member (خارجي + داخلي)
             let memberName = getSafeMemberName(for: memberId)
-            await notificationVM?.notifyAdmins(
-                title: "انضمام عضو جديد",
-                body: "تم انضمام \(memberName) للعائلة.",
+            await notificationVM?.notifyAdminsWithPush(
+                title: "عضو جديد",
+                body: "\(memberName) انضم للعائلة.",
                 kind: "join_approved"
             )
         } catch {
@@ -1167,50 +1258,51 @@ class AdminRequestViewModel: ObservableObject {
             Log.error("تم رفض حذف السجل: الصلاحية للمدير فقط")
             return
         }
-        do {
-            // 1) Unlink children from this member before deletion (avoid father_id FK constraints)
-            _ = try? await supabase
-                .from("profiles")
-                .update(["father_id": AnyEncodable(Optional<String>.none)])
-                .eq("father_id", value: memberId.uuidString)
-                .execute()
 
-            // 2) Clean up any requests associated with this member (avoid FK on admin_requests)
-            _ = try? await supabase
-                .from("admin_requests")
-                .delete()
-                .eq("member_id", value: memberId.uuidString)
-                .execute()
-
-            _ = try? await supabase
-                .from("admin_requests")
-                .delete()
-                .eq("requester_id", value: memberId.uuidString)
-                .execute()
-
-            // 3) Delete from profiles
-            try await supabase
-                .from("profiles")
-                .delete()
-                .eq("id", value: memberId.uuidString)
-                .execute()
-
-            // 4) Immediate local update to hide from UI
-            let deletedName = memberById(memberId)?.firstName ?? "عضو"
+        // حذف فوري محلياً — ثم API بالخلفية
+        let deletedName = memberById(memberId)?.firstName ?? "عضو"
+        withAnimation(.snappy(duration: 0.25)) {
             memberVM?.allMembers.removeAll(where: { $0.id == memberId })
             memberVM?.currentMemberChildren.removeAll(where: { $0.id == memberId })
+            memberVM?.membersVersion += 1
             memberVM?.objectWillChange.send()
+        }
 
-            await notificationVM?.notifyAdmins(
-                title: "حذف عضو",
-                body: "تم حذف \(deletedName) من الشجرة.",
-                kind: "admin"
-            )
+        Task { [weak self] in
+            do {
+                _ = try? await self?.supabase
+                    .from("profiles")
+                    .update(["father_id": AnyEncodable(Optional<String>.none)])
+                    .eq("father_id", value: memberId.uuidString)
+                    .execute()
 
-            Log.info("تم حذف العضو مع تنظيف المراجع المرتبطة بنجاح")
+                _ = try? await self?.supabase
+                    .from("admin_requests")
+                    .delete()
+                    .eq("member_id", value: memberId.uuidString)
+                    .execute()
 
-        } catch {
-            Log.error("خطأ في الحذف: \(error.localizedDescription)")
+                _ = try? await self?.supabase
+                    .from("admin_requests")
+                    .delete()
+                    .eq("requester_id", value: memberId.uuidString)
+                    .execute()
+
+                try await self?.supabase
+                    .from("profiles")
+                    .delete()
+                    .eq("id", value: memberId.uuidString)
+                    .execute()
+
+                await self?.notificationVM?.notifyAdminsWithPush(
+                    title: "حذف عضو",
+                    body: "\(deletedName) تم حذفه من الشجرة.",
+                    kind: "admin"
+                )
+                Log.info("تم حذف العضو مع تنظيف المراجع المرتبطة بنجاح")
+            } catch {
+                Log.error("خطأ في الحذف: \(error.localizedDescription)")
+            }
         }
     }
 
@@ -1243,52 +1335,52 @@ class AdminRequestViewModel: ObservableObject {
     func approveNewsReport(request: AdminRequest) async {
         guard canModerate else { return }
 
-        do {
-            if let postIdRaw = request.newValue, let postId = UUID(uuidString: postIdRaw) {
-                try await supabase
-                    .from("news")
-                    .delete()
-                    .eq("id", value: postId.uuidString)
+        optimisticRemove(from: &newsReportRequests, id: request.id, apiWork: { [weak self] in
+            do {
+                if let postIdRaw = request.newValue, let postId = UUID(uuidString: postIdRaw) {
+                    try await self?.supabase
+                        .from("news")
+                        .delete()
+                        .eq("id", value: postId.uuidString)
+                        .execute()
+                }
+
+                try await self?.supabase
+                    .from("admin_requests")
+                    .update(["status": AnyEncodable("approved")])
+                    .eq("id", value: request.id.uuidString)
                     .execute()
+
+                await self?.notificationVM?.sendNotification(
+                    title: L10n.t("تم تنفيذ طلبك", "Request Completed"),
+                    body: L10n.t("بلاغك تمت مراجعته", "Your report was reviewed"),
+                    targetMemberIds: [request.requesterId]
+                )
+            } catch {
+                Log.error("خطأ اعتماد بلاغ الخبر: \(error.localizedDescription)")
             }
-
-            try await supabase
-                .from("admin_requests")
-                .update(["status": AnyEncodable("approved")])
-                .eq("id", value: request.id.uuidString)
-                .execute()
-
-            removeLocallyThenRefresh(from: &newsReportRequests, id: request.id) { [weak self] in
-                await self?.fetchNewsReportRequests(force: true)
-                await self?.newsVM?.fetchNews(force: true)
-            }
-
-            await notificationVM?.sendNotification(
-                title: L10n.t("تم تنفيذ طلبك", "Request Completed"),
-                body: L10n.t("تمت مراجعة بلاغك واتخاذ الإجراء المناسب", "Your report was reviewed and action was taken"),
-                targetMemberIds: [request.requesterId]
-            )
-        } catch {
-            Log.error("خطأ اعتماد بلاغ الخبر: \(error.localizedDescription)")
-        }
+        }, refresh: { [weak self] in
+            await self?.fetchNewsReportRequests(force: true)
+            await self?.newsVM?.fetchNews(force: true)
+        })
     }
 
     func rejectNewsReport(request: AdminRequest) async {
         guard canModerate else { return }
 
-        do {
-            try await supabase
-                .from("admin_requests")
-                .update(["status": AnyEncodable("rejected")])
-                .eq("id", value: request.id.uuidString)
-                .execute()
-
-            removeLocallyThenRefresh(from: &newsReportRequests, id: request.id) { [weak self] in
-                await self?.fetchNewsReportRequests(force: true)
+        optimisticRemove(from: &newsReportRequests, id: request.id, apiWork: { [weak self] in
+            do {
+                try await self?.supabase
+                    .from("admin_requests")
+                    .update(["status": AnyEncodable("rejected")])
+                    .eq("id", value: request.id.uuidString)
+                    .execute()
+            } catch {
+                Log.error("خطأ رفض بلاغ الخبر: \(error.localizedDescription)")
             }
-        } catch {
-            Log.error("خطأ رفض بلاغ الخبر: \(error.localizedDescription)")
-        }
+        }, refresh: { [weak self] in
+            await self?.fetchNewsReportRequests(force: true)
+        })
     }
 
     // MARK: - Photo Suggestion Requests
@@ -1351,7 +1443,7 @@ class AdminRequestViewModel: ObservableObject {
             await notificationVM?.notifyAdminsWithPush(
                 title: L10n.t("اقتراح صورة", "Photo Suggestion"),
                 body: L10n.t(
-                    "اقترح \(requesterName) صورة لـ \(memberName)",
+                    "\(requesterName) اقترح صورة لـ \(memberName)",
                     "\(requesterName) suggested a photo for \(memberName)"
                 ),
                 kind: "photo_suggestion"
@@ -1393,66 +1485,64 @@ class AdminRequestViewModel: ObservableObject {
             return
         }
 
-        do {
-            let timestamp = Int(Date().timeIntervalSince1970)
-            let urlWithCache = photoUrl.contains("?") ? "\(photoUrl)&v=\(timestamp)" : "\(photoUrl)?v=\(timestamp)"
+        optimisticRemove(from: &photoSuggestionRequests, id: request.id, apiWork: { [weak self] in
+            do {
+                let timestamp = Int(Date().timeIntervalSince1970)
+                let urlWithCache = photoUrl.contains("?") ? "\(photoUrl)&v=\(timestamp)" : "\(photoUrl)?v=\(timestamp)"
 
-            try await supabase
-                .from("profiles")
-                .update(["avatar_url": AnyEncodable(urlWithCache)])
-                .eq("id", value: request.memberId.uuidString)
-                .execute()
+                try await self?.supabase
+                    .from("profiles")
+                    .update(["avatar_url": AnyEncodable(urlWithCache)])
+                    .eq("id", value: request.memberId.uuidString)
+                    .execute()
 
-            try await supabase
-                .from("admin_requests")
-                .update(["status": AnyEncodable("approved")])
-                .eq("id", value: request.id.uuidString)
-                .execute()
+                try await self?.supabase
+                    .from("admin_requests")
+                    .update(["status": AnyEncodable("approved")])
+                    .eq("id", value: request.id.uuidString)
+                    .execute()
 
-            removeLocallyThenRefresh(from: &photoSuggestionRequests, id: request.id) { [weak self] in
-                await self?.fetchPhotoSuggestionRequests(force: true)
-                await self?.memberVM?.fetchAllMembers(force: true)
+                await self?.notificationVM?.sendNotification(
+                    title: L10n.t("تم تنفيذ طلبك", "Request Completed"),
+                    body: L10n.t("الصورة المقترحة تم قبولها", "Your photo suggestion was approved"),
+                    targetMemberIds: [request.requesterId]
+                )
+                Log.info("[PhotoSuggestion] تم قبول اقتراح الصورة وتحديث الملف الشخصي")
+            } catch {
+                Log.error("[PhotoSuggestion] خطأ قبول اقتراح الصورة: \(error.localizedDescription)")
             }
-
-            await notificationVM?.sendNotification(
-                title: L10n.t("تم تنفيذ طلبك", "Request Completed"),
-                body: L10n.t("تم قبول الصورة المقترحة", "Your photo suggestion was approved"),
-                targetMemberIds: [request.requesterId]
-            )
-
-            Log.info("[PhotoSuggestion] تم قبول اقتراح الصورة وتحديث الملف الشخصي")
-        } catch {
-            Log.error("[PhotoSuggestion] خطأ قبول اقتراح الصورة: \(error.localizedDescription)")
-        }
+        }, refresh: { [weak self] in
+            await self?.fetchPhotoSuggestionRequests(force: true)
+            await self?.memberVM?.fetchAllMembers(force: true)
+        })
     }
 
     /// رفض اقتراح صورة — حذف الصورة من التخزين
     func rejectPhotoSuggestion(request: AdminRequest) async {
         guard canModerate else { return }
 
-        do {
-            if let photoUrl = request.newValue,
-               let url = URL(string: photoUrl),
-               let range = url.path.range(of: "/storage/v1/object/public/avatars/") {
-                let storagePath = String(url.path[range.upperBound...])
-                _ = try? await supabase.storage
-                    .from("avatars")
-                    .remove(paths: [storagePath])
+        optimisticRemove(from: &photoSuggestionRequests, id: request.id, apiWork: { [weak self] in
+            do {
+                if let photoUrl = request.newValue,
+                   let url = URL(string: photoUrl),
+                   let range = url.path.range(of: "/storage/v1/object/public/avatars/") {
+                    let storagePath = String(url.path[range.upperBound...])
+                    _ = try? await self?.supabase.storage
+                        .from("avatars")
+                        .remove(paths: [storagePath])
+                }
+
+                try await self?.supabase
+                    .from("admin_requests")
+                    .update(["status": AnyEncodable("rejected")])
+                    .eq("id", value: request.id.uuidString)
+                    .execute()
+                Log.info("[PhotoSuggestion] تم رفض اقتراح الصورة")
+            } catch {
+                Log.error("[PhotoSuggestion] خطأ رفض اقتراح الصورة: \(error.localizedDescription)")
             }
-
-            try await supabase
-                .from("admin_requests")
-                .update(["status": AnyEncodable("rejected")])
-                .eq("id", value: request.id.uuidString)
-                .execute()
-
-            removeLocallyThenRefresh(from: &photoSuggestionRequests, id: request.id) { [weak self] in
-                await self?.fetchPhotoSuggestionRequests(force: true)
-            }
-
-            Log.info("[PhotoSuggestion] تم رفض اقتراح الصورة")
-        } catch {
-            Log.error("[PhotoSuggestion] خطأ رفض اقتراح الصورة: \(error.localizedDescription)")
-        }
+        }, refresh: { [weak self] in
+            await self?.fetchPhotoSuggestionRequests(force: true)
+        })
     }
 }

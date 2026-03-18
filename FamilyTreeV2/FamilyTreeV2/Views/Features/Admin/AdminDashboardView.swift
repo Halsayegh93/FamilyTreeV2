@@ -70,7 +70,7 @@ struct AdminDashboardView: View {
                     ScrollView(showsIndicators: false) {
                         VStack(spacing: 0) {
 
-                        VStack(spacing: DS.Spacing.xxl) {
+                        VStack(spacing: DS.Spacing.md) {
 
                             // تحذير التوافق
                             if !authVM.notificationsFeatureAvailable || !authVM.newsApprovalFeatureAvailable {
@@ -80,7 +80,6 @@ struct AdminDashboardView: View {
 
                             // إحصائيات
                             adminStatsGrid
-                                .padding(.top, DS.Spacing.md)
 
                             // طلبات المراجعة
                             DSCard(padding: 0) {

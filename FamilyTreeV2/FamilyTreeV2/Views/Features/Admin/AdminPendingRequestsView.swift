@@ -281,7 +281,8 @@ struct AdminPendingRequestsView: View {
                             loadingMatchFor = member.id
                         }
                         // تأخير بسيط لإظهار اللودنج
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        Task {
+                            try? await Task.sleep(nanoseconds: 300_000_000)
                             let results = findNameMatches(for: member)
                             withAnimation(DS.Anim.smooth) {
                                 nameMatchResults[member.id] = results

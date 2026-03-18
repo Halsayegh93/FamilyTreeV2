@@ -159,12 +159,20 @@ struct AdminMemberDetailSheet: View {
             .onChange(of: memberVM.allMembers) { _, _ in
                 setupLocalChildren()
             }
+            // تحديث محلي فوري بالشجرة عند تغيير حالة المتوفي أو التواريخ
+            .onChange(of: isDeceased) { _, _ in updateLocalMemberState() }
+            .onChange(of: hasDeathDate) { _, _ in updateLocalMemberState() }
+            .onChange(of: deathDate) { _, _ in updateLocalMemberState() }
+            .onChange(of: hasBirthDate) { _, _ in updateLocalMemberState() }
+            .onChange(of: birthDate) { _, _ in updateLocalMemberState() }
             .alert(L10n.t("حذف نهائي", "Permanent Delete"), isPresented: $showDeleteConfirmation) {
                 Button(L10n.t("حذف", "Delete"), role: .destructive) {
                     Task {
                         guard canManageAccessPermissions else { return }
                         await adminRequestVM.rejectOrDeleteMember(memberId: member.id)
                         dismiss()
+                        // إغلاق شاشة تفاصيل العضو أيضاً
+                        NotificationCenter.default.post(name: .memberDeleted, object: member.id)
                     }
                 }
                 Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { }
@@ -878,6 +886,22 @@ struct AdminMemberDetailSheet: View {
     }
 
     // MARK: - Helpers
+
+    /// تحديث محلي فوري — يظهر بالشجرة والتفاصيل لحظياً (الحفظ الفعلي يصير عند زر الحفظ)
+    private func updateLocalMemberState() {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        if let idx = memberVM.allMembers.firstIndex(where: { $0.id == member.id }) {
+            withAnimation(DS.Anim.snappy) {
+                memberVM.allMembers[idx].isDeceased = isDeceased
+                memberVM.allMembers[idx].birthDate = hasBirthDate ? formatter.string(from: birthDate) : nil
+                memberVM.allMembers[idx].deathDate = (isDeceased && hasDeathDate) ? formatter.string(from: deathDate) : nil
+                memberVM.membersVersion += 1
+            }
+        }
+    }
+
     private let iconSm: CGFloat = 30
     private let iconFontSm: CGFloat = 13
 
@@ -1030,7 +1054,7 @@ struct AdminMemberDetailSheet: View {
                 await memberVM.notificationVM?.notifyAdminsWithPush(
                     title: L10n.t("تعديل بيانات عضو", "Member Data Updated"),
                     body: L10n.t(
-                        "قام \(adminName) بتعديل بيانات \(memberName): \(fieldsList)",
+                        "\(adminName) عدّل بيانات \(memberName): \(fieldsList)",
                         "\(adminName) updated \(memberName)'s data: \(fieldsList)"
                     ),
                     kind: "admin_edit"

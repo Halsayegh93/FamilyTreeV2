@@ -7,10 +7,14 @@ struct TreeEditRequestView: View {
     @Environment(\.dismiss) private var dismiss
     @FocusState private var isDetailsFocused: Bool
     @FocusState private var isNameFieldFocused: Bool
+    @FocusState private var isNewNameFocused: Bool
+    @FocusState private var isNewMemberNameFocused: Bool
 
     @State private var selectedAction = "تعديل اسم"
     @State private var memberName = ""
     @State private var details = ""
+    @State private var newNameText = ""
+    @State private var newMemberNameText = ""
     @State private var showSuccessAlert = false
     @State private var showErrorAlert = false
     @State private var nameSearchText = ""
@@ -24,7 +28,60 @@ struct TreeEditRequestView: View {
     ]
 
     private var canSubmit: Bool {
-        !memberName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !adminRequestVM.isLoading
+        guard selectedMember != nil, !adminRequestVM.isLoading else { return false }
+        switch selectedAction {
+        case "تعديل اسم":
+            return !newNameText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        case "حذف":
+            return !details.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        case "إضافة":
+            return !newMemberNameText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        default:
+            return false
+        }
+    }
+
+    /// Dynamic label for member picker based on action
+    private var memberPickerLabel: String {
+        switch selectedAction {
+        case "إضافة":
+            return L10n.t("الأب", "Father")
+        default:
+            return L10n.t("العضو المعني", "Target Member")
+        }
+    }
+
+    /// Dynamic placeholder for member picker
+    private var memberPickerPlaceholder: String {
+        switch selectedAction {
+        case "إضافة":
+            return L10n.t("اختر الأب من القائمة...", "Select father from list...")
+        default:
+            return L10n.t("اختر العضو من القائمة...", "Select member from list...")
+        }
+    }
+
+    /// Dynamic label & placeholder for details section
+    private var detailsLabel: String {
+        switch selectedAction {
+        case "حذف":
+            return L10n.t("سبب الحذف", "Removal Reason")
+        default:
+            return L10n.t("ملاحظات إضافية (اختياري)", "Additional Notes (optional)")
+        }
+    }
+
+    private var detailsPlaceholder: String {
+        switch selectedAction {
+        case "تعديل اسم":
+            return L10n.t("أي ملاحظات إضافية...", "Any additional notes...")
+        case "حذف":
+            return L10n.t("اكتب سبب الحذف...", "Write the removal reason...")
+        case "إضافة":
+            return L10n.t("أي ملاحظات إضافية...", "Any additional notes...")
+        default:
+            return ""
+        }
     }
 
     var body: some View {
@@ -36,6 +93,14 @@ struct TreeEditRequestView: View {
                     VStack(spacing: DS.Spacing.xxl) {
                         actionSection
                         memberNameSection
+
+                        // Action-specific fields
+                        if selectedAction == "تعديل اسم" {
+                            newNameSection
+                        } else if selectedAction == "إضافة" {
+                            newMemberNameSection
+                        }
+
                         detailsSection
                         submitButton
                     }
@@ -112,10 +177,10 @@ struct TreeEditRequestView: View {
         }
     }
 
-    // MARK: - Member Name Section
+    // MARK: - Member Name Section (dynamic label)
     private var memberNameSection: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            Text(L10n.t("اسم العضو", "Member Name"))
+            Text(memberPickerLabel)
                 .font(DS.Font.calloutBold)
                 .foregroundColor(DS.Color.textPrimary)
 
@@ -124,7 +189,7 @@ struct TreeEditRequestView: View {
                 showMemberPicker = true
             } label: {
                 HStack(spacing: DS.Spacing.sm) {
-                    Image(systemName: "person.fill")
+                    Image(systemName: selectedAction == "إضافة" ? "person.2.fill" : "person.fill")
                         .font(DS.Font.scaled(14, weight: .medium))
                         .foregroundColor(DS.Color.textTertiary)
                         .frame(width: 24)
@@ -134,7 +199,7 @@ struct TreeEditRequestView: View {
                             .font(DS.Font.body)
                             .foregroundColor(DS.Color.textPrimary)
                     } else {
-                        Text(L10n.t("اختر العضو من القائمة...", "Select member from list..."))
+                        Text(memberPickerPlaceholder)
                             .font(DS.Font.body)
                             .foregroundColor(DS.Color.textTertiary)
                     }
@@ -163,10 +228,105 @@ struct TreeEditRequestView: View {
             memberPickerSheet
         }
         .onChange(of: selectedAction) {
-            // Reset selection when action type changes
+            // Reset all fields when action type changes
             selectedMember = nil
             memberName = ""
+            newNameText = ""
+            newMemberNameText = ""
+            details = ""
         }
+    }
+
+    // MARK: - New Name Section (for تعديل اسم)
+    private var newNameSection: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.md) {
+            Text(L10n.t("الاسم الجديد", "New Name"))
+                .font(DS.Font.calloutBold)
+                .foregroundColor(DS.Color.textPrimary)
+
+            HStack(spacing: DS.Spacing.sm) {
+                Image(systemName: "pencil")
+                    .font(DS.Font.scaled(14, weight: .medium))
+                    .foregroundColor(DS.Color.textTertiary)
+                    .frame(width: 24)
+
+                TextField(
+                    L10n.t("اكتب الاسم الجديد...", "Enter the new name..."),
+                    text: $newNameText
+                )
+                .font(DS.Font.body)
+                .foregroundColor(DS.Color.textPrimary)
+                .focused($isNewNameFocused)
+
+                if !newNameText.isEmpty {
+                    Button {
+                        newNameText = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(DS.Font.scaled(14, weight: .medium))
+                            .foregroundColor(DS.Color.textTertiary)
+                    }
+                }
+            }
+            .padding(.horizontal, DS.Spacing.md)
+            .padding(.vertical, DS.Spacing.md)
+            .background(DS.Color.surface)
+            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Radius.lg)
+                    .stroke(
+                        isNewNameFocused ? DS.Color.primary.opacity(0.4) : DS.Color.textTertiary.opacity(0.15),
+                        lineWidth: isNewNameFocused ? 1.5 : 1
+                    )
+            )
+        }
+        .transition(.opacity.combined(with: .move(edge: .top)))
+    }
+
+    // MARK: - New Member Name Section (for إضافة)
+    private var newMemberNameSection: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.md) {
+            Text(L10n.t("اسم العضو الجديد", "New Member Name"))
+                .font(DS.Font.calloutBold)
+                .foregroundColor(DS.Color.textPrimary)
+
+            HStack(spacing: DS.Spacing.sm) {
+                Image(systemName: "person.badge.plus")
+                    .font(DS.Font.scaled(14, weight: .medium))
+                    .foregroundColor(DS.Color.textTertiary)
+                    .frame(width: 24)
+
+                TextField(
+                    L10n.t("اكتب اسم العضو الجديد...", "Enter the new member's name..."),
+                    text: $newMemberNameText
+                )
+                .font(DS.Font.body)
+                .foregroundColor(DS.Color.textPrimary)
+                .focused($isNewMemberNameFocused)
+
+                if !newMemberNameText.isEmpty {
+                    Button {
+                        newMemberNameText = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(DS.Font.scaled(14, weight: .medium))
+                            .foregroundColor(DS.Color.textTertiary)
+                    }
+                }
+            }
+            .padding(.horizontal, DS.Spacing.md)
+            .padding(.vertical, DS.Spacing.md)
+            .background(DS.Color.surface)
+            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Radius.lg)
+                    .stroke(
+                        isNewMemberNameFocused ? DS.Color.primary.opacity(0.4) : DS.Color.textTertiary.opacity(0.15),
+                        lineWidth: isNewMemberNameFocused ? 1.5 : 1
+                    )
+            )
+        }
+        .transition(.opacity.combined(with: .move(edge: .top)))
     }
 
     // MARK: - Member Picker Sheet
@@ -288,30 +448,27 @@ struct TreeEditRequestView: View {
             .filter { $0.fullName.lowercased().contains(query) || $0.firstName.lowercased().contains(query) }
     }
 
-    // MARK: - Details Section
+    // MARK: - Details Section (dynamic label based on action)
     private var detailsSection: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            Text(L10n.t("تفاصيل إضافية (اختياري)", "Additional Details (optional)"))
+            Text(detailsLabel)
                 .font(DS.Font.calloutBold)
                 .foregroundColor(DS.Color.textPrimary)
 
             ZStack(alignment: .topTrailing) {
                 TextEditor(text: $details)
-                    .frame(minHeight: 100)
+                    .frame(minHeight: selectedAction == "حذف" ? 100 : 80)
                     .focused($isDetailsFocused)
                     .scrollContentBackground(.hidden)
                     .font(DS.Font.body)
 
                 if details.isEmpty {
-                    Text(L10n.t(
-                        "مثال: تغيير الاسم من ... إلى ... أو إضافة ابن باسم ...",
-                        "Example: Change name from ... to ... or add a son named ..."
-                    ))
-                    .font(DS.Font.body)
-                    .foregroundColor(DS.Color.textTertiary)
-                    .padding(.top, DS.Spacing.sm)
-                    .padding(.trailing, DS.Spacing.xs)
-                    .allowsHitTesting(false)
+                    Text(detailsPlaceholder)
+                        .font(DS.Font.body)
+                        .foregroundColor(DS.Color.textTertiary)
+                        .padding(.top, DS.Spacing.sm)
+                        .padding(.trailing, DS.Spacing.xs)
+                        .allowsHitTesting(false)
                 }
             }
             .padding(DS.Spacing.md)
@@ -344,15 +501,61 @@ struct TreeEditRequestView: View {
 
     // MARK: - Submit Logic
     private func submit() {
-        Task {
-            let sent = await adminRequestVM.submitTreeEditRequest(
-                actionType: selectedAction,
-                memberName: memberName,
-                details: details
+        guard let member = selectedMember else { return }
+        let cleanNotes = details.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        let payload: TreeEditPayload
+        switch selectedAction {
+        case "تعديل اسم":
+            payload = TreeEditPayload(
+                v: 2,
+                action: selectedAction,
+                targetMemberId: member.id.uuidString,
+                targetMemberName: member.fullName,
+                newName: newNameText.trimmingCharacters(in: .whitespacesAndNewlines),
+                parentMemberId: nil,
+                parentMemberName: nil,
+                newMemberName: nil,
+                reason: nil,
+                notes: cleanNotes.isEmpty ? nil : cleanNotes
             )
+        case "حذف":
+            payload = TreeEditPayload(
+                v: 2,
+                action: selectedAction,
+                targetMemberId: member.id.uuidString,
+                targetMemberName: member.fullName,
+                newName: nil,
+                parentMemberId: nil,
+                parentMemberName: nil,
+                newMemberName: nil,
+                reason: cleanNotes.isEmpty ? nil : cleanNotes,
+                notes: nil
+            )
+        case "إضافة":
+            payload = TreeEditPayload(
+                v: 2,
+                action: selectedAction,
+                targetMemberId: nil,
+                targetMemberName: nil,
+                newName: nil,
+                parentMemberId: member.id.uuidString,
+                parentMemberName: member.fullName,
+                newMemberName: newMemberNameText.trimmingCharacters(in: .whitespacesAndNewlines),
+                reason: nil,
+                notes: cleanNotes.isEmpty ? nil : cleanNotes
+            )
+        default:
+            return
+        }
+
+        Task {
+            let sent = await adminRequestVM.submitTreeEditRequest(payload: payload)
             if sent {
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
                 showSuccessAlert = true
             } else {
+                UINotificationFeedbackGenerator().notificationOccurred(.error)
                 showErrorAlert = true
             }
         }
