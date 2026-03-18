@@ -85,38 +85,6 @@ struct NotificationsCenterView: View {
                         .foregroundStyle(DS.Color.primary)
                 }
             }
-
-            if !notificationVM.notifications.isEmpty {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        withAnimation(DS.Anim.snappy) {
-                            if isSelecting {
-                                let allIds = Set(filteredNotifications.map(\.id))
-                                if selectedIds == allIds {
-                                    selectedIds.removeAll()
-                                } else {
-                                    selectedIds = allIds
-                                }
-                            } else {
-                                isSelecting = true
-                                selectedIds.removeAll()
-                            }
-                        }
-                    } label: {
-                        if isSelecting {
-                            let allIds = Set(filteredNotifications.map(\.id))
-                            let allSelected = !allIds.isEmpty && selectedIds == allIds
-                            Image(systemName: allSelected ? "checkmark.circle.fill" : "checklist")
-                                .font(DS.Font.scaled(20, weight: .medium))
-                                .foregroundStyle(DS.Color.primary)
-                        } else {
-                            Image(systemName: "checkmark.circle")
-                                .font(DS.Font.scaled(20, weight: .medium))
-                                .foregroundStyle(DS.Color.primary)
-                        }
-                    }
-                }
-            }
         }
         .task { await notificationVM.fetchNotifications() }
         .onAppear {
@@ -350,10 +318,43 @@ struct NotificationsCenterView: View {
 
     // MARK: - Selection Bar
     private var selectionBar: some View {
-        VStack(spacing: DS.Spacing.xs) {
-            // الأزرار على اليمين
+        let allIds = Set(filteredNotifications.map(\.id))
+        let allSelected = !allIds.isEmpty && selectedIds == allIds
+
+        return VStack(spacing: DS.Spacing.xs) {
             HStack(spacing: DS.Spacing.sm) {
-                // زر قراءة الكل
+                // زر تحديد الكل — على اليسار مع القائمة
+                Button {
+                    withAnimation(DS.Anim.snappy) {
+                        if allSelected {
+                            selectedIds.removeAll()
+                        } else {
+                            selectedIds = allIds
+                        }
+                    }
+                } label: {
+                    HStack(spacing: DS.Spacing.xs) {
+                        Image(systemName: allSelected ? "checkmark.square.fill" : "square.dashed")
+                            .font(DS.Font.scaled(13, weight: .semibold))
+                        Text(allSelected ? L10n.t("إلغاء الكل", "Deselect") : L10n.t("تحديد الكل", "Select All"))
+                            .font(DS.Font.scaled(11, weight: .bold))
+                    }
+                    .foregroundColor(DS.Color.accent)
+                    .padding(.horizontal, DS.Spacing.md)
+                    .padding(.vertical, DS.Spacing.xs + 2)
+                    .background(DS.Color.accent.opacity(0.08))
+                    .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+
+                // عدد المحدد
+                Text(L10n.t("(\(selectedIds.count))", "(\(selectedIds.count))"))
+                    .font(DS.Font.scaled(11, weight: .semibold))
+                    .foregroundColor(DS.Color.textTertiary)
+
+                Spacer()
+
+                // زر قراءة الكل — على اليمين
                 Button {
                     Task { await notificationVM.markAllNotificationsAsRead() }
                 } label: {
@@ -370,8 +371,11 @@ struct NotificationsCenterView: View {
                     .clipShape(Capsule())
                 }
                 .buttonStyle(.plain)
+            }
 
-                // زر جعل المحدد مقروء
+            // أزرار الإجراءات على المحدد
+            HStack(spacing: DS.Spacing.sm) {
+                // مقروء
                 Button {
                     let ids = selectedIds
                     withAnimation(DS.Anim.snappy) {
@@ -394,7 +398,7 @@ struct NotificationsCenterView: View {
                 }
                 .disabled(selectedIds.isEmpty)
 
-                // زر حذف المحدد
+                // حذف
                 Button {
                     let ids = selectedIds
                     withAnimation(DS.Anim.snappy) {
@@ -417,14 +421,6 @@ struct NotificationsCenterView: View {
                 }
                 .disabled(selectedIds.isEmpty)
 
-                Spacer()
-            }
-
-            // عدد المحدد تحت الأزرار
-            HStack {
-                Text(L10n.t("محدد: \(selectedIds.count)", "Selected: \(selectedIds.count)"))
-                    .font(DS.Font.scaled(11, weight: .semibold))
-                    .foregroundColor(DS.Color.textTertiary)
                 Spacer()
             }
         }
@@ -465,40 +461,64 @@ struct NotificationsCenterView: View {
     // MARK: - إحصائية سريعة
     private var notificationSummaryBar: some View {
         let unreadCount = filteredNotifications.filter { !$0.read }.count
-        return Group {
+        return HStack(spacing: DS.Spacing.sm) {
+            // زر تحديد — على اليسار
+            Button {
+                withAnimation(DS.Anim.snappy) {
+                    isSelecting = true
+                    selectedIds.removeAll()
+                }
+            } label: {
+                HStack(spacing: DS.Spacing.xs) {
+                    Image(systemName: "checklist.unchecked")
+                        .font(DS.Font.scaled(13, weight: .semibold))
+                    Text(L10n.t("تحديد", "Select"))
+                        .font(DS.Font.scaled(11, weight: .bold))
+                }
+                .foregroundColor(DS.Color.accent)
+                .padding(.horizontal, DS.Spacing.md)
+                .padding(.vertical, DS.Spacing.xs + 2)
+                .background(DS.Color.accent.opacity(0.08))
+                .clipShape(Capsule())
+            }
+            .buttonStyle(.plain)
+
+            // عدد غير المقروء
             if unreadCount > 0 {
-                HStack(spacing: DS.Spacing.sm) {
+                HStack(spacing: DS.Spacing.xs) {
                     Circle()
                         .fill(DS.Color.error)
-                        .frame(width: 8, height: 8)
+                        .frame(width: 7, height: 7)
                     Text("\(unreadCount) " + L10n.t("غير مقروء", "unread"))
-                        .font(DS.Font.scaled(12, weight: .semibold))
+                        .font(DS.Font.scaled(11, weight: .semibold))
                         .foregroundColor(DS.Color.textSecondary)
-
-                    Spacer()
-
-                    // زر جعل الكل مقروء
-                    Button {
-                        Task { await notificationVM.markAllNotificationsAsRead() }
-                    } label: {
-                        HStack(spacing: DS.Spacing.xs) {
-                            Image(systemName: "envelope.open.fill")
-                                .font(DS.Font.scaled(11, weight: .semibold))
-                            Text(L10n.t("قراءة الكل", "Read All"))
-                                .font(DS.Font.scaled(11, weight: .bold))
-                        }
-                        .foregroundColor(DS.Color.primary)
-                        .padding(.horizontal, DS.Spacing.md)
-                        .padding(.vertical, DS.Spacing.xs + 2)
-                        .background(DS.Color.primary.opacity(0.08))
-                        .clipShape(Capsule())
-                    }
-                    .buttonStyle(.plain)
                 }
-                .padding(.horizontal, DS.Spacing.lg)
-                .padding(.vertical, DS.Spacing.xs)
+            }
+
+            Spacer()
+
+            // زر قراءة الكل — على اليمين
+            if unreadCount > 0 {
+                Button {
+                    Task { await notificationVM.markAllNotificationsAsRead() }
+                } label: {
+                    HStack(spacing: DS.Spacing.xs) {
+                        Image(systemName: "envelope.open.fill")
+                            .font(DS.Font.scaled(11, weight: .semibold))
+                        Text(L10n.t("قراءة الكل", "Read All"))
+                            .font(DS.Font.scaled(11, weight: .bold))
+                    }
+                    .foregroundColor(DS.Color.primary)
+                    .padding(.horizontal, DS.Spacing.md)
+                    .padding(.vertical, DS.Spacing.xs + 2)
+                    .background(DS.Color.primary.opacity(0.08))
+                    .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
             }
         }
+        .padding(.horizontal, DS.Spacing.lg)
+        .padding(.vertical, DS.Spacing.xs)
     }
 
     // MARK: - Empty State
