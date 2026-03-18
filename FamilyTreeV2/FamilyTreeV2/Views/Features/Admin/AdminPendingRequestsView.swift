@@ -580,181 +580,512 @@ struct FatherLinkApprovalSheet: View {
     let suggestedMatchIds: [UUID]
     @State private var searchText = ""
     @State private var selectedFatherId: UUID?
+    @State private var showAllResults = false
+    @State private var confirmationShown = false
 
     /// المرشحون: المطابقات المقترحة أولاً ثم الباقي
     private var fatherCandidates: [FamilyMember] {
         let candidates = memberVM.allMembers.filter { $0.role != .pending && $0.id != member.id }
 
         if searchText.isEmpty {
-            // المطابقات المقترحة أولاً
             let suggested = candidates.filter { suggestedMatchIds.contains($0.id) }
             let others = candidates.filter { !suggestedMatchIds.contains($0.id) }
-            return suggested + others.prefix(20)
+            return suggested + (showAllResults ? others : Array(others.prefix(20)))
         }
         return candidates.filter { $0.fullName.localizedCaseInsensitiveContains(searchText) }
     }
 
+    private var selectedFather: FamilyMember? {
+        guard let id = selectedFatherId else { return nil }
+        return memberVM.allMembers.first { $0.id == id }
+    }
+
     var body: some View {
         NavigationStack {
-            VStack(spacing: DS.Spacing.md) {
+            ZStack {
+                DS.Color.background.ignoresSafeArea()
 
-                // Header icon
-                ZStack {
-                    Circle()
-                        .fill(DS.Color.gradientPrimary)
-                        .frame(width: 56, height: 56)
-                    Image(systemName: "link.badge.plus")
-                        .font(DS.Font.scaled(22, weight: .semibold))
-                        .foregroundColor(DS.Color.textOnPrimary)
-                }
-                .dsGlowShadow()
-                .padding(.top, DS.Spacing.sm)
+                ScrollView {
+                    VStack(spacing: DS.Spacing.lg) {
 
-                // عرض اسم العضو الجديد بوضوح
-                VStack(spacing: DS.Spacing.xs) {
-                    Text(L10n.t("ربط العضو بالأب قبل التفعيل", "Link member to father before activation"))
-                        .font(DS.Font.headline)
-                        .foregroundColor(DS.Color.textPrimary)
+                        // MARK: - Member Profile Card
+                        memberProfileCard
+                            .padding(.top, DS.Spacing.sm)
 
-                    Text(member.fullName)
-                        .font(DS.Font.calloutBold)
-                        .foregroundColor(DS.Color.primary)
-                        .padding(.horizontal, DS.Spacing.md)
-                        .padding(.vertical, DS.Spacing.xs)
-                        .background(DS.Color.primary.opacity(0.08))
-                        .cornerRadius(DS.Radius.md)
-                }
+                        // MARK: - Match Status Banner
+                        matchStatusBanner
 
-                // شريط معلومات المطابقات
-                if !suggestedMatchIds.isEmpty {
-                    HStack(spacing: DS.Spacing.sm) {
-                        Image(systemName: "sparkle.magnifyingglass")
-                            .font(DS.Font.scaled(14))
-                            .foregroundColor(DS.Color.success)
-                        Text(L10n.t(
-                            "وُجدت \(suggestedMatchIds.count) مطابقة محتملة بالاسم",
-                            "\(suggestedMatchIds.count) potential name match(es) found"
-                        ))
-                        .font(DS.Font.caption1)
-                        .foregroundColor(DS.Color.success)
-                        Spacer()
-                    }
-                    .padding(.horizontal, DS.Spacing.md)
-                    .padding(.vertical, DS.Spacing.xs)
-                    .background(DS.Color.success.opacity(0.08))
-                    .cornerRadius(DS.Radius.md)
-                } else {
-                    HStack(spacing: DS.Spacing.sm) {
-                        Image(systemName: "info.circle.fill")
-                            .font(DS.Font.scaled(14))
-                            .foregroundColor(DS.Color.warning)
-                        Text(L10n.t("لا توجد مطابقات — اختر الأب يدوياً", "No matches — select father manually"))
-                            .font(DS.Font.caption1)
-                            .foregroundColor(DS.Color.warning)
-                        Spacer()
-                    }
-                    .padding(.horizontal, DS.Spacing.md)
-                    .padding(.vertical, DS.Spacing.xs)
-                    .background(DS.Color.warning.opacity(0.08))
-                    .cornerRadius(DS.Radius.md)
-                }
-
-                // حقل البحث
-                HStack(spacing: DS.Spacing.md) {
-                    ZStack {
-                        Circle()
-                            .fill(DS.Color.gradientPrimary)
-                            .frame(width: 32, height: 32)
-                        Image(systemName: "magnifyingglass")
-                            .font(DS.Font.scaled(12, weight: .semibold))
-                            .foregroundColor(DS.Color.textOnPrimary)
-                    }
-
-                    TextField(L10n.t("ابحث عن الأب...", "Search for father..."), text: $searchText)
-                        .multilineTextAlignment(.leading)
-                        .font(DS.Font.body)
-                        .focused($isSearchFocused)
-                }
-                .padding(DS.Spacing.md)
-                .background(DS.Color.surface)
-                .cornerRadius(DS.Radius.md)
-                .overlay(
-                    RoundedRectangle(cornerRadius: DS.Radius.md)
-                        .stroke(isSearchFocused ? DS.Color.primary : DS.Color.inactiveBorder, lineWidth: isSearchFocused ? 2 : 1)
-                )
-                .animation(.easeInOut(duration: 0.2), value: isSearchFocused)
-
-                List(fatherCandidates) { father in
-                    Button {
-                        selectedFatherId = father.id
-                    } label: {
-                        HStack(spacing: DS.Spacing.md) {
-                            if selectedFatherId == father.id {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .font(DS.Font.scaled(20))
-                                    .foregroundStyle(DS.Color.gradientPrimary)
-                            } else {
-                                Image(systemName: "circle")
-                                    .font(DS.Font.scaled(20))
-                                    .foregroundColor(DS.Color.textTertiary)
-                            }
-                            Spacer()
-                            VStack(alignment: .trailing, spacing: 2) {
-                                Text(father.fullName)
-                                    .font(DS.Font.callout)
-                                    .foregroundColor(DS.Color.textPrimary)
-                                // علامة المطابقة المقترحة
-                                if suggestedMatchIds.contains(father.id) {
-                                    Text(L10n.t("مطابقة محتملة", "Potential match"))
-                                        .font(DS.Font.scaled(10, weight: .semibold))
-                                        .foregroundColor(DS.Color.success)
-                                        .padding(.horizontal, 6)
-                                        .padding(.vertical, 2)
-                                        .background(DS.Color.success.opacity(0.12))
-                                        .cornerRadius(DS.Radius.sm)
-                                }
-                            }
+                        // MARK: - Selected Father Preview
+                        if let father = selectedFather {
+                            selectedFatherCard(father)
+                                .transition(.asymmetric(
+                                    insertion: .scale(scale: 0.95).combined(with: .opacity),
+                                    removal: .opacity
+                                ))
                         }
-                    }
-                    .listRowBackground(
-                        suggestedMatchIds.contains(father.id)
-                            ? DS.Color.success.opacity(0.04)
-                            : Color.clear
-                    )
-                }
-                .listStyle(.plain)
 
-                if selectedFatherId == nil {
-                    Text(L10n.t("اختر الأب أولاً قبل تفعيل العضوية.", "Select father first before activating membership."))
-                        .font(DS.Font.caption1)
-                        .foregroundColor(DS.Color.textSecondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
+                        // MARK: - Search
+                        searchField
 
-                DSPrimaryButton(
-                    L10n.t("تفعيل العضوية والربط", "Activate & Link"),
-                    icon: "checkmark.circle.fill",
-                    isLoading: adminRequestVM.isLoading
-                ) {
-                    Task {
-                        await adminRequestVM.approveMember(memberId: member.id, fatherId: selectedFatherId)
-                        dismiss()
+                        // MARK: - Candidates List
+                        candidatesList
+
+                        // MARK: - Activate Button
+                        activateButton
                     }
+                    .padding(.horizontal, DS.Spacing.lg)
+                    .padding(.bottom, DS.Spacing.xxl)
                 }
-                .disabled(selectedFatherId == nil || adminRequestVM.isLoading)
-                .opacity((selectedFatherId == nil || adminRequestVM.isLoading) ? 0.6 : 1.0)
             }
-            .padding(DS.Spacing.lg)
-            .navigationTitle(L10n.t("اعتماد طلب الربط", "Approve Link Request"))
+            .navigationTitle(L10n.t("ربط بالأب", "Link to Father"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button(L10n.t("إغلاق", "Close")) { dismiss() }
-                        .font(DS.Font.calloutBold)
-                        .foregroundColor(DS.Color.error)
+                    Button { dismiss() } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(DS.Font.scaled(20, weight: .medium))
+                            .foregroundColor(DS.Color.textTertiary)
+                    }
+                }
+            }
+            .animation(DS.Anim.snappy, value: selectedFatherId)
+        }
+        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+        .alert(
+            L10n.t("تأكيد التفعيل", "Confirm Activation"),
+            isPresented: $confirmationShown
+        ) {
+            Button(L10n.t("تفعيل", "Activate"), role: .none) {
+                Task {
+                    await adminRequestVM.approveMember(memberId: member.id, fatherId: selectedFatherId)
+                    dismiss()
+                }
+            }
+            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
+        } message: {
+            if let father = selectedFather {
+                Text(L10n.t(
+                    "سيتم تفعيل \(member.firstName ?? member.fullName) وربطه كابن لـ \(father.fullName)",
+                    "Activate \(member.firstName ?? member.fullName) and link as child of \(father.fullName)"
+                ))
+            } else {
+                Text(L10n.t(
+                    "سيتم تفعيل \(member.firstName ?? member.fullName) بدون ربط بأب",
+                    "Activate \(member.firstName ?? member.fullName) without linking to a father"
+                ))
+            }
+        }
+    }
+
+    // MARK: - Member Profile Card
+
+    private var memberProfileCard: some View {
+        DSCard {
+            VStack(spacing: DS.Spacing.md) {
+                // Avatar + Name
+                HStack(spacing: DS.Spacing.md) {
+                    // Avatar
+                    ZStack {
+                        Circle()
+                            .fill(DS.Color.gradientPrimary)
+                            .frame(width: 52, height: 52)
+                        if let avatarUrl = member.avatarUrl, let url = URL(string: avatarUrl) {
+                            AsyncImage(url: url) { img in
+                                img.resizable().scaledToFill()
+                            } placeholder: {
+                                Text(String(member.fullName.prefix(1)))
+                                    .font(DS.Font.scaled(22, weight: .bold))
+                                    .foregroundColor(DS.Color.textOnPrimary)
+                            }
+                            .frame(width: 52, height: 52)
+                            .clipShape(Circle())
+                        } else {
+                            Text(String(member.fullName.prefix(1)))
+                                .font(DS.Font.scaled(22, weight: .bold))
+                                .foregroundColor(DS.Color.textOnPrimary)
+                        }
+                    }
+
+                    VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                        Text(L10n.t("عضو جديد", "New Member"))
+                            .font(DS.Font.caption1)
+                            .foregroundColor(DS.Color.textTertiary)
+                        Text(member.fullName)
+                            .font(DS.Font.title3)
+                            .foregroundColor(DS.Color.textPrimary)
+                            .lineLimit(2)
+                    }
+
+                    Spacer()
+
+                    // Name parts count badge
+                    let parts = member.fullName.split(whereSeparator: \.isWhitespace).count
+                    VStack(spacing: 2) {
+                        Text("\(parts)")
+                            .font(DS.Font.scaled(18, weight: .black))
+                            .foregroundColor(parts >= 5 ? DS.Color.success : DS.Color.warning)
+                        Text(L10n.t("أجزاء", "parts"))
+                            .font(DS.Font.scaled(9, weight: .bold))
+                            .foregroundColor(DS.Color.textTertiary)
+                    }
+                    .padding(DS.Spacing.sm)
+                    .background((parts >= 5 ? DS.Color.success : DS.Color.warning).opacity(0.08))
+                    .cornerRadius(DS.Radius.md)
+                }
+
+                // Registration date
+                if let createdAt = member.createdAt {
+                    HStack(spacing: DS.Spacing.xs) {
+                        Image(systemName: "calendar.badge.clock")
+                            .font(DS.Font.scaled(11))
+                        Text(L10n.t("تاريخ التسجيل: \(createdAt.prefix(10))", "Registered: \(createdAt.prefix(10))"))
+                            .font(DS.Font.caption2)
+                    }
+                    .foregroundColor(DS.Color.textTertiary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+
+                // Phone if available
+                if let phone = member.phoneNumber, !phone.isEmpty {
+                    HStack(spacing: DS.Spacing.xs) {
+                        Image(systemName: "phone.fill")
+                            .font(DS.Font.scaled(11))
+                        Text(phone)
+                            .font(DS.Font.caption1)
+                    }
+                    .foregroundColor(DS.Color.textSecondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
         }
-        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+    }
+
+    // MARK: - Match Status Banner
+
+    private var matchStatusBanner: some View {
+        Group {
+            if !suggestedMatchIds.isEmpty {
+                HStack(spacing: DS.Spacing.sm) {
+                    ZStack {
+                        Circle()
+                            .fill(DS.Color.success.opacity(0.15))
+                            .frame(width: 32, height: 32)
+                        Image(systemName: "sparkle.magnifyingglass")
+                            .font(DS.Font.scaled(14, weight: .semibold))
+                            .foregroundColor(DS.Color.success)
+                    }
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(L10n.t("مطابقات محتملة", "Potential Matches"))
+                            .font(DS.Font.subheadline)
+                            .foregroundColor(DS.Color.success)
+                        Text(L10n.t(
+                            "وُجدت \(suggestedMatchIds.count) مطابقة بالاسم — يُنصح بالربط",
+                            "\(suggestedMatchIds.count) name match(es) found — linking recommended"
+                        ))
+                        .font(DS.Font.caption2)
+                        .foregroundColor(DS.Color.textSecondary)
+                    }
+                    Spacer()
+                    Text("\(suggestedMatchIds.count)")
+                        .font(DS.Font.scaled(20, weight: .black))
+                        .foregroundColor(DS.Color.success)
+                }
+                .padding(DS.Spacing.md)
+                .background(DS.Color.success.opacity(0.06))
+                .cornerRadius(DS.Radius.lg)
+                .overlay(
+                    RoundedRectangle(cornerRadius: DS.Radius.lg)
+                        .stroke(DS.Color.success.opacity(0.15), lineWidth: 1)
+                )
+            } else {
+                HStack(spacing: DS.Spacing.sm) {
+                    ZStack {
+                        Circle()
+                            .fill(DS.Color.warning.opacity(0.15))
+                            .frame(width: 32, height: 32)
+                        Image(systemName: "person.fill.questionmark")
+                            .font(DS.Font.scaled(14, weight: .semibold))
+                            .foregroundColor(DS.Color.warning)
+                    }
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(L10n.t("لا توجد مطابقات", "No Matches"))
+                            .font(DS.Font.subheadline)
+                            .foregroundColor(DS.Color.warning)
+                        Text(L10n.t("ابحث واختر الأب يدوياً من القائمة", "Search and select father manually"))
+                            .font(DS.Font.caption2)
+                            .foregroundColor(DS.Color.textSecondary)
+                    }
+                    Spacer()
+                }
+                .padding(DS.Spacing.md)
+                .background(DS.Color.warning.opacity(0.06))
+                .cornerRadius(DS.Radius.lg)
+                .overlay(
+                    RoundedRectangle(cornerRadius: DS.Radius.lg)
+                        .stroke(DS.Color.warning.opacity(0.15), lineWidth: 1)
+                )
+            }
+        }
+    }
+
+    // MARK: - Selected Father Card
+
+    private func selectedFatherCard(_ father: FamilyMember) -> some View {
+        DSGlowCard(borderColor: DS.Color.success) {
+            HStack(spacing: DS.Spacing.md) {
+                ZStack {
+                    Circle()
+                        .fill(DS.Color.success.opacity(0.15))
+                        .frame(width: 44, height: 44)
+                    Image(systemName: "link.circle.fill")
+                        .font(DS.Font.scaled(20, weight: .semibold))
+                        .foregroundColor(DS.Color.success)
+                }
+
+                VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                    Text(L10n.t("سيُربط كابن لـ", "Will be linked as child of"))
+                        .font(DS.Font.caption1)
+                        .foregroundColor(DS.Color.textTertiary)
+                    Text(father.fullName)
+                        .font(DS.Font.calloutBold)
+                        .foregroundColor(DS.Color.success)
+                        .lineLimit(2)
+                }
+
+                Spacer()
+
+                Button {
+                    withAnimation(DS.Anim.snappy) {
+                        selectedFatherId = nil
+                    }
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(DS.Font.scaled(20))
+                        .foregroundColor(DS.Color.textTertiary)
+                }
+            }
+        }
+    }
+
+    // MARK: - Search Field
+
+    private var searchField: some View {
+        HStack(spacing: DS.Spacing.sm) {
+            Image(systemName: "magnifyingglass")
+                .font(DS.Font.scaled(15, weight: .medium))
+                .foregroundColor(isSearchFocused ? DS.Color.primary : DS.Color.textTertiary)
+
+            TextField(L10n.t("ابحث عن الأب بالاسم...", "Search for father by name..."), text: $searchText)
+                .font(DS.Font.body)
+                .focused($isSearchFocused)
+
+            if !searchText.isEmpty {
+                Button {
+                    searchText = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(DS.Font.scaled(16))
+                        .foregroundColor(DS.Color.textTertiary)
+                }
+            }
+        }
+        .padding(DS.Spacing.md)
+        .background(DS.Color.surface)
+        .cornerRadius(DS.Radius.lg)
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Radius.lg)
+                .stroke(isSearchFocused ? DS.Color.primary : DS.Color.inactiveBorder, lineWidth: isSearchFocused ? 2 : 1)
+        )
+        .animation(.easeInOut(duration: 0.2), value: isSearchFocused)
+    }
+
+    // MARK: - Candidates List
+
+    private var candidatesList: some View {
+        LazyVStack(spacing: DS.Spacing.sm) {
+            // Suggested matches section
+            let suggested = fatherCandidates.filter { suggestedMatchIds.contains($0.id) }
+            let others = fatherCandidates.filter { !suggestedMatchIds.contains($0.id) }
+
+            if !suggested.isEmpty && searchText.isEmpty {
+                DSSectionHeader(
+                    L10n.t("مطابقات مقترحة", "Suggested Matches"),
+                    icon: "star.fill"
+                )
+
+                ForEach(suggested) { father in
+                    fatherCandidateRow(father, isSuggested: true)
+                }
+            }
+
+            if !others.isEmpty {
+                if !suggested.isEmpty && searchText.isEmpty {
+                    DSSectionHeader(
+                        L10n.t("أعضاء آخرون", "Other Members"),
+                        icon: "person.3.fill"
+                    )
+                    .padding(.top, DS.Spacing.sm)
+                }
+
+                ForEach(others) { father in
+                    fatherCandidateRow(father, isSuggested: false)
+                }
+
+                // Show more button
+                if searchText.isEmpty && !showAllResults {
+                    Button {
+                        withAnimation(DS.Anim.snappy) {
+                            showAllResults = true
+                        }
+                    } label: {
+                        HStack(spacing: DS.Spacing.xs) {
+                            Image(systemName: "ellipsis.circle.fill")
+                                .font(DS.Font.scaled(14, weight: .semibold))
+                            Text(L10n.t("عرض جميع الأعضاء", "Show all members"))
+                                .font(DS.Font.scaled(13, weight: .bold))
+                        }
+                        .foregroundColor(DS.Color.primary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, DS.Spacing.md)
+                        .background(DS.Color.primary.opacity(0.06))
+                        .cornerRadius(DS.Radius.md)
+                    }
+                    .buttonStyle(DSScaleButtonStyle())
+                }
+            }
+
+            if fatherCandidates.isEmpty {
+                VStack(spacing: DS.Spacing.md) {
+                    Image(systemName: "magnifyingglass")
+                        .font(DS.Font.scaled(28))
+                        .foregroundColor(DS.Color.textTertiary)
+                    Text(L10n.t("لا توجد نتائج", "No results"))
+                        .font(DS.Font.callout)
+                        .foregroundColor(DS.Color.textSecondary)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, DS.Spacing.xxxl)
+            }
+        }
+    }
+
+    // MARK: - Father Candidate Row
+
+    private func fatherCandidateRow(_ father: FamilyMember, isSuggested: Bool) -> some View {
+        let isSelected = selectedFatherId == father.id
+
+        return Button {
+            withAnimation(DS.Anim.snappy) {
+                selectedFatherId = father.id
+            }
+        } label: {
+            HStack(spacing: DS.Spacing.md) {
+                // Selection indicator
+                ZStack {
+                    Circle()
+                        .stroke(isSelected ? DS.Color.success : DS.Color.textTertiary.opacity(0.3), lineWidth: isSelected ? 0 : 1.5)
+                        .frame(width: 24, height: 24)
+
+                    if isSelected {
+                        Circle()
+                            .fill(DS.Color.gradientPrimary)
+                            .frame(width: 24, height: 24)
+                        Image(systemName: "checkmark")
+                            .font(DS.Font.scaled(12, weight: .bold))
+                            .foregroundColor(DS.Color.textOnPrimary)
+                    }
+                }
+
+                // Avatar
+                ZStack {
+                    Circle()
+                        .fill(isSuggested ? DS.Color.success.opacity(0.12) : DS.Color.primary.opacity(0.1))
+                        .frame(width: 38, height: 38)
+                    if let avatarUrl = father.avatarUrl, let url = URL(string: avatarUrl) {
+                        AsyncImage(url: url) { img in
+                            img.resizable().scaledToFill()
+                        } placeholder: {
+                            Text(String(father.fullName.prefix(1)))
+                                .font(DS.Font.scaled(16, weight: .bold))
+                                .foregroundColor(isSuggested ? DS.Color.success : DS.Color.primary)
+                        }
+                        .frame(width: 38, height: 38)
+                        .clipShape(Circle())
+                    } else {
+                        Text(String(father.fullName.prefix(1)))
+                            .font(DS.Font.scaled(16, weight: .bold))
+                            .foregroundColor(isSuggested ? DS.Color.success : DS.Color.primary)
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(father.fullName)
+                        .font(DS.Font.callout)
+                        .foregroundColor(DS.Color.textPrimary)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+
+                    if isSuggested {
+                        HStack(spacing: 4) {
+                            Image(systemName: "star.fill")
+                                .font(DS.Font.scaled(8))
+                            Text(L10n.t("مطابقة مقترحة", "Suggested match"))
+                                .font(DS.Font.scaled(10, weight: .semibold))
+                        }
+                        .foregroundColor(DS.Color.success)
+                    }
+                }
+
+                Spacer()
+
+                if isSelected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(DS.Font.scaled(18))
+                        .foregroundStyle(DS.Color.gradientPrimary)
+                        .transition(.scale.combined(with: .opacity))
+                }
+            }
+            .padding(DS.Spacing.md)
+            .background(
+                isSelected
+                    ? DS.Color.primary.opacity(0.06)
+                    : (isSuggested ? DS.Color.success.opacity(0.03) : DS.Color.surface)
+            )
+            .cornerRadius(DS.Radius.lg)
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Radius.lg)
+                    .stroke(
+                        isSelected ? DS.Color.primary.opacity(0.3) : (isSuggested ? DS.Color.success.opacity(0.12) : Color.clear),
+                        lineWidth: isSelected ? 1.5 : 1
+                    )
+            )
+        }
+        .buttonStyle(DSScaleButtonStyle())
+    }
+
+    // MARK: - Activate Button
+
+    private var activateButton: some View {
+        VStack(spacing: DS.Spacing.sm) {
+            if selectedFatherId == nil {
+                HStack(spacing: DS.Spacing.xs) {
+                    Image(systemName: "info.circle")
+                        .font(DS.Font.scaled(12))
+                    Text(L10n.t("اختر الأب أولاً لتفعيل العضوية", "Select a father first to activate membership"))
+                        .font(DS.Font.caption1)
+                }
+                .foregroundColor(DS.Color.textTertiary)
+            }
+
+            DSPrimaryButton(
+                L10n.t("تفعيل العضوية والربط", "Activate & Link"),
+                icon: "checkmark.shield.fill",
+                isLoading: adminRequestVM.isLoading
+            ) {
+                confirmationShown = true
+            }
+            .disabled(selectedFatherId == nil || adminRequestVM.isLoading)
+            .opacity((selectedFatherId == nil || adminRequestVM.isLoading) ? 0.5 : 1.0)
+        }
     }
 }
