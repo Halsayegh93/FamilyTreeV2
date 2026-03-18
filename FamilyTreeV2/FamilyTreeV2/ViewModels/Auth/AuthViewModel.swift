@@ -217,6 +217,13 @@ class AuthViewModel: ObservableObject {
     }
 
     private func resolveAuthAccess(for profile: FamilyMember) -> AuthStatus {
+        // البروفايل بدون اسم = الترقر أنشأ السجل تلقائياً ولم يكمل المستخدم التسجيل بعد
+        let name = profile.fullName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if name.isEmpty {
+            Log.info("[AUTH] البروفايل بدون اسم (أنشأه الترقر تلقائياً) → شاشة إنشاء الملف التعريفي")
+            return .authenticatedNoProfile
+        }
+
         guard profile.role != .pending else {
             return .pendingApproval
         }
