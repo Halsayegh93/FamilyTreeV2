@@ -744,7 +744,7 @@ struct AdminAllRequestsView: View {
                         Spacer()
                     }
 
-                    ForEach(matches.prefix(3), id: \.member.id) { match in
+                    ForEach(matches, id: \.member.id) { match in
                         joinMatchRow(match: match, pendingMember: member)
                     }
                 }
