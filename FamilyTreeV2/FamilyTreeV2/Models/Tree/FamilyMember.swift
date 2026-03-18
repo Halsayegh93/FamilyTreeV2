@@ -172,8 +172,8 @@ struct FamilyMember: Identifiable, Codable, Equatable {
     /// الاسم الأول + الأخير
     var displayName: String {
         let parts = fullName.split(separator: " ")
-        if parts.count >= 2 {
-            return "\(parts.first!) \(parts.last!)"
+        if parts.count >= 2, let first = parts.first, let last = parts.last {
+            return "\(first) \(last)"
         }
         return fullName
     }

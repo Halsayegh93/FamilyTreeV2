@@ -46,7 +46,9 @@ struct HomeNewsCardView: View {
     private var shortDisplayName: String {
         let parts = authorName.split(separator: " ")
         guard parts.count > 4 else { return authorName }
-        return "\(parts[0]) \(parts[1]) \(parts[2]) \(parts[3]) \(parts[parts.count - 1])"
+        let first4 = parts.prefix(4).joined(separator: " ")
+        let last = parts.last.map(String.init) ?? ""
+        return "\(first4) \(last)"
     }
 
     var body: some View {
