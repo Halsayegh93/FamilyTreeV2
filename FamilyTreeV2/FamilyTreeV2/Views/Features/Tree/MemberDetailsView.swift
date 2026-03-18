@@ -33,6 +33,7 @@ struct MemberDetailsView: View {
     @State private var showPhotoSuggestionSuccess = false
 
     @State private var showDeleteBioAlert = false
+    @State private var appeared = false
 
     var isAdminOrSupervisor: Bool {
         let role = authVM.currentUser?.role
@@ -54,15 +55,25 @@ struct MemberDetailsView: View {
                         VStack(spacing: 0) {
                             // صورة هيرو + اسم + بادجات
                             heroPhotoSection
+                                .opacity(appeared ? 1 : 0)
+                                .scaleEffect(appeared ? 1 : 0.95)
 
                             // كبسولات المعلومات
                             statsRow
                                 .padding(.top, DS.Spacing.lg)
+                                .opacity(appeared ? 1 : 0)
+                                .offset(y: appeared ? 0 : 15)
 
                             // قسم السيرة
                             bioTimelineSection
+                                .opacity(appeared ? 1 : 0)
+                                .offset(y: appeared ? 0 : 20)
 
                             Spacer(minLength: 60)
+                        }
+                        .onAppear {
+                            guard !appeared else { return }
+                            withAnimation(DS.Anim.smooth.delay(0.05)) { appeared = true }
                         }
                     }
 

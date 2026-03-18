@@ -11,6 +11,7 @@ struct AdminDashboardView: View {
     @State private var isSendingWeeklyDigest = false
     @State private var edgeFunctionResult: String?
     @State private var showEdgeFunctionAlert = false
+    @State private var appeared = false
     @Environment(\.dismiss) var dismiss
 
     // Admin theme accent (purple #6C5CE7)
@@ -80,6 +81,8 @@ struct AdminDashboardView: View {
 
                             // إحصائيات
                             adminStatsGrid
+                                .opacity(appeared ? 1 : 0)
+                                .offset(y: appeared ? 0 : 20)
 
                             // طلبات المراجعة
                             DSCard(padding: 0) {
@@ -204,6 +207,10 @@ struct AdminDashboardView: View {
                             .padding(.horizontal, DS.Spacing.lg)
 
                             Spacer(minLength: DS.Spacing.xxxl)
+                        }
+                        .onAppear {
+                            guard !appeared else { return }
+                            withAnimation(DS.Anim.smooth.delay(0.15)) { appeared = true }
                         }
                     }
                 }

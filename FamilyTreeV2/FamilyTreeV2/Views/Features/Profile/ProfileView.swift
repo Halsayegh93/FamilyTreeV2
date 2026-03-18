@@ -12,6 +12,7 @@ struct ProfileView: View {
     @State private var showAddChild = false
     @State private var editingChild: FamilyMember? = nil
     @State private var isReorderingChildren = false
+    @State private var appeared = false
 
     var user: FamilyMember? { authVM.currentUser }
 
@@ -51,20 +52,32 @@ struct ProfileView: View {
                                 // Profile Header
                                 profileHeader(user: currentUser)
                                     .padding(.top, DS.Spacing.md)
+                                    .opacity(appeared ? 1 : 0)
+                                    .offset(y: appeared ? 0 : 20)
 
                                 // Personal Info section
                                 personalInfoSection(user: currentUser)
+                                    .opacity(appeared ? 1 : 0)
+                                    .offset(y: appeared ? 0 : 25)
 
                                 // Children section
                                 serverSonsSection
+                                    .opacity(appeared ? 1 : 0)
+                                    .offset(y: appeared ? 0 : 30)
 
                                 // General: Gallery, Privacy, Settings, Sign Out
                                 generalSection(user: currentUser)
+                                    .opacity(appeared ? 1 : 0)
+                                    .offset(y: appeared ? 0 : 35)
                             }
                             .padding(.bottom, DS.Spacing.xxl)
                         } // closes ScrollView
                         .task {
                             await memberVM.fetchChildren(for: currentUser.id)
+                        }
+                        .onAppear {
+                            guard !appeared else { return }
+                            withAnimation(DS.Anim.smooth.delay(0.1)) { appeared = true }
                         }
                     } // closes VStack
                 } else {

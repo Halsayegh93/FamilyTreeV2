@@ -16,6 +16,7 @@ struct PrivacySettingsView: View {
     @State private var isPhoneHidden: Bool = false
     @State private var isBirthDateHidden: Bool = false
     @State private var showUpdateError: Bool = false
+    @State private var appeared: Bool = false
 
 
     var body: some View {
@@ -26,12 +27,21 @@ struct PrivacySettingsView: View {
                 VStack(spacing: DS.Spacing.md) {
                     // مجموعة الإشعارات
                     allNotificationsCard
+                        .opacity(appeared ? 1 : 0)
+                        .offset(y: appeared ? 0 : 20)
+
                     // مجموعة البيانات الشخصية
                     personalDataCard
+                        .opacity(appeared ? 1 : 0)
+                        .offset(y: appeared ? 0 : 28)
                 }
                 .padding(.horizontal, DS.Spacing.lg)
                 .padding(.top, DS.Spacing.xl)
                 .padding(.bottom, DS.Spacing.xxxl)
+                .onAppear {
+                    guard !appeared else { return }
+                    withAnimation(DS.Anim.smooth.delay(0.1)) { appeared = true }
+                }
             }
         }
         .navigationTitle(L10n.t("الإشعارات والخصوصية", "Notifications & Privacy"))

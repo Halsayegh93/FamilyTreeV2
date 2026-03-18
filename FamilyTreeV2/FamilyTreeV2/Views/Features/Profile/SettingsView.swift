@@ -11,6 +11,7 @@ struct SettingsView: View {
     @State private var showAbout = false
     @State private var showTerms = false
     @State private var showLinkedDevices = false
+    @State private var appeared = false
 
     private var isArabic: Bool { langManager.selectedLanguage == "ar" }
     private func t(_ ar: String, _ en: String) -> String { isArabic ? ar : en }
@@ -25,6 +26,7 @@ struct SettingsView: View {
                     VStack(spacing: DS.Spacing.md) {
 
                         // MARK: - App Preferences Section
+
                             DSCard(padding: 0) {
                                 DSSectionHeader(
                                     title: t("تفضيلات التطبيق", "App Preferences"),
@@ -179,6 +181,12 @@ struct SettingsView: View {
                             .padding(.top, DS.Spacing.md)
                     }
                     .padding(.top, DS.Spacing.xl)
+                    .opacity(appeared ? 1 : 0)
+                    .offset(y: appeared ? 0 : 25)
+                    .onAppear {
+                        guard !appeared else { return }
+                        withAnimation(DS.Anim.smooth.delay(0.1)) { appeared = true }
+                    }
                 }
             }
             .navigationTitle(t("الإعدادات", "Settings"))

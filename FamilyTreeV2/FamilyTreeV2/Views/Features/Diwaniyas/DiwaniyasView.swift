@@ -9,6 +9,7 @@ struct DiwaniyasView: View {
     @State private var showingAddRequest = false
     @State private var diwaniyaToEdit: Diwaniya? = nil
     @State private var diwaniyaToDelete: Diwaniya? = nil
+    @State private var appeared = false
 
     var body: some View {
         NavigationStack {
@@ -47,12 +48,19 @@ struct DiwaniyasView: View {
                     } else {
                         ScrollView(showsIndicators: false) {
                             LazyVStack(spacing: DS.Spacing.md) {
-                                ForEach(filteredDiwaniyas) { diwaniya in
+                                ForEach(Array(filteredDiwaniyas.enumerated()), id: \.element.id) { index, diwaniya in
                                     diwaniyaCard(for: diwaniya)
+                                        .opacity(appeared ? 1 : 0)
+                                        .offset(y: appeared ? 0 : 30)
+                                        .animation(DS.Anim.smooth.delay(Double(min(index, 6)) * 0.06), value: appeared)
                                 }
                             }
                             .padding(DS.Spacing.lg)
                             .padding(.bottom, DS.Spacing.xxxl)
+                            .onAppear {
+                                guard !appeared else { return }
+                                appeared = true
+                            }
                         }
                         .refreshable {
                             await viewModel.fetchDiwaniyas()
