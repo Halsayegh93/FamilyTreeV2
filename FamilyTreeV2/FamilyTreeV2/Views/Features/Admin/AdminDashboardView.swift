@@ -220,6 +220,7 @@ struct AdminDashboardView: View {
         .task {
             // تأخير بسيط لأن هذا التاب ليس مرئياً عند الفتح
             try? await Task.sleep(nanoseconds: 800_000_000)
+            diwaniyaVM.canModerate = authVM.currentUser?.role == .admin || authVM.currentUser?.role == .supervisor
             // تحميل البيانات على دفعات لتجنب إغراق اتصال الشبكة
             // الدفعة 1: البيانات الأساسية (الأعضاء أولاً)
             await memberVM.fetchAllMembers()

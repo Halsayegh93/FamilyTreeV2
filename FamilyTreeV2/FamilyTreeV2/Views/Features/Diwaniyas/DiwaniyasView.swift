@@ -99,6 +99,7 @@ struct DiwaniyasView: View {
                 await viewModel.fetchDiwaniyas()
             }
             .onAppear {
+                viewModel.canModerate = authVM.currentUser?.role == .admin || authVM.currentUser?.role == .supervisor
                 // تحديث القائمة كل ما يرجع المستخدم للتاب
                 if !viewModel.diwaniyas.isEmpty {
                     Task { await viewModel.fetchDiwaniyas() }

@@ -1,3 +1,5 @@
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
+
 type ContactEmailPayload = {
   category?: string;
   message?: string;
@@ -32,15 +34,32 @@ Deno.serve(async (req: Request): Promise<Response> => {
       return jsonResponse(405, { ok: false, message: "Method not allowed" });
     }
 
+    // JWT verification — require authenticated user
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return jsonResponse(401, { ok: false, message: "Missing authorization" });
+    }
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_ANON_KEY") ?? ""
+    );
+    const { error: authError } = await supabase.auth.getUser(
+      authHeader.replace("Bearer ", "")
+    );
+    if (authError) {
+      return jsonResponse(401, { ok: false, message: "Invalid or expired token" });
+    }
+
     const resendApiKey = (Deno.env.get("RESEND_API_KEY") ?? "").trim();
     const sendgridApiKey = (Deno.env.get("SENDGRID_API_KEY") ?? "").trim();
     const emailFrom = (Deno.env.get("CONTACT_EMAIL_FROM") ?? "").trim();
     const emailTo = (Deno.env.get("CONTACT_EMAIL_TO") ?? "").trim();
 
     if (!emailFrom || !emailTo || (!resendApiKey && !sendgridApiKey)) {
+      console.error("Missing env vars: CONTACT_EMAIL_FROM / CONTACT_EMAIL_TO and/or provider key");
       return jsonResponse(500, {
         ok: false,
-        message: "Missing env vars: CONTACT_EMAIL_FROM / CONTACT_EMAIL_TO and one provider key (RESEND_API_KEY or SENDGRID_API_KEY)",
+        message: "Email service not configured",
       });
     }
 
@@ -96,22 +115,21 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
         const raw = await response.text();
         if (!response.ok) {
+          console.error(`Resend failed: ${response.status} — ${raw}`);
           return jsonResponse(502, {
             ok: false,
-            provider: "resend",
-            message: `Resend failed: ${response.status}`,
-            details: raw,
+            message: "Email delivery failed. Please try again later.",
           });
         }
 
-        return jsonResponse(200, { ok: true, provider: "resend", message: "Email sent", details: raw });
+        return jsonResponse(200, { ok: true, message: "Email sent" });
       } catch (resendErr) {
         // If Resend fails and SendGrid is available, fall through
         if (!sendgridApiKey) {
+          console.error(`Resend error: ${(resendErr as Error).message}`);
           return jsonResponse(500, {
             ok: false,
-            provider: "resend",
-            message: `Resend error: ${(resendErr as Error).message}`,
+            message: "Email service error. Please try again later.",
           });
         }
       }
@@ -139,19 +157,19 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
       const sgRaw = await sgResponse.text();
       if (!sgResponse.ok) {
+        console.error(`SendGrid failed: ${sgResponse.status} — ${sgRaw}`);
         return jsonResponse(502, {
           ok: false,
-          provider: "sendgrid",
-          message: `SendGrid failed: ${sgResponse.status}`,
-          details: sgRaw,
+          message: "Email delivery failed. Please try again later.",
         });
       }
 
-      return jsonResponse(200, { ok: true, provider: "sendgrid", message: "Email sent", details: sgRaw });
+      return jsonResponse(200, { ok: true, message: "Email sent" });
     }
 
     return jsonResponse(500, { ok: false, message: "No email provider configured" });
   } catch (err) {
-    return jsonResponse(500, { ok: false, message: `Unhandled error: ${(err as Error).message}` });
+    console.error(`Unhandled error: ${(err as Error).message}`);
+    return jsonResponse(500, { ok: false, message: "An unexpected error occurred" });
   }
 });

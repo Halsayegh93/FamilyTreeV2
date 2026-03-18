@@ -652,7 +652,7 @@ class AdminRequestViewModel: ObservableObject {
                 kind: "phone_change"
             )
 
-            Log.info("تم إرسال طلب تغيير الرقم للإدارة: \(normalizedPhone)")
+            Log.info("تم إرسال طلب تغيير الرقم للإدارة: \(Log.masked(normalizedPhone))")
         } catch {
             Log.error("خطأ في إرسال طلب التغيير: \(error.localizedDescription)")
         }
@@ -993,7 +993,7 @@ class AdminRequestViewModel: ObservableObject {
                 self.isLoading = false
                 return
             }
-            Log.info("[MERGE] سجل العضو الجديد موجود: \(newMember.fullName), role=\(newMember.role), phone=\(newMember.phoneNumber ?? "nil")")
+            Log.info("[MERGE] سجل العضو الجديد موجود: \(newMember.fullName), role=\(newMember.role)")
             
             // 1) Load the existing tree record to get tree data
             let treeResponse = try await supabase

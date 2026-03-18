@@ -162,6 +162,7 @@ struct AdminAllRequestsView: View {
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .task {
             diwaniyaVM.notificationVM = notificationVM
+            diwaniyaVM.canModerate = authVM.currentUser?.role == .admin || authVM.currentUser?.role == .supervisor
             // تحميل متوازي لجميع الطلبات — أسرع بكثير
             await withTaskGroup(of: Void.self) { group in
                 group.addTask { @MainActor in await memberVM.fetchAllMembers() }

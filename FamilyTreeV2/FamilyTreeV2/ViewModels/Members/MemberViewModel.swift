@@ -756,8 +756,12 @@ class MemberViewModel: ObservableObject {
     }
 
     func deleteMemberGalleryPhotoMulti(photoId: UUID, photoURL: String) async -> Bool {
+        guard canModerate else {
+            Log.warning("[AUTH] Unauthorized gallery photo delete attempt")
+            return false
+        }
         self.isLoading = true
-        Log.info("بدء حذف صورة المعرض: id=\(photoId), url=\(photoURL)")
+        Log.info("بدء حذف صورة المعرض: id=\(photoId)")
         
         do {
             if let path = storagePath(fromPublicURL: photoURL, bucket: "gallery") {
