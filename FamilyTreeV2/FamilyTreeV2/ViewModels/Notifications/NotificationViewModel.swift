@@ -615,40 +615,50 @@ class NotificationViewModel: ObservableObject {
     
     func deleteNotification(id: UUID) async {
         Log.info("[NOTIF-DELETE] حذف إشعار واحد: \(id.uuidString.prefix(8))… | قبل الحذف: \(notifications.count)")
-        // تحديث محلي فوري
-        notifications.removeAll { $0.id == id }
+        // حفظ نسخة احتياطية قبل الحذف
+        let backup = notifications.first { $0.id == id }
+        // تحديث محلي فوري (optimistic)
+        withAnimation(.snappy(duration: 0.25)) {
+            notifications.removeAll { $0.id == id }
+        }
         Log.info("[NOTIF-DELETE] بعد الحذف المحلي: \(notifications.count)")
         let badgeOn = currentUser?.badgeEnabled ?? true
         let unread = notifications.filter { !$0.read }.count
         try? await UNUserNotificationCenter.current().setBadgeCount(badgeOn ? unread : 0)
-        
+
         do {
             try await supabase
                 .from("notifications")
                 .delete()
                 .eq("id", value: id.uuidString)
                 .execute()
-            Log.info("[NOTIF-DELETE] ✅ تم الحذف من قاعدة البيانات — إعادة جلب للتأكد")
-            await fetchNotifications(force: true)
+            Log.info("[NOTIF-DELETE] ✅ تم الحذف من قاعدة البيانات")
         } catch {
             Log.error("[NOTIF-DELETE] ❌ خطأ حذف إشعار: \(error.localizedDescription)")
-            await fetchNotifications(force: true)
+            // إرجاع الإشعار لو فشل الحذف من DB
+            if let backup = backup {
+                withAnimation(.snappy(duration: 0.25)) {
+                    notifications.append(backup)
+                    notifications.sort { $0.createdDate > $1.createdDate }
+                }
+            }
         }
     }
     
     func deleteNotifications(ids: Set<UUID>) async {
         guard !ids.isEmpty else { return }
         Log.info("[NOTIF-DELETE-MULTI] حذف \(ids.count) إشعار | قبل الحذف: \(notifications.count)")
-        for id in ids {
-            Log.info("[NOTIF-DELETE-MULTI]   → \(id.uuidString.prefix(8))…")
+        // حفظ نسخة احتياطية
+        let backup = notifications.filter { ids.contains($0.id) }
+        // تحديث محلي فوري (optimistic)
+        withAnimation(.snappy(duration: 0.25)) {
+            notifications.removeAll { ids.contains($0.id) }
         }
-        // تحديث محلي فوري
-        notifications.removeAll { ids.contains($0.id) }
         Log.info("[NOTIF-DELETE-MULTI] بعد الحذف المحلي: \(notifications.count)")
         let badgeOn = currentUser?.badgeEnabled ?? true
         let unread = notifications.filter { !$0.read }.count
         try? await UNUserNotificationCenter.current().setBadgeCount(badgeOn ? unread : 0)
-        
+
         do {
             let idStrings = ids.map { $0.uuidString }
             try await supabase
@@ -656,11 +666,16 @@ class NotificationViewModel: ObservableObject {
                 .delete()
                 .in("id", values: idStrings)
                 .execute()
-            Log.info("[NOTIF-DELETE-MULTI] ✅ تم الحذف من قاعدة البيانات — إعادة جلب للتأكد")
-            await fetchNotifications(force: true)
+            Log.info("[NOTIF-DELETE-MULTI] ✅ تم الحذف من قاعدة البيانات")
         } catch {
             Log.error("[NOTIF-DELETE-MULTI] ❌ خطأ حذف إشعارات: \(error.localizedDescription)")
-            await fetchNotifications(force: true)
+            // إرجاع الإشعارات لو فشل الحذف
+            if !backup.isEmpty {
+                withAnimation(.snappy(duration: 0.25)) {
+                    notifications.append(contentsOf: backup)
+                    notifications.sort { $0.createdDate > $1.createdDate }
+                }
+            }
         }
     }
     
