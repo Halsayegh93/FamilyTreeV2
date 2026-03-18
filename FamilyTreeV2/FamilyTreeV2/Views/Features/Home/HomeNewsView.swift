@@ -17,6 +17,7 @@ struct HomeNewsView: View {
     @State private var selectedMemberForDetails: FamilyMember? = nil
     @State private var lastRefreshDate: Date? = nil
     @State private var activeSubPage: HomeSubPage? = nil
+    @State private var appeared = false
 
     private enum HomeSubPage {
         case photos, projects, contact
@@ -51,12 +52,20 @@ struct HomeNewsView: View {
                             VStack(spacing: DS.Spacing.md) {
                                 // الوصول السريع
                                 quickActionsSection
+                                    .opacity(appeared ? 1 : 0)
+                                    .offset(y: appeared ? 0 : 15)
 
                                 // أخبار العائلة
                                 newsFeedSection
+                                    .opacity(appeared ? 1 : 0)
+                                    .offset(y: appeared ? 0 : 20)
                             }
                             .padding(.top, DS.Spacing.md)
                             .padding(.bottom, DS.Spacing.xxxxl)
+                            .onAppear {
+                                guard !appeared else { return }
+                                withAnimation(DS.Anim.smooth.delay(0.1)) { appeared = true }
+                            }
                         }
                         .refreshable { await refreshNews(notifyIfNew: true, force: true) }
                     }
@@ -255,8 +264,11 @@ struct HomeNewsView: View {
 
     private var newsListView: some View {
         LazyVStack(spacing: DS.Spacing.lg) {
-            ForEach(newsVM.allNews) { news in
+            ForEach(Array(newsVM.allNews.enumerated()), id: \.element.id) { index, news in
                 newsCard(for: news)
+                    .opacity(appeared ? 1 : 0)
+                    .offset(y: appeared ? 0 : 30)
+                    .animation(DS.Anim.smooth.delay(0.15 + Double(min(index, 5)) * 0.07), value: appeared)
             }
         }
         .padding(.horizontal, DS.Spacing.md)

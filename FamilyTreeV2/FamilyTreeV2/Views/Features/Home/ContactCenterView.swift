@@ -17,6 +17,7 @@ struct ContactCenterView: View {
     @State private var showSuccessState = false
     @State private var showErrorAlert = false
     @State private var showCharacterLimitWarning = false
+    @State private var appeared = false
 
     private let categoryItems: [(key: String, icon: String, labelAr: String, labelEn: String, color: Color)] = [
         ("استفسار", "questionmark.circle.fill", "استفسار", "Inquiry", DS.Color.info),
@@ -44,16 +45,40 @@ struct ContactCenterView: View {
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: DS.Spacing.xl) {
                         headerSection
+                            .opacity(appeared ? 1 : 0)
+                            .scaleEffect(appeared ? 1 : 0.9)
+
                         senderInfoCard
+                            .opacity(appeared ? 1 : 0)
+                            .offset(y: appeared ? 0 : 20)
+
                         categorySection
+                            .opacity(appeared ? 1 : 0)
+                            .offset(y: appeared ? 0 : 25)
+
                         subjectSection
+                            .opacity(appeared ? 1 : 0)
+                            .offset(y: appeared ? 0 : 28)
+
                         messageSection
+                            .opacity(appeared ? 1 : 0)
+                            .offset(y: appeared ? 0 : 30)
+
                         attachmentSection
+                            .opacity(appeared ? 1 : 0)
+                            .offset(y: appeared ? 0 : 32)
+
                         submitButton
+                            .opacity(appeared ? 1 : 0)
+                            .offset(y: appeared ? 0 : 35)
                     }
                     .padding(.horizontal, DS.Spacing.lg)
                     .padding(.top, DS.Spacing.md)
                     .padding(.bottom, DS.Spacing.xxxxl)
+                    .onAppear {
+                        guard !appeared else { return }
+                        withAnimation(DS.Anim.smooth.delay(0.1)) { appeared = true }
+                    }
                 }
             }
         }

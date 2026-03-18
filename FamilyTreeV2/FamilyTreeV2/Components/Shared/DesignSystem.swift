@@ -908,6 +908,8 @@ struct DSFloatingButton: View {
     var color: Color = DS.Color.primary
     var action: () -> Void
 
+    @State private var appeared = false
+
     var body: some View {
         Button(action: action) {
             HStack(spacing: DS.Spacing.sm) {
@@ -926,6 +928,12 @@ struct DSFloatingButton: View {
             .dsGlowShadow()
         }
         .buttonStyle(DSBoldButtonStyle())
+        .scaleEffect(appeared ? 1 : 0.3)
+        .opacity(appeared ? 1 : 0)
+        .onAppear {
+            guard !appeared else { return }
+            withAnimation(DS.Anim.elastic.delay(0.4)) { appeared = true }
+        }
     }
 }
 
