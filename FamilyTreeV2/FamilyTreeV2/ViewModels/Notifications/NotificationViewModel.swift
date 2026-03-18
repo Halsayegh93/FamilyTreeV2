@@ -680,36 +680,40 @@ class NotificationViewModel: ObservableObject {
     }
     
     func markNotificationAsRead(id: UUID) async {
-        // تحديث محلي فوري
+        // تحديث محلي فوري (optimistic — بدون إعادة جلب)
         if let idx = notifications.firstIndex(where: { $0.id == id }) {
             notifications[idx] = notifications[idx].withRead(true)
         }
         let badgeOn = currentUser?.badgeEnabled ?? true
         let unread = notifications.filter { !$0.read }.count
         try? await UNUserNotificationCenter.current().setBadgeCount(badgeOn ? unread : 0)
-        
+
         do {
             try await supabase
                 .from("notifications")
                 .update(["is_read": AnyEncodable(true)])
                 .eq("id", value: id.uuidString)
                 .execute()
+            Log.info("[NOTIF] ✅ تم تعليم إشعار كمقروء")
         } catch {
-            Log.error("خطأ تحديث حالة الإشعار: \(error.localizedDescription)")
-            await fetchNotifications(force: true)
+            Log.error("[NOTIF] ❌ خطأ تعليم كمقروء: \(error.localizedDescription)")
+            // إرجاع للحالة السابقة لو فشل
+            if let idx = notifications.firstIndex(where: { $0.id == id }) {
+                notifications[idx] = notifications[idx].withRead(false)
+            }
         }
     }
-    
+
     func markNotificationsAsRead(ids: Set<UUID>) async {
         guard !ids.isEmpty else { return }
-        // تحديث محلي فوري
+        // تحديث محلي فوري (optimistic)
         for i in notifications.indices where ids.contains(notifications[i].id) {
             notifications[i] = notifications[i].withRead(true)
         }
         let badgeOn = currentUser?.badgeEnabled ?? true
         let unread = notifications.filter { !$0.read }.count
         try? await UNUserNotificationCenter.current().setBadgeCount(badgeOn ? unread : 0)
-        
+
         do {
             let idStrings = ids.map { $0.uuidString }
             try await supabase
@@ -717,20 +721,26 @@ class NotificationViewModel: ObservableObject {
                 .update(["is_read": AnyEncodable(true)])
                 .in("id", values: idStrings)
                 .execute()
+            Log.info("[NOTIF] ✅ تم تعليم \(ids.count) إشعار كمقروء")
         } catch {
-            Log.error("خطأ تعليم إشعارات كمقروءة: \(error.localizedDescription)")
-            await fetchNotifications(force: true)
+            Log.error("[NOTIF] ❌ خطأ تعليم إشعارات كمقروءة: \(error.localizedDescription)")
+            // إرجاع للحالة السابقة
+            for i in notifications.indices where ids.contains(notifications[i].id) {
+                notifications[i] = notifications[i].withRead(false)
+            }
         }
     }
-    
+
     func markAllNotificationsAsRead() async {
         guard let userId = currentUser?.id else { return }
-        // تحديث محلي فوري
+        // حفظ الحالة السابقة
+        let previousUnreadIds = Set(notifications.filter { !$0.read }.map(\.id))
+        // تحديث محلي فوري (optimistic)
         for i in notifications.indices where !notifications[i].read {
             notifications[i] = notifications[i].withRead(true)
         }
         try? await UNUserNotificationCenter.current().setBadgeCount(0)
-        
+
         do {
             try await supabase
                 .from("notifications")
@@ -738,9 +748,13 @@ class NotificationViewModel: ObservableObject {
                 .eq("target_member_id", value: userId.uuidString)
                 .eq("is_read", value: false)
                 .execute()
+            Log.info("[NOTIF] ✅ تم تعليم كل الإشعارات كمقروءة")
         } catch {
-            Log.error("خطأ تعليم كل الإشعارات كمقروءة: \(error.localizedDescription)")
-            await fetchNotifications(force: true)
+            Log.error("[NOTIF] ❌ خطأ تعليم الكل كمقروء: \(error.localizedDescription)")
+            // إرجاع للحالة السابقة
+            for i in notifications.indices where previousUnreadIds.contains(notifications[i].id) {
+                notifications[i] = notifications[i].withRead(false)
+            }
         }
     }
     
