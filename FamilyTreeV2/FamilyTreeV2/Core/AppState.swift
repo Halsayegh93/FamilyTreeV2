@@ -46,13 +46,17 @@ class AppState: ObservableObject {
         self.projectsVM = projects
         self.appSettingsVM = appSettings
 
-        // 4. تحميل بيانات الشجرة فوراً عند تسجيل الدخول — يمنع ظهور الشجرة فارغة
+        // 4. تحميل كل البيانات بالتوازي عند تسجيل الدخول — يمنع اللودنج في كل تاب
         auth.$status
             .removeDuplicates()
-            .sink { [weak member] status in
+            .sink { [weak member, weak news, weak notification, weak projects] status in
                 guard status == .fullyAuthenticated else { return }
                 Task { @MainActor in
-                    await member?.fetchAllMembers(force: true)
+                    async let m: () = member?.fetchAllMembers(force: true) ?? ()
+                    async let n: () = news?.fetchNews() ?? ()
+                    async let notif: () = notification?.fetchNotifications() ?? ()
+                    async let proj: () = projects?.fetchProjects() ?? ()
+                    _ = await (m, n, notif, proj)
                 }
             }
             .store(in: &cancellables)

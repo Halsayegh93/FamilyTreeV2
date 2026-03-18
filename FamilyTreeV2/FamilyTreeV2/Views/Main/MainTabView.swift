@@ -9,10 +9,13 @@ struct MainTabView: View {
             get: { selectedTab },
             set: { newValue in
                 if newValue == selectedTab {
-                    // Tapped the same tab — post notification to reset sub-pages
                     NotificationCenter.default.post(name: .didReselectTab, object: nil, userInfo: ["tab": newValue])
                 }
-                selectedTab = newValue
+                // Haptic feedback on tab switch
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                withAnimation(DS.Anim.snappy) {
+                    selectedTab = newValue
+                }
             }
         )
     }
