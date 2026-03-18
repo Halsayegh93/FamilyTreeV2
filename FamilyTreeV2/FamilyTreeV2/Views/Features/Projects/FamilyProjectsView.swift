@@ -586,17 +586,16 @@ struct AddProjectView: View {
     private func saveProject() async {
         guard let currentUser = authVM.currentUser else { return }
         isSaving = true
-        
-        // Determine owner: selected member or current user
-        let ownerId: UUID
+
+        // owner_id لازم يكون المستخدم الحالي (RLS: owner_id = auth.uid())
+        // لو اختار عضو ثاني نحفظ اسمه بس الـ owner_id يبقى المستخدم الحالي
+        let ownerId = currentUser.id
         let ownerName: String
-        
+
         if let selectedId = selectedOwnerId,
            let selectedMember = memberVM.member(byId: selectedId) {
-            ownerId = selectedMember.id
             ownerName = selectedMember.fullName
         } else {
-            ownerId = currentUser.id
             ownerName = currentUser.fullName
         }
         

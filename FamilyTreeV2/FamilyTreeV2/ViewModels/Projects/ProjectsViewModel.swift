@@ -48,34 +48,37 @@ class ProjectsViewModel: ObservableObject {
         isLoading = true
         errorMessage = nil
         do {
-            let newProject = Project(
-                ownerId: ownerId,
-                ownerName: ownerName,
-                title: title,
-                description: description,
-                logoUrl: logoUrl,
-                websiteUrl: websiteUrl,
-                instagramUrl: instagramUrl,
-                twitterUrl: twitterUrl,
-                tiktokUrl: tiktokUrl,
-                snapchatUrl: snapchatUrl,
-                whatsappNumber: whatsappNumber,
-                phoneNumber: phoneNumber,
-                approvalStatus: "pending"
-            )
-            
+            // نرسل فقط الحقول المطلوبة — DB يولد id و created_at تلقائياً
+            // owner_id لازم يساوي auth.uid() عشان RLS يسمح بالإدراج
+            var payload: [String: AnyEncodable] = [
+                "owner_id": AnyEncodable(ownerId.uuidString),
+                "owner_name": AnyEncodable(ownerName),
+                "title": AnyEncodable(title),
+                "approval_status": AnyEncodable("pending")
+            ]
+            if let description, !description.isEmpty { payload["description"] = AnyEncodable(description) }
+            if let logoUrl, !logoUrl.isEmpty { payload["logo_url"] = AnyEncodable(logoUrl) }
+            if let websiteUrl, !websiteUrl.isEmpty { payload["website_url"] = AnyEncodable(websiteUrl) }
+            if let instagramUrl, !instagramUrl.isEmpty { payload["instagram_url"] = AnyEncodable(instagramUrl) }
+            if let twitterUrl, !twitterUrl.isEmpty { payload["twitter_url"] = AnyEncodable(twitterUrl) }
+            if let tiktokUrl, !tiktokUrl.isEmpty { payload["tiktok_url"] = AnyEncodable(tiktokUrl) }
+            if let snapchatUrl, !snapchatUrl.isEmpty { payload["snapchat_url"] = AnyEncodable(snapchatUrl) }
+            if let whatsappNumber, !whatsappNumber.isEmpty { payload["whatsapp_number"] = AnyEncodable(whatsappNumber) }
+            if let phoneNumber, !phoneNumber.isEmpty { payload["phone_number"] = AnyEncodable(phoneNumber) }
+
             try await supabase
                 .from("projects")
-                .insert(newProject)
+                .insert(payload)
                 .execute()
-            
+
             await fetchProjects()
             isLoading = false
+            Log.info("[Projects] ✅ تم إضافة المشروع: \(title)")
             return true
         } catch {
             self.errorMessage = L10n.t("تعذر إضافة المشروع.",
                                        "Failed to add project.")
-            Log.error("خطأ إضافة المشروع: \(error.localizedDescription)")
+            Log.error("[Projects] ❌ خطأ إضافة المشروع: \(error.localizedDescription)")
             isLoading = false
             return false
         }
