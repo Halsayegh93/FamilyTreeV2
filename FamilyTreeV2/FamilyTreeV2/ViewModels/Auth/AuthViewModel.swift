@@ -684,7 +684,7 @@ class AuthViewModel: ObservableObject {
             // بحث بالاسم الأول فقط كـ fallback
             let parts = fullName.split(whereSeparator: \.isWhitespace).map(String.init)
             if parts.count >= 2 {
-                let firstTwo = "\(parts[0]) \(parts[1])"
+                let firstTwo = parts.prefix(2).joined(separator: " ")
                 let partialResults: [FamilyMember] = try await supabase
                     .from("profiles")
                     .select()

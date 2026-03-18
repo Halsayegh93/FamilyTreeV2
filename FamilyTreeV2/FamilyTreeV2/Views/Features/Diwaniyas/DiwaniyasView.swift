@@ -421,8 +421,7 @@ private struct AddDiwaniyaRequestView: View {
     private var timeDisplayText: String {
         guard !selectedTimes.isEmpty else { return "" }
         let sorted: [String] = selectedTimes.sorted { Self.timeToMinutes($0) < Self.timeToMinutes($1) }
-        let first = sorted.first!
-        let last = sorted.last!
+        guard let first = sorted.first, let last = sorted.last else { return "" }
         if sorted.count == 1 {
             return L10n.t("\(first) م", "\(first) PM")
         }
@@ -778,8 +777,7 @@ private struct EditDiwaniyaView: View {
     private var timeDisplayText: String {
         guard !selectedTimes.isEmpty else { return "" }
         let sorted: [String] = selectedTimes.sorted { Self.timeToMinutes($0) < Self.timeToMinutes($1) }
-        let first = sorted.first!
-        let last = sorted.last!
+        guard let first = sorted.first, let last = sorted.last else { return "" }
         if sorted.count == 1 {
             return L10n.t("\(first) م", "\(first) PM")
         }

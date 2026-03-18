@@ -93,9 +93,9 @@ struct TreeView: View {
         })
 
         let childrenMap = Dictionary(
-            grouping: visible.filter { $0.fatherId != nil },
-            by: { $0.fatherId! }
-        ).mapValues(sortedMembers)
+            grouping: visible.compactMap { m in m.fatherId.map { (m, $0) } },
+            by: { $0.1 }
+        ).mapValues { pairs in sortedMembers(pairs.map(\.0)) }
 
         cachedVisibleMembers = visible
         cachedMemberById = byId
