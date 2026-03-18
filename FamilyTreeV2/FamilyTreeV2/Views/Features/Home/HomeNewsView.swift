@@ -48,7 +48,7 @@ struct HomeNewsView: View {
                         MainHeaderView(selectedTab: $selectedTab, showingNotifications: $showingNotifications)
 
                         ScrollView(showsIndicators: false) {
-                            VStack(spacing: DS.Spacing.sm) {
+                            VStack(spacing: DS.Spacing.md) {
                                 // الوصول السريع
                                 quickActionsSection
 
@@ -56,7 +56,7 @@ struct HomeNewsView: View {
                                 newsFeedSection
                             }
                             .padding(.top, DS.Spacing.md)
-                            .padding(.bottom, 120)
+                            .padding(.bottom, DS.Spacing.xxxxl)
                         }
                         .refreshable { await refreshNews(notifyIfNew: true, force: true) }
                     }
@@ -208,7 +208,7 @@ struct HomeNewsView: View {
             HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: "newspaper.fill")
                     .font(DS.Font.scaled(14, weight: .semibold))
-                    .foregroundColor(.white)
+                    .foregroundColor(DS.Color.textOnPrimary)
                     .frame(width: 30, height: 30)
                     .background(DS.Color.gradientPrimary)
                     .clipShape(Circle())

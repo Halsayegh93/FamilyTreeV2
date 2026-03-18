@@ -26,6 +26,9 @@ class MemberViewModel: ObservableObject {
     @Published var currentMemberChildren: [FamilyMember] = []
     @Published var activePath: [UUID] = []
     @Published var isLoading: Bool = false
+
+    /// يزداد عند كل تحديث للأعضاء (حذف، تعديل، إضافة) لإعادة بناء الشجرة
+    @Published var membersVersion: Int = 0
     
     // Fetch throttle timestamp
     private var lastMembersFetchDate: Date?
@@ -88,6 +91,7 @@ class MemberViewModel: ObservableObject {
 
             self.allMembers = members
             self.lastMembersFetchDate = Date()
+            self.membersVersion += 1
 
             // تحديث currentUser إذا تغيرت بياناته (مثلاً: تغيير الاسم من الإدارة)
             if let userId = currentUser?.id,
@@ -198,8 +202,8 @@ class MemberViewModel: ObservableObject {
         }
         
         // 2. تنظيف التواريخ قبل استخدامها
-        let cleanedBirthDate = birthDate?.isEmpty == false ? cleanNumber(birthDate!) : nil
-        let cleanedDeathDate = deathDate?.isEmpty == false ? cleanNumber(deathDate!) : nil
+        let cleanedBirthDate = birthDate.flatMap { $0.isEmpty ? nil : cleanNumber($0) }
+        let cleanedDeathDate = deathDate.flatMap { $0.isEmpty ? nil : cleanNumber($0) }
         
         // 3. البحث عن بيانات الأب لبناء الاسم الكامل
         let father: FamilyMember?
@@ -305,7 +309,7 @@ class MemberViewModel: ObservableObject {
                         .execute()
                     
                     let requesterName = currentUser?.firstName ?? "عضو"
-                    let childAddBody = "تمت إضافة ابن جديد: \(firstNameOnly)\nالأب: \(father.firstName)\nبواسطة: \(requesterName)"
+                    let childAddBody = "إضافة ابن جديد: \(firstNameOnly)\nالأب: \(father.firstName)\nمن: \(requesterName)"
                     await notificationVM?.notifyAdminsWithPush(
                         title: "إضافة ابن جديد",
                         body: childAddBody,
@@ -383,7 +387,32 @@ class MemberViewModel: ObservableObject {
             }
 
             Log.info("تم رفع الصورة بنجاح: \(urlString)")
-            
+
+            // إشعار العضو بتغيير صورته (إذا المدير غيّرها وليس العضو نفسه)
+            if memberId != currentUser?.id {
+                let adminName = currentUser?.fullName ?? ""
+                let memberName = getSafeMemberName(for: memberId)
+                await notificationVM?.sendPushToMembers(
+                    title: L10n.t("تحديث الصورة", "Photo Updated"),
+                    body: L10n.t(
+                        "تم تحديث صورتك الشخصية",
+                        "Your profile photo was updated"
+                    ),
+                    kind: "profile_update",
+                    targetMemberIds: [memberId]
+                )
+                if let creator = currentUser?.id {
+                    let payload: [String: AnyEncodable] = [
+                        "target_member_id": AnyEncodable(memberId.uuidString),
+                        "title": AnyEncodable(L10n.t("تحديث الصورة", "Photo Updated")),
+                        "body": AnyEncodable(L10n.t("تم تحديث صورتك الشخصية", "Your profile photo was updated")),
+                        "kind": AnyEncodable("profile_update"),
+                        "created_by": AnyEncodable(creator.uuidString)
+                    ]
+                    try? await supabase.from("notifications").insert(payload).execute()
+                }
+            }
+
         } catch {
             Log.error("خطأ في الرفع أو الرابط: \(error.localizedDescription)")
         }
@@ -685,7 +714,7 @@ class MemberViewModel: ObservableObject {
                 .value
             
             let galleryMemberName = currentUser?.firstName ?? "عضو"
-            let galleryBody = "قام \(galleryMemberName) بإضافة صورة جديدة في معرض الصور."
+            let galleryBody = "\(galleryMemberName) أضاف صورة جديدة في المعرض."
             if currentUser?.role == .member {
                 await notificationVM?.notifyAdminsWithPush(
                     title: "إضافة صورة جديدة",
@@ -693,7 +722,7 @@ class MemberViewModel: ObservableObject {
                     kind: "gallery_add"
                 )
             } else {
-                await notificationVM?.notifyAdmins(
+                await notificationVM?.notifyAdminsWithPush(
                     title: "إضافة صورة جديدة",
                     body: galleryBody,
                     kind: "gallery_add"
@@ -942,11 +971,36 @@ class MemberViewModel: ObservableObject {
                 .execute()
                 
             await fetchAllMembers(force: true)
+
+            // إشعار العضو بتغيير اسمه (إذا المدير غيّره وليس العضو نفسه)
+            if memberId != currentUser?.id {
+                let adminName = currentUser?.fullName ?? ""
+                await notificationVM?.sendPushToMembers(
+                    title: L10n.t("تحديث الاسم", "Name Updated"),
+                    body: L10n.t(
+                        "تم تحديث اسمك إلى: \(fullName)",
+                        "Your name was updated to: \(fullName)"
+                    ),
+                    kind: "profile_update",
+                    targetMemberIds: [memberId]
+                )
+                if let creator = currentUser?.id {
+                    let payload: [String: AnyEncodable] = [
+                        "target_member_id": AnyEncodable(memberId.uuidString),
+                        "title": AnyEncodable(L10n.t("تحديث الاسم", "Name Updated")),
+                        "body": AnyEncodable(L10n.t("تم تحديث اسمك إلى: \(fullName)", "Your name was updated to: \(fullName)")),
+                        "kind": AnyEncodable("profile_update"),
+                        "created_by": AnyEncodable(creator.uuidString)
+                    ]
+                    try? await supabase.from("notifications").insert(payload).execute()
+                }
+            }
+
             Log.info("تم تحديث اسم العضو بنجاح")
         } catch {
             Log.error("فشل تحديث اسم العضو: \(error.localizedDescription)")
         }
-        
+
         self.isLoading = false
     }
     
@@ -991,20 +1045,20 @@ class MemberViewModel: ObservableObject {
             await notificationVM?.notifyAdminsWithPush(
                 title: L10n.t("تغيير رتبة", "Role Changed"),
                 body: L10n.t(
-                    "تم تغيير رتبة \(memberName) إلى \(roleName).",
-                    "\(memberName)'s role changed to \(roleName)."
+                    "رتبة \(memberName) أصبحت: \(roleName).",
+                    "\(memberName)'s role is now: \(roleName)."
                 ),
                 kind: "role_change"
             )
-            
+
             // 4. إشعار العضو نفسه بتغيير رتبته
             if authVM?.notificationsFeatureAvailable == true {
                 let personalPayload: [String: AnyEncodable] = [
                     "target_member_id": AnyEncodable(memberId.uuidString),
-                    "title": AnyEncodable(L10n.t("تغيير رتبتك", "Your Role Changed")),
+                    "title": AnyEncodable(L10n.t("تغيير الرتبة", "Role Changed")),
                     "body": AnyEncodable(L10n.t(
-                        "تم تغيير رتبتك إلى: \(roleName).",
-                        "Your role has been changed to: \(roleName)."
+                        "رتبتك الآن: \(roleName).",
+                        "Your role is now: \(roleName)."
                     )),
                     "kind": AnyEncodable("role_change"),
                     "created_by": AnyEncodable(currentUser?.id.uuidString)
@@ -1012,10 +1066,10 @@ class MemberViewModel: ObservableObject {
                 do {
                     try await supabase.from("notifications").insert(personalPayload).execute()
                     await notificationVM?.sendPushToMembers(
-                        title: L10n.t("تغيير رتبتك", "Your Role Changed"),
+                        title: L10n.t("تغيير الرتبة", "Role Changed"),
                         body: L10n.t(
-                            "تم تغيير رتبتك إلى: \(roleName).",
-                            "Your role has been changed to: \(roleName)."
+                            "رتبتك الآن: \(roleName).",
+                            "Your role is now: \(roleName)."
                         ),
                         kind: "role_change",
                         targetMemberIds: [memberId]
@@ -1278,8 +1332,8 @@ class MemberViewModel: ObservableObject {
         formatter.locale = Locale(identifier: "en_US_POSIX")
         
         // تحويل التاريخ لنص فقط إذا كان المشرف قد أدخله، وإلا يبقى nil
-        let birthDateString = birthDate != nil ? formatter.string(from: birthDate!) : nil
-        let deathDateString = (isDeceased && deathDate != nil) ? formatter.string(from: deathDate!) : nil
+        let birthDateString = birthDate.map { formatter.string(from: $0) }
+        let deathDateString = isDeceased ? deathDate.map { formatter.string(from: $0) } : nil
         
         // 2. تجهيز البيانات للإرسال
         // نستخدم Optional<String>.none لإرسال NULL لقاعدة البيانات عند عدم توفر التاريخ

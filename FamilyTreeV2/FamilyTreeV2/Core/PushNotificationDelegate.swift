@@ -17,7 +17,7 @@ final class PushNotificationDelegate: NSObject, UIApplicationDelegate, UNUserNot
         Task { try? await UNUserNotificationCenter.current().setBadgeCount(0) }
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
             guard granted else { return }
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 UIApplication.shared.registerForRemoteNotifications()
             }
         }

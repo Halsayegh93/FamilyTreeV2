@@ -6,9 +6,9 @@ struct FamilyMember: Identifiable, Codable, Equatable {
     var firstName: String
     var fullName: String
     var phoneNumber: String?
-    let birthDate: String?
-    let deathDate: String?
-    let isDeceased: Bool?
+    var birthDate: String?
+    var deathDate: String?
+    var isDeceased: Bool?
     var role: UserRole
     var fatherId: UUID?
     var photoURL: String?

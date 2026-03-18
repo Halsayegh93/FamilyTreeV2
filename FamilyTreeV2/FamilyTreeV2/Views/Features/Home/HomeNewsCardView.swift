@@ -235,7 +235,8 @@ struct HomeNewsCardView: View {
                     withAnimation(DS.Anim.bouncy) {
                         showDoubleTapHeart = true
                     }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                    Task {
+                        try? await Task.sleep(nanoseconds: 600_000_000)
                         withAnimation(DS.Anim.smooth) {
                             showDoubleTapHeart = false
                         }

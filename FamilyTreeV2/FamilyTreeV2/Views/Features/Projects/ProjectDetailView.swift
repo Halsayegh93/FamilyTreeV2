@@ -50,32 +50,32 @@ enum SocialPlatform {
             switch self {
             case .website:
                 Image(systemName: "globe")
-                    .font(.system(size: iconSize, weight: .bold))
+                    .font(DS.Font.scaled(iconSize, weight: .bold))
                     .foregroundColor(DS.Color.primary)
             case .instagram:
                 // Instagram camera icon
                 Image(systemName: "camera.fill")
-                    .font(.system(size: iconSize, weight: .bold))
+                    .font(DS.Font.scaled(iconSize, weight: .bold))
                     .foregroundColor(DS.Color.primary)
             case .twitter:
                 Text("𝕏")
-                    .font(.system(size: iconSize + 2, weight: .black))
+                    .font(DS.Font.scaled(iconSize + 2, weight: .black))
                     .foregroundColor(DS.Color.primary)
             case .tiktok:
                 Image(systemName: "music.note")
-                    .font(.system(size: iconSize, weight: .bold))
+                    .font(DS.Font.scaled(iconSize, weight: .bold))
                     .foregroundColor(DS.Color.primary)
             case .snapchat:
                 Image(systemName: "ghost.fill")
-                    .font(.system(size: iconSize, weight: .bold))
+                    .font(DS.Font.scaled(iconSize, weight: .bold))
                     .foregroundColor(DS.Color.primary)
             case .whatsapp:
                 Image(systemName: "phone.bubble.fill")
-                    .font(.system(size: iconSize, weight: .bold))
+                    .font(DS.Font.scaled(iconSize, weight: .bold))
                     .foregroundColor(DS.Color.primary)
             case .phone:
                 Image(systemName: "phone.fill")
-                    .font(.system(size: iconSize, weight: .bold))
+                    .font(DS.Font.scaled(iconSize, weight: .bold))
                     .foregroundColor(DS.Color.primary)
             }
         }

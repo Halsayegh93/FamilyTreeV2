@@ -561,10 +561,12 @@ class NotificationViewModel: ObservableObject {
         }
         
         Log.info("[NOTIF-FETCH] جلب إشعارات للعضو: \(userId.uuidString) (force: \(force))")
-        
+
         do {
-            // جلب الإشعارات الموجهة للعضو شخصياً فقط (بدون البث الإداري)
-            let response: [AppNotification] = try await supabase
+            var allNotifications: [AppNotification] = []
+
+            // 1) جلب الإشعارات الموجهة للعضو شخصياً
+            let personal: [AppNotification] = try await supabase
                 .from("notifications")
                 .select()
                 .eq("target_member_id", value: userId.uuidString)
@@ -572,12 +574,32 @@ class NotificationViewModel: ObservableObject {
                 .limit(10000)
                 .execute()
                 .value
-            
-            let unreadCount = response.filter { !$0.read }.count
-            Log.info("[NOTIF-FETCH] ✅ تم الجلب — إجمالي: \(response.count) | غير مقروء: \(unreadCount)")
-            
+            allNotifications.append(contentsOf: personal)
+
+            // 2) للمدراء والمشرفين: جلب إشعارات broadcast (target_member_id = NULL)
+            if canModerate {
+                let broadcast: [AppNotification] = try await supabase
+                    .from("notifications")
+                    .select()
+                    .is("target_member_id", value: nil)
+                    .order("created_at", ascending: false)
+                    .limit(5000)
+                    .execute()
+                    .value
+                allNotifications.append(contentsOf: broadcast)
+            }
+
+            // ترتيب حسب التاريخ (الأحدث أولاً) + إزالة التكرارات
+            var seen = Set<UUID>()
+            allNotifications = allNotifications
+                .sorted { $0.createdDate > $1.createdDate }
+                .filter { seen.insert($0.id).inserted }
+
+            let unreadCount = allNotifications.filter { !$0.read }.count
+            Log.info("[NOTIF-FETCH] ✅ تم الجلب — إجمالي: \(allNotifications.count) (شخصي: \(personal.count)\(canModerate ? " | إداري: \(allNotifications.count - personal.count)" : "")) | غير مقروء: \(unreadCount)")
+
             self.notificationsFeatureAvailable = true
-            self.notifications = response
+            self.notifications = allNotifications
             let badgeOn = currentUser?.badgeEnabled ?? true
             try? await UNUserNotificationCenter.current().setBadgeCount(badgeOn ? unreadCount : 0)
         } catch {
@@ -745,8 +767,8 @@ class NotificationViewModel: ObservableObject {
                 )
             }
             
-            // إشعار المدراء الآخرين بإرسال إشعار إداري
-            await notifyAdmins(
+            // إشعار المدراء الآخرين بإرسال إشعار إداري (خارجي + داخلي)
+            await notifyAdminsWithPush(
                 title: "إشعار إداري",
                 body: "تم إرسال إشعار: \(title)",
                 kind: "admin"

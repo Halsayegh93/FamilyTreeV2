@@ -126,7 +126,7 @@ struct DSProfilePhotoPicker: View {
             action()
         case .notDetermined:
             PHPhotoLibrary.requestAuthorization(for: .readWrite) { newStatus in
-                DispatchQueue.main.async {
+                Task { @MainActor in
                     if newStatus == .authorized || newStatus == .limited {
                         action()
                     } else {
@@ -869,7 +869,7 @@ struct DSMultiPhotoPicker: View {
             action()
         case .notDetermined:
             PHPhotoLibrary.requestAuthorization(for: .readWrite) { newStatus in
-                DispatchQueue.main.async {
+                Task { @MainActor in
                     if newStatus == .authorized || newStatus == .limited {
                         action()
                     } else {

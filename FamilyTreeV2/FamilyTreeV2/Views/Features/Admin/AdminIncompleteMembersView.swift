@@ -468,7 +468,7 @@ struct AdminIncompleteMembersView: View {
                             Text(L10n.t("ذكر", "Male"))
                                 .font(DS.Font.calloutBold)
                         }
-                        .foregroundColor(.white)
+                        .foregroundColor(DS.Color.textOnPrimary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, DS.Spacing.sm)
                         .background(DS.Color.primary)
@@ -487,7 +487,7 @@ struct AdminIncompleteMembersView: View {
                             Text(L10n.t("أنثى", "Female"))
                                 .font(DS.Font.calloutBold)
                         }
-                        .foregroundColor(.white)
+                        .foregroundColor(DS.Color.textOnPrimary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, DS.Spacing.sm)
                         .background(DS.Color.neonPink)

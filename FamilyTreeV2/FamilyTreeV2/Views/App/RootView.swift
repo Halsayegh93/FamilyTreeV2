@@ -48,7 +48,7 @@ struct MaintenanceModeView: View {
             Spacer()
 
             Image(systemName: "wrench.and.screwdriver")
-                .font(.system(size: 80))
+                .font(DS.Font.scaled(80, weight: .regular))
                 .foregroundStyle(DS.Color.primary)
 
             Text(L10n.t("التطبيق تحت الصيانة", "App Under Maintenance"))

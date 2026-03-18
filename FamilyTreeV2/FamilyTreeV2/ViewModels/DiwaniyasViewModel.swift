@@ -21,10 +21,27 @@ class DiwaniyasViewModel: ObservableObject {
         id: T.ID,
         refresh: @escaping () async -> Void
     ) {
-        withAnimation(DS.Anim.snappy) {
+        withAnimation(.snappy(duration: 0.25)) {
             array.removeAll { $0.id as AnyHashable == id as AnyHashable }
         }
         Task {
+            try? await Task.sleep(nanoseconds: 800_000_000)
+            await refresh()
+        }
+    }
+
+    /// حذف فوري ثم تنفيذ API + تحديث بالخلفية (optimistic)
+    private func optimisticRemove<T: Identifiable>(
+        from array: inout [T],
+        id: T.ID,
+        apiWork: @escaping () async -> Void,
+        refresh: @escaping () async -> Void
+    ) {
+        withAnimation(.snappy(duration: 0.25)) {
+            array.removeAll { $0.id as AnyHashable == id as AnyHashable }
+        }
+        Task {
+            await apiWork()
             try? await Task.sleep(nanoseconds: 500_000_000)
             await refresh()
         }
@@ -158,38 +175,39 @@ class DiwaniyasViewModel: ObservableObject {
     }
     
     func approveDiwaniya(id: UUID, adminId: UUID) async {
-        do {
-            struct UpdateData: Codable {
-                let approval_status: String
-                let approved_by: UUID
+        // حفظ ownerId قبل الحذف المحلي
+        let ownerId = pendingDiwaniyas.first(where: { $0.id == id })?.ownerId
+
+        optimisticRemove(from: &pendingDiwaniyas, id: id, apiWork: { [weak self] in
+            do {
+                struct UpdateData: Codable {
+                    let approval_status: String
+                    let approved_by: UUID
+                }
+                try await self?.supabase
+                    .from("diwaniyas")
+                    .update(UpdateData(approval_status: "approved", approved_by: adminId))
+                    .eq("id", value: id.uuidString)
+                    .execute()
+
+                if let ownerId {
+                    await self?.notificationVM?.sendNotification(
+                        title: L10n.t("تم تنفيذ طلبك", "Request Completed"),
+                        body: L10n.t("تم اعتماد الديوانية", "Your diwaniya was approved"),
+                        targetMemberIds: [ownerId]
+                    )
+                }
+                Log.info("تم اعتماد الديوانية بنجاح")
+            } catch {
+                await MainActor.run {
+                    self?.errorMessage = L10n.t("فشل اعتماد الديوانية. حاول مرة أخرى.", "Failed to approve diwaniya. Please try again.")
+                }
+                Log.error("خطأ اعتماد ديوانية: \(error.localizedDescription)")
             }
-            try await supabase
-                .from("diwaniyas")
-                .update(UpdateData(approval_status: "approved", approved_by: adminId))
-                .eq("id", value: id.uuidString)
-                .execute()
-
-            // Find the owner to notify them
-            if let diwaniya = pendingDiwaniyas.first(where: { $0.id == id }) {
-                await notificationVM?.sendNotification(
-                    title: L10n.t("تم تنفيذ طلبك", "Request Completed"),
-                    body: L10n.t("تم اعتماد الديوانية", "Your diwaniya was approved"),
-                    targetMemberIds: [diwaniya.ownerId]
-                )
-            }
-
-            removeLocallyThenRefresh(from: &pendingDiwaniyas, id: id) { [weak self] in
-                await self?.fetchPendingDiwaniyas()
-            }
-
-            // تحديث القائمة الرئيسية عشان الديوانية المعتمدة تظهر
-            await fetchDiwaniyas()
-
-            Log.info("تم اعتماد الديوانية بنجاح")
-        } catch {
-            self.errorMessage = L10n.t("فشل اعتماد الديوانية. حاول مرة أخرى.", "Failed to approve diwaniya. Please try again.")
-            Log.error("خطأ اعتماد ديوانية: \(error.localizedDescription)")
-        }
+        }, refresh: { [weak self] in
+            await self?.fetchPendingDiwaniyas()
+            await self?.fetchDiwaniyas()
+        })
     }
     
     func updateDiwaniya(id: UUID, title: String, ownerName: String, scheduleText: String?, contactPhone: String?, mapsUrl: String?, address: String?, isClosed: Bool) async -> Bool {
@@ -253,21 +271,22 @@ class DiwaniyasViewModel: ObservableObject {
     }
 
     func rejectDiwaniya(id: UUID) async {
-        do {
-            try await supabase
-                .from("diwaniyas")
-                .delete()
-                .eq("id", value: id.uuidString)
-                .execute()
-
-            removeLocallyThenRefresh(from: &pendingDiwaniyas, id: id) { [weak self] in
-                await self?.fetchPendingDiwaniyas()
+        optimisticRemove(from: &pendingDiwaniyas, id: id, apiWork: { [weak self] in
+            do {
+                try await self?.supabase
+                    .from("diwaniyas")
+                    .delete()
+                    .eq("id", value: id.uuidString)
+                    .execute()
+                Log.info("تم رفض الديوانية بنجاح")
+            } catch {
+                await MainActor.run {
+                    self?.errorMessage = L10n.t("فشل رفض الديوانية. حاول مرة أخرى.", "Failed to reject diwaniya. Please try again.")
+                }
+                Log.error("خطأ رفض ديوانية: \(error.localizedDescription)")
             }
-
-            Log.info("تم رفض الديوانية بنجاح")
-        } catch {
-            self.errorMessage = L10n.t("فشل رفض الديوانية. حاول مرة أخرى.", "Failed to reject diwaniya. Please try again.")
-            Log.error("خطأ رفض ديوانية: \(error.localizedDescription)")
-        }
+        }, refresh: { [weak self] in
+            await self?.fetchPendingDiwaniyas()
+        })
     }
 }

@@ -59,10 +59,27 @@ class NewsViewModel: ObservableObject {
         id: T.ID,
         refresh: @escaping () async -> Void
     ) {
-        withAnimation(DS.Anim.snappy) {
+        withAnimation(.snappy(duration: 0.25)) {
             array.removeAll { $0.id as AnyHashable == id as AnyHashable }
         }
         Task {
+            try? await Task.sleep(nanoseconds: 800_000_000)
+            await refresh()
+        }
+    }
+
+    /// حذف فوري ثم تنفيذ API + تحديث بالخلفية (optimistic)
+    private func optimisticRemove<T: Identifiable>(
+        from array: inout [T],
+        id: T.ID,
+        apiWork: @escaping () async -> Void,
+        refresh: @escaping () async -> Void
+    ) {
+        withAnimation(.snappy(duration: 0.25)) {
+            array.removeAll { $0.id as AnyHashable == id as AnyHashable }
+        }
+        Task {
+            await apiWork()
             try? await Task.sleep(nanoseconds: 500_000_000)
             await refresh()
         }
@@ -335,6 +352,30 @@ class NewsViewModel: ObservableObject {
                     .from("news_likes")
                     .insert(likeRecord)
                     .execute()
+
+                // إشعار صاحب الخبر بالإعجاب (إذا مو هو نفسه)
+                if let postAuthorId = allNews.first(where: { $0.id == postId })?.author_id,
+                   postAuthorId != memberId {
+                    let likerName = currentUser?.fullName ?? ""
+                    await notificationVM?.sendPushToMembers(
+                        title: L10n.t("إعجاب جديد ❤️", "New Like ❤️"),
+                        body: L10n.t(
+                            "\(likerName) أعجب بخبرك",
+                            "\(likerName) liked your post"
+                        ),
+                        kind: "news_like",
+                        targetMemberIds: [postAuthorId]
+                    )
+                    // حفظ داخلي
+                    let payload: [String: AnyEncodable] = [
+                        "target_member_id": AnyEncodable(postAuthorId.uuidString),
+                        "title": AnyEncodable(L10n.t("إعجاب جديد ❤️", "New Like ❤️")),
+                        "body": AnyEncodable(L10n.t("\(likerName) أعجب بخبرك", "\(likerName) liked your post")),
+                        "kind": AnyEncodable("news_like"),
+                        "created_by": AnyEncodable(memberId.uuidString)
+                    ]
+                    try? await supabase.from("notifications").insert(payload).execute()
+                }
             }
         } catch {
             Log.error("خطأ تحديث الاعجاب: \(error.localizedDescription)")
@@ -373,6 +414,32 @@ class NewsViewModel: ObservableObject {
 
             // Refresh comments to get new data
             await fetchNewsComments(for: allNews.map(\.id))
+
+            // إشعار صاحب الخبر بالتعليق الجديد (إذا مو هو نفسه)
+            if let postAuthorId = allNews.first(where: { $0.id == postId })?.author_id,
+               postAuthorId != memberId {
+                await notificationVM?.sendPushToMembers(
+                    title: L10n.t("تعليق جديد 💬", "New Comment 💬"),
+                    body: L10n.t(
+                        "\(authorName) علّق على خبرك",
+                        "\(authorName) commented on your post"
+                    ),
+                    kind: "news_comment",
+                    targetMemberIds: [postAuthorId]
+                )
+                // حفظ داخلي
+                if let creator = currentUser?.id {
+                    let payload: [String: AnyEncodable] = [
+                        "target_member_id": AnyEncodable(postAuthorId.uuidString),
+                        "title": AnyEncodable(L10n.t("تعليق جديد 💬", "New Comment 💬")),
+                        "body": AnyEncodable(L10n.t("\(authorName) علّق على خبرك", "\(authorName) commented on your post")),
+                        "kind": AnyEncodable("news_comment"),
+                        "created_by": AnyEncodable(creator.uuidString)
+                    ]
+                    try? await supabase.from("notifications").insert(payload).execute()
+                }
+            }
+
             return true
         } catch {
             Log.error("خطأ إضافة تعليق: \(error.localizedDescription)")
@@ -522,14 +589,14 @@ class NewsViewModel: ObservableObject {
             if !shouldAutoApprove, currentUser?.role == .member {
                 await notificationVM?.notifyAdminsWithPush(
                     title: "خبر جديد بانتظار المراجعة",
-                    body: "قام عضو بإضافة خبر جديد ويحتاج موافقة الإدارة.",
+                    body: "خبر جديد يحتاج موافقة الإدارة.",
                     kind: "news_add"
                 )
             }
             if shouldAutoApprove {
-                await notificationVM?.notifyAdmins(
+                await notificationVM?.notifyAdminsWithPush(
                     title: "خبر جديد",
-                    body: "تم نشر خبر جديد.",
+                    body: "خبر جديد تم نشره.",
                     kind: "news_add"
                 )
             }
@@ -660,41 +727,42 @@ class NewsViewModel: ObservableObject {
         guard canModerate, let approverId = currentUser?.id else { return }
         guard newsApprovalFeatureAvailable else { return }
 
-        do {
-            let payload: [String: AnyEncodable] = [
-                "approval_status": AnyEncodable("approved"),
-                "approved_by": AnyEncodable(approverId.uuidString),
-                "approved_at": AnyEncodable(ISO8601DateFormatter().string(from: Date()))
-            ]
+        // حفظ authorId قبل الحذف المحلي
+        let authorId = pendingNewsRequests.first(where: { $0.id == postId })?.author_id ?? allNews.first(where: { $0.id == postId })?.author_id
 
-            try await supabase
-                .from("news")
-                .update(payload)
-                .eq("id", value: postId.uuidString)
-                .execute()
+        optimisticRemove(from: &pendingNewsRequests, id: postId, apiWork: { [weak self] in
+            do {
+                let payload: [String: AnyEncodable] = [
+                    "approval_status": AnyEncodable("approved"),
+                    "approved_by": AnyEncodable(approverId.uuidString),
+                    "approved_at": AnyEncodable(ISO8601DateFormatter().string(from: Date()))
+                ]
 
-            // إشعار صاحب الخبر
-            if let authorId = pendingNewsRequests.first(where: { $0.id == postId })?.author_id ?? allNews.first(where: { $0.id == postId })?.author_id {
-                await notificationVM?.sendNotification(
-                    title: L10n.t("تم تنفيذ طلبك", "Request Completed"),
-                    body: L10n.t("تم اعتماد خبرك ونشره", "Your news post was approved and published"),
-                    targetMemberIds: [authorId]
-                )
+                try await self?.supabase
+                    .from("news")
+                    .update(payload)
+                    .eq("id", value: postId.uuidString)
+                    .execute()
+
+                if let authorId {
+                    await self?.notificationVM?.sendNotification(
+                        title: L10n.t("تم نشر خبرك", "Post Published"),
+                        body: L10n.t("خبرك تمت الموافقة عليه ونُشر", "Your post was approved and published"),
+                        targetMemberIds: [authorId]
+                    )
+                }
+                Log.info("تم اعتماد الخبر بنجاح")
+            } catch {
+                if let self, self.isMissingNewsApprovalColumnError(error) {
+                    await MainActor.run { self.newsApprovalFeatureAvailable = false }
+                } else {
+                    Log.error("خطأ اعتماد الخبر: \(error.localizedDescription)")
+                }
             }
-
-            removeLocallyThenRefresh(from: &pendingNewsRequests, id: postId) { [weak self] in
-                await self?.fetchPendingNewsRequests(force: true)
-                await self?.fetchNews(force: true)
-            }
-
-            Log.info("تم اعتماد الخبر بنجاح")
-        } catch {
-            if isMissingNewsApprovalColumnError(error) {
-                newsApprovalFeatureAvailable = false
-            } else {
-                Log.error("خطأ اعتماد الخبر: \(error.localizedDescription)")
-            }
-        }
+        }, refresh: { [weak self] in
+            await self?.fetchPendingNewsRequests(force: true)
+            await self?.fetchNews(force: true)
+        })
     }
 
     // MARK: - Reject News Post
@@ -702,22 +770,21 @@ class NewsViewModel: ObservableObject {
     func rejectNewsPost(postId: UUID) async {
         guard canModerate else { return }
 
-        do {
-            try await supabase
-                .from("news")
-                .delete()
-                .eq("id", value: postId.uuidString)
-                .execute()
-
-            removeLocallyThenRefresh(from: &pendingNewsRequests, id: postId) { [weak self] in
-                await self?.fetchPendingNewsRequests(force: true)
-                await self?.fetchNews(force: true)
+        optimisticRemove(from: &pendingNewsRequests, id: postId, apiWork: { [weak self] in
+            do {
+                try await self?.supabase
+                    .from("news")
+                    .delete()
+                    .eq("id", value: postId.uuidString)
+                    .execute()
+                Log.info("تم رفض الخبر بنجاح")
+            } catch {
+                Log.error("خطأ رفض الخبر: \(error.localizedDescription)")
             }
-
-            Log.info("تم رفض الخبر بنجاح")
-        } catch {
-            Log.error("خطأ رفض الخبر: \(error.localizedDescription)")
-        }
+        }, refresh: { [weak self] in
+            await self?.fetchPendingNewsRequests(force: true)
+            await self?.fetchNews(force: true)
+        })
     }
 
     // MARK: - Delete News Post
@@ -738,9 +805,9 @@ class NewsViewModel: ObservableObject {
                 await fetchPendingNewsRequests(force: true)
             }
 
-            await notificationVM?.notifyAdmins(
+            await notificationVM?.notifyAdminsWithPush(
                 title: "حذف خبر",
-                body: "تم حذف خبر منشور.",
+                body: "خبر منشور تم حذفه.",
                 kind: "news_add"
             )
         } catch {
@@ -773,14 +840,14 @@ class NewsViewModel: ObservableObject {
                 .execute()
 
             await notificationVM?.notifyAdminsWithPush(
-                title: "بلاغ جديد على خبر",
-                body: "وصل بلاغ جديد ويحتاج مراجعة الإدارة.",
+                title: "بلاغ جديد",
+                body: "بلاغ على خبر يحتاج مراجعة.",
                 kind: "news_report"
             )
 
             await notificationVM?.sendNotification(
-                title: "تم استلام البلاغ",
-                body: "تم استلام بلاغك بنجاح.",
+                title: "بلاغك وصل",
+                body: "بلاغك تم استلامه وسيتم مراجعته.",
                 targetMemberIds: [userId]
             )
         } catch {

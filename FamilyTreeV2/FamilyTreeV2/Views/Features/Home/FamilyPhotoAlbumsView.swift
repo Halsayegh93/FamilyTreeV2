@@ -146,7 +146,7 @@ struct FamilyPhotoAlbumsView: View {
                             .tint(.white)
                         Text(L10n.t("جاري رفع الصور...", "Uploading photos..."))
                             .font(DS.Font.calloutBold)
-                            .foregroundColor(.white)
+                            .foregroundColor(DS.Color.textOnPrimary)
                     }
                     .padding(.horizontal, DS.Spacing.xl)
                     .padding(.vertical, DS.Spacing.md)
@@ -373,7 +373,7 @@ struct FamilyPhotoAlbumsView: View {
                         } label: {
                             Image(systemName: "trash.fill")
                                 .font(DS.Font.scaled(11, weight: .bold))
-                                .foregroundColor(.white)
+                                .foregroundColor(DS.Color.textOnPrimary)
                                 .frame(width: 26, height: 26)
                                 .background(DS.Color.error.opacity(0.85))
                                 .clipShape(Circle())
@@ -543,7 +543,7 @@ struct FamilyPhotoAlbumsView: View {
                                 } label: {
                                     Text(L10n.t("حفظ", "Save"))
                                         .font(DS.Font.scaled(13, weight: .bold))
-                                        .foregroundColor(.white)
+                                        .foregroundColor(DS.Color.textOnPrimary)
                                         .padding(.horizontal, DS.Spacing.md)
                                         .padding(.vertical, DS.Spacing.xs)
                                         .background(DS.Color.primary)
@@ -624,7 +624,8 @@ struct FamilyPhotoAlbumsView: View {
                             if let currentPhoto = filteredPhotos[safe: selectedPhotoIndex] {
                                 pendingDeletePhoto = currentPhoto
                                 showPhotoViewer = false
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                                Task {
+                                    try? await Task.sleep(nanoseconds: 400_000_000)
                                     showDeletePhotoAlert = true
                                 }
                             }
@@ -646,7 +647,8 @@ struct FamilyPhotoAlbumsView: View {
         .presentationDragIndicator(.visible)
         .onAppear {
             isSheetLoading = true
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            Task {
+                try? await Task.sleep(nanoseconds: 300_000_000)
                 withAnimation(DS.Anim.smooth) {
                     isSheetLoading = false
                 }
@@ -672,7 +674,7 @@ struct FamilyPhotoAlbumsView: View {
         } label: {
             Image(systemName: "plus")
                 .font(DS.Font.scaled(22, weight: .bold))
-                .foregroundColor(.white)
+                .foregroundColor(DS.Color.textOnPrimary)
                 .frame(width: 56, height: 56)
                 .background(DS.Color.gradientPrimary)
                 .clipShape(Circle())
@@ -711,7 +713,7 @@ struct FamilyPhotoAlbumsView: View {
                                 } label: {
                                     Image(systemName: "xmark.circle.fill")
                                         .font(DS.Font.scaled(24, weight: .bold))
-                                        .foregroundColor(.white)
+                                        .foregroundColor(DS.Color.textOnPrimary)
                                         .shadow(color: DS.Color.shadowDense, radius: 4, x: 0, y: 2)
                                 }
                                 .padding(DS.Spacing.md)
@@ -729,7 +731,7 @@ struct FamilyPhotoAlbumsView: View {
                             Text("\(pendingPreviewIndex + 1)/\(pendingImages.count)")
                                 .font(DS.Font.caption1)
                                 .fontWeight(.bold)
-                                .foregroundColor(.white)
+                                .foregroundColor(DS.Color.textOnPrimary)
                                 .padding(.horizontal, DS.Spacing.sm)
                                 .padding(.vertical, DS.Spacing.xs)
                                 .background(DS.Color.shadowOverlay)
@@ -902,7 +904,7 @@ struct FamilyPhotoAlbumsView: View {
                     Text(L10n.t("إضافة صور", "Add Photos"))
                         .font(DS.Font.calloutBold)
                 }
-                .foregroundColor(.white)
+                .foregroundColor(DS.Color.textOnPrimary)
                 .padding(.horizontal, DS.Spacing.xxl)
                 .padding(.vertical, DS.Spacing.md)
                 .background(DS.Color.gradientPrimary)
@@ -951,7 +953,7 @@ struct FamilyPhotoAlbumsView: View {
             action()
         case .notDetermined:
             PHPhotoLibrary.requestAuthorization(for: .readWrite) { newStatus in
-                DispatchQueue.main.async {
+                Task { @MainActor in
                     if newStatus == .authorized || newStatus == .limited {
                         action()
                     } else {

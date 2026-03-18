@@ -767,8 +767,26 @@ class AuthViewModel: ObservableObject {
             }
         }
         
-        self.otpStatusMessage = ""
-        self.otpErrorMessage = userFacingOTPError(lastError ?? NSError(domain: "otp", code: -1))
+        // SMS فشل — ننتقل تلقائياً للواتساب
+        Log.warning("فشل إرسال SMS، جاري التحويل للواتساب...")
+        self.otpStatusMessage = L10n.t("جاري إرسال الرمز عبر واتساب...", "Sending code via WhatsApp...")
+
+        let fallbackResult = await triggerOTPFallback(phone: finalPhone, channels: [.whatsapp])
+
+        if fallbackResult.success {
+            withAnimation(.spring()) {
+                self.isOtpSent = true
+            }
+            self.otpErrorMessage = nil
+            self.otpStatusMessage = L10n.t("تم إرسال الرمز عبر واتساب ✓", "Code sent via WhatsApp ✓")
+        } else {
+            self.otpStatusMessage = ""
+            self.otpErrorMessage = L10n.t(
+                "تعذر إرسال رمز التحقق عبر SMS والواتساب. حاول مرة أخرى.",
+                "Unable to send code via SMS or WhatsApp. Please try again."
+            )
+        }
+
         self.isLoading = false
     }
     
@@ -1197,13 +1215,13 @@ class AuthViewModel: ObservableObject {
             // إشعار المدير مع عدد المطابقات
             let pushBody: String
             if matchedMemberIds.isEmpty {
-                pushBody = "طلب ربط جديد من \(cleanFirstName) — لا توجد مطابقات بالشجرة."
+                pushBody = "\(cleanFirstName) يطلب الانضمام — لا مطابقات."
             } else {
-                pushBody = "طلب ربط جديد من \(cleanFirstName) — \(matchedMemberIds.count) مطابقة محتملة."
+                pushBody = "\(cleanFirstName) يطلب الانضمام — \(matchedMemberIds.count) مطابقة."
             }
             
             await notifyAdminsWithPush(
-                title: "طلب ربط عضو جديد",
+                title: "طلب انضمام جديد",
                 body: pushBody,
                 kind: "link_request"
             )
@@ -1249,7 +1267,7 @@ class AuthViewModel: ObservableObject {
         let details = """
         التصنيف: \(category)
         الرسالة: \(cleanMessage)
-        وسيلة التواصل: \(cleanContact?.isEmpty == false ? cleanContact! : "غير محدد")
+        وسيلة التواصل: \(cleanContact.flatMap { $0.isEmpty ? nil : $0 } ?? "غير محدد")
         """
 
         do {
@@ -1309,8 +1327,8 @@ class AuthViewModel: ObservableObject {
             // 3. إشعار المشرفين
             Log.info("[Contact] 3️⃣ إرسال إشعار للمشرفين...")
             await notifyAdminsWithPush(
-                title: "رسالة تواصل جديدة",
-                body: "وصلت رسالة \(category) جديدة.",
+                title: "رسالة تواصل",
+                body: "رسالة \(category) جديدة.",
                 kind: "contact_message"
             )
             Log.info("[Contact] ✅ تم إرسال إشعار المشرفين")
