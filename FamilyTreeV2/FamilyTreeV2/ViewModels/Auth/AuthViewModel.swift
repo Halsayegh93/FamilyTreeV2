@@ -217,6 +217,13 @@ class AuthViewModel: ObservableObject {
     }
 
     private func resolveAuthAccess(for profile: FamilyMember) -> AuthStatus {
+        // البروفايل بدون اسم = الترقر أنشأ السجل تلقائياً ولم يكمل المستخدم التسجيل بعد
+        let name = profile.fullName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if name.isEmpty {
+            Log.info("[AUTH] البروفايل بدون اسم (أنشأه الترقر تلقائياً) → شاشة إنشاء الملف التعريفي")
+            return .authenticatedNoProfile
+        }
+
         guard profile.role != .pending else {
             return .pendingApproval
         }
@@ -461,7 +468,7 @@ class AuthViewModel: ObservableObject {
             addCandidate("965\(normalized)")
         }
         
-        Log.info("[AUTH] findProfileByPhone: rawPhone=\(rawPhone), normalized=\(normalized), local8=\(local8), candidates=\(candidates)")
+        Log.info("[AUTH] findProfileByPhone: phone=\(Log.masked(rawPhone)), candidates=\(candidates.count)")
         
         // 1) محاولة مطابقة مباشرة على أكثر من صيغة شائعة
         for candidate in candidates {
@@ -502,7 +509,7 @@ class AuthViewModel: ObservableObject {
                 }
             }
 
-            Log.warning("[AUTH] لم يتم العثور على أي مطابقة للهاتف: \(rawPhone)")
+            Log.warning("[AUTH] لم يتم العثور على أي مطابقة للهاتف: \(Log.masked(rawPhone))")
             return nil
         } catch {
             Log.warning("فشل المطابقة الموسعة بالهاتف: \(error)")
@@ -871,11 +878,11 @@ class AuthViewModel: ObservableObject {
         } else {
             normalizedSessionPhone = ""
         }
-        Log.info("[AUTH] Session found. UUID: \(user.id), Phone: \(normalizedSessionPhone)")
+        Log.info("[AUTH] Session found. UUID: \(user.id), Phone: \(Log.masked(normalizedSessionPhone))")
 
         // فحص الحظر — حماية مزدوجة
         if !normalizedSessionPhone.isEmpty, await isPhoneBanned(normalizedSessionPhone) {
-            Log.info("[BAN] الرقم محظور بعد التحقق — تسجيل خروج: \(normalizedSessionPhone)")
+            Log.info("[BAN] الرقم محظور بعد التحقق — تسجيل خروج: \(Log.masked(normalizedSessionPhone))")
             _ = try? await supabase.auth.signOut()
             self.status = .unauthenticated
             self.otpErrorMessage = L10n.t(
@@ -974,7 +981,7 @@ class AuthViewModel: ObservableObject {
             Log.warning("[AUTH] Retry check failed: \(error.localizedDescription)")
         }
 
-        Log.warning("[AUTH] ⚠️ لم يتم العثور على بروفايل بعد 4 محاولات. Phone: \(normalizedSessionPhone), UUID: \(userIdString), lastAuthPhone: \(lastAuthPhone)")
+        Log.warning("[AUTH] ⚠️ لم يتم العثور على بروفايل بعد 4 محاولات. Phone: \(Log.masked(normalizedSessionPhone)), UUID: \(userIdString)")
         self.status = .authenticatedNoProfile
     }
 
@@ -1039,7 +1046,7 @@ class AuthViewModel: ObservableObject {
                     "banned_by": adminId.uuidString
                 ])
                 .execute()
-            Log.info("[BAN] تم حظر الرقم: \(normalizedPhone)")
+            Log.info("[BAN] تم حظر الرقم: \(Log.masked(normalizedPhone))")
             await fetchBannedPhones()
             return true
         } catch {

@@ -104,6 +104,9 @@ struct DiwaniyasView: View {
             .task {
                 await viewModel.fetchDiwaniyas()
             }
+            .onAppear {
+                viewModel.canModerate = authVM.currentUser?.role == .admin || authVM.currentUser?.role == .supervisor
+            }
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
             .alert(L10n.t("خطأ", "Error"), isPresented: .init(
                 get: { viewModel.errorMessage != nil },

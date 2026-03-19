@@ -14,6 +14,9 @@ class DiwaniyasViewModel: ObservableObject {
 
     weak var notificationVM: NotificationViewModel?
 
+    /// Set by the parent view/coordinator — true if current user is admin or supervisor
+    var canModerate: Bool = false
+
     // MARK: - Local Removal Helper
 
     private func removeLocallyThenRefresh<T: Identifiable>(
@@ -159,6 +162,11 @@ class DiwaniyasViewModel: ObservableObject {
     }
     
     func deleteDiwaniya(id: UUID) async {
+        guard canModerate else {
+            self.errorMessage = L10n.t("ليس لديك صلاحية لحذف الديوانية.", "You don't have permission to delete diwaniyas.")
+            Log.warning("[AUTH] Unauthorized deleteDiwaniya attempt")
+            return
+        }
         isLoading = true
         do {
             try await supabase
@@ -271,6 +279,11 @@ class DiwaniyasViewModel: ObservableObject {
     }
 
     func rejectDiwaniya(id: UUID) async {
+        guard canModerate else {
+            self.errorMessage = L10n.t("ليس لديك صلاحية لرفض الديوانية.", "You don't have permission to reject diwaniyas.")
+            Log.warning("[AUTH] Unauthorized rejectDiwaniya attempt")
+            return
+        }
         optimisticRemove(from: &pendingDiwaniyas, id: id, apiWork: { [weak self] in
             do {
                 try await self?.supabase

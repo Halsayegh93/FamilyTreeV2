@@ -66,7 +66,20 @@ serve(async (req)=>{
       message: "Method not allowed"
     });
   }
+  // JWT verification — require authenticated user
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader) {
+    return json(401, { ok: false, message: "Missing authorization" });
+  }
   const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+  const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+  const authClient = createClient(supabaseUrl, anonKey);
+  const { error: authError } = await authClient.auth.getUser(
+    authHeader.replace("Bearer ", "")
+  );
+  if (authError) {
+    return json(401, { ok: false, message: "Invalid or expired token" });
+  }
   const serviceRole = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
   if (!supabaseUrl || !serviceRole) {
     return json(500, {
@@ -135,11 +148,10 @@ serve(async (req)=>{
   try {
     jwt = await createApnsJwt(teamId, keyId, privateKey);
   } catch (e) {
+    console.error(`APNs JWT creation failed: ${e.message}, keyLength=${privateKey.length}`);
     return json(500, {
       ok: false,
-      message: `APNs JWT creation failed: ${e.message}`,
-      keyLength: privateKey.length,
-      hasBegin: privateKey.includes("BEGIN"),
+      message: "Push notification service configuration error",
     });
   }
   let sent = 0;

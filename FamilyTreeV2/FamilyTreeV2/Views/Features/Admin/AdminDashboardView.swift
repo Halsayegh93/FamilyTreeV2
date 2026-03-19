@@ -225,6 +225,7 @@ struct AdminDashboardView: View {
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .task {
+            diwaniyaVM.canModerate = authVM.currentUser?.role == .admin || authVM.currentUser?.role == .supervisor
             // تحميل كل البيانات بالتوازي — بدون تأخير
             await memberVM.fetchAllMembers()
 

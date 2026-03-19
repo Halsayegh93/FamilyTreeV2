@@ -138,7 +138,7 @@ async function handleChat(payload: AIRequest) {
     .eq("status", "active");
 
   if (error)
-    return json(500, { ok: false, message: `DB error: ${error.message}` });
+    return json(500, { ok: false, message: "Database operation failed" });
 
   const treeText = buildFamilyTreeText(members ?? []);
   const memberCount = (members ?? []).length;
@@ -375,7 +375,7 @@ async function handleAnalyzeTree(payload: AIRequest) {
     .eq("status", "active");
 
   if (error)
-    return json(500, { ok: false, message: `DB error: ${error.message}` });
+    return json(500, { ok: false, message: "Database operation failed" });
 
   const treeText = buildFamilyTreeText(members ?? []);
 
@@ -408,6 +408,22 @@ serve(async (req) => {
     return json(405, { ok: false, message: "Method not allowed" });
   }
 
+  // JWT verification — require authenticated user
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader) {
+    return json(401, { ok: false, message: "Missing authorization header" });
+  }
+  const supabaseAuth = createClient(
+    Deno.env.get("SUPABASE_URL") ?? "",
+    Deno.env.get("SUPABASE_ANON_KEY") ?? ""
+  );
+  const { data: { user: authUser }, error: authError } = await supabaseAuth.auth.getUser(
+    authHeader.replace("Bearer ", "")
+  );
+  if (authError || !authUser) {
+    return json(401, { ok: false, message: "Invalid or expired token" });
+  }
+
   let payload: AIRequest;
   try {
     payload = await req.json();
@@ -421,6 +437,11 @@ serve(async (req) => {
       ok: false,
       message: "action and user_id are required",
     });
+  }
+
+  // Verify user_id matches the authenticated user
+  if (user_id !== authUser.id) {
+    return json(403, { ok: false, message: "User ID mismatch" });
   }
 
   // Rate limiting
@@ -449,6 +470,6 @@ serve(async (req) => {
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     console.error(`[claude-ai] Error for action=${action}:`, msg);
-    return json(500, { ok: false, message: msg });
+    return json(500, { ok: false, message: "An internal error occurred. Please try again." });
   }
 });
