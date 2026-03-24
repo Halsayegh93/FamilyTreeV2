@@ -7,7 +7,8 @@ import Combine
 class ProjectsViewModel: ObservableObject {
     
     let supabase = SupabaseConfig.client
-    
+    weak var authVM: AuthViewModel?
+
     @Published var projects: [Project] = []
     @Published var pendingProjects: [Project] = []
     @Published var myPendingProjects: [Project] = []
@@ -149,6 +150,7 @@ class ProjectsViewModel: ObservableObject {
     // MARK: - Reject
 
     func rejectProject(id: UUID) async {
+        guard authVM?.isAdmin == true else { Log.warning("رفض المشروع مرفوض: الصلاحية للمدير فقط"); return }
         // حذف فوري محلياً
         withAnimation(.snappy(duration: 0.25)) {
             pendingProjects.removeAll { $0.id == id }
@@ -209,6 +211,7 @@ class ProjectsViewModel: ObservableObject {
     // MARK: - Delete
     
     func deleteProject(id: UUID) async {
+        guard authVM?.isAdmin == true else { Log.warning("حذف المشروع مرفوض: الصلاحية للمدير فقط"); return }
         do {
             try await supabase
                 .from("projects")

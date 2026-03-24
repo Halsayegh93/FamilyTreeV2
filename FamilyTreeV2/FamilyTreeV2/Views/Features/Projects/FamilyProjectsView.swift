@@ -193,20 +193,12 @@ struct FamilyProjectsView: View {
             VStack(spacing: DS.Spacing.sm) {
                 // Logo
                 if let logoUrl = project.logoUrl, let url = URL(string: logoUrl) {
-                    AsyncImage(url: url) { phase in
-                        switch phase {
-                        case .success(let image):
-                            image
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                                .frame(width: 64, height: 64)
-                                .clipShape(Circle())
-                        case .failure:
-                            projectPlaceholderIcon
-                        default:
-                            ProgressView()
-                                .frame(width: 64, height: 64)
-                        }
+                    CachedAsyncImage(url: url) { img in
+                        img.resizable().aspectRatio(contentMode: .fill)
+                            .frame(width: 64, height: 64)
+                            .clipShape(Circle())
+                    } placeholder: {
+                        ProgressView().frame(width: 64, height: 64)
                     }
                 } else {
                     projectPlaceholderIcon
@@ -237,20 +229,12 @@ struct FamilyProjectsView: View {
             VStack(spacing: DS.Spacing.sm) {
                 // Logo
                 if let logoUrl = project.logoUrl, let url = URL(string: logoUrl) {
-                    AsyncImage(url: url) { phase in
-                        switch phase {
-                        case .success(let image):
-                            image
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                                .frame(width: 64, height: 64)
-                                .clipShape(Circle())
-                        case .failure:
-                            projectPlaceholderIcon
-                        default:
-                            ProgressView()
-                                .frame(width: 64, height: 64)
-                        }
+                    CachedAsyncImage(url: url) { img in
+                        img.resizable().aspectRatio(contentMode: .fill)
+                            .frame(width: 64, height: 64)
+                            .clipShape(Circle())
+                    } placeholder: {
+                        ProgressView().frame(width: 64, height: 64)
                     }
                 } else {
                     projectPlaceholderIcon
@@ -504,17 +488,14 @@ struct AddProjectView: View {
                                 HStack(spacing: DS.Spacing.md) {
                                     // Avatar
                                     if let avatarUrl = member.avatarUrl, let url = URL(string: avatarUrl) {
-                                        AsyncImage(url: url) { phase in
-                                            switch phase {
-                                            case .success(let image):
-                                                image
-                                                    .resizable()
-                                                    .aspectRatio(contentMode: .fill)
-                                                    .frame(width: 40, height: 40)
-                                                    .clipShape(Circle())
-                                            default:
-                                                memberPlaceholderAvatar
-                                            }
+                                        CachedAsyncImage(url: url) { image in
+                                            image
+                                                .resizable()
+                                                .aspectRatio(contentMode: .fill)
+                                                .frame(width: 40, height: 40)
+                                                .clipShape(Circle())
+                                        } placeholder: {
+                                            memberPlaceholderAvatar
                                         }
                                     } else {
                                         memberPlaceholderAvatar

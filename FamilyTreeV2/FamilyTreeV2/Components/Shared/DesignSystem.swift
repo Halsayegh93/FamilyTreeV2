@@ -10,15 +10,15 @@ enum DS {
         static let primary       = SwiftUI.Color.adaptive(light: "#1B3A8C", dark: "#5B8FE6") // Royal Blue
         static let primaryDark   = SwiftUI.Color.adaptive(light: "#0E2460", dark: "#3A6CD4") // Deep Navy
         static let primaryLight  = SwiftUI.Color.adaptive(light: "#4F74C9", dark: "#7FAEF0") // Light Royal
-        static let accent        = SwiftUI.Color(hex: "#C8962E") // Rich Gold
-        static let accentDark    = SwiftUI.Color(hex: "#9A7321") // Deep Gold
-        static let accentLight   = SwiftUI.Color(hex: "#E6C06A") // Soft Gold
+        static let accent        = SwiftUI.Color.adaptive(light: "#C8962E", dark: "#E6B84D") // Rich Gold
+        static let accentDark    = SwiftUI.Color.adaptive(light: "#9A7321", dark: "#C8962E") // Deep Gold
+        static let accentLight   = SwiftUI.Color.adaptive(light: "#E6C06A", dark: "#F0D080") // Soft Gold
 
         // Supporting Accents — ألوان مساندة فخمة
         static let neonBlue     = SwiftUI.Color.adaptive(light: "#3B5FBF", dark: "#6B9FE8") // Sapphire
         static let neonPurple   = SwiftUI.Color.adaptive(light: "#7B68AE", dark: "#A08DD0") // Amethyst
-        static let neonCyan     = SwiftUI.Color(hex: "#E8D5A3") // Champagne Gold
-        static let neonPink     = SwiftUI.Color(hex: "#D4A38C") // Rose Gold
+        static let neonCyan     = SwiftUI.Color.adaptive(light: "#E8D5A3", dark: "#F2E4C0") // Champagne Gold
+        static let neonPink     = SwiftUI.Color.adaptive(light: "#D4A38C", dark: "#E8BFA8") // Rose Gold
 
         // Gradients — تدرجات ملكية
         static let gradientPrimary = LinearGradient(
@@ -34,7 +34,7 @@ enum DS {
             startPoint: .leading, endPoint: .trailing
         )
         static let gradientCool = LinearGradient(
-            colors: [SwiftUI.Color(hex: "#D4E4F7"), primaryLight],
+            colors: [SwiftUI.Color.adaptive(light: "#D4E4F7", dark: "#1A2A40"), primaryLight],
             startPoint: .leading, endPoint: .trailing
         )
         static let gradientDark = LinearGradient(
@@ -46,11 +46,11 @@ enum DS {
             startPoint: .topLeading, endPoint: .bottomTrailing
         )
         static let gradientFire = LinearGradient(
-            colors: [SwiftUI.Color(hex: "#B85C1E"), SwiftUI.Color(hex: "#8B3A13")],
+            colors: [SwiftUI.Color.adaptive(light: "#B85C1E", dark: "#E07030"), SwiftUI.Color.adaptive(light: "#8B3A13", dark: "#B85C1E")],
             startPoint: .topLeading, endPoint: .bottomTrailing
         )
         static let gradientOcean = LinearGradient(
-            colors: [primary, SwiftUI.Color(hex: "#162D6B")],
+            colors: [primary, SwiftUI.Color.adaptive(light: "#162D6B", dark: "#3A5A9F")],
             startPoint: .topLeading, endPoint: .bottomTrailing
         )
         static let gradientNeon = LinearGradient(
@@ -76,41 +76,42 @@ enum DS {
         static let textSecondary = SwiftUI.Color.secondary
         static let textTertiary  = SwiftUI.Color(.tertiaryLabel)
         static let textOnPrimary = SwiftUI.Color.white
-        static let textGold      = SwiftUI.Color(hex: "#C8962E")
+        static let textGold      = SwiftUI.Color.adaptive(light: "#C8962E", dark: "#E6B84D")
 
         // Semantic
-        static let success = SwiftUI.Color(hex: "#1B7A42") // Emerald Green
-        static let warning = SwiftUI.Color(hex: "#D4960A") // Golden Warning
-        static let error   = SwiftUI.Color(hex: "#B5302A") // Crimson Red
+        static let success = SwiftUI.Color.adaptive(light: "#1B7A42", dark: "#34C76A") // Emerald Green
+        static let warning = SwiftUI.Color.adaptive(light: "#D4960A", dark: "#F0B429") // Golden Warning
+        static let error   = SwiftUI.Color.adaptive(light: "#B5302A", dark: "#E85550") // Crimson Red
         static let info    = SwiftUI.Color.adaptive(light: "#2E5CAD", dark: "#6A9EE0") // Royal Info
 
         // Role Colors — ألوان الأدوار
         static func role(_ roleColor: SwiftUI.Color) -> SwiftUI.Color { roleColor }
-        static let adminRole      = SwiftUI.Color(hex: "#7B68AE") // Amethyst Purple
-        static let supervisorRole = SwiftUI.Color(hex: "#C8962E") // Gold
+        static let ownerRole      = SwiftUI.Color.adaptive(light: "#1A5FB4", dark: "#62A0EA") // Royal Blue
+        static let adminRole      = SwiftUI.Color.adaptive(light: "#7B68AE", dark: "#A08DD0") // Amethyst Purple
+        static let supervisorRole = SwiftUI.Color.adaptive(light: "#C8962E", dark: "#E6B84D") // Gold
         static let memberRole     = SwiftUI.Color.adaptive(light: "#1B3A8C", dark: "#5B8FE6") // Royal Blue
         static let pendingRole    = SwiftUI.Color.gray
 
         // News Type Colors — ألوان أنواع الأخبار
-        static let newsWedding      = SwiftUI.Color(hex: "#D4A38C") // Rose Gold
-        static let newsBirth        = SwiftUI.Color(hex: "#4AADA8") // Teal
-        static let newsDeath        = SwiftUI.Color(hex: "#8A8A8E") // Muted Gray
-        static let newsVote         = SwiftUI.Color(hex: "#C8962E") // Gold
-        static let newsAnnouncement = SwiftUI.Color(hex: "#5B7FD4") // Royal Blue
-        static let newsCongrats     = SwiftUI.Color(hex: "#D4A04B") // Warm Gold
-        static let newsReminder     = SwiftUI.Color(hex: "#C46B3E") // Burnt Orange
-        static let newsInvitation   = SwiftUI.Color(hex: "#7B5EA7") // Purple
+        static let newsWedding      = SwiftUI.Color.adaptive(light: "#D4A38C", dark: "#E8BFA8") // Rose Gold
+        static let newsBirth        = SwiftUI.Color.adaptive(light: "#4AADA8", dark: "#6CC9C4") // Teal
+        static let newsDeath        = SwiftUI.Color.adaptive(light: "#8A8A8E", dark: "#A8A8AC") // Muted Gray
+        static let newsVote         = SwiftUI.Color.adaptive(light: "#C8962E", dark: "#E6B84D") // Gold
+        static let newsAnnouncement = SwiftUI.Color.adaptive(light: "#5B7FD4", dark: "#7FA0E8") // Royal Blue
+        static let newsCongrats     = SwiftUI.Color.adaptive(light: "#D4A04B", dark: "#F0C060") // Warm Gold
+        static let newsReminder     = SwiftUI.Color.adaptive(light: "#C46B3E", dark: "#E88A5C") // Burnt Orange
+        static let newsInvitation   = SwiftUI.Color.adaptive(light: "#7B5EA7", dark: "#A080C8") // Purple
 
         // Status Colors
-        static let deceased         = SwiftUI.Color(hex: "#8A8A8E")
-        static let currentLocation  = SwiftUI.Color(hex: "#007AFF") // Vibrant Blue
-        static let likeAction       = SwiftUI.Color(hex: "#E8425A") // Like Red
+        static let deceased         = SwiftUI.Color.adaptive(light: "#8A8A8E", dark: "#A8A8AC")
+        static let currentLocation  = SwiftUI.Color.adaptive(light: "#007AFF", dark: "#409CFF") // Vibrant Blue
+        static let likeAction       = SwiftUI.Color.adaptive(light: "#E8425A", dark: "#F06070") // Like Red
 
         // Quick Access Grid Colors
         static let gridTree      = SwiftUI.Color.adaptive(light: "#0E2460", dark: "#3A6CD4") // Deep Navy
-        static let gridAlerts    = SwiftUI.Color(hex: "#B5302A") // Crimson
+        static let gridAlerts    = SwiftUI.Color.adaptive(light: "#B5302A", dark: "#E85550") // Crimson
         static let gridDiwaniya  = SwiftUI.Color.adaptive(light: "#1B3A8C", dark: "#5B8FE6") // Royal Blue
-        static let gridContact   = SwiftUI.Color(hex: "#C8962E") // Gold
+        static let gridContact   = SwiftUI.Color.adaptive(light: "#C8962E", dark: "#E6B84D") // Gold
 
         // Glass Effect Helpers — adaptive for light/dark mode
         static func glassBright(_ cs: ColorScheme) -> SwiftUI.Color {

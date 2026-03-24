@@ -117,7 +117,7 @@ Deno.serve(async (req) => {
   const { data: admins, error: adminsErr } = await supabase
     .from("profiles")
     .select("id")
-    .eq("role", "admin");
+    .in("role", ["owner", "admin", "supervisor"]);
 
   if (adminsErr) {
     return json(500, { ok: false, message: `Failed loading admins: ${adminsErr.message}` });
@@ -132,7 +132,7 @@ Deno.serve(async (req) => {
     .from("device_tokens")
     .select("token, member_id")
     .in("member_id", adminIds)
-    .eq("platform", "ios");
+    .in("platform", ["ios", "ipados"]);
 
   if (tokenErr) {
     return json(500, { ok: false, message: `Failed loading tokens: ${tokenErr.message}` });

@@ -13,6 +13,7 @@ class DiwaniyasViewModel: ObservableObject {
     let supabase = SupabaseConfig.client
 
     weak var notificationVM: NotificationViewModel?
+    weak var authVM: AuthViewModel?
 
     /// Set by the parent view/coordinator — true if current user is admin or supervisor
     var canModerate: Bool = false
@@ -162,7 +163,7 @@ class DiwaniyasViewModel: ObservableObject {
     }
     
     func deleteDiwaniya(id: UUID) async {
-        guard canModerate else {
+        guard authVM?.isAdmin == true else {
             self.errorMessage = L10n.t("ليس لديك صلاحية لحذف الديوانية.", "You don't have permission to delete diwaniyas.")
             Log.warning("[AUTH] Unauthorized deleteDiwaniya attempt")
             return
@@ -200,8 +201,8 @@ class DiwaniyasViewModel: ObservableObject {
 
                 if let ownerId {
                     await self?.notificationVM?.sendNotification(
-                        title: L10n.t("تم تنفيذ طلبك", "Request Completed"),
-                        body: L10n.t("تم اعتماد الديوانية", "Your diwaniya was approved"),
+                        title: L10n.t("تم اعتماد ديوانيتك", "Your Diwaniya Was Approved"),
+                        body: L10n.t("ديوانيتك أصبحت مرئية للجميع", "Your diwaniya is now visible to everyone"),
                         targetMemberIds: [ownerId]
                     )
                 }
@@ -279,7 +280,7 @@ class DiwaniyasViewModel: ObservableObject {
     }
 
     func rejectDiwaniya(id: UUID) async {
-        guard canModerate else {
+        guard authVM?.isAdmin == true else {
             self.errorMessage = L10n.t("ليس لديك صلاحية لرفض الديوانية.", "You don't have permission to reject diwaniyas.")
             Log.warning("[AUTH] Unauthorized rejectDiwaniya attempt")
             return

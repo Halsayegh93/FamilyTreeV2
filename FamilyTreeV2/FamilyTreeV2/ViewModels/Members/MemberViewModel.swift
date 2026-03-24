@@ -26,9 +26,15 @@ class MemberViewModel: ObservableObject {
     @Published var currentMemberChildren: [FamilyMember] = []
     @Published var activePath: [UUID] = []
     @Published var isLoading: Bool = false
+    @Published var errorMessage: String?
 
     /// يزداد عند كل تحديث للأعضاء (حذف، تعديل، إضافة) لإعادة بناء الشجرة
     @Published var membersVersion: Int = 0
+
+    /// صور المعرض المعلقة (للإدارة)
+    @Published var pendingGalleryPhotos: [MemberGalleryPhoto] = []
+    /// آخر الصور المعتمدة (للرئيسية)
+    @Published var approvedGalleryPhotos: [MemberGalleryPhoto] = []
     
     // Fetch throttle timestamp
     private var lastMembersFetchDate: Date?
@@ -62,6 +68,44 @@ class MemberViewModel: ObservableObject {
     func getSafeMemberName(for memberId: UUID) -> String {
         return memberId.uuidString
     }
+
+    // MARK: - Phone Duplicate Check
+
+    /// يتحقق إذا الرقم مستخدم من عضو ثاني (يتجاهل العضو الحالي)
+    func isPhoneDuplicate(_ phone: String, excludingMemberId: UUID? = nil) -> (isDuplicate: Bool, existingMember: FamilyMember?) {
+        guard !phone.isEmpty else { return (false, nil) }
+        let inputDigits = phone.filter(\.isNumber)
+        let inputSuffix = String(inputDigits.suffix(8))
+        guard inputSuffix.count >= 8 else { return (false, nil) }
+
+        let match = allMembers.first { member in
+            guard member.id != excludingMemberId else { return false }
+            guard let memberPhone = member.phoneNumber, !memberPhone.isEmpty else { return false }
+            let memberDigits = memberPhone.filter(\.isNumber)
+            let memberSuffix = String(memberDigits.suffix(8))
+            return memberSuffix == inputSuffix
+        }
+        return (match != nil, match)
+    }
+
+    /// يرجع كل مجموعات الأرقام المكررة: [[عضو1, عضو2], [عضو3, عضو4]]
+    var duplicatePhoneGroups: [[FamilyMember]] {
+        var phoneMap: [String: [FamilyMember]] = [:]
+        for member in allMembers {
+            guard let phone = member.phoneNumber, !phone.isEmpty else { continue }
+            let digits = phone.filter(\.isNumber)
+            let suffix = String(digits.suffix(8))
+            guard suffix.count >= 8 else { continue }
+            phoneMap[suffix, default: []].append(member)
+        }
+        return phoneMap.values.filter { $0.count > 1 }.sorted { $0[0].fullName < $1[0].fullName }
+    }
+
+    /// يمسح رقم الهاتف من عضو معين (profiles + auth.users)
+    func clearPhoneNumber(for memberId: UUID) async -> Bool {
+        await clearMemberPhone(memberId: memberId)
+        return true
+    }
     
     private func storagePath(fromPublicURL urlString: String, bucket: String) -> String? {
         guard let url = URL(string: urlString) else { return nil }
@@ -70,6 +114,17 @@ class MemberViewModel: ObservableObject {
         return String(url.path[range.upperBound...])
     }
     
+    // MARK: - Local State Updates
+
+    /// تحديث بيانات عضو محلياً (deceased, birthDate, deathDate) بدون حفظ في السيرفر
+    func updateMemberLocally(memberId: UUID, isDeceased: Bool, birthDate: String?, deathDate: String?) {
+        guard let idx = allMembers.firstIndex(where: { $0.id == memberId }) else { return }
+        allMembers[idx].isDeceased = isDeceased
+        allMembers[idx].birthDate = birthDate
+        allMembers[idx].deathDate = deathDate
+        membersVersion += 1
+    }
+
     // MARK: - Fetch Members
     
     func fetchAllMembers(force: Bool = false) async {
@@ -147,6 +202,22 @@ class MemberViewModel: ObservableObject {
         gender: String?,
         phoneNumber: String?
     ) async -> Bool {
+        guard canModerate else {
+            Log.warning("[AUTH] Unauthorized adminAddMember attempt")
+            return false
+        }
+        // التحقق من تكرار الرقم
+        if let phone = phoneNumber, !phone.isEmpty {
+            let check = isPhoneDuplicate(phone)
+            if check.isDuplicate {
+                Log.warning("رقم الهاتف مستخدم من عضو آخر: \(check.existingMember?.fullName ?? "")")
+                self.errorMessage = L10n.t(
+                    "رقم الهاتف مستخدم من عضو آخر: \(check.existingMember?.fullName ?? "")",
+                    "Phone number already used by: \(check.existingMember?.fullName ?? "")"
+                )
+                return false
+            }
+        }
         self.isLoading = true
         let newId = UUID()
 
@@ -308,11 +379,12 @@ class MemberViewModel: ObservableObject {
                         .insert(requestData)
                         .execute()
                     
-                    let requesterName = currentUser?.firstName ?? "عضو"
-                    let childAddBody = "إضافة ابن جديد: \(firstNameOnly)\nالأب: \(father.firstName)\nمن: \(requesterName)"
                     await notificationVM?.notifyAdminsWithPush(
-                        title: "إضافة ابن جديد",
-                        body: childAddBody,
+                        title: L10n.t("طلب إضافة ابن", "Child Add Request"),
+                        body: L10n.t(
+                            "طلب إضافة ابن: \(firstNameOnly) لـ: \(father.fullName)",
+                            "Child add request: \(firstNameOnly) to: \(father.fullName)"
+                        ),
                         kind: "child_add"
                     )
                 } catch {
@@ -390,13 +462,11 @@ class MemberViewModel: ObservableObject {
 
             // إشعار العضو بتغيير صورته (إذا المدير غيّرها وليس العضو نفسه)
             if memberId != currentUser?.id {
-                let adminName = currentUser?.fullName ?? ""
-                let memberName = getSafeMemberName(for: memberId)
                 await notificationVM?.sendPushToMembers(
-                    title: L10n.t("تحديث الصورة", "Photo Updated"),
+                    title: L10n.t("تم تحديث صورتك", "Your Photo Was Updated"),
                     body: L10n.t(
-                        "تم تحديث صورتك الشخصية",
-                        "Your profile photo was updated"
+                        "قام المشرف بتحديث صورتك الشخصية",
+                        "An admin updated your profile photo"
                     ),
                     kind: "profile_update",
                     targetMemberIds: [memberId]
@@ -409,7 +479,7 @@ class MemberViewModel: ObservableObject {
                         "kind": AnyEncodable("profile_update"),
                         "created_by": AnyEncodable(creator.uuidString)
                     ]
-                    try? await supabase.from("notifications").insert(payload).execute()
+                    _ = try? await supabase.from("notifications").insert(payload).execute()
                 }
             }
 
@@ -420,6 +490,10 @@ class MemberViewModel: ObservableObject {
     }
     
     func deleteAvatar(for memberId: UUID) async {
+        guard memberId == currentUser?.id || canModerate else {
+            Log.warning("[AUTH] Unauthorized deleteAvatar attempt for \(memberId)")
+            return
+        }
         self.isLoading = true
         do {
             // حذف الملف من التخزين إذا كان موجوداً
@@ -515,6 +589,10 @@ class MemberViewModel: ObservableObject {
     }
     
     func deleteCover(for memberId: UUID) async {
+        guard memberId == currentUser?.id || canModerate else {
+            Log.warning("[AUTH] Unauthorized deleteCover attempt for \(memberId)")
+            return
+        }
         self.isLoading = true
         do {
             let cachedCoverURL =
@@ -603,6 +681,10 @@ class MemberViewModel: ObservableObject {
     }
     
     func deleteMemberGalleryPhoto(for memberId: UUID) async -> Bool {
+        guard memberId == currentUser?.id || canModerate else {
+            Log.warning("[AUTH] Unauthorized deleteMemberGalleryPhoto attempt for \(memberId)")
+            return false
+        }
         self.isLoading = true
         let safeName = getSafeMemberName(for: memberId)
         
@@ -670,6 +752,76 @@ class MemberViewModel: ObservableObject {
         }
     }
     
+    /// جلب آخر الصور المعتمدة (للرئيسية)
+    func fetchApprovedGalleryPhotos(limit: Int = 10) async {
+        do {
+            let photos: [MemberGalleryPhoto] = try await supabase
+                .from("member_gallery_photos")
+                .select()
+                .eq("approval_status", value: "approved")
+                .order("created_at", ascending: false)
+                .limit(limit)
+                .execute()
+                .value
+            self.approvedGalleryPhotos = photos
+        } catch {
+            Log.error("خطأ جلب الصور المعتمدة: \(error.localizedDescription)")
+        }
+    }
+
+    /// جلب الصور المعلقة (للإدارة)
+    func fetchPendingGalleryPhotos() async {
+        do {
+            let photos: [MemberGalleryPhoto] = try await supabase
+                .from("member_gallery_photos")
+                .select()
+                .eq("approval_status", value: "pending")
+                .order("created_at", ascending: false)
+                .execute()
+                .value
+            self.pendingGalleryPhotos = photos
+        } catch {
+            Log.error("خطأ جلب الصور المعلقة: \(error.localizedDescription)")
+        }
+    }
+
+    /// موافقة على صورة معلقة
+    func approveGalleryPhoto(photoId: UUID) async {
+        do {
+            try await supabase
+                .from("member_gallery_photos")
+                .update(["approval_status": AnyEncodable("approved")])
+                .eq("id", value: photoId.uuidString)
+                .execute()
+            withAnimation { pendingGalleryPhotos.removeAll { $0.id == photoId } }
+            await fetchApprovedGalleryPhotos()
+            Log.info("تمت الموافقة على الصورة: \(photoId)")
+        } catch {
+            Log.error("خطأ الموافقة على الصورة: \(error.localizedDescription)")
+        }
+    }
+
+    /// رفض صورة معلقة (حذف)
+    func rejectGalleryPhoto(photoId: UUID, photoURL: String) async {
+        guard authVM?.isAdmin == true else { Log.warning("رفض الصورة: للمدير فقط"); return }
+        do {
+            // حذف من Storage
+            if let storagePath = storagePath(fromPublicURL: photoURL, bucket: "gallery") {
+                try await supabase.storage.from("gallery").remove(paths: [storagePath])
+            }
+            // حذف من DB
+            try await supabase
+                .from("member_gallery_photos")
+                .delete()
+                .eq("id", value: photoId.uuidString)
+                .execute()
+            withAnimation { pendingGalleryPhotos.removeAll { $0.id == photoId } }
+            Log.info("تم رفض وحذف الصورة: \(photoId)")
+        } catch {
+            Log.error("خطأ رفض الصورة: \(error.localizedDescription)")
+        }
+    }
+
     func uploadMemberGalleryPhotoMulti(image: UIImage, for memberId: UUID, caption: String? = nil) async -> MemberGalleryPhoto? {
         self.isLoading = true
         
@@ -696,36 +848,37 @@ class MemberViewModel: ObservableObject {
                 .getPublicURL(path: filePath)
                 .absoluteString
             
+            // المدير/المشرف → approved مباشرة، العضو → pending
+            let canModerate = authVM?.canModerate ?? false
+            let approvalStatus = canModerate ? "approved" : "pending"
+
             var payload: [String: AnyEncodable] = [
                 "id": AnyEncodable(photoId.uuidString),
                 "member_id": AnyEncodable(memberId.uuidString),
                 "photo_url": AnyEncodable(publicURL),
-                "created_by": AnyEncodable(currentUser?.id.uuidString)
+                "created_by": AnyEncodable(currentUser?.id.uuidString),
+                "approval_status": AnyEncodable(approvalStatus)
             ]
             if let caption, !caption.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 payload["caption"] = AnyEncodable(caption)
             }
-            
+
             let inserted: [MemberGalleryPhoto] = try await supabase
                 .from("member_gallery_photos")
                 .insert(payload)
                 .select()
                 .execute()
                 .value
-            
-            let galleryMemberName = currentUser?.firstName ?? "عضو"
-            let galleryBody = "\(galleryMemberName) أضاف صورة جديدة في المعرض."
-            if currentUser?.role == .member {
+
+            // إشعار المدراء فقط لو العضو أضاف (تحتاج موافقة)
+            if !canModerate {
                 await notificationVM?.notifyAdminsWithPush(
-                    title: "إضافة صورة جديدة",
-                    body: galleryBody,
-                    kind: "gallery_add"
-                )
-            } else {
-                await notificationVM?.notifyAdminsWithPush(
-                    title: "إضافة صورة جديدة",
-                    body: galleryBody,
-                    kind: "gallery_add"
+                    title: L10n.t("صورة جديدة تحتاج موافقة", "New Photo Needs Approval"),
+                    body: L10n.t(
+                        "تم إضافة صورة جديدة في المعرض تحتاج موافقتكم",
+                        "A new gallery photo needs your approval"
+                    ),
+                    kind: "gallery_pending"
                 )
             }
             
@@ -802,6 +955,18 @@ class MemberViewModel: ObservableObject {
         deathDate: Date?,
         isPhoneHidden: Bool
     ) async -> Bool {
+        // التحقق من تكرار الرقم
+        if !phoneNumber.isEmpty {
+            let check = isPhoneDuplicate(phoneNumber, excludingMemberId: memberId)
+            if check.isDuplicate {
+                Log.warning("رقم الهاتف مستخدم من عضو آخر: \(check.existingMember?.fullName ?? "")")
+                self.errorMessage = L10n.t(
+                    "رقم الهاتف مستخدم من عضو آخر: \(check.existingMember?.fullName ?? "")",
+                    "Phone number already used by: \(check.existingMember?.fullName ?? "")"
+                )
+                return false
+            }
+        }
         self.isLoading = true
 
         // استخراج الاسم الأول تلقائياً
@@ -978,9 +1143,8 @@ class MemberViewModel: ObservableObject {
 
             // إشعار العضو بتغيير اسمه (إذا المدير غيّره وليس العضو نفسه)
             if memberId != currentUser?.id {
-                let adminName = currentUser?.fullName ?? ""
                 await notificationVM?.sendPushToMembers(
-                    title: L10n.t("تحديث الاسم", "Name Updated"),
+                    title: L10n.t("تم تحديث اسمك", "Your Name Was Updated"),
                     body: L10n.t(
                         "تم تحديث اسمك إلى: \(fullName)",
                         "Your name was updated to: \(fullName)"
@@ -996,7 +1160,7 @@ class MemberViewModel: ObservableObject {
                         "kind": AnyEncodable("profile_update"),
                         "created_by": AnyEncodable(creator.uuidString)
                     ]
-                    try? await supabase.from("notifications").insert(payload).execute()
+                    _ = try? await supabase.from("notifications").insert(payload).execute()
                 }
             }
 
@@ -1008,12 +1172,62 @@ class MemberViewModel: ObservableObject {
         self.isLoading = false
     }
     
+    // MARK: - Delete Member (Admin only)
+
+    /// حذف عضو نهائياً من قاعدة البيانات (للمالك فقط)
+    func deleteMember(memberId: UUID) async -> Bool {
+        guard authVM?.canDeleteMembers == true else {
+            Log.error("حذف العضو مرفوض: الصلاحية للمالك فقط")
+            return false
+        }
+        guard memberId != currentUser?.id else {
+            Log.error("لا يمكن حذف حسابك الشخصي")
+            return false
+        }
+
+        isLoading = true
+        do {
+            // حذف الإشعارات المرتبطة
+            _ = try? await supabase.from("notifications")
+                .delete()
+                .eq("target_member_id", value: memberId.uuidString)
+                .execute()
+
+            // حذف device tokens
+            _ = try? await supabase.from("device_tokens")
+                .delete()
+                .eq("member_id", value: memberId.uuidString)
+                .execute()
+
+            // حذف صور المعرض
+            _ = try? await supabase.from("member_gallery_photos")
+                .delete()
+                .eq("member_id", value: memberId.uuidString)
+                .execute()
+
+            // حذف العضو من profiles
+            try await supabase.from("profiles")
+                .delete()
+                .eq("id", value: memberId.uuidString)
+                .execute()
+
+            await fetchAllMembers(force: true)
+            Log.info("تم حذف العضو بنجاح: \(memberId)")
+            isLoading = false
+            return true
+        } catch {
+            Log.error("فشل حذف العضو: \(error.localizedDescription)")
+            isLoading = false
+            return false
+        }
+    }
+
     // MARK: - Update Member Role
-    
-    // هذه الدالة لتحديث رتبة العضو (مدير، مشرف، عضو)
+
+    // هذه الدالة لتحديث رتبة العضو (مدير، مشرف، عضو) — المالك فقط
     func updateMemberRole(memberId: UUID, newRole: FamilyMember.UserRole) async {
-        guard currentUser?.role == .admin else {
-            Log.error("تم رفض تحديث الرتبة: الصلاحية للمدير فقط")
+        guard authVM?.canManageRoles == true else {
+            Log.error("تم رفض تحديث الرتبة: الصلاحية للمالك فقط")
             return
         }
         
@@ -1047,10 +1261,10 @@ class MemberViewModel: ObservableObject {
             
             // 3. إشعار المدراء بتغيير الرتبة (push + داخلي)
             await notificationVM?.notifyAdminsWithPush(
-                title: L10n.t("تغيير رتبة", "Role Changed"),
+                title: L10n.t("تغيير صلاحيات", "Role Changed"),
                 body: L10n.t(
-                    "رتبة \(memberName) أصبحت: \(roleName).",
-                    "\(memberName)'s role is now: \(roleName)."
+                    "تم تغيير صلاحيات \(memberName) إلى: \(roleName)",
+                    "\(memberName)'s role was changed to: \(roleName)"
                 ),
                 kind: "role_change"
             )
@@ -1059,10 +1273,10 @@ class MemberViewModel: ObservableObject {
             if authVM?.notificationsFeatureAvailable == true {
                 let personalPayload: [String: AnyEncodable] = [
                     "target_member_id": AnyEncodable(memberId.uuidString),
-                    "title": AnyEncodable(L10n.t("تغيير الرتبة", "Role Changed")),
+                    "title": AnyEncodable(L10n.t("تغيير مستوى الحساب", "Account Level Changed")),
                     "body": AnyEncodable(L10n.t(
-                        "رتبتك الآن: \(roleName).",
-                        "Your role is now: \(roleName)."
+                        "مستوى حسابك الآن: \(roleName).",
+                        "Your account level is now: \(roleName)."
                     )),
                     "kind": AnyEncodable("role_change"),
                     "created_by": AnyEncodable(currentUser?.id.uuidString)
@@ -1070,10 +1284,10 @@ class MemberViewModel: ObservableObject {
                 do {
                     try await supabase.from("notifications").insert(personalPayload).execute()
                     await notificationVM?.sendPushToMembers(
-                        title: L10n.t("تغيير الرتبة", "Role Changed"),
+                        title: L10n.t("تم تغيير مستوى حسابك", "Your Account Level Changed"),
                         body: L10n.t(
-                            "رتبتك الآن: \(roleName).",
-                            "Your role is now: \(roleName)."
+                            "مستوى حسابك الآن: \(roleName)",
+                            "Your account level is now: \(roleName)"
                         ),
                         kind: "role_change",
                         targetMemberIds: [memberId]

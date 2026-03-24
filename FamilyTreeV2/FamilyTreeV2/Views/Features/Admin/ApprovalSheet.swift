@@ -1,16 +1,28 @@
 import SwiftUI
-import Supabase
 
 struct ApprovalSheet: View {
     let member: FamilyMember
     var onComplete: () -> Void
     @Environment(\.dismiss) var dismiss
+    @EnvironmentObject var authVM: AuthViewModel
+    @EnvironmentObject var memberVM: MemberViewModel
+    @EnvironmentObject var adminRequestVM: AdminRequestViewModel
     @FocusState private var isSearchFocused: Bool
 
     @State private var searchText = ""
-    @State private var searchResults: [FamilyMember] = []
     @State private var selectedFather: FamilyMember? = nil
     @State private var isLoading = false
+
+    /// بحث محلي في الأعضاء المحملين بدل الاستعلام من السيرفر كل مرة
+    private var searchResults: [FamilyMember] {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard query.count >= 2 else { return [] }
+        return memberVM.allMembers
+            .filter { $0.status == .active && $0.id != member.id }
+            .filter { $0.fullName.lowercased().contains(query) }
+            .prefix(10)
+            .map { $0 }
+    }
 
     var body: some View {
         NavigationStack {
@@ -63,11 +75,6 @@ struct ApprovalSheet: View {
                             .multilineTextAlignment(.leading)
                             .font(DS.Font.body)
                             .focused($isSearchFocused)
-                            .task(id: searchText) {
-                                try? await Task.sleep(nanoseconds: 400_000_000)
-                                guard !Task.isCancelled else { return }
-                                searchForFather()
-                            }
                     }
                     .padding(DS.Spacing.md)
                     .background(DS.Color.surface)
@@ -107,6 +114,7 @@ struct ApprovalSheet: View {
                     .onTapGesture {
                         selectedFather = father
                     }
+                    .accessibilityLabel(L10n.t("اختيار \(father.fullName) كأب", "Select \(father.fullName) as father"))
                 }
                 .listStyle(.plain)
 
@@ -136,60 +144,22 @@ struct ApprovalSheet: View {
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
 
-    // دالة البحث عن الأب في السيرفر
-    func searchForFather() {
-            guard searchText.count >= 2 else {
-                searchResults = []
-                return
-            }
-
-            Task {
-                do {
-                    // التعديل هنا: تحديد أسماء المعاملات بوضوح لحل خطأ No exact matches
-                    let response: [FamilyMember] = try await SupabaseConfig.client
-                        .from("profiles")
-                        .select()
-                        .ilike("full_name", pattern: "%\(searchText)%")
-                        .eq("status", value: "active")
-                        .limit(10)
-                        .execute()
-                        .value
-
-                    await MainActor.run {
-                        self.searchResults = response
-                    }
-                } catch {
-                    Log.error("Search error: \(error.localizedDescription)")
-                }
-            }
+    /// تفعيل العضو وربطه بالأب عبر AdminRequestViewModel
+    private func approveAndLink() {
+        guard authVM.canModerate else {
+            Log.warning("[AUTH] Unauthorized approveAndLink attempt")
+            return
         }
-    // دالة التفعيل والربط النهائي
-    func approveAndLink() {
         guard let fatherId = selectedFather?.id else { return }
         isLoading = true
 
         Task {
-            do {
-                // 1. تحديث بيانات العضو الجديد (تغيير الحالة وربط الأب)
-                try await SupabaseConfig.client
-                    .from("profiles")
-                    .update([
-                        "status": "active",
-                        "father_id": fatherId.uuidString
-                    ])
-                    .eq("id", value: member.id)
-                    .execute()
-
-                Log.info("Member approved and linked successfully")
-
-                await MainActor.run {
-                    onComplete()
-                    dismiss()
-                }
-            } catch {
-                Log.error("Member approval failed: \(error.localizedDescription)")
+            await adminRequestVM.approveMember(memberId: member.id, fatherId: fatherId)
+            await MainActor.run {
+                isLoading = false
+                onComplete()
+                dismiss()
             }
-            isLoading = false
         }
     }
 }

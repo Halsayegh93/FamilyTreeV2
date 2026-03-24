@@ -119,16 +119,26 @@ struct FamilyMember: Identifiable, Codable, Equatable {
     }
     
     static func == (lhs: FamilyMember, rhs: FamilyMember) -> Bool {
-            return lhs.id == rhs.id
+        return lhs.id == rhs.id
+            && lhs.role == rhs.role
+            && lhs.firstName == rhs.firstName
+            && lhs.fullName == rhs.fullName
+            && lhs.status == rhs.status
+            && lhs.phoneNumber == rhs.phoneNumber
+            && lhs.avatarUrl == rhs.avatarUrl
+            && lhs.isDeceased == rhs.isDeceased
+            && lhs.isHiddenFromTree == rhs.isHiddenFromTree
         }
 
     // MARK: - Enums
     enum UserRole: String, Codable {
-        case admin, supervisor, member, pending
-        
+        case owner, admin, supervisor, member, pending
+
         // نضع التعريف هنا لكي يعمل كود authVM.currentUser?.role.color ✅
+        /// اللون العلني — المالك يظهر بنفس لون المدير
         var color: Color {
             switch self {
+            case .owner: return DS.Color.primary
             case .admin: return DS.Color.adminRole
             case .supervisor: return DS.Color.supervisorRole
             case .member: return DS.Color.memberRole
@@ -160,9 +170,11 @@ struct FamilyMember: Identifiable, Codable, Equatable {
         return status == .frozen
     }
     
+    /// الاسم العلني للمستوى — المالك يظهر كـ "مدير" للباقي
     var roleName: String {
         switch role {
-        case .admin: return L10n.t("مشرف عام", "Admin")
+        case .owner: return L10n.t("مدير", "Admin")
+        case .admin: return L10n.t("مدير", "Admin")
         case .supervisor: return L10n.t("مشرف", "Supervisor")
         case .member: return L10n.t("عضو", "Member")
         case .pending: return L10n.t("معلق", "Pending")
@@ -176,6 +188,16 @@ struct FamilyMember: Identifiable, Codable, Equatable {
             return "\(first) \(last)"
         }
         return fullName
+    }
+
+    /// الاسم الثلاثي: الأول + الثاني + الأخير (العائلة)
+    /// مثال: "حسن صلاح عبدالحميد حسن موسى محمدعلي الصايغ" → "حسن صلاح الصايغ"
+    var shortFullName: String {
+        let parts = fullName.split(separator: " ")
+        guard parts.count >= 3, let first = parts.first, let last = parts.last else { return fullName }
+        let second = parts[1]
+        if second == last { return "\(first) \(second)" }
+        return "\(first) \(second) \(last)"
     }
 
     enum CodingKeys: String, CodingKey {

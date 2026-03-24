@@ -19,6 +19,8 @@ final class ProfileEditCooldown {
     static let shared = ProfileEditCooldown()
 
     private let defaults = UserDefaults.standard
+    // Cooldown timestamps also stored in Keychain for tamper resistance
+    private let useKeychain = true
 
     /// مدة الـ cooldown العادي (24 ساعة)
     private let baseCooldown: TimeInterval = 24 * 60 * 60
@@ -44,6 +46,8 @@ final class ProfileEditCooldown {
         for field in EditableField.allCases {
             defaults.removeObject(forKey: lastEditKey(field))
             defaults.removeObject(forKey: prevEditKey(field))
+            KeychainHelper.delete(forKey: lastEditKey(field))
+            KeychainHelper.delete(forKey: prevEditKey(field))
         }
         Log.info("[Cooldown] تم تصفير جميع العدادات")
     }
@@ -68,9 +72,9 @@ final class ProfileEditCooldown {
 
     /// الوقت المتبقي بالثواني قبل ما يقدر يعدل
     func remainingTime(_ field: EditableField) -> TimeInterval {
-        guard let lastEdit = defaults.object(forKey: lastEditKey(field)) as? Date else {
-            return 0
-        }
+        // محاولة من Keychain أولاً (أصعب بالتلاعب)، ثم UserDefaults كـ fallback
+        let lastEdit: Date? = loadDate(forKey: lastEditKey(field))
+        guard let lastEdit else { return 0 }
 
         let cooldown = currentCooldown(for: field)
         let elapsed = Date().timeIntervalSince(lastEdit)
@@ -84,11 +88,11 @@ final class ProfileEditCooldown {
         let now = Date()
 
         // نقل آخر تعديل للسابق
-        if let lastEdit = defaults.object(forKey: lastEditKey(field)) as? Date {
-            defaults.set(lastEdit, forKey: prevEditKey(field))
+        if let lastEdit = loadDate(forKey: lastEditKey(field)) {
+            saveDate(lastEdit, forKey: prevEditKey(field))
         }
 
-        defaults.set(now, forKey: lastEditKey(field))
+        saveDate(now, forKey: lastEditKey(field))
     }
 
     /// نص الوقت المتبقي مثل "٣ ساعات و ١٥ دقيقة"
@@ -121,8 +125,8 @@ final class ProfileEditCooldown {
 
     /// حساب مدة الـ cooldown — 24 أو 48 ساعة
     private func currentCooldown(for field: EditableField) -> TimeInterval {
-        guard let lastEdit = defaults.object(forKey: lastEditKey(field)) as? Date,
-              let prevEdit = defaults.object(forKey: prevEditKey(field)) as? Date else {
+        guard let lastEdit = loadDate(forKey: lastEditKey(field)),
+              let prevEdit = loadDate(forKey: prevEditKey(field)) else {
             return baseCooldown
         }
 
@@ -133,5 +137,22 @@ final class ProfileEditCooldown {
         }
 
         return baseCooldown
+    }
+
+    // MARK: - Secure Storage Helpers
+
+    private func saveDate(_ date: Date, forKey key: String) {
+        defaults.set(date, forKey: key)
+        KeychainHelper.save(String(date.timeIntervalSince1970), forKey: key)
+    }
+
+    private func loadDate(forKey key: String) -> Date? {
+        // Keychain أولاً (أصعب بالتلاعب)
+        if let stored = KeychainHelper.load(forKey: key),
+           let interval = Double(stored) {
+            return Date(timeIntervalSince1970: interval)
+        }
+        // Fallback إلى UserDefaults
+        return defaults.object(forKey: key) as? Date
     }
 }

@@ -358,9 +358,9 @@ class NewsViewModel: ObservableObject {
                    postAuthorId != memberId {
                     let likerName = currentUser?.fullName ?? ""
                     await notificationVM?.sendPushToMembers(
-                        title: L10n.t("إعجاب جديد ❤️", "New Like ❤️"),
+                        title: L10n.t("إعجاب جديد", "New Like"),
                         body: L10n.t(
-                            "\(likerName) أعجب بخبرك",
+                            "\(likerName) أعجب بمنشورك",
                             "\(likerName) liked your post"
                         ),
                         kind: "news_like",
@@ -374,7 +374,7 @@ class NewsViewModel: ObservableObject {
                         "kind": AnyEncodable("news_like"),
                         "created_by": AnyEncodable(memberId.uuidString)
                     ]
-                    try? await supabase.from("notifications").insert(payload).execute()
+                    _ = try? await supabase.from("notifications").insert(payload).execute()
                 }
             }
         } catch {
@@ -419,9 +419,9 @@ class NewsViewModel: ObservableObject {
             if let postAuthorId = allNews.first(where: { $0.id == postId })?.author_id,
                postAuthorId != memberId {
                 await notificationVM?.sendPushToMembers(
-                    title: L10n.t("تعليق جديد 💬", "New Comment 💬"),
+                    title: L10n.t("تعليق جديد", "New Comment"),
                     body: L10n.t(
-                        "\(authorName) علّق على خبرك",
+                        "\(authorName) علّق على منشورك",
                         "\(authorName) commented on your post"
                     ),
                     kind: "news_comment",
@@ -436,7 +436,7 @@ class NewsViewModel: ObservableObject {
                         "kind": AnyEncodable("news_comment"),
                         "created_by": AnyEncodable(creator.uuidString)
                     ]
-                    try? await supabase.from("notifications").insert(payload).execute()
+                    _ = try? await supabase.from("notifications").insert(payload).execute()
                 }
             }
 
@@ -573,7 +573,7 @@ class NewsViewModel: ObservableObject {
             "author_id": AnyEncodable(user.id.uuidString),
             "author_name": AnyEncodable(user.fullName),
             "author_role": AnyEncodable(user.roleName),
-            "role_color": AnyEncodable(user.role == .admin ? "purple" : (user.role == .supervisor ? "orange" : "blue")),
+            "role_color": AnyEncodable(user.role == .owner ? "gold" : (user.role == .admin ? "purple" : (user.role == .supervisor ? "orange" : "blue"))),
             "content": AnyEncodable(content),
             "type": AnyEncodable(type),
             "image_url": AnyEncodable(imageURLs.first),
@@ -586,18 +586,25 @@ class NewsViewModel: ObservableObject {
 
         do {
             try await supabase.from("news").insert(newPost).execute()
+            let posterName = currentUser?.fullName ?? ""
             if !shouldAutoApprove, currentUser?.role == .member {
                 await notificationVM?.notifyAdminsWithPush(
-                    title: "خبر جديد بانتظار المراجعة",
-                    body: "خبر جديد يحتاج موافقة الإدارة.",
+                    title: L10n.t("منشور بانتظار الموافقة", "Post Pending Approval"),
+                    body: L10n.t(
+                        "\(posterName) أرسل منشوراً جديداً يحتاج موافقتكم",
+                        "\(posterName) submitted a new post for review"
+                    ),
                     kind: "news_add"
                 )
             }
             if shouldAutoApprove {
                 await notificationVM?.notifyAdminsWithPush(
-                    title: "خبر جديد",
-                    body: "خبر جديد تم نشره.",
-                    kind: "news_add"
+                    title: L10n.t("منشور جديد", "New Post"),
+                    body: L10n.t(
+                        "\(posterName) نشر منشوراً جديداً",
+                        "\(posterName) published a new post"
+                    ),
+                    kind: "news_published"
                 )
             }
             Log.info(shouldAutoApprove ? "تم نشر الخبر بنجاح" : "تم إرسال الخبر للمراجعة")
@@ -616,7 +623,7 @@ class NewsViewModel: ObservableObject {
                     "author_id": AnyEncodable(user.id.uuidString),
                     "author_name": AnyEncodable(user.fullName),
                     "author_role": AnyEncodable(user.roleName),
-                    "role_color": AnyEncodable(user.role == .admin ? "purple" : (user.role == .supervisor ? "orange" : "blue")),
+                    "role_color": AnyEncodable(user.role == .owner ? "gold" : (user.role == .admin ? "purple" : (user.role == .supervisor ? "orange" : "blue"))),
                     "content": AnyEncodable(content),
                     "type": AnyEncodable(type),
                     "image_url": AnyEncodable(imageURLs.first),
@@ -653,8 +660,15 @@ class NewsViewModel: ObservableObject {
         pollQuestion: String? = nil,
         pollOptions: [String] = []
     ) async -> Bool {
-        guard currentUser?.role != .pending else {
+        guard let userId = currentUser?.id, currentUser?.role != .pending else {
             newsPostErrorMessage = "غير مصرح لك بتعديل الخبر."
+            return false
+        }
+
+        // التحقق: العضو يعدل خبره فقط، المدير/المشرف يعدل أي خبر
+        let isAuthor = allNews.first(where: { $0.id == postId })?.author_id == userId
+        guard isAuthor || canModerate else {
+            newsPostErrorMessage = L10n.t("لا يمكنك تعديل خبر غيرك.", "You can only edit your own posts.")
             return false
         }
 
@@ -746,8 +760,8 @@ class NewsViewModel: ObservableObject {
 
                 if let authorId {
                     await self?.notificationVM?.sendNotification(
-                        title: L10n.t("تم نشر خبرك", "Post Published"),
-                        body: L10n.t("خبرك تمت الموافقة عليه ونُشر", "Your post was approved and published"),
+                        title: L10n.t("تم نشر منشورك", "Your Post is Published"),
+                        body: L10n.t("منشورك تمت الموافقة عليه وأصبح مرئياً للجميع", "Your post was approved and is now visible to everyone"),
                         targetMemberIds: [authorId]
                     )
                 }
@@ -768,7 +782,7 @@ class NewsViewModel: ObservableObject {
     // MARK: - Reject News Post
 
     func rejectNewsPost(postId: UUID) async {
-        guard canModerate else { return }
+        guard authVM?.isAdmin == true else { Log.warning("رفض الخبر مرفوض: الصلاحية للمدير فقط"); return }
 
         optimisticRemove(from: &pendingNewsRequests, id: postId, apiWork: { [weak self] in
             do {
@@ -790,7 +804,7 @@ class NewsViewModel: ObservableObject {
     // MARK: - Delete News Post
 
     func deleteNewsPost(postId: UUID) async {
-        guard currentUser?.role == .admin else { return }
+        guard authVM?.canDeleteNews == true else { return }
         self.isLoading = true
 
         do {
@@ -806,8 +820,8 @@ class NewsViewModel: ObservableObject {
             }
 
             await notificationVM?.notifyAdminsWithPush(
-                title: "حذف خبر",
-                body: "خبر منشور تم حذفه.",
+                title: L10n.t("حذف منشور", "Post Deleted"),
+                body: L10n.t("تم حذف منشور من الأخبار", "A news post has been deleted"),
                 kind: "news_add"
             )
         } catch {
@@ -839,15 +853,19 @@ class NewsViewModel: ObservableObject {
                 .insert(payload)
                 .execute()
 
+            let reporterName = currentUser?.fullName ?? ""
             await notificationVM?.notifyAdminsWithPush(
-                title: "بلاغ جديد",
-                body: "بلاغ على خبر يحتاج مراجعة.",
+                title: L10n.t("بلاغ على منشور", "Post Report"),
+                body: L10n.t(
+                    "\(reporterName) أبلغ عن منشور يحتاج مراجعتكم",
+                    "\(reporterName) reported a post that needs your review"
+                ),
                 kind: "news_report"
             )
 
             await notificationVM?.sendNotification(
-                title: "بلاغك وصل",
-                body: "بلاغك تم استلامه وسيتم مراجعته.",
+                title: L10n.t("تم استلام بلاغك", "Report Received"),
+                body: L10n.t("بلاغك وصلنا وسيتم مراجعته من الإدارة", "Your report was received and will be reviewed"),
                 targetMemberIds: [userId]
             )
         } catch {

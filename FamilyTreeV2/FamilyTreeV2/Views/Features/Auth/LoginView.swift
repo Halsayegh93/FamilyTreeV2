@@ -164,7 +164,7 @@ struct LoginView: View {
                         .keyboardType(.phonePad)
                         .font(DS.Font.scaled(16, weight: .bold))
                         .multilineTextAlignment(.center)
-                        .foregroundStyle(Color(UIColor.label))
+                        .foregroundStyle(DS.Color.textPrimary)
                 }
                 .frame(width: 80)
 
@@ -298,7 +298,7 @@ struct LoginView: View {
             TextField("------", text: otpBinding)
                 .keyboardType(.numberPad)
                 .font(DS.Font.scaled(32, weight: .bold))
-                .foregroundStyle(Color(UIColor.label))
+                .foregroundStyle(DS.Color.textPrimary)
                 .multilineTextAlignment(.center)
                 .tracking(12)
                 .frame(height: 60)

@@ -30,6 +30,9 @@ struct AppSettings: Codable {
 @MainActor
 class AppSettingsViewModel: ObservableObject {
     private let supabase = SupabaseConfig.client
+    weak var authVM: AuthViewModel?
+    private var canModerate: Bool { authVM?.canModerate ?? false }
+    private var canManageSettings: Bool { authVM?.canManageSettings ?? false }
 
     @Published var settings = AppSettings(
         id: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!,
@@ -67,6 +70,10 @@ class AppSettingsViewModel: ObservableObject {
 
     /// تحديث إعداد واحد في السيرفر
     func updateSetting<T: Encodable>(_ key: String, value: T, updatedBy: UUID?) async {
+        guard canManageSettings else {
+            Log.warning("[AUTH] Unauthorized updateSetting attempt — owner only")
+            return
+        }
         isSaving = true
         do {
             var updateData: [String: AnyEncodable] = [
@@ -94,6 +101,10 @@ class AppSettingsViewModel: ObservableObject {
 
     /// إعادة تعيين جميع الإعدادات للقيم الافتراضية
     func resetToDefaults(updatedBy: UUID?) async {
+        guard canManageSettings else {
+            Log.warning("[AUTH] Unauthorized resetToDefaults attempt — owner only")
+            return
+        }
         isSaving = true
         do {
             let updateData: [String: AnyEncodable] = [

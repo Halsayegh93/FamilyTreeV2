@@ -58,6 +58,7 @@ class AdminRequestViewModel: ObservableObject {
 
     private var currentUser: FamilyMember? { authVM?.currentUser }
     private var canModerate: Bool { authVM?.canModerate ?? false }
+    private var isAdmin: Bool { authVM?.isAdmin ?? false }
 
     /// حذف العنصر محلياً فوراً مع أنيميشن ثم تحديث من السيرفر بعد تأخير
     private func removeLocallyThenRefresh<T: Identifiable>(
@@ -108,9 +109,9 @@ class AdminRequestViewModel: ObservableObject {
         ))
     }
 
-    /// Helper to get a safe member name for logging (uses member ID string)
+    /// Helper to get a member name by ID — fallback to UUID if not found
     private func getSafeMemberName(for memberId: UUID) -> String {
-        return memberId.uuidString
+        return memberById(memberId)?.fullName ?? memberId.uuidString
     }
 
     /// Lookup a member by ID from authVM's member cache
@@ -160,13 +161,12 @@ class AdminRequestViewModel: ObservableObject {
                 }
             }
 
-            let requesterName = user.firstName
             let memberName = payload.targetMemberName ?? payload.newMemberName ?? ""
             await notificationVM?.notifyAdminsWithPush(
-                title: L10n.t("طلب تعديل الشجرة", "Tree Edit Request"),
+                title: L10n.t("طلب تعديل شجرة العائلة", "Family Tree Edit Request"),
                 body: L10n.t(
-                    "طلب \(payload.action) من \(requesterName): \(memberName)",
-                    "\(payload.action) request from \(requesterName): \(memberName)"
+                    "طلب تعديل: \(payload.action) — \(memberName)",
+                    "Edit request: \(payload.action) — \(memberName)"
                 ),
                 kind: "tree_edit"
             )
@@ -276,7 +276,7 @@ class AdminRequestViewModel: ObservableObject {
                 }
 
                 await self?.notificationVM?.sendNotification(
-                    title: L10n.t("تم تنفيذ طلبك", "Request Completed"),
+                    title: L10n.t("تم قبول طلبك", "Your Request Was Approved"),
                     body: notifBody,
                     targetMemberIds: [request.requesterId]
                 )
@@ -291,6 +291,7 @@ class AdminRequestViewModel: ObservableObject {
     }
 
     func rejectTreeEditRequest(request: AdminRequest, reason: String? = nil) async {
+        guard isAdmin else { Log.warning("رفض الطلب مرفوض: الصلاحية للمدير فقط"); return }
         optimisticRemove(from: &treeEditRequests, id: request.id, apiWork: { [weak self] in
             do {
                 try await self?.supabase
@@ -310,7 +311,7 @@ class AdminRequestViewModel: ObservableObject {
                     : "Your \(actionDesc) tree edit request was rejected: \(reasonText)"
 
                 await self?.notificationVM?.sendNotification(
-                    title: L10n.t("رُفض الطلب", "Request Rejected"),
+                    title: L10n.t("لم يتم قبول طلبك", "Your Request Was Declined"),
                     body: L10n.t(bodyAr, bodyEn),
                     targetMemberIds: [request.requesterId]
                 )
@@ -347,10 +348,12 @@ class AdminRequestViewModel: ObservableObject {
 
             let deceasedMemberName = memberById(memberId)?.firstName ?? "عضو"
             let requesterDeceasedName = currentUser?.firstName ?? "عضو"
-            let deceasedBody = "تأكيد وفاة: \(deceasedMemberName)\nالتاريخ: \(dateString)\nمن: \(requesterDeceasedName)"
             await notificationVM?.notifyAdminsWithPush(
-                title: "طلب تأكيد وفاة",
-                body: deceasedBody,
+                title: L10n.t("طلب تأكيد وفاة", "Deceased Status Request"),
+                body: L10n.t(
+                    "\(requesterDeceasedName) يطلب تأكيد وفاة \(deceasedMemberName)",
+                    "\(requesterDeceasedName) requests deceased confirmation for \(deceasedMemberName)"
+                ),
                 kind: "deceased_report"
             )
 
@@ -395,8 +398,8 @@ class AdminRequestViewModel: ObservableObject {
                     .execute()
 
                 await self?.notificationVM?.sendNotification(
-                    title: L10n.t("تم تنفيذ طلبك", "Request Completed"),
-                    body: L10n.t("تم تأكيد الوفاة", "Deceased status confirmed"),
+                    title: L10n.t("تم قبول طلبك", "Your Request Was Approved"),
+                    body: L10n.t("تم تأكيد حالة الوفاة وتحديث الشجرة", "Deceased status confirmed and tree updated"),
                     targetMemberIds: [request.requesterId]
                 )
                 Log.info("تم قبول الطلب وتحديث الشجرة بنجاح")
@@ -410,6 +413,7 @@ class AdminRequestViewModel: ObservableObject {
     }
 
     func rejectDeceasedRequest(request: AdminRequest) async {
+        guard isAdmin else { Log.warning("رفض الطلب مرفوض: الصلاحية للمدير فقط"); return }
         optimisticRemove(from: &deceasedRequests, id: request.id, apiWork: { [weak self] in
             do {
                 try await self?.supabase
@@ -447,6 +451,7 @@ class AdminRequestViewModel: ObservableObject {
     }
 
     func rejectChildAddRequest(request: AdminRequest) async {
+        guard isAdmin else { Log.warning("رفض الطلب مرفوض: الصلاحية للمدير فقط"); return }
         optimisticRemove(from: &childAddRequests, id: request.id, apiWork: { [weak self] in
             do {
                 if let childId = request.newValue {
@@ -482,8 +487,8 @@ class AdminRequestViewModel: ObservableObject {
                     .execute()
 
                 await self?.notificationVM?.sendNotification(
-                    title: L10n.t("تم تنفيذ طلبك", "Request Completed"),
-                    body: L10n.t("تمت الموافقة على إضافة الابن", "Your child add request was approved"),
+                    title: L10n.t("تم قبول طلبك", "Your Request Was Approved"),
+                    body: L10n.t("تمت الموافقة على إضافة الابن وتحديث الشجرة", "Your child add request was approved and tree updated"),
                     targetMemberIds: [request.requesterId]
                 )
                 Log.info("تم تأكيد طلب إضافة الابن بنجاح")
@@ -570,6 +575,15 @@ class AdminRequestViewModel: ObservableObject {
             self.isLoading = false
             return
         }
+        // التحقق من تكرار الرقم
+        if let memberVM = memberVM {
+            let check = memberVM.isPhoneDuplicate(normalizedPhone, excludingMemberId: memberId)
+            if check.isDuplicate {
+                Log.warning("رقم الهاتف مستخدم من عضو آخر: \(check.existingMember?.fullName ?? "")")
+                self.isLoading = false
+                return
+            }
+        }
         do {
             // 1) Update phone
             try await supabase
@@ -645,10 +659,12 @@ class AdminRequestViewModel: ObservableObject {
                 .execute()
 
             let phoneRequesterName = currentUser?.firstName ?? "عضو"
-            let phoneChangeBody = "تغيير رقم جوال\n\(phoneRequesterName) — \(KuwaitPhone.display(normalizedPhone))"
             await notificationVM?.notifyAdminsWithPush(
-                title: "طلب تغيير رقم جوال",
-                body: phoneChangeBody,
+                title: L10n.t("طلب تغيير رقم الهاتف", "Phone Change Request"),
+                body: L10n.t(
+                    "\(phoneRequesterName) يطلب تغيير رقم هاتفه",
+                    "\(phoneRequesterName) requests a phone number change"
+                ),
                 kind: "phone_change"
             )
 
@@ -678,11 +694,13 @@ class AdminRequestViewModel: ObservableObject {
                 .insert(requestData)
                 .execute()
 
-            let requesterName = currentUser?.firstName ?? "عضو"
-            let body = "تغيير اسم\n\(requesterName) → \(newName)"
+            let requesterFullName = currentUser?.fullName ?? "عضو"
             await notificationVM?.notifyAdminsWithPush(
-                title: "طلب تغيير اسم",
-                body: body,
+                title: L10n.t("طلب تغيير الاسم", "Name Change Request"),
+                body: L10n.t(
+                    "طلب تغيير اسم: \(requesterFullName) إلى \(newName)",
+                    "Name change request: \(requesterFullName) to \(newName)"
+                ),
                 kind: "name_change"
             )
 
@@ -746,8 +764,8 @@ class AdminRequestViewModel: ObservableObject {
                     .execute()
 
                 await self?.notificationVM?.sendNotification(
-                    title: L10n.t("تم تغيير الاسم", "Name Changed"),
-                    body: L10n.t("اسمك الجديد: \(newName)", "Your new name: \(newName)"),
+                    title: L10n.t("تم تغيير اسمك", "Your Name Was Changed"),
+                    body: L10n.t("تم اعتماد اسمك الجديد: \(newName)", "Your new name has been approved: \(newName)"),
                     targetMemberIds: [request.requesterId]
                 )
                 Log.info("[NameChange] تم قبول طلب تغيير الاسم → \(newName)")
@@ -761,6 +779,7 @@ class AdminRequestViewModel: ObservableObject {
     }
 
     func rejectNameChangeRequest(request: AdminRequest) async {
+        guard isAdmin else { Log.warning("رفض الطلب مرفوض: الصلاحية للمدير فقط"); return }
         optimisticRemove(from: &nameChangeRequests, id: request.id, apiWork: { [weak self] in
             do {
                 try await self?.supabase
@@ -770,8 +789,8 @@ class AdminRequestViewModel: ObservableObject {
                     .execute()
 
                 await self?.notificationVM?.sendNotification(
-                    title: L10n.t("رُفض الطلب", "Request Rejected"),
-                    body: L10n.t("طلب تغيير الاسم لم يُقبل", "Your name change request was not approved"),
+                    title: L10n.t("لم يتم قبول طلبك", "Your Request Was Declined"),
+                    body: L10n.t("طلب تغيير الاسم لم تتم الموافقة عليه", "Your name change request was not approved"),
                     targetMemberIds: [request.requesterId]
                 )
                 Log.info("[NameChange] تم رفض طلب تغيير الاسم")
@@ -810,6 +829,14 @@ class AdminRequestViewModel: ObservableObject {
     func approvePhoneChangeRequest(request: PhoneChangeRequest) async {
         guard canModerate, let rawPhone = request.newValue, !rawPhone.isEmpty else { return }
         guard let newPhone = KuwaitPhone.normalizeForStorageFromInput(rawPhone) else { return }
+        // التحقق من تكرار الرقم قبل الموافقة
+        if let memberVM = memberVM {
+            let check = memberVM.isPhoneDuplicate(newPhone, excludingMemberId: request.memberId)
+            if check.isDuplicate {
+                Log.warning("رفض تغيير الرقم: مستخدم من \(check.existingMember?.fullName ?? "")")
+                return
+            }
+        }
 
         optimisticRemove(from: &phoneChangeRequests, id: request.id, apiWork: { [weak self] in
             do {
@@ -827,8 +854,8 @@ class AdminRequestViewModel: ObservableObject {
 
                 if let requesterId = request.requesterId {
                     await self?.notificationVM?.sendNotification(
-                        title: L10n.t("تم تنفيذ طلبك", "Request Completed"),
-                        body: L10n.t("رقم جوالك الجديد تم اعتماده", "Your new phone number was approved"),
+                        title: L10n.t("تم تغيير رقم هاتفك", "Phone Number Updated"),
+                        body: L10n.t("رقم هاتفك الجديد تم اعتماده بنجاح", "Your new phone number has been approved"),
                         targetMemberIds: [requesterId]
                     )
                 }
@@ -842,7 +869,7 @@ class AdminRequestViewModel: ObservableObject {
     }
 
     func rejectPhoneChangeRequest(request: PhoneChangeRequest) async {
-        guard canModerate else { return }
+        guard isAdmin else { Log.warning("رفض الطلب مرفوض: الصلاحية للمدير فقط"); return }
 
         optimisticRemove(from: &phoneChangeRequests, id: request.id, apiWork: { [weak self] in
             do {
@@ -854,8 +881,8 @@ class AdminRequestViewModel: ObservableObject {
 
                 if let requesterId = request.requesterId {
                     await self?.notificationVM?.sendNotification(
-                        title: L10n.t("رُفض الطلب", "Request Rejected"),
-                        body: L10n.t("طلب تغيير رقم الجوال لم يُقبل", "Your phone change request was not approved"),
+                        title: L10n.t("لم يتم قبول طلبك", "Your Request Was Declined"),
+                        body: L10n.t("طلب تغيير رقم الهاتف لم تتم الموافقة عليه", "Your phone change request was not approved"),
                         targetMemberIds: [requesterId]
                     )
                 }
@@ -888,8 +915,8 @@ class AdminRequestViewModel: ObservableObject {
             let memberName = getSafeMemberName(for: memberId)
 
             // إشعار المستخدم بالتفعيل
-            let userTitle = "تم تفعيل حسابك"
-            let userBody = "تم تفعيل حسابك بنجاح. يمكنك الآن استخدام التطبيق."
+            let userTitle = L10n.t("مرحباً بك في العائلة", "Welcome to the Family")
+            let userBody = L10n.t("تم تفعيل حسابك بنجاح — يمكنك الآن استخدام التطبيق", "Your account is now active — you can start using the app")
             if let creator = currentUser?.id {
                 let payload: [String: AnyEncodable] = [
                     "target_member_id": AnyEncodable(memberId.uuidString),
@@ -898,7 +925,7 @@ class AdminRequestViewModel: ObservableObject {
                     "kind": AnyEncodable("account_activated"),
                     "created_by": AnyEncodable(creator.uuidString)
                 ]
-                try? await supabase.from("notifications").insert(payload).execute()
+                _ = try? await supabase.from("notifications").insert(payload).execute()
             }
             await notificationVM?.sendPushToMembers(
                 title: userTitle,
@@ -907,11 +934,14 @@ class AdminRequestViewModel: ObservableObject {
                 targetMemberIds: [memberId]
             )
 
-            // إشعار المدراء (خارجي + داخلي)
+            // إشعار المدراء
             await notificationVM?.notifyAdminsWithPush(
-                title: "تفعيل حساب",
-                body: "حساب \(memberName) تم تفعيله.",
-                kind: "admin"
+                title: L10n.t("تفعيل حساب", "Account Activated"),
+                body: L10n.t(
+                    "تم تفعيل حساب \(memberName)",
+                    "\(memberName)'s account was activated"
+                ),
+                kind: "account_activated"
             )
         } catch {
             Log.error("فشل تفعيل الحساب: \(error.localizedDescription)")
@@ -969,6 +999,7 @@ class AdminRequestViewModel: ObservableObject {
     /// Copies the tree position data (father, children, bio, photos) from the old tree record
     /// to the new registration record (which has the correct auth UUID), then deletes the old record.
     func mergeMemberIntoTreeMember(newMemberId: UUID, existingTreeMemberId: UUID) async {
+        guard canModerate else { Log.error("الدمج مرفوض: الصلاحية للمدير أو المشرف فقط"); return }
         Log.info("[MERGE] ==============================")
         Log.info("[MERGE] بدء الدمج:")
         Log.info("[MERGE]   العضو الجديد (يبقى): \(newMemberId)")
@@ -1190,12 +1221,18 @@ class AdminRequestViewModel: ObservableObject {
 
         let body: String
         if let fatherName, !fatherName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            body = "انضمامك تم اعتماده وتم ربطك مع: \(fatherName)."
+            body = L10n.t(
+                "تم اعتماد انضمامك وربطك بالشجرة مع: \(fatherName)",
+                "Your membership was approved and linked to: \(fatherName)"
+            )
         } else {
-            body = "انضمامك تم اعتماده بنجاح."
+            body = L10n.t(
+                "تم اعتماد انضمامك للعائلة بنجاح",
+                "Your family membership was approved successfully"
+            )
         }
 
-        let title = "أهلاً بك في العائلة"
+        let title = L10n.t("مرحباً بك في العائلة", "Welcome to the Family")
 
         let payload: [String: AnyEncodable] = [
             "target_member_id": AnyEncodable(memberId.uuidString),
@@ -1212,8 +1249,11 @@ class AdminRequestViewModel: ObservableObject {
             // Notify admins and supervisors about the new member (خارجي + داخلي)
             let memberName = getSafeMemberName(for: memberId)
             await notificationVM?.notifyAdminsWithPush(
-                title: "عضو جديد",
-                body: "\(memberName) انضم للعائلة.",
+                title: L10n.t("انضمام عضو جديد", "New Member Joined"),
+                body: L10n.t(
+                    "\(memberName) انضم لشجرة العائلة",
+                    "\(memberName) joined the family tree"
+                ),
                 kind: "join_approved"
             )
         } catch {
@@ -1254,8 +1294,8 @@ class AdminRequestViewModel: ObservableObject {
 
     /// Reject a join request or permanently delete a member
     func rejectOrDeleteMember(memberId: UUID) async {
-        guard currentUser?.role == .admin else {
-            Log.error("تم رفض حذف السجل: الصلاحية للمدير فقط")
+        guard authVM?.canDeleteMembers == true else {
+            Log.error("تم رفض حذف السجل: الصلاحية للمالك فقط")
             return
         }
 
@@ -1295,8 +1335,11 @@ class AdminRequestViewModel: ObservableObject {
                     .execute()
 
                 await self?.notificationVM?.notifyAdminsWithPush(
-                    title: "حذف عضو",
-                    body: "\(deletedName) تم حذفه من الشجرة.",
+                    title: L10n.t("حذف عضو", "Member Removed"),
+                    body: L10n.t(
+                        "تم حذف \(deletedName) من شجرة العائلة",
+                        "\(deletedName) was removed from the family tree"
+                    ),
                     kind: "admin"
                 )
                 Log.info("تم حذف العضو مع تنظيف المراجع المرتبطة بنجاح")
@@ -1352,8 +1395,8 @@ class AdminRequestViewModel: ObservableObject {
                     .execute()
 
                 await self?.notificationVM?.sendNotification(
-                    title: L10n.t("تم تنفيذ طلبك", "Request Completed"),
-                    body: L10n.t("بلاغك تمت مراجعته", "Your report was reviewed"),
+                    title: L10n.t("تمت مراجعة بلاغك", "Your Report Was Reviewed"),
+                    body: L10n.t("بلاغك تم مراجعته واتخاذ الإجراء المناسب", "Your report was reviewed and appropriate action was taken"),
                     targetMemberIds: [request.requesterId]
                 )
             } catch {
@@ -1366,7 +1409,7 @@ class AdminRequestViewModel: ObservableObject {
     }
 
     func rejectNewsReport(request: AdminRequest) async {
-        guard canModerate else { return }
+        guard isAdmin else { Log.warning("رفض الطلب مرفوض: الصلاحية للمدير فقط"); return }
 
         optimisticRemove(from: &newsReportRequests, id: request.id, apiWork: { [weak self] in
             do {
@@ -1416,14 +1459,13 @@ class AdminRequestViewModel: ObservableObject {
 
             // 2. إنشاء طلب إداري
             let memberName = memberById(memberId)?.fullName ?? "عضو"
-            let requesterName = user.firstName
 
             let basePayload: [String: AnyEncodable] = [
                 "member_id": AnyEncodable(memberId.uuidString),
                 "requester_id": AnyEncodable(user.id.uuidString),
                 "request_type": AnyEncodable("photo_suggestion"),
                 "status": AnyEncodable("pending"),
-                "details": AnyEncodable("اقتراح صورة لـ \(memberName) بواسطة \(requesterName)")
+                "details": AnyEncodable("اقتراح صورة لـ \(memberName)")
             ]
 
             // محاولة إرسال مع new_value
@@ -1441,10 +1483,10 @@ class AdminRequestViewModel: ObservableObject {
 
             // 3. إشعار المدراء
             await notificationVM?.notifyAdminsWithPush(
-                title: L10n.t("اقتراح صورة", "Photo Suggestion"),
+                title: L10n.t("اقتراح صورة جديدة", "New Photo Suggestion"),
                 body: L10n.t(
-                    "\(requesterName) اقترح صورة لـ \(memberName)",
-                    "\(requesterName) suggested a photo for \(memberName)"
+                    "اقتراح صورة جديدة لـ: \(memberName) تحتاج موافقتكم",
+                    "New photo suggestion for: \(memberName) — needs approval"
                 ),
                 kind: "photo_suggestion"
             )
@@ -1503,8 +1545,8 @@ class AdminRequestViewModel: ObservableObject {
                     .execute()
 
                 await self?.notificationVM?.sendNotification(
-                    title: L10n.t("تم تنفيذ طلبك", "Request Completed"),
-                    body: L10n.t("الصورة المقترحة تم قبولها", "Your photo suggestion was approved"),
+                    title: L10n.t("تم قبول اقتراحك", "Your Suggestion Was Approved"),
+                    body: L10n.t("الصورة المقترحة تم قبولها وتحديثها", "Your photo suggestion was approved and applied"),
                     targetMemberIds: [request.requesterId]
                 )
                 Log.info("[PhotoSuggestion] تم قبول اقتراح الصورة وتحديث الملف الشخصي")
@@ -1519,7 +1561,7 @@ class AdminRequestViewModel: ObservableObject {
 
     /// رفض اقتراح صورة — حذف الصورة من التخزين
     func rejectPhotoSuggestion(request: AdminRequest) async {
-        guard canModerate else { return }
+        guard isAdmin else { Log.warning("رفض الطلب مرفوض: الصلاحية للمدير فقط"); return }
 
         optimisticRemove(from: &photoSuggestionRequests, id: request.id, apiWork: { [weak self] in
             do {

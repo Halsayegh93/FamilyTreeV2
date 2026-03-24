@@ -3,8 +3,7 @@ import SwiftUI
 struct FrozenAccountView: View {
     @EnvironmentObject var authVM: AuthViewModel
 
-    private var isArabic: Bool { LanguageManager.shared.selectedLanguage == "ar" }
-    private func t(_ ar: String, _ en: String) -> String { isArabic ? ar : en }
+    private func t(_ ar: String, _ en: String) -> String { L10n.t(ar, en) }
 
     @State private var iconScale: CGFloat = 0.5
     @State private var iconOpacity: Double = 0

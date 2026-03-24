@@ -10,16 +10,18 @@ struct AdminModeratorsView: View {
     @State private var pendingRole: FamilyMember.UserRole = .member
     @State private var showRemoveConfirm = false
 
-    private var isAdmin: Bool {
-        authVM.currentUser?.role == .admin
+    private var isOwner: Bool {
+        authVM.isOwner
     }
 
     private var moderators: [FamilyMember] {
-        memberVM.allMembers
-            .filter { $0.role == .admin || $0.role == .supervisor }
+        let roleOrder: [FamilyMember.UserRole] = [.owner, .admin, .supervisor]
+        return memberVM.allMembers
+            .filter { $0.role == .owner || $0.role == .admin || $0.role == .supervisor }
             .sorted { a, b in
-                if a.role == .admin && b.role != .admin { return true }
-                if a.role != .admin && b.role == .admin { return false }
+                let aIdx = roleOrder.firstIndex(of: a.role) ?? 99
+                let bIdx = roleOrder.firstIndex(of: b.role) ?? 99
+                if aIdx != bIdx { return aIdx < bIdx }
                 return a.fullName < b.fullName
             }
     }
@@ -34,7 +36,8 @@ struct AdminModeratorsView: View {
                 emptyState
             } else {
                 List {
-                    let admins = moderators.filter { $0.role == .admin }
+                    // المالك يظهر ضمن المدراء — بدون قسم خاص
+                    let admins = moderators.filter { $0.role == .admin || $0.role == .owner }
                     if !admins.isEmpty {
                         Section {
                             ForEach(Array(admins.enumerated()), id: \.element.id) { index, member in
@@ -63,7 +66,7 @@ struct AdminModeratorsView: View {
         .navigationTitle(L10n.t("المدراء والمشرفين", "Admins & Supervisors"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            if isAdmin {
+            if isOwner {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
                         showAddSheet = true
@@ -75,13 +78,15 @@ struct AdminModeratorsView: View {
                 }
             }
         }
-        .sheet(isPresented: $showAddSheet) {
+        .sheet(isPresented: $showAddSheet, onDismiss: {
+            Task { await memberVM.fetchAllMembers(force: true) }
+        }) {
             AddModeratorSheet()
                 .environmentObject(authVM)
                 .environmentObject(memberVM)
         }
         .alert(
-            L10n.t("تغيير الرتبة", "Change Role"),
+            L10n.t("تغيير مستوى الحساب", "Change Account Level"),
             isPresented: $showRoleConfirm,
             presenting: memberToChange
         ) { member in
@@ -94,8 +99,8 @@ struct AdminModeratorsView: View {
         } message: { member in
             let roleName = pendingRole == .admin ? L10n.t("مدير", "Admin") : (pendingRole == .supervisor ? L10n.t("مشرف", "Supervisor") : L10n.t("عضو", "Member"))
             Text(L10n.t(
-                "تغيير رتبة \(member.firstName) إلى \(roleName)؟",
-                "Change \(member.firstName)'s role to \(roleName)?"
+                "تغيير مستوى حساب \(member.firstName) إلى \(roleName)؟",
+                "Change \(member.firstName)'s account level to \(roleName)?"
             ))
         }
         .alert(
@@ -116,6 +121,7 @@ struct AdminModeratorsView: View {
             ))
         }
         .onAppear {
+            Task { await memberVM.fetchAllMembers(force: true) }
             withAnimation(DS.Anim.smooth.delay(0.15)) {
                 appeared = true
             }
@@ -144,21 +150,22 @@ struct AdminModeratorsView: View {
     private func moderatorRow(member: FamilyMember, index: Int) -> some View {
         HStack(spacing: DS.Spacing.md) {
             ZStack {
+                let roleColor = (member.role == .owner || member.role == .admin) ? DS.Color.neonPurple : DS.Color.warning
+                let roleIcon = (member.role == .owner || member.role == .admin) ? "shield.fill" : "star.fill"
+
                 Circle()
                     .fill(
                         LinearGradient(
-                            colors: member.role == .admin
-                                ? [DS.Color.neonPurple.opacity(0.3), DS.Color.neonPurple.opacity(0.1)]
-                                : [DS.Color.warning.opacity(0.3), DS.Color.warning.opacity(0.1)],
+                            colors: [roleColor.opacity(0.3), roleColor.opacity(0.1)],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
                     )
                     .frame(width: 50, height: 50)
 
-                Image(systemName: member.role == .admin ? "shield.fill" : "star.fill")
+                Image(systemName: roleIcon)
                     .font(DS.Font.scaled(20, weight: .bold))
-                    .foregroundColor(member.role == .admin ? DS.Color.neonPurple : DS.Color.warning)
+                    .foregroundColor(roleColor)
             }
 
             VStack(alignment: .leading, spacing: DS.Spacing.xs) {
@@ -168,13 +175,13 @@ struct AdminModeratorsView: View {
                     .lineLimit(2)
 
                 HStack(spacing: DS.Spacing.xs) {
-                    Text(member.role == .admin ? L10n.t("مدير", "Admin") : L10n.t("مشرف", "Supervisor"))
+                    Text(member.roleName)
                         .font(DS.Font.caption2)
                         .fontWeight(.bold)
                         .foregroundColor(DS.Color.textOnPrimary)
                         .padding(.horizontal, DS.Spacing.sm)
                         .padding(.vertical, 2)
-                        .background(member.role == .admin ? DS.Color.neonPurple : DS.Color.warning)
+                        .background(member.role.color)
                         .clipShape(Capsule())
 
                     if member.id == authVM.currentUser?.id {
@@ -210,7 +217,7 @@ struct AdminModeratorsView: View {
         .listRowBackground(DS.Color.surface)
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             // لا يمكن تعديل نفسك + فقط المدير يقدر يتحكم
-            if isAdmin && member.id != authVM.currentUser?.id {
+            if isOwner && member.id != authVM.currentUser?.id && member.role != .owner {
                 // إزالة الصلاحية
                 Button(role: .destructive) {
                     memberToChange = member
@@ -219,7 +226,7 @@ struct AdminModeratorsView: View {
                     Label(L10n.t("إزالة", "Remove"), systemImage: "person.badge.minus")
                 }
 
-                // تبديل الرتبة
+                // تبديل مستوى الحساب
                 if member.role == .supervisor {
                     Button {
                         memberToChange = member
@@ -242,7 +249,7 @@ struct AdminModeratorsView: View {
             }
         }
         .contextMenu {
-            if isAdmin && member.id != authVM.currentUser?.id {
+            if isOwner && member.id != authVM.currentUser?.id && member.role != .owner {
                 if member.role == .supervisor {
                     Button {
                         memberToChange = member
@@ -280,7 +287,7 @@ struct AdminModeratorsView: View {
                 Circle()
                     .fill(DS.Color.neonPurple.opacity(0.08))
                     .frame(width: 120, height: 120)
-                Image(systemName: "crown.fill")
+                Image(systemName: "shield.fill")
                     .font(DS.Font.scaled(40, weight: .bold))
                     .foregroundColor(DS.Color.neonPurple.opacity(0.5))
             }
@@ -288,7 +295,7 @@ struct AdminModeratorsView: View {
                 .font(DS.Font.title3)
                 .foregroundColor(DS.Color.textSecondary)
 
-            if isAdmin {
+            if isOwner {
                 Button {
                     showAddSheet = true
                 } label: {
@@ -331,7 +338,7 @@ struct AddModeratorSheet: View {
                 DS.Color.background.ignoresSafeArea()
 
                 VStack(spacing: 0) {
-                    // اختيار الرتبة
+                    // اختيار مستوى الحساب
                     Picker("", selection: $selectedRole) {
                         Text(L10n.t("مشرف", "Supervisor")).tag(FamilyMember.UserRole.supervisor)
                         Text(L10n.t("مدير", "Admin")).tag(FamilyMember.UserRole.admin)

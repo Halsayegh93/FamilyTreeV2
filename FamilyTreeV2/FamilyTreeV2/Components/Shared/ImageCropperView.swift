@@ -29,7 +29,7 @@ struct ImageCropperView: View {
 
             ZStack {
                 // خلفية
-                Color(uiColor: .systemBackground).ignoresSafeArea()
+                DS.Color.background.ignoresSafeArea()
                 Rectangle()
                     .fill(.ultraThinMaterial)
                     .ignoresSafeArea()
@@ -158,7 +158,7 @@ struct ImageCropperView: View {
     private func cropOverlay(cropSize: CGFloat, screenW: CGFloat, screenH: CGFloat) -> some View {
         ZStack {
             // خلفية شبه شفافة
-            Color(uiColor: .systemBackground).opacity(0.7)
+            DS.Color.background.opacity(0.7)
 
             // فتحة القص
             Group {

@@ -49,7 +49,7 @@ struct AdminAllRequestsView: View {
     }
 
     enum RequestTab: String, CaseIterable, Identifiable {
-        case joinRequests, news, reports, phone, nameChange, diwaniya, deceased, children, photos, treeEdit, projects
+        case joinRequests, news, reports, phone, nameChange, diwaniya, deceased, children, photos, treeEdit, projects, gallery
 
         var id: String { rawValue }
 
@@ -66,6 +66,7 @@ struct AdminAllRequestsView: View {
             case .photos: return L10n.t("صور", "Photos")
             case .treeEdit: return L10n.t("تعديل", "Edit")
             case .projects: return L10n.t("مشاريع", "Projects")
+            case .gallery: return L10n.t("معرض", "Gallery")
             }
         }
 
@@ -82,6 +83,7 @@ struct AdminAllRequestsView: View {
             case .photos: return "camera.badge.ellipsis"
             case .treeEdit: return "pencil.and.list.clipboard"
             case .projects: return "briefcase.fill"
+            case .gallery: return "photo.on.rectangle.angled"
             }
         }
 
@@ -98,6 +100,7 @@ struct AdminAllRequestsView: View {
             case .photos: return DS.Color.neonBlue
             case .treeEdit: return DS.Color.accent
             case .projects: return DS.Color.neonPurple
+            case .gallery: return DS.Color.gridDiwaniya
             }
         }
     }
@@ -145,8 +148,14 @@ struct AdminAllRequestsView: View {
                         Image(systemName: "hand.draw.fill")
                             .font(DS.Font.scaled(11, weight: .medium))
                         Text(selectedTab == .joinRequests
-                            ? L10n.t("اسحب لليسار للربط • اسحب لليمين للرفض", "Swipe left to link • Swipe right to reject")
-                            : L10n.t("اسحب لليسار للموافقة • اسحب لليمين للرفض", "Swipe left to approve • Swipe right to reject")
+                            ? L10n.t(
+                                authVM.isAdmin ? "اسحب لليسار للربط • اسحب لليمين للرفض" : "اسحب لليسار للربط",
+                                authVM.isAdmin ? "Swipe left to link • Swipe right to reject" : "Swipe left to link"
+                            )
+                            : L10n.t(
+                                authVM.isAdmin ? "اسحب لليسار للموافقة • اسحب لليمين للرفض" : "اسحب لليسار للموافقة",
+                                authVM.isAdmin ? "Swipe left to approve • Swipe right to reject" : "Swipe left to approve"
+                            )
                         )
                             .font(DS.Font.caption2)
                     }
@@ -162,7 +171,8 @@ struct AdminAllRequestsView: View {
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .task {
             diwaniyaVM.notificationVM = notificationVM
-            diwaniyaVM.canModerate = authVM.currentUser?.role == .admin || authVM.currentUser?.role == .supervisor
+            diwaniyaVM.canModerate = authVM.canModerate
+            diwaniyaVM.authVM = authVM
             // تحميل متوازي لجميع الطلبات — أسرع بكثير
             await withTaskGroup(of: Void.self) { group in
                 group.addTask { @MainActor in await memberVM.fetchAllMembers() }
@@ -176,6 +186,7 @@ struct AdminAllRequestsView: View {
                 group.addTask { @MainActor in await adminRequestVM.fetchTreeEditRequests() }
                 group.addTask { @MainActor in await adminRequestVM.fetchNameChangeRequests() }
                 group.addTask { @MainActor in await projectsVM.fetchPendingProjects() }
+                group.addTask { @MainActor in await memberVM.fetchPendingGalleryPhotos() }
             }
             await fetchAllRegistrationMatches()
 
@@ -309,6 +320,7 @@ struct AdminAllRequestsView: View {
         case .photos: return adminRequestVM.photoSuggestionRequests.count
         case .treeEdit: return adminRequestVM.treeEditRequests.count
         case .projects: return projectsVM.pendingProjects.count
+        case .gallery: return memberVM.pendingGalleryPhotos.count
         }
     }
 
@@ -378,6 +390,7 @@ struct AdminAllRequestsView: View {
             )
         }
         .buttonStyle(DSScaleButtonStyle())
+        .accessibilityLabel(tab.title)
     }
 
     // MARK: - Tab Content
@@ -439,10 +452,12 @@ struct AdminAllRequestsView: View {
                         }.tint(DS.Color.success)
                     }
                     .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                        Button(role: .destructive) {
-                            Task { await adminRequestVM.rejectOrDeleteMember(memberId: member.id) }
-                        } label: {
-                            Label(L10n.t("رفض", "Reject"), systemImage: "xmark.circle.fill")
+                        if authVM.isAdmin {
+                            Button(role: .destructive) {
+                                Task { await adminRequestVM.rejectOrDeleteMember(memberId: member.id) }
+                            } label: {
+                                Label(L10n.t("رفض", "Reject"), systemImage: "xmark.circle.fill")
+                            }
                         }
                     }
                 }
@@ -458,8 +473,10 @@ struct AdminAllRequestsView: View {
                         }.tint(DS.Color.success)
                     }
                     .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                        Button(role: .destructive) { Task { await newsVM.rejectNewsPost(postId: post.id) } } label: {
-                            Label(L10n.t("رفض", "Reject"), systemImage: "xmark.circle.fill")
+                        if authVM.isAdmin {
+                            Button(role: .destructive) { Task { await newsVM.rejectNewsPost(postId: post.id) } } label: {
+                                Label(L10n.t("رفض", "Reject"), systemImage: "xmark.circle.fill")
+                            }
                         }
                     }
                 }
@@ -475,8 +492,10 @@ struct AdminAllRequestsView: View {
                         }.tint(DS.Color.success)
                     }
                     .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                        Button(role: .destructive) { Task { await adminRequestVM.rejectNewsReport(request: request) } } label: {
-                            Label(L10n.t("رفض", "Reject"), systemImage: "xmark.circle.fill")
+                        if authVM.isAdmin {
+                            Button(role: .destructive) { Task { await adminRequestVM.rejectNewsReport(request: request) } } label: {
+                                Label(L10n.t("رفض", "Reject"), systemImage: "xmark.circle.fill")
+                            }
                         }
                     }
                 }
@@ -499,8 +518,10 @@ struct AdminAllRequestsView: View {
                         }.tint(DS.Color.primary)
                     }
                     .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                        Button(role: .destructive) { Task { await adminRequestVM.rejectPhoneChangeRequest(request: request) } } label: {
-                            Label(L10n.t("رفض", "Reject"), systemImage: "xmark.circle.fill")
+                        if authVM.isAdmin {
+                            Button(role: .destructive) { Task { await adminRequestVM.rejectPhoneChangeRequest(request: request) } } label: {
+                                Label(L10n.t("رفض", "Reject"), systemImage: "xmark.circle.fill")
+                            }
                         }
                     }
                 }
@@ -526,8 +547,10 @@ struct AdminAllRequestsView: View {
                         }.tint(DS.Color.primary)
                     }
                     .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                        Button(role: .destructive) { Task { await adminRequestVM.rejectNameChangeRequest(request: request) } } label: {
-                            Label(L10n.t("رفض", "Reject"), systemImage: "xmark.circle.fill")
+                        if authVM.isAdmin {
+                            Button(role: .destructive) { Task { await adminRequestVM.rejectNameChangeRequest(request: request) } } label: {
+                                Label(L10n.t("رفض", "Reject"), systemImage: "xmark.circle.fill")
+                            }
                         }
                     }
                 }
@@ -550,8 +573,10 @@ struct AdminAllRequestsView: View {
                         }.tint(DS.Color.success)
                     }
                     .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                        Button(role: .destructive) { Task { await diwaniyaVM.rejectDiwaniya(id: diwaniya.id) } } label: {
-                            Label(L10n.t("رفض", "Reject"), systemImage: "xmark.circle.fill")
+                        if authVM.isAdmin {
+                            Button(role: .destructive) { Task { await diwaniyaVM.rejectDiwaniya(id: diwaniya.id) } } label: {
+                                Label(L10n.t("رفض", "Reject"), systemImage: "xmark.circle.fill")
+                            }
                         }
                     }
                 }
@@ -567,8 +592,10 @@ struct AdminAllRequestsView: View {
                         }.tint(DS.Color.success)
                     }
                     .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                        Button(role: .destructive) { Task { await adminRequestVM.rejectDeceasedRequest(request: request) } } label: {
-                            Label(L10n.t("رفض", "Reject"), systemImage: "xmark.circle.fill")
+                        if authVM.isAdmin {
+                            Button(role: .destructive) { Task { await adminRequestVM.rejectDeceasedRequest(request: request) } } label: {
+                                Label(L10n.t("رفض", "Reject"), systemImage: "xmark.circle.fill")
+                            }
                         }
                     }
                 }
@@ -584,8 +611,10 @@ struct AdminAllRequestsView: View {
                         }.tint(DS.Color.success)
                     }
                     .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                        Button(role: .destructive) { Task { await adminRequestVM.rejectChildAddRequest(request: request) } } label: {
-                            Label(L10n.t("رفض", "Reject"), systemImage: "xmark.circle.fill")
+                        if authVM.isAdmin {
+                            Button(role: .destructive) { Task { await adminRequestVM.rejectChildAddRequest(request: request) } } label: {
+                                Label(L10n.t("رفض", "Reject"), systemImage: "xmark.circle.fill")
+                            }
                         }
                     }
                 }
@@ -601,8 +630,10 @@ struct AdminAllRequestsView: View {
                         }.tint(DS.Color.success)
                     }
                     .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                        Button(role: .destructive) { Task { await adminRequestVM.rejectPhotoSuggestion(request: request) } } label: {
-                            Label(L10n.t("رفض", "Reject"), systemImage: "xmark.circle.fill")
+                        if authVM.isAdmin {
+                            Button(role: .destructive) { Task { await adminRequestVM.rejectPhotoSuggestion(request: request) } } label: {
+                                Label(L10n.t("رفض", "Reject"), systemImage: "xmark.circle.fill")
+                            }
                         }
                     }
                 }
@@ -618,12 +649,14 @@ struct AdminAllRequestsView: View {
                         }.tint(DS.Color.success)
                     }
                     .swipeActions(edge: .leading, allowsFullSwipe: false) {
-                        Button(role: .destructive) {
-                            treeEditToReject = request
-                            rejectReasonText = ""
-                            showRejectReasonAlert = true
-                        } label: {
-                            Label(L10n.t("رفض", "Reject"), systemImage: "xmark.circle.fill")
+                        if authVM.isAdmin {
+                            Button(role: .destructive) {
+                                treeEditToReject = request
+                                rejectReasonText = ""
+                                showRejectReasonAlert = true
+                            } label: {
+                                Label(L10n.t("رفض", "Reject"), systemImage: "xmark.circle.fill")
+                            }
                         }
                     }
                 }
@@ -643,12 +676,34 @@ struct AdminAllRequestsView: View {
                         }.tint(DS.Color.success)
                     }
                     .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                        Button(role: .destructive) {
-                            Task { await projectsVM.rejectProject(id: project.id) }
-                        } label: {
-                            Label(L10n.t("رفض", "Reject"), systemImage: "xmark.circle.fill")
+                        if authVM.isAdmin {
+                            Button(role: .destructive) {
+                                Task { await projectsVM.rejectProject(id: project.id) }
+                            } label: {
+                                Label(L10n.t("رفض", "Reject"), systemImage: "xmark.circle.fill")
+                            }
                         }
                     }
+                }
+            case .gallery:
+                ForEach(memberVM.pendingGalleryPhotos) { photo in
+                    galleryPendingRow(photo: photo)
+                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                            Button {
+                                Task { await memberVM.approveGalleryPhoto(photoId: photo.id) }
+                            } label: {
+                                Label(L10n.t("موافقة", "Approve"), systemImage: "checkmark.circle.fill")
+                            }.tint(DS.Color.success)
+                        }
+                        .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                            if authVM.isAdmin {
+                                Button(role: .destructive) {
+                                    Task { await memberVM.rejectGalleryPhoto(photoId: photo.id, photoURL: photo.photoURL) }
+                                } label: {
+                                    Label(L10n.t("رفض", "Reject"), systemImage: "xmark.circle.fill")
+                                }
+                            }
+                        }
                 }
             }
         }
@@ -757,7 +812,7 @@ struct AdminAllRequestsView: View {
                     if matches.count > 3 && !isExpanded {
                         Button {
                             withAnimation(DS.Anim.snappy) {
-                                expandedMatchMembers.insert(member.id)
+                                _ = expandedMatchMembers.insert(member.id)
                             }
                         } label: {
                             HStack(spacing: DS.Spacing.xs) {
@@ -774,6 +829,7 @@ struct AdminAllRequestsView: View {
                             .padding(.vertical, DS.Spacing.xs)
                         }
                         .buttonStyle(DSScaleButtonStyle())
+                        .accessibilityLabel(L10n.t("عرض كل التطابقات", "Show all matches"))
                     }
                 }
                 .padding(DS.Spacing.sm)
@@ -874,6 +930,7 @@ struct AdminAllRequestsView: View {
                 .clipShape(Capsule())
             }
             .buttonStyle(DSScaleButtonStyle())
+            .accessibilityLabel(L10n.t("دمج مع \(match.member.fullName)", "Merge with \(match.member.fullName)"))
         }
         .padding(DS.Spacing.xs)
         .background(strengthColor.opacity(0.04))
@@ -1098,7 +1155,7 @@ struct AdminAllRequestsView: View {
                 .background(DS.Color.success.opacity(0.06))
                 .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm))
 
-                Image(systemName: "arrow.left")
+                Image(systemName: L10n.isArabic ? "arrow.right" : "arrow.left")
                     .font(DS.Font.scaled(12, weight: .semibold))
                     .foregroundColor(DS.Color.textTertiary)
 
@@ -1581,6 +1638,50 @@ struct AdminAllRequestsView: View {
     }
 
     // MARK: - Project Row
+
+    // MARK: - Gallery Pending Row
+    private func galleryPendingRow(photo: MemberGalleryPhoto) -> some View {
+        HStack(spacing: DS.Spacing.md) {
+            AsyncImage(url: URL(string: photo.photoURL)) { phase in
+                switch phase {
+                case .success(let image):
+                    image.resizable().scaledToFill()
+                        .frame(width: 60, height: 60)
+                        .clipped()
+                        .cornerRadius(DS.Radius.sm)
+                default:
+                    RoundedRectangle(cornerRadius: DS.Radius.sm)
+                        .fill(DS.Color.surface)
+                        .frame(width: 60, height: 60)
+                        .overlay(Image(systemName: "photo").foregroundColor(DS.Color.textTertiary))
+                }
+            }
+
+            VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                if let member = memberVM.member(byId: photo.memberId) {
+                    Text(member.fullName)
+                        .font(DS.Font.calloutBold)
+                        .foregroundColor(DS.Color.textPrimary)
+                }
+                if let caption = photo.caption, !caption.isEmpty {
+                    Text(caption)
+                        .font(DS.Font.caption1)
+                        .foregroundColor(DS.Color.textSecondary)
+                        .lineLimit(1)
+                }
+                if let date = photo.createdAt {
+                    Text(String(date.prefix(10)))
+                        .font(DS.Font.caption2)
+                        .foregroundColor(DS.Color.textTertiary)
+                }
+            }
+
+            Spacer()
+
+            DSPulseBadge(count: 1)
+        }
+        .padding(.vertical, DS.Spacing.xs)
+    }
 
     private func projectRow(for project: Project) -> some View {
         VStack(alignment: .leading, spacing: DS.Spacing.md) {

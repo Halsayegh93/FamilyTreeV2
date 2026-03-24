@@ -44,11 +44,12 @@ struct HomeNewsCardView: View {
     }
 
     private var shortDisplayName: String {
-        let parts = authorName.split(separator: " ")
-        guard parts.count > 4 else { return authorName }
-        let first4 = parts.prefix(4).joined(separator: " ")
-        let last = parts.last.map(String.init) ?? ""
-        return "\(first4) \(last)"
+        let name = authorMember?.shortFullName ?? authorName
+        let parts = name.split(separator: " ")
+        guard parts.count > 4, let last = parts.last else { return name }
+        let first3 = parts.prefix(3).joined(separator: " ")
+        if parts[2] == last { return first3 }
+        return "\(first3) \(last)"
     }
 
     var body: some View {
@@ -407,6 +408,6 @@ struct HomeNewsCardView: View {
             }
             .foregroundColor(DS.Color.textTertiary)
         }
-        .environment(\.layoutDirection, .leftToRight)
+        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
 }

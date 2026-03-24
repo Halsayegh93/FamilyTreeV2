@@ -665,13 +665,13 @@ struct FatherLinkApprovalSheet: View {
         } message: {
             if let father = selectedFather {
                 Text(L10n.t(
-                    "سيتم تفعيل \(member.firstName ?? member.fullName) وربطه كابن لـ \(father.fullName)",
-                    "Activate \(member.firstName ?? member.fullName) and link as child of \(father.fullName)"
+                    "سيتم تفعيل \(member.firstName) وربطه كابن لـ \(father.fullName)",
+                    "Activate \(member.firstName) and link as child of \(father.fullName)"
                 ))
             } else {
                 Text(L10n.t(
-                    "سيتم تفعيل \(member.firstName ?? member.fullName) بدون ربط بأب",
-                    "Activate \(member.firstName ?? member.fullName) without linking to a father"
+                    "سيتم تفعيل \(member.firstName) بدون ربط بأب",
+                    "Activate \(member.firstName) without linking to a father"
                 ))
             }
         }
@@ -690,7 +690,7 @@ struct FatherLinkApprovalSheet: View {
                             .fill(DS.Color.gradientPrimary)
                             .frame(width: 52, height: 52)
                         if let avatarUrl = member.avatarUrl, let url = URL(string: avatarUrl) {
-                            AsyncImage(url: url) { img in
+                            CachedAsyncImage(url: url) { img in
                                 img.resizable().scaledToFill()
                             } placeholder: {
                                 Text(String(member.fullName.prefix(1)))
@@ -831,7 +831,7 @@ struct FatherLinkApprovalSheet: View {
     // MARK: - Selected Father Card
 
     private func selectedFatherCard(_ father: FamilyMember) -> some View {
-        DSGlowCard(borderColor: DS.Color.success) {
+        DSGlowCard(glowColor: DS.Color.success) {
             HStack(spacing: DS.Spacing.md) {
                 ZStack {
                     Circle()
@@ -909,7 +909,7 @@ struct FatherLinkApprovalSheet: View {
 
             if !suggested.isEmpty && searchText.isEmpty {
                 DSSectionHeader(
-                    L10n.t("مطابقات مقترحة", "Suggested Matches"),
+                    title: L10n.t("مطابقات مقترحة", "Suggested Matches"),
                     icon: "star.fill"
                 )
 
@@ -921,7 +921,7 @@ struct FatherLinkApprovalSheet: View {
             if !others.isEmpty {
                 if !suggested.isEmpty && searchText.isEmpty {
                     DSSectionHeader(
-                        L10n.t("أعضاء آخرون", "Other Members"),
+                        title: L10n.t("أعضاء آخرون", "Other Members"),
                         icon: "person.3.fill"
                     )
                     .padding(.top, DS.Spacing.sm)
@@ -1002,7 +1002,7 @@ struct FatherLinkApprovalSheet: View {
                         .fill(isSuggested ? DS.Color.success.opacity(0.12) : DS.Color.primary.opacity(0.1))
                         .frame(width: 38, height: 38)
                     if let avatarUrl = father.avatarUrl, let url = URL(string: avatarUrl) {
-                        AsyncImage(url: url) { img in
+                        CachedAsyncImage(url: url) { img in
                             img.resizable().scaledToFill()
                         } placeholder: {
                             Text(String(father.fullName.prefix(1)))

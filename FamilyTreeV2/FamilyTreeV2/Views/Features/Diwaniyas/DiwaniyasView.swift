@@ -105,7 +105,7 @@ struct DiwaniyasView: View {
                 await viewModel.fetchDiwaniyas()
             }
             .onAppear {
-                viewModel.canModerate = authVM.currentUser?.role == .admin || authVM.currentUser?.role == .supervisor
+                viewModel.canModerate = authVM.canModerate
             }
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
             .alert(L10n.t("خطأ", "Error"), isPresented: .init(
@@ -125,7 +125,7 @@ struct DiwaniyasView: View {
     /// المعتمدة تظهر للكل، المعلقة تظهر بس للأدمن/المشرف وصاحب الديوانية
     private var filteredDiwaniyas: [Diwaniya] {
         let userId = authVM.currentUser?.id
-        let canModerate = authVM.currentUser?.role == .admin || authVM.currentUser?.role == .supervisor
+        let canModerate = authVM.canModerate
         return viewModel.diwaniyas.filter { diwaniya in
             if diwaniya.approvalStatus == "approved" { return true }
             if diwaniya.approvalStatus == "pending" {
@@ -250,7 +250,7 @@ struct DiwaniyasView: View {
 
                     Spacer()
 
-                    if authVM.currentUser?.role == .admin || authVM.currentUser?.id == item.ownerId {
+                    if authVM.isAdmin || authVM.currentUser?.id == item.ownerId {
                         Menu {
                             Button(action: { diwaniyaToEdit = item }) {
                                 Label(L10n.t("تعديل", "Edit"), systemImage: "pencil")
@@ -649,7 +649,7 @@ private struct AddDiwaniyaRequestView: View {
         defer { isSubmitting = false }
         let trimmedURL = locationURL.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedAddress = address.trimmingCharacters(in: .whitespacesAndNewlines)
-        let canAutoApprove = user.role == .admin || user.role == .supervisor
+        let canAutoApprove = user.role == .owner || user.role == .admin || user.role == .supervisor
         let success = await viewModel.addDiwaniya(
             ownerId: user.id,
             ownerName: ownerName,

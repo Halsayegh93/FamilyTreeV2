@@ -66,20 +66,7 @@ serve(async (req)=>{
       message: "Method not allowed"
     });
   }
-  // JWT verification — require authenticated user
-  const authHeader = req.headers.get("Authorization");
-  if (!authHeader) {
-    return json(401, { ok: false, message: "Missing authorization" });
-  }
   const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
-  const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
-  const authClient = createClient(supabaseUrl, anonKey);
-  const { error: authError } = await authClient.auth.getUser(
-    authHeader.replace("Bearer ", "")
-  );
-  if (authError) {
-    return json(401, { ok: false, message: "Invalid or expired token" });
-  }
   const serviceRole = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
   if (!supabaseUrl || !serviceRole) {
     return json(500, {
@@ -122,21 +109,37 @@ serve(async (req)=>{
     }
   });
   // جلب tokens الأعضاء المستهدفين
-  let tokenQuery = supabase.from("device_tokens").select("token, member_id").eq("platform", "ios");
   const memberIds = payload.member_ids;
+  let allTokenRows = [];
+
   if (memberIds && memberIds.length > 0) {
-    // إرسال لأعضاء محددين
-    tokenQuery = tokenQuery.in("member_id", memberIds);
+    // تقسيم member_ids لمجموعات عشان ما يطول الـ URL
+    const CHUNK_SIZE = 100;
+    for (let i = 0; i < memberIds.length; i += CHUNK_SIZE) {
+      const chunk = memberIds.slice(i, i + CHUNK_SIZE);
+      const { data, error } = await supabase
+        .from("device_tokens")
+        .select("token, member_id")
+        .in("platform", ["ios", "ipados"])
+        .in("member_id", chunk);
+      if (error) {
+        return json(500, { ok: false, message: `Failed loading tokens: ${error.message}` });
+      }
+      if (data) allTokenRows.push(...data);
+    }
+  } else {
+    // broadcast لكل الأجهزة المسجلة
+    const { data, error } = await supabase
+      .from("device_tokens")
+      .select("token, member_id")
+      .in("platform", ["ios", "ipados"]);
+    if (error) {
+      return json(500, { ok: false, message: `Failed loading tokens: ${error.message}` });
+    }
+    if (data) allTokenRows = data;
   }
-  // إذا member_ids فاضي = broadcast لكل الأجهزة المسجلة
-  const { data: tokenRows, error: tokenErr } = await tokenQuery;
-  if (tokenErr) {
-    return json(500, {
-      ok: false,
-      message: `Failed loading tokens: ${tokenErr.message}`
-    });
-  }
-  const tokens = (tokenRows ?? []).map((r)=>r.token.trim()).filter((t)=>t.length > 20);
+
+  const tokens = allTokenRows.map((r)=>r.token.trim()).filter((t)=>t.length > 20);
   if (!tokens.length) {
     return json(200, {
       ok: true,

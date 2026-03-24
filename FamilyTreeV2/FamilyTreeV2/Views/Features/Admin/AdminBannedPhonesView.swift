@@ -3,8 +3,7 @@ import SwiftUI
 struct AdminBannedPhonesView: View {
     @EnvironmentObject var authVM: AuthViewModel
 
-    private var isArabic: Bool { LanguageManager.shared.selectedLanguage == "ar" }
-    private func t(_ ar: String, _ en: String) -> String { isArabic ? ar : en }
+    private func t(_ ar: String, _ en: String) -> String { L10n.t(ar, en) }
 
     @State private var searchText = ""
     @State private var isLoading = true
@@ -118,7 +117,7 @@ struct AdminBannedPhonesView: View {
 
             TextField(t("بحث عن رقم...", "Search number..."), text: $searchText)
                 .font(DS.Font.subheadline)
-                .foregroundStyle(Color(UIColor.label))
+                .foregroundStyle(DS.Color.textPrimary)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
         }
@@ -236,7 +235,7 @@ struct AdminBannedPhonesView: View {
 
     private func dateDisplay(_ date: Date) -> String {
         let df = DateFormatter()
-        df.locale = Locale(identifier: isArabic ? "ar" : "en")
+        df.locale = Locale(identifier: L10n.isArabic ? "ar" : "en")
         df.dateStyle = .medium
         df.timeStyle = .short
         return df.string(from: date)
@@ -249,8 +248,7 @@ struct AddBanSheet: View {
     @ObservedObject var authVM: AuthViewModel
     @Environment(\.dismiss) private var dismiss
 
-    private var isArabic: Bool { LanguageManager.shared.selectedLanguage == "ar" }
-    private func t(_ ar: String, _ en: String) -> String { isArabic ? ar : en }
+    private func t(_ ar: String, _ en: String) -> String { L10n.t(ar, en) }
 
     @State private var phoneNumber = ""
     @State private var reason = ""
@@ -289,7 +287,7 @@ struct AddBanSheet: View {
                             TextField(t("مثال: 99123456", "e.g. 99123456"), text: $phoneNumber)
                                 .keyboardType(.numberPad)
                                 .font(DS.Font.scaled(18, weight: .bold))
-                                .foregroundStyle(Color(UIColor.label))
+                                .foregroundStyle(DS.Color.textPrimary)
                                 .multilineTextAlignment(.leading)
                                 .padding(DS.Spacing.md)
                                 .background(DS.Color.surface)
@@ -309,7 +307,7 @@ struct AddBanSheet: View {
 
                             TextField(t("سبب الحظر...", "Ban reason..."), text: $reason)
                                 .font(DS.Font.subheadline)
-                                .foregroundStyle(Color(UIColor.label))
+                                .foregroundStyle(DS.Color.textPrimary)
                                 .padding(DS.Spacing.md)
                                 .background(DS.Color.surface)
                                 .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))

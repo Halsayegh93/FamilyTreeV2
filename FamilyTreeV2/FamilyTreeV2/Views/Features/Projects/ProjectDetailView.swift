@@ -198,24 +198,16 @@ struct ProjectDetailView: View {
     private var projectHeader: some View {
         VStack(spacing: DS.Spacing.lg) {
             if let logoUrl = project.logoUrl, let url = URL(string: logoUrl) {
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .frame(width: 100, height: 100)
-                            .clipShape(Circle())
-                            .overlay(
-                                Circle()
-                                    .stroke(DS.Color.primary.opacity(0.2), lineWidth: 2)
-                            )
-                    case .failure:
-                        largePlaceholder
-                    default:
-                        ProgressView()
-                            .frame(width: 100, height: 100)
-                    }
+                CachedAsyncImage(url: url) { img in
+                    img.resizable().aspectRatio(contentMode: .fill)
+                        .frame(width: 100, height: 100)
+                        .clipShape(Circle())
+                        .overlay(
+                            Circle()
+                                .stroke(DS.Color.primary.opacity(0.2), lineWidth: 2)
+                        )
+                } placeholder: {
+                    ProgressView().frame(width: 100, height: 100)
                 }
             } else {
                 largePlaceholder

@@ -22,9 +22,10 @@ interface AIRequest {
 // deno-lint-ignore no-explicit-any
 type ProfileRow = Record<string, any>;
 
-// ---- CORS + JSON (same pattern as push-admins) ----
+// ---- CORS + JSON ----
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Origin": SUPABASE_URL,
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
@@ -46,18 +47,47 @@ function getSupabaseAdmin() {
   });
 }
 
-// ---- Rate limiting (in-memory, resets on cold start) ----
+// ---- Rate limiting (persistent via Supabase + in-memory fallback) ----
 const rateLimitMap = new Map<string, number[]>();
 
-function checkRateLimit(userId: string, maxPerMinute = 10): boolean {
+async function checkRateLimit(userId: string, maxPerMinute = 10): Promise<boolean> {
   const now = Date.now();
-  const timestamps = (rateLimitMap.get(userId) ?? []).filter(
-    (t) => now - t < 60_000
-  );
-  if (timestamps.length >= maxPerMinute) return false;
-  timestamps.push(now);
-  rateLimitMap.set(userId, timestamps);
-  return true;
+  const supabase = getSupabaseAdmin();
+
+  try {
+    // Try persistent rate limiting via Supabase
+    const windowStart = new Date(now - 60_000).toISOString();
+    const { count } = await supabase
+      .from("ai_rate_limits")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .gte("created_at", windowStart);
+
+    if ((count ?? 0) >= maxPerMinute) return false;
+
+    // Record this request
+    await supabase
+      .from("ai_rate_limits")
+      .insert({ user_id: userId, created_at: new Date(now).toISOString() });
+
+    // Cleanup old entries (older than 2 minutes) — non-blocking
+    supabase
+      .from("ai_rate_limits")
+      .delete()
+      .lt("created_at", new Date(now - 120_000).toISOString())
+      .then(() => {});
+
+    return true;
+  } catch {
+    // Fallback to in-memory if table doesn't exist yet
+    const timestamps = (rateLimitMap.get(userId) ?? []).filter(
+      (t) => now - t < 60_000
+    );
+    if (timestamps.length >= maxPerMinute) return false;
+    timestamps.push(now);
+    rateLimitMap.set(userId, timestamps);
+    return true;
+  }
 }
 
 // ---- Claude API caller ----
@@ -445,7 +475,7 @@ serve(async (req) => {
   }
 
   // Rate limiting
-  if (!checkRateLimit(user_id)) {
+  if (!(await checkRateLimit(user_id))) {
     return json(429, {
       ok: false,
       message: "تم تجاوز الحد المسموح. انتظر قليلاً ثم حاول مرة أخرى.",

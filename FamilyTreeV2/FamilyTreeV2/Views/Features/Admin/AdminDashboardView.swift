@@ -8,9 +8,6 @@ struct AdminDashboardView: View {
     @StateObject private var diwaniyaVM = DiwaniyasViewModel()
     @Binding var selectedTab: Int
     @State private var showingNotifications = false
-    @State private var isSendingWeeklyDigest = false
-    @State private var edgeFunctionResult: String?
-    @State private var showEdgeFunctionAlert = false
     @State private var appeared = false
     @Environment(\.dismiss) var dismiss
 
@@ -22,7 +19,7 @@ struct AdminDashboardView: View {
         memberVM.allMembers.filter { $0.role == .pending }.count
     }
     private var moderatorCount: Int {
-        memberVM.allMembers.filter { $0.role == .admin || $0.role == .supervisor }.count
+        memberVM.allMembers.filter { $0.role == .owner || $0.role == .admin || $0.role == .supervisor }.count
     }
     private var totalReviewRequestsCount: Int {
         pendingCount
@@ -35,7 +32,23 @@ struct AdminDashboardView: View {
         + adminRequestVM.photoSuggestionRequests.count
         + adminRequestVM.treeEditRequests.count
         + adminRequestVM.nameChangeRequests.count
+        + memberVM.pendingGalleryPhotos.count
     }
+    /// عدد مشاكل الشجرة (يتائم، بدون أسماء، روابط مكسورة، مخفيين)
+    private var treeIssuesCount: Int {
+        let active = memberVM.allMembers.filter { $0.role != .pending && $0.status != .frozen }
+        let activeIds = Set(active.map(\.id))
+        let fatherIds = Set(active.compactMap(\.fatherId))
+        return memberVM.allMembers.filter { m in
+            guard m.status != .frozen else { return false }
+            let isOrphan = m.fatherId == nil && !fatherIds.contains(m.id) && m.role != .pending
+            let noName = m.fullName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || m.fullName == "بدون اسم"
+            let brokenParent = m.fatherId != nil && !activeIds.contains(m.fatherId!)
+            let hidden = m.isHiddenFromTree
+            return isOrphan || noName || brokenParent || hidden
+        }.count
+    }
+
     /// عدد الأعضاء اللي عندهم أي مشكلة (بدون تكرار)
     private var issueMembersCount: Int {
         memberVM.allMembers
@@ -84,7 +97,7 @@ struct AdminDashboardView: View {
                                 .opacity(appeared ? 1 : 0)
                                 .offset(y: appeared ? 0 : 20)
 
-                            // طلبات المراجعة
+                            // طلبات المراجعة — الكل (مالك + مدير + مشرف)
                             DSCard(padding: 0) {
                                 DSSectionHeader(
                                     title: L10n.t("طلبات تنتظر المراجعة", "Pending Requests"),
@@ -101,110 +114,80 @@ struct AdminDashboardView: View {
                                             badge: totalReviewRequestsCount
                                         )
                                     }
-                                    DSDivider()
-                                    NavigationLink(destination: AdminMembersManagementView()) {
-                                        DSActionRow(
-                                            title: L10n.t("إدارة الأعضاء", "Members Management"),
-                                            subtitle: L10n.t("تفعيل حسابات وتحديث بيانات ناقصة", "Activate accounts & update incomplete data"),
-                                            icon: "person.2.badge.gearshape",
-                                            color: DS.Color.warning,
-                                            badge: issueMembersCount
-                                        )
+                                    // إدارة الأعضاء (موحد: إدارة + صحة الشجرة + سجل ودليل)
+                                    if authVM.canModerate {
+                                        DSDivider()
+                                        NavigationLink(destination: AdminMembersManagementView()) {
+                                            DSActionRow(
+                                                title: L10n.t("إدارة الأعضاء", "Members Management"),
+                                                subtitle: L10n.t("إدارة، صحة الشجرة، سجل ودليل العائلة", "Manage, tree health, registry & directory"),
+                                                icon: "person.2.badge.gearshape",
+                                                color: DS.Color.warning,
+                                                badge: (issueMembersCount + treeIssuesCount) > 0 ? (issueMembersCount + treeIssuesCount) : nil
+                                            )
+                                        }
                                     }
                                 }
                             .padding(.horizontal, DS.Spacing.lg)
 
-                            // النظام والشجرة
-                            DSCard(padding: 0) {
-                                DSSectionHeader(
-                                    title: L10n.t("النظام والشجرة", "System & Tree"),
-                                    icon: "gearshape.2.fill",
-                                    iconColor: DS.Color.primary
-                                )
+                            // النظام — مدير + مالك فقط
+                            if authVM.isAdmin {
+                                DSCard(padding: 0) {
+                                    DSSectionHeader(
+                                        title: L10n.t("النظام", "System"),
+                                        icon: "gearshape.2.fill",
+                                        iconColor: DS.Color.primary
+                                    )
 
-                                    NavigationLink(destination: AdminRegisterMemberView()) {
-                                        DSActionRow(title: L10n.t("تسجيل عضو جديد", "Register New Member"), subtitle: L10n.t("إضافة عضو جديد مباشرة للشجرة", "Add a new member directly to the tree"), icon: "person.badge.plus", color: DS.Color.primary)
-                                    }
-                                    DSDivider()
-                                    NavigationLink(destination: AdminNotificationsView()) {
-                                        DSActionRow(title: L10n.t("إرسال إشعارات", "Send Notifications"), subtitle: L10n.t("إرسال إشعار عام أو مخصص", "Send a general or targeted notification"), icon: "bell.badge.fill", color: DS.Color.warning)
-                                    }
-                                    DSDivider()
-                                    NavigationLink(destination: AdminMembersDirectoryView()) {
-                                        DSActionRow(title: L10n.t("سجل ودليل الأعضاء", "Members & Directory"), subtitle: L10n.t("إدارة الأعضاء وتصفح بيانات العائلة", "Manage members and browse family data"), icon: "person.3.sequence.fill", color: adminAccent)
-                                    }
-                                    DSDivider()
-                                    NavigationLink(destination: AdminReportsView()) {
-                                        DSActionRow(title: L10n.t("تقارير PDF", "PDF Reports"), subtitle: L10n.t("تقرير الأرقام والأعمار للأعضاء", "Member numbers and ages report"), icon: "doc.text.fill", color: DS.Color.info)
-                                    }
-                                    DSDivider()
-                                    NavigationLink(destination: AdminAnalyticsView()) {
-                                        DSActionRow(title: L10n.t("إحصائيات متقدمة", "Analytics"), subtitle: L10n.t("رسوم بيانية وتحليلات مفصلة", "Charts and detailed analysis"), icon: "chart.bar.xaxis", color: DS.Color.neonBlue)
-                                    }
-                                    DSDivider()
-                                    NavigationLink(destination: AdminDevicesView()) {
-                                        DSActionRow(title: L10n.t("إدارة الأجهزة", "Device Management"), subtitle: L10n.t("عرض وإزالة أجهزة الأعضاء المرتبطة", "View and remove members' linked devices"), icon: "iphone.gen3", color: DS.Color.neonBlue)
-                                    }
-                                    DSDivider()
-                                    NavigationLink(destination: AdminBannedPhonesView()) {
-                                        DSActionRow(
-                                            title: L10n.t("الأرقام المحظورة", "Banned Numbers"),
-                                            subtitle: L10n.t("حظر أرقام من تسجيل الدخول", "Block numbers from logging in"),
-                                            icon: "phone.down.fill",
-                                            color: DS.Color.error,
-                                            badge: authVM.bannedPhones.count > 0 ? authVM.bannedPhones.count : nil
-                                        )
-                                    }
-                                    DSDivider()
-                                    NavigationLink(destination: AdminAppSettingsView()) {
-                                        DSActionRow(title: L10n.t("إعدادات التطبيق", "App Settings"), subtitle: L10n.t("تحكم بإعدادات التسجيل والأمان", "Manage registration and security settings"), icon: "gearshape.fill", color: DS.Color.gridContact)
-                                    }
-                                    DSDivider()
-                                    Button {
-                                        isSendingWeeklyDigest = true
-                                        Task {
-                                            let result = await authVM.triggerWeeklyDigest()
-                                            edgeFunctionResult = result.message
-                                            isSendingWeeklyDigest = false
-                                            showEdgeFunctionAlert = true
+                                        NavigationLink(destination: AdminRegisterMemberView()) {
+                                            DSActionRow(title: L10n.t("تسجيل عضو جديد", "Register New Member"), subtitle: L10n.t("إضافة عضو جديد مباشرة للشجرة", "Add a new member directly to the tree"), icon: "person.badge.plus", color: DS.Color.primary)
                                         }
-                                    } label: {
-                                        DSActionRow(
-                                            title: L10n.t("الملخص الأسبوعي", "Weekly Digest"),
-                                            subtitle: L10n.t("إرسال ملخص الأسبوع لجميع الأعضاء", "Send weekly summary to all members"),
-                                            icon: "doc.text.magnifyingglass",
-                                            color: DS.Color.info
-                                        )
-                                        .overlay(alignment: .leading) {
-                                            if isSendingWeeklyDigest {
-                                                ProgressView()
-                                                    .padding(.leading, DS.Spacing.lg)
+                                        DSDivider()
+                                        NavigationLink(destination: AdminNotificationsView()) {
+                                            DSActionRow(title: L10n.t("إرسال إشعارات", "Send Notifications"), subtitle: L10n.t("إرسال إشعار عام أو مخصص", "Send a general or targeted notification"), icon: "bell.badge.fill", color: DS.Color.warning)
+                                        }
+                                        DSDivider()
+                                        NavigationLink(destination: AdminReportsView()) {
+                                            DSActionRow(title: L10n.t("تقارير PDF", "PDF Reports"), subtitle: L10n.t("تقرير الأرقام والأعمار للأعضاء", "Member numbers and ages report"), icon: "doc.text.fill", color: DS.Color.info)
+                                        }
+                                        // الأمان والإعدادات — المالك فقط
+                                        if authVM.isOwner {
+                                            DSDivider()
+                                            NavigationLink(destination: AdminSecuritySettingsView()) {
+                                                DSActionRow(
+                                                    title: L10n.t("الأمان والإعدادات", "Security & Settings"),
+                                                    subtitle: L10n.t("أجهزة، أرقام محظورة، إعدادات التطبيق", "Devices, banned numbers, app settings"),
+                                                    icon: "lock.shield.fill",
+                                                    color: DS.Color.gridContact,
+                                                    badge: authVM.bannedPhones.count > 0 ? authVM.bannedPhones.count : nil
+                                                )
                                             }
                                         }
                                     }
-                                    .disabled(isSendingWeeklyDigest)
-                                }
-                            .padding(.horizontal, DS.Spacing.lg)
+                                .padding(.horizontal, DS.Spacing.lg)
+                            }
 
-                            // المدراء والمشرفين
-                            DSCard(padding: 0) {
-                                DSSectionHeader(
-                                    title: L10n.t("المدراء والمشرفين", "Admins & Supervisors"),
-                                    icon: "crown.fill",
-                                    iconColor: DS.Color.neonPurple
-                                )
+                            // المدراء والمشرفين — المدير + المالك
+                            if authVM.isAdmin {
+                                DSCard(padding: 0) {
+                                    DSSectionHeader(
+                                        title: L10n.t("المدراء والمشرفين", "Admins & Supervisors"),
+                                        icon: "shield.fill",
+                                        iconColor: DS.Color.neonPurple
+                                    )
 
-                                    NavigationLink(destination: AdminModeratorsView()) {
-                                        DSActionRow(
-                                            title: L10n.t("المدراء والمشرفين", "Admins & Supervisors"),
-                                            subtitle: L10n.t("عرض قائمة المدراء والمشرفين", "View admins and supervisors list"),
-                                            icon: "crown.fill",
-                                            color: DS.Color.neonPurple,
-                                            badge: moderatorCount
-                                        )
+                                        NavigationLink(destination: AdminModeratorsView()) {
+                                            DSActionRow(
+                                                title: L10n.t("المدراء والمشرفين", "Admins & Supervisors"),
+                                                subtitle: L10n.t("عرض قائمة المدراء والمشرفين", "View admins and supervisors list"),
+                                                icon: "shield.fill",
+                                                color: DS.Color.neonPurple,
+                                                badge: moderatorCount
+                                            )
+                                        }
                                     }
-                                }
-                            .padding(.horizontal, DS.Spacing.lg)
+                                .padding(.horizontal, DS.Spacing.lg)
+                            }
 
                             Spacer(minLength: DS.Spacing.xxxl)
                         }
@@ -218,14 +201,10 @@ struct AdminDashboardView: View {
         }
         .toolbar(.hidden, for: .navigationBar)
         }
-        .alert(L10n.t("نتيجة العملية", "Result"), isPresented: $showEdgeFunctionAlert) {
-            Button(L10n.t("حسناً", "OK"), role: .cancel) {}
-        } message: {
-            Text(edgeFunctionResult ?? "")
-        }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .task {
-            diwaniyaVM.canModerate = authVM.currentUser?.role == .admin || authVM.currentUser?.role == .supervisor
+            diwaniyaVM.canModerate = authVM.canModerate
+            diwaniyaVM.authVM = authVM
             // تحميل كل البيانات بالتوازي — بدون تأخير
             await memberVM.fetchAllMembers()
 
@@ -238,6 +217,7 @@ struct AdminDashboardView: View {
                 group.addTask { @MainActor in await adminRequestVM.fetchPhotoSuggestionRequests() }
                 group.addTask { @MainActor in await diwaniyaVM.fetchPendingDiwaniyas() }
                 group.addTask { @MainActor in await adminRequestVM.fetchTreeEditRequests() }
+                group.addTask { @MainActor in await memberVM.fetchPendingGalleryPhotos() }
                 group.addTask { @MainActor in await adminRequestVM.fetchNameChangeRequests() }
                 group.addTask { @MainActor in await authVM.fetchBannedPhones() }
             }
@@ -254,64 +234,48 @@ struct AdminDashboardView: View {
 
     // MARK: - إحصائيات (Colorful Stat Cards)
     private var adminStatsGrid: some View {
-        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: DS.Spacing.md) {
-            // Tree Members stat card
-            adminColorfulStatCard(
-                title: L10n.t("الأعضاء", "Members"),
-                value: "\(memberVM.allMembers.count)",
-                icon: "person.2.fill",
-                color: DS.Color.info
-            )
+        VStack(spacing: DS.Spacing.sm) {
+            HStack(spacing: DS.Spacing.md) {
+                adminColorfulStatCard(
+                    title: L10n.t("الأعضاء", "Members"),
+                    value: "\(memberVM.allMembers.filter { $0.role != .pending }.count)",
+                    icon: "person.2.fill",
+                    color: DS.Color.info
+                )
 
-            // Pending Members
-            adminColorfulStatCard(
-                title: L10n.t("انتظار", "Pending"),
-                value: "\(pendingCount)",
-                icon: "clock.fill",
-                color: DS.Color.warning
-            )
+                adminColorfulStatCard(
+                    title: L10n.t("انتظار", "Pending"),
+                    value: "\(pendingCount)",
+                    icon: "clock.fill",
+                    color: DS.Color.warning
+                )
 
-            // News Requests
-            adminColorfulStatCard(
-                title: L10n.t("الأخبار", "News"),
-                value: "\(newsVM.pendingNewsRequests.count)",
-                icon: "newspaper.fill",
-                color: DS.Color.accent
-            )
-            
-            // Deceased Requests
-            adminColorfulStatCard(
-                title: L10n.t("الوفيات", "Deceased"),
-                value: "\(adminRequestVM.deceasedRequests.count)",
-                icon: "bolt.heart.fill",
-                color: DS.Color.error
-            )
-            
-            // Phone Updates
-            adminColorfulStatCard(
-                title: L10n.t("الجوال", "Phone"),
-                value: "\(adminRequestVM.phoneChangeRequests.count)",
-                icon: "phone.badge.checkmark",
-                color: DS.Color.success
-            )
+                adminColorfulStatCard(
+                    title: L10n.t("طلبات", "Requests"),
+                    value: "\(totalReviewRequestsCount)",
+                    icon: "tray.full.fill",
+                    color: DS.Color.error
+                )
+            }
 
-            // Reports
-            adminColorfulStatCard(
-                title: L10n.t("بلاغات", "Reports"),
-                value: "\(adminRequestVM.newsReportRequests.count)",
-                icon: "exclamationmark.bubble.fill",
-                color: DS.Color.error
-            )
+            HStack(spacing: DS.Spacing.md) {
+                adminColorfulStatCard(
+                    title: L10n.t("الأحياء", "Alive"),
+                    value: "\(memberVM.allMembers.filter { $0.role != .pending && $0.isDeceased != true }.count)",
+                    icon: "heart.fill",
+                    color: DS.Color.success
+                )
 
-            // Issue Members
-            adminColorfulStatCard(
-                title: L10n.t("ناقص", "Incomplete"),
-                value: "\(issueMembersCount)",
-                icon: "exclamationmark.triangle.fill",
-                color: DS.Color.warning
-            )
+                adminColorfulStatCard(
+                    title: L10n.t("المتوفين", "Deceased"),
+                    value: "\(memberVM.allMembers.filter { $0.isDeceased == true }.count)",
+                    icon: "heart.slash.fill",
+                    color: DS.Color.deceased
+                )
+            }
         }
         .padding(.horizontal, DS.Spacing.lg)
+        .padding(.top, DS.Spacing.sm)
     }
 
     /// Colorful stat card with gradient top border

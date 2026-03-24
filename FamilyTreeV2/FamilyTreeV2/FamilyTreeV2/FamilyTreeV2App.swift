@@ -46,10 +46,14 @@ struct FamilyTreeV2App: App {
                 .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
                     Task {
                         try? await UNUserNotificationCenter.current().setBadgeCount(0)
-                        // فحص تصريح الجهاز فقط هنا — لا نكرره في didBecomeActive
+                        // تحديث الجلسة أولاً عشان الـ JWT يكون صالح
+                        await self.appState.authVM.refreshSessionIfNeeded()
+                        // فحص تصريح الجهاز
                         await self.appState.notificationVM.verifyDeviceAuthorization()
                         // تحديث بيانات المستخدم (اسم، صلاحيات، إلخ) عند العودة للتطبيق
                         await self.appState.authVM.checkUserProfile()
+                        // إعادة تسجيل APNs token لو موجود
+                        await self.appState.notificationVM.reRegisterPushTokenIfNeeded()
                     }
                 }
                 .onReceive(NotificationCenter.default.publisher(for: .didReceiveAPNSToken)) { note in

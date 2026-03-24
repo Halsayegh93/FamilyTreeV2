@@ -55,6 +55,13 @@ struct HomeNewsView: View {
                                     .opacity(appeared ? 1 : 0)
                                     .offset(y: appeared ? 0 : 15)
 
+                                // ذكريات العائلة — Stories
+                                if !galleryMembersWithPhotos.isEmpty {
+                                    galleryStoriesSection
+                                        .opacity(appeared ? 1 : 0)
+                                        .offset(y: appeared ? 0 : 18)
+                                }
+
                                 // أخبار العائلة
                                 newsFeedSection
                                     .opacity(appeared ? 1 : 0)
@@ -74,7 +81,10 @@ struct HomeNewsView: View {
             }
             .navigationBarHidden(true)
             .animation(DS.Anim.snappy, value: activeSubPage == nil)
-            .task { await refreshNews(notifyIfNew: false) }
+            .task {
+                await refreshNews(notifyIfNew: false)
+                await memberVM.fetchApprovedGalleryPhotos()
+            }
             .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
                 Task { await refreshNews(notifyIfNew: true) }
             }
@@ -169,6 +179,118 @@ struct HomeNewsView: View {
         .padding(.horizontal, DS.Spacing.lg)
         .padding(.vertical, DS.Spacing.sm)
         .background(DS.Color.background)
+    }
+
+    // MARK: - Gallery Stories Section
+
+    /// أعضاء عندهم صور معتمدة
+    private var galleryMembersWithPhotos: [(member: FamilyMember, count: Int)] {
+        let grouped = Dictionary(grouping: memberVM.approvedGalleryPhotos, by: { $0.memberId })
+        return grouped.compactMap { (memberId, photos) in
+            guard let member = memberVM.member(byId: memberId) else { return nil }
+            return (member: member, count: photos.count)
+        }
+        .sorted { $0.count > $1.count }
+    }
+
+    private var galleryStoriesSection: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: DS.Spacing.lg) {
+                // "الكل"
+                galleryStoryCircle(
+                    name: L10n.t("الصور", "Photos"),
+                    avatarView: AnyView(
+                        Image(systemName: "photo.on.rectangle.angled")
+                            .font(DS.Font.scaled(20, weight: .semibold))
+                            .foregroundColor(DS.Color.primary)
+                    ),
+                    count: memberVM.approvedGalleryPhotos.count,
+                    memberId: nil
+                )
+
+                ForEach(galleryMembersWithPhotos, id: \.member.id) { item in
+                    galleryStoryCircle(
+                        name: item.member.firstName,
+                        avatarView: AnyView(galleryMemberAvatar(item.member, size: 56)),
+                        count: item.count,
+                        memberId: item.member.id
+                    )
+                }
+            }
+            .padding(.horizontal, DS.Spacing.lg)
+            .padding(.vertical, DS.Spacing.sm)
+        }
+    }
+
+    private func galleryStoryCircle(name: String, avatarView: AnyView, count: Int, memberId: UUID?) -> some View {
+        Button {
+            withAnimation(DS.Anim.snappy) { activeSubPage = .photos }
+        } label: {
+            VStack(spacing: DS.Spacing.xs) {
+                ZStack {
+                    Circle()
+                        .stroke(DS.Color.gradientPrimary, lineWidth: 2.5)
+                        .frame(width: 64, height: 64)
+
+                    if memberId == nil {
+                        Circle()
+                            .fill(DS.Color.surface)
+                            .frame(width: 56, height: 56)
+                            .overlay(avatarView)
+                    } else {
+                        avatarView
+                            .frame(width: 56, height: 56)
+                            .clipShape(Circle())
+                    }
+
+                    if count > 0 {
+                        Text("\(count)")
+                            .font(DS.Font.scaled(9, weight: .bold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 1)
+                            .background(DS.Color.primary)
+                            .clipShape(Capsule())
+                            .offset(x: 18, y: 20)
+                    }
+                }
+
+                Text(name)
+                    .font(DS.Font.scaled(11, weight: .medium))
+                    .foregroundColor(DS.Color.textSecondary)
+                    .lineLimit(1)
+                    .frame(width: 64)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func galleryMemberAvatar(_ member: FamilyMember, size: CGFloat) -> some View {
+        Group {
+            if let avatarUrl = member.avatarUrl, let url = URL(string: avatarUrl) {
+                AsyncImage(url: url) { phase in
+                    if let image = phase.image {
+                        image.resizable().scaledToFill()
+                    } else {
+                        ZStack {
+                            Circle().fill(DS.Color.primary.opacity(0.15))
+                            Text(String(member.firstName.prefix(1)))
+                                .font(DS.Font.scaled(size * 0.4, weight: .bold))
+                                .foregroundColor(DS.Color.primary)
+                        }
+                    }
+                }
+                .frame(width: size, height: size)
+                .clipShape(Circle())
+            } else {
+                ZStack {
+                    Circle().fill(DS.Color.primary.opacity(0.15)).frame(width: size, height: size)
+                    Text(String(member.firstName.prefix(1)))
+                        .font(DS.Font.scaled(size * 0.4, weight: .bold))
+                        .foregroundColor(DS.Color.primary)
+                }
+            }
+        }
     }
 
     // MARK: - Quick Actions Section
@@ -300,7 +422,7 @@ struct HomeNewsView: View {
             onVoteTap: { optionIndex in
                 Task { await newsVM.submitNewsPollVote(postId: news.id, optionIndex: optionIndex) }
             },
-            canDelete: authVM.currentUser?.role == .admin || authVM.currentUser?.role == .supervisor,
+            canDelete: authVM.canDeleteNews,
             canReport: authVM.currentUser?.role == .member,
             canEdit: authVM.canModerate || authVM.currentUser?.id == news.author_id,
             onDeleteTap: { postToDelete = news },
@@ -406,7 +528,7 @@ extension HomeNewsView {
 }
 
 // MARK: - أيقونة الهيدر — Glass circle
-struct headerIconView: View {
+struct HeaderIconView: View {
     let icon: String
     let color: Color
     var body: some View {

@@ -41,7 +41,7 @@ struct AdminMemberDetailSheet: View {
     @State private var childToEdit: FamilyMember?
 
     private var canManageAccessPermissions: Bool {
-        authVM.currentUser?.role == .admin
+        authVM.isAdmin
     }
 
     init(member: FamilyMember) {
@@ -110,8 +110,8 @@ struct AdminMemberDetailSheet: View {
                         // Birth date & health section
                         datesSection
 
-                        // Role section
-                        if canManageAccessPermissions {
+                        // Role section — المالك فقط
+                        if authVM.isOwner {
                             roleSection
                         }
 
@@ -199,8 +199,8 @@ struct AdminMemberDetailSheet: View {
                         await memberVM.notificationVM?.notifyAdminsWithPush(
                             title: L10n.t("تعديل بيانات عضو", "Member Data Updated"),
                             body: L10n.t(
-                                "قام \(adminName) بحذف صورة \(member.firstName)",
-                                "\(adminName) deleted \(member.firstName)'s photo"
+                                "تم حذف صورة: \(member.fullName)",
+                                "Photo removed: \(member.fullName)"
                             ),
                             kind: "admin_edit"
                         )
@@ -217,10 +217,10 @@ struct AdminMemberDetailSheet: View {
                     }
                     let adminName = authVM.currentUser?.firstName ?? "مدير"
                     await memberVM.notificationVM?.notifyAdminsWithPush(
-                        title: L10n.t("تعديل بيانات عضو", "Member Data Updated"),
+                        title: L10n.t("تحديث صورة عضو", "Member Photo Updated"),
                         body: L10n.t(
-                            "قام \(adminName) بتعديل صورة \(member.firstName)",
-                            "\(adminName) updated \(member.firstName)'s photo"
+                            "تم تحديث صورة: \(member.fullName)",
+                            "Photo updated: \(member.fullName)"
                         ),
                         kind: "admin_edit"
                     )
@@ -708,18 +708,20 @@ struct AdminMemberDetailSheet: View {
             }
             .buttonStyle(DSBoldButtonStyle())
 
-            // Delete button
-            Button {
-                childToDelete = child
-            } label: {
-                Image(systemName: "xmark.circle.fill")
-                    .font(DS.Font.scaled(16))
-                    .foregroundColor(DS.Color.error.opacity(0.7))
-                    .background(DS.Color.surface)
-                    .clipShape(Circle())
+            // Delete button — admin/owner only
+            if canManageAccessPermissions {
+                Button {
+                    childToDelete = child
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(DS.Font.scaled(16))
+                        .foregroundColor(DS.Color.error.opacity(0.7))
+                        .background(DS.Color.surface)
+                        .clipShape(Circle())
+                }
+                .buttonStyle(PlainButtonStyle())
+                .offset(x: 6, y: -6)
             }
-            .buttonStyle(PlainButtonStyle())
-            .offset(x: 6, y: -6)
         }
     }
 
@@ -758,7 +760,7 @@ struct AdminMemberDetailSheet: View {
 
                         DatePicker("", selection: $birthDate, in: ...Date(), displayedComponents: .date)
                             .labelsHidden()
-                            .environment(\.locale, Locale(identifier: "en_US"))
+                            .environment(\.locale, Locale(identifier: L10n.isArabic ? "ar" : "en_US"))
 
                         Spacer()
 
@@ -817,7 +819,7 @@ struct AdminMemberDetailSheet: View {
 
                             DatePicker("", selection: $deathDate, in: ...Date(), displayedComponents: .date)
                                 .labelsHidden()
-                                .environment(\.locale, Locale(identifier: "en_US"))
+                                .environment(\.locale, Locale(identifier: L10n.isArabic ? "ar" : "en_US"))
 
                             Spacer()
 
@@ -892,13 +894,13 @@ struct AdminMemberDetailSheet: View {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
         formatter.locale = Locale(identifier: "en_US_POSIX")
-        if let idx = memberVM.allMembers.firstIndex(where: { $0.id == member.id }) {
-            withAnimation(DS.Anim.snappy) {
-                memberVM.allMembers[idx].isDeceased = isDeceased
-                memberVM.allMembers[idx].birthDate = hasBirthDate ? formatter.string(from: birthDate) : nil
-                memberVM.allMembers[idx].deathDate = (isDeceased && hasDeathDate) ? formatter.string(from: deathDate) : nil
-                memberVM.membersVersion += 1
-            }
+        withAnimation(DS.Anim.snappy) {
+            memberVM.updateMemberLocally(
+                memberId: member.id,
+                isDeceased: isDeceased,
+                birthDate: hasBirthDate ? formatter.string(from: birthDate) : nil,
+                deathDate: (isDeceased && hasDeathDate) ? formatter.string(from: deathDate) : nil
+            )
         }
     }
 
@@ -1039,10 +1041,10 @@ struct AdminMemberDetailSheet: View {
 
             // إشعار يوضح أي مدير عدّل + شنو عدّل
             let adminName = authVM.currentUser?.firstName ?? "مدير"
-            let memberName = member.firstName
+            let memberName = member.fullName
             var changedFields: [String] = []
             if nameChanged { changedFields.append(L10n.t("الاسم", "Name")) }
-            if roleChanged { changedFields.append(L10n.t("الرتبة", "Role")) }
+            if roleChanged { changedFields.append(L10n.t("مستوى الحساب", "Account Level")) }
             if phoneChanged { changedFields.append(L10n.t("الهاتف", "Phone")) }
             if fatherChanged { changedFields.append(L10n.t("الأب", "Father")) }
             if genderChanged { changedFields.append(L10n.t("الجنس", "Gender")) }
@@ -1054,8 +1056,8 @@ struct AdminMemberDetailSheet: View {
                 await memberVM.notificationVM?.notifyAdminsWithPush(
                     title: L10n.t("تعديل بيانات عضو", "Member Data Updated"),
                     body: L10n.t(
-                        "\(adminName) عدّل بيانات \(memberName): \(fieldsList)",
-                        "\(adminName) updated \(memberName)'s data: \(fieldsList)"
+                        "تم تعديل بيانات: \(memberName)",
+                        "Data updated: \(memberName)"
                     ),
                     kind: "admin_edit"
                 )

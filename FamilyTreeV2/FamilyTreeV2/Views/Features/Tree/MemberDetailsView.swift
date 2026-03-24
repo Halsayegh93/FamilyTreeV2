@@ -36,8 +36,7 @@ struct MemberDetailsView: View {
     @State private var appeared = false
 
     var isAdminOrSupervisor: Bool {
-        let role = authVM.currentUser?.role
-        return role == .admin || role == .supervisor
+        authVM.canModerate
     }
 
     private let heroHeight: CGFloat = 320
@@ -209,13 +208,17 @@ struct MemberDetailsView: View {
             }
             .frame(height: heroHeight)
 
-            // الاسم تحت الصورة
+            // الاسم تحت الصورة — كامل داخل كبسولة
             Text(member.fullName)
-                .font(DS.Font.title2)
-                .fontWeight(.bold)
+                .font(DS.Font.calloutBold)
                 .foregroundColor(DS.Color.textPrimary)
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
+                .padding(.horizontal, DS.Spacing.lg)
+                .padding(.vertical, DS.Spacing.sm)
+                .background(DS.Color.surface.opacity(0.85))
+                .clipShape(Capsule())
+                .overlay(Capsule().stroke(DS.Color.textTertiary.opacity(0.12), lineWidth: 0.5))
                 .padding(.horizontal, DS.Spacing.xxl)
                 .padding(.top, DS.Spacing.sm)
 
@@ -434,8 +437,8 @@ struct MemberDetailsView: View {
                 }
                 .padding(.horizontal, DS.Spacing.lg)
 
-                // زر حذف السيرة — للمدير/المشرف أو صاحب الحساب
-                if isAdminOrSupervisor || member.id == authVM.currentUser?.id {
+                // زر حذف السيرة — للمدير/المالك أو صاحب الحساب
+                if authVM.isAdmin || member.id == authVM.currentUser?.id {
                     Button {
                         showDeleteBioAlert = true
                     } label: {

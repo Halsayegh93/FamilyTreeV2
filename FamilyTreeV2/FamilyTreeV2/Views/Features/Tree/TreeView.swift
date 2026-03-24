@@ -33,11 +33,14 @@ struct TreeView: View {
     @State private var searchDebounceTask: Task<Void, Never>?
     @State private var isSearchFocused = false
     @State private var searchedMemberID: UUID? = nil
+    @State private var highlightTask: Task<Void, Never>?
+    @State private var locationHighlightTask: Task<Void, Never>?
 
     @State private var scale: CGFloat = 0.70
     @State private var treeID = UUID()
     @State private var currentAnchor: UnitPoint = .center
     @State private var baseScale: CGFloat = 0.70
+    @State private var zoomAnchor: UnitPoint = .center
 
     @Environment(\.verticalSizeClass) var verticalSizeClass
     @Environment(\.colorScheme) var colorScheme
@@ -82,13 +85,19 @@ struct TreeView: View {
         let visible = memberVM.allMembers.filter {
             !$0.isHiddenFromTree
             && $0.role != .pending
-            && !$0.fullName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             && $0.status != .frozen
+            && !$0.fullName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         }
         let byId = Dictionary(uniqueKeysWithValues: visible.map { ($0.id, $0) })
 
+        // مجموعة الأعضاء اللي عندهم أبناء (آباء حقيقيين)
+        let fatherIds = Set(visible.compactMap(\.fatherId))
+
         let roots = sortedMembers(visible.filter { member in
-            guard let fatherId = member.fatherId else { return true }
+            guard let fatherId = member.fatherId else {
+                // عضو بدون أب: يظهر كجذر فقط إذا عنده أبناء (جد/أب أصلي)
+                return fatherIds.contains(member.id)
+            }
             return byId[fatherId] == nil
         })
 
@@ -183,7 +192,7 @@ struct TreeView: View {
                                             .frame(maxWidth: .infinity, alignment: .center)
                                     }
                                 }
-                                .scaleEffect(scale, anchor: .center)
+                                .scaleEffect(scale, anchor: zoomAnchor)
                                 .frame(
                                     minWidth: geometry.size.width,
                                     minHeight: geometry.size.height
@@ -195,6 +204,12 @@ struct TreeView: View {
                             .simultaneousGesture(
                                 MagnifyGesture()
                                     .onChanged { value in
+                                        // تحديد نقطة الزوم حسب موقع الأصابع
+                                        let loc = value.startLocation
+                                        zoomAnchor = UnitPoint(
+                                            x: min(max(loc.x / geometry.size.width, 0), 1),
+                                            y: min(max(loc.y / geometry.size.height, 0), 1)
+                                        )
                                         let newScale = baseScale * value.magnification
                                         scale = min(max(newScale, 0.2), 3.0)
                                     }
@@ -246,8 +261,10 @@ struct TreeView: View {
                                    let userMember = cachedMemberById[currentUserID] ?? memberVM.member(byId: currentUserID) {
                                     currentLocationMemberID = userMember.id
                                     centerOnMember(userMember, highlight: true, includeFocusedMemberInPath: false)
-                                    Task {
+                                    locationHighlightTask?.cancel()
+                                    locationHighlightTask = Task {
                                         try? await Task.sleep(nanoseconds: 5_000_000_000)
+                                        guard !Task.isCancelled else { return }
                                         withAnimation { currentLocationMemberID = nil }
                                     }
                                 }
@@ -291,15 +308,13 @@ struct TreeView: View {
                 TreeEditRequestView()
             }
 
-            .onAppear {
+            .task {
                 let isFirstLoad = cachedVisibleMembers.isEmpty
-                Task {
-                    await memberVM.fetchAllMembers()
-                    rebuildCache()
-                    if isFirstLoad {
-                        currentLocationMemberID = authVM.currentUser?.id
-                        resetToTopRoot()
-                    }
+                await memberVM.fetchAllMembers()
+                rebuildCache()
+                if isFirstLoad {
+                    currentLocationMemberID = authVM.currentUser?.id
+                    resetToTopRoot()
                 }
             }
             .onChange(of: memberVM.allMembers.count) { _, _ in
@@ -572,6 +587,7 @@ struct TreeView: View {
         // الانتقال للعضو بعد بناء العقد
         Task {
             try? await Task.sleep(nanoseconds: 250_000_000)
+            guard !Task.isCancelled else { return }
             scrollTarget = member.id
             scrollCounter += 1
         }
@@ -603,15 +619,18 @@ struct TreeView: View {
         
         Task {
             try? await Task.sleep(nanoseconds: 250_000_000)
+            guard !Task.isCancelled else { return }
             currentAnchor = .center
             scrollTarget = member.id
             scrollCounter += 1
         }
-        
-        // Remove highlight after 3 seconds
+
+        // Remove highlight after 5 seconds
         if highlight {
-            Task {
+            highlightTask?.cancel()
+            highlightTask = Task {
                 try? await Task.sleep(nanoseconds: 5_000_000_000)
+                guard !Task.isCancelled else { return }
                 withAnimation(.easeOut(duration: 0.3)) { searchedMemberID = nil }
             }
         }
@@ -664,6 +683,7 @@ struct TreeView: View {
                             .frame(width: 44, height: 44)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel(L10n.t("تكبير", "Zoom in"))
 
                     Divider().frame(width: 30)
 
@@ -672,6 +692,7 @@ struct TreeView: View {
                         isRefreshing = true
                         Task {
                             await memberVM.fetchAllMembers(force: true)
+                            guard !Task.isCancelled else { return }
                             rebuildCache()
                             resetToTopRoot()
                             withAnimation { isRefreshing = false }
@@ -691,6 +712,7 @@ struct TreeView: View {
                     }
                     .buttonStyle(.plain)
                     .disabled(isRefreshing)
+                    .accessibilityLabel(L10n.t("تحديث الشجرة", "Refresh tree"))
 
                     Divider().frame(width: 30)
 
@@ -701,6 +723,7 @@ struct TreeView: View {
                             .frame(width: 44, height: 44)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel(L10n.t("تصغير", "Zoom out"))
                 }
                 .background(.ultraThinMaterial)
                 .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
@@ -897,6 +920,7 @@ struct RecursiveTreeBranch: View {
                 }
                 Task {
                     try? await Task.sleep(nanoseconds: 200_000_000)
+                    guard !Task.isCancelled else { return }
                     scrollAnchor = .center
                     // عند الفتح نركز على العقدة، عند الإغلاق نركز على الأب لعرض الإخوان
                     scrollTarget = willExpand ? member.id : (member.fatherId ?? member.id)
@@ -1185,15 +1209,14 @@ struct TreeMemberNode: View {
                             .offset(y: -16)
                     }
                 }
-                .onAppear {
+                .task {
                     // تأخير تحميل الصور حسب المستوى لتحسين الأداء
                     if level <= 1 {
                         shouldLoadImage = true
                     } else {
-                        Task {
-                            try? await Task.sleep(nanoseconds: UInt64(level) * 200_000_000)
-                            shouldLoadImage = true
-                        }
+                        try? await Task.sleep(nanoseconds: UInt64(level) * 200_000_000)
+                        guard !Task.isCancelled else { return }
+                        shouldLoadImage = true
                     }
                 }
 

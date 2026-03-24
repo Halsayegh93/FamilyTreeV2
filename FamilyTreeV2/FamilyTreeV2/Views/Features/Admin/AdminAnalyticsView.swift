@@ -106,7 +106,7 @@ struct AdminAnalyticsView: View {
 
     // MARK: - Roles Distribution
     private var rolesSection: some View {
-        let admins = memberVM.allMembers.filter { $0.role == .admin }.count
+        let admins = memberVM.allMembers.filter { $0.role == .owner || $0.role == .admin }.count
         let supervisors = memberVM.allMembers.filter { $0.role == .supervisor }.count
         let members = memberVM.allMembers.filter { $0.role == .member }.count
         let total = max(admins + supervisors + members, 1)
@@ -120,7 +120,7 @@ struct AdminAnalyticsView: View {
 
             VStack(spacing: DS.Spacing.md) {
                 barRow(
-                    label: L10n.t("مشرف عام", "Admin"),
+                    label: L10n.t("مدير", "Admin"),
                     count: admins,
                     total: total,
                     color: FamilyMember.UserRole.admin.color

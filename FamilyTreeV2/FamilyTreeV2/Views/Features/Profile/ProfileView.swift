@@ -150,8 +150,8 @@ struct ProfileView: View {
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, DS.Spacing.lg)
 
-                HStack(spacing: DS.Spacing.sm) {
-                    // شارة الدور
+                // مستوى الحساب + الاسم الثلاثي
+                VStack(spacing: DS.Spacing.xs) {
                     HStack(spacing: DS.Spacing.xs) {
                         Circle()
                             .fill(user.roleColor)
@@ -165,23 +165,13 @@ struct ProfileView: View {
                     .background(user.roleColor.opacity(0.10))
                     .clipShape(Capsule())
                     .overlay(Capsule().stroke(user.roleColor.opacity(0.2), lineWidth: 1))
-                    
-                    // الجنس
-                    if let gender = user.gender, !gender.isEmpty {
-                        let isFemale = gender.lowercased() == "female"
-                        HStack(spacing: DS.Spacing.xs) {
-                            Image(systemName: isFemale ? "figure.stand.dress" : "figure.stand")
-                                .font(DS.Font.scaled(10, weight: .semibold))
-                            Text(isFemale ? L10n.t("أنثى", "Female") : L10n.t("ذكر", "Male"))
-                                .font(DS.Font.scaled(11, weight: .semibold))
-                        }
+
+                    Text(user.shortFullName)
+                        .font(DS.Font.caption1)
                         .foregroundColor(DS.Color.textSecondary)
-                        .padding(.horizontal, DS.Spacing.sm)
-                        .padding(.vertical, DS.Spacing.xs)
-                        .background(DS.Color.surface)
-                        .clipShape(Capsule())
-                        .overlay(Capsule().stroke(DS.Color.inactiveBorder, lineWidth: 1))
-                    }
+                }
+
+                HStack(spacing: DS.Spacing.sm) {
                     
                     // عدد الأبناء
                     if !memberVM.currentMemberChildren.isEmpty {

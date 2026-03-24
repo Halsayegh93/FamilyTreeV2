@@ -31,11 +31,13 @@ class AppState: ObservableObject {
         // 2. Wire dependencies after creation (avoids circular init)
         auth.notificationVM = notification
         auth.appSettingsVM = appSettings
+        appSettings.authVM = auth
         notification.configure(authVM: auth)
         notification.appSettingsVM = appSettings
         member.configure(authVM: auth, notificationVM: notification)
         news.configure(authVM: auth, memberVM: member, notificationVM: notification)
         admin.configure(authVM: auth, memberVM: member, notificationVM: notification, newsVM: news)
+        projects.authVM = auth
 
         // 3. Store references
         self.authVM = auth
@@ -49,13 +51,14 @@ class AppState: ObservableObject {
         // 4. تحميل كل البيانات بالتوازي عند تسجيل الدخول — يمنع اللودنج في كل تاب
         auth.$status
             .removeDuplicates()
-            .sink { [weak member, weak news, weak notification, weak projects] status in
+            .sink { [weak self] status in
                 guard status == .fullyAuthenticated else { return }
-                Task { @MainActor in
-                    async let m: () = member?.fetchAllMembers(force: true) ?? ()
-                    async let n: () = news?.fetchNews() ?? ()
-                    async let notif: () = notification?.fetchNotifications() ?? ()
-                    async let proj: () = projects?.fetchProjects() ?? ()
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    async let m: () = self.memberVM.fetchAllMembers(force: true)
+                    async let n: () = self.newsVM.fetchNews()
+                    async let notif: () = self.notificationVM.fetchNotifications()
+                    async let proj: () = self.projectsVM.fetchProjects()
                     _ = await (m, n, notif, proj)
                 }
             }

@@ -206,7 +206,7 @@ struct EditChildSheet: View {
                     HStack(spacing: DS.Spacing.md) {
                         DSIcon("calendar", color: DS.Color.info)
                         DatePicker(L10n.t("تاريخ الميلاد", "Birth Date"), selection: $birthDate, in: ...Date(), displayedComponents: .date)
-                            .environment(\.locale, Locale(identifier: "en_US"))
+                            .environment(\.locale, Locale(identifier: L10n.isArabic ? "ar" : "en_US"))
                     }
                     .padding(.horizontal, DS.Spacing.lg)
                     .padding(.vertical, DS.Spacing.xs)
@@ -229,7 +229,7 @@ struct EditChildSheet: View {
                         HStack(spacing: DS.Spacing.md) {
                             DSIcon("calendar", color: DS.Color.error)
                             DatePicker(L10n.t("تاريخ الوفاة", "Death Date"), selection: $deathDate, in: ...Date(), displayedComponents: .date)
-                                .environment(\.locale, Locale(identifier: "en_US"))
+                                .environment(\.locale, Locale(identifier: L10n.isArabic ? "ar" : "en_US"))
                         }
                         .padding(.horizontal, DS.Spacing.lg)
                         .padding(.vertical, DS.Spacing.xs)

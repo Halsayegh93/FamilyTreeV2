@@ -133,7 +133,14 @@ class NotificationViewModel: ObservableObject {
     }
     
     private var lastNotificationsFetchDate: Date?
-    
+
+    /// IDs قيد التحديث — يمنع fetchNotifications من الكتابة فوقها
+    private var pendingReadIds: Set<UUID> = []
+    /// IDs قيد الحذف — يمنع fetchNotifications من إعادتها
+    private var pendingDeleteIds: Set<UUID> = []
+    /// مدة الكاش بالثواني
+    private let cacheDuration: TimeInterval = 30
+
     weak var authVM: AuthViewModel?
     weak var appSettingsVM: AppSettingsViewModel?
 
@@ -207,7 +214,7 @@ class NotificationViewModel: ObservableObject {
 
         Log.info("[DEVICE] بدء تسجيل الجهاز: \(deviceModelName) (\(platform)), deviceId=\(deviceId.prefix(8))...")
 
-        // فحص حد الأجهزة
+        // فحص حد الأجهزة — إذا وصل الحد، نشيل الأقدم تلقائياً
         do {
             let existingDevices: [LinkedDevice] = try await supabase
                 .from("device_tokens")
@@ -219,11 +226,23 @@ class NotificationViewModel: ObservableObject {
             let isAlreadyRegistered = existingDevices.contains { $0.deviceId == deviceId }
 
             if !isAlreadyRegistered && existingDevices.count >= maxDevicesAllowed {
-                Log.warning("[DEVICE] تجاوز الحد: \(existingDevices.count) أجهزة مسجلة، الحد \(maxDevicesAllowed)")
-                self.linkedDevices = existingDevices
-                self.isDeviceLimitExceeded = true
-                authVM?.status = .deviceLimitExceeded
-                return
+                Log.info("[DEVICE] الحد الأقصى (\(maxDevicesAllowed)) — إزالة الأقدم تلقائياً...")
+                // ترتيب حسب الأقدم (updated_at) وإزالة الأقدم حتى يصير في مكان
+                let sortedByOldest = existingDevices.sorted { $0.updatedAt < $1.updatedAt }
+                let devicesToRemove = sortedByOldest.prefix(existingDevices.count - maxDevicesAllowed + 1)
+
+                for oldDevice in devicesToRemove {
+                    do {
+                        try await supabase
+                            .from("device_tokens")
+                            .delete()
+                            .eq("id", value: oldDevice.id)
+                            .execute()
+                        Log.info("[DEVICE] تم إزالة الجهاز القديم: \(oldDevice.displayName) (id=\(oldDevice.id))")
+                    } catch {
+                        Log.error("[DEVICE] خطأ إزالة الجهاز القديم: \(error.localizedDescription)")
+                    }
+                }
             }
         } catch {
             Log.error("[DEVICE] خطأ فحص حد الأجهزة: \(error.localizedDescription)")
@@ -246,7 +265,8 @@ class NotificationViewModel: ObservableObject {
                 .upsert(payload, onConflict: "member_id,device_id")
                 .execute()
 
-            Log.info("[DEVICE] تم تسجيل الجهاز بنجاح: \(deviceModelName)")
+            let tokenPreview = (pushToken ?? "").prefix(12)
+            Log.info("[DEVICE] تم تسجيل الجهاز بنجاح: \(deviceModelName), platform=\(platform), tokenLen=\(pushToken?.count ?? 0), token=\(tokenPreview)...")
         } catch {
             Log.error("[DEVICE] خطأ تسجيل الجهاز: \(error.localizedDescription) — deviceId=\(deviceId.prefix(8)), model=\(deviceModelName)")
         }
@@ -254,19 +274,44 @@ class NotificationViewModel: ObservableObject {
     
     // MARK: - Push Token
     
+    /// إعادة تسجيل التوكن المحفوظ عند فتح التطبيق — يضمن إن السيرفر عنده أحدث توكن
+    func reRegisterPushTokenIfNeeded() async {
+        guard let token = pushToken, !token.isEmpty else {
+            // لو ما فيه توكن محفوظ، نطلب واحد جديد من النظام
+            await MainActor.run {
+                UIApplication.shared.registerForRemoteNotifications()
+            }
+            Log.info("[PUSH] طلب توكن APNs جديد من النظام")
+            return
+        }
+        // نعيد إرسال التوكن الحالي للسيرفر
+        await registerPushToken(token)
+        Log.info("[PUSH] أعيد تسجيل التوكن المحفوظ عند فتح التطبيق")
+    }
+
     func registerPushToken(_ token: String) async {
         let cleanToken = token.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleanToken.isEmpty else { return }
 
         self.pushToken = cleanToken
+        Log.info("[PUSH] استلام توكن APNs: len=\(cleanToken.count), token=\(cleanToken.prefix(12))...")
 
         // لا ترسل التوكن للسيرفر إذا الإشعارات مغلقة
         let notificationsEnabled = UserDefaults.standard.object(forKey: "notificationsEnabled") as? Bool ?? true
-        guard notificationsEnabled else { return }
+        guard notificationsEnabled else {
+            Log.warning("[PUSH] الإشعارات معطّلة — لن يتم تحديث التوكن بالسيرفر")
+            return
+        }
 
-        guard let memberId = currentUser?.id else { return }
-        guard let deviceId = currentDeviceId else { return }
-        
+        guard let memberId = currentUser?.id else {
+            Log.warning("[PUSH] لا يوجد مستخدم حالي — تخطي تحديث التوكن")
+            return
+        }
+        guard let deviceId = currentDeviceId else {
+            Log.warning("[PUSH] لا يوجد معرّف جهاز — تخطي تحديث التوكن")
+            return
+        }
+
         // تحديث التوكن على سجل الجهاز الحالي
         do {
             try await supabase
@@ -277,10 +322,10 @@ class NotificationViewModel: ObservableObject {
                 .eq("member_id", value: memberId.uuidString)
                 .eq("device_id", value: deviceId)
                 .execute()
-            
-            Log.info("[DEVICE] تم تحديث Push Token للجهاز")
+
+            Log.info("[PUSH] تم تحديث Push Token بنجاح — memberId=\(memberId.uuidString.prefix(8)), deviceId=\(deviceId.prefix(8))")
         } catch {
-            Log.error("خطأ تحديث Push Token: \(error.localizedDescription)")
+            Log.error("[PUSH] خطأ تحديث Push Token: \(error.localizedDescription)")
         }
     }
 
@@ -300,10 +345,8 @@ class NotificationViewModel: ObservableObject {
         }
     }
     
-    @Published var isDeviceLimitExceeded: Bool = false
-    
     // MARK: - Linked Devices
-    
+
     func fetchLinkedDevices() async {
         guard let memberId = currentUser?.id else { return }
         do {
@@ -317,40 +360,6 @@ class NotificationViewModel: ObservableObject {
             self.linkedDevices = devices
         } catch {
             Log.error("خطأ جلب الأجهزة المرتبطة: \(error.localizedDescription)")
-        }
-    }
-    
-    /// التحقق من عدد الأجهزة عند تسجيل الدخول
-    func checkDeviceLimit() async {
-        guard let memberId = currentUser?.id else { return }
-        do {
-            let devices: [LinkedDevice] = try await supabase
-                .from("device_tokens")
-                .select()
-                .eq("member_id", value: memberId.uuidString)
-                .execute()
-                .value
-            self.linkedDevices = devices
-            
-            let isCurrentDeviceRegistered = devices.contains { $0.deviceId == currentDeviceId }
-            
-            // إذا الجهاز الحالي مسجل، ما في مشكلة
-            if isCurrentDeviceRegistered {
-                self.isDeviceLimitExceeded = false
-                return
-            }
-            
-            // إذا وصل الحد الأقصى وهذا جهاز جديد
-            if devices.count >= maxDevicesAllowed {
-                Log.warning("[DEVICE] تجاوز الحد الأقصى للأجهزة: \(devices.count)/\(maxDevicesAllowed)")
-                self.isDeviceLimitExceeded = true
-                self.linkedDevices = devices
-                authVM?.status = .deviceLimitExceeded
-            } else {
-                self.isDeviceLimitExceeded = false
-            }
-        } catch {
-            Log.error("خطأ فحص حد الأجهزة: \(error.localizedDescription)")
         }
     }
     
@@ -372,6 +381,10 @@ class NotificationViewModel: ObservableObject {
     
     /// جلب أجهزة عضو محدد (للمدير)
     func fetchDevicesForMember(_ memberId: UUID) async -> [LinkedDevice] {
+        guard canModerate else {
+            Log.warning("[AUTH] Unauthorized fetchDevicesForMember attempt")
+            return []
+        }
         do {
             let devices: [LinkedDevice] = try await supabase
                 .from("device_tokens")
@@ -389,6 +402,10 @@ class NotificationViewModel: ObservableObject {
     
     /// حذف جهاز عضو بواسطة المدير
     func removeDeviceByAdmin(_ device: LinkedDevice) async -> Bool {
+        guard canModerate else {
+            Log.warning("[AUTH] Unauthorized removeDeviceByAdmin attempt")
+            return false
+        }
         do {
             try await supabase
                 .from("device_tokens")
@@ -405,6 +422,10 @@ class NotificationViewModel: ObservableObject {
     
     /// جلب جميع الأجهزة المسجلة (للمدير)
     func fetchAllDevices() async -> [LinkedDevice] {
+        guard canModerate else {
+            Log.warning("[AUTH] Unauthorized fetchAllDevices attempt")
+            return []
+        }
         do {
             let devices: [LinkedDevice] = try await supabase
                 .from("device_tokens")
@@ -484,17 +505,11 @@ class NotificationViewModel: ObservableObject {
 
             if thisDeviceExists {
                 Log.info("[DEVICE-VERIFY] الجهاز مصرّح ✓")
-            } else if allDevices.isEmpty {
-                // ما في أجهزة مسجلة أصلاً → تسجيل أول مرة
-                Log.info("[DEVICE-VERIFY] لا توجد أجهزة مسجلة — تسجيل تلقائي…")
+            } else {
+                // الجهاز غير مسجل — نسجله تلقائياً (registerDevice يشيل الأقدم لو وصل الحد)
+                Log.info("[DEVICE-VERIFY] الجهاز غير مسجل — تسجيل تلقائي…")
                 await registerDevice()
                 Log.info("[DEVICE-VERIFY] تم تسجيل الجهاز ✓")
-            } else {
-                // توجد أجهزة أخرى لكن هذا محذوف → المدير حذفه
-                Log.warning("[DEVICE-VERIFY] الجهاز محذوف من قِبل المدير — منع الوصول")
-                self.linkedDevices = allDevices
-                self.isDeviceLimitExceeded = true
-                authVM?.status = .deviceLimitExceeded
             }
         } catch {
             Log.error("[DEVICE-VERIFY] خطأ التحقق من تصريح الجهاز: \(error.localizedDescription)")
@@ -502,25 +517,39 @@ class NotificationViewModel: ObservableObject {
     }
     
     private func sendExternalAdminPush(title: String, body: String, kind: String = "admin_request") async {
+        Log.info("[PUSH] إرسال push-admins: kind=\(kind)")
         do {
             let payload = [
                 "title": title,
                 "body": body,
                 "kind": kind
             ]
-            
+
             try await supabase.functions
                 .invoke(
                     "push-admins",
                     options: FunctionInvokeOptions(body: payload)
                 )
+
+            Log.info("[PUSH] push-admins اكتمل بنجاح")
         } catch {
-            Log.warning("تعذر إرسال Push خارجي للمدير: \(error.localizedDescription)")
+            Log.warning("[PUSH] push-admins فشل، محاولة تحديث الجلسة وإعادة الإرسال: \(error.localizedDescription)")
+            // إعادة محاولة بعد refresh session
+            do {
+                _ = try await supabase.auth.refreshSession()
+                let payload = ["title": title, "body": body, "kind": kind]
+                try await supabase.functions.invoke("push-admins", options: FunctionInvokeOptions(body: payload))
+                Log.info("[PUSH] push-admins نجح بعد تحديث الجلسة")
+            } catch {
+                Log.error("[PUSH] push-admins فشل نهائياً: \(error.localizedDescription)")
+            }
         }
     }
     
     /// إرسال push حقيقي لأعضاء محددين أو للجميع عبر Edge Function
     func sendPushToMembers(title: String, body: String, kind: String = "general", targetMemberIds: [UUID]? = nil) async {
+        let targetCount = targetMemberIds?.count ?? 0
+        Log.info("[PUSH] إرسال push-notify: targets=\(targetCount == 0 ? "ALL" : "\(targetCount)"), kind=\(kind)")
         do {
             var payload: [String: AnyEncodable] = [
                 "title": AnyEncodable(title),
@@ -530,236 +559,254 @@ class NotificationViewModel: ObservableObject {
             if let ids = targetMemberIds, !ids.isEmpty {
                 payload["member_ids"] = AnyEncodable(ids.map { $0.uuidString })
             }
-            
+
             try await supabase.functions
                 .invoke(
                     "push-notify",
                     options: FunctionInvokeOptions(body: payload)
                 )
+
+            Log.info("[PUSH] push-notify اكتمل بنجاح")
         } catch {
-            Log.warning("تعذر إرسال Push للأعضاء: \(error.localizedDescription)")
+            Log.warning("[PUSH] push-notify فشل، محاولة تحديث الجلسة: \(error.localizedDescription)")
+            // إعادة محاولة بعد refresh session
+            do {
+                _ = try await supabase.auth.refreshSession()
+                var retryPayload: [String: AnyEncodable] = [
+                    "title": AnyEncodable(title),
+                    "body": AnyEncodable(body),
+                    "kind": AnyEncodable(kind)
+                ]
+                if let ids = targetMemberIds, !ids.isEmpty {
+                    retryPayload["member_ids"] = AnyEncodable(ids.map { $0.uuidString })
+                }
+                try await supabase.functions.invoke("push-notify", options: FunctionInvokeOptions(body: retryPayload))
+                Log.info("[PUSH] push-notify نجح بعد تحديث الجلسة")
+            } catch {
+                Log.error("[PUSH] push-notify فشل نهائياً: \(error.localizedDescription)")
+            }
         }
     }
     
     // MARK: - Notifications
     
     func fetchNotifications(force: Bool = false) async {
-        if !force, let last = lastNotificationsFetchDate, Date().timeIntervalSince(last) < 15, !notifications.isEmpty {
-            Log.info("[NOTIF-FETCH] تخطي الجلب (cache ≤ 15 ثانية) — عدد حالي: \(notifications.count)")
+        if !force, let last = lastNotificationsFetchDate, Date().timeIntervalSince(last) < cacheDuration, !notifications.isEmpty {
             return
         }
         lastNotificationsFetchDate = Date()
         guard let userId = currentUser?.id else {
-            Log.warning("[NOTIF-FETCH] لا يوجد مستخدم حالي — تفريغ الإشعارات")
             notifications = []
             return
         }
         guard notificationsFeatureAvailable else {
-            Log.warning("[NOTIF-FETCH] الإشعارات غير متاحة — تفريغ")
             notifications = []
             return
         }
-        
-        Log.info("[NOTIF-FETCH] جلب إشعارات للعضو: \(userId.uuidString) (force: \(force))")
+
+        if force { isLoading = true }
 
         do {
             var allNotifications: [AppNotification] = []
 
-            // 1) جلب الإشعارات الموجهة للعضو شخصياً
+            // 1) جلب الإشعارات الشخصية
             let personal: [AppNotification] = try await supabase
                 .from("notifications")
                 .select()
                 .eq("target_member_id", value: userId.uuidString)
                 .order("created_at", ascending: false)
-                .limit(10000)
+                .limit(200)
                 .execute()
                 .value
             allNotifications.append(contentsOf: personal)
 
-            // 2) للمدراء والمشرفين: جلب إشعارات broadcast (target_member_id = NULL)
+            // 2) للمدراء/المشرفين: جلب إشعارات broadcast
             if canModerate {
                 let broadcast: [AppNotification] = try await supabase
                     .from("notifications")
                     .select()
                     .is("target_member_id", value: nil)
                     .order("created_at", ascending: false)
-                    .limit(5000)
+                    .limit(200)
                     .execute()
                     .value
                 allNotifications.append(contentsOf: broadcast)
             }
 
-            // ترتيب حسب التاريخ (الأحدث أولاً) + إزالة التكرارات
+            // ترتيب + إزالة تكرارات
             var seen = Set<UUID>()
             allNotifications = allNotifications
                 .sorted { $0.createdDate > $1.createdDate }
                 .filter { seen.insert($0.id).inserted }
 
-            let unreadCount = allNotifications.filter { !$0.read }.count
-            Log.info("[NOTIF-FETCH] ✅ تم الجلب — إجمالي: \(allNotifications.count) (شخصي: \(personal.count)\(canModerate ? " | إداري: \(allNotifications.count - personal.count)" : "")) | غير مقروء: \(unreadCount)")
+            // ── دمج مع الحالة المحلية (حماية العمليات الجارية) ──
+            // إزالة الإشعارات المحذوفة محلياً
+            if !pendingDeleteIds.isEmpty {
+                allNotifications.removeAll { pendingDeleteIds.contains($0.id) }
+            }
+            // تطبيق حالة القراءة المحلية
+            if !pendingReadIds.isEmpty {
+                allNotifications = allNotifications.map { notif in
+                    if pendingReadIds.contains(notif.id) {
+                        return notif.withRead(true)
+                    }
+                    return notif
+                }
+            }
 
             self.notificationsFeatureAvailable = true
             self.notifications = allNotifications
-            let badgeOn = currentUser?.badgeEnabled ?? true
-            try? await UNUserNotificationCenter.current().setBadgeCount(badgeOn ? unreadCount : 0)
+            await updateBadgeCount()
         } catch {
             if isMissingNotificationsTableError(error) {
                 notificationsFeatureAvailable = false
                 notifications = []
-                Log.error("[NOTIF-FETCH] ❌ جدول الإشعارات غير موجود")
-            } else {
-                Log.error("[NOTIF-FETCH] ❌ خطأ جلب الإشعارات: \(error.localizedDescription)")
+            } else if !isCancellationError(error) {
+                Log.error("[NOTIF] خطأ جلب الإشعارات: \(error.localizedDescription)")
             }
         }
+
+        if force { isLoading = false }
     }
-    
-    func deleteNotification(id: UUID) async {
-        Log.info("[NOTIF-DELETE] حذف إشعار واحد: \(id.uuidString.prefix(8))… | قبل الحذف: \(notifications.count)")
-        // حفظ نسخة احتياطية قبل الحذف
-        let backup = notifications.first { $0.id == id }
-        // تحديث محلي فوري (optimistic)
-        withAnimation(.snappy(duration: 0.25)) {
-            notifications.removeAll { $0.id == id }
-        }
-        Log.info("[NOTIF-DELETE] بعد الحذف المحلي: \(notifications.count)")
+
+    /// تحديث عداد الـ badge
+    private func updateBadgeCount() async {
         let badgeOn = currentUser?.badgeEnabled ?? true
         let unread = notifications.filter { !$0.read }.count
         try? await UNUserNotificationCenter.current().setBadgeCount(badgeOn ? unread : 0)
+    }
+    
+    func deleteNotification(id: UUID) async {
+        let backup = notifications.first { $0.id == id }
+        pendingDeleteIds.insert(id)
+
+        withAnimation(.snappy(duration: 0.25)) {
+            notifications.removeAll { $0.id == id }
+        }
+        await updateBadgeCount()
 
         do {
-            try await supabase
-                .from("notifications")
-                .delete()
-                .eq("id", value: id.uuidString)
-                .execute()
-            Log.info("[NOTIF-DELETE] ✅ تم الحذف من قاعدة البيانات")
+            try await supabase.from("notifications").delete().eq("id", value: id.uuidString).execute()
+            pendingDeleteIds.remove(id)
         } catch {
-            Log.error("[NOTIF-DELETE] ❌ خطأ حذف إشعار: \(error.localizedDescription)")
-            // إرجاع الإشعار لو فشل الحذف من DB
-            if let backup = backup {
+            pendingDeleteIds.remove(id)
+            Log.error("[NOTIF] خطأ حذف: \(error.localizedDescription)")
+            if let backup {
                 withAnimation(.snappy(duration: 0.25)) {
                     notifications.append(backup)
                     notifications.sort { $0.createdDate > $1.createdDate }
                 }
+                await updateBadgeCount()
             }
         }
     }
-    
+
     func deleteNotifications(ids: Set<UUID>) async {
         guard !ids.isEmpty else { return }
-        Log.info("[NOTIF-DELETE-MULTI] حذف \(ids.count) إشعار | قبل الحذف: \(notifications.count)")
-        // حفظ نسخة احتياطية
         let backup = notifications.filter { ids.contains($0.id) }
-        // تحديث محلي فوري (optimistic)
+        pendingDeleteIds.formUnion(ids)
+
         withAnimation(.snappy(duration: 0.25)) {
             notifications.removeAll { ids.contains($0.id) }
         }
-        Log.info("[NOTIF-DELETE-MULTI] بعد الحذف المحلي: \(notifications.count)")
-        let badgeOn = currentUser?.badgeEnabled ?? true
-        let unread = notifications.filter { !$0.read }.count
-        try? await UNUserNotificationCenter.current().setBadgeCount(badgeOn ? unread : 0)
+        await updateBadgeCount()
 
         do {
-            let idStrings = ids.map { $0.uuidString }
-            try await supabase
-                .from("notifications")
-                .delete()
-                .in("id", values: idStrings)
-                .execute()
-            Log.info("[NOTIF-DELETE-MULTI] ✅ تم الحذف من قاعدة البيانات")
+            try await supabase.from("notifications").delete().in("id", values: ids.map(\.uuidString)).execute()
+            pendingDeleteIds.subtract(ids)
         } catch {
-            Log.error("[NOTIF-DELETE-MULTI] ❌ خطأ حذف إشعارات: \(error.localizedDescription)")
-            // إرجاع الإشعارات لو فشل الحذف
+            pendingDeleteIds.subtract(ids)
+            Log.error("[NOTIF] خطأ حذف متعدد: \(error.localizedDescription)")
             if !backup.isEmpty {
                 withAnimation(.snappy(duration: 0.25)) {
                     notifications.append(contentsOf: backup)
                     notifications.sort { $0.createdDate > $1.createdDate }
                 }
+                await updateBadgeCount()
             }
         }
     }
-    
+
     func markNotificationAsRead(id: UUID) async {
-        // تحديث محلي فوري (optimistic — بدون إعادة جلب)
+        pendingReadIds.insert(id)
         if let idx = notifications.firstIndex(where: { $0.id == id }) {
             notifications[idx] = notifications[idx].withRead(true)
         }
-        let badgeOn = currentUser?.badgeEnabled ?? true
-        let unread = notifications.filter { !$0.read }.count
-        try? await UNUserNotificationCenter.current().setBadgeCount(badgeOn ? unread : 0)
+        await updateBadgeCount()
 
         do {
-            try await supabase
-                .from("notifications")
-                .update(["is_read": AnyEncodable(true)])
-                .eq("id", value: id.uuidString)
-                .execute()
-            Log.info("[NOTIF] ✅ تم تعليم إشعار كمقروء")
+            try await supabase.from("notifications").update(["is_read": AnyEncodable(true)]).eq("id", value: id.uuidString).execute()
+            pendingReadIds.remove(id)
         } catch {
-            Log.error("[NOTIF] ❌ خطأ تعليم كمقروء: \(error.localizedDescription)")
-            // إرجاع للحالة السابقة لو فشل
+            pendingReadIds.remove(id)
+            Log.error("[NOTIF] خطأ قراءة: \(error.localizedDescription)")
             if let idx = notifications.firstIndex(where: { $0.id == id }) {
                 notifications[idx] = notifications[idx].withRead(false)
             }
+            await updateBadgeCount()
         }
     }
 
     func markNotificationsAsRead(ids: Set<UUID>) async {
         guard !ids.isEmpty else { return }
-        // تحديث محلي فوري (optimistic)
+        pendingReadIds.formUnion(ids)
         for i in notifications.indices where ids.contains(notifications[i].id) {
             notifications[i] = notifications[i].withRead(true)
         }
-        let badgeOn = currentUser?.badgeEnabled ?? true
-        let unread = notifications.filter { !$0.read }.count
-        try? await UNUserNotificationCenter.current().setBadgeCount(badgeOn ? unread : 0)
+        await updateBadgeCount()
 
         do {
-            let idStrings = ids.map { $0.uuidString }
-            try await supabase
-                .from("notifications")
-                .update(["is_read": AnyEncodable(true)])
-                .in("id", values: idStrings)
-                .execute()
-            Log.info("[NOTIF] ✅ تم تعليم \(ids.count) إشعار كمقروء")
+            try await supabase.from("notifications").update(["is_read": AnyEncodable(true)]).in("id", values: ids.map(\.uuidString)).execute()
+            pendingReadIds.subtract(ids)
         } catch {
-            Log.error("[NOTIF] ❌ خطأ تعليم إشعارات كمقروءة: \(error.localizedDescription)")
-            // إرجاع للحالة السابقة
+            pendingReadIds.subtract(ids)
+            Log.error("[NOTIF] خطأ قراءة متعدد: \(error.localizedDescription)")
             for i in notifications.indices where ids.contains(notifications[i].id) {
                 notifications[i] = notifications[i].withRead(false)
             }
+            await updateBadgeCount()
         }
     }
 
     func markAllNotificationsAsRead() async {
         guard let userId = currentUser?.id else { return }
-        // حفظ الحالة السابقة
-        let previousUnreadIds = Set(notifications.filter { !$0.read }.map(\.id))
-        // تحديث محلي فوري (optimistic)
+        let unreadIds = Set(notifications.filter { !$0.read }.map(\.id))
+        guard !unreadIds.isEmpty else { return }
+
+        pendingReadIds.formUnion(unreadIds)
         for i in notifications.indices where !notifications[i].read {
             notifications[i] = notifications[i].withRead(true)
         }
         try? await UNUserNotificationCenter.current().setBadgeCount(0)
 
         do {
-            try await supabase
-                .from("notifications")
+            try await supabase.from("notifications")
                 .update(["is_read": AnyEncodable(true)])
                 .eq("target_member_id", value: userId.uuidString)
                 .eq("is_read", value: false)
                 .execute()
-            Log.info("[NOTIF] ✅ تم تعليم كل الإشعارات كمقروءة")
+
+            // إذا moderator، نحدث broadcast أيضاً
+            if canModerate {
+                try await supabase.from("notifications")
+                    .update(["is_read": AnyEncodable(true)])
+                    .is("target_member_id", value: nil)
+                    .eq("is_read", value: false)
+                    .execute()
+            }
+            pendingReadIds.subtract(unreadIds)
         } catch {
-            Log.error("[NOTIF] ❌ خطأ تعليم الكل كمقروء: \(error.localizedDescription)")
-            // إرجاع للحالة السابقة
-            for i in notifications.indices where previousUnreadIds.contains(notifications[i].id) {
+            pendingReadIds.subtract(unreadIds)
+            Log.error("[NOTIF] خطأ قراءة الكل: \(error.localizedDescription)")
+            for i in notifications.indices where unreadIds.contains(notifications[i].id) {
                 notifications[i] = notifications[i].withRead(false)
             }
+            await updateBadgeCount()
         }
     }
     
     func sendNotification(title: String, body: String, targetMemberIds: [UUID]?, sendPush: Bool = true) async {
-        guard canModerate, let creator = currentUser?.id else { return }
+        guard authVM?.isAdmin == true, let creator = currentUser?.id else { return }
         guard notificationsFeatureAvailable else { return }
         self.isLoading = true
         
@@ -795,14 +842,7 @@ class NotificationViewModel: ObservableObject {
                     targetMemberIds: targetMemberIds
                 )
             }
-            
-            // إشعار المدراء الآخرين بإرسال إشعار إداري (خارجي + داخلي)
-            await notifyAdminsWithPush(
-                title: "إشعار إداري",
-                body: "تم إرسال إشعار: \(title)",
-                kind: "admin"
-            )
-            
+
             await fetchNotifications(force: true)
         } catch {
             if isMissingNotificationsTableError(error) {

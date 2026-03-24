@@ -9,10 +9,13 @@ struct AdminIncompleteMembersView: View {
     @State private var isSelectionMode = false
     @State private var selectedMembers: Set<UUID> = []
     @State private var memberToEdit: FamilyMember?
+    @State private var memberToDelete: FamilyMember?
+    @State private var showDeleteConfirm = false
     @State private var showGenderConfirm = false
     @State private var pendingGender: String = "male"
     @State private var genderUpdateResult: String?
     @State private var showGenderResult = false
+    @State private var displayLimit = 20
 
     enum IncompleteFilter: String, CaseIterable {
         case noBirthDate, noFather, noGender
@@ -124,7 +127,8 @@ struct AdminIncompleteMembersView: View {
                         noResultsState
                     } else {
                         List {
-                            ForEach(Array(filteredMembers.enumerated()), id: \.element.id) { index, member in
+                            let visible = Array(filteredMembers.prefix(displayLimit))
+                            ForEach(Array(visible.enumerated()), id: \.element.id) { index, member in
                                 if isSelectionMode {
                                     Button {
                                         withAnimation(DS.Anim.snappy) {
@@ -143,6 +147,12 @@ struct AdminIncompleteMembersView: View {
                                     }
                                     .buttonStyle(DSBoldButtonStyle())
                                     .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                        Button(role: .destructive) {
+                                            memberToDelete = member
+                                            showDeleteConfirm = true
+                                        } label: {
+                                            Label(L10n.t("حذف", "Delete"), systemImage: "trash")
+                                        }
                                         Button {
                                             memberToEdit = member
                                         } label: {
@@ -150,6 +160,24 @@ struct AdminIncompleteMembersView: View {
                                         }
                                         .tint(DS.Color.primary)
                                     }
+                                }
+                            }
+
+                            if displayLimit < filteredMembers.count {
+                                Button {
+                                    displayLimit += 20
+                                } label: {
+                                    HStack {
+                                        Spacer()
+                                        Text(L10n.t(
+                                            "عرض المزيد (\(filteredMembers.count - displayLimit) متبقي)",
+                                            "Show more (\(filteredMembers.count - displayLimit) remaining)"
+                                        ))
+                                        .font(DS.Font.caption1)
+                                        .foregroundColor(DS.Color.primary)
+                                        Spacer()
+                                    }
+                                    .padding(.vertical, DS.Spacing.sm)
                                 }
                             }
                         }
@@ -227,6 +255,21 @@ struct AdminIncompleteMembersView: View {
         } message: {
             Text(genderUpdateResult ?? "")
         }
+        .alert(
+            L10n.t("حذف العضو نهائياً", "Delete Member Permanently"),
+            isPresented: $showDeleteConfirm,
+            presenting: memberToDelete
+        ) { member in
+            Button(L10n.t("حذف", "Delete"), role: .destructive) {
+                Task { await memberVM.deleteMember(memberId: member.id) }
+            }
+            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
+        } message: { member in
+            Text(L10n.t(
+                "هل أنت متأكد من حذف \(member.fullName)؟ هذا الإجراء لا يمكن التراجع عنه.",
+                "Are you sure you want to delete \(member.fullName)? This action cannot be undone."
+            ))
+        }
         .onAppear {
             withAnimation(DS.Anim.smooth.delay(0.15)) {
                 appeared = true
@@ -286,6 +329,7 @@ struct AdminIncompleteMembersView: View {
         return Button {
             withAnimation(DS.Anim.snappy) {
                 selectedFilter = filter
+                displayLimit = 20
             }
         } label: {
             HStack(spacing: DS.Spacing.xs) {
@@ -314,6 +358,7 @@ struct AdminIncompleteMembersView: View {
                 .foregroundColor(DS.Color.textTertiary)
             TextField(L10n.t("بحث عن عضو...", "Search member..."), text: $searchText)
                 .font(DS.Font.callout)
+                .onChange(of: searchText) { displayLimit = 20 }
             if !searchText.isEmpty {
                 Button {
                     searchText = ""

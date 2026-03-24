@@ -4,8 +4,7 @@ struct AdminDevicesView: View {
     @EnvironmentObject var notificationVM: NotificationViewModel
     @EnvironmentObject var memberVM: MemberViewModel
 
-    private var isArabic: Bool { LanguageManager.shared.selectedLanguage == "ar" }
-    private func t(_ ar: String, _ en: String) -> String { isArabic ? ar : en }
+    private func t(_ ar: String, _ en: String) -> String { L10n.t(ar, en) }
 
     @State private var allDevices: [NotificationViewModel.LinkedDevice] = []
     @State private var searchText = ""
@@ -282,7 +281,7 @@ struct AdminDevicesView: View {
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         if let date = formatter.date(from: isoString) {
             let df = DateFormatter()
-            df.locale = Locale(identifier: isArabic ? "ar" : "en")
+            df.locale = Locale(identifier: L10n.isArabic ? "ar" : "en")
             df.dateStyle = .medium
             df.timeStyle = .short
             return df.string(from: date)
@@ -290,7 +289,7 @@ struct AdminDevicesView: View {
         formatter.formatOptions = [.withInternetDateTime]
         if let date = formatter.date(from: isoString) {
             let df = DateFormatter()
-            df.locale = Locale(identifier: isArabic ? "ar" : "en")
+            df.locale = Locale(identifier: L10n.isArabic ? "ar" : "en")
             df.dateStyle = .medium
             df.timeStyle = .short
             return df.string(from: date)

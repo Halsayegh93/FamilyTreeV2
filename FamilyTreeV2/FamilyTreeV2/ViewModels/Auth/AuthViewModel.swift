@@ -76,9 +76,21 @@ class AuthViewModel: ObservableObject {
     @Published var phoneNumber: String = ""
     @Published var dialingCode: String = "+965"
     
-    /// حفظ آخر رقم هاتف مستخدم للتسجيل — يبقى بعد إعادة فتح التطبيق
-    @AppStorage("lastAuthPhone") private var lastAuthPhone: String = ""
-    @AppStorage("lastAuthDialingCode") private var lastAuthDialingCode: String = ""
+    /// حفظ آخر رقم هاتف مستخدم للتسجيل — محفوظ بأمان في Keychain
+    private var lastAuthPhone: String {
+        get { KeychainHelper.load(forKey: "lastAuthPhone") ?? "" }
+        set {
+            if newValue.isEmpty { KeychainHelper.delete(forKey: "lastAuthPhone") }
+            else { KeychainHelper.save(newValue, forKey: "lastAuthPhone") }
+        }
+    }
+    private var lastAuthDialingCode: String {
+        get { KeychainHelper.load(forKey: "lastAuthDialingCode") ?? "" }
+        set {
+            if newValue.isEmpty { KeychainHelper.delete(forKey: "lastAuthDialingCode") }
+            else { KeychainHelper.save(newValue, forKey: "lastAuthDialingCode") }
+        }
+    }
     @Published var otpCode: String = ""
     @Published var isOtpSent: Bool = false
     @Published var isLoading: Bool = false
@@ -99,7 +111,6 @@ class AuthViewModel: ObservableObject {
         case authenticatedNoProfile
         case fullyAuthenticated
         case pendingApproval
-        case deviceLimitExceeded
         case accountFrozen
     }
     
@@ -108,11 +119,53 @@ class AuthViewModel: ObservableObject {
     weak var notificationVM: NotificationViewModel?
     weak var appSettingsVM: AppSettingsViewModel?
     
-    var canModerate: Bool {
-        currentUser?.role == .admin || currentUser?.role == .supervisor
+    // MARK: - صلاحيات الأدوار
+
+    /// المالك — UUID ثابت (غيّره لحساب المالك الفعلي)
+    static let ownerUUID = UUID(uuidString: "9849ab4f-fc16-495e-b82d-33811d4b8d3c")
+
+    /// هل المستخدم الحالي مالك التطبيق
+    var isOwner: Bool {
+        currentUser?.role == .owner
     }
 
-    
+    /// هل المستخدم مدير أو مالك
+    var isAdmin: Bool {
+        currentUser?.role == .owner || currentUser?.role == .admin
+    }
+
+    /// هل يقدر يدخل لوحة الإدارة (مالك أو مدير أو مشرف)
+    var canModerate: Bool {
+        currentUser?.role == .owner || currentUser?.role == .admin || currentUser?.role == .supervisor
+    }
+
+    /// تغيير أدوار الأعضاء (ترقية/تنزيل) — المالك فقط
+    var canManageRoles: Bool { isOwner }
+
+    /// حذف أعضاء نهائياً — المالك فقط
+    var canDeleteMembers: Bool { isOwner }
+
+    /// إعدادات التطبيق — المالك فقط
+    var canManageSettings: Bool { isOwner }
+
+    /// أرقام محظورة — المالك فقط
+    var canManageBannedPhones: Bool { isOwner }
+
+    /// إدارة الأجهزة — المالك فقط
+    var canManageDevices: Bool { isOwner }
+
+    /// تعديل بيانات أعضاء آخرين — مدير + مالك
+    var canEditMembers: Bool { isAdmin }
+
+    /// حذف أخبار — مدير + مالك
+    var canDeleteNews: Bool { isAdmin }
+
+    /// إرسال إشعارات يدوية — مدير + مالك
+    var canSendNotifications: Bool { isAdmin }
+
+    /// تسجيل عضو جديد مباشرة — مدير + مالك
+    var canRegisterMembers: Bool { isAdmin }
+
     var canAutoPublishNews: Bool {
         canModerate
     }
@@ -495,7 +548,7 @@ class AuthViewModel: ObservableObject {
             let broad: [PhoneLookupProfile] = try await supabase
                 .from("profiles")
                 .select("id, phone_number, role, status")
-                .limit(10000)
+                .limit(500)
                 .execute()
                 .value
             
@@ -605,39 +658,29 @@ class AuthViewModel: ObservableObject {
                 .execute()
             
             // 4) تحديث device_tokens إذا كانت موجودة
-            _ = try? await supabase
-                .from("device_tokens")
-                .update(["user_id": AnyEncodable(newId)])
-                .eq("user_id", value: oldId)
-                .execute()
-            
+            do {
+                try await supabase.from("device_tokens").update(["user_id": AnyEncodable(newId)]).eq("user_id", value: oldId).execute()
+            } catch { Log.warning("[AUTH] فشل تحديث device_tokens أثناء الربط: \(error.localizedDescription)") }
+
             // 5) تحديث admin_requests
-            _ = try? await supabase
-                .from("admin_requests")
-                .update(["member_id": AnyEncodable(newId)])
-                .eq("member_id", value: oldId)
-                .execute()
-            
+            do {
+                try await supabase.from("admin_requests").update(["member_id": AnyEncodable(newId)]).eq("member_id", value: oldId).execute()
+            } catch { Log.warning("[AUTH] فشل تحديث admin_requests أثناء الربط: \(error.localizedDescription)") }
+
             // 6) تحديث notifications
-            _ = try? await supabase
-                .from("notifications")
-                .update(["target_member_id": AnyEncodable(newId)])
-                .eq("target_member_id", value: oldId)
-                .execute()
-            
+            do {
+                try await supabase.from("notifications").update(["target_member_id": AnyEncodable(newId)]).eq("target_member_id", value: oldId).execute()
+            } catch { Log.warning("[AUTH] فشل تحديث notifications أثناء الربط: \(error.localizedDescription)") }
+
             // 7) تحديث news
-            _ = try? await supabase
-                .from("news")
-                .update(["author_id": AnyEncodable(newId)])
-                .eq("author_id", value: oldId)
-                .execute()
-            
+            do {
+                try await supabase.from("news").update(["author_id": AnyEncodable(newId)]).eq("author_id", value: oldId).execute()
+            } catch { Log.warning("[AUTH] فشل تحديث news أثناء الربط: \(error.localizedDescription)") }
+
             // 8) تحديث member_gallery_photos
-            _ = try? await supabase
-                .from("member_gallery_photos")
-                .update(["member_id": AnyEncodable(newId)])
-                .eq("member_id", value: oldId)
-                .execute()
+            do {
+                try await supabase.from("member_gallery_photos").update(["member_id": AnyEncodable(newId)]).eq("member_id", value: oldId).execute()
+            } catch { Log.warning("[AUTH] فشل تحديث member_gallery_photos أثناء الربط: \(error.localizedDescription)") }
             
             Log.info("[AUTH] ✅ تم ربط البروفايل بنجاح: \(oldProfile.fullName) → auth.uid: \(newId)")
         } catch {
@@ -745,8 +788,7 @@ class AuthViewModel: ObservableObject {
         }
 
         let maxAttempts = 2
-        var lastError: Error?
-        
+
         for attempt in 1...maxAttempts {
             do {
                 try await supabase.auth.signInWithOTP(
@@ -762,7 +804,6 @@ class AuthViewModel: ObservableObject {
                     self.isLoading = false
                     return
             } catch {
-                lastError = error
                 let raw = "\(error) \(error.localizedDescription)".lowercased()
                 let isRateLimited = raw.contains("429") || raw.contains("rate")
                 
@@ -843,6 +884,28 @@ class AuthViewModel: ObservableObject {
     
     // MARK: - Profile Check
     
+    /// تحديث الجلسة لو منتهية — يضمن JWT صالح لاستدعاء Edge Functions
+    func refreshSessionIfNeeded() async {
+        do {
+            let session = try await supabase.auth.session
+            // لو الجلسة قاربت على الانتهاء (أقل من ساعة)
+            let expiresAt = Date(timeIntervalSince1970: TimeInterval(session.expiresAt))
+            if expiresAt.timeIntervalSinceNow < 3600 {
+                _ = try await supabase.auth.refreshSession()
+                Log.info("[AUTH] تم تحديث الجلسة بنجاح")
+            }
+        } catch {
+            Log.warning("[AUTH] تعذر تحديث الجلسة: \(error.localizedDescription)")
+            // محاولة refresh حتى لو فشل الأول
+            do {
+                _ = try await supabase.auth.refreshSession()
+                Log.info("[AUTH] تم تحديث الجلسة (إعادة محاولة)")
+            } catch {
+                Log.error("[AUTH] فشل تحديث الجلسة نهائياً: \(error.localizedDescription)")
+            }
+        }
+    }
+
     func checkUserProfile() async {
         let user: Supabase.User
         do {
@@ -905,7 +968,7 @@ class AuthViewModel: ObservableObject {
                 .execute()
                 .value
 
-            if var profile = response.first {
+            if let profile = response.first {
                 Log.info("[AUTH] Found profile by UUID: \(profile.fullName), role: \(profile.role), status: \(profile.status?.rawValue ?? "nil")")
                 
                 let existingPhone = profile.phoneNumber?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""

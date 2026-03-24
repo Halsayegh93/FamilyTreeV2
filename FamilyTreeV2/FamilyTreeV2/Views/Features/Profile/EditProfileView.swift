@@ -400,7 +400,7 @@ struct EditProfileView: View {
                 // حقل كتابة السيرة
                 TextEditor(text: $bioText)
                     .font(DS.Font.callout)
-                    .foregroundStyle(Color(UIColor.label))
+                    .foregroundStyle(DS.Color.textPrimary)
                     .frame(minHeight: 120, maxHeight: 200)
                     .scrollContentBackground(.hidden)
                     .padding(DS.Spacing.sm)

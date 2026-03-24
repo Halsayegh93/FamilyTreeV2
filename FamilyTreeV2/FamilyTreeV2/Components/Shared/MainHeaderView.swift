@@ -110,7 +110,7 @@ struct MainHeaderView<TrailingContent: View>: View {
                 trailingContent
                 
                 if customTitle == nil {
-                    if authVM.currentUser?.role == .admin || authVM.currentUser?.role == .supervisor {
+                    if authVM.canModerate {
                         Button(action: { selectedTab = 4 }) {
                             headerIconView(icon: "shield.fill")
                         }

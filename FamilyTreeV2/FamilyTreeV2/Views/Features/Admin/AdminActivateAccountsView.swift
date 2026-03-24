@@ -20,6 +20,7 @@ struct AdminActivateAccountsView: View {
     @State private var pendingGender: String = "male"
     @State private var genderUpdateResult: String?
     @State private var showGenderResult = false
+    @State private var displayLimit = 20
 
     // MARK: - Combined Filter
 
@@ -202,7 +203,8 @@ struct AdminActivateAccountsView: View {
                         noResultsState
                     } else {
                         List {
-                            ForEach(Array(filteredMembers.enumerated()), id: \.element.id) { index, member in
+                            let visible = Array(filteredMembers.prefix(displayLimit))
+                            ForEach(Array(visible.enumerated()), id: \.element.id) { index, member in
                                 if isSelectionMode {
                                     Button {
                                         withAnimation(DS.Anim.snappy) {
@@ -254,6 +256,24 @@ struct AdminActivateAccountsView: View {
                                                 .tint(DS.Color.success)
                                             }
                                         }
+                                }
+                            }
+
+                            if displayLimit < filteredMembers.count {
+                                Button {
+                                    displayLimit += 20
+                                } label: {
+                                    HStack {
+                                        Spacer()
+                                        Text(L10n.t(
+                                            "عرض المزيد (\(filteredMembers.count - displayLimit) متبقي)",
+                                            "Show more (\(filteredMembers.count - displayLimit) remaining)"
+                                        ))
+                                        .font(DS.Font.caption1)
+                                        .foregroundColor(DS.Color.primary)
+                                        Spacer()
+                                    }
+                                    .padding(.vertical, DS.Spacing.sm)
                                 }
                             }
                         }
@@ -351,6 +371,7 @@ struct AdminActivateAccountsView: View {
             LinkFatherSheet(member: member, memberVM: memberVM)
         }
         .onChange(of: selectedFilter) {
+            displayLimit = 20
             // Exit selection mode when switching filters
             if isSelectionMode {
                 isSelectionMode = false
@@ -508,6 +529,7 @@ struct AdminActivateAccountsView: View {
                 .foregroundColor(DS.Color.textTertiary)
             TextField(L10n.t("بحث عن عضو...", "Search member..."), text: $searchText)
                 .font(DS.Font.callout)
+                .onChange(of: searchText) { displayLimit = 20 }
             if !searchText.isEmpty {
                 Button {
                     searchText = ""
@@ -672,6 +694,7 @@ struct AdminActivateAccountsView: View {
     // MARK: - Helpers
     private func roleLabel(_ role: FamilyMember.UserRole) -> String {
         switch role {
+        case .owner: return L10n.t("مدير", "Admin")
         case .admin: return L10n.t("مدير", "Admin")
         case .supervisor: return L10n.t("مشرف", "Supervisor")
         case .member: return L10n.t("عضو", "Member")

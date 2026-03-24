@@ -14,7 +14,7 @@ struct SettingsView: View {
     @State private var appeared = false
 
     private var isArabic: Bool { langManager.selectedLanguage == "ar" }
-    private func t(_ ar: String, _ en: String) -> String { isArabic ? ar : en }
+    private func t(_ ar: String, _ en: String) -> String { L10n.t(ar, en) }
 
     var body: some View {
             ZStack {
@@ -284,7 +284,7 @@ struct SettingsView: View {
 struct AboutView: View {
     @Environment(\.dismiss) var dismiss
     private var isArabic: Bool { LanguageManager.shared.selectedLanguage == "ar" }
-    private func t(_ ar: String, _ en: String) -> String { isArabic ? ar : en }
+    private func t(_ ar: String, _ en: String) -> String { L10n.t(ar, en) }
 
     private var appVersion: String {
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
@@ -426,7 +426,7 @@ struct AboutView: View {
 struct PrivacyPolicyView: View {
     @Environment(\.dismiss) var dismiss
     private var isArabic: Bool { LanguageManager.shared.selectedLanguage == "ar" }
-    private func t(_ ar: String, _ en: String) -> String { isArabic ? ar : en }
+    private func t(_ ar: String, _ en: String) -> String { L10n.t(ar, en) }
 
     var body: some View {
         NavigationStack {
@@ -592,7 +592,7 @@ struct LinkedDevicesSettingsSheet: View {
     @EnvironmentObject var notificationVM: NotificationViewModel
 
     private var isArabic: Bool { LanguageManager.shared.selectedLanguage == "ar" }
-    private func t(_ ar: String, _ en: String) -> String { isArabic ? ar : en }
+    private func t(_ ar: String, _ en: String) -> String { L10n.t(ar, en) }
 
 
     var body: some View {

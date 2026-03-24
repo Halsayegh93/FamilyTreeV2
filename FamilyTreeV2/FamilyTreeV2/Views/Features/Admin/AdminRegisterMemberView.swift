@@ -244,7 +244,7 @@ struct AdminRegisterMemberView: View {
                         Spacer()
                         DatePicker("", selection: $birthDate, in: ...Date(), displayedComponents: .date)
                             .labelsHidden()
-                            .environment(\.locale, Locale(identifier: "en_US"))
+                            .environment(\.locale, Locale(identifier: L10n.isArabic ? "ar" : "en_US"))
                     }
                     .padding(.horizontal, DS.Spacing.md)
                     .padding(.vertical, DS.Spacing.xs)

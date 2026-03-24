@@ -274,7 +274,7 @@ struct AddSonByAdminSheet: View {
 
                         DatePicker("", selection: $birthDate, in: ...Date(), displayedComponents: .date)
                             .labelsHidden()
-                            .environment(\.locale, Locale(identifier: "en_US"))
+                            .environment(\.locale, Locale(identifier: L10n.isArabic ? "ar" : "en_US"))
 
                         Spacer()
 
@@ -333,7 +333,7 @@ struct AddSonByAdminSheet: View {
 
                             DatePicker("", selection: $deathDate, in: ...Date(), displayedComponents: .date)
                                 .labelsHidden()
-                                .environment(\.locale, Locale(identifier: "en_US"))
+                                .environment(\.locale, Locale(identifier: L10n.isArabic ? "ar" : "en_US"))
 
                             Spacer()
 
@@ -373,7 +373,7 @@ struct AddSonByAdminSheet: View {
         dismiss()
 
         let adminName = authVM.currentUser?.firstName ?? "مدير"
-        let parentName = parent.firstName
+        let parentName = parent.fullName
 
         if let child = editingChild {
             // Edit mode: detect what actually changed
@@ -415,8 +415,8 @@ struct AddSonByAdminSheet: View {
                 await vm.notificationVM?.notifyAdminsWithPush(
                     title: L10n.t("تعديل بيانات ابن", "Child Data Updated"),
                     body: L10n.t(
-                        "قام \(adminName) بتعديل \(capturedFirstName) ابن \(parentName): \(fieldsList)",
-                        "\(adminName) updated \(capturedFirstName) son of \(parentName): \(fieldsList)"
+                        "تم تعديل بيانات: \(capturedFirstName) ابن \(parentName)",
+                        "Updated: \(capturedFirstName) son of \(parentName)"
                     ),
                     kind: "admin_edit"
                 )
@@ -438,10 +438,10 @@ struct AddSonByAdminSheet: View {
                 )
                 // إشعار: أي مدير أضاف الابن
                 await vm.notificationVM?.notifyAdminsWithPush(
-                    title: L10n.t("إضافة ابن بواسطة المدير", "Child Added by Admin"),
+                    title: L10n.t("إضافة ابن جديد", "New Child Added"),
                     body: L10n.t(
-                        "قام \(adminName) بإضافة \(capturedFirstName) للسيد \(parentName)",
-                        "\(adminName) added \(capturedFirstName) to \(parentName)"
+                        "تم إضافة ابن: \(capturedFirstName) لـ: \(parentName)",
+                        "Child added: \(capturedFirstName) to: \(parentName)"
                     ),
                     kind: "admin_child_add"
                 )
