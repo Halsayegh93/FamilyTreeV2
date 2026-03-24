@@ -7,6 +7,7 @@ struct AdminAllRequestsView: View {
     @EnvironmentObject var memberVM: MemberViewModel
     @EnvironmentObject var notificationVM: NotificationViewModel
     @EnvironmentObject var projectsVM: ProjectsViewModel
+    @EnvironmentObject var storyVM: StoryViewModel
     @StateObject private var diwaniyaVM = DiwaniyasViewModel()
     @State private var nameEditRequest: AdminRequest? = nil
     @State private var editedName: String = ""
@@ -49,7 +50,7 @@ struct AdminAllRequestsView: View {
     }
 
     enum RequestTab: String, CaseIterable, Identifiable {
-        case joinRequests, news, reports, phone, nameChange, diwaniya, deceased, children, photos, treeEdit, projects, gallery
+        case joinRequests, news, reports, phone, nameChange, diwaniya, deceased, children, photos, treeEdit, projects, gallery, stories
 
         var id: String { rawValue }
 
@@ -67,6 +68,7 @@ struct AdminAllRequestsView: View {
             case .treeEdit: return L10n.t("تعديل", "Edit")
             case .projects: return L10n.t("مشاريع", "Projects")
             case .gallery: return L10n.t("معرض", "Gallery")
+            case .stories: return L10n.t("قصص", "Stories")
             }
         }
 
@@ -84,6 +86,7 @@ struct AdminAllRequestsView: View {
             case .treeEdit: return "pencil.and.list.clipboard"
             case .projects: return "briefcase.fill"
             case .gallery: return "photo.on.rectangle.angled"
+            case .stories: return "circle.dashed"
             }
         }
 
@@ -101,6 +104,7 @@ struct AdminAllRequestsView: View {
             case .treeEdit: return DS.Color.accent
             case .projects: return DS.Color.neonPurple
             case .gallery: return DS.Color.gridDiwaniya
+            case .stories: return DS.Color.neonCyan
             }
         }
     }
@@ -187,6 +191,7 @@ struct AdminAllRequestsView: View {
                 group.addTask { @MainActor in await adminRequestVM.fetchNameChangeRequests() }
                 group.addTask { @MainActor in await projectsVM.fetchPendingProjects() }
                 group.addTask { @MainActor in await memberVM.fetchPendingGalleryPhotos() }
+                group.addTask { @MainActor in await storyVM.fetchPendingStories(force: true) }
             }
             await fetchAllRegistrationMatches()
 
@@ -321,6 +326,7 @@ struct AdminAllRequestsView: View {
         case .treeEdit: return adminRequestVM.treeEditRequests.count
         case .projects: return projectsVM.pendingProjects.count
         case .gallery: return memberVM.pendingGalleryPhotos.count
+        case .stories: return storyVM.pendingStories.count
         }
     }
 
@@ -331,7 +337,7 @@ struct AdminAllRequestsView: View {
     // MARK: - Tab Bar
 
     private var availableTabs: [RequestTab] {
-        [.joinRequests, .news, .reports, .phone, .nameChange, .diwaniya, .deceased, .children, .photos, .treeEdit, .projects].filter { itemCount(for: $0) > 0 }
+        RequestTab.allCases.filter { itemCount(for: $0) > 0 }
     }
 
     private var tabBar: some View {
@@ -702,6 +708,24 @@ struct AdminAllRequestsView: View {
                                 } label: {
                                     Label(L10n.t("رفض", "Reject"), systemImage: "xmark.circle.fill")
                                 }
+                            }
+                        }
+                }
+            case .stories:
+                ForEach(storyVM.pendingStories) { story in
+                    storyPendingRow(story: story)
+                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                            Button {
+                                Task { await storyVM.approveStory(story) }
+                            } label: {
+                                Label(L10n.t("نشر", "Publish"), systemImage: "checkmark.circle.fill")
+                            }.tint(DS.Color.success)
+                        }
+                        .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                            Button(role: .destructive) {
+                                Task { await storyVM.rejectStory(story) }
+                            } label: {
+                                Label(L10n.t("رفض", "Reject"), systemImage: "xmark.circle.fill")
                             }
                         }
                 }
@@ -1674,6 +1698,47 @@ struct AdminAllRequestsView: View {
                         .font(DS.Font.caption2)
                         .foregroundColor(DS.Color.textTertiary)
                 }
+            }
+
+            Spacer()
+
+            DSPulseBadge(count: 1)
+        }
+        .padding(.vertical, DS.Spacing.xs)
+    }
+
+    // MARK: - Story Pending Row
+    private func storyPendingRow(story: FamilyStory) -> some View {
+        HStack(spacing: DS.Spacing.md) {
+            CachedAsyncPhaseImage(url: URL(string: story.imageUrl)) { phase in
+                if let image = phase.image {
+                    image.resizable().scaledToFill()
+                        .frame(width: 60, height: 60)
+                        .clipped()
+                        .cornerRadius(DS.Radius.sm)
+                } else {
+                    RoundedRectangle(cornerRadius: DS.Radius.sm)
+                        .fill(DS.Color.surface)
+                        .frame(width: 60, height: 60)
+                        .overlay(Image(systemName: "circle.dashed").foregroundColor(DS.Color.textTertiary))
+                }
+            }
+
+            VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                if let member = memberVM.member(byId: story.memberId) {
+                    Text(member.firstName)
+                        .font(DS.Font.calloutBold)
+                        .foregroundColor(DS.Color.textPrimary)
+                }
+                if let caption = story.caption, !caption.isEmpty {
+                    Text(caption)
+                        .font(DS.Font.caption1)
+                        .foregroundColor(DS.Color.textSecondary)
+                        .lineLimit(1)
+                }
+                Text(String(story.createdAt.prefix(10)))
+                    .font(DS.Font.caption2)
+                    .foregroundColor(DS.Color.textTertiary)
             }
 
             Spacer()

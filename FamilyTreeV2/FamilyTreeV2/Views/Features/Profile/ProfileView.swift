@@ -166,9 +166,6 @@ struct ProfileView: View {
                     .clipShape(Capsule())
                     .overlay(Capsule().stroke(user.roleColor.opacity(0.2), lineWidth: 1))
 
-                    Text(user.shortFullName)
-                        .font(DS.Font.caption1)
-                        .foregroundColor(DS.Color.textSecondary)
                 }
 
                 HStack(spacing: DS.Spacing.sm) {

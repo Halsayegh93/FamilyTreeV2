@@ -4,6 +4,7 @@ struct HomeNewsView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var newsVM: NewsViewModel
     @EnvironmentObject var memberVM: MemberViewModel
+    @EnvironmentObject var storyVM: StoryViewModel
     @Environment(\.colorScheme) private var colorScheme
     @Binding var selectedTab: Int
     @State private var showingAddNews = false
@@ -18,6 +19,9 @@ struct HomeNewsView: View {
     @State private var lastRefreshDate: Date? = nil
     @State private var activeSubPage: HomeSubPage? = nil
     @State private var appeared = false
+    @State private var showAddStory = false
+    @State private var storyViewerGroup: Int? = nil
+    @State private var showStoryViewer = false
 
     private enum HomeSubPage {
         case photos, projects, contact
@@ -55,12 +59,10 @@ struct HomeNewsView: View {
                                     .opacity(appeared ? 1 : 0)
                                     .offset(y: appeared ? 0 : 15)
 
-                                // ذكريات العائلة — Stories
-                                if !galleryMembersWithPhotos.isEmpty {
-                                    galleryStoriesSection
-                                        .opacity(appeared ? 1 : 0)
-                                        .offset(y: appeared ? 0 : 18)
-                                }
+                                // ستوري العائلة
+                                realStoriesSection
+                                    .opacity(appeared ? 1 : 0)
+                                    .offset(y: appeared ? 0 : 18)
 
                                 // أخبار العائلة
                                 newsFeedSection
@@ -84,6 +86,7 @@ struct HomeNewsView: View {
             .task {
                 await refreshNews(notifyIfNew: false)
                 await memberVM.fetchApprovedGalleryPhotos()
+                await storyVM.fetchActiveStories()
             }
             .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
                 Task { await refreshNews(notifyIfNew: true) }
@@ -132,6 +135,22 @@ struct HomeNewsView: View {
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
             }
+            .sheet(isPresented: $showAddStory) {
+                AddStorySheet()
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
+            }
+            .overlay {
+                if showStoryViewer {
+                    StoryViewerView(
+                        isPresented: $showStoryViewer,
+                        allGroups: sortedStoryGroups,
+                        initialGroupIndex: storyViewerGroup ?? 0
+                    )
+                    .transition(.opacity)
+                    .zIndex(100)
+                }
+            }
         }
         .onChange(of: selectedTab) {
             if selectedTab != 0, activeSubPage != nil {
@@ -143,6 +162,8 @@ struct HomeNewsView: View {
                 withAnimation(DS.Anim.snappy) { activeSubPage = nil }
             }
         }
+        .toolbar(showStoryViewer ? .hidden : .visible, for: .tabBar)
+        .animation(.easeInOut(duration: 0.3), value: showStoryViewer)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
 
@@ -193,10 +214,103 @@ struct HomeNewsView: View {
         .sorted { $0.count > $1.count }
     }
 
+    // MARK: - Real Stories Section
+
+    /// ستوريات مرتبة: المستخدم الحالي أولاً
+    private var sortedStoryGroups: [(member: FamilyMember, stories: [FamilyStory])] {
+        let groups = storyVM.membersWithStories
+        guard let userId = authVM.currentUser?.id else { return groups }
+        var sorted = groups
+        if let myIndex = sorted.firstIndex(where: { $0.member.id == userId }) {
+            let myGroup = sorted.remove(at: myIndex)
+            sorted.insert(myGroup, at: 0)
+        }
+        return sorted
+    }
+
+    private var realStoriesSection: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: DS.Spacing.lg) {
+                // زر إضافة ستوري
+                addStoryButton
+
+                // ستوريات الأعضاء — المستخدم الحالي أولاً
+                ForEach(Array(sortedStoryGroups.enumerated()), id: \.element.member.id) { index, item in
+                    storyMemberCircle(item: item, index: index)
+                }
+            }
+            .padding(.horizontal, DS.Spacing.lg)
+            .padding(.vertical, DS.Spacing.sm)
+        }
+    }
+
+    private var addStoryButton: some View {
+        Button { showAddStory = true } label: {
+            VStack(spacing: DS.Spacing.xs) {
+                ZStack {
+                    Circle()
+                        .fill(DS.Color.primary.opacity(0.12))
+                        .frame(width: 64, height: 64)
+
+                    Image(systemName: "plus")
+                        .font(.system(size: 24, weight: .bold))
+                        .foregroundColor(DS.Color.primary)
+                }
+
+                Text(L10n.t("إضافة", "Add"))
+                    .font(DS.Font.scaled(11, weight: .medium))
+                    .foregroundColor(DS.Color.textSecondary)
+                    .lineLimit(1)
+                    .frame(width: 64)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func storyMemberCircle(item: (member: FamilyMember, stories: [FamilyStory]), index: Int) -> some View {
+        Button {
+            storyViewerGroup = index
+            withAnimation(.easeOut(duration: 0.3)) {
+                showStoryViewer = true
+            }
+        } label: {
+            VStack(spacing: DS.Spacing.xs) {
+                ZStack {
+                    Circle()
+                        .stroke(DS.Color.gradientPrimary, lineWidth: 2.5)
+                        .frame(width: 64, height: 64)
+
+                    galleryMemberAvatar(item.member, size: 56)
+                        .frame(width: 56, height: 56)
+                        .clipShape(Circle())
+
+                    if item.stories.count > 1 {
+                        Text("\(item.stories.count)")
+                            .font(DS.Font.scaled(9, weight: .bold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 1)
+                            .background(DS.Color.primary)
+                            .clipShape(Capsule())
+                            .offset(x: 18, y: 20)
+                    }
+                }
+
+                Text(item.member.firstName)
+                    .font(DS.Font.scaled(11, weight: .medium))
+                    .foregroundColor(DS.Color.textSecondary)
+                    .lineLimit(1)
+                    .frame(width: 64)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - Gallery Stories Section (Legacy)
+
     private var galleryStoriesSection: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: DS.Spacing.lg) {
-                // "الكل"
                 galleryStoryCircle(
                     name: L10n.t("الصور", "Photos"),
                     avatarView: AnyView(

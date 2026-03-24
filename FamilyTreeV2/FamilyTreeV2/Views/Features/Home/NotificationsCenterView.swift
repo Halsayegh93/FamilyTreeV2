@@ -414,11 +414,12 @@ struct NotificationsCenterView: View {
                     }
 
                     // النص الكامل
-                    Text(cleanBody(item.body))
-                        .font(DS.Font.scaled(13, weight: .regular))
-                        .foregroundColor(isUnread ? DS.Color.textSecondary : DS.Color.textTertiary)
-                        .lineLimit(3)
-                        .multilineTextAlignment(.leading)
+                    richBodyView(
+                        item.body,
+                        font: DS.Font.scaled(13, weight: .regular),
+                        color: isUnread ? DS.Color.textSecondary : DS.Color.textTertiary,
+                        lineLimit: 3
+                    )
 
                     // شريط سفلي: التصنيف + بادج المدير
                     HStack(spacing: DS.Spacing.sm) {
@@ -583,10 +584,11 @@ struct NotificationsCenterView: View {
 
                             Spacer().frame(height: DS.Spacing.sm)
 
-                            Text(cleanBody(notification.body))
-                                .font(DS.Font.scaled(15, weight: .regular))
-                                .foregroundColor(DS.Color.textPrimary)
-                                .fixedSize(horizontal: false, vertical: true)
+                            richBodyView(
+                                notification.body,
+                                font: DS.Font.scaled(15, weight: .regular),
+                                color: DS.Color.textPrimary
+                            )
                         }
                         .padding(DS.Spacing.lg)
                         .background(
@@ -773,6 +775,65 @@ struct NotificationsCenterView: View {
             .joined(separator: "\n")
     }
 
+    /// يحلل النص ويبني عرض يحتوي على كبسولات للأسماء المحاطة بـ «»
+    @ViewBuilder
+    private func richBodyView(_ body: String, font: Font, color: Color, lineLimit: Int? = nil) -> some View {
+        let cleaned = cleanBody(body)
+        let segments = parseNameSegments(cleaned)
+
+        if segments.contains(where: { $0.isCapsule }) {
+            // فيه أسماء — نعرضها كـ Flow layout
+            WrappingHStack(segments: segments, font: font, color: color, lineLimit: lineLimit)
+        } else {
+            // نص عادي بدون كبسولات
+            Text(cleaned)
+                .font(font)
+                .foregroundColor(color)
+                .lineLimit(lineLimit)
+                .multilineTextAlignment(.leading)
+        }
+    }
+
+    struct BodySegment: Identifiable {
+        let id = UUID()
+        let text: String
+        let isCapsule: Bool
+    }
+
+    private func parseNameSegments(_ text: String) -> [BodySegment] {
+        var segments: [BodySegment] = []
+        var remaining = text[...]
+
+        while let openRange = remaining.range(of: "«") {
+            // نص قبل «
+            let before = String(remaining[remaining.startIndex..<openRange.lowerBound])
+            if !before.isEmpty {
+                segments.append(BodySegment(text: before, isCapsule: false))
+            }
+
+            let afterOpen = remaining[openRange.upperBound...]
+            if let closeRange = afterOpen.range(of: "»") {
+                let name = String(afterOpen[afterOpen.startIndex..<closeRange.lowerBound])
+                if !name.isEmpty {
+                    segments.append(BodySegment(text: name, isCapsule: true))
+                }
+                remaining = afterOpen[closeRange.upperBound...]
+            } else {
+                // لا يوجد إغلاق — نكمل كنص عادي
+                let rest = String(remaining[openRange.lowerBound...])
+                segments.append(BodySegment(text: rest, isCapsule: false))
+                remaining = remaining[remaining.endIndex...]
+            }
+        }
+
+        // النص المتبقي
+        if !remaining.isEmpty {
+            segments.append(BodySegment(text: String(remaining), isCapsule: false))
+        }
+
+        return segments
+    }
+
     private func createdByName(for notification: AppNotification) -> String? {
         guard authVM.canModerate else { return nil }
         if let creatorId = notification.createdBy {
@@ -832,6 +893,10 @@ struct NotificationsCenterView: View {
             return ("list.clipboard.fill", DS.Color.gradientOcean, DS.Color.primaryDark)
         case "tree_edit":
             return ("pencil.circle.fill", DS.Color.gradientAccent, DS.Color.accent)
+        case "story_pending":
+            return ("circle.dashed", DS.Color.gradientNeon, DS.Color.neonCyan)
+        case "story_approved", "story_rejected":
+            return ("circle.fill", DS.Color.gradientCool, DS.Color.info)
         default:
             return ("bell.fill", DS.Color.gradientPrimary, DS.Color.primary)
         }
@@ -856,10 +921,100 @@ struct NotificationsCenterView: View {
         case "news_published": return L10n.t("خبر جديد", "New Post")
         case "profile_update": return L10n.t("تحديث بيانات", "Profile Update")
         case "account_activated": return L10n.t("تفعيل حساب", "Activated")
-        case "role_change": return L10n.t("تغيير مستوى الحساب", "Account Level Change")
+        case "role_change": return L10n.t("تغيير الصلاحية", "Role Change")
         case "weekly_digest": return L10n.t("ملخص أسبوعي", "Weekly Digest")
         case "tree_edit": return L10n.t("تعديل شجرة", "Tree Edit")
+        case "story_pending": return L10n.t("قصة معلقة", "Pending Story")
+        case "story_approved": return L10n.t("قصة معتمدة", "Story Approved")
+        case "story_rejected": return L10n.t("قصة مرفوضة", "Story Rejected")
         default: return L10n.t("عام", "General")
+        }
+    }
+}
+
+// MARK: - Wrapping HStack for capsule names
+
+private struct WrappingHStack: View {
+    let segments: [NotificationsCenterView.BodySegment]
+    let font: Font
+    let color: Color
+    let lineLimit: Int?
+
+    /// يحدد لون الكبسولة حسب محتواها — إذا كانت صلاحية يستخدم لونها، وإلا اللون الأساسي
+    private func capsuleColor(for text: String) -> Color {
+        let trimmed = text.trimmingCharacters(in: .whitespaces)
+        switch trimmed {
+        case "مدير", "Admin":       return FamilyMember.UserRole.admin.color
+        case "مشرف", "Supervisor":  return FamilyMember.UserRole.supervisor.color
+        case "عضو", "Member":       return FamilyMember.UserRole.member.color
+        default:                     return DS.Color.primary
+        }
+    }
+
+    var body: some View {
+        // عرض النصوص مع كبسولات الأسماء
+        FlowLayout(spacing: 4) {
+            ForEach(segments) { segment in
+                if segment.isCapsule {
+                    let capColor = capsuleColor(for: segment.text)
+                    Text(segment.text)
+                        .font(font).bold()
+                        .foregroundColor(capColor)
+                        .padding(.horizontal, DS.Spacing.sm)
+                        .padding(.vertical, 3)
+                        .background(capColor.opacity(0.12))
+                        .clipShape(Capsule())
+                        .overlay(Capsule().stroke(capColor.opacity(0.25), lineWidth: 0.5))
+                } else {
+                    Text(segment.text)
+                        .font(font)
+                        .foregroundColor(color)
+                        .padding(.vertical, 3)
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Flow Layout (wrapping horizontal layout)
+private struct FlowLayout: Layout {
+    var spacing: CGFloat = 4
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let maxWidth = proposal.width ?? .infinity
+        var currentX: CGFloat = 0
+        var currentY: CGFloat = 0
+        var lineHeight: CGFloat = 0
+
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if currentX + size.width > maxWidth && currentX > 0 {
+                currentY += lineHeight + spacing
+                currentX = 0
+                lineHeight = 0
+            }
+            currentX += size.width + spacing
+            lineHeight = max(lineHeight, size.height)
+        }
+
+        return CGSize(width: maxWidth, height: currentY + lineHeight)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var currentX: CGFloat = bounds.minX
+        var currentY: CGFloat = bounds.minY
+        var lineHeight: CGFloat = 0
+
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if currentX + size.width > bounds.maxX && currentX > bounds.minX {
+                currentY += lineHeight + spacing
+                currentX = bounds.minX
+                lineHeight = 0
+            }
+            subview.place(at: CGPoint(x: currentX, y: currentY), proposal: .unspecified)
+            currentX += size.width + spacing
+            lineHeight = max(lineHeight, size.height)
         }
     }
 }

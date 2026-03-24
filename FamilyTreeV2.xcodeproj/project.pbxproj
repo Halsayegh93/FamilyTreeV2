@@ -15,6 +15,8 @@
 		9AA8863A2F524EBB001B4183 /* FamilyTreeV2.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = FamilyTreeV2.xcodeproj; sourceTree = "<group>"; };
 		9AEB37E22F5E54D10086CE6F /* FamilyTreeV2.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = FamilyTreeV2.xcodeproj; sourceTree = "<group>"; };
 		9AEB3CEC2F60F3C20086CE6F /* FamilyTreeV2.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = FamilyTreeV2.xcodeproj; sourceTree = "<group>"; };
+		9AF643262F7326A200445E6C /* FamilyTreeV2.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = FamilyTreeV2.xcodeproj; sourceTree = "<group>"; };
+		9AF643272F7326A200445E6C /* FamilyTreeV2 2.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = "FamilyTreeV2 2.xcodeproj"; sourceTree = "<group>"; };
 		9F71E7492F0D83E20001F8B7 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -53,6 +55,20 @@
 			sourceTree = "<group>";
 		};
 		9AEB3CED2F60F3C20086CE6F /* Products */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		9AF6432A2F7326A200445E6C /* Products */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		9AF6432C2F7326A200445E6C /* Products */ = {
 			isa = PBXGroup;
 			children = (
 			);
@@ -127,6 +143,10 @@
 			projectDirPath = "";
 			projectReferences = (
 				{
+					ProductGroup = 9AF6432A2F7326A200445E6C /* Products */;
+					ProjectRef = 9AF643272F7326A200445E6C /* FamilyTreeV2 2.xcodeproj */;
+				},
+				{
 					ProductGroup = 9AEB3CED2F60F3C20086CE6F /* Products */;
 					ProjectRef = 9AEB3CEC2F60F3C20086CE6F /* FamilyTreeV2.xcodeproj */;
 				},
@@ -137,6 +157,10 @@
 				{
 					ProductGroup = 9AA886402F524EBB001B4183 /* Products */;
 					ProjectRef = 9AA8863A2F524EBB001B4183 /* FamilyTreeV2.xcodeproj */;
+				},
+				{
+					ProductGroup = 9AF6432C2F7326A200445E6C /* Products */;
+					ProjectRef = 9AF643262F7326A200445E6C /* FamilyTreeV2.xcodeproj */;
 				},
 			);
 			projectRoot = "";

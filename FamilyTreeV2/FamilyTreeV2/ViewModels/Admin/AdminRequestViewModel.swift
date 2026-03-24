@@ -267,9 +267,10 @@ class AdminRequestViewModel: ObservableObject {
                     )
                 case "إضافة":
                     let childName = payload?.newMemberName ?? ""
+                    let parentName = payload?.parentMemberName ?? ""
                     notifBody = L10n.t(
-                        "تم قبول طلب إضافة \(childName) للشجرة",
-                        "Request to add \(childName) was approved"
+                        "تم إضافة الابن: «\(childName)» لـ: «\(parentName)»",
+                        "Son added: «\(childName)» to: «\(parentName)»"
                     )
                 default:
                     notifBody = L10n.t("تم قبول طلب تعديل الشجرة", "Your tree edit request was approved")
@@ -486,9 +487,24 @@ class AdminRequestViewModel: ObservableObject {
                     .eq("id", value: request.id.uuidString)
                     .execute()
 
+                // جلب اسم الابن والأب من البيانات
+                let childFirstName = request.member?.firstName ?? ""
+                let parentName: String = {
+                    if let fatherId = request.member?.fatherId,
+                       let parent = self?.memberVM?.member(byId: fatherId) {
+                        return parent.fullName
+                    }
+                    return ""
+                }()
+
+                let childNotifBody = L10n.t(
+                    "تم إضافة الابن: «\(childFirstName)» لـ: «\(parentName)»",
+                    "Son added: «\(childFirstName)» to: «\(parentName)»"
+                )
+
                 await self?.notificationVM?.sendNotification(
                     title: L10n.t("تم قبول طلبك", "Your Request Was Approved"),
-                    body: L10n.t("تمت الموافقة على إضافة الابن وتحديث الشجرة", "Your child add request was approved and tree updated"),
+                    body: childNotifBody,
                     targetMemberIds: [request.requesterId]
                 )
                 Log.info("تم تأكيد طلب إضافة الابن بنجاح")
@@ -554,6 +570,18 @@ class AdminRequestViewModel: ObservableObject {
 
             // Refresh members immediately
             await memberVM?.fetchAllMembers(force: true)
+
+            // إشعار للمدراء بإضافة الابن
+            let parentFullName = parent?.fullName ?? ""
+            let notifBody = L10n.t(
+                "تم إضافة الابن: «\(firstName)» لـ: «\(parentFullName)»",
+                "Son added: «\(firstName)» to: «\(parentFullName)»"
+            )
+            await notificationVM?.notifyAdminsWithPush(
+                title: L10n.t("تعديل الشجرة", "Tree Update"),
+                body: notifBody,
+                kind: "tree_edit"
+            )
 
         } catch {
             Log.error("خطأ في إضافة العضو: \(error.localizedDescription)")

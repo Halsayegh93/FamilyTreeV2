@@ -5,6 +5,7 @@ struct AdminDashboardView: View {
     @EnvironmentObject var memberVM: MemberViewModel
     @EnvironmentObject var newsVM: NewsViewModel
     @EnvironmentObject var adminRequestVM: AdminRequestViewModel
+    @EnvironmentObject var storyVM: StoryViewModel
     @StateObject private var diwaniyaVM = DiwaniyasViewModel()
     @Binding var selectedTab: Int
     @State private var showingNotifications = false
@@ -33,6 +34,7 @@ struct AdminDashboardView: View {
         + adminRequestVM.treeEditRequests.count
         + adminRequestVM.nameChangeRequests.count
         + memberVM.pendingGalleryPhotos.count
+        + storyVM.pendingStories.count
     }
     /// عدد مشاكل الشجرة (يتائم، بدون أسماء، روابط مكسورة، مخفيين)
     private var treeIssuesCount: Int {
@@ -108,7 +110,7 @@ struct AdminDashboardView: View {
                                     NavigationLink(destination: AdminAllRequestsView()) {
                                         DSActionRow(
                                             title: L10n.t("طلبات المراجعة", "Review Requests"),
-                                            subtitle: L10n.t("انضمام، أخبار، بلاغات، جوال، ديوانيات، وفاة، أبناء، صور، تعديل", "Join, news, reports, phone, diwaniyas, deceased, children, photos, edits"),
+                                            subtitle: L10n.t("انضمام، أخبار، بلاغات، جوال، ديوانيات، وفاة، أبناء، صور، قصص، تعديل", "Join, news, reports, phone, diwaniyas, deceased, children, photos, stories, edits"),
                                             icon: "tray.full.fill",
                                             color: DS.Color.warning,
                                             badge: totalReviewRequestsCount

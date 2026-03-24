@@ -382,8 +382,8 @@ class MemberViewModel: ObservableObject {
                     await notificationVM?.notifyAdminsWithPush(
                         title: L10n.t("طلب إضافة ابن", "Child Add Request"),
                         body: L10n.t(
-                            "طلب إضافة ابن: \(firstNameOnly) لـ: \(father.fullName)",
-                            "Child add request: \(firstNameOnly) to: \(father.fullName)"
+                            "طلب إضافة ابن: «\(firstNameOnly)» لـ: «\(father.fullName)»",
+                            "Child add request: «\(firstNameOnly)» to: «\(father.fullName)»"
                         ),
                         kind: "child_add"
                     )
@@ -1257,14 +1257,14 @@ class MemberViewModel: ObservableObject {
             await fetchAllMembers(force: true)
             
             let memberName = _memberById[memberId]?.firstName ?? "عضو"
-            let roleName = newRole == .admin ? "مدير" : (newRole == .supervisor ? "مشرف" : "عضو")
-            
+            let roleName = newRole == .admin ? L10n.t("مدير", "Admin") : (newRole == .supervisor ? L10n.t("مشرف", "Supervisor") : L10n.t("عضو", "Member"))
+
             // 3. إشعار المدراء بتغيير الرتبة (push + داخلي)
             await notificationVM?.notifyAdminsWithPush(
-                title: L10n.t("تغيير صلاحيات", "Role Changed"),
+                title: L10n.t("تغيير الصلاحية", "Role Change"),
                 body: L10n.t(
-                    "تم تغيير صلاحيات \(memberName) إلى: \(roleName)",
-                    "\(memberName)'s role was changed to: \(roleName)"
+                    "تم تغيير صلاحية «\(memberName)» إلى: «\(roleName)»",
+                    "«\(memberName)»'s role changed to: «\(roleName)»"
                 ),
                 kind: "role_change"
             )
@@ -1273,10 +1273,10 @@ class MemberViewModel: ObservableObject {
             if authVM?.notificationsFeatureAvailable == true {
                 let personalPayload: [String: AnyEncodable] = [
                     "target_member_id": AnyEncodable(memberId.uuidString),
-                    "title": AnyEncodable(L10n.t("تغيير مستوى الحساب", "Account Level Changed")),
+                    "title": AnyEncodable(L10n.t("تغيير الصلاحية", "Role Change")),
                     "body": AnyEncodable(L10n.t(
-                        "مستوى حسابك الآن: \(roleName).",
-                        "Your account level is now: \(roleName)."
+                        "صلاحيتك الآن: «\(roleName)»",
+                        "Your role is now: «\(roleName)»"
                     )),
                     "kind": AnyEncodable("role_change"),
                     "created_by": AnyEncodable(currentUser?.id.uuidString)
@@ -1284,10 +1284,10 @@ class MemberViewModel: ObservableObject {
                 do {
                     try await supabase.from("notifications").insert(personalPayload).execute()
                     await notificationVM?.sendPushToMembers(
-                        title: L10n.t("تم تغيير مستوى حسابك", "Your Account Level Changed"),
+                        title: L10n.t("تغيير الصلاحية", "Role Change"),
                         body: L10n.t(
-                            "مستوى حسابك الآن: \(roleName)",
-                            "Your account level is now: \(roleName)"
+                            "صلاحيتك الآن: «\(roleName)»",
+                            "Your role is now: «\(roleName)»"
                         ),
                         kind: "role_change",
                         targetMemberIds: [memberId]
