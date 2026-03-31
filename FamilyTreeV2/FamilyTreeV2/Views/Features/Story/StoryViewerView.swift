@@ -24,7 +24,7 @@ struct StoryViewerView: View {
     var body: some View {
         GeometryReader { geo in
             ZStack {
-                Color.black.opacity(dragOpacity).ignoresSafeArea()
+                DS.Color.overlayDark.opacity(dragOpacity).ignoresSafeArea()
 
                 if !allGroups.isEmpty,
                    currentGroupIndex < allGroups.count,
@@ -60,8 +60,8 @@ struct StoryViewerView: View {
                         if let caption = story.caption, !caption.isEmpty {
                             Text(caption)
                                 .font(DS.Font.scaled(16, weight: .semibold))
-                                .foregroundColor(.white)
-                                .shadow(color: .black.opacity(0.5), radius: 4, y: 2)
+                                .foregroundColor(DS.Color.textOnPrimary)
+                                .dsCardShadow()
                                 .multilineTextAlignment(.center)
                                 .padding(.horizontal, DS.Spacing.xl)
                                 .padding(.top, DS.Spacing.sm)
@@ -72,11 +72,11 @@ struct StoryViewerView: View {
                         if story.createdBy == authVM.currentUser?.id {
                             HStack(spacing: DS.Spacing.xs) {
                                 Image(systemName: "eye.fill")
-                                    .font(.system(size: 13))
+                                    .font(DS.Font.footnote)
                                 Text("\(storyVM.viewCounts[story.id] ?? 0)")
                                     .font(DS.Font.scaled(13, weight: .semibold))
                             }
-                            .foregroundColor(.white.opacity(0.7))
+                            .foregroundColor(DS.Color.textOnPrimary.opacity(0.7))
                             .padding(.top, DS.Spacing.sm)
                             .allowsHitTesting(false)
                         }
@@ -129,16 +129,16 @@ struct StoryViewerView: View {
                     .frame(width: screenWidth, height: screenWidth)
             } else if phase.error != nil {
                 ZStack {
-                    Color.black
+                    DS.Color.overlayDark
                     Image(systemName: "photo.slash")
-                        .font(.system(size: 40))
-                        .foregroundColor(.gray)
+                        .font(DS.Font.scaled(40, weight: .regular))
+                        .foregroundColor(DS.Color.textSecondary)
                 }
                 .frame(width: screenWidth, height: screenWidth)
             } else {
                 ZStack {
-                    Color.black
-                    ProgressView().tint(.white)
+                    DS.Color.overlayDark
+                    ProgressView().tint(DS.Color.textOnPrimary)
                 }
                 .frame(width: screenWidth, height: screenWidth)
             }
@@ -154,9 +154,9 @@ struct StoryViewerView: View {
                 GeometryReader { barGeo in
                     ZStack(alignment: .leading) {
                         Capsule()
-                            .fill(Color.white.opacity(0.3))
+                            .fill(DS.Color.overlayIconBorder)
                         Capsule()
-                            .fill(Color.white)
+                            .fill(DS.Color.textOnPrimary)
                             .frame(width: barWidth(index: index, totalWidth: barGeo.size.width))
                     }
                 }
@@ -196,13 +196,13 @@ struct StoryViewerView: View {
             }
             .frame(width: headerIconSize, height: headerIconSize)
             .clipShape(Circle())
-            .overlay(Circle().stroke(Color.white.opacity(0.5), lineWidth: 1))
+            .overlay(Circle().stroke(DS.Color.overlayHalf, lineWidth: 1))
 
             VStack(alignment: .leading, spacing: 1) {
                 HStack(spacing: DS.Spacing.sm) {
                     Text(firstAndLastName(member.fullName))
                         .font(DS.Font.scaled(14, weight: .bold))
-                        .foregroundColor(.white)
+                        .foregroundColor(DS.Color.textOnPrimary)
                     if story.approvalStatus == "pending" {
                         Text(L10n.t("معلقة", "Pending"))
                             .font(DS.Font.scaled(10, weight: .bold))
@@ -215,7 +215,7 @@ struct StoryViewerView: View {
                 }
                 Text(relativeTime(story.createdDate))
                     .font(DS.Font.scaled(11, weight: .medium))
-                    .foregroundColor(.white.opacity(0.7))
+                    .foregroundColor(DS.Color.textOnPrimary.opacity(0.7))
             }
 
             Spacer()
@@ -225,9 +225,9 @@ struct StoryViewerView: View {
                 Button { showDeleteConfirm = true } label: {
                     Image(systemName: "trash")
                         .font(DS.Font.scaled(14, weight: .bold))
-                        .foregroundColor(.white)
+                        .foregroundColor(DS.Color.textOnPrimary)
                         .frame(width: headerIconSize, height: headerIconSize)
-                        .background(Color.white.opacity(0.15))
+                        .background(DS.Color.overlayIcon)
                         .clipShape(Circle())
                 }
             }
@@ -235,9 +235,9 @@ struct StoryViewerView: View {
             Button { closeViewer() } label: {
                 Image(systemName: "xmark")
                     .font(DS.Font.scaled(14, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundColor(DS.Color.textOnPrimary)
                     .frame(width: headerIconSize, height: headerIconSize)
-                    .background(Color.white.opacity(0.15))
+                    .background(DS.Color.overlayIcon)
                     .clipShape(Circle())
             }
         }
@@ -363,11 +363,11 @@ struct StoryViewerView: View {
             } label: {
                 HStack(spacing: DS.Spacing.xs) {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 16, weight: .bold))
+                        .font(DS.Font.scaled(16, weight: .bold))
                     Text(L10n.t("رفض", "Reject"))
                         .font(DS.Font.scaled(14, weight: .bold))
                 }
-                .foregroundColor(.white)
+                .foregroundColor(DS.Color.textOnPrimary)
                 .padding(.horizontal, DS.Spacing.xl)
                 .padding(.vertical, DS.Spacing.sm)
                 .background(DS.Color.error.opacity(0.8))
@@ -386,16 +386,16 @@ struct StoryViewerView: View {
                 HStack(spacing: DS.Spacing.xs) {
                     if isApproving {
                         ProgressView()
-                            .tint(.white)
+                            .tint(DS.Color.textOnPrimary)
                             .scaleEffect(0.8)
                     } else {
                         Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 16, weight: .bold))
+                            .font(DS.Font.scaled(16, weight: .bold))
                     }
                     Text(L10n.t("موافقة", "Approve"))
                         .font(DS.Font.scaled(14, weight: .bold))
                 }
-                .foregroundColor(.white)
+                .foregroundColor(DS.Color.textOnPrimary)
                 .padding(.horizontal, DS.Spacing.xl)
                 .padding(.vertical, DS.Spacing.sm)
                 .background(DS.Color.success.opacity(0.8))
@@ -438,7 +438,7 @@ struct StoryViewerView: View {
             Circle().fill(DS.Color.primary.opacity(0.4))
             Text(String(member.firstName.prefix(1)))
                 .font(DS.Font.scaled(size * 0.4, weight: .bold))
-                .foregroundColor(.white)
+                .foregroundColor(DS.Color.textOnPrimary)
         }
         .frame(width: size, height: size)
     }

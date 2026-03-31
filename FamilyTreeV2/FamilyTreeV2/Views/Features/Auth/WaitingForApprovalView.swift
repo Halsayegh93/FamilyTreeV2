@@ -16,7 +16,6 @@ struct WaitingForApprovalView: View {
     var body: some View {
         ZStack {
             DS.Color.background.ignoresSafeArea()
-            DSDecorativeBackground()
 
             ScrollView(showsIndicators: false) {
                 VStack(spacing: DS.Spacing.xxl) {
@@ -97,7 +96,7 @@ struct WaitingForApprovalView: View {
                     )
                 )
                 .frame(width: 100, height: 100)
-                .shadow(color: DS.Color.warning.opacity(0.25), radius: 16, y: 6)
+                .dsNeonShadow()
 
             // الأيقونة
             Image(systemName: "hourglass")

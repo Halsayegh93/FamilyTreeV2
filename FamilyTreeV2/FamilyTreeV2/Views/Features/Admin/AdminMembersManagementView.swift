@@ -22,7 +22,6 @@ struct AdminMembersManagementView: View {
     var body: some View {
         ZStack {
             DS.Color.background.ignoresSafeArea()
-            DSDecorativeBackground()
 
             VStack(spacing: 0) {
                 // Segmented Picker

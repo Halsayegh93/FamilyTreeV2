@@ -5,6 +5,7 @@ struct HomeNewsView: View {
     @EnvironmentObject var newsVM: NewsViewModel
     @EnvironmentObject var memberVM: MemberViewModel
     @EnvironmentObject var storyVM: StoryViewModel
+    @EnvironmentObject var notificationVM: NotificationViewModel
     @Environment(\.colorScheme) private var colorScheme
     @Binding var selectedTab: Int
     @State private var showingAddNews = false
@@ -87,9 +88,13 @@ struct HomeNewsView: View {
                 await refreshNews(notifyIfNew: false)
                 await memberVM.fetchApprovedGalleryPhotos()
                 await storyVM.fetchActiveStories()
+                await notificationVM.fetchNotifications()
             }
             .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
-                Task { await refreshNews(notifyIfNew: true) }
+                Task {
+                    await refreshNews(notifyIfNew: true)
+                    await notificationVM.fetchNotifications(force: true)
+                }
             }
             .sheet(isPresented: $showingAddNews) {
                 AddNewsView()
@@ -253,7 +258,7 @@ struct HomeNewsView: View {
                         .frame(width: 64, height: 64)
 
                     Image(systemName: "plus")
-                        .font(.system(size: 24, weight: .bold))
+                        .font(DS.Font.scaled(24, weight: .bold))
                         .foregroundColor(DS.Color.primary)
                 }
 
@@ -277,7 +282,7 @@ struct HomeNewsView: View {
             VStack(spacing: DS.Spacing.xs) {
                 ZStack {
                     Circle()
-                        .stroke(DS.Color.gradientPrimary, lineWidth: 2.5)
+                        .stroke(DS.Color.gradientSecondary, lineWidth: 2.5)
                         .frame(width: 64, height: 64)
 
                     galleryMemberAvatar(item.member, size: 56)
@@ -343,7 +348,7 @@ struct HomeNewsView: View {
             VStack(spacing: DS.Spacing.xs) {
                 ZStack {
                     Circle()
-                        .stroke(DS.Color.gradientPrimary, lineWidth: 2.5)
+                        .stroke(DS.Color.gradientSecondary, lineWidth: 2.5)
                         .frame(width: 64, height: 64)
 
                     if memberId == nil {
@@ -410,9 +415,9 @@ struct HomeNewsView: View {
     // MARK: - Quick Actions Section
     private var quickActionsSection: some View {
         HStack(spacing: DS.Spacing.sm) {
-            quickActionItem(icon: "photo.on.rectangle.angled.fill", title: L10n.t("الصور", "Photos"), color: DS.Color.gridDiwaniya) { withAnimation(DS.Anim.snappy) { activeSubPage = .photos } }
-            quickActionItem(icon: "briefcase.fill", title: L10n.t("مشاريع", "Projects"), color: DS.Color.neonBlue) { withAnimation(DS.Anim.snappy) { activeSubPage = .projects } }
-            quickActionItem(icon: "bubble.left.and.bubble.right.fill", title: L10n.t("تواصل", "Contact"), color: DS.Color.gridContact) { withAnimation(DS.Anim.snappy) { activeSubPage = .contact } }
+            quickActionItem(icon: "photo.on.rectangle.angled.fill", title: L10n.t("الصور", "Photos"), color: DS.Color.primary) { withAnimation(DS.Anim.snappy) { activeSubPage = .photos } }
+            quickActionItem(icon: "briefcase.fill", title: L10n.t("مشاريع", "Projects"), color: DS.Color.accent) { withAnimation(DS.Anim.snappy) { activeSubPage = .projects } }
+            quickActionItem(icon: "bubble.left.and.bubble.right.fill", title: L10n.t("تواصل", "Contact"), color: DS.Color.secondary) { withAnimation(DS.Anim.snappy) { activeSubPage = .contact } }
         }
         .padding(.horizontal, DS.Spacing.lg)
     }
@@ -455,7 +460,7 @@ struct HomeNewsView: View {
                     .font(DS.Font.scaled(14, weight: .semibold))
                     .foregroundColor(DS.Color.textOnPrimary)
                     .frame(width: 30, height: 30)
-                    .background(DS.Color.gradientPrimary)
+                    .background(DS.Color.gradientSecondary)
                     .clipShape(Circle())
 
                 Text(L10n.t("أخبار العائلة", "Family News"))

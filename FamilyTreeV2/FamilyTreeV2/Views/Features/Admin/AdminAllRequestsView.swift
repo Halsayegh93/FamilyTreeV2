@@ -133,7 +133,6 @@ struct AdminAllRequestsView: View {
     var body: some View {
         ZStack {
             DS.Color.background.ignoresSafeArea()
-            DSDecorativeBackground()
 
             VStack(spacing: 0) {
                 // شريط التابات الأفقي (يظهر فقط إذا في طلبات)
@@ -377,13 +376,13 @@ struct AdminAllRequestsView: View {
                     Text("\(count)")
                         .font(DS.Font.caption2)
                         .fontWeight(.bold)
-                        .foregroundColor(isSelected ? tab.color : .white)
+                        .foregroundColor(isSelected ? tab.color : DS.Color.textOnPrimary)
                         .frame(minWidth: 18, minHeight: 18)
                         .background(isSelected ? DS.Color.surface : tab.color.opacity(0.6))
                         .clipShape(Circle())
                 }
             }
-            .foregroundColor(isSelected ? .white : DS.Color.textTertiary)
+            .foregroundColor(isSelected ? DS.Color.textOnPrimary : DS.Color.textTertiary)
             .padding(.horizontal, DS.Spacing.md)
             .padding(.vertical, DS.Spacing.sm)
             .background(
@@ -949,7 +948,7 @@ struct AdminAllRequestsView: View {
                 }
                 .foregroundColor(DS.Color.textOnPrimary)
                 .padding(.horizontal, DS.Spacing.sm)
-                .padding(.vertical, 4)
+                .padding(.vertical, DS.Spacing.xs)
                 .background(DS.Color.gradientPrimary)
                 .clipShape(Capsule())
             }

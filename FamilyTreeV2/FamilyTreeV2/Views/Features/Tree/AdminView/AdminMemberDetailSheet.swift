@@ -83,7 +83,6 @@ struct AdminMemberDetailSheet: View {
         NavigationStack {
             ZStack {
                 DS.Color.background.ignoresSafeArea()
-                DSDecorativeBackground()
 
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: DS.Spacing.sm) {
@@ -195,7 +194,7 @@ struct AdminMemberDetailSheet: View {
                     Task {
                         await memberVM.deleteAvatar(for: member.id)
                         await MainActor.run { currentAvatarURL = nil }
-                        let adminName = authVM.currentUser?.firstName ?? "مدير"
+                        _ = authVM.currentUser?.firstName ?? "مدير"
                         await memberVM.notificationVM?.notifyAdminsWithPush(
                             title: L10n.t("تعديل بيانات عضو", "Member Data Updated"),
                             body: L10n.t(

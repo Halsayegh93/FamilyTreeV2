@@ -12,7 +12,6 @@ struct FrozenAccountView: View {
     var body: some View {
         ZStack {
             DS.Color.background.ignoresSafeArea()
-            DSDecorativeBackground()
 
             VStack(spacing: DS.Spacing.xxl) {
 

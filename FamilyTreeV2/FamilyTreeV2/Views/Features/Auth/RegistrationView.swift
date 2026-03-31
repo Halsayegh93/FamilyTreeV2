@@ -18,7 +18,6 @@ struct RegistrationView: View {
     var body: some View {
         ZStack {
             DS.Color.background.ignoresSafeArea()
-            DSDecorativeBackground()
 
             VStack(spacing: 0) {
                 // Top bar
@@ -201,7 +200,7 @@ struct RegistrationView: View {
         .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                .stroke(Color.gray.opacity(0.15), lineWidth: 1)
+                .stroke(DS.Color.inactiveBorder, lineWidth: 1)
         )
     }
 
@@ -230,7 +229,7 @@ struct RegistrationView: View {
             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                    .stroke(Color.gray.opacity(0.15), lineWidth: 1)
+                    .stroke(DS.Color.inactiveBorder, lineWidth: 1)
             )
 
             // ملاحظة الربط
@@ -256,7 +255,7 @@ struct RegistrationView: View {
                 icon: "paperplane.fill",
                 isLoading: authVM.isLoading,
                 useGradient: !isDisabled,
-                color: isDisabled ? .gray : DS.Color.primary
+                color: isDisabled ? DS.Color.inactive : DS.Color.primary
             ) {
                 withAnimation(DS.Anim.snappy) {
                     hasAttemptedSubmit = true

@@ -196,7 +196,7 @@ struct AddStorySheet: View {
 
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
+            DS.Color.overlayDark.ignoresSafeArea()
 
             VStack(spacing: 0) {
                 headerBar
@@ -218,21 +218,21 @@ struct AddStorySheet: View {
                 dismiss()
             } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundColor(.white)
+                    .font(DS.Font.title3)
+                    .foregroundColor(DS.Color.textOnPrimary)
             }
 
             Spacer()
 
             Text(L10n.t("قصة جديدة", "New Story"))
                 .font(DS.Font.scaled(20, weight: .bold))
-                .foregroundColor(.white)
+                .foregroundColor(DS.Color.textOnPrimary)
 
             Spacer()
 
             // Invisible balance
             Image(systemName: "xmark")
-                .font(.system(size: 18, weight: .semibold))
+                .font(DS.Font.title3)
                 .foregroundColor(.clear)
         }
         .padding(.horizontal, DS.Spacing.lg)
@@ -252,7 +252,7 @@ struct AddStorySheet: View {
                             Text(album.title)
                             Spacer()
                             Text("\(album.count)")
-                                .foregroundColor(.secondary)
+                                .foregroundColor(DS.Color.textSecondary)
                             if album.id == photoService.selectedAlbum?.id {
                                 Image(systemName: "checkmark")
                             }
@@ -262,16 +262,16 @@ struct AddStorySheet: View {
             } label: {
                 HStack(spacing: DS.Spacing.sm) {
                     Image(systemName: "photo.on.rectangle")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(DS.Font.scaled(13, weight: .semibold))
                     Text(photoService.selectedAlbum?.title ?? L10n.t("الكل", "All Photos"))
                         .font(DS.Font.scaled(13, weight: .semibold))
                     Image(systemName: "chevron.down")
-                        .font(.system(size: 10, weight: .bold))
+                        .font(DS.Font.scaled(10, weight: .bold))
                 }
-                .foregroundColor(.white)
+                .foregroundColor(DS.Color.textOnPrimary)
                 .padding(.horizontal, DS.Spacing.md)
                 .padding(.vertical, DS.Spacing.sm)
-                .background(Color.white.opacity(0.1))
+                .background(DS.Color.overlayFillSubtle)
                 .clipShape(Capsule())
             }
 
@@ -322,19 +322,19 @@ struct AddStorySheet: View {
                         .aspectRatio(1, contentMode: .fill)
                         .clipped()
                 } else {
-                    Color.gray.opacity(0.15)
+                    DS.Color.textSecondary.opacity(0.15)
                         .aspectRatio(1, contentMode: .fill)
                 }
 
                 if isSelected && isLoadingPhoto {
-                    Color.black.opacity(0.4)
+                    DS.Color.overlayDark.opacity(0.4)
                     ProgressView()
-                        .tint(.white)
+                        .tint(DS.Color.textOnPrimary)
                 }
 
                 if isSelected {
                     RoundedRectangle(cornerRadius: 2)
-                        .stroke(Color.white, lineWidth: 3)
+                        .stroke(DS.Color.textOnPrimary, lineWidth: 3)
                 }
             }
         }
@@ -345,11 +345,11 @@ struct AddStorySheet: View {
     private var permissionDeniedView: some View {
         VStack(spacing: DS.Spacing.lg) {
             Image(systemName: "photo.on.rectangle.angled")
-                .font(.system(size: 36))
-                .foregroundColor(.white.opacity(0.3))
+                .font(DS.Font.scaled(36, weight: .regular))
+                .foregroundColor(DS.Color.overlayIconBorder)
             Text(L10n.t("يرجى السماح بالوصول للصور من الإعدادات", "Please allow photo access in Settings"))
                 .font(DS.Font.scaled(13, weight: .medium))
-                .foregroundColor(.white.opacity(0.5))
+                .foregroundColor(DS.Color.overlayHalf)
                 .multilineTextAlignment(.center)
 
             Button {
@@ -359,10 +359,10 @@ struct AddStorySheet: View {
             } label: {
                 Text(L10n.t("فتح الإعدادات", "Open Settings"))
                     .font(DS.Font.scaled(14, weight: .bold))
-                    .foregroundColor(.black)
+                    .foregroundColor(DS.Color.textPrimary)
                     .padding(.horizontal, DS.Spacing.xl)
                     .padding(.vertical, DS.Spacing.sm)
-                    .background(Color.white)
+                    .background(SwiftUI.Color.white)
                     .clipShape(Capsule())
             }
         }
@@ -372,7 +372,7 @@ struct AddStorySheet: View {
     private var loadingView: some View {
         VStack {
             ProgressView()
-                .tint(.white)
+                .tint(DS.Color.textOnPrimary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -421,14 +421,14 @@ struct AddStorySheet: View {
         if showSuccess {
             VStack(spacing: DS.Spacing.md) {
                 Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 60))
+                    .font(DS.Font.scaled(60, weight: .regular))
                     .foregroundColor(DS.Color.success)
                 Text(L10n.t("تم الرفع بنجاح", "Uploaded Successfully"))
                     .font(DS.Font.headline)
-                    .foregroundColor(.white)
+                    .foregroundColor(DS.Color.textOnPrimary)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color.black.opacity(0.8))
+            .background(DS.Color.shadowDense)
             .transition(.opacity)
         }
     }
@@ -475,7 +475,7 @@ struct StoryCropperWrapper: View {
                 if needsApproval {
                     HStack(spacing: DS.Spacing.sm) {
                         Image(systemName: "clock.badge.checkmark")
-                            .font(.system(size: 12))
+                            .font(DS.Font.caption1)
                         Text(L10n.t("القصة تحتاج موافقة الإدارة قبل النشر", "Story needs admin approval before publishing"))
                             .font(DS.Font.scaled(11, weight: .medium))
                     }
@@ -494,16 +494,16 @@ struct StoryCropperWrapper: View {
     private var captionField: some View {
         HStack(spacing: DS.Spacing.sm) {
             Image(systemName: "text.bubble")
-                .font(.system(size: 14))
-                .foregroundColor(.white.opacity(0.5))
+                .font(DS.Font.subheadline)
+                .foregroundColor(DS.Color.overlayHalf)
 
             TextField(
                 L10n.t("اكتب نص للقصة...", "Add a caption..."),
                 text: $caption
             )
             .font(DS.Font.scaled(14, weight: .regular))
-            .foregroundColor(.white)
-            .tint(.white)
+            .foregroundColor(DS.Color.textOnPrimary)
+            .tint(DS.Color.textOnPrimary)
             .focused($isCaptionFocused)
         }
         .padding(.horizontal, DS.Spacing.lg)

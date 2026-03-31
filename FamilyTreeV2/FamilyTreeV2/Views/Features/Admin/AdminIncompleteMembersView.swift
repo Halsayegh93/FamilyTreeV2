@@ -563,7 +563,7 @@ struct AdminIncompleteMembersView: View {
         .padding(.vertical, DS.Spacing.md)
         .background(
             DS.Color.surface
-                .shadow(color: DS.Color.shadowMedium, radius: 8, y: -2)
+                .dsSubtleShadow()
         )
     }
 

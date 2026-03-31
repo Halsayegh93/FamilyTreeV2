@@ -110,7 +110,6 @@ struct LoginView: View {
     private var backgroundView: some View {
         ZStack {
             DS.Color.background.ignoresSafeArea()
-            DSDecorativeBackground()
         }
     }
 
@@ -193,7 +192,7 @@ struct LoginView: View {
                     .stroke(
                         isFieldFocused
                             ? DS.Color.primary.opacity(0.5)
-                            : Color.gray.opacity(0.15),
+                            : DS.Color.inactiveBorder,
                         lineWidth: isFieldFocused ? 1.5 : 1
                     )
                     .animation(DS.Anim.quick, value: isFieldFocused)
@@ -207,7 +206,7 @@ struct LoginView: View {
                 icon: timeRemaining > 0 ? nil : "arrow.right",
                 isLoading: authVM.isLoading,
                 useGradient: !isDisabled,
-                color: isDisabled ? .gray : DS.Color.primary
+                color: isDisabled ? DS.Color.inactive : DS.Color.primary
             ) {
                 isFieldFocused = false
                 timeRemaining = 60
@@ -227,7 +226,7 @@ struct LoginView: View {
             RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
                 .stroke(DS.Color.primary.opacity(0.3), lineWidth: 1.5)
         )
-        .shadow(color: DS.Color.primary.opacity(0.15), radius: 12, x: 0, y: 4)
+        .dsGlowShadow()
     }
 
     // MARK: - OTP Input — Compact Card
@@ -307,7 +306,7 @@ struct LoginView: View {
                 .overlay(
                     RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
                         .stroke(
-                            isFieldFocused ? DS.Color.primary.opacity(0.5) : Color.gray.opacity(0.15),
+                            isFieldFocused ? DS.Color.primary.opacity(0.5) : DS.Color.inactiveBorder,
                             lineWidth: isFieldFocused ? 1.5 : 1
                         )
                         .animation(DS.Anim.quick, value: isFieldFocused)
@@ -333,7 +332,7 @@ struct LoginView: View {
                     icon: "checkmark.shield.fill",
                     isLoading: authVM.isLoading,
                     useGradient: !otpDisabled,
-                    color: otpDisabled ? .gray : DS.Color.primary
+                    color: otpDisabled ? DS.Color.inactive : DS.Color.primary
                 ) {
                     Task { await authVM.verifyOTP() }
                 }
@@ -364,7 +363,7 @@ struct LoginView: View {
             RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
                 .stroke(DS.Color.primary.opacity(0.3), lineWidth: 1.5)
         )
-        .shadow(color: DS.Color.primary.opacity(0.15), radius: 12, x: 0, y: 4)
+        .dsGlowShadow()
     }
 
     @ViewBuilder

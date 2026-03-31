@@ -17,7 +17,6 @@ struct FamilyProjectsView: View {
     var body: some View {
         ZStack {
             DS.Color.background.ignoresSafeArea()
-            DSDecorativeBackground()
             
             if projectsVM.isLoading && projectsVM.projects.isEmpty && projectsVM.myPendingProjects.isEmpty {
                 VStack(spacing: DS.Spacing.lg) {

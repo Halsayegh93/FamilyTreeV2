@@ -18,7 +18,7 @@ struct PhoneNumberTextField: UIViewRepresentable {
         tf.font = font
         tf.keyboardType = keyboardType
         tf.textAlignment = textAlignment
-        tf.textColor = UIColor.label
+        tf.textColor = UIColor(DS.Color.textPrimary)
         tf.tintColor = UIColor(DS.Color.primary)
         tf.semanticContentAttribute = .forceLeftToRight
         tf.autocorrectionType = .no

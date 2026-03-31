@@ -655,7 +655,7 @@ struct AdminActivateAccountsView: View {
         .padding(.vertical, DS.Spacing.md)
         .background(
             DS.Color.surface
-                .shadow(color: .black.opacity(0.06), radius: 8, y: -2)
+                .dsSubtleShadow()
         )
     }
 
@@ -834,7 +834,7 @@ struct EditPhoneSheet: View {
                         HStack(spacing: DS.Spacing.sm) {
                             if isSaving {
                                 ProgressView()
-                                    .tint(.white)
+                                    .tint(DS.Color.textOnPrimary)
                             } else {
                                 Image(systemName: "checkmark.circle.fill")
                             }
@@ -1016,7 +1016,7 @@ struct LinkFatherSheet: View {
                         HStack(spacing: DS.Spacing.sm) {
                             if isSaving {
                                 ProgressView()
-                                    .tint(.white)
+                                    .tint(DS.Color.textOnPrimary)
                             } else {
                                 Image(systemName: "link.circle.fill")
                             }
@@ -1139,7 +1139,7 @@ struct EditBirthDateSheet: View {
                         HStack(spacing: DS.Spacing.sm) {
                             if isSaving {
                                 ProgressView()
-                                    .tint(.white)
+                                    .tint(DS.Color.textOnPrimary)
                             } else {
                                 Image(systemName: "checkmark.circle.fill")
                             }

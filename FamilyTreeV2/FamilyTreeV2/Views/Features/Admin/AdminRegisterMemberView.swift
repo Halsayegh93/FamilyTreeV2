@@ -26,7 +26,6 @@ struct AdminRegisterMemberView: View {
             DS.Color.background.ignoresSafeArea()
 
             // Decorative gradient background
-            DSDecorativeBackground()
 
             VStack(spacing: 0) {
                 ScrollView(showsIndicators: false) {

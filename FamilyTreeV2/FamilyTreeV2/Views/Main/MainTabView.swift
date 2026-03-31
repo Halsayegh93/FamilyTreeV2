@@ -63,29 +63,7 @@ struct MainTabView: View {
         .tint(DS.Color.primary)
         .toolbarBackground(.visible, for: .tabBar)
         .toolbarBackground(DS.Color.surface.opacity(0.95), for: .tabBar)
-
-        // Tree tab glow overlay
-        treeTabGlow
         }
-    }
-
-    // MARK: - Tree Tab Glow Effect
-    private var treeTabGlow: some View {
-        GeometryReader { geo in
-            let tabCount = CGFloat(authVM.canModerate ? 5 : 4)
-            let tabWidth = geo.size.width / tabCount
-            let treeIndex: CGFloat = 1
-            let centerX = tabWidth * treeIndex + tabWidth / 2
-
-            Circle()
-                .fill(DS.Color.primary.opacity(selectedTab == 1 ? 0.25 : 0))
-                .frame(width: 44, height: 44)
-                .blur(radius: 12)
-                .position(x: centerX, y: geo.size.height - 30)
-                .allowsHitTesting(false)
-                .animation(DS.Anim.smooth, value: selectedTab)
-        }
-        .ignoresSafeArea()
     }
 }
 

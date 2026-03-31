@@ -46,7 +46,6 @@ struct EditProfileView: View {
                 // Background with decorative circles
                 DS.Color.background.ignoresSafeArea()
 
-                DSDecorativeBackground()
 
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: DS.Spacing.md) {
@@ -193,7 +192,7 @@ struct EditProfileView: View {
                 }
             } label: {
                 HStack(spacing: DS.Spacing.md) {
-                    DSIcon("person.fill", color: DS.Color.primary)
+                    DSIcon("person.fill", color: DS.Color.secondary)
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(L10n.t("الاسم الكامل", "Full Name"))
@@ -304,7 +303,7 @@ struct EditProfileView: View {
 
     private func modernReadOnlyField(label: String, value: String, icon: String) -> some View {
         HStack(spacing: DS.Spacing.md) {
-            DSIcon(icon, color: DS.Color.primary)
+            DSIcon(icon, color: DS.Color.secondary)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(label)
@@ -326,7 +325,7 @@ struct EditProfileView: View {
 
     private func modernTextField(label: String, text: Binding<String>, icon: String, placeholder: String) -> some View {
         HStack(spacing: DS.Spacing.md) {
-            DSIcon(icon, color: DS.Color.primary)
+            DSIcon(icon, color: DS.Color.secondary)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(label)
@@ -344,7 +343,7 @@ struct EditProfileView: View {
 
     private var modernPhoneField: some View {
         HStack(spacing: DS.Spacing.sm) {
-            DSIcon("phone.fill", color: DS.Color.success)
+            DSIcon("phone.fill", color: DS.Color.accent)
 
             Text(L10n.t("رقم الهاتف", "Phone Number"))
                 .font(DS.Font.caption2)
@@ -393,7 +392,7 @@ struct EditProfileView: View {
             DSSectionHeader(
                 title: L10n.t("السيرة الذاتية", "Bio"),
                 icon: "text.quote",
-                iconColor: DS.Color.primary
+                iconColor: DS.Color.accent
             )
 
             VStack(spacing: DS.Spacing.md) {
@@ -408,7 +407,7 @@ struct EditProfileView: View {
                     .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
                     .overlay(
                         RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                            .stroke(Color.gray.opacity(0.15), lineWidth: 1)
+                            .stroke(DS.Color.inactiveBorder, lineWidth: 1)
                     )
                     .padding(.horizontal, DS.Spacing.lg)
 
@@ -679,7 +678,7 @@ struct GalleryPhotoViewer: View {
                             .foregroundColor(DS.Color.overlayTextMuted)
                     } else {
                         ProgressView()
-                            .tint(.white)
+                            .tint(DS.Color.textOnPrimary)
                     }
                 }
                 .padding()
@@ -700,8 +699,8 @@ struct GalleryPhotoViewer: View {
                         .foregroundStyle(DS.Color.error, DS.Color.hierarchicalSecondary)
                 }
             }
-            .padding(.horizontal, 20)
-            .padding(.top, 16)
+            .padding(.horizontal, DS.Spacing.xl)
+            .padding(.top, DS.Spacing.lg)
         }
     }
 }

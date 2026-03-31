@@ -54,7 +54,6 @@ struct AddSonByAdminSheet: View {
         NavigationStack {
             ZStack {
                 DS.Color.background.ignoresSafeArea()
-                DSDecorativeBackground()
 
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: DS.Spacing.sm) {
@@ -172,7 +171,7 @@ struct AddSonByAdminSheet: View {
                             Text(L10n.t("ذكر", "Male"))
                                 .font(DS.Font.caption1)
                                 .fontWeight(.bold)
-                                .foregroundColor(selectedGender == "male" ? .white : DS.Color.textSecondary)
+                                .foregroundColor(selectedGender == "male" ? DS.Color.textOnPrimary : DS.Color.textSecondary)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, DS.Spacing.sm)
                                 .background(selectedGender == "male" ? DS.Color.primary : DS.Color.surface)
@@ -184,7 +183,7 @@ struct AddSonByAdminSheet: View {
                             Text(L10n.t("أنثى", "Female"))
                                 .font(DS.Font.caption1)
                                 .fontWeight(.bold)
-                                .foregroundColor(selectedGender == "female" ? .white : DS.Color.textSecondary)
+                                .foregroundColor(selectedGender == "female" ? DS.Color.textOnPrimary : DS.Color.textSecondary)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, DS.Spacing.sm)
                                 .background(selectedGender == "female" ? DS.Color.neonPink : DS.Color.surface)

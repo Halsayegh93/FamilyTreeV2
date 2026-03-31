@@ -30,7 +30,6 @@ struct AdminModeratorsView: View {
         ZStack {
             DS.Color.background.ignoresSafeArea()
 
-            DSDecorativeBackground()
 
             if moderators.isEmpty {
                 emptyState

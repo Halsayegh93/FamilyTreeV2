@@ -352,7 +352,7 @@ struct ContactCenterView: View {
                         Image(systemName: "xmark.circle.fill")
                             .font(DS.Font.scaled(22, weight: .bold))
                             .foregroundColor(DS.Color.textOnPrimary)
-                            .shadow(color: .black.opacity(0.5), radius: 4, y: 2)
+                            .dsCardShadow()
                     }
                     .padding(DS.Spacing.sm)
                 }

@@ -61,13 +61,13 @@ struct AdminNotificationsView: View {
                         Image(systemName: "text.alignright")
                             .foregroundColor(DS.Color.textTertiary)
                             .font(DS.Font.scaled(14, weight: .medium))
-                            .padding(.top, 8)
+                            .padding(.top, DS.Spacing.sm)
                         ZStack(alignment: L10n.isArabic ? .topTrailing : .topLeading) {
                             if bodyText.isEmpty {
                                 Text(L10n.t("تفاصيل (اختياري)", "Details (optional)"))
                                     .font(DS.Font.callout)
                                     .foregroundColor(DS.Color.textTertiary)
-                                    .padding(.top, 8)
+                                    .padding(.top, DS.Spacing.sm)
                                     .allowsHitTesting(false)
                             }
                             TextEditor(text: $bodyText)
@@ -155,7 +155,7 @@ struct AdminNotificationsView: View {
                     Spacer()
                     VStack(spacing: DS.Spacing.sm) {
                         Image(systemName: "person.2.slash")
-                            .font(.system(size: 36))
+                            .font(DS.Font.scaled(36, weight: .regular))
                             .foregroundColor(DS.Color.textTertiary)
                         Text(L10n.t("لا يوجد أعضاء", "No members found"))
                             .font(DS.Font.callout)

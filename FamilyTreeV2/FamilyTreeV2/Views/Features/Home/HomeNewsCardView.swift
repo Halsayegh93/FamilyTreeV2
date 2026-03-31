@@ -104,7 +104,7 @@ struct HomeNewsCardView: View {
                             Circle()
                                 .stroke(DS.Color.textTertiary.opacity(0.3), lineWidth: 1)
                         )
-                        .shadow(color: NewsTypeHelper.color(for: type).opacity(0.3), radius: 6, x: 0, y: 3)
+                        .dsGlowShadow()
 
                         VStack(alignment: .leading, spacing: 2) {
                             Text(shortDisplayName)
@@ -137,7 +137,7 @@ struct HomeNewsCardView: View {
                         .fontWeight(.semibold)
                         .foregroundColor(DS.Color.warning)
                         .padding(.horizontal, DS.Spacing.sm)
-                        .padding(.vertical, 4)
+                        .padding(.vertical, DS.Spacing.xs)
                         .background(.ultraThinMaterial)
                         .clipShape(Capsule())
                         .overlay(Capsule().stroke(DS.Color.warning.opacity(0.3), lineWidth: 1))
@@ -228,7 +228,7 @@ struct HomeNewsCardView: View {
                         Image(systemName: "heart.fill")
                             .font(DS.Font.scaled(60, weight: .bold))
                             .foregroundStyle(DS.Color.textOnPrimary)
-                            .shadow(color: DS.Color.shadowStrong, radius: 8, x: 0, y: 4)
+                            .dsCardShadow()
                             .transition(.scale.combined(with: .opacity))
                     }
                 }
@@ -291,8 +291,7 @@ struct HomeNewsCardView: View {
                     lineWidth: 0.75
                 )
         )
-        .shadow(color: DS.Color.shadowMedium, radius: 16, x: 0, y: 8)
-        .shadow(color: NewsTypeHelper.color(for: type).opacity(0.12), radius: 20, x: 0, y: 10)
+        .dsCardShadow()
     }
 
     private var pollSection: some View {

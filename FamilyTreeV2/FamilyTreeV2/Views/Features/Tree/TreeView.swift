@@ -36,10 +36,10 @@ struct TreeView: View {
     @State private var highlightTask: Task<Void, Never>?
     @State private var locationHighlightTask: Task<Void, Never>?
 
-    @State private var scale: CGFloat = 0.70
+    @State private var scale: CGFloat = 0.60
     @State private var treeID = UUID()
     @State private var currentAnchor: UnitPoint = .center
-    @State private var baseScale: CGFloat = 0.70
+    @State private var baseScale: CGFloat = 0.60
     @State private var zoomAnchor: UnitPoint = .center
 
     @Environment(\.verticalSizeClass) var verticalSizeClass
@@ -67,9 +67,9 @@ struct TreeView: View {
         return 200
     }
 
-    private var preferredBaseScale: CGFloat { 0.70 }
+    private var preferredBaseScale: CGFloat { 0.60 }
 
-    private func preferredScaleForCurrentExpansion() -> CGFloat { 0.70 }
+    private func preferredScaleForCurrentExpansion() -> CGFloat { 0.60 }
 
     private var currentZoomPercentText: String {
         let zoom = Int((scale * 100).rounded())
@@ -125,7 +125,6 @@ struct TreeView: View {
         let normalizedSearch = debouncedSearchText.trimmingCharacters(in: .whitespacesAndNewlines)
         if normalizedSearch.isEmpty { return [] }
 
-        // تقسيم البحث إلى كلمات مستقلة
         let searchWords = normalizedSearch
             .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
             .components(separatedBy: .whitespaces)
@@ -133,52 +132,48 @@ struct TreeView: View {
 
         if searchWords.isEmpty { return [] }
 
-        let firstWord = searchWords[0]
-        let remainingWords = Array(searchWords.dropFirst())
+        // نتائج مرتبة: تطابق الاسم الأول أولاً، ثم باقي النتائج
+        var exactMatches: [FamilyMember] = []
+        var partialMatches: [FamilyMember] = []
 
-        var results: [FamilyMember] = []
         for member in cachedVisibleMembers {
-            guard results.count < 20 else { break }
+            guard (exactMatches.count + partialMatches.count) < 50 else { break }
 
-            let memberFirstName = member.firstName
+            let lineage = getFullLineage(for: member, lookup: cachedMemberById)
+            // نبني نص شامل من: الاسم الكامل + النسب (الآباء)
+            let combinedText = "\(member.fullName) \(lineage)"
                 .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
 
-            if searchWords.count == 1 {
-                // كلمة وحدة → نبحث في كل شي (الاسم الكامل + النسب)
-                let lineage = getFullLineage(for: member, lookup: cachedMemberById)
-                let combinedText = "\(member.fullName) \(lineage)"
-                    .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
-                if combinedText.contains(firstWord) {
-                    results.append(member)
-                }
+            // نقسم النص لكلمات عشان نبحث ببداية الكلمة (prefix) مو substring
+            let textWords = combinedText
+                .components(separatedBy: .whitespaces)
+                .filter { !$0.isEmpty }
+
+            // كل كلمة بحث لازم تطابق بداية كلمة واحدة على الأقل
+            let allMatch = searchWords.allSatisfy { searchWord in
+                textWords.contains { $0.hasPrefix(searchWord) }
+            }
+
+            guard allMatch else { continue }
+
+            // الاسم الأول يبدأ بأول كلمة بحث؟ → أولوية عالية
+            let firstName = member.firstName
+                .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+            if firstName.hasPrefix(searchWords[0]) {
+                exactMatches.append(member)
             } else {
-                // كلمتين أو أكثر → الكلمة الأولى لازم تكون بالاسم الأول
-                guard memberFirstName.contains(firstWord) else { continue }
-
-                // باقي الكلمات تُبحث في الاسم الكامل + النسب
-                let lineage = getFullLineage(for: member, lookup: cachedMemberById)
-                let combinedText = "\(member.fullName) \(lineage)"
-                    .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
-
-                let restMatch = remainingWords.allSatisfy { word in
-                    combinedText.contains(word)
-                }
-
-                if restMatch {
-                    results.append(member)
-                }
+                partialMatches.append(member)
             }
         }
-        return results
+
+        return exactMatches + partialMatches
     }
     
     var body: some View {
         NavigationStack {
             GeometryReader { geometry in
                 ZStack(alignment: .top) {
-                    // خلفية جديدة Liquid Glass
-                    BoldTreeBackground()
-                        .edgesIgnoringSafeArea(.all)
+                    DS.Color.background.ignoresSafeArea()
 
                     if cachedVisibleMembers.isEmpty {
                         emptyStateView
@@ -195,9 +190,10 @@ struct TreeView: View {
                                 .scaleEffect(scale, anchor: zoomAnchor)
                                 .frame(
                                     minWidth: geometry.size.width,
-                                    minHeight: geometry.size.height
+                                    minHeight: geometry.size.height,
+                                    alignment: .center
                                 )
-                                .padding(.top, DS.Spacing.xxxxl * 3)
+                                .padding(.top, DS.Spacing.xxxxl * 2)
                                 .padding(.bottom, DS.Spacing.xxxxl * 4)
                                 .padding(.horizontal, DS.Spacing.xxxxl)
                             }
@@ -235,7 +231,8 @@ struct TreeView: View {
                             showingNotifications: $showingNotifications,
                             title: L10n.t("شجرة العائلة", "Family Tree"),
                             subtitle: "\(cachedVisibleMembers.count) " + L10n.t("فرد", "members"),
-                            icon: "leaf.fill"
+                            icon: "leaf.fill",
+                            backgroundGradient: DS.Color.gradientPrimary
                         ) {
                             // زر طلب تعديل الشجرة
                             Button(action: {
@@ -243,9 +240,9 @@ struct TreeView: View {
                             }) {
                                 ZStack {
                                     Circle()
-                                        .fill(Color.white.opacity(0.15))
+                                        .fill(DS.Color.overlayIcon)
                                         .frame(width: 44, height: 44)
-                                        .overlay(Circle().stroke(Color.white.opacity(0.3), lineWidth: 1))
+                                        .overlay(Circle().stroke(DS.Color.overlayIconBorder, lineWidth: 1))
                                     Image(systemName: "pencil.line")
                                         .font(DS.Font.scaled(16, weight: .bold))
                                         .foregroundColor(DS.Color.textOnPrimary)
@@ -271,9 +268,9 @@ struct TreeView: View {
                             }) {
                                 ZStack {
                                     Circle()
-                                        .fill(Color.white.opacity(0.15))
+                                        .fill(DS.Color.overlayIcon)
                                         .frame(width: 44, height: 44)
-                                        .overlay(Circle().stroke(Color.white.opacity(0.3), lineWidth: 1))
+                                        .overlay(Circle().stroke(DS.Color.overlayIconBorder, lineWidth: 1))
                                     Image(systemName: "location.fill")
                                         .font(DS.Font.scaled(18, weight: .bold))
                                         .foregroundColor(DS.Color.textOnPrimary)
@@ -406,11 +403,11 @@ struct TreeView: View {
                 .overlay(
                     RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
                         .stroke(
-                            isSearchFocused ? DS.Color.primary.opacity(0.4) : Color.gray.opacity(0.12),
+                            isSearchFocused ? DS.Color.primary.opacity(0.4) : DS.Color.inactiveBorder,
                             lineWidth: isSearchFocused ? 1.5 : 1
                         )
                 )
-                .shadow(color: isSearchFocused ? DS.Color.primary.opacity(0.1) : .clear, radius: 8)
+                .dsGlowShadow()
                 
             }
 
@@ -446,7 +443,7 @@ struct TreeView: View {
                 }
                 .glassCard(radius: DS.Radius.lg)
                 .frame(maxHeight: 280)
-                .padding(.top, 4)
+                .padding(.top, DS.Spacing.xs)
             } else if !debouncedSearchText.isEmpty && searchText == debouncedSearchText {
                 // لا توجد نتائج
                 HStack(spacing: DS.Spacing.sm) {
@@ -460,7 +457,7 @@ struct TreeView: View {
                 }
                 .padding(DS.Spacing.md)
                 .glassCard(radius: DS.Radius.lg)
-                .padding(.top, 4)
+                .padding(.top, DS.Spacing.xs)
             }
         }
         .zIndex(100)
@@ -548,7 +545,7 @@ struct TreeView: View {
                         Text(L10n.t("متوفى", "Deceased"))
                             .font(DS.Font.scaled(9, weight: .medium))
                             .foregroundColor(DS.Color.deceased)
-                            .padding(.horizontal, 4)
+                            .padding(.horizontal, DS.Spacing.xs)
                             .padding(.vertical, 2)
                             .background(DS.Color.deceased.opacity(0.1))
                             .clipShape(Capsule())
@@ -729,9 +726,9 @@ struct TreeView: View {
                 .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                        .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                        .stroke(DS.Color.mutedBackground, lineWidth: 1)
                 )
-                .shadow(color: Color.black.opacity(0.06), radius: 6, y: 3)
+                .dsSubtleShadow()
                 .padding(.bottom, DS.Spacing.xl)
             }
             .padding(.horizontal, DS.Spacing.lg)
@@ -750,6 +747,8 @@ struct TreeView: View {
             scrollTarget: $scrollTarget,
             scrollAnchor: $currentAnchor,
             scrollCounter: $scrollCounter,
+            scale: $scale,
+            baseScale: $baseScale,
             level: 0,
             viewMode: viewMode,
             lightweightFullTree: lightweightFullTree,
@@ -792,34 +791,6 @@ struct TreeView: View {
 }
 
 
-// MARK: - خلفية الشجرة — Bold Dynamic مع تدرجات قوية
-private struct BoldTreeBackground: View {
-    @Environment(\.colorScheme) private var colorScheme
-
-    private var baseColor: Color {
-        DS.Color.background
-    }
-
-    var body: some View {
-        ZStack {
-            baseColor
-
-            // تدرج خفيف بدون GeometryReader
-            LinearGradient(
-                colors: [
-                    DS.Color.primary.opacity(colorScheme == .dark ? 0.06 : 0.04),
-                    Color.clear
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-
-            // شبكة خطوط بسيطة (خفيفة على الأداء)
-            Color.clear
-        }
-    }
-}
-
 // MARK: - 2. فرع الشجرة (الإخوان جنب بعض)
 struct RecursiveTreeBranch: View {
     let member: FamilyMember
@@ -831,6 +802,8 @@ struct RecursiveTreeBranch: View {
     @Binding var scrollTarget: UUID?
     @Binding var scrollAnchor: UnitPoint
     @Binding var scrollCounter: Int
+    @Binding var scale: CGFloat
+    @Binding var baseScale: CGFloat
     let level: Int
 
     var viewMode: TreeDisplayMode
@@ -844,7 +817,7 @@ struct RecursiveTreeBranch: View {
         activePath.contains(member.id)
     }
 
-    init(member: FamilyMember, childrenByFatherId: [UUID: [FamilyMember]], ancestorIDs: Set<UUID>, activePath: Binding<Set<UUID>>, searchedMemberID: Binding<UUID?>, selectedMember: Binding<FamilyMember?>, scrollTarget: Binding<UUID?>, scrollAnchor: Binding<UnitPoint>, scrollCounter: Binding<Int>, level: Int, viewMode: TreeDisplayMode, lightweightFullTree: Bool, currentLocationMemberID: UUID?, renderedCount: Binding<Int>, maxRendered: Int) {
+    init(member: FamilyMember, childrenByFatherId: [UUID: [FamilyMember]], ancestorIDs: Set<UUID>, activePath: Binding<Set<UUID>>, searchedMemberID: Binding<UUID?>, selectedMember: Binding<FamilyMember?>, scrollTarget: Binding<UUID?>, scrollAnchor: Binding<UnitPoint>, scrollCounter: Binding<Int>, scale: Binding<CGFloat>, baseScale: Binding<CGFloat>, level: Int, viewMode: TreeDisplayMode, lightweightFullTree: Bool, currentLocationMemberID: UUID?, renderedCount: Binding<Int>, maxRendered: Int) {
         self.member = member
         self.childrenByFatherId = childrenByFatherId
         self.ancestorIDs = ancestorIDs
@@ -854,6 +827,8 @@ struct RecursiveTreeBranch: View {
         self._scrollTarget = scrollTarget
         self._scrollAnchor = scrollAnchor
         self._scrollCounter = scrollCounter
+        self._scale = scale
+        self._baseScale = baseScale
         self.level = level
         self.viewMode = viewMode
         self.lightweightFullTree = lightweightFullTree
@@ -880,7 +855,7 @@ struct RecursiveTreeBranch: View {
 
     // لون موحّد للخطوط
     private var connectorColor: Color {
-        DS.Color.primary.opacity(0.45)
+        DS.Color.primary.opacity(0.6)
     }
 
     var body: some View {
@@ -904,6 +879,9 @@ struct RecursiveTreeBranch: View {
                     if willExpand {
                         // نضيف العقدة للمسار بدون ما نشيل الإخوان المفتوحين
                         activePath.insert(member.id)
+                        // زوم 75% عند فتح عقدة
+                        scale = 0.75
+                        baseScale = 0.75
                     } else {
                         // نقفل هالعقدة وكل ذريتها
                         var idsToRemove: Set<UUID> = [member.id]
@@ -916,6 +894,9 @@ struct RecursiveTreeBranch: View {
                         collectDescendants(of: member.id)
                         activePath.subtract(idsToRemove)
                         searchedMemberID = nil
+                        // رجوع 60% عند إغلاق العقدة
+                        scale = 0.60
+                        baseScale = 0.60
                     }
                 }
                 Task {
@@ -964,6 +945,8 @@ struct RecursiveTreeBranch: View {
                                         scrollTarget: $scrollTarget,
                                         scrollAnchor: $scrollAnchor,
                                         scrollCounter: $scrollCounter,
+                                        scale: $scale,
+                                        baseScale: $baseScale,
                                         level: level + 1,
                                         viewMode: viewMode,
                                         lightweightFullTree: lightweightFullTree,
@@ -1004,25 +987,21 @@ struct TreeMemberNode: View {
         member.id == currentLocationMemberID
     }
 
-    // لون دائرة الصورة — موحّد لكل الأحياء بلون التطبيق
+    // لون دائرة الصورة — متوفى رمادي، أحياء حسب الرتبة
     private var nodeAccentColor: Color {
         if member.isDeceased == true {
-            return Color.gray.opacity(0.7)
-        }
-        return DS.Color.primary
-    }
-
-    // لون الإطار — حسب الدور
-    private var borderColor: Color {
-        if member.isDeceased == true {
-            return DS.Color.deceased.opacity(0.5)
+            return DS.Color.deceased
         }
         switch member.role {
-        case .admin: return DS.Color.adminRole.opacity(0.6)
-        case .supervisor: return DS.Color.supervisorRole.opacity(0.6)
-        default: return DS.Color.primary.opacity(0.5)
+        case .owner: return DS.Color.ownerRole
+        case .admin: return DS.Color.adminRole
+        case .supervisor: return DS.Color.supervisorRole
+        default: return DS.Color.primary
         }
     }
+
+    // لون الإطار = نفس لون الدائرة
+    private var borderColor: Color { nodeAccentColor }
 
     var body: some View {
         if viewMode == .fullTree {
@@ -1033,13 +1012,13 @@ struct TreeMemberNode: View {
                         Circle()
                             .fill(
                                 member.isDeceased == true
-                                    ? Color.gray.opacity(0.7)
-                                    : nodeAccentColor.opacity(0.9)
+                                    ? DS.Color.muted
+                                    : nodeAccentColor
                             )
                             .frame(width: 14, height: 14)
 
                         Text(fullDisplayName)
-                            .font(DS.Font.scaled(10, weight: .bold))
+                            .font(DS.Font.scaled(12, weight: .bold))
                             .foregroundColor(DS.Color.textPrimary)
                             .lineLimit(nil)
                             .multilineTextAlignment(.center)
@@ -1047,13 +1026,13 @@ struct TreeMemberNode: View {
 
                         if member.isDeceased ?? false {
                             Text(getLifeSpan())
-                                .font(DS.Font.scaled(8, weight: .black))
+                                .font(DS.Font.scaled(9, weight: .black))
                                 .foregroundColor(DS.Color.textSecondary)
                                 .lineLimit(1)
                         }
                     }
                     .padding(.horizontal, 10)
-                    .frame(height: 26)
+                    .frame(height: 28)
                     .background(DS.Color.surface)
                     .clipShape(Capsule())
                     .overlay(
@@ -1082,7 +1061,7 @@ struct TreeMemberNode: View {
                             Circle()
                                 .fill(nodeAccentColor)
                                 .frame(width: 56, height: 56)
-                                .shadow(color: nodeAccentColor.opacity(0.25), radius: 6, y: 2)
+                                .dsSubtleShadow()
 
                             Text(String(fullDisplayName.prefix(1)))
                                 .font(DS.Font.scaled(19, weight: .black))
@@ -1115,13 +1094,13 @@ struct TreeMemberNode: View {
                     }
 
                     Text(fullDisplayName)
-                        .font(DS.Font.scaled(10, weight: .bold))
+                        .font(DS.Font.scaled(12, weight: .bold))
                         .foregroundColor(DS.Color.textPrimary)
                         .multilineTextAlignment(.center)
                         .lineLimit(nil)
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(.horizontal, 10)
-                        .frame(minWidth: 60, minHeight: 22)
+                        .frame(minWidth: 60, minHeight: 24)
                         .background(DS.Color.surface)
                         .clipShape(Capsule())
                         .overlay(Capsule().stroke(borderColor, lineWidth: 2.5))
@@ -1142,9 +1121,9 @@ struct TreeMemberNode: View {
 
                         // الشكل الدائري الرئيسي
                         Circle()
-                            .fill(nodeAccentColor.opacity(0.85))
+                            .fill(nodeAccentColor)
                             .frame(width: interactiveNodeSize, height: interactiveNodeSize)
-                            .shadow(color: nodeAccentColor.opacity(0.2), radius: 6, y: 3)
+                            .dsSubtleShadow()
 
                         // الصورة أو الأيقونة
                         if shouldLoadImage, let urlStr = member.avatarUrl, let url = URL(string: urlStr) {
@@ -1153,7 +1132,7 @@ struct TreeMemberNode: View {
                             } placeholder: {
                                 Image(systemName: "person.fill")
                                     .font(DS.Font.scaled(30))
-                                    .foregroundColor(.white.opacity(0.7))
+                                    .foregroundColor(DS.Color.overlayTextMuted)
                             }
                             .frame(width: interactiveNodeSize, height: interactiveNodeSize)
                             .clipShape(Circle())
@@ -1162,7 +1141,7 @@ struct TreeMemberNode: View {
                                 .resizable()
                                 .scaledToFit()
                                 .frame(width: 44)
-                                .foregroundColor(.white.opacity(0.7))
+                                .foregroundColor(DS.Color.overlayTextMuted)
                         }
 
                         if member.isDeceased ?? false { deathTag }
@@ -1180,7 +1159,7 @@ struct TreeMemberNode: View {
                                 lineWidth: 5
                             )
                             .frame(width: interactiveNodeSize + 14, height: interactiveNodeSize + 14)
-                            .shadow(color: DS.Color.primaryDark.opacity(0.7), radius: 14)
+                            .dsGlowShadow()
                     }
                 }
                 .overlay {
@@ -1202,7 +1181,7 @@ struct TreeMemberNode: View {
                         Text(L10n.t("أنت هنا", "You"))
                             .font(DS.Font.scaled(10, weight: .bold))
                             .foregroundColor(DS.Color.textOnPrimary)
-                            .padding(.horizontal, 8)
+                            .padding(.horizontal, DS.Spacing.sm)
                             .padding(.vertical, 3)
                             .background(DS.Color.currentLocation)
                             .clipShape(Capsule())
@@ -1220,72 +1199,41 @@ struct TreeMemberNode: View {
                     }
                 }
 
+                // الاسم
                 Button(action: onToggle) {
-                    VStack(spacing: 4) {
-                        if showName {
-                            ZStack {
-                                Text(displayName)
-                                    .font(DS.Font.scaled(13, weight: .bold))
-                                    .foregroundColor(DS.Color.textPrimary)
-                                    .lineLimit(1)
-                                    .multilineTextAlignment(.center)
-                                    .minimumScaleFactor(0.75)
-                                    .padding(.horizontal, 24)
-
-                                if childrenCount > 0 {
-                                    HStack(spacing: 4) {
-                                        Text("\(childrenCount)")
-                                            .font(DS.Font.scaled(11, weight: .black))
-                                            .foregroundColor(DS.Color.textPrimary)
-                                            .padding(.horizontal, 6)
-                                            .padding(.vertical, 2)
-                                            .background(DS.Color.textPrimary.opacity(0.08))
-                                            .clipShape(Capsule())
-                                        Spacer()
-                                    }
-                                    .environment(\.layoutDirection, .leftToRight)
-                                    .padding(.leading, 4)
-                                }
-                            }
+                    if showName {
+                        Text(displayName)
+                            .font(DS.Font.scaled(15, weight: .bold))
+                            .foregroundColor(DS.Color.textPrimary)
+                            .lineLimit(1)
+                            .multilineTextAlignment(.center)
+                            .minimumScaleFactor(0.75)
+                            .padding(.horizontal, DS.Spacing.lg)
                             .frame(minWidth: interactiveLabelWidth)
                             .frame(height: interactiveLabelHeight + 2, alignment: .center)
                             .background(DS.Color.surface)
                             .clipShape(Capsule())
                             .overlay(Capsule().stroke(borderColor, lineWidth: 2.5))
-                        }
-
-                        if hasChildren {
-                            ZStack {
-                                Circle()
-                                    .fill(DS.Color.gradientPrimary)
-                                    .frame(width: 40, height: 40)
-                                    .shadow(color: DS.Color.primary.opacity(arrowGlow ? 0.8 : 0.4), radius: arrowGlow ? 12 : 6, y: 3)
-                                    .overlay(Circle().stroke(LinearGradient(colors: [Color.white, Color.white.opacity(0.3)], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1.5))
-                                    .scaleEffect(arrowGlow ? 1.12 : 1.0)
-
-                                Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                                    .font(DS.Font.scaled(18, weight: .black))
-                                    .foregroundColor(DS.Color.textOnPrimary)
-                                    .shadow(color: .black.opacity(0.3), radius: 2, y: 1)
-                            }
-                            .frame(width: interactiveLabelWidth, alignment: .center)
-                            .onAppear {
-                                if level <= 2 && !isExpanded {
-                                    withAnimation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) {
-                                        arrowGlow = true
-                                    }
-                                }
-                            }
-                            .onChange(of: isExpanded) { _, expanded in
-                                if expanded && level <= 2 {
-                                    withAnimation(.easeOut(duration: 0.3)) {
-                                        arrowGlow = false
-                                    }
-                                }
-                            }
-                        }
                     }
                 }.foregroundColor(DS.Color.textOnPrimary).zIndex(1)
+
+                // سهم التوسيع — نص دائرة أسفل الاسم
+                if hasChildren {
+                    Button(action: onToggle) {
+                        HStack(spacing: 4) {
+                            Text("\(childrenCount)")
+                                .font(.system(size: 15, weight: .heavy, design: .rounded))
+                            Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                                .font(.system(size: 14, weight: .heavy))
+                        }
+                        .foregroundColor(.white)
+                        .frame(width: 60, height: 28)
+                        .background(DS.Color.primaryDark)
+                        .clipShape(SemiCircleShape())
+                    }
+                    .offset(y: -1)
+                    .zIndex(0)
+                }
             }.fixedSize()
         }
     }
@@ -1301,12 +1249,7 @@ struct TreeMemberNode: View {
                 .frame(width: interactiveLabelWidth, height: interactiveLabelHeight)
                 .background(
                     Capsule()
-                        .fill(
-                            LinearGradient(
-                                colors: [DS.Color.error, DS.Color.error.opacity(0.8)],
-                                startPoint: .leading, endPoint: .trailing
-                            )
-                        )
+                        .fill(DS.Color.error)
                 )
                 .offset(y: 5)
         }
@@ -1340,6 +1283,24 @@ struct TreeMemberNode: View {
     private var interactiveNodeSize: CGFloat { 105 }
     private var interactiveLabelWidth: CGFloat { 110 }
     private var interactiveLabelHeight: CGFloat { 28 }
+}
+
+// MARK: - نص دائرة (النص السفلي)
+private struct SemiCircleShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: 0, y: 0))
+        path.addLine(to: CGPoint(x: rect.width, y: 0))
+        path.addArc(
+            center: CGPoint(x: rect.midX, y: 0),
+            radius: rect.width / 2,
+            startAngle: .degrees(0),
+            endAngle: .degrees(180),
+            clockwise: false
+        )
+        path.closeSubpath()
+        return path
+    }
 }
 
 // MARK: - شكل سداسي

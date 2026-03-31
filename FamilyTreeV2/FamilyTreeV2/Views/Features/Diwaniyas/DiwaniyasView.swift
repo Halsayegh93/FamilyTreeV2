@@ -16,14 +16,14 @@ struct DiwaniyasView: View {
             ZStack {
                 DS.Color.background.ignoresSafeArea()
 
-                DSDecorativeBackground()
 
                 VStack(spacing: 0) {
                     MainHeaderView(
                         selectedTab: $selectedTab,
                         showingNotifications: $showingNotifications,
                         title: L10n.t("الديوانيات", "Diwaniyas"),
-                        icon: "map.fill"
+                        icon: "map.fill",
+                        backgroundGradient: DS.Color.gradientPrimary
                     ) {
                         Button(action: { showingAddRequest = true }) {
                             ZStack {
@@ -443,7 +443,6 @@ private struct AddDiwaniyaRequestView: View {
         NavigationStack {
             ZStack {
                 DS.Color.background.ignoresSafeArea()
-                DSDecorativeBackground()
 
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: DS.Spacing.xxl) {
@@ -526,9 +525,9 @@ private struct AddDiwaniyaRequestView: View {
                                         } label: {
                                             Text(L10n.t(day.ar, day.en))
                                                 .font(DS.Font.scaled(13, weight: isOn ? .bold : .medium))
-                                                .foregroundColor(isOn ? .white : DS.Color.textSecondary)
+                                                .foregroundColor(isOn ? DS.Color.textOnPrimary : DS.Color.textSecondary)
                                                 .frame(maxWidth: .infinity)
-                                                .padding(.vertical, 8)
+                                                .padding(.vertical, DS.Spacing.sm)
                                                 .background(isOn ? DS.Color.warning : DS.Color.surface)
                                                 .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm))
                                                 .overlay(RoundedRectangle(cornerRadius: DS.Radius.sm).stroke(isOn ? Color.clear : DS.Color.textTertiary.opacity(0.25), lineWidth: 1))
@@ -562,9 +561,9 @@ private struct AddDiwaniyaRequestView: View {
                                         } label: {
                                             Text(L10n.t("\(time) م", "\(time) PM"))
                                                 .font(DS.Font.scaled(13, weight: isOn ? .bold : .medium))
-                                                .foregroundColor(isOn ? .white : DS.Color.textSecondary)
+                                                .foregroundColor(isOn ? DS.Color.textOnPrimary : DS.Color.textSecondary)
                                                 .frame(maxWidth: .infinity)
-                                                .padding(.vertical, 8)
+                                                .padding(.vertical, DS.Spacing.sm)
                                                 .background(isOn ? DS.Color.warning : DS.Color.surface)
                                                 .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm))
                                                 .overlay(RoundedRectangle(cornerRadius: DS.Radius.sm).stroke(isOn ? Color.clear : DS.Color.textTertiary.opacity(0.25), lineWidth: 1))
@@ -799,7 +798,6 @@ private struct EditDiwaniyaView: View {
         NavigationStack {
             ZStack {
                 DS.Color.background.ignoresSafeArea()
-                DSDecorativeBackground()
 
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: DS.Spacing.xxl) {
@@ -876,9 +874,9 @@ private struct EditDiwaniyaView: View {
                                         } label: {
                                             Text(L10n.t(day.ar, day.en))
                                                 .font(DS.Font.scaled(13, weight: isOn ? .bold : .medium))
-                                                .foregroundColor(isOn ? .white : DS.Color.textSecondary)
+                                                .foregroundColor(isOn ? DS.Color.textOnPrimary : DS.Color.textSecondary)
                                                 .frame(maxWidth: .infinity)
-                                                .padding(.vertical, 8)
+                                                .padding(.vertical, DS.Spacing.sm)
                                                 .background(isOn ? DS.Color.warning : DS.Color.surface)
                                                 .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm))
                                                 .overlay(RoundedRectangle(cornerRadius: DS.Radius.sm).stroke(isOn ? Color.clear : DS.Color.textTertiary.opacity(0.25), lineWidth: 1))
@@ -912,9 +910,9 @@ private struct EditDiwaniyaView: View {
                                         } label: {
                                             Text(L10n.t("\(time) م", "\(time) PM"))
                                                 .font(DS.Font.scaled(13, weight: isOn ? .bold : .medium))
-                                                .foregroundColor(isOn ? .white : DS.Color.textSecondary)
+                                                .foregroundColor(isOn ? DS.Color.textOnPrimary : DS.Color.textSecondary)
                                                 .frame(maxWidth: .infinity)
-                                                .padding(.vertical, 8)
+                                                .padding(.vertical, DS.Spacing.sm)
                                                 .background(isOn ? DS.Color.warning : DS.Color.surface)
                                                 .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm))
                                                 .overlay(RoundedRectangle(cornerRadius: DS.Radius.sm).stroke(isOn ? Color.clear : DS.Color.textTertiary.opacity(0.25), lineWidth: 1))

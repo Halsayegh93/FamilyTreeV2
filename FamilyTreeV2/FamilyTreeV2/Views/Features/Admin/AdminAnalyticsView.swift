@@ -17,7 +17,6 @@ struct AdminAnalyticsView: View {
     var body: some View {
         ZStack {
             DS.Color.background.ignoresSafeArea()
-            DSDecorativeBackground()
 
             ScrollView(showsIndicators: false) {
                 VStack(spacing: DS.Spacing.xxl) {
@@ -55,7 +54,7 @@ struct AdminAnalyticsView: View {
             DSSectionHeader(
                 title: L10n.t("ملخص عام", "Overview"),
                 icon: "chart.bar.fill",
-                iconColor: DS.Color.primary
+                iconColor: DS.Color.secondary
             )
 
             let columns = [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())]
@@ -64,7 +63,7 @@ struct AdminAnalyticsView: View {
                     value: "\(totalMembers)",
                     label: L10n.t("إجمالي", "Total"),
                     icon: "person.2.fill",
-                    color: DS.Color.primary
+                    color: DS.Color.secondary
                 )
                 overviewCell(
                     value: "\(activeMembers.count)",
@@ -265,7 +264,7 @@ struct AdminAnalyticsView: View {
                 title: L10n.t("نمو الأعضاء", "Member Growth"),
                 icon: "chart.line.uptrend.xyaxis",
                 trailing: L10n.t("آخر ٦ أشهر", "Last 6 months"),
-                iconColor: DS.Color.primary
+                iconColor: DS.Color.accent
             )
 
             HStack(alignment: .bottom, spacing: DS.Spacing.sm) {
@@ -278,7 +277,7 @@ struct AdminAnalyticsView: View {
                         RoundedRectangle(cornerRadius: DS.Radius.sm)
                             .fill(
                                 LinearGradient(
-                                    colors: [DS.Color.primary, DS.Color.primaryLight],
+                                    colors: [DS.Color.accent, DS.Color.accentLight],
                                     startPoint: .bottom,
                                     endPoint: .top
                                 )
@@ -311,7 +310,7 @@ struct AdminAnalyticsView: View {
             DSSectionHeader(
                 title: L10n.t("إحصائيات الأخبار", "News Statistics"),
                 icon: "newspaper.fill",
-                iconColor: DS.Color.accent
+                iconColor: DS.Color.primary
             )
 
             let columns = [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())]

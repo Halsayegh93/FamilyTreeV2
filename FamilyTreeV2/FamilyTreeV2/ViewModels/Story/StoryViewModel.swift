@@ -225,7 +225,7 @@ class StoryViewModel: ObservableObject {
                 .execute()
 
             // إشعار صاحب الستوري
-            let creatorName = memberVM?.member(byId: story.createdBy)?.firstName ?? ""
+            _ = memberVM?.member(byId: story.createdBy)?.firstName ?? ""
             await notificationVM?.sendNotification(
                 title: L10n.t("تم نشر قصتك", "Your Story is Published"),
                 body: L10n.t(
@@ -255,7 +255,7 @@ class StoryViewModel: ObservableObject {
             // حذف الصورة من التخزين
             let urlComponents = story.imageUrl.components(separatedBy: "/stories/")
             if let path = urlComponents.last?.components(separatedBy: "?").first {
-                try? await supabase.storage.from("stories").remove(paths: [path])
+                _ = try? await supabase.storage.from("stories").remove(paths: [path])
             }
 
             // حذف السجل
@@ -289,7 +289,7 @@ class StoryViewModel: ObservableObject {
         do {
             let urlComponents = story.imageUrl.components(separatedBy: "/stories/")
             if let path = urlComponents.last?.components(separatedBy: "?").first {
-                try? await supabase.storage.from("stories").remove(paths: [path])
+                _ = try? await supabase.storage.from("stories").remove(paths: [path])
             }
 
             try await supabase

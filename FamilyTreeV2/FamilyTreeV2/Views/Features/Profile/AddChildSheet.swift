@@ -27,7 +27,6 @@ struct AddChildSheet: View {
             ZStack {
                 DS.Color.background.ignoresSafeArea()
 
-                DSDecorativeBackground()
 
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: DS.Spacing.md) {
@@ -89,7 +88,7 @@ struct AddChildSheet: View {
                 VStack(spacing: 0) {
                     // Name field
                     HStack(spacing: DS.Spacing.md) {
-                        DSIcon("person.fill", color: DS.Color.primary)
+                        DSIcon("person.fill", color: DS.Color.secondary)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(L10n.t("الاسم الأول", "First Name"))
                                 .font(DS.Font.caption1)
@@ -147,7 +146,7 @@ struct AddChildSheet: View {
                                     Text(L10n.t("ذكر", "Male"))
                                         .font(DS.Font.caption1)
                                         .fontWeight(.bold)
-                                        .foregroundColor(selectedGender == "male" ? .white : DS.Color.textSecondary)
+                                        .foregroundColor(selectedGender == "male" ? DS.Color.textOnPrimary : DS.Color.textSecondary)
                                         .frame(maxWidth: .infinity)
                                         .padding(.vertical, DS.Spacing.sm)
                                         .background(selectedGender == "male" ? DS.Color.primary : DS.Color.surface)
@@ -159,7 +158,7 @@ struct AddChildSheet: View {
                                     Text(L10n.t("أنثى", "Female"))
                                         .font(DS.Font.caption1)
                                         .fontWeight(.bold)
-                                        .foregroundColor(selectedGender == "female" ? .white : DS.Color.textSecondary)
+                                        .foregroundColor(selectedGender == "female" ? DS.Color.textOnPrimary : DS.Color.textSecondary)
                                         .frame(maxWidth: .infinity)
                                         .padding(.vertical, DS.Spacing.sm)
                                         .background(selectedGender == "female" ? DS.Color.neonPink : DS.Color.surface)
@@ -180,7 +179,7 @@ struct AddChildSheet: View {
 
                     // Phone field — بدون رمز الدولة
                     HStack(spacing: DS.Spacing.md) {
-                        DSIcon("phone.fill", color: DS.Color.success)
+                        DSIcon("phone.fill", color: DS.Color.primary)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(L10n.t("رقم الهاتف", "Phone Number"))
                                 .font(DS.Font.caption1)
@@ -203,7 +202,7 @@ struct AddChildSheet: View {
 
                     // Birth date
                     HStack(spacing: DS.Spacing.md) {
-                        DSIcon("calendar", color: DS.Color.info)
+                        DSIcon("calendar", color: DS.Color.accent)
                         DatePicker(L10n.t("تاريخ الميلاد", "Birth Date"), selection: $birthDate, in: ...Date(), displayedComponents: .date)
                             .environment(\.locale, Locale(identifier: L10n.isArabic ? "ar" : "en_US"))
                     }

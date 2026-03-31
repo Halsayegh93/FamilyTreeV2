@@ -150,7 +150,7 @@ struct MainHeaderView<TrailingContent: View>: View {
         .background(
             (backgroundGradient ?? DS.Color.gradientPrimary)
                 .ignoresSafeArea(edges: .top)
-                .shadow(color: hasDropShadow ? DS.Color.shadowRegular : .clear, radius: 8, x: 0, y: 4)
+                .shadow(color: hasDropShadow ? DS.Shadow.card.color : .clear, radius: DS.Shadow.card.radius, x: DS.Shadow.card.x, y: DS.Shadow.card.y)
         )
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .onAppear {

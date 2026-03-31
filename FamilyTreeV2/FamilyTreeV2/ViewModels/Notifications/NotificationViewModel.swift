@@ -152,7 +152,7 @@ class NotificationViewModel: ObservableObject {
     // MARK: - Computed Properties
     
     var unreadNotificationsCount: Int {
-        notifications.filter { !$0.read && $0.targetMemberId != nil }.count
+        notifications.filter { !$0.read }.count
     }
     
     private var currentUser: FamilyMember? {

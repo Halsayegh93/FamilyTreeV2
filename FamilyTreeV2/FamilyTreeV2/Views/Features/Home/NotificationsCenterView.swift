@@ -45,7 +45,6 @@ struct NotificationsCenterView: View {
     var body: some View {
         ZStack {
             DS.Color.background.ignoresSafeArea()
-            DSDecorativeBackground()
 
             VStack(spacing: 0) {
                 // شريط الأدوات الموحد
@@ -117,7 +116,7 @@ struct NotificationsCenterView: View {
                     pillButton(
                         icon: "envelope.open.fill",
                         label: L10n.t("مقروء", "Read"),
-                        fg: .white,
+                        fg: DS.Color.textOnPrimary,
                         bg: selectedIds.isEmpty ? DS.Color.inactive : DS.Color.primary,
                         disabled: selectedIds.isEmpty
                     ) {
@@ -132,7 +131,7 @@ struct NotificationsCenterView: View {
                         pillButton(
                             icon: "trash.fill",
                             label: L10n.t("حذف", "Delete"),
-                            fg: .white,
+                            fg: DS.Color.textOnPrimary,
                             bg: selectedIds.isEmpty ? DS.Color.inactive : DS.Color.error,
                             disabled: selectedIds.isEmpty
                         ) {
@@ -147,7 +146,7 @@ struct NotificationsCenterView: View {
                     if !selectedIds.isEmpty {
                         Text("\(selectedIds.count)")
                             .font(DS.Font.scaled(11, weight: .black))
-                            .foregroundColor(.white)
+                            .foregroundColor(DS.Color.textOnPrimary)
                             .frame(minWidth: 22, minHeight: 22)
                             .background(DS.Color.primary)
                             .clipShape(Circle())
@@ -476,7 +475,7 @@ struct NotificationsCenterView: View {
                         lineWidth: isUnread ? 1 : 0.5
                     )
             )
-            .shadow(color: isUnread ? iconInfo.color.opacity(0.08) : Color.clear, radius: 8, x: 0, y: 3)
+            .dsSubtleShadow()
             .opacity(isUnread ? 1 : 0.55)
         }
         .buttonStyle(DSScaleButtonStyle())
@@ -599,7 +598,7 @@ struct NotificationsCenterView: View {
                             RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
                                 .stroke(DS.Color.textTertiary.opacity(0.1), lineWidth: 0.5)
                         )
-                        .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 3)
+                        .dsSubtleShadow()
                         .padding(.horizontal, DS.Spacing.lg)
                         .padding(.top, DS.Spacing.xl)
 

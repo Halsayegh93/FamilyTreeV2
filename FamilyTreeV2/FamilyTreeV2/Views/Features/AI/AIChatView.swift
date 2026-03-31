@@ -14,7 +14,6 @@ struct AIChatView: View {
             ZStack {
                 DS.Color.background.ignoresSafeArea()
 
-                DSDecorativeBackground()
 
                 VStack(spacing: 0) {
                     // Chat messages
@@ -227,7 +226,7 @@ struct ChatBubbleView: View {
             VStack(alignment: isUser ? .trailing : .leading, spacing: DS.Spacing.xs) {
                 Text(message.content)
                     .font(DS.Font.body)
-                    .foregroundColor(isUser ? .white : DS.Color.textPrimary)
+                    .foregroundColor(isUser ? DS.Color.textOnPrimary : DS.Color.textPrimary)
                     .padding(DS.Spacing.md)
                     .background(
                         Group {

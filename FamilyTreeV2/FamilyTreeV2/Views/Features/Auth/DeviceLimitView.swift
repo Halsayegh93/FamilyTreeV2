@@ -11,7 +11,6 @@ struct DeviceLimitView: View {
     var body: some View {
         ZStack {
             DS.Color.background.ignoresSafeArea()
-            DSDecorativeBackground()
 
             VStack(spacing: DS.Spacing.xxl) {
 
@@ -82,7 +81,6 @@ struct LinkedDevicesSheet: View {
         NavigationStack {
             ZStack {
                 DS.Color.background.ignoresSafeArea()
-                DSDecorativeBackground()
 
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: DS.Spacing.md) {

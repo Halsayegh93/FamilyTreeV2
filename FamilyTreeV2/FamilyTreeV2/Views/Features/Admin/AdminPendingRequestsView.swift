@@ -115,7 +115,6 @@ struct AdminPendingRequestsView: View {
     var body: some View {
         ZStack {
             DS.Color.background.ignoresSafeArea()
-            DSDecorativeBackground()
 
             if pendingMembers.isEmpty {
                 VStack(spacing: DS.Spacing.xl) {
@@ -495,7 +494,7 @@ struct AdminPendingRequestsView: View {
                 ))
                 .font(DS.Font.scaled(10, weight: .semibold))
                 .foregroundColor(strengthColor)
-                .padding(.horizontal, 8)
+                .padding(.horizontal, DS.Spacing.sm)
                 .padding(.vertical, 3)
                 .background(strengthColor.opacity(0.12))
                 .clipShape(Capsule())
@@ -504,7 +503,7 @@ struct AdminPendingRequestsView: View {
                 Text(matchStrengthLabel(ratio: matchRatio))
                     .font(DS.Font.scaled(10, weight: .bold))
                     .foregroundColor(DS.Color.textOnPrimary)
-                    .padding(.horizontal, 8)
+                    .padding(.horizontal, DS.Spacing.sm)
                     .padding(.vertical, 3)
                     .background(strengthColor)
                     .clipShape(Capsule())

@@ -72,7 +72,7 @@ struct AdminDashboardView: View {
                 DS.Color.background.ignoresSafeArea()
 
                 // Decorative background circles
-                decorativeBackground
+                EmptyView()
 
                 VStack(spacing: 0) {
                     MainHeaderView(
@@ -80,7 +80,7 @@ struct AdminDashboardView: View {
                         showingNotifications: $showingNotifications,
                         title: L10n.t("الادارة", "Admin Dashboard"),
                         icon: "shield.lefthalf.filled",
-                        backgroundGradient: DS.Color.gradientAccent
+                        backgroundGradient: DS.Color.gradientPrimary
                     )
 
                     ScrollView(showsIndicators: false) {
@@ -227,11 +227,6 @@ struct AdminDashboardView: View {
     }
 
 
-    // MARK: - Decorative Background
-    private var decorativeBackground: some View {
-        DSDecorativeBackground()
-    }
-
 
 
     // MARK: - إحصائيات (Colorful Stat Cards)
@@ -242,21 +237,21 @@ struct AdminDashboardView: View {
                     title: L10n.t("الأعضاء", "Members"),
                     value: "\(memberVM.allMembers.filter { $0.role != .pending }.count)",
                     icon: "person.2.fill",
-                    color: DS.Color.info
+                    color: DS.Color.primary
                 )
 
                 adminColorfulStatCard(
                     title: L10n.t("انتظار", "Pending"),
                     value: "\(pendingCount)",
                     icon: "clock.fill",
-                    color: DS.Color.warning
+                    color: DS.Color.secondary
                 )
 
                 adminColorfulStatCard(
                     title: L10n.t("طلبات", "Requests"),
                     value: "\(totalReviewRequestsCount)",
                     icon: "tray.full.fill",
-                    color: DS.Color.error
+                    color: DS.Color.accent
                 )
             }
 

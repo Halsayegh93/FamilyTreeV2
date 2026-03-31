@@ -120,7 +120,7 @@ struct FamilyPhotoAlbumsView: View {
                 VStack {
                     Spacer()
                     HStack(spacing: DS.Spacing.sm) {
-                        ProgressView().tint(.white)
+                        ProgressView().tint(DS.Color.textOnPrimary)
                         Text(L10n.t("جاري رفع الصور...", "Uploading photos..."))
                             .font(DS.Font.calloutBold)
                             .foregroundColor(DS.Color.textOnPrimary)
@@ -199,7 +199,7 @@ struct FamilyPhotoAlbumsView: View {
                     avatarView: AnyView(
                         Image(systemName: "square.grid.3x3.fill")
                             .font(DS.Font.scaled(20, weight: .semibold))
-                            .foregroundColor(selectedMemberId == nil ? .white : DS.Color.primary)
+                            .foregroundColor(selectedMemberId == nil ? DS.Color.textOnPrimary : DS.Color.primary)
                     ),
                     isSelected: selectedMemberId == nil,
                     count: allPhotos.count
@@ -258,7 +258,7 @@ struct FamilyPhotoAlbumsView: View {
                     if count > 0 {
                         Text("\(count)")
                             .font(DS.Font.scaled(9, weight: .bold))
-                            .foregroundColor(.white)
+                            .foregroundColor(DS.Color.textOnPrimary)
                             .padding(.horizontal, 5)
                             .padding(.vertical, 1)
                             .background(DS.Color.primary)
@@ -360,7 +360,7 @@ struct FamilyPhotoAlbumsView: View {
                     if photo.isPending {
                         Text(L10n.t("معلق", "Pending"))
                             .font(DS.Font.scaled(9, weight: .bold))
-                            .foregroundColor(.white)
+                            .foregroundColor(DS.Color.textOnPrimary)
                             .padding(.horizontal, 5)
                             .padding(.vertical, 2)
                             .background(DS.Color.warning)
@@ -566,7 +566,7 @@ struct FamilyPhotoAlbumsView: View {
                                     Image(systemName: "xmark.circle.fill")
                                         .font(DS.Font.scaled(24, weight: .bold))
                                         .foregroundColor(DS.Color.textOnPrimary)
-                                        .shadow(color: .black.opacity(0.3), radius: 4, x: 0, y: 2)
+                                        .dsCardShadow()
                                 }
                                 .padding(DS.Spacing.md)
                             }
@@ -585,7 +585,7 @@ struct FamilyPhotoAlbumsView: View {
                                 .foregroundColor(DS.Color.textOnPrimary)
                                 .padding(.horizontal, DS.Spacing.sm)
                                 .padding(.vertical, DS.Spacing.xs)
-                                .background(Color.black.opacity(0.5))
+                                .background(DS.Color.shadowHeavy)
                                 .clipShape(Capsule())
                                 .padding(DS.Spacing.md)
                         }

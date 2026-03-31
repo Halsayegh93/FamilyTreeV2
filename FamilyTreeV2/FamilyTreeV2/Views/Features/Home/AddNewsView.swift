@@ -224,14 +224,14 @@ struct AddNewsView: View {
                         Button {
                             let generator = UIImpactFeedbackGenerator(style: .light)
                             generator.impactOccurred()
-                            withAnimation(DS.Anim.snappy) {
+                            _ = withAnimation(DS.Anim.snappy) {
                                 selectedImages.remove(at: idx)
                             }
                         } label: {
                             Image(systemName: "xmark.circle.fill")
                                 .font(DS.Font.scaled(18, weight: .bold))
-                                .foregroundStyle(.white, DS.Color.error)
-                                .shadow(color: .black.opacity(0.3), radius: 2, y: 1)
+                                .foregroundStyle(DS.Color.textOnPrimary, DS.Color.error)
+                                .dsCardShadow()
                         }
                         .offset(x: 6, y: -6)
                     }

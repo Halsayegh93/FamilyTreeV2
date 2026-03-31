@@ -1,26 +1,29 @@
 import SwiftUI
 
 // MARK: - Design Tokens — المحمدعلي Family App
-// Theme: Royal & Modern | Colors: Royal Blue + Gold | Light & Dark Mode
+// Theme: Vivid Spectrum | Colors: Blue + Cyan + Indigo | Light & Dark Mode
 enum DS {
 
     // MARK: Colors
     enum Color {
-        // Brand — Royal Blue + Gold (adaptive for dark mode)
-        static let primary       = SwiftUI.Color.adaptive(light: "#1B3A8C", dark: "#5B8FE6") // Royal Blue
-        static let primaryDark   = SwiftUI.Color.adaptive(light: "#0E2460", dark: "#3A6CD4") // Deep Navy
-        static let primaryLight  = SwiftUI.Color.adaptive(light: "#4F74C9", dark: "#7FAEF0") // Light Royal
-        static let accent        = SwiftUI.Color.adaptive(light: "#C8962E", dark: "#E6B84D") // Rich Gold
-        static let accentDark    = SwiftUI.Color.adaptive(light: "#9A7321", dark: "#C8962E") // Deep Gold
-        static let accentLight   = SwiftUI.Color.adaptive(light: "#E6C06A", dark: "#F0D080") // Soft Gold
+        // Brand — Electric Blue (adaptive for dark mode)
+        static let primary       = SwiftUI.Color.adaptive(light: "#357DED", dark: "#5C9AF2") // Blue
+        static let primaryDark   = SwiftUI.Color.adaptive(light: "#2460C0", dark: "#357DED") // Deep Blue
+        static let primaryLight  = SwiftUI.Color.adaptive(light: "#6AA0F2", dark: "#8EBBF6") // Light Blue
+        static let secondary     = SwiftUI.Color.adaptive(light: "#56EEF4", dark: "#3ABCC2") // Cyan
+        static let secondaryDark = SwiftUI.Color.adaptive(light: "#2CC4CA", dark: "#56EEF4") // Deep Cyan
+        static let secondaryLight = SwiftUI.Color.adaptive(light: "#88F4F8", dark: "#70E8EE") // Soft Cyan
+        static let accent        = SwiftUI.Color.adaptive(light: "#5438DC", dark: "#7A62E8") // Indigo
+        static let accentDark    = SwiftUI.Color.adaptive(light: "#3E28B0", dark: "#5438DC") // Deep Indigo
+        static let accentLight   = SwiftUI.Color.adaptive(light: "#7A62E8", dark: "#A090F0") // Light Indigo
 
-        // Supporting Accents — ألوان مساندة فخمة
-        static let neonBlue     = SwiftUI.Color.adaptive(light: "#3B5FBF", dark: "#6B9FE8") // Sapphire
-        static let neonPurple   = SwiftUI.Color.adaptive(light: "#7B68AE", dark: "#A08DD0") // Amethyst
-        static let neonCyan     = SwiftUI.Color.adaptive(light: "#E8D5A3", dark: "#F2E4C0") // Champagne Gold
-        static let neonPink     = SwiftUI.Color.adaptive(light: "#D4A38C", dark: "#E8BFA8") // Rose Gold
+        // Supporting Accents
+        static let neonBlue     = SwiftUI.Color.adaptive(light: "#2460C0", dark: "#6AA0F2") // Deep Blue
+        static let neonPurple   = SwiftUI.Color.adaptive(light: "#5438DC", dark: "#7A62E8") // Indigo
+        static let neonCyan     = SwiftUI.Color.adaptive(light: "#56EEF4", dark: "#88F4F8") // Cyan
+        static let neonPink     = SwiftUI.Color.adaptive(light: "#B24C63", dark: "#CC6A80") // Berry Rose
 
-        // Gradients — تدرجات ملكية
+        // Gradients
         static let gradientPrimary = LinearGradient(
             colors: [primaryLight, primary, primaryDark],
             startPoint: .topLeading, endPoint: .bottomTrailing
@@ -29,89 +32,107 @@ enum DS {
             colors: [accentLight, accent, accentDark],
             startPoint: .topLeading, endPoint: .bottomTrailing
         )
+        static let gradientSecondary = LinearGradient(
+            colors: [secondaryLight, secondary, secondaryDark],
+            startPoint: .topLeading, endPoint: .bottomTrailing
+        )
         static let gradientWarm = LinearGradient(
-            colors: [accentLight, accent],
+            colors: [primary, secondary],
             startPoint: .leading, endPoint: .trailing
         )
         static let gradientCool = LinearGradient(
-            colors: [SwiftUI.Color.adaptive(light: "#D4E4F7", dark: "#1A2A40"), primaryLight],
+            colors: [SwiftUI.Color.adaptive(light: "#F0F4FF", dark: "#0A0E18"), primaryLight],
             startPoint: .leading, endPoint: .trailing
         )
         static let gradientDark = LinearGradient(
-            colors: [SwiftUI.Color(hex: "#1A1A2E"), SwiftUI.Color(hex: "#0F0F1A"), SwiftUI.Color(hex: "#060610")],
+            colors: [SwiftUI.Color(hex: "#0A0E18"), SwiftUI.Color(hex: "#06080E"), SwiftUI.Color(hex: "#030406")],
             startPoint: .top, endPoint: .bottom
         )
         static let gradientAuth = LinearGradient(
-            colors: [SwiftUI.Color(hex: "#0A1628"), primaryDark, SwiftUI.Color(hex: "#1A1235"), SwiftUI.Color(hex: "#050A18")],
+            colors: [SwiftUI.Color(hex: "#0A0E18"), primaryDark, SwiftUI.Color(hex: "#0E0A20"), SwiftUI.Color(hex: "#060810")],
             startPoint: .topLeading, endPoint: .bottomTrailing
         )
         static let gradientFire = LinearGradient(
-            colors: [SwiftUI.Color.adaptive(light: "#B85C1E", dark: "#E07030"), SwiftUI.Color.adaptive(light: "#8B3A13", dark: "#B85C1E")],
+            colors: [SwiftUI.Color.adaptive(light: "#B24C63", dark: "#CC6A80"), SwiftUI.Color.adaptive(light: "#D4960A", dark: "#F0B040")],
             startPoint: .topLeading, endPoint: .bottomTrailing
         )
         static let gradientOcean = LinearGradient(
-            colors: [primary, SwiftUI.Color.adaptive(light: "#162D6B", dark: "#3A5A9F")],
+            colors: [primary, secondary],
             startPoint: .topLeading, endPoint: .bottomTrailing
         )
         static let gradientNeon = LinearGradient(
-            colors: [primaryLight, neonBlue],
+            colors: [secondary, accent],
             startPoint: .leading, endPoint: .trailing
         )
         static let gradientRoyal = LinearGradient(
-            colors: [primaryDark, primary, accentDark],
+            colors: [accentDark, primary, secondaryDark],
             startPoint: .topLeading, endPoint: .bottomTrailing
         )
         static let gradientGold = LinearGradient(
-            colors: [accentLight, accent, accentDark],
+            colors: [secondaryLight, secondary, secondaryDark],
             startPoint: .topLeading, endPoint: .bottomTrailing
         )
 
-        // Surfaces
-        static let background       = SwiftUI.Color(.systemGroupedBackground)
-        static let surface          = SwiftUI.Color(.secondarySystemGroupedBackground)
-        static let surfaceElevated  = SwiftUI.Color(.tertiarySystemGroupedBackground)
+        // MARK: Feature Gradients — موحد
+        static let gradientHome     = gradientPrimary
+        static let gradientTree     = gradientPrimary
+        static let gradientDiwaniya = gradientPrimary
+        static let gradientProfile  = gradientPrimary
+        static let gradientAdmin    = gradientPrimary
+
+        // MARK: Feature Tints — لون واحد موحد
+        static let tintHome     = primary
+        static let tintTree     = primary
+        static let tintDiwaniya = primary
+        static let tintProfile  = primary
+        static let tintAdmin    = primary
+
+        // Surfaces — الكروت لازم تبان فوق الخلفية
+        static let background       = SwiftUI.Color(.systemBackground)
+        static let surface          = SwiftUI.Color(.secondarySystemBackground)
+        static let surfaceElevated  = SwiftUI.Color(.tertiarySystemBackground)
 
         // Text
-        static let textPrimary   = SwiftUI.Color.primary
-        static let textSecondary = SwiftUI.Color.secondary
-        static let textTertiary  = SwiftUI.Color(.tertiaryLabel)
+        static let textPrimary   = SwiftUI.Color.adaptive(light: "#0A0E18", dark: "#F0F4FF") // Deep Navy / Cool White
+        static let textSecondary = SwiftUI.Color.adaptive(light: "#5A6070", dark: "#8A90A0") // Slate
+        static let textTertiary  = SwiftUI.Color.adaptive(light: "#8A90A0", dark: "#5A6070") // Light Slate
         static let textOnPrimary = SwiftUI.Color.white
-        static let textGold      = SwiftUI.Color.adaptive(light: "#C8962E", dark: "#E6B84D")
+        static let textGold      = SwiftUI.Color.adaptive(light: "#56EEF4", dark: "#3ABCC2") // Cyan
 
         // Semantic
-        static let success = SwiftUI.Color.adaptive(light: "#1B7A42", dark: "#34C76A") // Emerald Green
-        static let warning = SwiftUI.Color.adaptive(light: "#D4960A", dark: "#F0B429") // Golden Warning
-        static let error   = SwiftUI.Color.adaptive(light: "#B5302A", dark: "#E85550") // Crimson Red
-        static let info    = SwiftUI.Color.adaptive(light: "#2E5CAD", dark: "#6A9EE0") // Royal Info
+        static let success = SwiftUI.Color.adaptive(light: "#32E875", dark: "#28C060") // Emerald
+        static let warning = SwiftUI.Color.adaptive(light: "#D4960A", dark: "#F0B040") // Amber
+        static let error   = SwiftUI.Color.adaptive(light: "#D32F2F", dark: "#EF5350") // أحمر صافي
+        static let info    = SwiftUI.Color.adaptive(light: "#357DED", dark: "#5C9AF2") // Blue
 
-        // Role Colors — ألوان الأدوار
+        // Role Colors — باستيل ناعم
         static func role(_ roleColor: SwiftUI.Color) -> SwiftUI.Color { roleColor }
-        static let ownerRole      = SwiftUI.Color.adaptive(light: "#1A5FB4", dark: "#62A0EA") // Royal Blue
-        static let adminRole      = SwiftUI.Color.adaptive(light: "#7B68AE", dark: "#A08DD0") // Amethyst Purple
-        static let supervisorRole = SwiftUI.Color.adaptive(light: "#C8962E", dark: "#E6B84D") // Gold
-        static let memberRole     = SwiftUI.Color.adaptive(light: "#1B3A8C", dark: "#5B8FE6") // Royal Blue
-        static let pendingRole    = SwiftUI.Color.gray
+        static let ownerRole      = SwiftUI.Color.adaptive(light: "#9B7FD4", dark: "#B89FE8") // بنفسجي باستيل
+        static let adminRole      = SwiftUI.Color.adaptive(light: "#D47B7B", dark: "#E8A0A0") // وردي باستيل
+        static let supervisorRole = SwiftUI.Color.adaptive(light: "#D4A96B", dark: "#E8C48F") // ذهبي باستيل
+        static let memberRole     = SwiftUI.Color.adaptive(light: "#7BA8D4", dark: "#9FC4E8") // أزرق باستيل
+        static let pendingRole    = SwiftUI.Color.adaptive(light: "#A0A0A0", dark: "#B8B8B8") // رمادي باستيل
 
-        // News Type Colors — ألوان أنواع الأخبار
-        static let newsWedding      = SwiftUI.Color.adaptive(light: "#D4A38C", dark: "#E8BFA8") // Rose Gold
-        static let newsBirth        = SwiftUI.Color.adaptive(light: "#4AADA8", dark: "#6CC9C4") // Teal
+        // News Type Colors
+        static let newsWedding      = SwiftUI.Color.adaptive(light: "#B24C63", dark: "#CC6A80") // Berry Rose
+        static let newsBirth        = SwiftUI.Color.adaptive(light: "#32E875", dark: "#28C060") // Emerald
         static let newsDeath        = SwiftUI.Color.adaptive(light: "#8A8A8E", dark: "#A8A8AC") // Muted Gray
-        static let newsVote         = SwiftUI.Color.adaptive(light: "#C8962E", dark: "#E6B84D") // Gold
-        static let newsAnnouncement = SwiftUI.Color.adaptive(light: "#5B7FD4", dark: "#7FA0E8") // Royal Blue
-        static let newsCongrats     = SwiftUI.Color.adaptive(light: "#D4A04B", dark: "#F0C060") // Warm Gold
-        static let newsReminder     = SwiftUI.Color.adaptive(light: "#C46B3E", dark: "#E88A5C") // Burnt Orange
-        static let newsInvitation   = SwiftUI.Color.adaptive(light: "#7B5EA7", dark: "#A080C8") // Purple
+        static let newsVote         = SwiftUI.Color.adaptive(light: "#5438DC", dark: "#7A62E8") // Indigo
+        static let newsAnnouncement = SwiftUI.Color.adaptive(light: "#357DED", dark: "#5C9AF2") // Blue
+        static let newsCongrats     = SwiftUI.Color.adaptive(light: "#56EEF4", dark: "#3ABCC2") // Cyan
+        static let newsReminder     = SwiftUI.Color.adaptive(light: "#B24C63", dark: "#CC6A80") // Berry
+        static let newsInvitation   = SwiftUI.Color.adaptive(light: "#5438DC", dark: "#7A62E8") // Indigo
 
         // Status Colors
-        static let deceased         = SwiftUI.Color.adaptive(light: "#8A8A8E", dark: "#A8A8AC")
-        static let currentLocation  = SwiftUI.Color.adaptive(light: "#007AFF", dark: "#409CFF") // Vibrant Blue
-        static let likeAction       = SwiftUI.Color.adaptive(light: "#E8425A", dark: "#F06070") // Like Red
+        static let deceased         = SwiftUI.Color.adaptive(light: "#A0A0A0", dark: "#808080") // رمادي هادي
+        static let currentLocation  = SwiftUI.Color.adaptive(light: "#00C853", dark: "#69F0AE") // أخضر
+        static let likeAction       = SwiftUI.Color.adaptive(light: "#B24C63", dark: "#CC6A80") // Berry Rose
 
         // Quick Access Grid Colors
-        static let gridTree      = SwiftUI.Color.adaptive(light: "#0E2460", dark: "#3A6CD4") // Deep Navy
-        static let gridAlerts    = SwiftUI.Color.adaptive(light: "#B5302A", dark: "#E85550") // Crimson
-        static let gridDiwaniya  = SwiftUI.Color.adaptive(light: "#1B3A8C", dark: "#5B8FE6") // Royal Blue
-        static let gridContact   = SwiftUI.Color.adaptive(light: "#C8962E", dark: "#E6B84D") // Gold
+        static let gridTree      = primary
+        static let gridAlerts    = error
+        static let gridDiwaniya  = secondary
+        static let gridContact   = accent
 
         // Glass Effect Helpers — adaptive for light/dark mode
         static func glassBright(_ cs: ColorScheme) -> SwiftUI.Color {
@@ -173,7 +194,7 @@ enum DS {
         /// حدود حالة غير نشطة
         static let inactiveBorder = SwiftUI.Color.gray.opacity(0.12)
         /// لون ثانوي خافت
-        static let muted = SwiftUI.Color.gray.opacity(0.7)
+        static let muted = SwiftUI.Color.adaptive(light: "#9E9E9E", dark: "#757575")
         /// خلفية ثانوية خافتة
         static let mutedBackground = SwiftUI.Color.gray.opacity(0.2)
     }
@@ -262,11 +283,11 @@ enum DS {
 
     // MARK: Shadow — ظلال عصرية أنيقة
     enum Shadow {
-        static let card     = ShadowStyle(color: .black.opacity(0.08), radius: 16, x: 0, y: 4)
-        static let subtle   = ShadowStyle(color: .black.opacity(0.04), radius: 8, x: 0, y: 2)
-        static let glow     = ShadowStyle(color: SwiftUI.Color(hex: "#1B3A8C").opacity(0.18), radius: 16, x: 0, y: 6)
-        static let glowAccent = ShadowStyle(color: SwiftUI.Color(hex: "#C8962E").opacity(0.15), radius: 14, x: 0, y: 5)
-        static let neon     = ShadowStyle(color: SwiftUI.Color(hex: "#C8962E").opacity(0.20), radius: 16, x: 0, y: 4)
+        static let card     = ShadowStyle(color: .black.opacity(0.06), radius: 8, x: 0, y: 2)
+        static let subtle   = ShadowStyle(color: .black.opacity(0.03), radius: 4, x: 0, y: 1)
+        static let glow     = ShadowStyle(color: .clear, radius: 0, x: 0, y: 0)
+        static let glowAccent = ShadowStyle(color: .clear, radius: 0, x: 0, y: 0)
+        static let neon     = ShadowStyle(color: .clear, radius: 0, x: 0, y: 0)
         static let none     = ShadowStyle(color: .clear, radius: 0, x: 0, y: 0)
     }
 
@@ -568,9 +589,9 @@ struct DSSecondaryButton: View {
     let title: String
     let icon: String?
     let action: () -> Void
-    var color: Color = DS.Color.primary
+    var color: Color = DS.Color.secondary
 
-    init(_ title: String, icon: String? = nil, color: Color = DS.Color.primary, action: @escaping () -> Void) {
+    init(_ title: String, icon: String? = nil, color: Color = DS.Color.secondary, action: @escaping () -> Void) {
         self.title = title
         self.icon = icon
         self.color = color
@@ -938,28 +959,13 @@ struct DSFloatingButton: View {
     }
 }
 
-// MARK: - Decorative Background — خلفية زخرفية موحدة
+// MARK: - Decorative Background — خلفية نظيفة بدون وهج
 struct DSDecorativeBackground: View {
     var primaryGradient: LinearGradient = DS.Color.gradientPrimary
     var accentGradient: LinearGradient = DS.Color.gradientAccent
 
     var body: some View {
-        GeometryReader { geo in
-            Circle()
-                .fill(primaryGradient)
-                .frame(width: 240, height: 240)
-                .blur(radius: 100)
-                .opacity(0.14)
-                .offset(x: geo.size.width * 0.35, y: -220)
-
-            Circle()
-                .fill(accentGradient)
-                .frame(width: 180, height: 180)
-                .blur(radius: 80)
-                .opacity(0.10)
-                .offset(x: -geo.size.width * 0.25, y: geo.size.height * 0.4)
-        }
-        .ignoresSafeArea()
+        EmptyView()
     }
 }
 

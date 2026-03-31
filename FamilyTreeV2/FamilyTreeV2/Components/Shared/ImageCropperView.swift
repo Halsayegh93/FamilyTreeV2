@@ -44,7 +44,7 @@ struct ImageCropperView: View {
                             .scaleEffect(scale)
                             .offset(offset)
                     } else {
-                        ProgressView().tint(.white)
+                        ProgressView().tint(DS.Color.textOnPrimary)
                     }
 
                     // Static overlay mask
@@ -65,8 +65,8 @@ struct ImageCropperView: View {
                             Text(L10n.t("إلغاء", "Cancel"))
                                 .font(DS.Font.callout)
                                 .foregroundColor(DS.Color.error)
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 8)
+                                .padding(.horizontal, DS.Spacing.lg)
+                                .padding(.vertical, DS.Spacing.sm)
                         }
 
                         Spacer()
@@ -84,8 +84,8 @@ struct ImageCropperView: View {
                             Text(L10n.t("تأكيد", "Confirm"))
                                 .font(DS.Font.calloutBold)
                                 .foregroundColor(DS.Color.textOnPrimary)
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 8)
+                                .padding(.horizontal, DS.Spacing.lg)
+                                .padding(.vertical, DS.Spacing.sm)
                                 .background(DS.Color.primary)
                                 .clipShape(Capsule())
                         }
@@ -167,7 +167,7 @@ struct ImageCropperView: View {
                         .frame(width: cropSize, height: cropSize)
                         .blendMode(.destinationOut)
                 } else {
-                    RoundedRectangle(cornerRadius: 12)
+                    RoundedRectangle(cornerRadius: DS.Radius.md)
                         .frame(width: cropSize, height: cropSize)
                         .blendMode(.destinationOut)
                 }
@@ -180,7 +180,7 @@ struct ImageCropperView: View {
                         .stroke(DS.Color.primary.opacity(0.6), lineWidth: 2)
                         .frame(width: cropSize, height: cropSize)
                 } else {
-                    RoundedRectangle(cornerRadius: 12)
+                    RoundedRectangle(cornerRadius: DS.Radius.md)
                         .stroke(DS.Color.primary.opacity(0.6), lineWidth: 2)
                         .frame(width: cropSize, height: cropSize)
                 }

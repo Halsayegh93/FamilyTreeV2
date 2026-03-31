@@ -491,7 +491,7 @@ struct MemberDetailsView: View {
                             .frame(width: 40, height: 40)
                             .background(.ultraThinMaterial)
                             .clipShape(Circle())
-                            .shadow(color: DS.Color.shadowMediumDark, radius: 6, y: 2)
+                            .dsSubtleShadow()
                     }
                 }
 
@@ -505,7 +505,7 @@ struct MemberDetailsView: View {
                         .frame(width: 40, height: 40)
                         .background(.ultraThinMaterial)
                         .clipShape(Circle())
-                        .shadow(color: DS.Color.shadowMediumDark, radius: 6, y: 2)
+                        .dsSubtleShadow()
                 }
             }
             .padding(.horizontal, DS.Spacing.lg)

@@ -26,7 +26,6 @@ struct AdminBannedPhonesView: View {
     var body: some View {
         ZStack {
             DS.Color.background.ignoresSafeArea()
-            DSDecorativeBackground()
 
             VStack(spacing: 0) {
                 if isLoading {
@@ -126,7 +125,7 @@ struct AdminBannedPhonesView: View {
         .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                .stroke(Color.gray.opacity(0.15), lineWidth: 1)
+                .stroke(DS.Color.textSecondary.opacity(0.15), lineWidth: 1)
         )
         .padding(.horizontal, DS.Spacing.lg)
         .padding(.bottom, DS.Spacing.sm)
@@ -172,7 +171,7 @@ struct AdminBannedPhonesView: View {
                         Text(t("إلغاء", "Unban"))
                             .font(DS.Font.caption1)
                             .fontWeight(.semibold)
-                            .foregroundStyle(.white)
+                            .foregroundStyle(DS.Color.textOnPrimary)
                             .padding(.horizontal, DS.Spacing.md)
                             .padding(.vertical, DS.Spacing.xs)
                             .background(DS.Color.error)
@@ -294,7 +293,7 @@ struct AddBanSheet: View {
                                 .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
                                 .overlay(
                                     RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                                        .stroke(Color.gray.opacity(0.15), lineWidth: 1)
+                                        .stroke(DS.Color.textSecondary.opacity(0.15), lineWidth: 1)
                                 )
                                 .environment(\.layoutDirection, .leftToRight)
                         }
@@ -313,7 +312,7 @@ struct AddBanSheet: View {
                                 .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
                                 .overlay(
                                     RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                                        .stroke(Color.gray.opacity(0.15), lineWidth: 1)
+                                        .stroke(DS.Color.textSecondary.opacity(0.15), lineWidth: 1)
                                 )
                         }
                     }

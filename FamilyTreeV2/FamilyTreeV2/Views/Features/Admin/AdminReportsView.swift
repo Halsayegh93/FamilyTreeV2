@@ -183,7 +183,7 @@ struct AdminReportsView: View {
                             if activeFilterCount > 0 {
                                 Text("\(activeFilterCount)")
                                     .font(DS.Font.scaled(10, weight: .bold))
-                                    .foregroundColor(.white)
+                                    .foregroundColor(DS.Color.textOnPrimary)
                                     .padding(.horizontal, 6)
                                     .padding(.vertical, 2)
                                     .background(DS.Color.primary)
@@ -258,7 +258,7 @@ struct AdminReportsView: View {
                     Spacer()
                     VStack(spacing: DS.Spacing.sm) {
                         Image(systemName: "person.2.slash")
-                            .font(.system(size: 36))
+                            .font(DS.Font.scaled(36, weight: .regular))
                             .foregroundColor(DS.Color.textTertiary)
                         Text(L10n.t("لا يوجد أعضاء", "No members found"))
                             .font(DS.Font.callout)

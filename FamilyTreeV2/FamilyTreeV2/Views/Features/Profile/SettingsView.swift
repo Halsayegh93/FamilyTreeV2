@@ -20,7 +20,6 @@ struct SettingsView: View {
             ZStack {
                 DS.Color.background.ignoresSafeArea()
 
-                DSDecorativeBackground()
 
                 ScrollView {
                     VStack(spacing: DS.Spacing.md) {
@@ -35,7 +34,7 @@ struct SettingsView: View {
 
                                 // Appearance Row
                                 HStack(spacing: DS.Spacing.md) {
-                                    DSIcon("circle.lefthalf.filled", color: DS.Color.gridTree)
+                                    DSIcon("circle.lefthalf.filled", color: DS.Color.accent)
 
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(t("مظهر التطبيق", "Appearance"))
@@ -54,7 +53,7 @@ struct SettingsView: View {
                                         Text(t("داكن", "Dark")).tag("dark")
                                     }
                                     .pickerStyle(.menu)
-                                    .tint(DS.Color.gridTree)
+                                    .tint(DS.Color.accent)
                                     .fixedSize()
                                 }
                                 .padding(.horizontal, DS.Spacing.lg)
@@ -64,7 +63,7 @@ struct SettingsView: View {
 
                                 // Language Row
                                 HStack(spacing: DS.Spacing.md) {
-                                    DSIcon("character.bubble.fill", color: DS.Color.primary)
+                                    DSIcon("character.bubble.fill", color: DS.Color.secondary)
 
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(t("لغة التطبيق", "App Language"))
@@ -82,7 +81,7 @@ struct SettingsView: View {
                                         Text("العربية").tag("ar")
                                     }
                                     .pickerStyle(.menu)
-                                    .tint(DS.Color.primary)
+                                    .tint(DS.Color.secondary)
                                     .fixedSize()
                                 }
                                 .padding(.horizontal, DS.Spacing.lg)
@@ -99,7 +98,7 @@ struct SettingsView: View {
                                             "Manage registered devices — \(notificationVM.linkedDevices.count) device\(notificationVM.linkedDevices.count == 1 ? "" : "s")"
                                         ),
                                         icon: "iphone.gen3",
-                                        color: DS.Color.neonBlue
+                                        color: DS.Color.primary
                                     )
                                 }
                                 .buttonStyle(DSBoldButtonStyle())
@@ -118,7 +117,7 @@ struct SettingsView: View {
                                         title: t("عن التطبيق", "About FamilyTree"),
                                         subtitle: t("تعرّف على التطبيق ومميزاته", "Learn about the app and its features"),
                                         icon: "app.badge.fill",
-                                        color: DS.Color.warning
+                                        color: DS.Color.secondary
                                     )
                                 }
                                 .buttonStyle(DSBoldButtonStyle())
@@ -130,7 +129,7 @@ struct SettingsView: View {
                                         title: t("سياسة الخصوصية والشروط", "Privacy Policy & Terms"),
                                         subtitle: t("كيف نحمي بياناتك وشروط الاستخدام", "How we protect your data & usage terms"),
                                         icon: "doc.text.fill",
-                                        color: DS.Color.accent
+                                        color: DS.Color.primary
                                     )
                                 }
                                 .buttonStyle(DSBoldButtonStyle())
@@ -599,7 +598,6 @@ struct LinkedDevicesSettingsSheet: View {
         NavigationStack {
             ZStack {
                 DS.Color.background.ignoresSafeArea()
-                DSDecorativeBackground()
 
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: DS.Spacing.md) {
@@ -609,7 +607,7 @@ struct LinkedDevicesSettingsSheet: View {
                             DSSectionHeader(
                                 title: t("الأجهزة المرتبطة", "Linked Devices"),
                                 icon: "iphone.gen3",
-                                iconColor: DS.Color.neonBlue
+                                iconColor: DS.Color.primary
                             )
 
                             // Device count info cell

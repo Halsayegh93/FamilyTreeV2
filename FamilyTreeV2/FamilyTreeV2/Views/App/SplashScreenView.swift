@@ -15,7 +15,6 @@ struct SplashScreenView: View {
         ZStack {
             // خلفية
             DS.Color.background.ignoresSafeArea()
-            DSDecorativeBackground()
 
             VStack(spacing: DS.Spacing.xxl) {
                 Spacer()
@@ -69,7 +68,7 @@ struct SplashScreenView: View {
                     Circle()
                         .fill(DS.Color.gradientRoyal)
                         .frame(width: 100, height: 100)
-                        .shadow(color: DS.Color.primary.opacity(0.3), radius: 20, y: 5)
+                        .dsGlowShadow()
 
                     // Shimmer overlay
                     Circle()
@@ -89,7 +88,7 @@ struct SplashScreenView: View {
                     Image(systemName: "leaf.fill")
                         .font(DS.Font.scaled(42, weight: .bold))
                         .foregroundColor(DS.Color.textOnPrimary)
-                        .shadow(color: .black.opacity(0.15), radius: 3, y: 2)
+                        .dsCardShadow()
                 }
                 .dsGlowShadow()
                 .scaleEffect(logoScale)

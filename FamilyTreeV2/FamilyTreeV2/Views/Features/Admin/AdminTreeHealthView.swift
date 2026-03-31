@@ -296,7 +296,7 @@ struct AdminTreeHealthView: View {
         ) { member in
             Button(L10n.t("مسح", "Clear"), role: .destructive) {
                 Task {
-                    await memberVM.clearPhoneNumber(for: member.id)
+                    _ = await memberVM.clearPhoneNumber(for: member.id)
                     rebuildCache()
                 }
             }
@@ -365,15 +365,15 @@ struct AdminTreeHealthView: View {
                             if filterCount > 0 {
                                 Text("\(filterCount)")
                                     .font(DS.Font.scaled(11, weight: .heavy))
-                                    .foregroundColor(selectedFilter == filter ? .white : filter.color)
+                                    .foregroundColor(selectedFilter == filter ? DS.Color.textOnPrimary : filter.color)
                                     .padding(.horizontal, 5)
                                     .padding(.vertical, 1)
                                     .background(
-                                        Capsule().fill(selectedFilter == filter ? .white.opacity(0.25) : filter.color.opacity(0.15))
+                                        Capsule().fill(selectedFilter == filter ? DS.Color.textOnPrimary.opacity(0.25) : filter.color.opacity(0.15))
                                     )
                             }
                         }
-                        .foregroundColor(selectedFilter == filter ? .white : filter.color)
+                        .foregroundColor(selectedFilter == filter ? DS.Color.textOnPrimary : filter.color)
                         .padding(.horizontal, DS.Spacing.md)
                         .padding(.vertical, DS.Spacing.sm)
                         .background(
@@ -486,7 +486,7 @@ struct AdminTreeHealthView: View {
     private var emptyState: some View {
         VStack(spacing: DS.Spacing.lg) {
             Image(systemName: "checkmark.shield.fill")
-                .font(.system(size: 60))
+                .font(DS.Font.scaled(60, weight: .regular))
                 .foregroundColor(DS.Color.success)
             Text(L10n.t("الشجرة سليمة!", "Tree is Healthy!"))
                 .font(DS.Font.title2)
@@ -501,7 +501,7 @@ struct AdminTreeHealthView: View {
     private var noResultsState: some View {
         VStack(spacing: DS.Spacing.md) {
             Image(systemName: "magnifyingglass")
-                .font(.system(size: 40))
+                .font(DS.Font.scaled(40, weight: .regular))
                 .foregroundColor(DS.Color.textTertiary)
             Text(L10n.t("لا توجد نتائج", "No Results"))
                 .font(DS.Font.headline)

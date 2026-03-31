@@ -21,7 +21,6 @@ struct ProfileView: View {
             ZStack {
                 DS.Color.background.ignoresSafeArea()
 
-                DSDecorativeBackground()
 
                 if let currentUser = user {
                     VStack(spacing: 0) {
@@ -29,7 +28,8 @@ struct ProfileView: View {
                             selectedTab: $selectedTab,
                             showingNotifications: $showingNotifications,
                             title: L10n.t("حسابي", "My Profile"),
-                            icon: "person.fill"
+                            icon: "person.fill",
+                            backgroundGradient: DS.Color.gradientPrimary
                         ) {
                             Button(action: { showEditProfile = true }) {
                                 ZStack {
@@ -111,13 +111,13 @@ struct ProfileView: View {
                 Circle()
                     .fill(DS.Color.surface)
                     .frame(width: 110, height: 110)
-                    .shadow(color: DS.Color.primary.opacity(0.25), radius: 12, y: 4)
+                    .dsGlowShadow()
                 
                 // حلقة gradient
                 Circle()
                     .stroke(
                         LinearGradient(
-                            colors: [DS.Color.primary, DS.Color.primaryLight, DS.Color.primary],
+                            colors: [DS.Color.primary, DS.Color.secondary, DS.Color.primary],
                             startPoint: .topLeading, endPoint: .bottomTrailing
                         ),
                         lineWidth: 3
@@ -150,8 +150,9 @@ struct ProfileView: View {
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, DS.Spacing.lg)
 
-                // مستوى الحساب + الاسم الثلاثي
-                VStack(spacing: DS.Spacing.xs) {
+                // مستوى الحساب + عدد الأبناء
+                HStack(spacing: DS.Spacing.sm) {
+                    // الرتبة
                     HStack(spacing: DS.Spacing.xs) {
                         Circle()
                             .fill(user.roleColor)
@@ -166,10 +167,6 @@ struct ProfileView: View {
                     .clipShape(Capsule())
                     .overlay(Capsule().stroke(user.roleColor.opacity(0.2), lineWidth: 1))
 
-                }
-
-                HStack(spacing: DS.Spacing.sm) {
-                    
                     // عدد الأبناء
                     if !memberVM.currentMemberChildren.isEmpty {
                         HStack(spacing: DS.Spacing.xs) {
@@ -178,12 +175,12 @@ struct ProfileView: View {
                             Text("\(memberVM.currentMemberChildren.count) " + L10n.t("أبناء", "children"))
                                 .font(DS.Font.scaled(11, weight: .bold))
                         }
-                        .foregroundColor(DS.Color.success)
+                        .foregroundColor(DS.Color.textSecondary)
                         .padding(.horizontal, DS.Spacing.sm)
                         .padding(.vertical, DS.Spacing.xs)
-                        .background(DS.Color.success.opacity(0.10))
+                        .background(DS.Color.textSecondary.opacity(0.10))
                         .clipShape(Capsule())
-                        .overlay(Capsule().stroke(DS.Color.success.opacity(0.2), lineWidth: 1))
+                        .overlay(Capsule().stroke(DS.Color.textSecondary.opacity(0.2), lineWidth: 1))
                     }
                 }
             }
@@ -202,7 +199,7 @@ struct ProfileView: View {
                 DSSectionHeader(
                     title: L10n.t("المعلومات الشخصية", "Personal Info"),
                     icon: "info.circle.fill",
-                    iconColor: DS.Color.primary
+                    iconColor: DS.Color.textSecondary
                 )
 
                 LazyVGrid(columns: columns, spacing: DS.Spacing.md) {
@@ -252,7 +249,7 @@ struct ProfileView: View {
 
         items.append(InfoItem(
             icon: "phone.fill",
-            color: DS.Color.success,
+            color: DS.Color.textSecondary,
             title: L10n.t("الهاتف", "Phone"),
             value: user.phoneNumber.flatMap { $0.isEmpty ? nil : KuwaitPhone.display($0) } ?? L10n.t("غير محدد", "N/A")
         ))
@@ -260,7 +257,7 @@ struct ProfileView: View {
         if let birth = user.birthDate, !birth.isEmpty {
             items.append(InfoItem(
                 icon: "calendar",
-                color: DS.Color.primary,
+                color: DS.Color.textSecondary,
                 title: L10n.t("تاريخ الميلاد", "Birthday"),
                 value: birth
             ))
@@ -269,7 +266,7 @@ struct ProfileView: View {
         if let married = user.isMarried {
             items.append(InfoItem(
                 icon: "heart.fill",
-                color: DS.Color.neonPink,
+                color: DS.Color.textSecondary,
                 title: L10n.t("الحالة الاجتماعية", "Status"),
                 value: married ? L10n.t("متزوج", "Married") : L10n.t("أعزب", "Single")
             ))
@@ -278,7 +275,7 @@ struct ProfileView: View {
         if let created = user.createdAt, !created.isEmpty {
             items.append(InfoItem(
                 icon: "clock.fill",
-                color: DS.Color.info,
+                color: DS.Color.textSecondary,
                 title: L10n.t("تاريخ الانضمام", "Joined"),
                 value: formatDateOnly(created)
             ))
@@ -350,7 +347,7 @@ struct ProfileView: View {
                     DSSectionHeader(
                         title: L10n.t("الأبناء", "Children"),
                         icon: "person.2.fill",
-                        iconColor: DS.Color.success
+                        iconColor: DS.Color.textSecondary
                     )
 
                     Spacer()
@@ -413,15 +410,15 @@ struct ProfileView: View {
                     HStack(spacing: DS.Spacing.sm) {
                         Image(systemName: "plus")
                             .font(DS.Font.scaled(16, weight: .bold))
-                            .foregroundColor(DS.Color.success)
+                            .foregroundColor(DS.Color.primary)
                             .frame(width: 36, height: 36)
-                            .background(DS.Color.success.opacity(0.12))
+                            .background(DS.Color.primary.opacity(0.12))
                             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
 
                         Text(L10n.t("إضافة ابن", "Add Child"))
                             .font(DS.Font.caption1)
                             .fontWeight(.bold)
-                            .foregroundColor(DS.Color.success)
+                            .foregroundColor(DS.Color.primary)
                             .lineLimit(1)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -430,7 +427,7 @@ struct ProfileView: View {
                     .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
                     .overlay(
                         RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                            .stroke(DS.Color.success.opacity(0.3), lineWidth: 1)
+                            .stroke(DS.Color.primary.opacity(0.3), lineWidth: 1)
                             .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [5]))
                     )
                 }
@@ -490,7 +487,7 @@ struct ProfileView: View {
                         Text(L10n.t("متوفى", "Deceased"))
                             .font(DS.Font.scaled(8, weight: .bold))
                             .foregroundColor(DS.Color.textOnPrimary)
-                            .padding(.horizontal, 4)
+                            .padding(.horizontal, DS.Spacing.xs)
                             .padding(.vertical, 1)
                             .background(DS.Color.error.opacity(0.8))
                             .clipShape(Capsule())
@@ -606,20 +603,20 @@ struct ProfileView: View {
         .transition(.opacity.combined(with: .move(edge: .top)))
     }
 
-    // MARK: - General Section (Gallery, Privacy, Settings, Sign Out)
+    // MARK: - General Section (Privacy, Settings)
     private func generalSection(user: FamilyMember) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
+        VStack(alignment: .leading, spacing: DS.Spacing.md) {
             DSCard(padding: 0) {
                 DSSectionHeader(
                     title: L10n.t("اعدادات التطبيق", "App Settings"),
                     icon: "gearshape.2.fill",
-                    iconColor: DS.Color.warning
+                    iconColor: DS.Color.textSecondary
                 )
                 VStack(spacing: 0) {
                     // Privacy Row
                     NavigationLink(destination: PrivacySettingsView()) {
                         HStack(spacing: DS.Spacing.md) {
-                            DSIcon("lock.shield.fill", color: DS.Color.neonPurple)
+                            DSIcon("lock.shield.fill", color: DS.Color.textSecondary)
 
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(L10n.t("الإشعارات والخصوصية", "Notifications & Privacy"))
@@ -649,7 +646,7 @@ struct ProfileView: View {
                     // Settings Row
                     NavigationLink(destination: SettingsView()) {
                         HStack(spacing: DS.Spacing.md) {
-                            DSIcon("gearshape.fill", color: DS.Color.warning)
+                            DSIcon("gearshape.fill", color: DS.Color.textSecondary)
 
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(L10n.t("الإعدادات", "Settings"))
@@ -673,31 +670,32 @@ struct ProfileView: View {
                         .padding(.vertical, DS.Spacing.xs)
                     }
                     .buttonStyle(DSBoldButtonStyle())
-
-                    DSDivider()
-
-                    // Sign Out Row
-                    Button(action: { Task { await authVM.signOut() } }) {
-                        HStack(spacing: DS.Spacing.md) {
-                            DSIcon("rectangle.portrait.and.arrow.right", color: DS.Color.error)
-
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(L10n.t("تسجيل الخروج", "Sign Out"))
-                                    .font(DS.Font.calloutBold)
-                                    .foregroundColor(DS.Color.error)
-                                Text(L10n.t("الخروج من حسابك في التطبيق", "Log out of your account"))
-                                    .font(DS.Font.caption1)
-                                    .foregroundColor(DS.Color.textSecondary)
-                            }
-
-                            Spacer()
-                        }
-                        .padding(.horizontal, DS.Spacing.lg)
-                        .padding(.vertical, DS.Spacing.xs)
-                    }
-                    .buttonStyle(DSBoldButtonStyle())
                 }
             }
+
+            // Sign Out — standalone
+            Button(action: { Task { await authVM.signOut() } }) {
+                HStack(spacing: DS.Spacing.md) {
+                    Image(systemName: "rectangle.portrait.and.arrow.right")
+                        .font(DS.Font.scaled(16, weight: .bold))
+                        .foregroundColor(DS.Color.error)
+
+                    Text(L10n.t("تسجيل الخروج", "Sign Out"))
+                        .font(DS.Font.calloutBold)
+                        .foregroundColor(DS.Color.error)
+
+                    Spacer()
+                }
+                .padding(.horizontal, DS.Spacing.lg)
+                .padding(.vertical, DS.Spacing.md)
+                .background(DS.Color.error.opacity(0.08))
+                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                        .stroke(DS.Color.error.opacity(0.2), lineWidth: 1)
+                )
+            }
+            .buttonStyle(DSBoldButtonStyle())
         }
         .padding(.horizontal, DS.Spacing.lg)
         .padding(.bottom, DS.Spacing.lg)

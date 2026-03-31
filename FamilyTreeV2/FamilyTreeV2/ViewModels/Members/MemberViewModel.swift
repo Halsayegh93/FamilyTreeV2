@@ -1004,7 +1004,13 @@ class MemberViewModel: ObservableObject {
                 .eq("id", value: memberId.uuidString)
                 .execute()
 
-            // 4. تحديث البيانات محلياً
+            // 4. تحديث أسماء الذرية تلقائياً (إذا تغير الاسم)
+            let oldMember = _memberById[memberId]
+            if oldMember?.fullName != fullName || oldMember?.firstName != firstName {
+                await propagateNameToDescendants(of: memberId)
+            }
+
+            // 5. تحديث البيانات محلياً
             await fetchAllMembers(force: true)
 
             // إذا كان المستخدم يحدّث ملفه الشخصي "هو"
@@ -1138,7 +1144,10 @@ class MemberViewModel: ObservableObject {
                 .update(nameUpdate)
                 .eq("id", value: memberId.uuidString)
                 .execute()
-                
+
+            // تحديث أسماء كل الذرية تلقائياً
+            await propagateNameToDescendants(of: memberId)
+
             await fetchAllMembers(force: true)
 
             // إشعار العضو بتغيير اسمه (إذا المدير غيّره وليس العضو نفسه)
@@ -1170,6 +1179,71 @@ class MemberViewModel: ObservableObject {
         }
 
         self.isLoading = false
+    }
+
+    // MARK: - تحديث أسماء الذرية تلقائياً عند تغيير اسم الأب/الجد
+
+    /// يبني الاسم الكامل من firstName + سلسلة أسماء الآباء
+    private func buildFullName(for member: FamilyMember, lookup: [UUID: FamilyMember]) -> String {
+        var parts = [member.firstName]
+        var current = member
+        var visited: Set<UUID> = [member.id]
+        while let fatherId = current.fatherId,
+              let father = lookup[fatherId],
+              !visited.contains(father.id) {
+            visited.insert(father.id)
+            parts.append(father.firstName)
+            current = father
+        }
+        return parts.joined(separator: " ")
+    }
+
+    /// يجمع كل الذرية (أبناء، أحفاد، ...) بشكل تعاودي
+    private func collectAllDescendants(of parentId: UUID, from members: [FamilyMember]) -> [FamilyMember] {
+        let children = members.filter { $0.fatherId == parentId }
+        var all = children
+        for child in children {
+            all.append(contentsOf: collectAllDescendants(of: child.id, from: members))
+        }
+        return all
+    }
+
+    /// بعد تعديل اسم عضو، يعيد بناء fullName لكل ذريته
+    private func propagateNameToDescendants(of memberId: UUID) async {
+        // نجيب آخر نسخة من البيانات (بعد التحديث)
+        let freshMembers: [FamilyMember]
+        do {
+            freshMembers = try await supabase
+                .from("profiles")
+                .select()
+                .execute()
+                .value
+        } catch {
+            Log.error("فشل جلب الأعضاء لتحديث الأسماء: \(error.localizedDescription)")
+            return
+        }
+
+        let lookup = Dictionary(uniqueKeysWithValues: freshMembers.map { ($0.id, $0) })
+        let descendants = collectAllDescendants(of: memberId, from: freshMembers)
+
+        guard !descendants.isEmpty else { return }
+
+        for descendant in descendants {
+            let newFullName = buildFullName(for: descendant, lookup: lookup)
+            // لا نحدّث إذا الاسم ما تغير
+            guard newFullName != descendant.fullName else { continue }
+
+            let update: [String: AnyEncodable] = [
+                "full_name": AnyEncodable(newFullName)
+            ]
+            _ = try? await supabase
+                .from("profiles")
+                .update(update)
+                .eq("id", value: descendant.id.uuidString)
+                .execute()
+        }
+
+        Log.info("تم تحديث أسماء \(descendants.count) من الذرية")
     }
     
     // MARK: - Delete Member (Admin only)
