@@ -6,7 +6,7 @@ struct AdminNotificationsView: View {
     @EnvironmentObject var memberVM: MemberViewModel
     @Environment(\.dismiss) var dismiss
 
-    @State private var title = ""
+    @State private var title = "عائلة المحمدعلي 🌿"
     @State private var bodyText = ""
     @State private var selectedMemberIds: Set<UUID> = []
     @State private var searchText = ""

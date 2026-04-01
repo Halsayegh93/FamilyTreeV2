@@ -61,8 +61,7 @@ struct MainTabView: View {
             }
         }
         .tint(DS.Color.primary)
-        .toolbarBackground(.visible, for: .tabBar)
-        .toolbarBackground(DS.Color.surface.opacity(0.95), for: .tabBar)
+        .toolbarBackground(.ultraThinMaterial, for: .tabBar)
         }
     }
 }

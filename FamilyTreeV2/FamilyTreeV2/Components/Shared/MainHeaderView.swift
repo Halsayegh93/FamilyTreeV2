@@ -148,7 +148,10 @@ struct MainHeaderView<TrailingContent: View>: View {
         .padding(.bottom, DS.Spacing.md)
         .padding(.top, DS.Spacing.sm)
         .background(
-            (backgroundGradient ?? DS.Color.gradientPrimary)
+            ZStack {
+                (backgroundGradient ?? DS.Color.gradientPrimary)
+                SwiftUI.Color.white.opacity(0.05)
+            }
                 .ignoresSafeArea(edges: .top)
                 .shadow(color: hasDropShadow ? DS.Shadow.card.color : .clear, radius: DS.Shadow.card.radius, x: DS.Shadow.card.x, y: DS.Shadow.card.y)
         )

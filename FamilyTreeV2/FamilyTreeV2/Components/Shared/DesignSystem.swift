@@ -379,35 +379,35 @@ extension View {
         self.background(DS.Color.gradientPrimary)
     }
 
-    /// كرت صلب نظيف — Professional solid card
+    /// كرت زجاجي — Liquid Glass card
     func glassCard(radius: CGFloat = DS.Radius.xl) -> some View {
         self
-            .background(DS.Color.surface)
+            .background(.ultraThinMaterial)
             .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: radius, style: .continuous)
-                    .stroke(SwiftUI.Color.gray.opacity(0.12), lineWidth: 1)
+                    .stroke(SwiftUI.Color.white.opacity(0.2), lineWidth: 0.5)
             )
             .dsCardShadow()
     }
 
-    /// خلفية صلبة — Professional solid background
+    /// خلفية زجاجية — Liquid Glass background
     func glassBackground(radius: CGFloat = DS.Radius.lg) -> some View {
         self
-            .background(DS.Color.surface)
+            .background(.thinMaterial)
             .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: radius, style: .continuous)
-                    .stroke(SwiftUI.Color.gray.opacity(0.10), lineWidth: 1)
+                    .stroke(SwiftUI.Color.white.opacity(0.15), lineWidth: 0.5)
             )
     }
 
-    /// شكل كبسولة صلب — Professional solid pill
+    /// شكل كبسولة زجاجية — Liquid Glass pill
     func glassPill() -> some View {
         self
-            .background(DS.Color.surface)
+            .background(.ultraThinMaterial)
             .clipShape(Capsule())
-            .overlay(Capsule().stroke(SwiftUI.Color.gray.opacity(0.10), lineWidth: 1))
+            .overlay(Capsule().stroke(SwiftUI.Color.white.opacity(0.15), lineWidth: 0.5))
     }
 
     /// Bold press effect
@@ -420,7 +420,7 @@ extension View {
 
 // MARK: - Reusable Components
 
-/// كرت موحد — Professional solid card
+/// كرت موحد — Liquid Glass card
 struct DSCard<Content: View>: View {
     let content: Content
     var padding: CGFloat = DS.Spacing.lg
@@ -433,11 +433,11 @@ struct DSCard<Content: View>: View {
     var body: some View {
         VStack(spacing: 0) { content }
             .padding(padding)
-            .background(DS.Color.surface)
+            .background(.ultraThinMaterial)
             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
-                    .stroke(Color.gray.opacity(0.12), lineWidth: 1)
+                    .stroke(Color.white.opacity(0.2), lineWidth: 0.5)
             )
             .dsCardShadow()
     }
@@ -482,13 +482,13 @@ struct DSGlowCard<Content: View>: View {
 
     var body: some View {
         VStack(spacing: 0) { content }
-            .background(DS.Color.surface)
+            .background(.ultraThinMaterial)
             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
-                    .stroke(glowColor.opacity(0.3), lineWidth: 1.5)
+                    .stroke(glowColor.opacity(0.3), lineWidth: 1)
             )
-            .shadow(color: glowColor.opacity(0.15), radius: 12, x: 0, y: 4)
+            .shadow(color: glowColor.opacity(0.12), radius: 10, x: 0, y: 3)
     }
 }
 
@@ -515,10 +515,11 @@ struct DSPulseBadge: View {
     var body: some View {
         Text("\(count)")
             .font(DS.Font.caption2)
+            .fontWeight(.bold)
             .foregroundColor(.white)
             .padding(.horizontal, DS.Spacing.sm)
             .padding(.vertical, 3)
-            .background(color)
+            .background(DS.Color.error)
             .clipShape(Capsule())
             .scaleEffect(isPulsing ? 1.15 : 1.0)
             .animation(
@@ -608,11 +609,11 @@ struct DSSecondaryButton: View {
             .foregroundColor(color)
             .frame(maxWidth: .infinity)
             .frame(height: 52)
-            .background(DS.Color.surface)
+            .background(.ultraThinMaterial)
             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                    .stroke(color.opacity(0.30), lineWidth: 1.2)
+                    .stroke(color.opacity(0.25), lineWidth: 0.7)
             )
         }
         .buttonStyle(DSBoldButtonStyle())
@@ -673,14 +674,14 @@ struct DSTextField: View {
         }
         .padding(.horizontal, DS.Spacing.lg)
         .padding(.vertical, DS.Spacing.md)
-        .background(DS.Color.surface)
+        .background(isFocused ? .thinMaterial : .ultraThinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                .stroke(isFocused ? iconColor.opacity(0.5) : Color.gray.opacity(0.15), lineWidth: isFocused ? 1.5 : 1)
+                .stroke(isFocused ? iconColor.opacity(0.4) : Color.white.opacity(0.15), lineWidth: isFocused ? 1.2 : 0.5)
                 .animation(DS.Anim.quick, value: isFocused)
         )
-        .shadow(color: isFocused ? iconColor.opacity(0.15) : .clear, radius: 12, x: 0, y: 4)
+        .shadow(color: isFocused ? iconColor.opacity(0.1) : .clear, radius: 8, x: 0, y: 3)
         .animation(DS.Anim.quick, value: isFocused)
     }
 }

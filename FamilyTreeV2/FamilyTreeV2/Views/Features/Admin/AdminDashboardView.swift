@@ -80,7 +80,8 @@ struct AdminDashboardView: View {
                         showingNotifications: $showingNotifications,
                         title: L10n.t("الادارة", "Admin Dashboard"),
                         icon: "shield.lefthalf.filled",
-                        backgroundGradient: DS.Color.gradientPrimary
+                        backgroundGradient: DS.Color.gradientPrimary,
+                        hasDropShadow: false
                     )
 
                     ScrollView(showsIndicators: false) {
@@ -232,6 +233,7 @@ struct AdminDashboardView: View {
     // MARK: - إحصائيات (Colorful Stat Cards)
     private var adminStatsGrid: some View {
         VStack(spacing: DS.Spacing.sm) {
+            // السطر الأول: الأعضاء + الأحياء + المتوفين
             HStack(spacing: DS.Spacing.md) {
                 adminColorfulStatCard(
                     title: L10n.t("الأعضاء", "Members"),
@@ -240,22 +242,6 @@ struct AdminDashboardView: View {
                     color: DS.Color.primary
                 )
 
-                adminColorfulStatCard(
-                    title: L10n.t("انتظار", "Pending"),
-                    value: "\(pendingCount)",
-                    icon: "clock.fill",
-                    color: DS.Color.secondary
-                )
-
-                adminColorfulStatCard(
-                    title: L10n.t("طلبات", "Requests"),
-                    value: "\(totalReviewRequestsCount)",
-                    icon: "tray.full.fill",
-                    color: DS.Color.accent
-                )
-            }
-
-            HStack(spacing: DS.Spacing.md) {
                 adminColorfulStatCard(
                     title: L10n.t("الأحياء", "Alive"),
                     value: "\(memberVM.allMembers.filter { $0.role != .pending && $0.isDeceased != true }.count)",
@@ -268,6 +254,23 @@ struct AdminDashboardView: View {
                     value: "\(memberVM.allMembers.filter { $0.isDeceased == true }.count)",
                     icon: "heart.slash.fill",
                     color: DS.Color.deceased
+                )
+            }
+
+            // السطر الثاني: انتظار + طلبات
+            HStack(spacing: DS.Spacing.md) {
+                adminColorfulStatCard(
+                    title: L10n.t("انتظار", "Pending"),
+                    value: "\(pendingCount)",
+                    icon: "clock.fill",
+                    color: DS.Color.secondary
+                )
+
+                adminColorfulStatCard(
+                    title: L10n.t("طلبات", "Requests"),
+                    value: "\(totalReviewRequestsCount)",
+                    icon: "tray.full.fill",
+                    color: DS.Color.accent
                 )
             }
         }

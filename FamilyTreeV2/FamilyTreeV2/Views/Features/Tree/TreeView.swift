@@ -413,16 +413,13 @@ struct TreeView: View {
             }
 
             .task {
-                let isFirstLoad = cachedVisibleMembers.isEmpty
-                await memberVM.fetchAllMembers()
-                rebuildCache()
-                if isFirstLoad {
+                if cachedVisibleMembers.isEmpty {
+                    rebuildCache()
                     currentLocationMemberID = authVM.currentUser?.id
-                    resetToTopRoot()
+                    // أول تحميل — نبدأ من الجذر بالمنتصف (نفس إعادة الوضع)
+                    try? await Task.sleep(nanoseconds: 100_000_000)
+                    resetToTopRoot(animated: false)
                 }
-            }
-            .onChange(of: memberVM.allMembers.count) { _, _ in
-                rebuildCache()
             }
             .onChange(of: memberVM.membersVersion) { _, _ in
                 withAnimation(DS.Anim.snappy) {

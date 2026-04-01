@@ -22,7 +22,7 @@ struct QRCodeSheet: View {
             HStack {
                 Button(action: { dismiss() }) {
                     Image(systemName: "xmark.circle.fill")
-                        .font(DS.Font.scaled(22))
+                        .font(DS.Font.scaled(30))
                         .foregroundStyle(DS.Color.textTertiary)
                 }
                 Spacer()
@@ -32,7 +32,7 @@ struct QRCodeSheet: View {
                 Spacer()
                 // spacer للتوازن
                 Image(systemName: "xmark.circle.fill")
-                    .font(DS.Font.scaled(22))
+                    .font(DS.Font.scaled(30))
                     .foregroundStyle(.clear)
             }
             .padding(.horizontal, DS.Spacing.lg)
@@ -73,9 +73,13 @@ struct QRCodeSheet: View {
             }
         }
         .padding(.bottom, DS.Spacing.xl)
-        .onAppear {
-            let deepLink = QRCodeGenerator.memberDeepLink(memberId: member.id)
-            qrImage = QRCodeGenerator.generate(from: deepLink, size: 600)
+        .task {
+            let id = member.id
+            let image = await Task.detached {
+                let deepLink = QRCodeGenerator.memberDeepLink(memberId: id)
+                return QRCodeGenerator.generate(from: deepLink, size: 200)
+            }.value
+            qrImage = image
         }
     }
 }

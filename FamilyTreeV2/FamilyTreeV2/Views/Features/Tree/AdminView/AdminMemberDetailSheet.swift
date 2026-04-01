@@ -233,6 +233,8 @@ struct AdminMemberDetailSheet: View {
                     .font(DS.Font.headline)
                     .foregroundColor(DS.Color.textPrimary)
                     .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.8)
 
                 DSRoleBadge(title: member.roleName, color: member.roleColor)
             }
@@ -1107,13 +1109,16 @@ struct AdminMemberDetailSheet: View {
                 await memberVM.notificationVM?.notifyAdminsWithPush(
                     title: L10n.t("تعديل بيانات عضو", "Member Data Updated"),
                     body: L10n.t(
-                        "تم تعديل بيانات: \(memberName)",
-                        "Data updated: \(memberName)"
+                        "\(adminName) عدّل (\(fieldsList)) لـ \(memberName)",
+                        "\(adminName) updated (\(fieldsList)) for \(memberName)"
                     ),
                     kind: "admin_edit"
                 )
                 Log.info("[Admin] \(adminName) عدّل بيانات \(memberName): \(fieldsList)")
             }
+
+            // إعادة تحميل البيانات من السيرفر عشان الشجرة تتحدث
+            await memberVM.fetchAllMembers(force: true)
 
             isSaving = false
             dismiss()

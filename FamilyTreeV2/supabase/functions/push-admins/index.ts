@@ -62,13 +62,32 @@ async function createApnsJwt(teamId: string, keyId: string, privateKeyPem: strin
     ["sign"],
   );
 
-  const signature = await crypto.subtle.sign(
+  const rawSig = await crypto.subtle.sign(
     { name: "ECDSA", hash: "SHA-256" },
     key,
     new TextEncoder().encode(data),
   );
-
-  const signatureUrl = toBase64Url(new Uint8Array(signature));
+  const sigBytes = new Uint8Array(rawSig);
+  let finalSig = sigBytes;
+  if (sigBytes.length !== 64 && sigBytes[0] === 0x30) {
+    let offset = 2;
+    if (sigBytes[1] > 0x80) offset += (sigBytes[1] - 0x80);
+    const rLen = sigBytes[offset + 1];
+    const rStart = offset + 2;
+    let r = sigBytes.slice(rStart, rStart + rLen);
+    if (r.length === 33 && r[0] === 0) r = r.slice(1);
+    const sOffset = rStart + rLen;
+    const sLen = sigBytes[sOffset + 1];
+    const sStart = sOffset + 2;
+    let s = sigBytes.slice(sStart, sStart + sLen);
+    if (s.length === 33 && s[0] === 0) s = s.slice(1);
+    const rPad = new Uint8Array(32); rPad.set(r, 32 - r.length);
+    const sPad = new Uint8Array(32); sPad.set(s, 32 - s.length);
+    finalSig = new Uint8Array(64);
+    finalSig.set(rPad, 0);
+    finalSig.set(sPad, 32);
+  }
+  const signatureUrl = toBase64Url(finalSig);
   return `${data}.${signatureUrl}`;
 }
 
@@ -90,7 +109,8 @@ Deno.serve(async (req) => {
   const teamId = Deno.env.get("APPLE_TEAM_ID") ?? "";
   const keyId = Deno.env.get("APPLE_KEY_ID") ?? "";
   const bundleId = Deno.env.get("APPLE_BUNDLE_ID") ?? "";
-  const privateKey = (Deno.env.get("APPLE_APNS_KEY_P8") ?? "").replace(/\\n/g, "\n");
+  const rawKey = Deno.env.get("APPLE_APNS_KEY_P8") ?? "";
+  const privateKey = rawKey.includes("\\n") ? rawKey.replace(/\\n/g, "\n") : rawKey;
   const apnsHost = Deno.env.get("APPLE_APNS_HOST") ?? "https://api.push.apple.com";
 
   if (!teamId || !keyId || !bundleId || !privateKey) {

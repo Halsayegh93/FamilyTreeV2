@@ -460,6 +460,28 @@ class NewsViewModel: ObservableObject {
         }
     }
 
+    // MARK: - Delete Comment (Admin/Moderator)
+
+    func deleteComment(commentId: UUID, postId: UUID) async -> Bool {
+        do {
+            try await supabase
+                .from("news_comments")
+                .delete()
+                .eq("id", value: commentId.uuidString)
+                .execute()
+
+            // تحديث محلي
+            commentsByPost[postId]?.removeAll { $0.id == commentId }
+            commentsCountByPost[postId] = commentsByPost[postId]?.count ?? 0
+
+            Log.info("[News] تم حذف التعليق: \(commentId)")
+            return true
+        } catch {
+            Log.error("[News] خطأ حذف التعليق: \(error.localizedDescription)")
+            return false
+        }
+    }
+
     // MARK: - Fetch Pending News Requests
 
     func fetchPendingNewsRequests(force: Bool = false) async {

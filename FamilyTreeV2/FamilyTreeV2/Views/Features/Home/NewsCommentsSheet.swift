@@ -30,9 +30,24 @@ struct NewsCommentsSheet: View {
                                         Text(comment.content).font(DS.Font.callout)
                                     }
                                     Spacer()
-                                    Text(relativeTimeFromISO(comment.created_at))
-                                    .font(DS.Font.caption2)
-                                    .foregroundColor(DS.Color.textSecondary)
+                                    VStack(alignment: .trailing, spacing: DS.Spacing.xs) {
+                                        Text(relativeTimeFromISO(comment.created_at))
+                                            .font(DS.Font.caption2)
+                                            .foregroundColor(DS.Color.textSecondary)
+
+                                        // حذف التعليق — للإدارة أو صاحب التعليق
+                                        if authVM.canModerate || comment.author_id == authVM.currentUser?.id {
+                                            Button {
+                                                Task {
+                                                    _ = await newsVM.deleteComment(commentId: comment.id, postId: news.id)
+                                                }
+                                            } label: {
+                                                Image(systemName: "trash")
+                                                    .font(DS.Font.caption2)
+                                                    .foregroundColor(DS.Color.error)
+                                            }
+                                        }
+                                    }
                                 }
                                 .padding(DS.Spacing.md)
                                 .glassBackground(radius: DS.Radius.md)

@@ -85,16 +85,8 @@ struct HomeNewsView: View {
             .navigationBarHidden(true)
             .animation(DS.Anim.snappy, value: activeSubPage == nil)
             .task {
-                await refreshNews(notifyIfNew: false)
+                // AppState يحمّل البيانات الأساسية — هنا بس الصور والمعرض
                 await memberVM.fetchApprovedGalleryPhotos()
-                await storyVM.fetchActiveStories()
-                await notificationVM.fetchNotifications()
-            }
-            .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
-                Task {
-                    await refreshNews(notifyIfNew: true)
-                    await notificationVM.fetchNotifications(force: true)
-                }
             }
             .sheet(isPresented: $showingAddNews) {
                 AddNewsView()
@@ -505,15 +497,15 @@ struct HomeNewsView: View {
 
     private var newsListView: some View {
         LazyVStack(spacing: DS.Spacing.lg) {
-            ForEach(Array(newsVM.allNews.enumerated()), id: \.element.id) { index, news in
+            ForEach(newsVM.allNews) { news in
                 newsCard(for: news)
                     .opacity(appeared ? 1 : 0)
-                    .offset(y: appeared ? 0 : 30)
-                    .animation(DS.Anim.smooth.delay(0.15 + Double(min(index, 5)) * 0.07), value: appeared)
+                    .offset(y: appeared ? 0 : 20)
             }
         }
         .padding(.horizontal, DS.Spacing.md)
         .padding(.top, DS.Spacing.sm)
+        .animation(DS.Anim.smooth, value: appeared)
     }
 
     private func newsCard(for news: NewsPost) -> some View {

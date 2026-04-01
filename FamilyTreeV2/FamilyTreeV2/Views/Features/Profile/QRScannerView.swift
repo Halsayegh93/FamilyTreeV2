@@ -45,7 +45,7 @@ struct QRScannerView: View {
                 }
                 ToolbarItem(placement: .principal) {
                     if kinshipResult == nil {
-                        Text(L10n.t("مسح الباركود", "Scan QR Code"))
+                        Text(L10n.t("الرمز التعريفي", "ID Code"))
                             .font(DS.Font.headline)
                             .foregroundColor(.white)
                     }
@@ -62,17 +62,7 @@ struct QRScannerView: View {
         VStack {
             Spacer()
 
-            RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
-                .stroke(DS.Color.primary, lineWidth: 3)
-                .frame(width: 260, height: 260)
-                .background(
-                    RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
-                        .fill(Color.white.opacity(0.05))
-                )
-
-            Spacer()
-
-            Text(L10n.t("وجّه الكاميرا نحو الباركود", "Point camera at QR code"))
+            Text(L10n.t("وجّه الكاميرا نحو الرمز التعريفي", "Point camera at ID code"))
                 .font(DS.Font.calloutBold)
                 .foregroundColor(.white)
                 .padding(.horizontal, DS.Spacing.xl)

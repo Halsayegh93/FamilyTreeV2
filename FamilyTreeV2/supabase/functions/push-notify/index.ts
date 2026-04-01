@@ -47,11 +47,36 @@ async function createApnsJwt(teamId, keyId, privateKeyPem) {
   }, false, [
     "sign"
   ]);
-  const signature = await crypto.subtle.sign({
+  const rawSig = await crypto.subtle.sign({
     name: "ECDSA",
     hash: "SHA-256"
   }, key, new TextEncoder().encode(data));
-  const signatureUrl = toBase64Url(new Uint8Array(signature));
+  // Convert DER signature to raw (r || s) format if needed
+  const sigBytes = new Uint8Array(rawSig);
+  let finalSig = sigBytes;
+  if (sigBytes.length !== 64 && sigBytes[0] === 0x30) {
+    // DER format — extract r and s
+    let offset = 2;
+    if (sigBytes[1] > 0x80) offset += (sigBytes[1] - 0x80);
+    // r
+    const rLen = sigBytes[offset + 1];
+    const rStart = offset + 2;
+    let r = sigBytes.slice(rStart, rStart + rLen);
+    if (r.length === 33 && r[0] === 0) r = r.slice(1);
+    // s
+    const sOffset = rStart + rLen;
+    const sLen = sigBytes[sOffset + 1];
+    const sStart = sOffset + 2;
+    let s = sigBytes.slice(sStart, sStart + sLen);
+    if (s.length === 33 && s[0] === 0) s = s.slice(1);
+    // Pad to 32 bytes each
+    const rPad = new Uint8Array(32); rPad.set(r, 32 - r.length);
+    const sPad = new Uint8Array(32); sPad.set(s, 32 - s.length);
+    finalSig = new Uint8Array(64);
+    finalSig.set(rPad, 0);
+    finalSig.set(sPad, 32);
+  }
+  const signatureUrl = toBase64Url(finalSig);
   return `${data}.${signatureUrl}`;
 }
 serve(async (req)=>{
@@ -77,7 +102,9 @@ serve(async (req)=>{
   const teamId = Deno.env.get("APPLE_TEAM_ID") ?? "";
   const keyId = Deno.env.get("APPLE_KEY_ID") ?? "";
   const bundleId = Deno.env.get("APPLE_BUNDLE_ID") ?? "";
-  const privateKey = (Deno.env.get("APPLE_APNS_KEY_P8") ?? "").replace(/\\n/g, "\n");
+  const rawKey = Deno.env.get("APPLE_APNS_KEY_P8") ?? "";
+  // Support both formats: literal \n or actual newlines
+  const privateKey = rawKey.includes("\\n") ? rawKey.replace(/\\n/g, "\n") : rawKey;
   const apnsHost = Deno.env.get("APPLE_APNS_HOST") ?? "https://api.push.apple.com";
   if (!teamId || !keyId || !bundleId || !privateKey) {
     return json(500, {
@@ -150,11 +177,12 @@ serve(async (req)=>{
   let jwt;
   try {
     jwt = await createApnsJwt(teamId, keyId, privateKey);
+    console.log(`JWT created: teamId=${teamId}, keyId=${keyId}, keyLen=${privateKey.length}, jwtLen=${jwt.length}`);
   } catch (e) {
-    console.error(`APNs JWT creation failed: ${e.message}, keyLength=${privateKey.length}`);
+    console.error(`APNs JWT creation failed: ${e.message}, keyLength=${privateKey.length}, keyStart=${privateKey.substring(0, 30)}`);
     return json(500, {
       ok: false,
-      message: "Push notification service configuration error",
+      message: `JWT error: ${e.message}, keyLen=${privateKey.length}`,
     });
   }
   let sent = 0;

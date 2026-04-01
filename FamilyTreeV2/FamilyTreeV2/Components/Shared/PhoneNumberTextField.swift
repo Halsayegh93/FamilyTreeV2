@@ -21,6 +21,7 @@ struct PhoneNumberTextField: UIViewRepresentable {
         tf.textColor = UIColor(DS.Color.textPrimary)
         tf.tintColor = UIColor(DS.Color.primary)
         tf.semanticContentAttribute = .forceLeftToRight
+        tf.textContentType = .telephoneNumber
         tf.autocorrectionType = .no
         tf.autocapitalizationType = .none
         tf.setContentHuggingPriority(.defaultLow, for: .horizontal)

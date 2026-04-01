@@ -77,6 +77,9 @@ class AppState: ObservableObject {
                     // بدء الاشتراكات الحية بعد تحميل البيانات
                     RealtimeManager.shared.subscribe()
 
+                    // تسجيل الجهاز + Push Token بعد تسجيل الدخول
+                    await self.notificationVM.registerDevice()
+                    await self.notificationVM.reRegisterPushTokenIfNeeded()
                 }
             }
             .store(in: &cancellables)

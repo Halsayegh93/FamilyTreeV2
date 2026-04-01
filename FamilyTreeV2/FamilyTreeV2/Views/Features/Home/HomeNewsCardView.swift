@@ -352,6 +352,8 @@ struct HomeNewsCardView: View {
                 .overlay(Capsule().stroke(DS.Color.textTertiary.opacity(0.25), lineWidth: 0.75))
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(isLiked ? L10n.t("إلغاء الإعجاب", "Unlike") : L10n.t("إعجاب", "Like"))
+            .accessibilityValue(likeCount > 0 ? "\(likeCount)" : "")
 
             // Comment
             Button(action: onCommentTap) {
@@ -376,6 +378,8 @@ struct HomeNewsCardView: View {
                 .overlay(Capsule().stroke(DS.Color.textTertiary.opacity(0.25), lineWidth: 0.75))
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(L10n.t("تعليقات", "Comments"))
+            .accessibilityValue(commentCount > 0 ? "\(commentCount)" : "")
 
             Spacer()
 
