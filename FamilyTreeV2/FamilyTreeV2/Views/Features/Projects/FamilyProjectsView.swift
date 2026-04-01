@@ -583,7 +583,7 @@ struct AddProjectView: View {
         var uploadedLogoUrl: String? = nil
         if let logoImage {
             let projectId = UUID()
-            if let data = logoImage.jpegData(compressionQuality: 0.8) {
+            if let data = ImageProcessor.process(logoImage, for: .projectLogo) {
                 uploadedLogoUrl = await projectsVM.uploadLogo(imageData: data, projectId: projectId)
             }
         }

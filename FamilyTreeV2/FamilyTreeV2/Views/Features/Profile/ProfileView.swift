@@ -8,6 +8,8 @@ struct ProfileView: View {
     @ObservedObject private var langManager = LanguageManager.shared
 
     @State private var showEditProfile = false
+    @State private var showQRCode = false
+    @State private var showQRScanner = false
 
     @State private var showAddChild = false
     @State private var editingChild: FamilyMember? = nil
@@ -31,20 +33,39 @@ struct ProfileView: View {
                             icon: "person.fill",
                             backgroundGradient: DS.Color.gradientPrimary
                         ) {
-                            Button(action: { showEditProfile = true }) {
-                                ZStack {
-                                    Circle()
-                                        .fill(DS.Color.overlayIcon)
-                                        .frame(width: 44, height: 44)
-                                        .overlay(Circle().stroke(DS.Color.overlayIconBorder, lineWidth: 1.5))
-                                    Image(systemName: "pencil")
-                                        .font(DS.Font.scaled(18, weight: .bold))
-                                        .foregroundColor(DS.Color.textOnPrimary)
+                            HStack(spacing: DS.Spacing.sm) {
+                                // زر مسح باركود
+                                Button(action: { showQRScanner = true }) {
+                                    ZStack {
+                                        Circle()
+                                            .fill(DS.Color.overlayIcon)
+                                            .frame(width: 44, height: 44)
+                                            .overlay(Circle().stroke(DS.Color.overlayIconBorder, lineWidth: 1.5))
+                                        Image(systemName: "camera.viewfinder")
+                                            .font(DS.Font.scaled(18, weight: .bold))
+                                            .foregroundColor(DS.Color.textOnPrimary)
+                                    }
+                                    .contentShape(Circle())
+                                    .accessibilityLabel(L10n.t("مسح باركود", "Scan QR"))
                                 }
-                                .contentShape(Circle())
-                                .accessibilityLabel(L10n.t("تعديل الملف الشخصي", "Edit profile"))
+                                .buttonStyle(BounceButtonStyle())
+
+                                // زر باركود العضو
+                                Button(action: { showQRCode = true }) {
+                                    ZStack {
+                                        Circle()
+                                            .fill(DS.Color.overlayIcon)
+                                            .frame(width: 44, height: 44)
+                                            .overlay(Circle().stroke(DS.Color.overlayIconBorder, lineWidth: 1.5))
+                                        Image(systemName: "qrcode")
+                                            .font(DS.Font.scaled(18, weight: .bold))
+                                            .foregroundColor(DS.Color.textOnPrimary)
+                                    }
+                                    .contentShape(Circle())
+                                    .accessibilityLabel(L10n.t("باركود", "QR Code"))
+                                }
+                                .buttonStyle(BounceButtonStyle())
                             }
-                            .buttonStyle(BounceButtonStyle())
                         }
 
                         ScrollView(showsIndicators: false) {
@@ -86,7 +107,14 @@ struct ProfileView: View {
             }
             .navigationBarHidden(true)
             .sheet(isPresented: $showEditProfile) { if let c = user { EditProfileView(member: c) } }
-
+            .sheet(isPresented: $showQRCode) {
+                if let c = user {
+                    QRCodeSheet(member: c)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .presentationDetents([.height(420)])
+                }
+            }
+            .fullScreenCover(isPresented: $showQRScanner) { QRScannerView(selectedTab: $selectedTab) }
             .sheet(isPresented: $showAddChild) { if let c = user { AddChildSheet(member: c) } }
             .sheet(item: $editingChild) { child in EditChildSheet(member: child) }
             .onChange(of: showAddChild) { _, isPresented in

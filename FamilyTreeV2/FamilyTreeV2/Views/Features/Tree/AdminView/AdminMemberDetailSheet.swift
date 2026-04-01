@@ -39,6 +39,7 @@ struct AdminMemberDetailSheet: View {
     @State private var showDeleteConfirmation = false
     @State private var childToDelete: FamilyMember?
     @State private var childToEdit: FamilyMember?
+    @State private var phoneDuplicateWarning: String?
 
     private var canManageAccessPermissions: Bool {
         authVM.isAdmin
@@ -445,9 +446,25 @@ struct AdminMemberDetailSheet: View {
                 .environment(\.layoutDirection, .leftToRight)
                 .onChange(of: phoneNumber) { _, newValue in
                     phoneNumber = KuwaitPhone.userTypedDigits(newValue, maxDigits: selectedPhoneCountry.maxDigits)
+                    checkPhoneDuplicate()
                 }
                 .onChange(of: selectedPhoneCountry) { _, newCountry in
                     phoneNumber = KuwaitPhone.userTypedDigits(phoneNumber, maxDigits: newCountry.maxDigits)
+                    checkPhoneDuplicate()
+                }
+
+                // تحذير الرقم المكرر
+                if let warning = phoneDuplicateWarning {
+                    HStack(spacing: DS.Spacing.xs) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(DS.Font.scaled(13, weight: .bold))
+                        Text(warning)
+                            .font(DS.Font.caption1)
+                            .fontWeight(.medium)
+                    }
+                    .foregroundColor(DS.Color.error)
+                    .padding(.horizontal, DS.Spacing.lg)
+                    .transition(.opacity)
                 }
             }
         }
@@ -927,6 +944,30 @@ struct AdminMemberDetailSheet: View {
 
     @State private var isSaving = false
 
+    private func checkPhoneDuplicate() {
+        let digits = phoneNumber.filter(\.isNumber)
+        guard digits.count >= 4 else {
+            phoneDuplicateWarning = nil
+            return
+        }
+        let normalized = KuwaitPhone.normalizedForStorage(
+            country: selectedPhoneCountry,
+            rawLocalDigits: phoneNumber
+        )
+        let result = memberVM.isPhoneDuplicate(normalized ?? phoneNumber, excludingMemberId: member.id)
+        withAnimation(.easeInOut(duration: 0.2)) {
+            if result.isDuplicate, let existing = result.existingMember {
+                let existingPhone = KuwaitPhone.display(existing.phoneNumber)
+                phoneDuplicateWarning = L10n.t(
+                    "⚠️ الرقم مستخدم من: \(existing.firstName) — \(existingPhone) (\(existing.fullName))",
+                    "⚠️ Used by: \(existing.firstName) — \(existingPhone) (\(existing.fullName))"
+                )
+            } else {
+                phoneDuplicateWarning = nil
+            }
+        }
+    }
+
     private func saveAction() {
         guard !isSaving else { return }
 
@@ -1009,6 +1050,17 @@ struct AdminMemberDetailSheet: View {
                 if capturedPhone.isEmpty {
                     await memberVM.clearMemberPhone(memberId: capturedMemberId)
                 } else {
+                    // إذا الرقم مستخدم من عضو ثاني → امسحه منه أولاً
+                    let normalized = KuwaitPhone.normalizedForStorage(
+                        country: capturedPhoneCountry,
+                        rawLocalDigits: capturedPhone
+                    )
+                    let dup = memberVM.isPhoneDuplicate(normalized ?? capturedPhone, excludingMemberId: capturedMemberId)
+                    if dup.isDuplicate, let oldMember = dup.existingMember {
+                        await memberVM.clearMemberPhone(memberId: oldMember.id)
+                        Log.info("[Admin] نقل الرقم من \(oldMember.firstName) إلى العضو الحالي")
+                    }
+
                     await memberVM.updateMemberPhone(
                         memberId: capturedMemberId,
                         country: capturedPhoneCountry,

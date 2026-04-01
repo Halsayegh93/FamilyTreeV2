@@ -417,7 +417,7 @@ struct HomeNewsView: View {
         HStack(spacing: DS.Spacing.sm) {
             quickActionItem(icon: "photo.on.rectangle.angled.fill", title: L10n.t("الصور", "Photos"), color: DS.Color.primary) { withAnimation(DS.Anim.snappy) { activeSubPage = .photos } }
             quickActionItem(icon: "briefcase.fill", title: L10n.t("مشاريع", "Projects"), color: DS.Color.accent) { withAnimation(DS.Anim.snappy) { activeSubPage = .projects } }
-            quickActionItem(icon: "bubble.left.and.bubble.right.fill", title: L10n.t("تواصل", "Contact"), color: DS.Color.secondary) { withAnimation(DS.Anim.snappy) { activeSubPage = .contact } }
+            quickActionItem(icon: "bubble.left.and.bubble.right.fill", title: L10n.t("تواصل", "Contact"), color: DS.Color.primary) { withAnimation(DS.Anim.snappy) { activeSubPage = .contact } }
         }
         .padding(.horizontal, DS.Spacing.lg)
     }
@@ -460,7 +460,7 @@ struct HomeNewsView: View {
                     .font(DS.Font.scaled(14, weight: .semibold))
                     .foregroundColor(DS.Color.textOnPrimary)
                     .frame(width: 30, height: 30)
-                    .background(DS.Color.gradientSecondary)
+                    .background(DS.Color.gradientPrimary)
                     .clipShape(Circle())
 
                 Text(L10n.t("أخبار العائلة", "Family News"))

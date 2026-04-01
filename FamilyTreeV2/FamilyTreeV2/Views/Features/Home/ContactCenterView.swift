@@ -444,7 +444,7 @@ struct ContactCenterView: View {
             // Upload image if attached
             var imageNote = ""
             if let image = attachedImage,
-               let data = image.jpegData(compressionQuality: 0.7) {
+               let data = ImageProcessor.process(image, for: .contact) {
                 let path = "contact-attachments/\(UUID().uuidString).jpg"
                 do {
                     try await SupabaseConfig.client.storage

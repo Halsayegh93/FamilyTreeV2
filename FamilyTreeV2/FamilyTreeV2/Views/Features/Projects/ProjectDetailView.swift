@@ -567,7 +567,7 @@ struct EditProjectView: View {
         // Upload new logo if selected
         var finalLogoUrl = project.logoUrl
         if let logoImage {
-            if let data = logoImage.jpegData(compressionQuality: 0.8) {
+            if let data = ImageProcessor.process(logoImage, for: .projectLogo) {
                 if let uploaded = await projectsVM.uploadLogo(imageData: data, projectId: project.id) {
                     finalLogoUrl = uploaded
                 }

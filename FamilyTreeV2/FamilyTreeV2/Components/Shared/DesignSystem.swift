@@ -10,9 +10,9 @@ enum DS {
         static let primary       = SwiftUI.Color.adaptive(light: "#357DED", dark: "#5C9AF2") // Blue
         static let primaryDark   = SwiftUI.Color.adaptive(light: "#2460C0", dark: "#357DED") // Deep Blue
         static let primaryLight  = SwiftUI.Color.adaptive(light: "#6AA0F2", dark: "#8EBBF6") // Light Blue
-        static let secondary     = SwiftUI.Color.adaptive(light: "#56EEF4", dark: "#3ABCC2") // Cyan
-        static let secondaryDark = SwiftUI.Color.adaptive(light: "#2CC4CA", dark: "#56EEF4") // Deep Cyan
-        static let secondaryLight = SwiftUI.Color.adaptive(light: "#88F4F8", dark: "#70E8EE") // Soft Cyan
+        static let secondary     = SwiftUI.Color.adaptive(light: "#10B981", dark: "#0D9488") // Emerald
+        static let secondaryDark = SwiftUI.Color.adaptive(light: "#059669", dark: "#10B981") // Deep Emerald
+        static let secondaryLight = SwiftUI.Color.adaptive(light: "#34D399", dark: "#6EE7B7") // Soft Emerald
         static let accent        = SwiftUI.Color.adaptive(light: "#5438DC", dark: "#7A62E8") // Indigo
         static let accentDark    = SwiftUI.Color.adaptive(light: "#3E28B0", dark: "#5438DC") // Deep Indigo
         static let accentLight   = SwiftUI.Color.adaptive(light: "#7A62E8", dark: "#A090F0") // Light Indigo
@@ -20,7 +20,7 @@ enum DS {
         // Supporting Accents
         static let neonBlue     = SwiftUI.Color.adaptive(light: "#2460C0", dark: "#6AA0F2") // Deep Blue
         static let neonPurple   = SwiftUI.Color.adaptive(light: "#5438DC", dark: "#7A62E8") // Indigo
-        static let neonCyan     = SwiftUI.Color.adaptive(light: "#56EEF4", dark: "#88F4F8") // Cyan
+        static let neonCyan     = SwiftUI.Color.adaptive(light: "#10B981", dark: "#34D399") // Emerald
         static let neonPink     = SwiftUI.Color.adaptive(light: "#B24C63", dark: "#CC6A80") // Berry Rose
 
         // Gradients
@@ -97,7 +97,7 @@ enum DS {
         static let textSecondary = SwiftUI.Color.adaptive(light: "#5A6070", dark: "#8A90A0") // Slate
         static let textTertiary  = SwiftUI.Color.adaptive(light: "#8A90A0", dark: "#5A6070") // Light Slate
         static let textOnPrimary = SwiftUI.Color.white
-        static let textGold      = SwiftUI.Color.adaptive(light: "#56EEF4", dark: "#3ABCC2") // Cyan
+        static let textGold      = SwiftUI.Color.adaptive(light: "#10B981", dark: "#0D9488") // Emerald
 
         // Semantic
         static let success = SwiftUI.Color.adaptive(light: "#32E875", dark: "#28C060") // Emerald
@@ -119,7 +119,7 @@ enum DS {
         static let newsDeath        = SwiftUI.Color.adaptive(light: "#8A8A8E", dark: "#A8A8AC") // Muted Gray
         static let newsVote         = SwiftUI.Color.adaptive(light: "#5438DC", dark: "#7A62E8") // Indigo
         static let newsAnnouncement = SwiftUI.Color.adaptive(light: "#357DED", dark: "#5C9AF2") // Blue
-        static let newsCongrats     = SwiftUI.Color.adaptive(light: "#56EEF4", dark: "#3ABCC2") // Cyan
+        static let newsCongrats     = SwiftUI.Color.adaptive(light: "#10B981", dark: "#0D9488") // Emerald
         static let newsReminder     = SwiftUI.Color.adaptive(light: "#B24C63", dark: "#CC6A80") // Berry
         static let newsInvitation   = SwiftUI.Color.adaptive(light: "#5438DC", dark: "#7A62E8") // Indigo
 

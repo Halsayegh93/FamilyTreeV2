@@ -166,7 +166,17 @@ class NewsViewModel: ObservableObject {
     // MARK: - Fetch News
 
     func fetchNews(force: Bool = false) async {
+        // تحميل من الكاش أولاً
+        if allNews.isEmpty,
+           let cached = CacheManager.shared.load([NewsPost].self, for: .news) {
+            self.allNews = cached
+            Log.info("[News] تم تحميل \(cached.count) خبر من الكاش")
+        }
+
         if !force, let last = lastNewsFetchDate, Date().timeIntervalSince(last) < 10, !allNews.isEmpty { return }
+
+        guard NetworkMonitor.shared.isConnected else { return }
+
         lastNewsFetchDate = Date()
         do {
             let response: [NewsPost] = try await supabase.from("news")
@@ -185,9 +195,12 @@ class NewsViewModel: ObservableObject {
                 }
             }
 
+            // حفظ في الكاش
+            CacheManager.shared.save(self.allNews, for: .news)
+
             // تجنب إطلاق طلبات فرعية إذا تم إلغاء المهمة
             guard !Task.isCancelled else { return }
-            
+
             let pollPostIds = allNews.filter { $0.hasPoll }.map(\.id)
             let allPostIds = allNews.map(\.id)
             await fetchNewsPollVotes(for: pollPostIds)
@@ -483,7 +496,7 @@ class NewsViewModel: ObservableObject {
     // MARK: - Upload News Image
 
     func uploadNewsImage(image: UIImage, for authorId: UUID) async -> String? {
-        guard let imageData = image.jpegData(compressionQuality: 0.7) else { return nil }
+        guard let imageData = ImageProcessor.process(image, for: .news) else { return nil }
 
         let imageId = UUID()
         let safeAuthorName = memberVM?.getSafeMemberName(for: authorId) ?? authorId.uuidString

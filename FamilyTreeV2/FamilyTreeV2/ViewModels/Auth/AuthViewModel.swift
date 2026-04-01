@@ -1149,6 +1149,10 @@ class AuthViewModel: ObservableObject {
         // مسح الرقم المحفوظ
         self.lastAuthPhone = ""
         self.lastAuthDialingCode = ""
+        // مسح الكاش المحلي
+        CacheManager.shared.clearAll()
+        // إيقاف الاشتراكات الحية
+        RealtimeManager.shared.unsubscribe()
     }
 
     // MARK: - حذف الحساب (Account Deletion — Apple Requirement)
@@ -1235,7 +1239,7 @@ class AuthViewModel: ObservableObject {
             }
 
             // رفع الصورة الشخصية إذا اختارها المستخدم
-            if let avatarImage, let imageData = avatarImage.jpegData(compressionQuality: 0.5) {
+            if let avatarImage, let imageData = ImageProcessor.process(avatarImage, for: .avatar) {
                 let fileName = "\(user.id.uuidString.lowercased()).jpg"
                 do {
                     try await supabase.storage

@@ -266,30 +266,11 @@ struct HomeNewsCardView: View {
                 .padding(.horizontal, DS.Spacing.lg)
                 .padding(.vertical, DS.Spacing.xs)
         }
-        .background(
-            ZStack {
-                RoundedRectangle(cornerRadius: DS.Radius.xxl, style: .continuous)
-                    .fill(.thickMaterial)
-
-                LinearGradient(
-                    colors: [DS.Color.glassDivider(colorScheme), Color.clear],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xxl, style: .continuous))
-            }
-        )
+        .background(DS.Color.surface)
         .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xxl, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: DS.Radius.xxl, style: .continuous)
-                .stroke(
-                    LinearGradient(
-                        colors: [DS.Color.glassMedium(colorScheme), DS.Color.glassSubtle(colorScheme)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    lineWidth: 0.75
-                )
+                .stroke(DS.Color.textTertiary.opacity(0.15), lineWidth: 0.75)
         )
         .dsCardShadow()
     }

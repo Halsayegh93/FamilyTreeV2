@@ -52,7 +52,15 @@ class AppState: ObservableObject {
         self.appSettingsVM = appSettings
         self.storyVM = story
 
-        // 4. تحميل كل البيانات بالتوازي عند تسجيل الدخول — يمنع اللودنج في كل تاب
+        // 4. ربط RealtimeManager بالـ ViewModels
+        let realtime = RealtimeManager.shared
+        realtime.memberVM = member
+        realtime.newsVM = news
+        realtime.storyVM = story
+        realtime.notificationVM = notification
+        realtime.projectsVM = projects
+
+        // 5. تحميل كل البيانات بالتوازي عند تسجيل الدخول — يمنع اللودنج في كل تاب
         auth.$status
             .removeDuplicates()
             .sink { [weak self] status in
@@ -65,6 +73,10 @@ class AppState: ObservableObject {
                     async let proj: () = self.projectsVM.fetchProjects()
                     async let stories: () = self.storyVM.fetchActiveStories()
                     _ = await (m, n, notif, proj, stories)
+
+                    // بدء الاشتراكات الحية بعد تحميل البيانات
+                    RealtimeManager.shared.subscribe()
+
                 }
             }
             .store(in: &cancellables)

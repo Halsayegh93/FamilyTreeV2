@@ -1465,7 +1465,7 @@ class AdminRequestViewModel: ObservableObject {
         self.isLoading = true
         defer { self.isLoading = false }
 
-        guard let imageData = image.jpegData(compressionQuality: 0.5) else { return false }
+        guard let imageData = ImageProcessor.process(image, for: .avatar) else { return false }
 
         let fileName = "photo_suggestion_\(memberId.uuidString)_\(Int(Date().timeIntervalSince1970)).jpg"
 

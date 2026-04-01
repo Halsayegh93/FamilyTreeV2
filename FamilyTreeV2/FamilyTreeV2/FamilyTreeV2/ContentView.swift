@@ -9,8 +9,14 @@ import SwiftUI
 
 struct ContentView: View {
     var body: some View {
-        NavigationStack {
-            RootView()
+        ZStack(alignment: .top) {
+            NavigationStack {
+                RootView()
+            }
+
+            OfflineBanner()
+                .padding(.top, DS.Spacing.xxxxl + DS.Spacing.lg)
+                .animation(DS.Anim.snappy, value: NetworkMonitor.shared.isConnected)
         }
     }
 }

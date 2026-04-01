@@ -16,6 +16,8 @@ struct FamilyTreeV2App: App {
     @ObservedObject private var langManager = LanguageManager.shared
     @AppStorage("appearanceMode") private var appearanceMode: String = "system"
 
+    // Deep link handling is done via NotificationCenter → TreeView
+
     private var preferredScheme: ColorScheme? {
         switch appearanceMode {
         case "light":
@@ -66,6 +68,41 @@ struct FamilyTreeV2App: App {
                         await self.appState.notificationVM.fetchNotifications(force: true)
                         // تحديث بيانات الشجرة + البروفايل لتعكس أي تغييرات (مثل تغيير الاسم)
                         await self.appState.memberVM.fetchAllMembers(force: true)
+                    }
+                }
+                // Deep Link — QR Code → فتح الشجرة وعرض صلة القرابة
+                .onOpenURL { url in
+                    // familytree://member/{memberId}
+                    guard url.scheme == "familytree",
+                          url.host == "member",
+                          let idString = url.pathComponents.last,
+                          let memberId = UUID(uuidString: idString),
+                          let member = appState.memberVM.member(byId: memberId),
+                          let currentUser = appState.authVM.currentUser else { return }
+
+                    Log.info("[DeepLink] فتح عضو: \(member.firstName)")
+
+                    // حساب صلة القرابة
+                    let result = KinshipCalculator.calculate(
+                        from: currentUser,
+                        to: member,
+                        lookup: appState.memberVM._memberById
+                    )
+                    var pathIds = result.pathA.map(\.id) + result.pathB.map(\.id)
+                    pathIds.append(currentUser.id)
+                    pathIds.append(member.id)
+
+                    // إرسال notification للشجرة
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        NotificationCenter.default.post(
+                            name: .showKinshipPath,
+                            object: nil,
+                            userInfo: [
+                                "memberId": member.id,
+                                "relationship": result.relationship,
+                                "pathIds": pathIds
+                            ]
+                        )
                     }
                 }
         }

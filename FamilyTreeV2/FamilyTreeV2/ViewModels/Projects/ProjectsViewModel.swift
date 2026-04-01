@@ -18,6 +18,15 @@ class ProjectsViewModel: ObservableObject {
     // MARK: - Fetch
     
     func fetchProjects() async {
+        // تحميل من الكاش أولاً
+        if projects.isEmpty,
+           let cached = CacheManager.shared.load([Project].self, for: .projects) {
+            self.projects = cached
+            Log.info("[Projects] تم تحميل \(cached.count) مشروع من الكاش")
+        }
+
+        guard NetworkMonitor.shared.isConnected else { return }
+
         isLoading = true
         errorMessage = nil
         do {
@@ -28,8 +37,11 @@ class ProjectsViewModel: ObservableObject {
                 .order("created_at", ascending: false)
                 .execute()
                 .value
-            
+
             self.projects = response
+
+            // حفظ في الكاش
+            CacheManager.shared.save(response, for: .projects)
         } catch {
             self.errorMessage = L10n.t("تعذر تحميل المشاريع. حاول مرة أخرى.",
                                        "Failed to load projects. Please try again.")

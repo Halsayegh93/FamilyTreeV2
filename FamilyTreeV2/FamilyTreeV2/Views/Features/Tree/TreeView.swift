@@ -4,6 +4,7 @@ import Foundation
 // MARK: - Notification Names
 extension Notification.Name {
     static let memberDeleted = Notification.Name("memberDeleted")
+    static let showKinshipPath = Notification.Name("showKinshipPath")
 }
 
 // MARK: - أنماط العرض
@@ -45,6 +46,8 @@ struct TreeView: View {
     @Environment(\.verticalSizeClass) var verticalSizeClass
     @Environment(\.colorScheme) var colorScheme
     @State private var activePath: Set<UUID> = []
+    @State private var kinshipBanner: String? = nil
+    @State private var kinshipHighlightedIds: Set<UUID> = [] // الأعضاء المهايلايتين بصلة القرابة
 
     // MARK: - بيانات مُخزنة مؤقتاً لتجنب إعادة الحساب كل render
     @State private var cachedVisibleMembers: [FamilyMember] = []
@@ -121,52 +124,118 @@ struct TreeView: View {
         }
     }
 
-    var filteredMembers: [FamilyMember] {
-        let normalizedSearch = debouncedSearchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        if normalizedSearch.isEmpty { return [] }
+    // MARK: - سجل البحث الأخير
+    @AppStorage("recentTreeSearches") private var recentSearchesData: Data = Data()
 
-        let searchWords = normalizedSearch
-            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+    private var recentSearches: [String] {
+        (try? JSONDecoder().decode([String].self, from: recentSearchesData)) ?? []
+    }
+
+    private func saveRecentSearch(_ query: String) {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        var searches = recentSearches.filter { $0 != trimmed }
+        searches.insert(trimmed, at: 0)
+        if searches.count > 10 { searches = Array(searches.prefix(10)) }
+        recentSearchesData = (try? JSONEncoder().encode(searches)) ?? Data()
+    }
+
+    private func clearRecentSearches() {
+        recentSearchesData = (try? JSONEncoder().encode([String]())) ?? Data()
+    }
+
+    // MARK: - بحث متقدم بنظام النقاط
+
+    private struct SearchResult: Identifiable {
+        let member: FamilyMember
+        let score: Double
+        let matchContext: String? // سياق التطابق (اسم، هاتف، سيرة)
+        var id: UUID { member.id }
+    }
+
+    private var filteredResults: [SearchResult] {
+        let raw = debouncedSearchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if raw.isEmpty { return [] }
+
+        let normalizedQuery = ArabicTextNormalizer.normalizeForSearch(raw)
+        let searchWords = normalizedQuery
             .components(separatedBy: .whitespaces)
             .filter { !$0.isEmpty }
 
         if searchWords.isEmpty { return [] }
 
-        // نتائج مرتبة: تطابق الاسم الأول أولاً، ثم باقي النتائج
-        var exactMatches: [FamilyMember] = []
-        var partialMatches: [FamilyMember] = []
+        let isDigitSearch = raw.allSatisfy { $0.isNumber || $0 == "+" }
+        let searchDigits = raw.filter(\.isNumber)
+
+        var results: [SearchResult] = []
 
         for member in cachedVisibleMembers {
-            guard (exactMatches.count + partialMatches.count) < 50 else { break }
+            var score: Double = 0
+            var matchContext: String?
 
-            let lineage = getFullLineage(for: member, lookup: cachedMemberById)
-            // نبني نص شامل من: الاسم الكامل + النسب (الآباء)
-            let combinedText = "\(member.fullName) \(lineage)"
-                .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+            let normalizedFirst = ArabicTextNormalizer.normalizeForSearch(member.firstName)
 
-            // نقسم النص لكلمات عشان نبحث ببداية الكلمة (prefix) مو substring
-            let textWords = combinedText
-                .components(separatedBy: .whitespaces)
-                .filter { !$0.isEmpty }
+            // بحث بالأرقام (هاتف)
+            if isDigitSearch && searchDigits.count >= 4 {
+                if let phone = member.phoneNumber {
+                    let phoneDigits = phone.filter(\.isNumber)
+                    let phoneSuffix = String(phoneDigits.suffix(8))
+                    if phoneSuffix.contains(searchDigits) || searchDigits.contains(phoneSuffix) {
+                        score += 90
+                        matchContext = L10n.t("تطابق الهاتف", "Phone match")
+                    }
+                }
+            } else {
+                // تطابق الاسم الأول
+                if normalizedFirst == searchWords[0] {
+                    score += 100 // تطابق تام
+                } else if normalizedFirst.hasPrefix(searchWords[0]) {
+                    score += 80 // بداية الاسم
+                }
 
-            // كل كلمة بحث لازم تطابق بداية كلمة واحدة على الأقل
-            let allMatch = searchWords.allSatisfy { searchWord in
-                textWords.contains { $0.hasPrefix(searchWord) }
+                // تطابق الاسم الكامل
+                let lineage = getFullLineage(for: member, lookup: cachedMemberById)
+                let normalizedCombined = ArabicTextNormalizer.normalizeForSearch("\(member.fullName) \(lineage)")
+                let textWords = normalizedCombined
+                    .components(separatedBy: .whitespaces)
+                    .filter { !$0.isEmpty }
+
+                let allMatch = searchWords.allSatisfy { searchWord in
+                    textWords.contains { $0.hasPrefix(searchWord) }
+                }
+
+                if allMatch && score < 80 {
+                    score += 50 // تطابق الاسم الكامل/النسب
+                    if score == 50 { matchContext = L10n.t("تطابق النسب", "Lineage match") }
+                } else if !allMatch && score == 0 {
+                    // بحث في السيرة الذاتية
+                    if let bio = member.bio, !bio.isEmpty {
+                        let bioText = ArabicTextNormalizer.normalizeForSearch(
+                            bio.map { "\($0.title) \($0.details)" }.joined(separator: " ")
+                        )
+                        let bioMatch = searchWords.allSatisfy { bioText.contains($0) }
+                        if bioMatch {
+                            score += 20
+                            matchContext = L10n.t("في السيرة", "In bio")
+                        }
+                    }
+                }
             }
 
-            guard allMatch else { continue }
-
-            // الاسم الأول يبدأ بأول كلمة بحث؟ → أولوية عالية
-            let firstName = member.firstName
-                .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
-            if firstName.hasPrefix(searchWords[0]) {
-                exactMatches.append(member)
-            } else {
-                partialMatches.append(member)
+            if score > 0 {
+                results.append(SearchResult(member: member, score: score, matchContext: matchContext))
             }
         }
 
-        return exactMatches + partialMatches
+        return results
+            .sorted { $0.score > $1.score }
+            .prefix(50)
+            .map { $0 }
+    }
+
+    /// للتوافق مع الأماكن اللي تستخدم filteredMembers
+    var filteredMembers: [FamilyMember] {
+        filteredResults.map(\.member)
     }
     
     var body: some View {
@@ -289,6 +358,44 @@ struct TreeView: View {
 
                     if !cachedVisibleMembers.isEmpty {
                         overlayTools
+
+                        // بانر صلة القرابة
+                        if let banner = kinshipBanner {
+                            VStack {
+                                HStack(spacing: DS.Spacing.sm) {
+                                    Image(systemName: "person.2.fill")
+                                        .font(DS.Font.scaled(16, weight: .bold))
+                                    Text(banner)
+                                        .font(DS.Font.calloutBold)
+                                    Spacer()
+                                    Button {
+                                        withAnimation(DS.Anim.snappy) {
+                                            kinshipBanner = nil
+                                            kinshipHighlightedIds = []
+                                            activePath = []
+                                            searchedMemberID = nil
+                                            scale = 0.60
+                                            baseScale = 0.60
+                                        }
+                                    } label: {
+                                        Image(systemName: "xmark.circle.fill")
+                                            .font(DS.Font.scaled(18))
+                                            .foregroundColor(DS.Color.textOnPrimary.opacity(0.7))
+                                    }
+                                }
+                                .foregroundColor(DS.Color.textOnPrimary)
+                                .padding(.horizontal, DS.Spacing.lg)
+                                .padding(.vertical, DS.Spacing.md)
+                                .background(DS.Color.gradientPrimary)
+                                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+                                .padding(.horizontal, DS.Spacing.lg)
+                                .padding(.top, DS.Spacing.sm)
+                                .shadow(color: DS.Color.primary.opacity(0.3), radius: 8, y: 4)
+                                .transition(.move(edge: .top).combined(with: .opacity))
+
+                                Spacer()
+                            }
+                        }
                     }
                 }
                 .onTapGesture {
@@ -326,6 +433,65 @@ struct TreeView: View {
                 // إغلاق شاشة التفاصيل تلقائياً بعد حذف العضو
                 withAnimation(DS.Anim.snappy) {
                     selectedMember = nil
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .showKinshipPath)) { note in
+                guard let info = note.userInfo,
+                      let memberId = info["memberId"] as? UUID,
+                      let relationship = info["relationship"] as? String else { return }
+
+                // بناء مسار كامل من الجذر للعضو الممسوح (عشان كل الفروع تنفتح)
+                var fullPath = Set<UUID>()
+
+                // مسار العضو الممسوح من الجذر
+                var current = cachedMemberById[memberId]
+                while let c = current {
+                    fullPath.insert(c.id)
+                    if let fid = c.fatherId { current = cachedMemberById[fid] } else { current = nil }
+                }
+
+                // مسار المستخدم الحالي من الجذر
+                if let myId = authVM.currentUser?.id {
+                    var myCurrent = cachedMemberById[myId]
+                    while let c = myCurrent {
+                        fullPath.insert(c.id)
+                        if let fid = c.fatherId { myCurrent = cachedMemberById[fid] } else { myCurrent = nil }
+                    }
+                }
+
+                // إضافة IDs القرابة إذا موجودة
+                if let pathIds = info["pathIds"] as? [UUID] {
+                    fullPath.formUnion(pathIds)
+                }
+
+                // تصغير الزوم عشان يبان المسار كامل
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    scale = 0.35
+                    baseScale = 0.35
+                }
+
+                // فتح كل الفروع بالمسار + هايلايت
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    activePath = fullPath
+                    kinshipHighlightedIds = fullPath
+                    searchedMemberID = memberId
+                    kinshipBanner = relationship
+                }
+
+                // سكرول للعضو بعد فتح الفروع
+                Task {
+                    try? await Task.sleep(nanoseconds: 600_000_000)
+                    scrollTarget = memberId
+                    scrollCounter += 1
+                }
+
+                // إخفاء البانر والهايلايت بعد 12 ثانية
+                Task {
+                    try? await Task.sleep(nanoseconds: 12_000_000_000)
+                    withAnimation(DS.Anim.snappy) {
+                        kinshipBanner = nil
+                        kinshipHighlightedIds = []
+                    }
                 }
             }
             .onChange(of: searchText) { _, newValue in
@@ -377,7 +543,7 @@ struct TreeView: View {
                             .foregroundColor(DS.Color.primary)
                     }
 
-                    TextField(L10n.t("ابحث بالاسم...", "Search by name..."), text: $searchText, onEditingChanged: { focused in
+                    TextField(L10n.t("ابحث بالاسم أو الهاتف...", "Search by name or phone..."), text: $searchText, onEditingChanged: { focused in
                         isSearchFocused = focused
                     })
                     .font(DS.Font.body)
@@ -411,6 +577,47 @@ struct TreeView: View {
                 
             }
 
+            // عمليات بحث سابقة
+            if isSearchFocused && searchText.isEmpty && !recentSearches.isEmpty {
+                VStack(spacing: DS.Spacing.xs) {
+                    HStack {
+                        Text(L10n.t("بحث سابق", "Recent"))
+                            .font(DS.Font.scaled(11, weight: .semibold))
+                            .foregroundColor(DS.Color.textSecondary)
+                        Spacer()
+                        Button(action: clearRecentSearches) {
+                            Text(L10n.t("مسح", "Clear"))
+                                .font(DS.Font.scaled(11, weight: .medium))
+                                .foregroundColor(DS.Color.error)
+                        }
+                    }
+                    .padding(.horizontal, DS.Spacing.sm)
+
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: DS.Spacing.sm) {
+                            ForEach(recentSearches, id: \.self) { query in
+                                Button(action: { searchText = query }) {
+                                    HStack(spacing: DS.Spacing.xs) {
+                                        Image(systemName: "clock.arrow.circlepath")
+                                            .font(.system(size: 10))
+                                        Text(query)
+                                            .font(DS.Font.caption1)
+                                    }
+                                    .foregroundColor(DS.Color.primary)
+                                    .padding(.horizontal, DS.Spacing.md)
+                                    .padding(.vertical, DS.Spacing.xs + 2)
+                                    .background(DS.Color.primary.opacity(0.08))
+                                    .clipShape(Capsule())
+                                }
+                            }
+                        }
+                        .padding(.horizontal, DS.Spacing.sm)
+                    }
+                }
+                .padding(.top, DS.Spacing.xs)
+                .transition(.opacity)
+            }
+
             // نتائج البحث
             if !filteredMembers.isEmpty {
                 VStack(spacing: 0) {
@@ -430,11 +637,11 @@ struct TreeView: View {
                     
                     ScrollView {
                         LazyVStack(spacing: 0) {
-                            ForEach(filteredMembers) { member in
-                                Button(action: { selectMemberFromSearch(member) }) {
-                                    searchResultRow(for: member)
+                            ForEach(filteredResults) { result in
+                                Button(action: { selectMemberFromSearch(result.member) }) {
+                                    searchResultRow(for: result.member, matchContext: result.matchContext)
                                 }
-                                if member.id != filteredMembers.last?.id {
+                                if result.id != filteredResults.last?.id {
                                     Divider().padding(.horizontal, DS.Spacing.md)
                                 }
                             }
@@ -464,7 +671,7 @@ struct TreeView: View {
     }
     
     // MARK: - صف نتيجة البحث مع صورة
-    private func searchResultRow(for member: FamilyMember) -> some View {
+    private func searchResultRow(for member: FamilyMember, matchContext: String? = nil) -> some View {
         HStack(spacing: DS.Spacing.md) {
             // صورة العضو أو الأحرف الأولى
             ZStack {
@@ -550,6 +757,17 @@ struct TreeView: View {
                             .background(DS.Color.deceased.opacity(0.1))
                             .clipShape(Capsule())
                     }
+
+                    // سياق التطابق
+                    if let context = matchContext {
+                        Text(context)
+                            .font(DS.Font.scaled(9, weight: .medium))
+                            .foregroundColor(DS.Color.info)
+                            .padding(.horizontal, DS.Spacing.xs)
+                            .padding(.vertical, 2)
+                            .background(DS.Color.info.opacity(0.1))
+                            .clipShape(Capsule())
+                    }
                 }
             }
             Spacer()
@@ -563,6 +781,8 @@ struct TreeView: View {
     
 
     private func selectMemberFromSearch(_ member: FamilyMember) {
+        // حفظ البحث في السجل
+        saveRecentSearch(searchText)
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
         searchText = ""
         isSearchFocused = false
@@ -754,7 +974,8 @@ struct TreeView: View {
             lightweightFullTree: lightweightFullTree,
             currentLocationMemberID: currentLocationMemberID,
             renderedCount: .constant(0),
-            maxRendered: maxRenderedNodes
+            maxRendered: maxRenderedNodes,
+            kinshipHighlightedIds: kinshipHighlightedIds
         )
     }
 
@@ -811,13 +1032,14 @@ struct RecursiveTreeBranch: View {
     let currentLocationMemberID: UUID?
     @Binding var renderedCount: Int
     let maxRendered: Int
+    var kinshipHighlightedIds: Set<UUID> = []
 
     /// الفتح يعتمد على activePath كمصدر وحيد للحقيقة
     private var isExpanded: Bool {
         activePath.contains(member.id)
     }
 
-    init(member: FamilyMember, childrenByFatherId: [UUID: [FamilyMember]], ancestorIDs: Set<UUID>, activePath: Binding<Set<UUID>>, searchedMemberID: Binding<UUID?>, selectedMember: Binding<FamilyMember?>, scrollTarget: Binding<UUID?>, scrollAnchor: Binding<UnitPoint>, scrollCounter: Binding<Int>, scale: Binding<CGFloat>, baseScale: Binding<CGFloat>, level: Int, viewMode: TreeDisplayMode, lightweightFullTree: Bool, currentLocationMemberID: UUID?, renderedCount: Binding<Int>, maxRendered: Int) {
+    init(member: FamilyMember, childrenByFatherId: [UUID: [FamilyMember]], ancestorIDs: Set<UUID>, activePath: Binding<Set<UUID>>, searchedMemberID: Binding<UUID?>, selectedMember: Binding<FamilyMember?>, scrollTarget: Binding<UUID?>, scrollAnchor: Binding<UnitPoint>, scrollCounter: Binding<Int>, scale: Binding<CGFloat>, baseScale: Binding<CGFloat>, level: Int, viewMode: TreeDisplayMode, lightweightFullTree: Bool, currentLocationMemberID: UUID?, renderedCount: Binding<Int>, maxRendered: Int, kinshipHighlightedIds: Set<UUID> = []) {
         self.member = member
         self.childrenByFatherId = childrenByFatherId
         self.ancestorIDs = ancestorIDs
@@ -835,6 +1057,7 @@ struct RecursiveTreeBranch: View {
         self.currentLocationMemberID = currentLocationMemberID
         self._renderedCount = renderedCount
         self.maxRendered = maxRendered
+        self.kinshipHighlightedIds = kinshipHighlightedIds
     }
 
     private var visibleChildren: [FamilyMember] {
@@ -853,9 +1076,17 @@ struct RecursiveTreeBranch: View {
         return allChildren
     }
 
-    // لون موحّد للخطوط
+    // لون الخطوط — ذهبي عريض إذا جزء من مسار القرابة
+    private var isKinshipPath: Bool {
+        kinshipHighlightedIds.contains(member.id)
+    }
+
     private var connectorColor: Color {
-        DS.Color.primary.opacity(0.6)
+        isKinshipPath ? DS.Color.warning : DS.Color.primary.opacity(0.6)
+    }
+
+    private var connectorWidth: CGFloat {
+        isKinshipPath ? 4 : 2
     }
 
     var body: some View {
@@ -924,7 +1155,7 @@ struct RecursiveTreeBranch: View {
                     VStack(spacing: verticalSpacing) {
                         Rectangle()
                             .fill(connectorColor)
-                            .frame(width: 2, height: connectorHeight)
+                            .frame(width: connectorWidth, height: connectorHeight)
 
                         let chunkSize = viewMode == .fullTree ? 4 : 3
                         let chunkedChildren = stride(from: 0, to: childrenToDisplay.count, by: chunkSize).map {
@@ -952,7 +1183,8 @@ struct RecursiveTreeBranch: View {
                                         lightweightFullTree: lightweightFullTree,
                                         currentLocationMemberID: currentLocationMemberID,
                                         renderedCount: $renderedCount,
-                                        maxRendered: maxRendered
+                                        maxRendered: maxRendered,
+                                        kinshipHighlightedIds: kinshipHighlightedIds
                                     )
                                 }
                             }

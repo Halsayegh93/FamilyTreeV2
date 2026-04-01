@@ -36,18 +36,7 @@ struct LoginView: View {
         )
     }
 
-    private var otpBinding: Binding<String> {
-        Binding(
-            get: { authVM.otpCode },
-            set: { newValue in
-                authVM.otpCode = KuwaitPhone.normalizeDigits(newValue)
-                    .filter(\.isNumber)
-                    .prefix(6)
-                    .map(String.init)
-                    .joined()
-            }
-        )
-    }
+    @State private var otpText: String = ""
 
     var body: some View {
         ZStack {
@@ -84,6 +73,9 @@ struct LoginView: View {
 
                 Spacer()
             }
+        }
+        .onTapGesture {
+            isFieldFocused = false
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .animation(DS.Anim.bouncy, value: authVM.isOtpSent)
@@ -210,7 +202,7 @@ struct LoginView: View {
             ) {
                 isFieldFocused = false
                 timeRemaining = 60
-                authVM.otpCode = ""
+                authVM.otpCode = ""; otpText = ""
                 Task {
                     await authVM.sendOTP()
                     if !authVM.isOtpSent { timeRemaining = 0 }
@@ -256,7 +248,7 @@ struct LoginView: View {
                     Button(action: {
                         withAnimation(DS.Anim.smooth) {
                             authVM.isOtpSent = false
-                            authVM.otpCode = ""
+                            authVM.otpCode = ""; otpText = ""
                             authVM.otpErrorMessage = nil
                             authVM.otpStatusMessage = ""
                             timeRemaining = 0
@@ -293,13 +285,13 @@ struct LoginView: View {
                 }
             }
 
-            // حقل OTP — مع تأثير التركيز
-            TextField("------", text: otpBinding)
+            // حقل OTP — AutoFill compatible
+            TextField("", text: $otpText, prompt: Text("------").foregroundStyle(DS.Color.textTertiary))
                 .keyboardType(.numberPad)
+                .textContentType(.oneTimeCode)
                 .font(DS.Font.scaled(32, weight: .bold))
                 .foregroundStyle(DS.Color.textPrimary)
                 .multilineTextAlignment(.center)
-                .tracking(12)
                 .frame(height: 60)
                 .background(DS.Color.surface)
                 .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
@@ -315,11 +307,20 @@ struct LoginView: View {
                 .accessibilityLabel(L10n.t("رمز التحقق", "Verification Code"))
                 .onAppear {
                     isFieldFocused = true
+                    otpText = ""
                     authVM.otpCode = ""
                     otpTimeRemaining = 300
                 }
-                .onChange(of: authVM.otpCode) { _, newValue in
-                    if newValue.count == 6 {
+                .onChange(of: otpText) { _, newValue in
+                    let digits = newValue.filter(\.isNumber)
+                    let limited = String(digits.prefix(6))
+                    // فقط صحّح إذا فيه حروف غير أرقام
+                    if newValue != limited {
+                        otpText = limited
+                        return
+                    }
+                    authVM.otpCode = limited
+                    if limited.count == 6 {
                         isFieldFocused = false
                         Task { await authVM.verifyOTP() }
                     }
@@ -343,7 +344,7 @@ struct LoginView: View {
 
             // إعادة طلب الرمز
             Button(action: {
-                authVM.otpCode = ""
+                authVM.otpCode = ""; otpText = ""
                 authVM.otpErrorMessage = nil
                 authVM.otpStatusMessage = ""
                 otpTimeRemaining = 300

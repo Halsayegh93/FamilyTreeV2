@@ -128,25 +128,39 @@ class MemberViewModel: ObservableObject {
     // MARK: - Fetch Members
     
     func fetchAllMembers(force: Bool = false) async {
+        // تحميل من الكاش أولاً إذا لا توجد بيانات
+        if allMembers.isEmpty,
+           let cached = CacheManager.shared.load([FamilyMember].self, for: .members) {
+            self.allMembers = cached
+            self.membersVersion += 1
+            Log.info("[Members] تم تحميل \(cached.count) عضو من الكاش")
+        }
+
         // تجنب إعادة التحميل خلال 15 ثانية إلا إذا force
         if !force, let last = lastMembersFetchDate, Date().timeIntervalSince(last) < 15, !allMembers.isEmpty {
             return
         }
-        
+
+        // لا نحمل من السيرفر إذا مو متصلين بالنت
+        guard NetworkMonitor.shared.isConnected else { return }
+
         self.activePath = [] // تصفير المسار عند كل تحميل
-        
+
         do {
             let response = try await supabase
                 .from("profiles")
                 .select()
                 .limit(10000)
                 .execute()
-            
+
             let members = try JSONDecoder().decode([FamilyMember].self, from: response.data)
 
             self.allMembers = members
             self.lastMembersFetchDate = Date()
             self.membersVersion += 1
+
+            // حفظ في الكاش
+            CacheManager.shared.save(members, for: .members)
 
             // تحديث currentUser إذا تغيرت بياناته (مثلاً: تغيير الاسم من الإدارة)
             if let userId = currentUser?.id,
@@ -414,14 +428,14 @@ class MemberViewModel: ObservableObject {
         self.isLoading = true
         
         // 1. ضغط الصورة وتحويلها لبيانات
-        guard let imageData = image.jpegData(compressionQuality: 0.5) else {
+        guard let imageData = ImageProcessor.process(image, for: .avatar) else {
             self.isLoading = false
             return
         }
-        
+
         let safeName = getSafeMemberName(for: memberId)
         let fileName = "\(safeName).jpg"
-        
+
         do {
             // 2. الرفع إلى السيرفر
             try await supabase.storage
@@ -545,11 +559,11 @@ class MemberViewModel: ObservableObject {
     func uploadCover(image: UIImage, for memberId: UUID) async {
         self.isLoading = true
         
-        guard let imageData = image.jpegData(compressionQuality: 0.5) else {
+        guard let imageData = ImageProcessor.process(image, for: .cover) else {
             self.isLoading = false
             return
         }
-        
+
         let safeName = getSafeMemberName(for: memberId)
         let fileName = "cover_\(safeName).jpg"
         
@@ -640,7 +654,7 @@ class MemberViewModel: ObservableObject {
     func uploadMemberGalleryPhoto(image: UIImage, for memberId: UUID) async -> String? {
         self.isLoading = true
         
-        guard let imageData = image.jpegData(compressionQuality: 0.55) else {
+        guard let imageData = ImageProcessor.process(image, for: .gallery) else {
             self.isLoading = false
             return nil
         }
@@ -825,11 +839,11 @@ class MemberViewModel: ObservableObject {
     func uploadMemberGalleryPhotoMulti(image: UIImage, for memberId: UUID, caption: String? = nil) async -> MemberGalleryPhoto? {
         self.isLoading = true
         
-        guard let imageData = image.jpegData(compressionQuality: 0.6) else {
+        guard let imageData = ImageProcessor.process(image, for: .gallery) else {
             self.isLoading = false
             return nil
         }
-        
+
         let photoId = UUID()
         let safeName = getSafeMemberName(for: memberId)
         let filePath = "member_gallery/\(safeName)/\(photoId.uuidString).jpg"

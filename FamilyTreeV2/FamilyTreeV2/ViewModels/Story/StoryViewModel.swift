@@ -58,7 +58,17 @@ class StoryViewModel: ObservableObject {
     // MARK: - Fetch Active Stories
 
     func fetchActiveStories(force: Bool = false) async {
+        // تحميل من الكاش أولاً
+        if activeStories.isEmpty,
+           let cached = CacheManager.shared.load([FamilyStory].self, for: .stories) {
+            self.activeStories = cached.filter { !$0.isExpired }
+            Log.info("[Stories] تم تحميل \(self.activeStories.count) قصة من الكاش")
+        }
+
         if !force, let last = lastFetchDate, Date().timeIntervalSince(last) < 15, !activeStories.isEmpty { return }
+
+        guard NetworkMonitor.shared.isConnected else { return }
+
         lastFetchDate = Date()
 
         let now = ISO8601DateFormatter().string(from: Date())
@@ -105,6 +115,9 @@ class StoryViewModel: ObservableObject {
             }
 
             self.activeStories = all
+
+            // حفظ في الكاش
+            CacheManager.shared.save(all, for: .stories)
         } catch {
             Log.error("فشل جلب القصص: \(error.localizedDescription)")
         }
@@ -137,8 +150,7 @@ class StoryViewModel: ObservableObject {
     func uploadStory(image: UIImage, caption: String?) async -> Bool {
         guard let userId = currentUser?.id else { return false }
         // إزالة الـ alpha channel لتقليل حجم الذاكرة
-        let opaqueImage = image.withoutAlpha()
-        guard let imageData = opaqueImage.jpegData(compressionQuality: 0.7) else { return false }
+        guard let imageData = ImageProcessor.process(image, for: .story) else { return false }
 
         isUploading = true
         defer { isUploading = false }

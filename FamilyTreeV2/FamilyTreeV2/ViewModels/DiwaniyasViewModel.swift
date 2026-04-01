@@ -52,6 +52,15 @@ class DiwaniyasViewModel: ObservableObject {
     }
 
     func fetchDiwaniyas() async {
+        // تحميل من الكاش أولاً
+        if diwaniyas.isEmpty,
+           let cached = CacheManager.shared.load([Diwaniya].self, for: .diwaniyas) {
+            self.diwaniyas = cached
+            Log.info("[Diwaniyas] تم تحميل \(cached.count) ديوانية من الكاش")
+        }
+
+        guard NetworkMonitor.shared.isConnected else { return }
+
         isLoading = true
         errorMessage = nil
         do {
@@ -63,6 +72,9 @@ class DiwaniyasViewModel: ObservableObject {
                 .value
 
             self.diwaniyas = response
+
+            // حفظ في الكاش
+            CacheManager.shared.save(response, for: .diwaniyas)
         } catch is CancellationError {
             Log.info("جلب الديوانيات تم إلغاؤه")
         } catch let urlError as URLError where urlError.code == .cancelled {
