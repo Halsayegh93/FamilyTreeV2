@@ -12,11 +12,6 @@
 
 /* Begin PBXFileReference section */
 		9A8DF20B2F406AEB000B2DD7 /* FamilyTreeV2.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FamilyTreeV2.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		9AA8863A2F524EBB001B4183 /* FamilyTreeV2.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = FamilyTreeV2.xcodeproj; sourceTree = "<group>"; };
-		9AEB37E22F5E54D10086CE6F /* FamilyTreeV2.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = FamilyTreeV2.xcodeproj; sourceTree = "<group>"; };
-		9AEB3CEC2F60F3C20086CE6F /* FamilyTreeV2.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = FamilyTreeV2.xcodeproj; sourceTree = "<group>"; };
-		9AF643262F7326A200445E6C /* FamilyTreeV2.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = FamilyTreeV2.xcodeproj; sourceTree = "<group>"; };
-		9AF643272F7326A200445E6C /* FamilyTreeV2 2.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = "FamilyTreeV2 2.xcodeproj"; sourceTree = "<group>"; };
 		9F71E7492F0D83E20001F8B7 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -40,41 +35,6 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		9AA886402F524EBB001B4183 /* Products */ = {
-			isa = PBXGroup;
-			children = (
-			);
-			name = Products;
-			sourceTree = "<group>";
-		};
-		9AEB37E92F5E54D10086CE6F /* Products */ = {
-			isa = PBXGroup;
-			children = (
-			);
-			name = Products;
-			sourceTree = "<group>";
-		};
-		9AEB3CED2F60F3C20086CE6F /* Products */ = {
-			isa = PBXGroup;
-			children = (
-			);
-			name = Products;
-			sourceTree = "<group>";
-		};
-		9AF6432A2F7326A200445E6C /* Products */ = {
-			isa = PBXGroup;
-			children = (
-			);
-			name = Products;
-			sourceTree = "<group>";
-		};
-		9AF6432C2F7326A200445E6C /* Products */ = {
-			isa = PBXGroup;
-			children = (
-			);
-			name = Products;
-			sourceTree = "<group>";
-		};
 		9F71E69B2F0B04F70001F8B7 = {
 			isa = PBXGroup;
 			children = (
@@ -141,28 +101,6 @@
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 9F71E69B2F0B04F70001F8B7;
 			projectDirPath = "";
-			projectReferences = (
-				{
-					ProductGroup = 9AF6432A2F7326A200445E6C /* Products */;
-					ProjectRef = 9AF643272F7326A200445E6C /* FamilyTreeV2 2.xcodeproj */;
-				},
-				{
-					ProductGroup = 9AEB3CED2F60F3C20086CE6F /* Products */;
-					ProjectRef = 9AEB3CEC2F60F3C20086CE6F /* FamilyTreeV2.xcodeproj */;
-				},
-				{
-					ProductGroup = 9AEB37E92F5E54D10086CE6F /* Products */;
-					ProjectRef = 9AEB37E22F5E54D10086CE6F /* FamilyTreeV2.xcodeproj */;
-				},
-				{
-					ProductGroup = 9AA886402F524EBB001B4183 /* Products */;
-					ProjectRef = 9AA8863A2F524EBB001B4183 /* FamilyTreeV2.xcodeproj */;
-				},
-				{
-					ProductGroup = 9AF6432C2F7326A200445E6C /* Products */;
-					ProjectRef = 9AF643262F7326A200445E6C /* FamilyTreeV2.xcodeproj */;
-				},
-			);
 			projectRoot = "";
 			targets = (
 				9A8DF20A2F406AEB000B2DD7 /* FamilyTreeV2 */,
