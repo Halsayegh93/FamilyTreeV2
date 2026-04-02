@@ -315,7 +315,7 @@ struct AboutView: View {
 
                         // App Name & Version
                         VStack(spacing: DS.Spacing.sm) {
-                            Text(t("شجرة العائلة", "FamilyTree"))
+                            Text(t("عائلة المحمدعلي", "Al-Mohammadali Family"))
                                 .font(DS.Font.title1)
                                 .fontWeight(.black)
                                 .foregroundColor(DS.Color.textPrimary)

@@ -85,10 +85,11 @@ struct SplashScreenView: View {
                             Circle().frame(width: 100, height: 100)
                         )
 
-                    Image(systemName: "leaf.fill")
-                        .font(DS.Font.scaled(42, weight: .bold))
-                        .foregroundColor(DS.Color.textOnPrimary)
-                        .dsCardShadow()
+                    Image("AppIconImage")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 80, height: 80)
+                        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
                 }
                 .dsGlowShadow()
                 .scaleEffect(logoScale)
@@ -96,7 +97,7 @@ struct SplashScreenView: View {
 
                 // النصوص
                 VStack(spacing: DS.Spacing.sm) {
-                    Text(L10n.t("عائلة المحمد علي", "Al-Muhammad Ali Family"))
+                    Text(L10n.t("عائلة المحمدعلي", "Al-Mohammadali Family"))
                         .font(DS.Font.title1)
                         .fontWeight(.black)
                         .foregroundColor(DS.Color.textPrimary)
