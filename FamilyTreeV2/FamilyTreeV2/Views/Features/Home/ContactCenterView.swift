@@ -48,23 +48,23 @@ struct ContactCenterView: View {
                             .opacity(appeared ? 1 : 0)
                             .scaleEffect(appeared ? 1 : 0.9)
 
-                        senderInfoCard
+                        categorySection
                             .opacity(appeared ? 1 : 0)
                             .offset(y: appeared ? 0 : 20)
 
-                        categorySection
+                        subjectSection
                             .opacity(appeared ? 1 : 0)
                             .offset(y: appeared ? 0 : 25)
 
-                        subjectSection
+                        messageSection
                             .opacity(appeared ? 1 : 0)
                             .offset(y: appeared ? 0 : 28)
 
-                        messageSection
+                        attachmentSection
                             .opacity(appeared ? 1 : 0)
                             .offset(y: appeared ? 0 : 30)
 
-                        attachmentSection
+                        senderInfoCard
                             .opacity(appeared ? 1 : 0)
                             .offset(y: appeared ? 0 : 32)
 
