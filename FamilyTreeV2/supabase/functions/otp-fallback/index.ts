@@ -220,13 +220,14 @@ serve(async (req) => {
   const expectedKey = (Deno.env.get("OTP_FALLBACK_API_KEY") ?? "")
     .trim()
     .replace(/^['"]|['"]$/g, "");
-  if (expectedKey) {
-    const tokenFromAuthorization = extractBearerToken(req.headers.get("authorization"));
-    const tokenFromApiKey = (req.headers.get("apikey") ?? "").trim().replace(/^['"]|['"]$/g, "");
-    const providedToken = tokenFromAuthorization || tokenFromApiKey;
-    if (providedToken !== expectedKey) {
-      return json(401, { accepted: false, message: "Unauthorized" });
-    }
+  if (!expectedKey) {
+    return json(500, { accepted: false, message: "OTP_FALLBACK_API_KEY not configured" });
+  }
+  const tokenFromAuthorization = extractBearerToken(req.headers.get("authorization"));
+  const tokenFromApiKey = (req.headers.get("apikey") ?? "").trim().replace(/^['"]|['"]$/g, "");
+  const providedToken = tokenFromAuthorization || tokenFromApiKey;
+  if (providedToken !== expectedKey) {
+    return json(401, { accepted: false, message: "Unauthorized" });
   }
 
   let payload: FallbackRequest;

@@ -54,7 +54,7 @@ serve(async (req) => {
 
     if (
       !callerProfile ||
-      !["owner", "admin", "supervisor"].includes(callerProfile.role)
+      !["owner", "admin"].includes(callerProfile.role)
     ) {
       return json(403, {
         ok: false,

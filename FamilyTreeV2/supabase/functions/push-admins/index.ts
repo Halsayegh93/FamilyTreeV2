@@ -102,8 +102,31 @@ Deno.serve(async (req) => {
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
   const serviceRole = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+  const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
   if (!supabaseUrl || !serviceRole) {
     return json(500, { ok: false, message: "Missing Supabase service env" });
+  }
+
+  // التحقق من هوية المرسل — لازم يكون مدير أو مالك
+  const authHeader = req.headers.get("authorization") ?? "";
+  if (!authHeader) {
+    return json(401, { ok: false, message: "Missing authorization header" });
+  }
+  const callerClient = createClient(supabaseUrl, anonKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: { headers: { authorization: authHeader } },
+  });
+  const { data: { user: caller } } = await callerClient.auth.getUser();
+  if (!caller) {
+    return json(401, { ok: false, message: "Invalid token" });
+  }
+  const { data: callerProfile } = await callerClient
+    .from("profiles")
+    .select("role")
+    .eq("id", caller.id)
+    .single();
+  if (!callerProfile || !["owner", "admin", "monitor", "supervisor"].includes(callerProfile.role)) {
+    return json(403, { ok: false, message: "Only moderators can send push notifications" });
   }
 
   const teamId = Deno.env.get("APPLE_TEAM_ID") ?? "";
@@ -137,7 +160,7 @@ Deno.serve(async (req) => {
   const { data: admins, error: adminsErr } = await supabase
     .from("profiles")
     .select("id")
-    .in("role", ["owner", "admin", "supervisor"]);
+    .in("role", ["owner", "admin", "monitor", "supervisor"]);
 
   if (adminsErr) {
     return json(500, { ok: false, message: `Failed loading admins: ${adminsErr.message}` });
