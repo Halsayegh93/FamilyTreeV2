@@ -80,6 +80,28 @@ struct HomeNewsView: View {
                         .refreshable { await refreshNews(notifyIfNew: true, force: true) }
                     }
                     .transition(.move(edge: L10n.isArabic ? .trailing : .leading))
+
+                    // زر إضافة خبر عائم — فوق البار السفلي
+                    if authVM.currentUser?.role != .pending && activeSubPage == nil {
+                        VStack {
+                            Spacer()
+                            HStack {
+                                Spacer()
+                                Button(action: { showingAddNews = true }) {
+                                    Image(systemName: "plus")
+                                        .font(DS.Font.scaled(22, weight: .bold))
+                                        .foregroundColor(.white)
+                                        .frame(width: 56, height: 56)
+                                        .background(DS.Color.gradientPrimary)
+                                        .clipShape(Circle())
+                                        .shadow(color: DS.Color.primary.opacity(0.3), radius: 8, y: 4)
+                                }
+                                .buttonStyle(DSBoldButtonStyle())
+                                .padding(.trailing, DS.Spacing.xl)
+                                .padding(.bottom, DS.Spacing.sm)
+                            }
+                        }
+                    }
                 }
             }
             .navigationBarHidden(true)
@@ -477,28 +499,7 @@ struct HomeNewsView: View {
 
                 Spacer()
 
-                if authVM.currentUser?.role != .pending {
-                    Button(action: { showingAddNews = true }) {
-                        HStack(spacing: DS.Spacing.xs) {
-                            Image(systemName: "plus")
-                                .font(DS.Font.scaled(14, weight: .bold))
-                            Text(L10n.t("خبر جديد", "New Post"))
-                                .font(DS.Font.caption1)
-                                .fontWeight(.bold)
-                        }
-                        .foregroundColor(DS.Color.primary)
-                        .padding(.horizontal, DS.Spacing.md)
-                        .padding(.vertical, DS.Spacing.xs + 2)
-                        .background(DS.Color.primary.opacity(0.1))
-                        .clipShape(Capsule())
-                        .overlay(
-                            Capsule()
-                                .stroke(DS.Color.primary.opacity(0.15), lineWidth: 1)
-                        )
-                    }
-                    .buttonStyle(DSScaleButtonStyle())
-                    .accessibilityLabel(L10n.t("إضافة خبر جديد", "Add new post"))
-                }
+                // زر إضافة خبر منقول للأسفل كـ FAB
             }
             .padding(.horizontal, DS.Spacing.lg)
             .padding(.vertical, DS.Spacing.sm)
