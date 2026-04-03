@@ -379,7 +379,7 @@ struct TreeView: View {
 
                 // إخفاء البانر والهايلايت بعد 12 ثانية
                 Task {
-                    try? await Task.sleep(nanoseconds: 12_000_000_000)
+                    try? await Task.sleep(nanoseconds: 20_000_000_000)
                     withAnimation(DS.Anim.snappy) {
                         kinshipBanner = nil
                         kinshipHighlightedIds = []
