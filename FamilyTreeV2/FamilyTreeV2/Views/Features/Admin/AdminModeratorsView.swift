@@ -346,6 +346,10 @@ struct AdminModeratorsView: View {
             (L10n.t("تسجيل عضو جديد", "Register members"), [true, false, false]),
             (L10n.t("إرسال إشعارات", "Send notifications"), [true, false, false]),
             (L10n.t("حذف أخبار", "Delete news"), [true, false, false]),
+            (L10n.t("إدارة الأدوار", "Manage roles"), [false, false, false]),
+            (L10n.t("الأمان والإعدادات", "Security & Settings"), [false, false, false]),
+            (L10n.t("أرقام محظورة", "Banned phones"), [false, false, false]),
+            (L10n.t("إدارة الأجهزة", "Manage devices"), [false, false, false]),
         ]
 
         return VStack(spacing: 0) {
