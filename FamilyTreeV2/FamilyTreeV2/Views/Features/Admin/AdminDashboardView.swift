@@ -174,16 +174,16 @@ struct AdminDashboardView: View {
                             if authVM.isAdmin {
                                 DSCard(padding: 0) {
                                     DSSectionHeader(
-                                        title: L10n.t("المدراء والمشرفين والمراقبين", "Admins, Monitors & Supervisors"),
-                                        icon: "shield.fill",
+                                        title: L10n.t("فريق الإدارة", "Admin Team"),
+                                        icon: "person.3.fill",
                                         iconColor: DS.Color.neonPurple
                                     )
 
                                         NavigationLink(destination: AdminModeratorsView()) {
                                             DSActionRow(
-                                                title: L10n.t("المدراء والمشرفين والمراقبين", "Admins, Monitors & Supervisors"),
-                                                subtitle: L10n.t("عرض قائمة المدراء والمراقبين والمشرفين", "View admins, monitors, and supervisors list"),
-                                                icon: "shield.fill",
+                                                title: L10n.t("فريق الإدارة", "Admin Team"),
+                                                subtitle: L10n.t("عرض أعضاء فريق الإدارة وصلاحياتهم", "View admin team members and permissions"),
+                                                icon: "person.3.fill",
                                                 color: DS.Color.neonPurple,
                                                 badge: moderatorCount
                                             )

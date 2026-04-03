@@ -43,7 +43,7 @@ struct AdminModeratorsView: View {
                                 moderatorRow(member: member, index: index)
                             }
                         } header: {
-                            sectionHeader(title: L10n.t("المدراء", "Admins"), icon: "shield.fill", color: DS.Color.neonPurple, count: admins.count)
+                            sectionHeader(title: L10n.t("المدراء", "Admins"), icon: "shield.circle.fill", color: DS.Color.neonPurple, count: admins.count)
                         }
                     }
 
@@ -54,7 +54,7 @@ struct AdminModeratorsView: View {
                                 moderatorRow(member: member, index: admins.count + index)
                             }
                         } header: {
-                            sectionHeader(title: L10n.t("المراقبين", "Monitors"), icon: "eye.fill", color: DS.Color.monitorRole, count: monitors.count)
+                            sectionHeader(title: L10n.t("المراقبين", "Monitors"), icon: "eye.circle.fill", color: DS.Color.monitorRole, count: monitors.count)
                         }
                     }
 
@@ -65,21 +65,21 @@ struct AdminModeratorsView: View {
                                 moderatorRow(member: member, index: admins.count + monitors.count + index)
                             }
                         } header: {
-                            sectionHeader(title: L10n.t("المشرفين", "Supervisors"), icon: "star.fill", color: DS.Color.warning, count: supervisors.count)
+                            sectionHeader(title: L10n.t("المشرفين", "Supervisors"), icon: "star.circle.fill", color: DS.Color.warning, count: supervisors.count)
                         }
                     }
                     // قسم الصلاحيات
                     Section {
                         permissionsGuide
                     } header: {
-                        sectionHeader(title: L10n.t("صلاحيات الأدوار", "Role Permissions"), icon: "lock.shield.fill", color: DS.Color.info, count: nil)
+                        sectionHeader(title: L10n.t("صلاحيات الأدوار", "Role Permissions"), icon: "lock.circle.fill", color: DS.Color.info, count: nil)
                     }
                 }
                 .listStyle(.insetGrouped)
                 .scrollContentBackground(.hidden)
             }
         }
-        .navigationTitle(L10n.t("المدراء والمشرفين والمراقبين", "Admins, Monitors & Supervisors"))
+        .navigationTitle(L10n.t("فريق الإدارة", "Admin Team"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if isOwner {
@@ -176,7 +176,7 @@ struct AdminModeratorsView: View {
         HStack(spacing: DS.Spacing.md) {
             ZStack {
                 let roleColor = (member.role == .owner || member.role == .admin) ? DS.Color.neonPurple : (member.role == .monitor ? DS.Color.monitorRole : DS.Color.warning)
-                let roleIcon = (member.role == .owner || member.role == .admin) ? "shield.fill" : (member.role == .monitor ? "eye.fill" : "star.fill")
+                let roleIcon = (member.role == .owner || member.role == .admin) ? "shield.circle.fill" : (member.role == .monitor ? "eye.circle.fill" : "star.circle.fill")
 
                 Circle()
                     .fill(
@@ -422,7 +422,7 @@ struct AdminModeratorsView: View {
                     .font(DS.Font.scaled(40, weight: .bold))
                     .foregroundColor(DS.Color.neonPurple.opacity(0.5))
             }
-            Text(L10n.t("لا يوجد مدراء أو مراقبين أو مشرفين", "No admins, monitors, or supervisors"))
+            Text(L10n.t("لا يوجد أعضاء في فريق الإدارة", "No admin team members"))
                 .font(DS.Font.title3)
                 .foregroundColor(DS.Color.textSecondary)
 
