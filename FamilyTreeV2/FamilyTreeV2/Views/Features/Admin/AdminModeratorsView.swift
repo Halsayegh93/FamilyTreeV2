@@ -354,17 +354,17 @@ struct AdminModeratorsView: View {
 
         return VStack(spacing: 0) {
             // رأس الجدول
-            HStack(spacing: 0) {
+            HStack(spacing: 4) {
                 Text(L10n.t("الصلاحية", "Permission"))
-                    .font(DS.Font.scaled(11, weight: .bold))
+                    .font(DS.Font.scaled(13, weight: .bold))
                     .foregroundColor(DS.Color.textSecondary)
-                    .frame(width: 130, alignment: .leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
                 ForEach(0..<roles.count, id: \.self) { i in
                     Text(roles[i].0)
-                        .font(DS.Font.scaled(10, weight: .bold))
+                        .font(DS.Font.scaled(12, weight: .bold))
                         .foregroundColor(roles[i].1)
-                        .frame(width: 44)
+                        .frame(width: 38)
                 }
             }
             .padding(.horizontal, DS.Spacing.md)
@@ -375,19 +375,19 @@ struct AdminModeratorsView: View {
 
             // صفوف الصلاحيات
             ForEach(0..<permissions.count, id: \.self) { row in
-                HStack(spacing: 0) {
+                HStack(spacing: 4) {
                     Text(permissions[row].0)
-                        .font(DS.Font.scaled(11, weight: .medium))
+                        .font(DS.Font.scaled(13, weight: .medium))
                         .foregroundColor(DS.Color.textPrimary)
-                        .frame(width: 130, alignment: .leading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                         .lineLimit(2)
                         .minimumScaleFactor(0.8)
 
                     ForEach(0..<permissions[row].1.count, id: \.self) { col in
                         Image(systemName: permissions[row].1[col] ? "checkmark.circle.fill" : "xmark.circle.fill")
-                            .font(DS.Font.scaled(14))
+                            .font(DS.Font.scaled(16))
                             .foregroundColor(permissions[row].1[col] ? DS.Color.success : DS.Color.textTertiary.opacity(0.4))
-                            .frame(width: 44)
+                            .frame(width: 38)
                     }
                 }
                 .padding(.horizontal, DS.Spacing.md)
