@@ -694,6 +694,14 @@ struct RecursiveTreeBranch: View {
             return allChildren
         }
 
+        // عند عرض صلة القرابة — فقط الأبناء اللي بمسار القرابة
+        if !kinshipHighlightedIds.isEmpty {
+            let kinshipChildren = allChildren.filter { kinshipHighlightedIds.contains($0.id) }
+            if !kinshipChildren.isEmpty {
+                return kinshipChildren
+            }
+        }
+
         // إذا فيه فروع مفتوحة، نعرض كل الفروع المفتوحة
         let focusedChildren = allChildren.filter { activePath.contains($0.id) }
         if !focusedChildren.isEmpty {
