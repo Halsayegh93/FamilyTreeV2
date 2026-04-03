@@ -33,10 +33,10 @@ struct TreeView: View {
     @State private var highlightTask: Task<Void, Never>?
     @State private var locationHighlightTask: Task<Void, Never>?
 
-    @State private var scale: CGFloat = 0.60
+    @State private var scale: CGFloat = 0.80
     @State private var treeID = UUID()
     @State private var currentAnchor: UnitPoint = .center
-    @State private var baseScale: CGFloat = 0.60
+    @State private var baseScale: CGFloat = 0.80
     @State private var zoomAnchor: UnitPoint = .center
 
     @Environment(\.verticalSizeClass) var verticalSizeClass
@@ -741,8 +741,8 @@ struct RecursiveTreeBranch: View {
                         activePath.subtract(idsToRemove)
                         searchedMemberID = nil
                         // رجوع 60% عند إغلاق العقدة
-                        scale = 0.60
-                        baseScale = 0.60
+                        scale = 0.80
+                        baseScale = 0.80
                     }
                 }
                 Task {
@@ -850,6 +850,23 @@ struct TreeMemberNode: View {
 
     // لون الإطار = نفس لون الدائرة
     private var borderColor: Color { nodeAccentColor }
+
+    // تدرج العقدة
+    private var nodeGradient: LinearGradient {
+        LinearGradient(
+            colors: [nodeAccentColor, nodeAccentColor.opacity(0.6)],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
+
+    private var borderGradient: LinearGradient {
+        LinearGradient(
+            colors: [nodeAccentColor.opacity(0.9), nodeAccentColor.opacity(0.4)],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+    }
 
     var body: some View {
         if viewMode == .fullTree {
@@ -962,14 +979,14 @@ struct TreeMemberNode: View {
             VStack(spacing: 0) {
                 Button(action: onTap) {
                     ZStack {
-                        // حلقة خارجية بلون الرتبة
+                        // حلقة خارجية بتدرج لون الرتبة
                         Circle()
-                            .stroke(borderColor, lineWidth: 3)
+                            .stroke(borderGradient, lineWidth: 3)
                             .frame(width: interactiveNodeSize + 4, height: interactiveNodeSize + 4)
 
-                        // الشكل الدائري الرئيسي
+                        // الشكل الدائري الرئيسي — تدرج
                         Circle()
-                            .fill(nodeAccentColor)
+                            .fill(nodeGradient)
                             .frame(width: interactiveNodeSize, height: interactiveNodeSize)
                             .dsSubtleShadow()
 
@@ -1061,7 +1078,7 @@ struct TreeMemberNode: View {
                             .frame(height: interactiveLabelHeight + 2, alignment: .center)
                             .background(DS.Color.surface)
                             .clipShape(Capsule())
-                            .overlay(Capsule().stroke(borderColor, lineWidth: 2.5))
+                            .overlay(Capsule().stroke(borderGradient, lineWidth: 2.5))
                     }
                 }.foregroundColor(DS.Color.textOnPrimary).zIndex(1)
 
