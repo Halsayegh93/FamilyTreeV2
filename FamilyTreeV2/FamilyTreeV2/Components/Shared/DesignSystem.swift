@@ -25,7 +25,7 @@ enum DS {
 
         // Gradients
         static let gradientPrimary = LinearGradient(
-            colors: [primary, secondaryDark],
+            colors: [primary, secondary],
             startPoint: .topLeading, endPoint: .bottomTrailing
         )
         static let gradientAccent = LinearGradient(
@@ -65,7 +65,7 @@ enum DS {
             startPoint: .leading, endPoint: .trailing
         )
         static let gradientRoyal = LinearGradient(
-            colors: [primary, secondaryDark],
+            colors: [primary, secondary],
             startPoint: .topLeading, endPoint: .bottomTrailing
         )
         static let gradientGold = LinearGradient(
