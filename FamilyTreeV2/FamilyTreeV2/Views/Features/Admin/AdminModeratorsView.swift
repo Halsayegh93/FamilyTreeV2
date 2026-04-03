@@ -354,20 +354,19 @@ struct AdminModeratorsView: View {
 
         return VStack(spacing: 0) {
             // رأس الجدول
-            HStack(spacing: 4) {
+            HStack(spacing: 0) {
+                Spacer().frame(width: DS.Spacing.md)
                 Text(L10n.t("الصلاحية", "Permission"))
                     .font(DS.Font.scaled(13, weight: .bold))
                     .foregroundColor(DS.Color.textSecondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
                 ForEach(0..<roles.count, id: \.self) { i in
+                    Spacer()
                     Text(roles[i].0)
                         .font(DS.Font.scaled(12, weight: .bold))
                         .foregroundColor(roles[i].1)
-                        .frame(width: 38)
                 }
+                Spacer().frame(width: DS.Spacing.md)
             }
-            .padding(.horizontal, DS.Spacing.md)
             .padding(.vertical, DS.Spacing.sm)
             .background(DS.Color.surface.opacity(0.5))
 
@@ -375,22 +374,21 @@ struct AdminModeratorsView: View {
 
             // صفوف الصلاحيات
             ForEach(0..<permissions.count, id: \.self) { row in
-                HStack(spacing: 4) {
+                HStack(spacing: 0) {
+                    Spacer().frame(width: DS.Spacing.md)
                     Text(permissions[row].0)
                         .font(DS.Font.scaled(13, weight: .medium))
                         .foregroundColor(DS.Color.textPrimary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
                         .lineLimit(2)
                         .minimumScaleFactor(0.8)
-
                     ForEach(0..<permissions[row].1.count, id: \.self) { col in
+                        Spacer()
                         Image(systemName: permissions[row].1[col] ? "checkmark.circle.fill" : "xmark.circle.fill")
                             .font(DS.Font.scaled(16))
                             .foregroundColor(permissions[row].1[col] ? DS.Color.success : DS.Color.textTertiary.opacity(0.4))
-                            .frame(width: 38)
                     }
+                    Spacer().frame(width: DS.Spacing.md)
                 }
-                .padding(.horizontal, DS.Spacing.md)
                 .padding(.vertical, DS.Spacing.sm)
 
                 if row < permissions.count - 1 {
