@@ -13,13 +13,8 @@ struct SplashScreenView: View {
 
     var body: some View {
         ZStack {
-            // خلفية تدرج لونين
-            LinearGradient(
-                colors: [DS.Color.primary, DS.Color.accentDark],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
+            // خلفية
+            DS.Color.background.ignoresSafeArea()
 
             VStack(spacing: DS.Spacing.xxl) {
                 Spacer()
@@ -31,12 +26,12 @@ struct SplashScreenView: View {
                         .trim(from: 0.0, to: 0.65)
                         .stroke(
                             AngularGradient(
-                                colors: [Color.white.opacity(0.0), Color.white.opacity(0.35), Color.white.opacity(0.0)],
+                                colors: [DS.Color.primary.opacity(0.0), DS.Color.primary.opacity(0.3), DS.Color.primary.opacity(0.0)],
                                 center: .center
                             ),
                             style: StrokeStyle(lineWidth: 2.5, lineCap: .round)
                         )
-                        .frame(width: 175, height: 175)
+                        .frame(width: 155, height: 155)
                         .rotationEffect(.degrees(ringRotation))
 
                     // حلقة ثانية عكسية
@@ -44,48 +39,57 @@ struct SplashScreenView: View {
                         .trim(from: 0.0, to: 0.4)
                         .stroke(
                             AngularGradient(
-                                colors: [Color.white.opacity(0.0), Color.white.opacity(0.25), Color.white.opacity(0.0)],
+                                colors: [DS.Color.accent.opacity(0.0), DS.Color.accent.opacity(0.2), DS.Color.accent.opacity(0.0)],
                                 center: .center
                             ),
                             style: StrokeStyle(lineWidth: 2, lineCap: .round)
                         )
-                        .frame(width: 165, height: 165)
+                        .frame(width: 145, height: 145)
                         .rotationEffect(.degrees(ring2Rotation))
 
                     // حلقة نبض خارجية
                     Circle()
-                        .stroke(Color.white.opacity(0.15), lineWidth: 2.5)
-                        .frame(width: 160, height: 160)
+                        .stroke(DS.Color.primary.opacity(0.12), lineWidth: 2.5)
+                        .frame(width: 140, height: 140)
                         .scaleEffect(pulseScale)
 
                     // Glow ring
                     Circle()
-                        .fill(Color.white.opacity(glowOpacity * 0.1))
-                        .frame(width: 150, height: 150)
+                        .fill(DS.Color.primary.opacity(glowOpacity * 0.08))
+                        .frame(width: 130, height: 130)
                         .blur(radius: 15)
 
+                    // دائرة خارجية
+                    Circle()
+                        .fill(DS.Color.primary.opacity(0.08))
+                        .frame(width: 120, height: 120)
+
+                    // الدائرة الرئيسية
+                    Circle()
+                        .fill(DS.Color.gradientRoyal)
+                        .frame(width: 100, height: 100)
+                        .dsGlowShadow()
+
                     // Shimmer overlay
-                    RoundedRectangle(cornerRadius: 32, style: .continuous)
+                    Circle()
                         .fill(
                             LinearGradient(
-                                colors: [.clear, .white.opacity(0.18), .clear],
+                                colors: [.clear, .white.opacity(0.15), .clear],
                                 startPoint: .leading,
                                 endPoint: .trailing
                             )
                         )
-                        .frame(width: 140, height: 140)
+                        .frame(width: 100, height: 100)
                         .offset(x: shimmerOffset)
                         .mask(
-                            RoundedRectangle(cornerRadius: 32, style: .continuous).frame(width: 140, height: 140)
+                            Circle().frame(width: 100, height: 100)
                         )
 
-                    // أيقونة التطبيق — نفس شكل الأيقونة بالضبط
                     Image("AppIconImage")
                         .resizable()
                         .scaledToFit()
-                        .frame(width: 140, height: 140)
-                        .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
-                        .shadow(color: DS.Color.primary.opacity(0.3), radius: 20, y: 8)
+                        .frame(width: 80, height: 80)
+                        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
                 }
                 .dsGlowShadow()
                 .scaleEffect(logoScale)
@@ -96,11 +100,11 @@ struct SplashScreenView: View {
                     Text(L10n.t("عائلة المحمدعلي", "Al-Mohammadali Family"))
                         .font(DS.Font.title1)
                         .fontWeight(.black)
-                        .foregroundColor(.white)
+                        .foregroundColor(DS.Color.textPrimary)
 
                     Text(L10n.t("شجرة العائلة", "Family Tree"))
                         .font(DS.Font.title3)
-                        .foregroundColor(.white.opacity(0.8))
+                        .foregroundColor(DS.Color.textSecondary)
                 }
                 .opacity(textOpacity)
 
@@ -112,7 +116,7 @@ struct SplashScreenView: View {
                     HStack(spacing: 6) {
                         ForEach(0..<3) { i in
                             Circle()
-                                .fill(Color.white)
+                                .fill(DS.Color.primary)
                                 .frame(width: 8, height: 8)
                                 .scaleEffect(dotCount == i + 1 ? 1.3 : 0.7)
                                 .opacity(dotCount == i + 1 ? 1.0 : 0.3)
@@ -123,7 +127,7 @@ struct SplashScreenView: View {
                     Text(L10n.t("جاري التحقق", "Verifying") + String(repeating: ".", count: dotCount))
                         .font(DS.Font.callout)
                         .fontWeight(.medium)
-                        .foregroundColor(.white.opacity(0.7))
+                        .foregroundColor(DS.Color.textSecondary)
                         .frame(width: 140)
                         .animation(.none, value: dotCount)
                 }
