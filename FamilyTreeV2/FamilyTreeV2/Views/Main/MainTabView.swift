@@ -11,11 +11,8 @@ struct MainTabView: View {
                 if newValue == selectedTab {
                     NotificationCenter.default.post(name: .didReselectTab, object: nil, userInfo: ["tab": newValue])
                 }
-                // Haptic feedback on tab switch
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                withAnimation(DS.Anim.snappy) {
-                    selectedTab = newValue
-                }
+                selectedTab = newValue
             }
         )
     }
