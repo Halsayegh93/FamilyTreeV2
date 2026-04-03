@@ -25,7 +25,7 @@ enum DS {
 
         // Gradients
         static let gradientPrimary = LinearGradient(
-            colors: [primary, secondaryLight],
+            colors: [primaryDark, primary, SwiftUI.Color.adaptive(light: "#4DC9A0", dark: "#2A9D78")],
             startPoint: .topLeading, endPoint: .bottomTrailing
         )
         static let gradientAccent = LinearGradient(
