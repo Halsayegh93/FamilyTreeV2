@@ -355,12 +355,6 @@ struct TreeView: View {
                     fullPath.formUnion(pathIds)
                 }
 
-                // تصغير الزوم عشان يبان المسار كامل
-                withAnimation(.easeInOut(duration: 0.3)) {
-                    scale = 0.35
-                    baseScale = 0.35
-                }
-
                 // فتح كل الفروع بالمسار + هايلايت
                 withAnimation(.easeInOut(duration: 0.3)) {
                     activePath = fullPath
@@ -369,10 +363,22 @@ struct TreeView: View {
                     kinshipBanner = relationship
                 }
 
-                // سكرول للجد المشترك — عشان يكون بالنص بين الاسمين
+                // تصغير الزوم عشان يبان المسار كامل
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    scale = 0.45
+                    baseScale = 0.45
+                }
+
+                // سكرول للجد المشترك — عشان يكون بنص الشاشة
                 let scrollToId = commonAncestor ?? memberId
                 Task {
-                    try? await Task.sleep(nanoseconds: 600_000_000)
+                    try? await Task.sleep(nanoseconds: 500_000_000)
+                    currentAnchor = .center
+                    scrollTarget = scrollToId
+                    scrollCounter += 1
+
+                    // سكرول ثاني للتأكد من التمركز بعد ما الشجرة تتحدث
+                    try? await Task.sleep(nanoseconds: 400_000_000)
                     currentAnchor = .center
                     scrollTarget = scrollToId
                     scrollCounter += 1
