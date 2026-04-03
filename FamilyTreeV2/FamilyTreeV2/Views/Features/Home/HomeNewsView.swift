@@ -85,9 +85,12 @@ struct HomeNewsView: View {
             .navigationBarHidden(true)
             .animation(DS.Anim.snappy, value: activeSubPage == nil)
             .task {
-                // AppState يحمّل البيانات الأساسية — هنا بس الصور والمعرض
                 await memberVM.fetchApprovedGalleryPhotos()
+                rebuildGalleryMembers()
+                rebuildStoryGroups()
             }
+            .onChange(of: storyVM.membersWithStories.count) { _, _ in rebuildStoryGroups() }
+            .onChange(of: memberVM.approvedGalleryPhotos.count) { _, _ in rebuildGalleryMembers() }
             .sheet(isPresented: $showingAddNews) {
                 AddNewsView()
                     .presentationDetents([.medium, .large])
@@ -201,10 +204,16 @@ struct HomeNewsView: View {
 
     // MARK: - Gallery Stories Section
 
-    /// أعضاء عندهم صور معتمدة
+    /// أعضاء عندهم صور معتمدة — cached
+    @State private var cachedGalleryMembers: [(member: FamilyMember, count: Int)] = []
+
     private var galleryMembersWithPhotos: [(member: FamilyMember, count: Int)] {
+        cachedGalleryMembers
+    }
+
+    private func rebuildGalleryMembers() {
         let grouped = Dictionary(grouping: memberVM.approvedGalleryPhotos, by: { $0.memberId })
-        return grouped.compactMap { (memberId, photos) in
+        cachedGalleryMembers = grouped.compactMap { (memberId, photos) in
             guard let member = memberVM.member(byId: memberId) else { return nil }
             return (member: member, count: photos.count)
         }
@@ -213,16 +222,21 @@ struct HomeNewsView: View {
 
     // MARK: - Real Stories Section
 
-    /// ستوريات مرتبة: المستخدم الحالي أولاً
+    /// ستوريات مرتبة: المستخدم الحالي أولاً — cached
+    @State private var cachedStoryGroups: [(member: FamilyMember, stories: [FamilyStory])] = []
+
     private var sortedStoryGroups: [(member: FamilyMember, stories: [FamilyStory])] {
-        let groups = storyVM.membersWithStories
-        guard let userId = authVM.currentUser?.id else { return groups }
-        var sorted = groups
-        if let myIndex = sorted.firstIndex(where: { $0.member.id == userId }) {
-            let myGroup = sorted.remove(at: myIndex)
-            sorted.insert(myGroup, at: 0)
+        cachedStoryGroups
+    }
+
+    private func rebuildStoryGroups() {
+        var groups = storyVM.membersWithStories
+        if let userId = authVM.currentUser?.id,
+           let myIndex = groups.firstIndex(where: { $0.member.id == userId }) {
+            let myGroup = groups.remove(at: myIndex)
+            groups.insert(myGroup, at: 0)
         }
-        return sorted
+        cachedStoryGroups = groups
     }
 
     private var realStoriesSection: some View {
@@ -505,7 +519,7 @@ struct HomeNewsView: View {
         }
         .padding(.horizontal, DS.Spacing.md)
         .padding(.top, DS.Spacing.sm)
-        .animation(DS.Anim.smooth, value: appeared)
+        // شيلت animation واسعة — تسبب لاق على القائمة الكبيرة
     }
 
     private func newsCard(for news: NewsPost) -> some View {

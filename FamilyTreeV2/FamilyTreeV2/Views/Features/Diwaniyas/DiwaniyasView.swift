@@ -10,6 +10,7 @@ struct DiwaniyasView: View {
     @State private var diwaniyaToEdit: Diwaniya? = nil
     @State private var diwaniyaToDelete: Diwaniya? = nil
     @State private var appeared = false
+    @State private var cachedFilteredDiwaniyas: [Diwaniya] = []
 
     var body: some View {
         NavigationStack {
@@ -107,7 +108,9 @@ struct DiwaniyasView: View {
             .onAppear {
                 viewModel.canModerate = authVM.canModerate
                 viewModel.authVM = authVM
+                rebuildFilteredDiwaniyas()
             }
+            .onChange(of: viewModel.diwaniyas.count) { _, _ in rebuildFilteredDiwaniyas() }
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
             .alert(L10n.t("خطأ", "Error"), isPresented: .init(
                 get: { viewModel.errorMessage != nil },
@@ -123,11 +126,12 @@ struct DiwaniyasView: View {
 
 
     // MARK: - Filtered Diwaniyas
-    /// المعتمدة تظهر للكل، المعلقة تظهر بس للأدمن/المشرف وصاحب الديوانية
-    private var filteredDiwaniyas: [Diwaniya] {
+    private var filteredDiwaniyas: [Diwaniya] { cachedFilteredDiwaniyas }
+
+    private func rebuildFilteredDiwaniyas() {
         let userId = authVM.currentUser?.id
         let canModerate = authVM.canModerate
-        return viewModel.diwaniyas.filter { diwaniya in
+        cachedFilteredDiwaniyas = viewModel.diwaniyas.filter { diwaniya in
             if diwaniya.approvalStatus == "approved" { return true }
             if diwaniya.approvalStatus == "pending" {
                 return canModerate || diwaniya.ownerId == userId
