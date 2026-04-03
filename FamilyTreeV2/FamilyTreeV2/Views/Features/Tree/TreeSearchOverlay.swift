@@ -160,8 +160,9 @@ struct TreeSearchOverlay: View {
                 .padding(.top, DS.Spacing.sm)
                 .padding(.bottom, DS.Spacing.xs)
 
-                ScrollView {
-                    LazyVStack(spacing: 0) {
+                if searchResults.count <= 4 {
+                    // نتائج قليلة — بدون سكرول، حسب المحتوى
+                    VStack(spacing: 0) {
                         ForEach(searchResults) { result in
                             Button(action: {
                                 saveRecentSearch(searchText)
@@ -177,10 +178,30 @@ struct TreeSearchOverlay: View {
                             }
                         }
                     }
+                } else {
+                    // نتائج كثيرة — سكرول مع حد أقصى
+                    ScrollView {
+                        LazyVStack(spacing: 0) {
+                            ForEach(searchResults) { result in
+                                Button(action: {
+                                    saveRecentSearch(searchText)
+                                    searchText = ""
+                                    isSearchFocused = false
+                                    searchResults = []
+                                    onSelect(result.member)
+                                }) {
+                                    searchResultRow(result)
+                                }
+                                if result.id != searchResults.last?.id {
+                                    Divider().padding(.horizontal, DS.Spacing.md)
+                                }
+                            }
+                        }
+                    }
+                    .frame(maxHeight: 280)
                 }
             }
             .glassCard(radius: DS.Radius.lg)
-            .frame(maxHeight: 280)
             .padding(.top, DS.Spacing.xs)
         } else if !debouncedSearchText.isEmpty && searchText == debouncedSearchText {
             HStack(spacing: DS.Spacing.sm) {
