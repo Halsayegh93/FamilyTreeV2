@@ -87,9 +87,9 @@ struct SplashScreenView: View {
 
                     Image("AppIconImage")
                         .resizable()
-                        .scaledToFit()
-                        .frame(width: 80, height: 80)
-                        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        .scaledToFill()
+                        .frame(width: 100, height: 100)
+                        .clipShape(Circle())
                 }
                 .dsGlowShadow()
                 .scaleEffect(logoScale)
