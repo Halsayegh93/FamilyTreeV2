@@ -110,10 +110,35 @@ unauthenticated → (OTP login) → checking → authenticatedNoProfile → (reg
 ```
 
 - **OTP delivery:** SMS (default), WhatsApp, Voice call via `OTPDeliveryChannel`
-- **Roles:** `admin`, `supervisor`, `member`, `pending` (defined in `FamilyMember.UserRole`)
+- **Roles:** `owner`, `admin`, `monitor`, `supervisor`, `member`, `pending` (defined in `FamilyMember.UserRole`)
 - **Member statuses:** `pending`, `active`, `frozen`
 - **Trial system:** 7-day trial period tracked via `trialStartedAt`/`trialEndsAt`
-- **Moderation:** `canModerate` = admin OR supervisor (controls Admin tab visibility)
+- **Moderation:** `canModerate` = owner OR admin OR monitor OR supervisor (controls Admin tab visibility)
+
+### صلاحيات فريق الإدارة
+
+| الصلاحية | المالك (owner) | المدير (admin) | المراقب (monitor) | المشرف (supervisor) |
+|---|:---:|:---:|:---:|:---:|
+| دخول لوحة الإدارة | ✅ | ✅ | ✅ | ✅ |
+| قبول الطلبات | ✅ | ✅ | ✅ | ✅ |
+| رفض الطلبات (`canRejectRequests`) | ✅ | ✅ | ✅ | ❌ |
+| تعديل بيانات الأعضاء (`canEditMembers`) | ✅ | ✅ | ❌ | ❌ |
+| حذف أعضاء (`canDeleteMembers`) | ✅ | ✅ | ❌ | ❌ |
+| تسجيل عضو جديد (`canRegisterMembers`) | ✅ | ✅ | ❌ | ❌ |
+| إرسال إشعارات (`canSendNotifications`) | ✅ | ✅ | ❌ | ❌ |
+| حذف أخبار (`canDeleteNews`) | ✅ | ✅ | ❌ | ❌ |
+| نشر تلقائي للأخبار (`canAutoPublishNews`) | ✅ | ✅ | ✅ | ✅ |
+| إدارة الأدوار (`canManageRoles`) | ✅ | ❌ | ❌ | ❌ |
+| حذف أعضاء نهائياً | ✅ | ❌ | ❌ | ❌ |
+| الأمان والإعدادات (`canManageSettings`) | ✅ | ❌ | ❌ | ❌ |
+| أرقام محظورة (`canManageBannedPhones`) | ✅ | ❌ | ❌ | ❌ |
+| إدارة الأجهزة (`canManageDevices`) | ✅ | ❌ | ❌ | ❌ |
+
+**ملاحظات:**
+- المالك (`owner`) هو UUID ثابت — لا يمكن ترقية أحد لمالك عبر التطبيق
+- المالك يظهر للآخرين كـ "مدير" (لا يظهر لقب "مالك")
+- المراقب يقدر يوافق ويرفض الطلبات فقط — لا يعدل أو يحذف أعضاء
+- المشرف يقدر يوافق فقط — لا يرفض طلبات
 
 ## Navigation
 
