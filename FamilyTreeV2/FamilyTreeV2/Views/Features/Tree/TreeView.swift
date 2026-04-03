@@ -373,6 +373,7 @@ struct TreeView: View {
                 let scrollToId = commonAncestor ?? memberId
                 Task {
                     try? await Task.sleep(nanoseconds: 600_000_000)
+                    currentAnchor = .center
                     scrollTarget = scrollToId
                     scrollCounter += 1
                 }
