@@ -246,17 +246,37 @@ struct TreeSearchOverlay: View {
                     }
                 }
             } else {
+                let normalizedFull = ArabicTextNormalizer.normalizeForSearch(member.fullName)
+                let fullWords = normalizedFull.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
+
+                // تطابق الاسم الأول
                 if normalizedFirst == searchWords[0] {
                     score += 100
                 } else if normalizedFirst.hasPrefix(searchWords[0]) {
                     score += 80
                 }
 
-                let normalizedFull = ArabicTextNormalizer.normalizeForSearch(member.fullName)
-                let fullWords = normalizedFull.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
+                // نقاط إضافية لكل كلمة بحث تطابق بالترتيب — اللي يطابق أكثر يطلع أول
+                if searchWords.count > 1 && score > 0 {
+                    var matchedInOrder = 0
+                    var wordIdx = 0
+                    for sw in searchWords {
+                        while wordIdx < fullWords.count {
+                            if fullWords[wordIdx].hasPrefix(sw) {
+                                matchedInOrder += 1
+                                wordIdx += 1
+                                break
+                            }
+                            wordIdx += 1
+                        }
+                    }
+                    // كل كلمة مطابقة بالترتيب تضيف 30 نقطة
+                    score += Double(matchedInOrder) * 30.0
+                }
+
                 let allMatch = searchWords.allSatisfy { sw in fullWords.contains { $0.hasPrefix(sw) } }
 
-                if allMatch && score < 80 {
+                if allMatch && score == 0 {
                     score += 50
                 } else if !allMatch && score == 0 {
                     if let bio = member.bio, !bio.isEmpty {
