@@ -176,7 +176,7 @@ struct AdminModeratorsView: View {
         HStack(spacing: DS.Spacing.md) {
             ZStack {
                 let roleColor = (member.role == .owner || member.role == .admin) ? DS.Color.neonPurple : (member.role == .monitor ? DS.Color.monitorRole : DS.Color.warning)
-                let roleIcon = (member.role == .owner || member.role == .admin) ? "shield.circle.fill" : (member.role == .monitor ? "eye.circle.fill" : "star.circle.fill")
+                let roleIcon = (member.role == .owner || member.role == .admin) ? "shield.fill" : (member.role == .monitor ? "eye.fill" : "star.fill")
 
                 Circle()
                     .fill(
