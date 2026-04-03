@@ -364,7 +364,7 @@ struct AdminModeratorsView: View {
                     Text(roles[i].0)
                         .font(DS.Font.scaled(10, weight: .bold))
                         .foregroundColor(roles[i].1)
-                        .frame(width: 52)
+                        .frame(width: 44)
                 }
             }
             .padding(.horizontal, DS.Spacing.md)
@@ -387,7 +387,7 @@ struct AdminModeratorsView: View {
                         Image(systemName: permissions[row].1[col] ? "checkmark.circle.fill" : "xmark.circle.fill")
                             .font(DS.Font.scaled(14))
                             .foregroundColor(permissions[row].1[col] ? DS.Color.success : DS.Color.textTertiary.opacity(0.4))
-                            .frame(width: 52)
+                            .frame(width: 44)
                     }
                 }
                 .padding(.horizontal, DS.Spacing.md)
