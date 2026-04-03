@@ -323,24 +323,32 @@ struct TreeView: View {
                       let memberId = info["memberId"] as? UUID,
                       let relationship = info["relationship"] as? String else { return }
 
-                // بناء مسار كامل من الجذر للعضو الممسوح (عشان كل الفروع تنفتح)
+                // بناء مسار كامل من الجذر للعضو الممسوح
                 var fullPath = Set<UUID>()
 
                 // مسار العضو الممسوح من الجذر
+                var memberAncestors: [UUID] = []
                 var current = cachedMemberById[memberId]
                 while let c = current {
                     fullPath.insert(c.id)
+                    memberAncestors.append(c.id)
                     if let fid = c.fatherId { current = cachedMemberById[fid] } else { current = nil }
                 }
 
                 // مسار المستخدم الحالي من الجذر
+                var myAncestors: [UUID] = []
                 if let myId = authVM.currentUser?.id {
                     var myCurrent = cachedMemberById[myId]
                     while let c = myCurrent {
                         fullPath.insert(c.id)
+                        myAncestors.append(c.id)
                         if let fid = c.fatherId { myCurrent = cachedMemberById[fid] } else { myCurrent = nil }
                     }
                 }
+
+                // حساب الجد المشترك — أقرب أب مشترك بين الاثنين
+                let memberSet = Set(memberAncestors)
+                let commonAncestor = myAncestors.first { memberSet.contains($0) }
 
                 // إضافة IDs القرابة إذا موجودة
                 if let pathIds = info["pathIds"] as? [UUID] {
@@ -361,10 +369,11 @@ struct TreeView: View {
                     kinshipBanner = relationship
                 }
 
-                // سكرول للعضو بعد فتح الفروع
+                // سكرول للجد المشترك — عشان يكون بالنص بين الاسمين
+                let scrollToId = commonAncestor ?? memberId
                 Task {
                     try? await Task.sleep(nanoseconds: 600_000_000)
-                    scrollTarget = memberId
+                    scrollTarget = scrollToId
                     scrollCounter += 1
                 }
 
