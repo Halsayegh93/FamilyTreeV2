@@ -52,17 +52,9 @@ struct ContactCenterView: View {
                             .opacity(appeared ? 1 : 0)
                             .offset(y: appeared ? 0 : 20)
 
-                        subjectSection
+                        combinedMessageCard
                             .opacity(appeared ? 1 : 0)
                             .offset(y: appeared ? 0 : 25)
-
-                        messageSection
-                            .opacity(appeared ? 1 : 0)
-                            .offset(y: appeared ? 0 : 28)
-
-                        attachmentSection
-                            .opacity(appeared ? 1 : 0)
-                            .offset(y: appeared ? 0 : 30)
 
                         senderInfoCard
                             .opacity(appeared ? 1 : 0)
@@ -222,7 +214,134 @@ struct ContactCenterView: View {
         }
     }
 
-    // MARK: - Subject Section
+    // MARK: - Combined Message Card (موضوع + رسالة + مرفق)
+    private var combinedMessageCard: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(L10n.t("رسالتك", "Your Message"))
+                .font(DS.Font.calloutBold)
+                .foregroundColor(DS.Color.textPrimary)
+                .padding(.leading, DS.Spacing.xs)
+                .padding(.bottom, DS.Spacing.sm)
+
+            VStack(spacing: 0) {
+                // الموضوع
+                HStack(spacing: DS.Spacing.sm) {
+                    Image(systemName: "text.alignleft")
+                        .font(DS.Font.scaled(14, weight: .medium))
+                        .foregroundColor(DS.Color.textTertiary)
+                        .frame(width: 24)
+
+                    TextField(
+                        L10n.t("الموضوع (اختياري)...", "Subject (optional)..."),
+                        text: $subject
+                    )
+                    .font(DS.Font.body)
+                    .foregroundColor(DS.Color.textPrimary)
+                    .focused($focusedField, equals: .subject)
+                    .onChange(of: subject) { _, newValue in
+                        if newValue.count > 100 { subject = String(newValue.prefix(100)) }
+                    }
+
+                    if !subject.isEmpty {
+                        Button { subject = "" } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(DS.Font.scaled(14))
+                                .foregroundColor(DS.Color.textTertiary)
+                        }
+                    }
+                }
+                .padding(.horizontal, DS.Spacing.md)
+                .padding(.vertical, DS.Spacing.md)
+
+                Divider().padding(.horizontal, DS.Spacing.md)
+
+                // الرسالة
+                ZStack(alignment: .topTrailing) {
+                    TextEditor(text: $message)
+                        .frame(minHeight: 140)
+                        .focused($focusedField, equals: .message)
+                        .scrollContentBackground(.hidden)
+                        .font(DS.Font.body)
+                        .onChange(of: message) { _, newValue in
+                            if newValue.count > 1000 {
+                                message = String(newValue.prefix(1000))
+                                showCharacterLimitWarning = true
+                            }
+                        }
+
+                    if message.isEmpty {
+                        Text(L10n.t("اكتب رسالتك هنا...", "Write your message here..."))
+                            .font(DS.Font.body)
+                            .foregroundColor(DS.Color.textTertiary)
+                            .padding(.top, DS.Spacing.sm)
+                            .padding(.trailing, DS.Spacing.xs)
+                            .allowsHitTesting(false)
+                    }
+                }
+                .padding(.horizontal, DS.Spacing.md)
+                .padding(.top, DS.Spacing.sm)
+
+                HStack {
+                    Spacer()
+                    Text("\(message.count)/1000")
+                        .font(DS.Font.caption2)
+                        .foregroundColor(message.count >= 900 ? DS.Color.error : DS.Color.textTertiary)
+                }
+                .padding(.horizontal, DS.Spacing.md)
+
+                Divider().padding(.horizontal, DS.Spacing.md)
+
+                // المرفق
+                if let image = attachedImage {
+                    ZStack(alignment: .topTrailing) {
+                        Image(uiImage: image)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(height: 120)
+                            .frame(maxWidth: .infinity)
+                            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
+                            .padding(.horizontal, DS.Spacing.md)
+                            .padding(.vertical, DS.Spacing.sm)
+
+                        Button {
+                            withAnimation(DS.Anim.snappy) {
+                                attachedImage = nil
+                                selectedPhoto = nil
+                            }
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(DS.Font.scaled(20, weight: .bold))
+                                .foregroundColor(.white)
+                                .dsCardShadow()
+                        }
+                        .padding(DS.Spacing.lg)
+                    }
+                } else {
+                    PhotosPicker(selection: $selectedPhoto, matching: .images) {
+                        HStack(spacing: DS.Spacing.sm) {
+                            Image(systemName: "photo.badge.plus")
+                                .font(DS.Font.scaled(15, weight: .semibold))
+                            Text(L10n.t("إرفاق صورة", "Attach Image"))
+                                .font(DS.Font.caption1)
+                                .fontWeight(.semibold)
+                        }
+                        .foregroundColor(DS.Color.primary)
+                        .padding(.vertical, DS.Spacing.md)
+                        .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .background(DS.Color.surface)
+            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Radius.lg)
+                    .stroke(DS.Color.textTertiary.opacity(0.15), lineWidth: 1)
+            )
+        }
+    }
+
+    // MARK: - Subject Section (unused — merged into combinedMessageCard)
     private var subjectSection: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.md) {
             Text(L10n.t("الموضوع (اختياري)", "Subject (optional)"))
