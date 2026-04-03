@@ -106,9 +106,10 @@ struct AdminAnalyticsView: View {
     // MARK: - Roles Distribution
     private var rolesSection: some View {
         let admins = memberVM.allMembers.filter { $0.role == .owner || $0.role == .admin }.count
+        let monitors = memberVM.allMembers.filter { $0.role == .monitor }.count
         let supervisors = memberVM.allMembers.filter { $0.role == .supervisor }.count
         let members = memberVM.allMembers.filter { $0.role == .member }.count
-        let total = max(admins + supervisors + members, 1)
+        let total = max(admins + monitors + supervisors + members, 1)
 
         return DSCard(padding: 0) {
             DSSectionHeader(
@@ -123,6 +124,12 @@ struct AdminAnalyticsView: View {
                     count: admins,
                     total: total,
                     color: FamilyMember.UserRole.admin.color
+                )
+                barRow(
+                    label: L10n.t("مراقب", "Monitor"),
+                    count: monitors,
+                    total: total,
+                    color: FamilyMember.UserRole.monitor.color
                 )
                 barRow(
                     label: L10n.t("مشرف", "Supervisor"),

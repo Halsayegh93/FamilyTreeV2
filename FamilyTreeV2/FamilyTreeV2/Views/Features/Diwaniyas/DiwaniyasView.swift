@@ -648,7 +648,7 @@ private struct AddDiwaniyaRequestView: View {
         defer { isSubmitting = false }
         let trimmedURL = locationURL.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedAddress = address.trimmingCharacters(in: .whitespacesAndNewlines)
-        let canAutoApprove = user.role == .owner || user.role == .admin || user.role == .supervisor
+        let canAutoApprove = user.role == .owner || user.role == .admin || user.role == .monitor || user.role == .supervisor
         let success = await viewModel.addDiwaniya(
             ownerId: user.id,
             ownerName: ownerName,

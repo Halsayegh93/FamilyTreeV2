@@ -152,12 +152,12 @@ struct AdminAllRequestsView: View {
                             .font(DS.Font.scaled(11, weight: .medium))
                         Text(selectedTab == .joinRequests
                             ? L10n.t(
-                                authVM.isAdmin ? "اسحب لليسار للربط • اسحب لليمين للرفض" : "اسحب لليسار للربط",
-                                authVM.isAdmin ? "Swipe left to link • Swipe right to reject" : "Swipe left to link"
+                                authVM.canRejectRequests ? "اسحب لليسار للربط • اسحب لليمين للرفض" : "اسحب لليسار للربط",
+                                authVM.canRejectRequests ? "Swipe left to link • Swipe right to reject" : "Swipe left to link"
                             )
                             : L10n.t(
-                                authVM.isAdmin ? "اسحب لليسار للموافقة • اسحب لليمين للرفض" : "اسحب لليسار للموافقة",
-                                authVM.isAdmin ? "Swipe left to approve • Swipe right to reject" : "Swipe left to approve"
+                                authVM.canRejectRequests ? "اسحب لليسار للموافقة • اسحب لليمين للرفض" : "اسحب لليسار للموافقة",
+                                authVM.canRejectRequests ? "Swipe left to approve • Swipe right to reject" : "Swipe left to approve"
                             )
                         )
                             .font(DS.Font.caption2)
@@ -457,7 +457,7 @@ struct AdminAllRequestsView: View {
                         }.tint(DS.Color.success)
                     }
                     .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                        if authVM.isAdmin {
+                        if authVM.canRejectRequests {
                             Button(role: .destructive) {
                                 Task { await adminRequestVM.rejectOrDeleteMember(memberId: member.id) }
                             } label: {
@@ -478,7 +478,7 @@ struct AdminAllRequestsView: View {
                         }.tint(DS.Color.success)
                     }
                     .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                        if authVM.isAdmin {
+                        if authVM.canRejectRequests {
                             Button(role: .destructive) { Task { await newsVM.rejectNewsPost(postId: post.id) } } label: {
                                 Label(L10n.t("رفض", "Reject"), systemImage: "xmark.circle.fill")
                             }
@@ -497,7 +497,7 @@ struct AdminAllRequestsView: View {
                         }.tint(DS.Color.success)
                     }
                     .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                        if authVM.isAdmin {
+                        if authVM.canRejectRequests {
                             Button(role: .destructive) { Task { await adminRequestVM.rejectNewsReport(request: request) } } label: {
                                 Label(L10n.t("رفض", "Reject"), systemImage: "xmark.circle.fill")
                             }
@@ -523,7 +523,7 @@ struct AdminAllRequestsView: View {
                         }.tint(DS.Color.primary)
                     }
                     .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                        if authVM.isAdmin {
+                        if authVM.canRejectRequests {
                             Button(role: .destructive) { Task { await adminRequestVM.rejectPhoneChangeRequest(request: request) } } label: {
                                 Label(L10n.t("رفض", "Reject"), systemImage: "xmark.circle.fill")
                             }
@@ -552,7 +552,7 @@ struct AdminAllRequestsView: View {
                         }.tint(DS.Color.primary)
                     }
                     .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                        if authVM.isAdmin {
+                        if authVM.canRejectRequests {
                             Button(role: .destructive) { Task { await adminRequestVM.rejectNameChangeRequest(request: request) } } label: {
                                 Label(L10n.t("رفض", "Reject"), systemImage: "xmark.circle.fill")
                             }
@@ -578,7 +578,7 @@ struct AdminAllRequestsView: View {
                         }.tint(DS.Color.success)
                     }
                     .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                        if authVM.isAdmin {
+                        if authVM.canRejectRequests {
                             Button(role: .destructive) { Task { await diwaniyaVM.rejectDiwaniya(id: diwaniya.id) } } label: {
                                 Label(L10n.t("رفض", "Reject"), systemImage: "xmark.circle.fill")
                             }
@@ -597,7 +597,7 @@ struct AdminAllRequestsView: View {
                         }.tint(DS.Color.success)
                     }
                     .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                        if authVM.isAdmin {
+                        if authVM.canRejectRequests {
                             Button(role: .destructive) { Task { await adminRequestVM.rejectDeceasedRequest(request: request) } } label: {
                                 Label(L10n.t("رفض", "Reject"), systemImage: "xmark.circle.fill")
                             }
@@ -616,7 +616,7 @@ struct AdminAllRequestsView: View {
                         }.tint(DS.Color.success)
                     }
                     .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                        if authVM.isAdmin {
+                        if authVM.canRejectRequests {
                             Button(role: .destructive) { Task { await adminRequestVM.rejectChildAddRequest(request: request) } } label: {
                                 Label(L10n.t("رفض", "Reject"), systemImage: "xmark.circle.fill")
                             }
@@ -635,7 +635,7 @@ struct AdminAllRequestsView: View {
                         }.tint(DS.Color.success)
                     }
                     .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                        if authVM.isAdmin {
+                        if authVM.canRejectRequests {
                             Button(role: .destructive) { Task { await adminRequestVM.rejectPhotoSuggestion(request: request) } } label: {
                                 Label(L10n.t("رفض", "Reject"), systemImage: "xmark.circle.fill")
                             }
@@ -654,7 +654,7 @@ struct AdminAllRequestsView: View {
                         }.tint(DS.Color.success)
                     }
                     .swipeActions(edge: .leading, allowsFullSwipe: false) {
-                        if authVM.isAdmin {
+                        if authVM.canRejectRequests {
                             Button(role: .destructive) {
                                 treeEditToReject = request
                                 rejectReasonText = ""
@@ -681,7 +681,7 @@ struct AdminAllRequestsView: View {
                         }.tint(DS.Color.success)
                     }
                     .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                        if authVM.isAdmin {
+                        if authVM.canRejectRequests {
                             Button(role: .destructive) {
                                 Task { await projectsVM.rejectProject(id: project.id) }
                             } label: {
@@ -701,7 +701,7 @@ struct AdminAllRequestsView: View {
                             }.tint(DS.Color.success)
                         }
                         .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                            if authVM.isAdmin {
+                            if authVM.canRejectRequests {
                                 Button(role: .destructive) {
                                     Task { await memberVM.rejectGalleryPhoto(photoId: photo.id, photoURL: photo.photoURL) }
                                 } label: {
@@ -721,10 +721,12 @@ struct AdminAllRequestsView: View {
                             }.tint(DS.Color.success)
                         }
                         .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                            Button(role: .destructive) {
-                                Task { await storyVM.rejectStory(story) }
-                            } label: {
-                                Label(L10n.t("رفض", "Reject"), systemImage: "xmark.circle.fill")
+                            if authVM.canRejectRequests {
+                                Button(role: .destructive) {
+                                    Task { await storyVM.rejectStory(story) }
+                                } label: {
+                                    Label(L10n.t("رفض", "Reject"), systemImage: "xmark.circle.fill")
+                                }
                             }
                         }
                 }

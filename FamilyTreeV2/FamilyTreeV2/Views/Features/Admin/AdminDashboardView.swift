@@ -20,7 +20,7 @@ struct AdminDashboardView: View {
         memberVM.allMembers.filter { $0.role == .pending }.count
     }
     private var moderatorCount: Int {
-        memberVM.allMembers.filter { $0.role == .owner || $0.role == .admin || $0.role == .supervisor }.count
+        memberVM.allMembers.filter { $0.role == .owner || $0.role == .admin || $0.role == .monitor || $0.role == .supervisor }.count
     }
     private var totalReviewRequestsCount: Int {
         pendingCount
@@ -174,15 +174,15 @@ struct AdminDashboardView: View {
                             if authVM.isAdmin {
                                 DSCard(padding: 0) {
                                     DSSectionHeader(
-                                        title: L10n.t("المدراء والمشرفين", "Admins & Supervisors"),
+                                        title: L10n.t("المدراء والمشرفين والمراقبين", "Admins, Monitors & Supervisors"),
                                         icon: "shield.fill",
                                         iconColor: DS.Color.neonPurple
                                     )
 
                                         NavigationLink(destination: AdminModeratorsView()) {
                                             DSActionRow(
-                                                title: L10n.t("المدراء والمشرفين", "Admins & Supervisors"),
-                                                subtitle: L10n.t("عرض قائمة المدراء والمشرفين", "View admins and supervisors list"),
+                                                title: L10n.t("المدراء والمشرفين والمراقبين", "Admins, Monitors & Supervisors"),
+                                                subtitle: L10n.t("عرض قائمة المدراء والمراقبين والمشرفين", "View admins, monitors, and supervisors list"),
                                                 icon: "shield.fill",
                                                 color: DS.Color.neonPurple,
                                                 badge: moderatorCount

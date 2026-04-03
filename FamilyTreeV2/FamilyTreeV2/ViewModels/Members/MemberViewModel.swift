@@ -1345,7 +1345,14 @@ class MemberViewModel: ObservableObject {
             await fetchAllMembers(force: true)
             
             let memberName = _memberById[memberId]?.firstName ?? "عضو"
-            let roleName = newRole == .admin ? L10n.t("مدير", "Admin") : (newRole == .supervisor ? L10n.t("مشرف", "Supervisor") : L10n.t("عضو", "Member"))
+            let roleName: String = {
+                switch newRole {
+                case .admin, .owner: return L10n.t("مدير", "Admin")
+                case .monitor: return L10n.t("مراقب", "Monitor")
+                case .supervisor: return L10n.t("مشرف", "Supervisor")
+                default: return L10n.t("عضو", "Member")
+                }
+            }()
 
             // 3. إشعار المدراء بتغيير الرتبة (push + داخلي)
             await notificationVM?.notifyAdminsWithPush(

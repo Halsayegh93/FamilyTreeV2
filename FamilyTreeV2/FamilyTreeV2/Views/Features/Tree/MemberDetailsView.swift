@@ -84,6 +84,7 @@ struct MemberDetailsView: View {
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
             .sheet(isPresented: $showAdminControl) {
                 AdminMemberDetailSheet(member: member)
+                    .id(memberVM.membersVersion)
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .memberDeleted)) { notification in

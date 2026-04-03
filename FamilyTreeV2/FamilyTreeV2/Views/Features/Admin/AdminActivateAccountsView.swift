@@ -696,6 +696,7 @@ struct AdminActivateAccountsView: View {
         switch role {
         case .owner: return L10n.t("مدير", "Admin")
         case .admin: return L10n.t("مدير", "Admin")
+        case .monitor: return L10n.t("مراقب", "Monitor")
         case .supervisor: return L10n.t("مشرف", "Supervisor")
         case .member: return L10n.t("عضو", "Member")
         case .pending: return L10n.t("معلق", "Pending")

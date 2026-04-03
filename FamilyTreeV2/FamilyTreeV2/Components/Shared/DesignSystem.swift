@@ -109,6 +109,7 @@ enum DS {
         static func role(_ roleColor: SwiftUI.Color) -> SwiftUI.Color { roleColor }
         static let ownerRole      = SwiftUI.Color.adaptive(light: "#9B7FD4", dark: "#B89FE8") // بنفسجي باستيل
         static let adminRole      = SwiftUI.Color.adaptive(light: "#D47B7B", dark: "#E8A0A0") // وردي باستيل
+        static let monitorRole    = SwiftUI.Color.adaptive(light: "#7BB8A4", dark: "#9FD4C0") // أخضر نعناعي باستيل
         static let supervisorRole = SwiftUI.Color.adaptive(light: "#D4A96B", dark: "#E8C48F") // ذهبي باستيل
         static let memberRole     = SwiftUI.Color.adaptive(light: "#7BA8D4", dark: "#9FC4E8") // أزرق باستيل
         static let pendingRole    = SwiftUI.Color.adaptive(light: "#A0A0A0", dark: "#B8B8B8") // رمادي باستيل

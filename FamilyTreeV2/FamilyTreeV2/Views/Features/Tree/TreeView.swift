@@ -29,10 +29,6 @@ struct TreeView: View {
 
     private let viewMode: TreeDisplayMode = .interactive
 
-    @State private var searchText = ""
-    @State private var debouncedSearchText = ""
-    @State private var searchDebounceTask: Task<Void, Never>?
-    @State private var isSearchFocused = false
     @State private var searchedMemberID: UUID? = nil
     @State private var highlightTask: Task<Void, Never>?
     @State private var locationHighlightTask: Task<Void, Never>?
@@ -124,119 +120,7 @@ struct TreeView: View {
         }
     }
 
-    // MARK: - سجل البحث الأخير
-    @AppStorage("recentTreeSearches") private var recentSearchesData: Data = Data()
-
-    private var recentSearches: [String] {
-        (try? JSONDecoder().decode([String].self, from: recentSearchesData)) ?? []
-    }
-
-    private func saveRecentSearch(_ query: String) {
-        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        var searches = recentSearches.filter { $0 != trimmed }
-        searches.insert(trimmed, at: 0)
-        if searches.count > 10 { searches = Array(searches.prefix(10)) }
-        recentSearchesData = (try? JSONEncoder().encode(searches)) ?? Data()
-    }
-
-    private func clearRecentSearches() {
-        recentSearchesData = (try? JSONEncoder().encode([String]())) ?? Data()
-    }
-
-    // MARK: - بحث متقدم بنظام النقاط
-
-    private struct SearchResult: Identifiable {
-        let member: FamilyMember
-        let score: Double
-        let matchContext: String? // سياق التطابق (اسم، هاتف، سيرة)
-        var id: UUID { member.id }
-    }
-
-    private var filteredResults: [SearchResult] {
-        let raw = debouncedSearchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        if raw.isEmpty { return [] }
-
-        let normalizedQuery = ArabicTextNormalizer.normalizeForSearch(raw)
-        let searchWords = normalizedQuery
-            .components(separatedBy: .whitespaces)
-            .filter { !$0.isEmpty }
-
-        if searchWords.isEmpty { return [] }
-
-        let isDigitSearch = raw.allSatisfy { $0.isNumber || $0 == "+" }
-        let searchDigits = raw.filter(\.isNumber)
-
-        var results: [SearchResult] = []
-
-        for member in cachedVisibleMembers {
-            var score: Double = 0
-            var matchContext: String?
-
-            let normalizedFirst = ArabicTextNormalizer.normalizeForSearch(member.firstName)
-
-            // بحث بالأرقام (هاتف)
-            if isDigitSearch && searchDigits.count >= 4 {
-                if let phone = member.phoneNumber {
-                    let phoneDigits = phone.filter(\.isNumber)
-                    let phoneSuffix = String(phoneDigits.suffix(8))
-                    if phoneSuffix.contains(searchDigits) || searchDigits.contains(phoneSuffix) {
-                        score += 90
-                        matchContext = L10n.t("تطابق الهاتف", "Phone match")
-                    }
-                }
-            } else {
-                // تطابق الاسم الأول
-                if normalizedFirst == searchWords[0] {
-                    score += 100 // تطابق تام
-                } else if normalizedFirst.hasPrefix(searchWords[0]) {
-                    score += 80 // بداية الاسم
-                }
-
-                // تطابق الاسم الكامل
-                let lineage = getFullLineage(for: member, lookup: cachedMemberById)
-                let normalizedCombined = ArabicTextNormalizer.normalizeForSearch("\(member.fullName) \(lineage)")
-                let textWords = normalizedCombined
-                    .components(separatedBy: .whitespaces)
-                    .filter { !$0.isEmpty }
-
-                let allMatch = searchWords.allSatisfy { searchWord in
-                    textWords.contains { $0.hasPrefix(searchWord) }
-                }
-
-                if allMatch && score < 80 {
-                    score += 50 // تطابق الاسم الكامل/النسب
-                    if score == 50 { matchContext = L10n.t("تطابق النسب", "Lineage match") }
-                } else if !allMatch && score == 0 {
-                    // بحث في السيرة الذاتية
-                    if let bio = member.bio, !bio.isEmpty {
-                        let bioText = ArabicTextNormalizer.normalizeForSearch(
-                            bio.map { "\($0.title) \($0.details)" }.joined(separator: " ")
-                        )
-                        let bioMatch = searchWords.allSatisfy { bioText.contains($0) }
-                        if bioMatch {
-                            score += 20
-                            matchContext = L10n.t("في السيرة", "In bio")
-                        }
-                    }
-                }
-            }
-
-            if score > 0 {
-                results.append(SearchResult(member: member, score: score, matchContext: matchContext))
-            }
-        }
-
-        return results
-            .sorted { $0.score > $1.score }
-            .prefix(50)
-            .map { $0 }
-    }
-
-    /// للتوافق مع الأماكن اللي تستخدم filteredMembers
-    var filteredMembers: [FamilyMember] {
-        filteredResults.map(\.member)
-    }
+    // MARK: - بحث (منقول إلى TreeSearchOverlay)
     
     var body: some View {
         NavigationStack {
@@ -350,8 +234,10 @@ struct TreeView: View {
                             .accessibilityLabel(L10n.t("موقعي في الشجرة", "My location in tree"))
                         }
 
-                        searchOverlay
-                            .padding(.horizontal, DS.Spacing.sm)
+                        TreeSearchOverlay(onSelect: { member in
+                            selectMemberFromSearch(member)
+                        })
+                        .padding(.horizontal, DS.Spacing.sm)
 
                     }
                     .zIndex(101)
@@ -399,8 +285,7 @@ struct TreeView: View {
                     }
                 }
                 .onTapGesture {
-                    isSearchFocused = false
-                    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) // MainActor safe
+                    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
                 }
             }
             .navigationBarHidden(true)
@@ -491,19 +376,7 @@ struct TreeView: View {
                     }
                 }
             }
-            .onChange(of: searchText) { _, newValue in
-                searchDebounceTask?.cancel()
-                if newValue.isEmpty {
-                    debouncedSearchText = ""
-                } else {
-                    searchDebounceTask = Task {
-                        try? await Task.sleep(nanoseconds: 300_000_000) // 0.3 ثانية
-                        if !Task.isCancelled {
-                            debouncedSearchText = newValue
-                        }
-                    }
-                }
-            }
+            // البحث منقول إلى TreeSearchOverlay — لا يعيد رسم الشجرة عند الكتابة
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
@@ -526,263 +399,8 @@ struct TreeView: View {
         return name
     }
 
-    private var searchOverlay: some View {
-        VStack(spacing: 0) {
-            // شريط البحث
-            HStack(spacing: DS.Spacing.sm) {
-                HStack(spacing: DS.Spacing.sm) {
-                    ZStack {
-                        Circle()
-                            .fill(DS.Color.primary.opacity(0.12))
-                            .frame(width: 32, height: 32)
-                        Image(systemName: "magnifyingglass")
-                            .font(DS.Font.scaled(14, weight: .semibold))
-                            .foregroundColor(DS.Color.primary)
-                    }
-
-                    TextField(L10n.t("ابحث بالاسم أو الهاتف...", "Search by name or phone..."), text: $searchText, onEditingChanged: { focused in
-                        isSearchFocused = focused
-                    })
-                    .font(DS.Font.body)
-                    .multilineTextAlignment(.leading)
-
-                    if !searchText.isEmpty {
-                        Button(action: { searchText = "" }) {
-                            ZStack {
-                                Circle()
-                                    .fill(DS.Color.error.opacity(0.12))
-                                    .frame(width: 28, height: 28)
-                                Image(systemName: "xmark")
-                                    .font(DS.Font.scaled(11, weight: .bold))
-                                    .foregroundColor(DS.Color.error)
-                            }
-                        }
-                    }
-                }
-                .padding(.horizontal, DS.Spacing.md)
-                .padding(.vertical, DS.Spacing.sm)
-                .background(DS.Color.surface)
-                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                        .stroke(
-                            isSearchFocused ? DS.Color.primary.opacity(0.4) : DS.Color.inactiveBorder,
-                            lineWidth: isSearchFocused ? 1.5 : 1
-                        )
-                )
-                .dsGlowShadow()
-                
-            }
-
-            // عمليات بحث سابقة
-            if isSearchFocused && searchText.isEmpty && !recentSearches.isEmpty {
-                VStack(spacing: DS.Spacing.xs) {
-                    HStack {
-                        Text(L10n.t("بحث سابق", "Recent"))
-                            .font(DS.Font.scaled(11, weight: .semibold))
-                            .foregroundColor(DS.Color.textSecondary)
-                        Spacer()
-                        Button(action: clearRecentSearches) {
-                            Text(L10n.t("مسح", "Clear"))
-                                .font(DS.Font.scaled(11, weight: .medium))
-                                .foregroundColor(DS.Color.error)
-                        }
-                    }
-                    .padding(.horizontal, DS.Spacing.sm)
-
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: DS.Spacing.sm) {
-                            ForEach(recentSearches, id: \.self) { query in
-                                Button(action: { searchText = query }) {
-                                    HStack(spacing: DS.Spacing.xs) {
-                                        Image(systemName: "clock.arrow.circlepath")
-                                            .font(.system(size: 10))
-                                        Text(query)
-                                            .font(DS.Font.caption1)
-                                    }
-                                    .foregroundColor(DS.Color.primary)
-                                    .padding(.horizontal, DS.Spacing.md)
-                                    .padding(.vertical, DS.Spacing.xs + 2)
-                                    .background(DS.Color.primary.opacity(0.08))
-                                    .clipShape(Capsule())
-                                }
-                            }
-                        }
-                        .padding(.horizontal, DS.Spacing.sm)
-                    }
-                }
-                .padding(.top, DS.Spacing.xs)
-                .transition(.opacity)
-            }
-
-            // نتائج البحث
-            if !filteredMembers.isEmpty {
-                VStack(spacing: 0) {
-                    // عدد النتائج
-                    HStack {
-                        Text(L10n.t("النتائج", "Results"))
-                            .font(DS.Font.scaled(11, weight: .semibold))
-                            .foregroundColor(DS.Color.textSecondary)
-                        Text("(\(filteredMembers.count))")
-                            .font(DS.Font.scaled(11, weight: .bold))
-                            .foregroundColor(DS.Color.primary)
-                        Spacer()
-                    }
-                    .padding(.horizontal, DS.Spacing.md)
-                    .padding(.top, DS.Spacing.sm)
-                    .padding(.bottom, DS.Spacing.xs)
-                    
-                    ScrollView {
-                        LazyVStack(spacing: 0) {
-                            ForEach(filteredResults) { result in
-                                Button(action: { selectMemberFromSearch(result.member) }) {
-                                    searchResultRow(for: result.member, matchContext: result.matchContext)
-                                }
-                                if result.id != filteredResults.last?.id {
-                                    Divider().padding(.horizontal, DS.Spacing.md)
-                                }
-                            }
-                        }
-                    }
-                }
-                .glassCard(radius: DS.Radius.lg)
-                .frame(maxHeight: 280)
-                .padding(.top, DS.Spacing.xs)
-            } else if !debouncedSearchText.isEmpty && searchText == debouncedSearchText {
-                // لا توجد نتائج
-                HStack(spacing: DS.Spacing.sm) {
-                    Image(systemName: "person.slash.fill")
-                        .font(DS.Font.scaled(16))
-                        .foregroundColor(DS.Color.textTertiary)
-                    Text(L10n.t("لا توجد نتائج", "No results found"))
-                        .font(DS.Font.callout)
-                        .foregroundColor(DS.Color.textSecondary)
-                    Spacer()
-                }
-                .padding(DS.Spacing.md)
-                .glassCard(radius: DS.Radius.lg)
-                .padding(.top, DS.Spacing.xs)
-            }
-        }
-        .zIndex(100)
-    }
-    
-    // MARK: - صف نتيجة البحث مع صورة
-    private func searchResultRow(for member: FamilyMember, matchContext: String? = nil) -> some View {
-        HStack(spacing: DS.Spacing.md) {
-            // صورة العضو أو الأحرف الأولى
-            ZStack {
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [member.roleColor, member.roleColor.opacity(0.7)],
-                            startPoint: .topLeading, endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 44, height: 44)
-
-                if let urlStr = member.avatarUrl, let url = URL(string: urlStr) {
-                    CachedAsyncImage(url: url) { image in
-                        image.resizable().scaledToFill()
-                    } placeholder: {
-                        Text(String(member.firstName.prefix(1)))
-                            .font(DS.Font.scaled(16, weight: .bold))
-                            .foregroundColor(DS.Color.textOnPrimary)
-                    }
-                    .frame(width: 44, height: 44)
-                    .clipShape(Circle())
-                } else {
-                    Text(String(member.firstName.prefix(1)))
-                        .font(DS.Font.scaled(16, weight: .bold))
-                        .foregroundColor(DS.Color.textOnPrimary)
-                }
-
-                // مؤشر المتوفى
-                if member.isDeceased ?? false {
-                    VStack {
-                        Spacer()
-                        HStack {
-                            Spacer()
-                            Circle()
-                                .fill(DS.Color.deceased)
-                                .frame(width: 13, height: 13)
-                                .overlay(
-                                    Image(systemName: "heart.slash.fill")
-                                        .font(DS.Font.scaled(7, weight: .bold))
-                                        .foregroundColor(DS.Color.textOnPrimary)
-                                )
-                        }
-                    }
-                    .frame(width: 44, height: 44)
-                }
-            }
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(getFullLineage(for: member, lookup: cachedMemberById))
-                    .font(DS.Font.scaled(13, weight: .semibold))
-                    .foregroundColor(DS.Color.textPrimary)
-                    .lineLimit(1)
-                
-                HStack(spacing: DS.Spacing.xs) {
-                    // الدور
-                    Text(member.roleName)
-                        .font(DS.Font.scaled(10, weight: .medium))
-                        .foregroundColor(member.roleColor)
-                        .padding(.horizontal, DS.Spacing.xs)
-                        .padding(.vertical, 2)
-                        .background(member.roleColor.opacity(0.1))
-                        .clipShape(Capsule())
-                    
-                    // عدد الأبناء
-                    let childCount = cachedChildrenByFatherId[member.id]?.count ?? 0
-                    if childCount > 0 {
-                        HStack(spacing: 2) {
-                            Image(systemName: "person.2.fill")
-                                .font(DS.Font.scaled(8, weight: .medium))
-                            Text("\(childCount)")
-                                .font(DS.Font.scaled(10, weight: .bold))
-                        }
-                        .foregroundColor(DS.Color.textTertiary)
-                    }
-
-                    if member.isDeceased ?? false {
-                        Text(L10n.t("متوفى", "Deceased"))
-                            .font(DS.Font.scaled(9, weight: .medium))
-                            .foregroundColor(DS.Color.deceased)
-                            .padding(.horizontal, DS.Spacing.xs)
-                            .padding(.vertical, 2)
-                            .background(DS.Color.deceased.opacity(0.1))
-                            .clipShape(Capsule())
-                    }
-
-                    // سياق التطابق
-                    if let context = matchContext {
-                        Text(context)
-                            .font(DS.Font.scaled(9, weight: .medium))
-                            .foregroundColor(DS.Color.info)
-                            .padding(.horizontal, DS.Spacing.xs)
-                            .padding(.vertical, 2)
-                            .background(DS.Color.info.opacity(0.1))
-                            .clipShape(Capsule())
-                    }
-                }
-            }
-            Spacer()
-            Image(systemName: "arrow.up.left.circle.fill")
-                .font(DS.Font.scaled(18))
-                .foregroundColor(member.roleColor.opacity(0.6))
-        }
-        .padding(.horizontal, DS.Spacing.md)
-        .padding(.vertical, DS.Spacing.sm + 2)
-    }
-    
-
     private func selectMemberFromSearch(_ member: FamilyMember) {
-        // حفظ البحث في السجل
-        saveRecentSearch(searchText)
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-        searchText = ""
-        isSearchFocused = false
         searchedMemberID = member.id
         var ancestors = Set<UUID>()
         var currentParentId = member.fatherId
@@ -1224,6 +842,7 @@ struct TreeMemberNode: View {
         switch member.role {
         case .owner: return DS.Color.ownerRole
         case .admin: return DS.Color.adminRole
+        case .monitor: return DS.Color.monitorRole
         case .supervisor: return DS.Color.supervisorRole
         default: return DS.Color.primary
         }

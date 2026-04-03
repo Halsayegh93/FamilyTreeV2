@@ -134,16 +134,21 @@ class AuthViewModel: ObservableObject {
         currentUser?.role == .owner || currentUser?.role == .admin
     }
 
-    /// هل يقدر يدخل لوحة الإدارة (مالك أو مدير أو مشرف)
+    /// هل يقدر يدخل لوحة الإدارة (مالك أو مدير أو مراقب أو مشرف)
     var canModerate: Bool {
-        currentUser?.role == .owner || currentUser?.role == .admin || currentUser?.role == .supervisor
+        currentUser?.role == .owner || currentUser?.role == .admin || currentUser?.role == .monitor || currentUser?.role == .supervisor
+    }
+
+    /// هل يقدر يرفض الطلبات (مالك أو مدير أو مراقب) — المشرف يقدر يوافق بس ما يرفض
+    var canRejectRequests: Bool {
+        currentUser?.role == .owner || currentUser?.role == .admin || currentUser?.role == .monitor
     }
 
     /// تغيير أدوار الأعضاء (ترقية/تنزيل) — المالك فقط
     var canManageRoles: Bool { isOwner }
 
-    /// حذف أعضاء نهائياً — المالك فقط
-    var canDeleteMembers: Bool { isOwner }
+    /// حذف أعضاء نهائياً — مدير + مالك
+    var canDeleteMembers: Bool { isAdmin }
 
     /// إعدادات التطبيق — المالك فقط
     var canManageSettings: Bool { isOwner }

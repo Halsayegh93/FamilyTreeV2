@@ -132,7 +132,7 @@ struct FamilyMember: Identifiable, Codable, Equatable {
 
     // MARK: - Enums
     enum UserRole: String, Codable {
-        case owner, admin, supervisor, member, pending
+        case owner, admin, monitor, supervisor, member, pending
 
         // نضع التعريف هنا لكي يعمل كود authVM.currentUser?.role.color ✅
         /// اللون العلني — المالك يظهر بنفس لون المدير
@@ -140,6 +140,7 @@ struct FamilyMember: Identifiable, Codable, Equatable {
             switch self {
             case .owner: return DS.Color.primary
             case .admin: return DS.Color.adminRole
+            case .monitor: return DS.Color.monitorRole
             case .supervisor: return DS.Color.supervisorRole
             case .member: return DS.Color.memberRole
             case .pending: return DS.Color.pendingRole
@@ -175,6 +176,7 @@ struct FamilyMember: Identifiable, Codable, Equatable {
         switch role {
         case .owner: return L10n.t("مدير", "Admin")
         case .admin: return L10n.t("مدير", "Admin")
+        case .monitor: return L10n.t("مراقب", "Monitor")
         case .supervisor: return L10n.t("مشرف", "Supervisor")
         case .member: return L10n.t("عضو", "Member")
         case .pending: return L10n.t("معلق", "Pending")

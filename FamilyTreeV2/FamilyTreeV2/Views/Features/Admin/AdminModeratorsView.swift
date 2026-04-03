@@ -15,9 +15,9 @@ struct AdminModeratorsView: View {
     }
 
     private var moderators: [FamilyMember] {
-        let roleOrder: [FamilyMember.UserRole] = [.owner, .admin, .supervisor]
+        let roleOrder: [FamilyMember.UserRole] = [.owner, .admin, .monitor, .supervisor]
         return memberVM.allMembers
-            .filter { $0.role == .owner || $0.role == .admin || $0.role == .supervisor }
+            .filter { $0.role == .owner || $0.role == .admin || $0.role == .monitor || $0.role == .supervisor }
             .sorted { a, b in
                 let aIdx = roleOrder.firstIndex(of: a.role) ?? 99
                 let bIdx = roleOrder.firstIndex(of: b.role) ?? 99
@@ -47,11 +47,22 @@ struct AdminModeratorsView: View {
                         }
                     }
 
+                    let monitors = moderators.filter { $0.role == .monitor }
+                    if !monitors.isEmpty {
+                        Section {
+                            ForEach(Array(monitors.enumerated()), id: \.element.id) { index, member in
+                                moderatorRow(member: member, index: admins.count + index)
+                            }
+                        } header: {
+                            sectionHeader(title: L10n.t("المراقبين", "Monitors"), icon: "eye.fill", color: DS.Color.monitorRole, count: monitors.count)
+                        }
+                    }
+
                     let supervisors = moderators.filter { $0.role == .supervisor }
                     if !supervisors.isEmpty {
                         Section {
                             ForEach(Array(supervisors.enumerated()), id: \.element.id) { index, member in
-                                moderatorRow(member: member, index: admins.count + index)
+                                moderatorRow(member: member, index: admins.count + monitors.count + index)
                             }
                         } header: {
                             sectionHeader(title: L10n.t("المشرفين", "Supervisors"), icon: "star.fill", color: DS.Color.warning, count: supervisors.count)
@@ -62,7 +73,7 @@ struct AdminModeratorsView: View {
                 .scrollContentBackground(.hidden)
             }
         }
-        .navigationTitle(L10n.t("المدراء والمشرفين", "Admins & Supervisors"))
+        .navigationTitle(L10n.t("المدراء والمشرفين والمراقبين", "Admins, Monitors & Supervisors"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if isOwner {
@@ -96,7 +107,14 @@ struct AdminModeratorsView: View {
             }
             Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
         } message: { member in
-            let roleName = pendingRole == .admin ? L10n.t("مدير", "Admin") : (pendingRole == .supervisor ? L10n.t("مشرف", "Supervisor") : L10n.t("عضو", "Member"))
+            let roleName: String = {
+                switch pendingRole {
+                case .admin: return L10n.t("مدير", "Admin")
+                case .monitor: return L10n.t("مراقب", "Monitor")
+                case .supervisor: return L10n.t("مشرف", "Supervisor")
+                default: return L10n.t("عضو", "Member")
+                }
+            }()
             Text(L10n.t(
                 "تغيير مستوى حساب \(member.firstName) إلى \(roleName)؟",
                 "Change \(member.firstName)'s account level to \(roleName)?"
@@ -149,8 +167,8 @@ struct AdminModeratorsView: View {
     private func moderatorRow(member: FamilyMember, index: Int) -> some View {
         HStack(spacing: DS.Spacing.md) {
             ZStack {
-                let roleColor = (member.role == .owner || member.role == .admin) ? DS.Color.neonPurple : DS.Color.warning
-                let roleIcon = (member.role == .owner || member.role == .admin) ? "shield.fill" : "star.fill"
+                let roleColor = (member.role == .owner || member.role == .admin) ? DS.Color.neonPurple : (member.role == .monitor ? DS.Color.monitorRole : DS.Color.warning)
+                let roleIcon = (member.role == .owner || member.role == .admin) ? "shield.fill" : (member.role == .monitor ? "eye.fill" : "star.fill")
 
                 Circle()
                     .fill(
@@ -229,6 +247,15 @@ struct AdminModeratorsView: View {
                 if member.role == .supervisor {
                     Button {
                         memberToChange = member
+                        pendingRole = .monitor
+                        showRoleConfirm = true
+                    } label: {
+                        Label(L10n.t("ترقية لمراقب", "Promote"), systemImage: "arrow.up.circle.fill")
+                    }
+                    .tint(DS.Color.monitorRole)
+                } else if member.role == .monitor {
+                    Button {
+                        memberToChange = member
                         pendingRole = .admin
                         showRoleConfirm = true
                     } label: {
@@ -238,12 +265,12 @@ struct AdminModeratorsView: View {
                 } else if member.role == .admin {
                     Button {
                         memberToChange = member
-                        pendingRole = .supervisor
+                        pendingRole = .monitor
                         showRoleConfirm = true
                     } label: {
-                        Label(L10n.t("تنزيل لمشرف", "Demote"), systemImage: "arrow.down.circle.fill")
+                        Label(L10n.t("تنزيل لمراقب", "Demote"), systemImage: "arrow.down.circle.fill")
                     }
-                    .tint(DS.Color.warning)
+                    .tint(DS.Color.monitorRole)
                 }
             }
         }
@@ -252,18 +279,33 @@ struct AdminModeratorsView: View {
                 if member.role == .supervisor {
                     Button {
                         memberToChange = member
+                        pendingRole = .monitor
+                        showRoleConfirm = true
+                    } label: {
+                        Label(L10n.t("ترقية لمراقب", "Promote to Monitor"), systemImage: "eye.fill")
+                    }
+                } else if member.role == .monitor {
+                    Button {
+                        memberToChange = member
                         pendingRole = .admin
                         showRoleConfirm = true
                     } label: {
                         Label(L10n.t("ترقية لمدير", "Promote to Admin"), systemImage: "shield.fill")
                     }
-                } else if member.role == .admin {
                     Button {
                         memberToChange = member
                         pendingRole = .supervisor
                         showRoleConfirm = true
                     } label: {
                         Label(L10n.t("تنزيل لمشرف", "Demote to Supervisor"), systemImage: "star.fill")
+                    }
+                } else if member.role == .admin {
+                    Button {
+                        memberToChange = member
+                        pendingRole = .monitor
+                        showRoleConfirm = true
+                    } label: {
+                        Label(L10n.t("تنزيل لمراقب", "Demote to Monitor"), systemImage: "eye.fill")
                     }
                 }
 
@@ -290,7 +332,7 @@ struct AdminModeratorsView: View {
                     .font(DS.Font.scaled(40, weight: .bold))
                     .foregroundColor(DS.Color.neonPurple.opacity(0.5))
             }
-            Text(L10n.t("لا يوجد مدراء أو مشرفين", "No admins or supervisors"))
+            Text(L10n.t("لا يوجد مدراء أو مراقبين أو مشرفين", "No admins, monitors, or supervisors"))
                 .font(DS.Font.title3)
                 .foregroundColor(DS.Color.textSecondary)
 
@@ -340,6 +382,7 @@ struct AddModeratorSheet: View {
                     // اختيار مستوى الحساب
                     Picker("", selection: $selectedRole) {
                         Text(L10n.t("مشرف", "Supervisor")).tag(FamilyMember.UserRole.supervisor)
+                        Text(L10n.t("مراقب", "Monitor")).tag(FamilyMember.UserRole.monitor)
                         Text(L10n.t("مدير", "Admin")).tag(FamilyMember.UserRole.admin)
                     }
                     .pickerStyle(.segmented)
@@ -407,7 +450,7 @@ struct AddModeratorSheet: View {
 
                                         Image(systemName: "plus.circle.fill")
                                             .font(DS.Font.scaled(22))
-                                            .foregroundColor(selectedRole == .admin ? DS.Color.neonPurple : DS.Color.warning)
+                                            .foregroundColor(selectedRole == .admin ? DS.Color.neonPurple : (selectedRole == .monitor ? DS.Color.monitorRole : DS.Color.warning))
                                     }
                                 }
                                 .listRowBackground(DS.Color.surface)
