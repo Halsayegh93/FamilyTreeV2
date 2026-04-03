@@ -248,7 +248,7 @@ struct AdminModeratorsView: View {
                     memberToChange = member
                     showRemoveConfirm = true
                 } label: {
-                    Label(L10n.t("إزالة", "Remove"), systemImage: "person.badge.minus")
+                    Label(L10n.t("إزالة", "Remove"), systemImage: "minus.circle.fill")
                 }
 
                 // تبديل مستوى الحساب
@@ -331,7 +331,7 @@ struct AdminModeratorsView: View {
                     memberToChange = member
                     showRemoveConfirm = true
                 } label: {
-                    Label(L10n.t("إزالة الصلاحية", "Remove Permission"), systemImage: "person.badge.minus")
+                    Label(L10n.t("إزالة الصلاحية", "Remove Permission"), systemImage: "minus.circle.fill")
                 }
             }
         }
