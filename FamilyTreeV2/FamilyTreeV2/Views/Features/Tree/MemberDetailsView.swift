@@ -34,6 +34,7 @@ struct MemberDetailsView: View {
 
     @State private var showDeleteBioAlert = false
     @State private var appeared = false
+    @State private var kinshipText: String? = nil
 
     var isAdminOrSupervisor: Bool {
         authVM.canModerate
@@ -241,6 +242,25 @@ struct MemberDetailsView: View {
                 }
             }
             .padding(.top, DS.Spacing.sm)
+
+            // زر صلة القرابة — تحت الاسم
+            if member.id != authVM.currentUser?.id, !member.isDeleted {
+                Button(action: showKinshipPath) {
+                    HStack(spacing: DS.Spacing.sm) {
+                        Image(systemName: "point.3.connected.trianglepath.dotted")
+                            .font(DS.Font.scaled(13, weight: .semibold))
+                        Text(L10n.t("صلة القرابة", "Kinship"))
+                            .font(DS.Font.calloutBold)
+                    }
+                    .foregroundColor(DS.Color.warning)
+                    .padding(.horizontal, DS.Spacing.xl)
+                    .padding(.vertical, DS.Spacing.sm)
+                    .background(DS.Color.warning.opacity(0.12))
+                    .clipShape(Capsule())
+                }
+                .buttonStyle(DSScaleButtonStyle())
+                .padding(.top, DS.Spacing.md)
+            }
 
             // طلب إضافة صورة — يظهر فقط إذا العضو ما عنده صورة ومو صاحب الحساب
             if member.id != authVM.currentUser?.id && !member.isDeleted,
@@ -479,6 +499,35 @@ struct MemberDetailsView: View {
     }
 
     // MARK: - أزرار عائمة
+
+    // MARK: - صلة القرابة
+    private func showKinshipPath() {
+        guard let currentUser = authVM.currentUser else { return }
+        let lookup = memberVM._memberById
+        let result = KinshipCalculator.calculate(from: currentUser, to: member, lookup: lookup)
+
+        // جمع كل IDs المسار
+        var pathIds = result.pathA.map(\.id) + result.pathB.map(\.id)
+        if let ancestor = result.commonAncestor {
+            pathIds.append(ancestor.id)
+        }
+
+        // إغلاق الشيت والانتقال للشجرة
+        dismiss()
+
+        // إرسال الإشعار للشجرة بعد إغلاق الشيت
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            NotificationCenter.default.post(
+                name: .showKinshipPath,
+                object: nil,
+                userInfo: [
+                    "memberId": member.id,
+                    "relationship": result.relationship,
+                    "pathIds": pathIds
+                ]
+            )
+        }
+    }
 
     private var floatingNavButtons: some View {
         VStack {
