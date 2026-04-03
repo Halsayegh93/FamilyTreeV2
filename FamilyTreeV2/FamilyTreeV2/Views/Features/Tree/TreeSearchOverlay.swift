@@ -281,7 +281,7 @@ struct TreeSearchOverlay: View {
         return Array(results.sorted { $0.score > $1.score }.prefix(50))
     }
 
-    /// الاسم الرباعي
+    /// الاسم الرباعي + اسم العائلة
     private static func fourPartName(for member: FamilyMember, lookup: [UUID: FamilyMember]) -> String {
         var parts = [member.firstName]
         var current = member
@@ -293,6 +293,14 @@ struct TreeSearchOverlay: View {
             parts.append(father.firstName)
             current = father
             visited.insert(father.id)
+        }
+        // إضافة اسم العائلة (آخر كلمة من الاسم الكامل)
+        let fullParts = member.fullName.split(whereSeparator: \.isWhitespace)
+        if fullParts.count > 1, let lastName = fullParts.last {
+            let lastNameStr = String(lastName)
+            if lastNameStr != parts.last {
+                parts.append(lastNameStr)
+            }
         }
         return parts.joined(separator: " ")
     }
