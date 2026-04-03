@@ -68,6 +68,12 @@ struct AdminModeratorsView: View {
                             sectionHeader(title: L10n.t("المشرفين", "Supervisors"), icon: "star.fill", color: DS.Color.warning, count: supervisors.count)
                         }
                     }
+                    // قسم الصلاحيات
+                    Section {
+                        permissionsGuide
+                    } header: {
+                        sectionHeader(title: L10n.t("صلاحيات الأدوار", "Role Permissions"), icon: "lock.shield.fill", color: DS.Color.info, count: nil)
+                    }
                 }
                 .listStyle(.insetGrouped)
                 .scrollContentBackground(.hidden)
@@ -147,7 +153,7 @@ struct AdminModeratorsView: View {
     }
 
     // MARK: - Section Header
-    private func sectionHeader(title: String, icon: String, color: Color, count: Int) -> some View {
+    private func sectionHeader(title: String, icon: String, color: Color, count: Int? = nil) -> some View {
         HStack(spacing: DS.Spacing.sm) {
             Image(systemName: icon)
                 .font(DS.Font.scaled(14, weight: .bold))
@@ -155,9 +161,11 @@ struct AdminModeratorsView: View {
             Text(title)
                 .font(DS.Font.calloutBold)
                 .foregroundColor(DS.Color.textPrimary)
-            Text("(\(count))")
-                .font(DS.Font.caption1)
-                .foregroundColor(DS.Color.textTertiary)
+            if let count {
+                Text("(\(count))")
+                    .font(DS.Font.caption1)
+                    .foregroundColor(DS.Color.textTertiary)
+            }
         }
         .textCase(nil)
         .padding(.vertical, DS.Spacing.xs)
@@ -319,6 +327,77 @@ struct AdminModeratorsView: View {
                 }
             }
         }
+    }
+
+    // MARK: - جدول الصلاحيات
+    private var permissionsGuide: some View {
+        let roles: [(String, Color)] = [
+            (L10n.t("مدير", "Admin"), DS.Color.adminRole),
+            (L10n.t("مراقب", "Monitor"), DS.Color.monitorRole),
+            (L10n.t("مشرف", "Supervisor"), DS.Color.supervisorRole)
+        ]
+
+        let permissions: [(String, [Bool])] = [
+            (L10n.t("دخول لوحة الإدارة", "Access admin panel"), [true, true, true]),
+            (L10n.t("قبول الطلبات", "Approve requests"), [true, true, true]),
+            (L10n.t("رفض الطلبات", "Reject requests"), [true, true, false]),
+            (L10n.t("تعديل بيانات الأعضاء", "Edit members"), [true, false, false]),
+            (L10n.t("حذف أعضاء", "Delete members"), [true, false, false]),
+            (L10n.t("تسجيل عضو جديد", "Register members"), [true, false, false]),
+            (L10n.t("إرسال إشعارات", "Send notifications"), [true, false, false]),
+            (L10n.t("حذف أخبار", "Delete news"), [true, false, false]),
+        ]
+
+        return VStack(spacing: 0) {
+            // رأس الجدول
+            HStack(spacing: 0) {
+                Text(L10n.t("الصلاحية", "Permission"))
+                    .font(DS.Font.scaled(11, weight: .bold))
+                    .foregroundColor(DS.Color.textSecondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                ForEach(0..<roles.count, id: \.self) { i in
+                    Text(roles[i].0)
+                        .font(DS.Font.scaled(10, weight: .bold))
+                        .foregroundColor(roles[i].1)
+                        .frame(width: 52)
+                }
+            }
+            .padding(.horizontal, DS.Spacing.md)
+            .padding(.vertical, DS.Spacing.sm)
+            .background(DS.Color.surface.opacity(0.5))
+
+            Divider()
+
+            // صفوف الصلاحيات
+            ForEach(0..<permissions.count, id: \.self) { row in
+                HStack(spacing: 0) {
+                    Text(permissions[row].0)
+                        .font(DS.Font.scaled(11, weight: .medium))
+                        .foregroundColor(DS.Color.textPrimary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.8)
+
+                    ForEach(0..<permissions[row].1.count, id: \.self) { col in
+                        Image(systemName: permissions[row].1[col] ? "checkmark.circle.fill" : "xmark.circle.fill")
+                            .font(DS.Font.scaled(14))
+                            .foregroundColor(permissions[row].1[col] ? DS.Color.success : DS.Color.textTertiary.opacity(0.4))
+                            .frame(width: 52)
+                    }
+                }
+                .padding(.horizontal, DS.Spacing.md)
+                .padding(.vertical, DS.Spacing.sm)
+
+                if row < permissions.count - 1 {
+                    Divider().padding(.leading, DS.Spacing.md)
+                }
+            }
+        }
+        .background(DS.Color.surface)
+        .cornerRadius(DS.Radius.md)
+        .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
+        .listRowBackground(Color.clear)
     }
 
     // MARK: - Empty State
