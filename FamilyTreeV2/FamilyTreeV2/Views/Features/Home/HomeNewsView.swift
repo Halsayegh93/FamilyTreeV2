@@ -98,6 +98,8 @@ struct HomeNewsView: View {
             }
             .sheet(item: $selectedNewsForComments) { news in
                 NewsCommentsSheet(news: news)
+                    .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
             }
             .sheet(item: $postToEdit) { news in
                 EditNewsView(news: news)
@@ -515,11 +517,19 @@ struct HomeNewsView: View {
                 newsCard(for: news)
                     .opacity(appeared ? 1 : 0)
                     .offset(y: appeared ? 0 : 20)
+                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                        if authVM.canDeleteNews {
+                            Button(role: .destructive) {
+                                postToDelete = news
+                            } label: {
+                                Label(L10n.t("حذف", "Delete"), systemImage: "trash.fill")
+                            }
+                        }
+                    }
             }
         }
         .padding(.horizontal, DS.Spacing.md)
         .padding(.top, DS.Spacing.sm)
-        // شيلت animation واسعة — تسبب لاق على القائمة الكبيرة
     }
 
     private func newsCard(for news: NewsPost) -> some View {
