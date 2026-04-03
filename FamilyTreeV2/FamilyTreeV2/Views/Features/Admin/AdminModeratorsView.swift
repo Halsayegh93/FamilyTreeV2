@@ -43,7 +43,7 @@ struct AdminModeratorsView: View {
                                 moderatorRow(member: member, index: index)
                             }
                         } header: {
-                            sectionHeader(title: L10n.t("المدراء", "Admins"), icon: "shield.circle.fill", color: DS.Color.neonPurple, count: admins.count)
+                            sectionHeader(title: L10n.t("المدراء", "Admins"), icon: "shield.fill", color: DS.Color.neonPurple, count: admins.count)
                         }
                     }
 
@@ -54,7 +54,7 @@ struct AdminModeratorsView: View {
                                 moderatorRow(member: member, index: admins.count + index)
                             }
                         } header: {
-                            sectionHeader(title: L10n.t("المراقبين", "Monitors"), icon: "eye.circle.fill", color: DS.Color.monitorRole, count: monitors.count)
+                            sectionHeader(title: L10n.t("المراقبين", "Monitors"), icon: "eye.fill", color: DS.Color.monitorRole, count: monitors.count)
                         }
                     }
 
@@ -65,14 +65,14 @@ struct AdminModeratorsView: View {
                                 moderatorRow(member: member, index: admins.count + monitors.count + index)
                             }
                         } header: {
-                            sectionHeader(title: L10n.t("المشرفين", "Supervisors"), icon: "star.circle.fill", color: DS.Color.warning, count: supervisors.count)
+                            sectionHeader(title: L10n.t("المشرفين", "Supervisors"), icon: "star.fill", color: DS.Color.warning, count: supervisors.count)
                         }
                     }
                     // قسم الصلاحيات
                     Section {
                         permissionsGuide
                     } header: {
-                        sectionHeader(title: L10n.t("صلاحيات الأدوار", "Role Permissions"), icon: "lock.circle.fill", color: DS.Color.info, count: nil)
+                        sectionHeader(title: L10n.t("صلاحيات الأدوار", "Role Permissions"), icon: "lock.fill", color: DS.Color.info, count: nil)
                     }
                 }
                 .listStyle(.insetGrouped)
