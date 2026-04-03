@@ -352,47 +352,35 @@ struct AdminModeratorsView: View {
             (L10n.t("إدارة الأجهزة", "Manage devices"), [false, false, false]),
         ]
 
-        return VStack(spacing: 0) {
-            // رأس الجدول
-            HStack(spacing: 0) {
-                Spacer().frame(width: DS.Spacing.md)
-                Text(L10n.t("الصلاحية", "Permission"))
-                    .font(DS.Font.scaled(13, weight: .bold))
-                    .foregroundColor(DS.Color.textSecondary)
-                ForEach(0..<roles.count, id: \.self) { i in
-                    Spacer()
-                    Text(roles[i].0)
-                        .font(DS.Font.scaled(12, weight: .bold))
-                        .foregroundColor(roles[i].1)
-                }
-                Spacer().frame(width: DS.Spacing.md)
-            }
-            .padding(.vertical, DS.Spacing.sm)
-            .background(DS.Color.surface.opacity(0.5))
-
-            Divider()
-
-            // صفوف الصلاحيات
+        return VStack(spacing: DS.Spacing.sm) {
             ForEach(0..<permissions.count, id: \.self) { row in
-                HStack(spacing: 0) {
-                    Spacer().frame(width: DS.Spacing.md)
+                VStack(spacing: DS.Spacing.sm) {
+                    // اسم الصلاحية
                     Text(permissions[row].0)
-                        .font(DS.Font.scaled(13, weight: .medium))
+                        .font(DS.Font.scaled(14, weight: .semibold))
                         .foregroundColor(DS.Color.textPrimary)
-                        .lineLimit(2)
-                        .minimumScaleFactor(0.8)
-                    ForEach(0..<permissions[row].1.count, id: \.self) { col in
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                    // الأدوار
+                    HStack(spacing: DS.Spacing.md) {
+                        ForEach(0..<roles.count, id: \.self) { col in
+                            HStack(spacing: DS.Spacing.xs) {
+                                Image(systemName: permissions[row].1[col] ? "checkmark.circle.fill" : "xmark.circle.fill")
+                                    .font(DS.Font.scaled(15))
+                                    .foregroundColor(permissions[row].1[col] ? DS.Color.success : DS.Color.textTertiary.opacity(0.4))
+                                Text(roles[col].0)
+                                    .font(DS.Font.scaled(12, weight: .medium))
+                                    .foregroundColor(roles[col].1)
+                            }
+                        }
                         Spacer()
-                        Image(systemName: permissions[row].1[col] ? "checkmark.circle.fill" : "xmark.circle.fill")
-                            .font(DS.Font.scaled(16))
-                            .foregroundColor(permissions[row].1[col] ? DS.Color.success : DS.Color.textTertiary.opacity(0.4))
                     }
-                    Spacer().frame(width: DS.Spacing.md)
                 }
+                .padding(.horizontal, DS.Spacing.md)
                 .padding(.vertical, DS.Spacing.sm)
 
                 if row < permissions.count - 1 {
-                    Divider().padding(.leading, DS.Spacing.md)
+                    Divider().padding(.horizontal, DS.Spacing.md)
                 }
             }
         }
