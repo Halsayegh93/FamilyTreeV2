@@ -59,11 +59,11 @@ struct TreeView: View {
     /// الحد الأقصى لعدد العقد المرسومة في وقت واحد لتجنب التهنيق
     private var maxRenderedNodes: Int {
         let count = cachedVisibleMembers.count
-        if count > 8000 { return 40 }
-        if count > 5000 { return 60 }
-        if count > 2000 { return 80 }
-        if count > 500 { return 120 }
-        return 200
+        if count > 8000 { return 30 }
+        if count > 5000 { return 50 }
+        if count > 2000 { return 70 }
+        if count > 500 { return 100 }
+        return 150
     }
 
     private var preferredBaseScale: CGFloat { 0.60 }
@@ -140,6 +140,7 @@ struct TreeView: View {
                                             .frame(maxWidth: .infinity, alignment: .center)
                                     }
                                 }
+                                .drawingGroup()
                                 .scaleEffect(scale, anchor: zoomAnchor)
                                 .frame(
                                     minWidth: geometry.size.width,
