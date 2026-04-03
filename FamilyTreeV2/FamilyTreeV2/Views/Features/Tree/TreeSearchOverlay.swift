@@ -248,37 +248,48 @@ struct TreeSearchOverlay: View {
             } else {
                 let normalizedFull = ArabicTextNormalizer.normalizeForSearch(member.fullName)
                 let fullWords = normalizedFull.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
-
-                // تطابق الاسم الأول
-                if normalizedFirst == searchWords[0] {
-                    score += 100
-                } else if normalizedFirst.hasPrefix(searchWords[0]) {
-                    score += 80
-                }
-
-                // نقاط إضافية لكل كلمة بحث تطابق بالترتيب — اللي يطابق أكثر يطلع أول
-                if searchWords.count > 1 && score > 0 {
-                    var matchedInOrder = 0
-                    var wordIdx = 0
-                    for sw in searchWords {
-                        while wordIdx < fullWords.count {
-                            if fullWords[wordIdx].hasPrefix(sw) {
-                                matchedInOrder += 1
-                                wordIdx += 1
-                                break
-                            }
-                            wordIdx += 1
-                        }
-                    }
-                    // كل كلمة مطابقة بالترتيب تضيف 30 نقطة
-                    score += Double(matchedInOrder) * 30.0
-                }
-
                 let allMatch = searchWords.allSatisfy { sw in fullWords.contains { $0.hasPrefix(sw) } }
 
-                if allMatch && score == 0 {
-                    score += 50
-                } else if !allMatch && score == 0 {
+                if searchWords.count == 1 {
+                    // كلمة وحدة — نعرض كل من يبدأ اسمه فيها
+                    if normalizedFirst == searchWords[0] {
+                        score += 100
+                    } else if normalizedFirst.hasPrefix(searchWords[0]) {
+                        score += 80
+                    } else if allMatch {
+                        score += 50
+                    }
+                } else {
+                    // أكثر من كلمة — لازم كل الكلمات تطابق عشان يطلع بالنتائج
+                    if allMatch {
+                        // نقاط أساسية
+                        if normalizedFirst == searchWords[0] {
+                            score += 100
+                        } else if normalizedFirst.hasPrefix(searchWords[0]) {
+                            score += 80
+                        } else {
+                            score += 50
+                        }
+
+                        // نقاط إضافية لكل كلمة تطابق بالترتيب
+                        var matchedInOrder = 0
+                        var wordIdx = 0
+                        for sw in searchWords {
+                            while wordIdx < fullWords.count {
+                                if fullWords[wordIdx].hasPrefix(sw) {
+                                    matchedInOrder += 1
+                                    wordIdx += 1
+                                    break
+                                }
+                                wordIdx += 1
+                            }
+                        }
+                        score += Double(matchedInOrder) * 30.0
+                    }
+                }
+
+                // بحث في السيرة فقط إذا ما طابق الاسم
+                if score == 0 {
                     if let bio = member.bio, !bio.isEmpty {
                         let bioText = ArabicTextNormalizer.normalizeForSearch(
                             bio.map { "\($0.title) \($0.details)" }.joined(separator: " ")
