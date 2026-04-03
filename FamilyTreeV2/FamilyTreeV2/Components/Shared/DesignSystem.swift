@@ -706,7 +706,13 @@ struct DSIcon: View {
             .font(DS.Font.scaled(iconSize, weight: .bold))
             .foregroundColor(color)
             .frame(width: size, height: size)
-            .background(color.opacity(DS.Icon.opacity))
+            .background(
+                LinearGradient(
+                    colors: [color.opacity(DS.Icon.opacity), color.opacity(DS.Icon.opacity * 0.4)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
     }
 }
