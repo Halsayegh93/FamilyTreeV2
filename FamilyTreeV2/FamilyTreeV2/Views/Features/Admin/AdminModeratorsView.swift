@@ -270,6 +270,14 @@ struct AdminModeratorsView: View {
                         Label(L10n.t("ترقية لمدير", "Promote"), systemImage: "arrow.up.circle.fill")
                     }
                     .tint(DS.Color.neonPurple)
+                    Button {
+                        memberToChange = member
+                        pendingRole = .supervisor
+                        showRoleConfirm = true
+                    } label: {
+                        Label(L10n.t("تنزيل لمشرف", "Demote"), systemImage: "arrow.down.circle.fill")
+                    }
+                    .tint(DS.Color.warning)
                 } else if member.role == .admin {
                     Button {
                         memberToChange = member
