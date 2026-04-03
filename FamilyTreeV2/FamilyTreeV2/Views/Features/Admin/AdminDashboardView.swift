@@ -10,38 +10,43 @@ struct AdminDashboardView: View {
     @Binding var selectedTab: Int
     @State private var showingNotifications = false
     @State private var appeared = false
+    @State private var pendingCount: Int = 0
+    @State private var moderatorCount: Int = 0
+    @State private var totalReviewRequestsCount: Int = 0
+    @State private var treeIssuesCount: Int = 0
+    @State private var issueMembersCount: Int = 0
+    @State private var totalMembersCount: Int = 0
+    @State private var aliveMembersCount: Int = 0
+    @State private var deceasedMembersCount: Int = 0
     @Environment(\.dismiss) var dismiss
 
     // Admin theme accent (purple #6C5CE7)
     private let adminAccent = DS.Color.gridTree
 
-    // MARK: - Cached badge counts
-    private var pendingCount: Int {
-        memberVM.allMembers.filter { $0.role == .pending }.count
-    }
-    private var moderatorCount: Int {
-        memberVM.allMembers.filter { $0.role == .owner || $0.role == .admin || $0.role == .monitor || $0.role == .supervisor }.count
-    }
-    private var totalReviewRequestsCount: Int {
-        pendingCount
-        + newsVM.pendingNewsRequests.count
-        + adminRequestVM.newsReportRequests.count
-        + adminRequestVM.phoneChangeRequests.count
-        + diwaniyaVM.pendingDiwaniyas.count
-        + adminRequestVM.deceasedRequests.count
-        + adminRequestVM.childAddRequests.count
-        + adminRequestVM.photoSuggestionRequests.count
-        + adminRequestVM.treeEditRequests.count
-        + adminRequestVM.nameChangeRequests.count
-        + memberVM.pendingGalleryPhotos.count
-        + storyVM.pendingStories.count
-    }
-    /// عدد مشاكل الشجرة (يتائم، بدون أسماء، روابط مكسورة، مخفيين)
-    private var treeIssuesCount: Int {
+    private func recalculateBadges() {
+        let all = memberVM.allMembers
+        pendingCount = all.filter { $0.role == .pending }.count
+        moderatorCount = all.filter { [.owner, .admin, .monitor, .supervisor].contains($0.role) }.count
+        totalMembersCount = all.filter { $0.role != .pending }.count
+        aliveMembersCount = all.filter { $0.role != .pending && $0.isDeceased != true }.count
+        deceasedMembersCount = all.filter { $0.isDeceased == true }.count
+        totalReviewRequestsCount = pendingCount
+            + newsVM.pendingNewsRequests.count
+            + adminRequestVM.newsReportRequests.count
+            + adminRequestVM.phoneChangeRequests.count
+            + diwaniyaVM.pendingDiwaniyas.count
+            + adminRequestVM.deceasedRequests.count
+            + adminRequestVM.childAddRequests.count
+            + adminRequestVM.photoSuggestionRequests.count
+            + adminRequestVM.treeEditRequests.count
+            + adminRequestVM.nameChangeRequests.count
+            + memberVM.pendingGalleryPhotos.count
+            + storyVM.pendingStories.count
+
         let active = memberVM.allMembers.filter { $0.role != .pending && $0.status != .frozen }
         let activeIds = Set(active.map(\.id))
         let fatherIds = Set(active.compactMap(\.fatherId))
-        return memberVM.allMembers.filter { m in
+        treeIssuesCount = memberVM.allMembers.filter { m in
             guard m.status != .frozen else { return false }
             let isOrphan = m.fatherId == nil && !fatherIds.contains(m.id) && m.role != .pending
             let noName = m.fullName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || m.fullName == "بدون اسم"
@@ -49,18 +54,15 @@ struct AdminDashboardView: View {
             let hidden = m.isHiddenFromTree
             return isOrphan || noName || brokenParent || hidden
         }.count
-    }
 
-    /// عدد الأعضاء اللي عندهم أي مشكلة (بدون تكرار)
-    private var issueMembersCount: Int {
-        memberVM.allMembers
+        issueMembersCount = memberVM.allMembers
             .filter { $0.role != .pending && $0.isDeceased != true }
             .filter { member in
                 let isNotActivated = member.status == nil || member.status == .pending
-                let hasNoPhone = member.phoneNumber == nil || (member.phoneNumber ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                let noBirth = member.birthDate == nil || (member.birthDate ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                let hasNoPhone = (member.phoneNumber ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                let noBirth = (member.birthDate ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 let noFather = member.fatherId == nil
-                let noGender = member.gender == nil || (member.gender ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                let noGender = (member.gender ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 return isNotActivated || hasNoPhone || noBirth || noFather || noGender
             }
             .count
@@ -104,7 +106,7 @@ struct AdminDashboardView: View {
                             DSCard(padding: 0) {
                                 DSSectionHeader(
                                     title: L10n.t("طلبات تنتظر المراجعة", "Pending Requests"),
-                                    icon: "exclamationmark.shield.fill",
+                                    icon: "exclamationmark.circle.fill",
                                     iconColor: DS.Color.error
                                 )
 
@@ -112,7 +114,7 @@ struct AdminDashboardView: View {
                                         DSActionRow(
                                             title: L10n.t("طلبات المراجعة", "Review Requests"),
                                             subtitle: L10n.t("انضمام، أخبار، بلاغات، جوال، ديوانيات، وفاة، أبناء، صور، قصص، تعديل", "Join, news, reports, phone, diwaniyas, deceased, children, photos, stories, edits"),
-                                            icon: "tray.full.fill",
+                                            icon: "tray.circle.fill",
                                             color: DS.Color.warning,
                                             badge: totalReviewRequestsCount
                                         )
@@ -124,7 +126,7 @@ struct AdminDashboardView: View {
                                             DSActionRow(
                                                 title: L10n.t("إدارة الأعضاء", "Members Management"),
                                                 subtitle: L10n.t("إدارة، صحة الشجرة، سجل ودليل العائلة", "Manage, tree health, registry & directory"),
-                                                icon: "person.2.badge.gearshape",
+                                                icon: "person.2.circle.fill",
                                                 color: DS.Color.warning,
                                                 badge: (issueMembersCount + treeIssuesCount) > 0 ? (issueMembersCount + treeIssuesCount) : nil
                                             )
@@ -138,20 +140,20 @@ struct AdminDashboardView: View {
                                 DSCard(padding: 0) {
                                     DSSectionHeader(
                                         title: L10n.t("النظام", "System"),
-                                        icon: "gearshape.2.fill",
+                                        icon: "gearshape.circle.fill",
                                         iconColor: DS.Color.primary
                                     )
 
                                         NavigationLink(destination: AdminRegisterMemberView()) {
-                                            DSActionRow(title: L10n.t("تسجيل عضو جديد", "Register New Member"), subtitle: L10n.t("إضافة عضو جديد مباشرة للشجرة", "Add a new member directly to the tree"), icon: "person.badge.plus", color: DS.Color.primary)
+                                            DSActionRow(title: L10n.t("تسجيل عضو جديد", "Register New Member"), subtitle: L10n.t("إضافة عضو جديد مباشرة للشجرة", "Add a new member directly to the tree"), icon: "person.badge.plus.circle.fill", color: DS.Color.primary)
                                         }
                                         DSDivider()
                                         NavigationLink(destination: AdminNotificationsView()) {
-                                            DSActionRow(title: L10n.t("إرسال إشعارات", "Send Notifications"), subtitle: L10n.t("إرسال إشعار عام أو مخصص", "Send a general or targeted notification"), icon: "bell.badge.fill", color: DS.Color.warning)
+                                            DSActionRow(title: L10n.t("إرسال إشعارات", "Send Notifications"), subtitle: L10n.t("إرسال إشعار عام أو مخصص", "Send a general or targeted notification"), icon: "bell.circle.fill", color: DS.Color.warning)
                                         }
                                         DSDivider()
                                         NavigationLink(destination: AdminReportsView()) {
-                                            DSActionRow(title: L10n.t("تقارير PDF", "PDF Reports"), subtitle: L10n.t("تقرير الأرقام والأعمار للأعضاء", "Member numbers and ages report"), icon: "doc.text.fill", color: DS.Color.info)
+                                            DSActionRow(title: L10n.t("تقارير PDF", "PDF Reports"), subtitle: L10n.t("تقرير الأرقام والأعمار للأعضاء", "Member numbers and ages report"), icon: "doc.circle.fill", color: DS.Color.info)
                                         }
                                         // الأمان والإعدادات — المالك فقط
                                         if authVM.isOwner {
@@ -160,7 +162,7 @@ struct AdminDashboardView: View {
                                                 DSActionRow(
                                                     title: L10n.t("الأمان والإعدادات", "Security & Settings"),
                                                     subtitle: L10n.t("أجهزة، أرقام محظورة، إعدادات التطبيق", "Devices, banned numbers, app settings"),
-                                                    icon: "lock.shield.fill",
+                                                    icon: "lock.circle.fill",
                                                     color: DS.Color.gridContact,
                                                     badge: authVM.bannedPhones.count > 0 ? authVM.bannedPhones.count : nil
                                                 )
@@ -175,7 +177,7 @@ struct AdminDashboardView: View {
                                 DSCard(padding: 0) {
                                     DSSectionHeader(
                                         title: L10n.t("فريق الإدارة", "Admin Team"),
-                                        icon: "person.3.fill",
+                                        icon: "person.3.circle.fill",
                                         iconColor: DS.Color.neonPurple
                                     )
 
@@ -183,7 +185,7 @@ struct AdminDashboardView: View {
                                             DSActionRow(
                                                 title: L10n.t("فريق الإدارة", "Admin Team"),
                                                 subtitle: L10n.t("عرض أعضاء فريق الإدارة وصلاحياتهم", "View admin team members and permissions"),
-                                                icon: "person.3.fill",
+                                                icon: "person.3.circle.fill",
                                                 color: DS.Color.neonPurple,
                                                 badge: moderatorCount
                                             )
@@ -224,10 +226,10 @@ struct AdminDashboardView: View {
                 group.addTask { @MainActor in await adminRequestVM.fetchNameChangeRequests() }
                 group.addTask { @MainActor in await authVM.fetchBannedPhones() }
             }
+            recalculateBadges()
         }
+        .onChange(of: memberVM.membersVersion) { _, _ in recalculateBadges() }
     }
-
-
 
 
     // MARK: - إحصائيات (Colorful Stat Cards)
@@ -237,21 +239,21 @@ struct AdminDashboardView: View {
             HStack(spacing: DS.Spacing.md) {
                 adminColorfulStatCard(
                     title: L10n.t("الأعضاء", "Members"),
-                    value: "\(memberVM.allMembers.filter { $0.role != .pending }.count)",
+                    value: "\(totalMembersCount)",
                     icon: "person.2.fill",
                     color: DS.Color.primary
                 )
 
                 adminColorfulStatCard(
                     title: L10n.t("الأحياء", "Alive"),
-                    value: "\(memberVM.allMembers.filter { $0.role != .pending && $0.isDeceased != true }.count)",
+                    value: "\(aliveMembersCount)",
                     icon: "heart.fill",
                     color: DS.Color.success
                 )
 
                 adminColorfulStatCard(
                     title: L10n.t("المتوفين", "Deceased"),
-                    value: "\(memberVM.allMembers.filter { $0.isDeceased == true }.count)",
+                    value: "\(deceasedMembersCount)",
                     icon: "heart.slash.fill",
                     color: DS.Color.deceased
                 )
