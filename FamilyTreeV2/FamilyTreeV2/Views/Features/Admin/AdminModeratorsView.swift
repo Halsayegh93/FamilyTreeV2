@@ -358,7 +358,7 @@ struct AdminModeratorsView: View {
                 Text(L10n.t("الصلاحية", "Permission"))
                     .font(DS.Font.scaled(11, weight: .bold))
                     .foregroundColor(DS.Color.textSecondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .frame(width: 130, alignment: .leading)
 
                 ForEach(0..<roles.count, id: \.self) { i in
                     Text(roles[i].0)
@@ -379,7 +379,7 @@ struct AdminModeratorsView: View {
                     Text(permissions[row].0)
                         .font(DS.Font.scaled(11, weight: .medium))
                         .foregroundColor(DS.Color.textPrimary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .frame(width: 130, alignment: .leading)
                         .lineLimit(2)
                         .minimumScaleFactor(0.8)
 
