@@ -711,7 +711,7 @@ struct RecursiveTreeBranch: View {
     }
 
     private var connectorWidth: CGFloat {
-        isKinshipPath ? 4 : 2
+        isKinshipPath ? 5 : 2
     }
 
     var body: some View {
@@ -726,7 +726,8 @@ struct RecursiveTreeBranch: View {
                 viewMode: viewMode,
                 lightweightFullTree: lightweightFullTree,
                 level: level,
-                currentLocationMemberID: currentLocationMemberID
+                currentLocationMemberID: currentLocationMemberID,
+                isKinshipHighlighted: isKinshipPath
             ) {
                 selectedMember = member
             } onToggle: {
@@ -853,6 +854,7 @@ struct TreeMemberNode: View {
     let lightweightFullTree: Bool
     var level: Int = 0
     let currentLocationMemberID: UUID?
+    var isKinshipHighlighted: Bool = false
     let onTap: () -> Void
     let onToggle: () -> Void
     @State private var shouldLoadImage = false
@@ -863,8 +865,11 @@ struct TreeMemberNode: View {
         member.id == currentLocationMemberID
     }
 
-    // لون دائرة الصورة — متوفى رمادي، أحياء حسب الرتبة
+    // لون دائرة الصورة — ذهبي إذا جزء من مسار القرابة
     private var nodeAccentColor: Color {
+        if isKinshipHighlighted {
+            return DS.Color.warning
+        }
         if member.isDeceased == true {
             return DS.Color.deceased
         }
