@@ -349,7 +349,7 @@ struct AdminModeratorsView: View {
             (L10n.t("دخول لوحة الإدارة", "Access admin panel"), [true, true, true]),
             (L10n.t("قبول الطلبات", "Approve requests"), [true, true, true]),
             (L10n.t("رفض الطلبات", "Reject requests"), [true, true, false]),
-            (L10n.t("تعديل بيانات الأعضاء", "Edit members"), [true, false, false]),
+            (L10n.t("تعديل بيانات الأعضاء", "Edit members"), [true, true, false]),
             (L10n.t("حذف أعضاء", "Delete members"), [true, false, false]),
             (L10n.t("تسجيل عضو جديد", "Register members"), [true, false, false]),
             (L10n.t("إرسال إشعارات", "Send notifications"), [true, false, false]),

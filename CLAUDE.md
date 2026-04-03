@@ -122,7 +122,7 @@ unauthenticated → (OTP login) → checking → authenticatedNoProfile → (reg
 | دخول لوحة الإدارة | ✅ | ✅ | ✅ | ✅ |
 | قبول الطلبات | ✅ | ✅ | ✅ | ✅ |
 | رفض الطلبات (`canRejectRequests`) | ✅ | ✅ | ✅ | ❌ |
-| تعديل بيانات الأعضاء (`canEditMembers`) | ✅ | ✅ | ❌ | ❌ |
+| تعديل بيانات الأعضاء (`canEditMembers`) | ✅ | ✅ | ✅ | ❌ |
 | حذف أعضاء (`canDeleteMembers`) | ✅ | ✅ | ❌ | ❌ |
 | تسجيل عضو جديد (`canRegisterMembers`) | ✅ | ✅ | ❌ | ❌ |
 | إرسال إشعارات (`canSendNotifications`) | ✅ | ✅ | ❌ | ❌ |
@@ -137,7 +137,7 @@ unauthenticated → (OTP login) → checking → authenticatedNoProfile → (reg
 **ملاحظات:**
 - المالك (`owner`) هو UUID ثابت — لا يمكن ترقية أحد لمالك عبر التطبيق
 - المالك يظهر للآخرين كـ "مدير" (لا يظهر لقب "مالك")
-- المراقب يقدر يوافق ويرفض الطلبات فقط — لا يعدل أو يحذف أعضاء
+- المراقب يقدر يوافق ويرفض الطلبات ويعدل بيانات الأعضاء — لا يحذف أعضاء
 - المشرف يقدر يوافق فقط — لا يرفض طلبات
 
 ## Navigation

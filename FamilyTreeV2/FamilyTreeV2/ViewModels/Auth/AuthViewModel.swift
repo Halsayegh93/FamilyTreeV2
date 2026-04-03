@@ -159,8 +159,8 @@ class AuthViewModel: ObservableObject {
     /// إدارة الأجهزة — المالك فقط
     var canManageDevices: Bool { isOwner }
 
-    /// تعديل بيانات أعضاء آخرين — مدير + مالك
-    var canEditMembers: Bool { isAdmin }
+    /// تعديل بيانات أعضاء آخرين — مدير + مراقب + مالك
+    var canEditMembers: Bool { isAdmin || currentUser?.role == .monitor }
 
     /// حذف أخبار — مدير + مالك
     var canDeleteNews: Bool { isAdmin }
