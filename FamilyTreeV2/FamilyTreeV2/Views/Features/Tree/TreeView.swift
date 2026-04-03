@@ -764,11 +764,11 @@ struct RecursiveTreeBranch: View {
                 let childrenToDisplay = self.visibleChildren
 
                 if !childrenToDisplay.isEmpty {
-                    let verticalSpacing: CGFloat = viewMode == .fullTree ? 6 : 8
                     let rowSpacing: CGFloat = viewMode == .fullTree ? 16 : 28
                     let connectorHeight: CGFloat = viewMode == .fullTree ? 12 : 16
 
-                    VStack(spacing: verticalSpacing) {
+                    VStack(spacing: 0) {
+                        // خط عمودي من الأب
                         Rectangle()
                             .fill(connectorColor)
                             .frame(width: connectorWidth, height: connectorHeight)
@@ -780,28 +780,47 @@ struct RecursiveTreeBranch: View {
 
                         ForEach(0..<chunkedChildren.count, id: \.self) { rowIndex in
                             let row = chunkedChildren[rowIndex]
-                            HStack(alignment: .top, spacing: rowSpacing) {
-                                ForEach(row) { child in
-                                    RecursiveTreeBranch(
-                                        member: child,
-                                        childrenByFatherId: childrenByFatherId,
-                                        ancestorIDs: ancestorIDs.union([member.id]),
-                                        activePath: $activePath,
-                                        searchedMemberID: $searchedMemberID,
-                                        selectedMember: $selectedMember,
-                                        scrollTarget: $scrollTarget,
-                                        scrollAnchor: $scrollAnchor,
-                                        scrollCounter: $scrollCounter,
-                                        scale: $scale,
-                                        baseScale: $baseScale,
-                                        level: level + 1,
-                                        viewMode: viewMode,
-                                        lightweightFullTree: lightweightFullTree,
-                                        currentLocationMemberID: currentLocationMemberID,
-                                        renderedCount: $renderedCount,
-                                        maxRendered: maxRendered,
-                                        kinshipHighlightedIds: kinshipHighlightedIds
-                                    )
+                            VStack(spacing: 0) {
+                                // خط أفقي يربط الإخوان — فقط إذا أكثر من واحد
+                                if row.count > 1 {
+                                    Rectangle()
+                                        .fill(connectorColor)
+                                        .frame(height: connectorWidth)
+                                        .padding(.horizontal, rowSpacing)
+                                }
+
+                                HStack(alignment: .top, spacing: rowSpacing) {
+                                    ForEach(row) { child in
+                                        VStack(spacing: 0) {
+                                            // خط عمودي قصير من الخط الأفقي للعقدة
+                                            if row.count > 1 {
+                                                Rectangle()
+                                                    .fill(connectorColor)
+                                                    .frame(width: connectorWidth, height: connectorHeight / 2)
+                                            }
+
+                                            RecursiveTreeBranch(
+                                                member: child,
+                                                childrenByFatherId: childrenByFatherId,
+                                                ancestorIDs: ancestorIDs.union([member.id]),
+                                                activePath: $activePath,
+                                                searchedMemberID: $searchedMemberID,
+                                                selectedMember: $selectedMember,
+                                                scrollTarget: $scrollTarget,
+                                                scrollAnchor: $scrollAnchor,
+                                                scrollCounter: $scrollCounter,
+                                                scale: $scale,
+                                                baseScale: $baseScale,
+                                                level: level + 1,
+                                                viewMode: viewMode,
+                                                lightweightFullTree: lightweightFullTree,
+                                                currentLocationMemberID: currentLocationMemberID,
+                                                renderedCount: $renderedCount,
+                                                maxRendered: maxRendered,
+                                                kinshipHighlightedIds: kinshipHighlightedIds
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
