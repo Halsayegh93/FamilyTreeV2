@@ -106,6 +106,7 @@ struct DiwaniyasView: View {
             }
             .onAppear {
                 viewModel.canModerate = authVM.canModerate
+                viewModel.authVM = authVM
             }
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
             .alert(L10n.t("خطأ", "Error"), isPresented: .init(
