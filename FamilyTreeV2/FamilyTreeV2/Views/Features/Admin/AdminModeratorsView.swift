@@ -359,7 +359,6 @@ struct AdminModeratorsView: View {
             (L10n.t("إرسال إشعارات", "Send notifications"), [true, false, false]),
             (L10n.t("حذف أخبار", "Delete news"), [true, false, false]),
             (L10n.t("إحصائيات", "Statistics"), [true, true, false]),
-            (L10n.t("ملخص الإدارة AI", "Admin AI Summary"), [true, false, false]),
             (L10n.t("إدارة الأدوار", "Manage roles"), [false, false, false]),
             (L10n.t("الأمان والإعدادات", "Security & Settings"), [false, false, false]),
         ]

@@ -13,6 +13,17 @@
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>يحتاج التطبيق للوصول إلى مكتبة الصور لاختيار صور الملف الشخصي والأخبار</string>
 	<key>NSCameraUsageDescription</key>
-	<string>يحتاج التطبيق للوصول إلى الكاميرا لالتقاط صور الملف الشخصي</string>
+	<string>يحتاج التطبيق للوصول إلى الكاميرا لالتقاط صور الملف الشخصي ومسح الباركود</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.hasan.familytree</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>familytree</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

@@ -175,14 +175,6 @@ class AuthViewModel: ObservableObject {
         canModerate
     }
 
-    // MARK: - صلاحيات الذكاء الاصطناعي
-
-    /// ملخص الإدارة بالذكاء الاصطناعي — مدير + مالك فقط
-    var canAccessAdminSummary: Bool { isAdmin }
-
-    /// توليد أخبار بالذكاء الاصطناعي — فريق الإدارة (بدون الأعضاء)
-    var canGenerateNewsWithAI: Bool { canModerate }
-
     // MARK: - صلاحيات المحتوى
 
     /// حذف تعليقات الأعضاء — مدير + مراقب + مالك
