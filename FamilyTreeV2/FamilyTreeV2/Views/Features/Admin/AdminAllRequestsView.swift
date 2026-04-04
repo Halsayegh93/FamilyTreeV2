@@ -644,23 +644,38 @@ struct AdminAllRequestsView: View {
                 }
             case .treeEdit:
                 ForEach(adminRequestVM.treeEditRequests) { request in
-                    Button { selectedDetail = .treeEdit(request) } label: {
-                        treeEditRow(for: request)
-                    }
-                    .buttonStyle(.plain)
-                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                        Button { Task { await adminRequestVM.approveTreeEditRequest(request: request) } } label: {
-                            Label(L10n.t("موافقة", "Approve"), systemImage: "checkmark.circle.fill")
-                        }.tint(DS.Color.success)
-                    }
-                    .swipeActions(edge: .leading, allowsFullSwipe: false) {
-                        if authVM.canRejectRequests {
-                            Button(role: .destructive) {
-                                treeEditToReject = request
-                                rejectReasonText = ""
-                                showRejectReasonAlert = true
-                            } label: {
-                                Label(L10n.t("رفض", "Reject"), systemImage: "xmark.circle.fill")
+                    let action = request.treeEditPayload?.action ?? ""
+                    // المراقب: تعديل اسم + حذف — المشرف: إضافة فقط — المدير: الكل
+                    let canApproveThis: Bool = {
+                        if authVM.isAdmin { return true }
+                        if authVM.currentUser?.role == .monitor {
+                            return action == "تعديل اسم" || action == "حذف"
+                        }
+                        if authVM.currentUser?.role == .supervisor {
+                            return action == "إضافة"
+                        }
+                        return false
+                    }()
+
+                    if canApproveThis {
+                        Button { selectedDetail = .treeEdit(request) } label: {
+                            treeEditRow(for: request)
+                        }
+                        .buttonStyle(.plain)
+                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                            Button { Task { await adminRequestVM.approveTreeEditRequest(request: request) } } label: {
+                                Label(L10n.t("موافقة", "Approve"), systemImage: "checkmark.circle.fill")
+                            }.tint(DS.Color.success)
+                        }
+                        .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                            if authVM.canRejectRequests {
+                                Button(role: .destructive) {
+                                    treeEditToReject = request
+                                    rejectReasonText = ""
+                                    showRejectReasonAlert = true
+                                } label: {
+                                    Label(L10n.t("رفض", "Reject"), systemImage: "xmark.circle.fill")
+                                }
                             }
                         }
                     }
