@@ -108,7 +108,7 @@ struct ProjectDetailView: View {
     
     private var isOwnerOrAdmin: Bool {
         guard let user = authVM.currentUser else { return false }
-        return user.id == project.ownerId || authVM.canModerate
+        return user.id == project.ownerId || authVM.isAdmin
     }
     
     var body: some View {

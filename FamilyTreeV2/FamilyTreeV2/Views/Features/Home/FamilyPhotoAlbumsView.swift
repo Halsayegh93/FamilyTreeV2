@@ -51,7 +51,9 @@ struct FamilyPhotoAlbumsView: View {
 
     private var canDeleteCurrentPhoto: Bool {
         guard let currentPhoto = filteredPhotos[safe: selectedPhotoIndex] else { return false }
-        if authVM.canModerate { return true }
+        // المدير + المراقب + المالك يقدرون يحذفون أي صورة
+        if authVM.canDeleteComments { return true }
+        // صاحب الصورة يقدر يحذفها
         if let currentUser = authVM.currentUser, currentPhoto.memberId == currentUser.id { return true }
         return false
     }

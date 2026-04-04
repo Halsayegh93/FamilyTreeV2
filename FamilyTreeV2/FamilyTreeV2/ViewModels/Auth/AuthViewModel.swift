@@ -159,11 +159,11 @@ class AuthViewModel: ObservableObject {
     /// إدارة الأجهزة — المالك فقط
     var canManageDevices: Bool { isOwner }
 
-    /// تعديل بيانات أعضاء آخرين — مدير + مراقب + مالك
-    var canEditMembers: Bool { isAdmin || currentUser?.role == .monitor }
+    /// تعديل بيانات أعضاء آخرين — مدير + مالك
+    var canEditMembers: Bool { isAdmin }
 
-    /// حذف أخبار — مدير + مالك
-    var canDeleteNews: Bool { isAdmin }
+    /// حذف أخبار — مدير + مراقب + مالك
+    var canDeleteNews: Bool { isAdmin || currentUser?.role == .monitor }
 
     /// إرسال إشعارات يدوية — مدير + مالك
     var canSendNotifications: Bool { isAdmin }
@@ -183,11 +183,14 @@ class AuthViewModel: ObservableObject {
     /// تجميد حسابات الأعضاء — مدير + مالك
     var canFreezeMembers: Bool { isAdmin }
 
-    /// حذف قصص الأعضاء — مدير + مالك
-    var canDeleteStories: Bool { isAdmin }
+    /// حذف قصص الأعضاء — مدير + مراقب + مالك
+    var canDeleteStories: Bool { isAdmin || currentUser?.role == .monitor }
 
     /// حذف ديوانيات — مدير + مالك
     var canDeleteDiwaniyas: Bool { isAdmin }
+
+    /// حذف صور الأعضاء — مدير + مراقب + مالك
+    var canDeletePhotos: Bool { isAdmin || currentUser?.role == .monitor }
 
     // MARK: - Schema Error Helpers
     

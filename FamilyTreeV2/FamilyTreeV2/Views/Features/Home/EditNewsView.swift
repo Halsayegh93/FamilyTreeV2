@@ -367,6 +367,8 @@ struct EditNewsView: View {
 
     // MARK: - Submit
     private func submitEdits() async {
+        // تحقق من الصلاحية — صاحب الخبر أو المدير
+        guard authVM.currentUser?.id == news.author_id || authVM.canModerate else { return }
         guard canSubmit, !isSubmitting else { return }
         isSubmitting = true
         defer { isSubmitting = false }
