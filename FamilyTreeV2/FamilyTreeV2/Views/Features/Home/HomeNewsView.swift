@@ -34,22 +34,8 @@ struct HomeNewsView: View {
                 DS.Color.background.ignoresSafeArea()
 
                 if let subPage = activeSubPage {
-                    // Sub-page content
-                    VStack(spacing: 0) {
-                        subPageHeader(for: subPage)
-                        
-                        switch subPage {
-                        case .photos:
-                            FamilyPhotoAlbumsView()
-                        case .projects:
-                            FamilyProjectsView()
-                        case .contact:
-                            ContactCenterView()
-                        case .ai:
-                            AIChatView()
-                        }
-                    }
-                    .transition(.move(edge: L10n.isArabic ? .leading : .trailing))
+                    subPageContent(for: subPage)
+                        .transition(.move(edge: L10n.isArabic ? .leading : .trailing))
                 } else {
                     // Main home content
                     VStack(spacing: 0) {
@@ -193,6 +179,20 @@ struct HomeNewsView: View {
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
 
+    // MARK: - Sub-page Content
+    @ViewBuilder
+    private func subPageContent(for page: HomeSubPage) -> some View {
+        VStack(spacing: 0) {
+            subPageHeader(for: page)
+            switch page {
+            case .photos: FamilyPhotoAlbumsView()
+            case .projects: FamilyProjectsView()
+            case .contact: ContactCenterView()
+            case .ai: AIChatView()
+            }
+        }
+    }
+
     // MARK: - Sub-page Header
     private func subPageHeader(for page: HomeSubPage) -> some View {
         let title: String = {
@@ -200,6 +200,7 @@ struct HomeNewsView: View {
             case .photos: return L10n.t("صور العائلة", "Family Photos")
             case .projects: return L10n.t("مشاريع العائلة", "Family Projects")
             case .contact: return L10n.t("التواصل", "Contact")
+            case .ai: return L10n.t("الذكاء الاصطناعي", "AI Assistant")
             }
         }()
 
