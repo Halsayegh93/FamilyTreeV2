@@ -188,7 +188,7 @@ struct HomeNewsView: View {
             case .photos: FamilyPhotoAlbumsView()
             case .projects: FamilyProjectsView()
             case .contact: ContactCenterView()
-            case .ai: AIChatView()
+            case .ai: AIChatView(userId: authVM.currentUser?.id.uuidString ?? "")
             }
         }
     }
