@@ -25,7 +25,7 @@ struct HomeNewsView: View {
     @State private var showStoryViewer = false
 
     private enum HomeSubPage {
-        case photos, projects, contact, ai
+        case photos, projects, contact
     }
 
     var body: some View {
@@ -188,7 +188,6 @@ struct HomeNewsView: View {
             case .photos: FamilyPhotoAlbumsView()
             case .projects: FamilyProjectsView()
             case .contact: ContactCenterView()
-            case .ai: AIChatView(userId: authVM.currentUser?.id.uuidString ?? "")
             }
         }
     }
@@ -200,7 +199,6 @@ struct HomeNewsView: View {
             case .photos: return L10n.t("صور العائلة", "Family Photos")
             case .projects: return L10n.t("مشاريع العائلة", "Family Projects")
             case .contact: return L10n.t("التواصل", "Contact")
-            case .ai: return L10n.t("الذكاء الاصطناعي", "AI Assistant")
             }
         }()
 
@@ -449,7 +447,6 @@ struct HomeNewsView: View {
     private var quickActionsSection: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: DS.Spacing.sm) {
-                quickActionItem(icon: "sparkles", title: L10n.t("الذكاء", "AI"), color: DS.Color.neonPurple) { withAnimation(DS.Anim.snappy) { activeSubPage = .ai } }
                 quickActionItem(icon: "photo.on.rectangle.angled.fill", title: L10n.t("الصور", "Photos"), color: DS.Color.primary) { withAnimation(DS.Anim.snappy) { activeSubPage = .photos } }
                 quickActionItem(icon: "briefcase.fill", title: L10n.t("مشاريع", "Projects"), color: DS.Color.accent) { withAnimation(DS.Anim.snappy) { activeSubPage = .projects } }
                 quickActionItem(icon: "bubble.left.and.bubble.right.fill", title: L10n.t("تواصل", "Contact"), color: DS.Color.primary) { withAnimation(DS.Anim.snappy) { activeSubPage = .contact } }
