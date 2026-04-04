@@ -256,7 +256,7 @@ struct NotificationsCenterView: View {
 
     private var filteredNotifications: [AppNotification] {
         let base: [AppNotification]
-        if authVM.canModerate {
+        if authVM.isAdmin {
             base = notificationVM.notifications
         } else {
             base = notificationVM.notifications.filter { $0.targetMemberId != nil }
@@ -432,7 +432,7 @@ struct NotificationsCenterView: View {
                             .clipShape(Capsule())
 
                         // اسم المرسل الثلاثي — يظهر فقط للمدراء والمشرفين
-                        if authVM.canModerate, let creatorId = item.createdBy {
+                        if authVM.isAdmin, let creatorId = item.createdBy {
                             let creator = memberVM.member(byId: creatorId)
                             let creatorName = creator?.shortFullName ?? L10n.t("مدير", "Admin")
                             let roleColor: Color = creator?.roleColor ?? DS.Color.accent
@@ -621,7 +621,7 @@ struct NotificationsCenterView: View {
                             )
 
                             // اسم المرسل الثلاثي — يظهر فقط للمدراء والمشرفين
-                            if authVM.canModerate, let creatorId = notification.createdBy {
+                            if authVM.isAdmin, let creatorId = notification.createdBy {
                                 let creator = memberVM.member(byId: creatorId)
                                 let creatorName = creator?.shortFullName ?? L10n.t("مدير", "Admin")
                                 let roleColor: Color = creator?.roleColor ?? DS.Color.accent
@@ -648,7 +648,7 @@ struct NotificationsCenterView: View {
                                 .padding(.vertical, DS.Spacing.md)
                             }
 
-                            if authVM.canModerate {
+                            if authVM.isAdmin {
                                 detailDivider
                                 detailInfoRow(
                                     icon: "tag.fill",
@@ -834,7 +834,7 @@ struct NotificationsCenterView: View {
     }
 
     private func createdByName(for notification: AppNotification) -> String? {
-        guard authVM.canModerate else { return nil }
+        guard authVM.isAdmin else { return nil }
         if let creatorId = notification.createdBy {
             if let member = memberVM.member(byId: creatorId) {
                 return member.fullName
