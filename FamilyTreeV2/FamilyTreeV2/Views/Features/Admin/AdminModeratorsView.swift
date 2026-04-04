@@ -346,21 +346,26 @@ struct AdminModeratorsView: View {
         ]
 
         let permissions: [(String, [Bool])] = [
+            // الكل ✅✅✅
             (L10n.t("دخول لوحة الإدارة", "Access admin panel"), [true, true, true]),
             (L10n.t("قبول الطلبات", "Approve requests"), [true, true, true]),
+            // مدير + مراقب ✅✅❌
             (L10n.t("رفض الطلبات", "Reject requests"), [true, true, false]),
             (L10n.t("تعديل بيانات محدودة", "Edit basic info"), [true, true, false]),
-            (L10n.t("تسجيل عضو جديد", "Register members"), [true, false, true]),
-            (L10n.t("حذف أعضاء", "Delete members"), [true, false, false]),
-            (L10n.t("تجميد حسابات", "Freeze accounts"), [true, false, false]),
             (L10n.t("حذف أخبار", "Delete news"), [true, true, false]),
             (L10n.t("حذف تعليقات", "Delete comments"), [true, true, false]),
             (L10n.t("حذف قصص", "Delete stories"), [true, true, false]),
             (L10n.t("حذف صور", "Delete photos"), [true, true, false]),
+            // مدير + مشرف ✅❌✅
+            (L10n.t("تسجيل عضو جديد", "Register members"), [true, false, true]),
+            // مدير فقط ✅❌❌
+            (L10n.t("حذف أعضاء", "Delete members"), [true, false, false]),
+            (L10n.t("تجميد حسابات", "Freeze accounts"), [true, false, false]),
             (L10n.t("حذف ديوانيات", "Delete diwaniyas"), [true, false, false]),
             (L10n.t("حذف مشاريع", "Delete projects"), [true, false, false]),
             (L10n.t("إرسال إشعارات", "Send notifications"), [true, false, false]),
             (L10n.t("إحصائيات", "Statistics"), [true, false, false]),
+            // المالك فقط ❌❌❌
             (L10n.t("إدارة الأدوار", "Manage roles"), [false, false, false]),
             (L10n.t("الأمان والإعدادات", "Security & Settings"), [false, false, false]),
         ]
