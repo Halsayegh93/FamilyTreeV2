@@ -97,10 +97,12 @@ struct AdminDashboardView: View {
                                     .padding(.horizontal, DS.Spacing.lg)
                             }
 
-                            // إحصائيات
-                            adminStatsGrid
-                                .opacity(appeared ? 1 : 0)
-                                .offset(y: appeared ? 0 : 20)
+                            // إحصائيات — مدير + مراقب + مالك (المشرف لا)
+                            if authVM.isAdmin || authVM.currentUser?.role == .monitor {
+                                adminStatsGrid
+                                    .opacity(appeared ? 1 : 0)
+                                    .offset(y: appeared ? 0 : 20)
+                            }
 
                             // طلبات المراجعة — الكل (مالك + مدير + مشرف)
                             DSCard(padding: 0) {
@@ -119,8 +121,8 @@ struct AdminDashboardView: View {
                                             badge: totalReviewRequestsCount
                                         )
                                     }
-                                    // إدارة الأعضاء (موحد: إدارة + صحة الشجرة + سجل ودليل)
-                                    if authVM.canModerate {
+                                    // إدارة الأعضاء — مدير + مراقب + مالك (المشرف لا)
+                                    if authVM.canEditMembers {
                                         DSDivider()
                                         NavigationLink(destination: AdminMembersManagementView()) {
                                             DSActionRow(
@@ -135,8 +137,8 @@ struct AdminDashboardView: View {
                                 }
                             .padding(.horizontal, DS.Spacing.lg)
 
-                            // النظام — مدير + مالك فقط
-                            if authVM.isAdmin {
+                            // تسجيل عضو جديد — مدير + مشرف + مالك
+                            if authVM.canModerate {
                                 DSCard(padding: 0) {
                                     DSSectionHeader(
                                         title: L10n.t("النظام", "System"),
@@ -147,14 +149,19 @@ struct AdminDashboardView: View {
                                         NavigationLink(destination: AdminRegisterMemberView()) {
                                             DSActionRow(title: L10n.t("تسجيل عضو جديد", "Register New Member"), subtitle: L10n.t("إضافة عضو جديد مباشرة للشجرة", "Add a new member directly to the tree"), icon: "person.badge.plus.circle.fill", color: DS.Color.primary)
                                         }
-                                        DSDivider()
-                                        NavigationLink(destination: AdminNotificationsView()) {
-                                            DSActionRow(title: L10n.t("إرسال إشعارات", "Send Notifications"), subtitle: L10n.t("إرسال إشعار عام أو مخصص", "Send a general or targeted notification"), icon: "bell.circle.fill", color: DS.Color.warning)
+
+                                        // إشعارات وتقارير — مدير + مالك فقط
+                                        if authVM.isAdmin {
+                                            DSDivider()
+                                            NavigationLink(destination: AdminNotificationsView()) {
+                                                DSActionRow(title: L10n.t("إرسال إشعارات", "Send Notifications"), subtitle: L10n.t("إرسال إشعار عام أو مخصص", "Send a general or targeted notification"), icon: "bell.circle.fill", color: DS.Color.warning)
+                                            }
+                                            DSDivider()
+                                            NavigationLink(destination: AdminReportsView()) {
+                                                DSActionRow(title: L10n.t("تقارير PDF", "PDF Reports"), subtitle: L10n.t("تقرير الأرقام والأعمار للأعضاء", "Member numbers and ages report"), icon: "doc.circle.fill", color: DS.Color.info)
+                                            }
                                         }
-                                        DSDivider()
-                                        NavigationLink(destination: AdminReportsView()) {
-                                            DSActionRow(title: L10n.t("تقارير PDF", "PDF Reports"), subtitle: L10n.t("تقرير الأرقام والأعمار للأعضاء", "Member numbers and ages report"), icon: "doc.circle.fill", color: DS.Color.info)
-                                        }
+
                                         // الأمان والإعدادات — المالك فقط
                                         if authVM.isOwner {
                                             DSDivider()

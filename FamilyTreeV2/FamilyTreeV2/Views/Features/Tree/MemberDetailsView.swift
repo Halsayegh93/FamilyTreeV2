@@ -532,8 +532,8 @@ struct MemberDetailsView: View {
     private var floatingNavButtons: some View {
         VStack {
             HStack {
-                // زر التعديل
-                if isAdminOrSupervisor, !member.isDeleted {
+                // زر التعديل — مدير + مراقب + مالك (المشرف لا)
+                if authVM.canEditMembers, !member.isDeleted {
                     Button { showAdminControl = true } label: {
                         Image(systemName: "pencil")
                             .font(DS.Font.scaled(14, weight: .bold))
