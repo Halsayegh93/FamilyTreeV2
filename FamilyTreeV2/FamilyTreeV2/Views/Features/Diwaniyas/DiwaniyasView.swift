@@ -255,7 +255,7 @@ struct DiwaniyasView: View {
 
                     Spacer()
 
-                    if authVM.isAdmin || authVM.currentUser?.id == item.ownerId {
+                    if authVM.canDeleteDiwaniyas || authVM.currentUser?.id == item.ownerId {
                         Menu {
                             Button(action: { diwaniyaToEdit = item }) {
                                 Label(L10n.t("تعديل", "Edit"), systemImage: "pencil")

@@ -175,6 +175,28 @@ class AuthViewModel: ObservableObject {
         canModerate
     }
 
+    // MARK: - صلاحيات الذكاء الاصطناعي
+
+    /// ملخص الإدارة بالذكاء الاصطناعي — مدير + مالك فقط
+    var canAccessAdminSummary: Bool { isAdmin }
+
+    /// توليد أخبار بالذكاء الاصطناعي — فريق الإدارة (بدون الأعضاء)
+    var canGenerateNewsWithAI: Bool { canModerate }
+
+    // MARK: - صلاحيات المحتوى
+
+    /// حذف تعليقات الأعضاء — مدير + مراقب + مالك
+    var canDeleteComments: Bool { isAdmin || currentUser?.role == .monitor }
+
+    /// تجميد حسابات الأعضاء — مدير + مالك
+    var canFreezeMembers: Bool { isAdmin }
+
+    /// حذف قصص الأعضاء — مدير + مالك
+    var canDeleteStories: Bool { isAdmin }
+
+    /// حذف ديوانيات — مدير + مالك
+    var canDeleteDiwaniyas: Bool { isAdmin }
+
     // MARK: - Schema Error Helpers
     
     private func schemaErrorDescription(_ error: Error) -> String {

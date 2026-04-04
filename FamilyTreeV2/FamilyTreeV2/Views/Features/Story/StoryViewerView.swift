@@ -312,8 +312,8 @@ struct StoryViewerView: View {
         let story = allGroups[currentGroupIndex].stories[currentStoryIndex]
         let isCreator = story.createdBy == authVM.currentUser?.id
         let role = authVM.currentUser?.role
-        // المشرف ما يقدر يحذف — فقط المدير أو المالك أو صاحب القصة
-        return isCreator || role == .admin || role == .owner
+        // فقط المدير أو المالك أو صاحب القصة
+        return isCreator || authVM.canDeleteStories
     }
 
     /// هل القصة الحالية معلقة ويقدر المستخدم يوافق/يرفض؟

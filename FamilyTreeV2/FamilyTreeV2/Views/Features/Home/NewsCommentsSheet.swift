@@ -35,8 +35,8 @@ struct NewsCommentsSheet: View {
                                             .font(DS.Font.caption2)
                                             .foregroundColor(DS.Color.textSecondary)
 
-                                        // حذف التعليق — للإدارة أو صاحب التعليق
-                                        if authVM.canModerate || comment.author_id == authVM.currentUser?.id {
+                                        // حذف التعليق — مدير/مراقب/مالك أو صاحب التعليق
+                                        if authVM.canDeleteComments || comment.author_id == authVM.currentUser?.id {
                                             Button {
                                                 Task {
                                                     _ = await newsVM.deleteComment(commentId: comment.id, postId: news.id)

@@ -175,7 +175,7 @@ class DiwaniyasViewModel: ObservableObject {
     }
     
     func deleteDiwaniya(id: UUID) async {
-        guard authVM?.isAdmin == true else {
+        guard authVM?.canDeleteDiwaniyas == true else {
             self.errorMessage = L10n.t("ليس لديك صلاحية لحذف الديوانية.", "You don't have permission to delete diwaniyas.")
             Log.warning("[AUTH] Unauthorized deleteDiwaniya attempt")
             return

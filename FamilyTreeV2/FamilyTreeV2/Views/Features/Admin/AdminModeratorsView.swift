@@ -352,13 +352,16 @@ struct AdminModeratorsView: View {
             (L10n.t("تعديل بيانات الأعضاء", "Edit members"), [true, true, false]),
             (L10n.t("تسجيل عضو جديد", "Register members"), [true, false, true]),
             (L10n.t("حذف أعضاء", "Delete members"), [true, false, false]),
+            (L10n.t("حذف تعليقات", "Delete comments"), [true, true, false]),
+            (L10n.t("حذف قصص", "Delete stories"), [true, false, false]),
+            (L10n.t("حذف ديوانيات", "Delete diwaniyas"), [true, false, false]),
+            (L10n.t("تجميد حسابات", "Freeze accounts"), [true, false, false]),
             (L10n.t("إرسال إشعارات", "Send notifications"), [true, false, false]),
             (L10n.t("حذف أخبار", "Delete news"), [true, false, false]),
             (L10n.t("إحصائيات", "Statistics"), [true, true, false]),
+            (L10n.t("ملخص الإدارة AI", "Admin AI Summary"), [true, false, false]),
             (L10n.t("إدارة الأدوار", "Manage roles"), [false, false, false]),
             (L10n.t("الأمان والإعدادات", "Security & Settings"), [false, false, false]),
-            (L10n.t("أرقام محظورة", "Banned phones"), [false, false, false]),
-            (L10n.t("إدارة الأجهزة", "Manage devices"), [false, false, false]),
         ]
 
         return VStack(spacing: 0) {
