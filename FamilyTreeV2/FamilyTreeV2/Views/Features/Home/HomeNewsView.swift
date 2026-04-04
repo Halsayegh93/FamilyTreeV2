@@ -25,7 +25,7 @@ struct HomeNewsView: View {
     @State private var showStoryViewer = false
 
     private enum HomeSubPage {
-        case photos, projects, contact
+        case photos, projects, contact, ai
     }
 
     var body: some View {
@@ -45,6 +45,8 @@ struct HomeNewsView: View {
                             FamilyProjectsView()
                         case .contact:
                             ContactCenterView()
+                        case .ai:
+                            AIChatView()
                         }
                     }
                     .transition(.move(edge: L10n.isArabic ? .leading : .trailing))
@@ -444,12 +446,15 @@ struct HomeNewsView: View {
 
     // MARK: - Quick Actions Section
     private var quickActionsSection: some View {
-        HStack(spacing: DS.Spacing.sm) {
-            quickActionItem(icon: "photo.on.rectangle.angled.fill", title: L10n.t("الصور", "Photos"), color: DS.Color.primary) { withAnimation(DS.Anim.snappy) { activeSubPage = .photos } }
-            quickActionItem(icon: "briefcase.fill", title: L10n.t("مشاريع", "Projects"), color: DS.Color.accent) { withAnimation(DS.Anim.snappy) { activeSubPage = .projects } }
-            quickActionItem(icon: "bubble.left.and.bubble.right.fill", title: L10n.t("تواصل", "Contact"), color: DS.Color.primary) { withAnimation(DS.Anim.snappy) { activeSubPage = .contact } }
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: DS.Spacing.sm) {
+                quickActionItem(icon: "sparkles", title: L10n.t("الذكاء", "AI"), color: DS.Color.neonPurple) { withAnimation(DS.Anim.snappy) { activeSubPage = .ai } }
+                quickActionItem(icon: "photo.on.rectangle.angled.fill", title: L10n.t("الصور", "Photos"), color: DS.Color.primary) { withAnimation(DS.Anim.snappy) { activeSubPage = .photos } }
+                quickActionItem(icon: "briefcase.fill", title: L10n.t("مشاريع", "Projects"), color: DS.Color.accent) { withAnimation(DS.Anim.snappy) { activeSubPage = .projects } }
+                quickActionItem(icon: "bubble.left.and.bubble.right.fill", title: L10n.t("تواصل", "Contact"), color: DS.Color.primary) { withAnimation(DS.Anim.snappy) { activeSubPage = .contact } }
+            }
+            .padding(.horizontal, DS.Spacing.lg)
         }
-        .padding(.horizontal, DS.Spacing.lg)
     }
 
     private func quickActionItem(icon: String, title: String, color: Color, action: @escaping () -> Void) -> some View {
