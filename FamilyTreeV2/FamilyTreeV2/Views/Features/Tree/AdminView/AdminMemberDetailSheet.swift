@@ -45,6 +45,11 @@ struct AdminMemberDetailSheet: View {
         authVM.isAdmin
     }
 
+    /// المراقب يشوف بيانات بس — بدون تعديل الأب أو الأبناء أو الدور أو الحذف
+    private var isMonitorOnly: Bool {
+        authVM.currentUser?.role == .monitor
+    }
+
     init(member: FamilyMember) {
         self.member = member
         self._currentAvatarURL = State(initialValue: member.avatarUrl)
@@ -92,32 +97,35 @@ struct AdminMemberDetailSheet: View {
                         memberHeader
                             .padding(.top, DS.Spacing.sm)
 
-                        // Basic info section
+                        // Basic info section — الاسم (الكل يقدر يعدل)
                         basicInfoSection
 
-                        // Gender section
+                        // Gender section (الكل يقدر يعدل)
                         genderSection
 
-                        // Father link section
-                        fatherSection
-
-                        // Phone section
-                        phoneSection
-
-                        // Children section
-                        childrenSection
-
-                        // Birth date & health section
+                        // Birth date & health section (الكل يقدر يعدل)
                         datesSection
 
-                        // Role section — المالك فقط
-                        if authVM.isOwner {
-                            roleSection
-                        }
+                        // Phone section (الكل يقدر يعدل)
+                        phoneSection
 
-                        // Delete button (admin only)
-                        if canManageAccessPermissions {
-                            deleteSection
+                        // الأقسام التالية للمدير والمالك فقط — المراقب لا
+                        if !isMonitorOnly {
+                            // Father link section
+                            fatherSection
+
+                            // Children section
+                            childrenSection
+
+                            // Role section — المالك فقط
+                            if authVM.isOwner {
+                                roleSection
+                            }
+
+                            // Delete button (admin only)
+                            if canManageAccessPermissions {
+                                deleteSection
+                            }
                         }
                     }
                     .padding(.bottom, DS.Spacing.xxxl)
