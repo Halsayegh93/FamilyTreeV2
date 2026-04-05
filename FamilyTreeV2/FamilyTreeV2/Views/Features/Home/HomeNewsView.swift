@@ -258,19 +258,29 @@ struct HomeNewsView: View {
     }
 
     private var realStoriesSection: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: DS.Spacing.lg) {
-                // زر إضافة ستوري
-                addStoryButton
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            Text(L10n.t("القصص", "Stories"))
+                .font(DS.Font.caption1)
+                .fontWeight(.bold)
+                .foregroundColor(DS.Color.textSecondary)
+                .padding(.horizontal, DS.Spacing.xl)
 
-                // ستوريات الأعضاء — المستخدم الحالي أولاً
-                ForEach(Array(sortedStoryGroups.enumerated()), id: \.element.member.id) { index, item in
-                    storyMemberCircle(item: item, index: index)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: DS.Spacing.lg) {
+                    addStoryButton
+
+                    ForEach(Array(sortedStoryGroups.enumerated()), id: \.element.member.id) { index, item in
+                        storyMemberCircle(item: item, index: index)
+                    }
                 }
+                .padding(.horizontal, DS.Spacing.lg)
+                .padding(.vertical, DS.Spacing.sm)
             }
-            .padding(.horizontal, DS.Spacing.lg)
-            .padding(.vertical, DS.Spacing.sm)
         }
+        .padding(.vertical, DS.Spacing.sm)
+        .background(DS.Color.surface.opacity(0.5))
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
+        .padding(.horizontal, DS.Spacing.md)
     }
 
     private var addStoryButton: some View {
