@@ -39,14 +39,14 @@ struct NewsCommentsSheet: View {
                                 }
                                 .padding(DS.Spacing.md)
                                 .glassBackground(radius: DS.Radius.md)
-                                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                .contextMenu {
                                     if authVM.canDeleteComments || comment.author_id == authVM.currentUser?.id {
                                         Button(role: .destructive) {
                                             Task {
                                                 _ = await newsVM.deleteComment(commentId: comment.id, postId: news.id)
                                             }
                                         } label: {
-                                            Label(L10n.t("حذف", "Delete"), systemImage: "trash.fill")
+                                            Label(L10n.t("حذف التعليق", "Delete Comment"), systemImage: "trash")
                                         }
                                     }
                                 }
