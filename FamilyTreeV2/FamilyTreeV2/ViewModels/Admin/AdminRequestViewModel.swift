@@ -131,12 +131,10 @@ class AdminRequestViewModel: ObservableObject {
             let jsonData = try JSONEncoder().encode(payload)
             let jsonString = String(data: jsonData, encoding: .utf8) ?? ""
 
-            // member_id: target member for edit/delete, parent for add, fallback to requester
+            // member_id: دايماً يكون العضو المعني — للإضافة = الطالب نفسه (لأن الابن مو موجود بعد)
             let targetId: String
             if let tid = payload.targetMemberId, !tid.isEmpty {
                 targetId = tid
-            } else if let pid = payload.parentMemberId, !pid.isEmpty {
-                targetId = pid
             } else {
                 targetId = user.id.uuidString
             }
