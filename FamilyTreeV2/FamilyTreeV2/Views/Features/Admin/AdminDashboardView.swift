@@ -109,7 +109,7 @@ struct AdminDashboardView: View {
                                 DSSectionHeader(
                                     title: L10n.t("طلبات تنتظر المراجعة", "Pending Requests"),
                                     icon: "exclamationmark.shield.fill",
-                                    iconColor: DS.Color.error
+                                    iconColor: DS.Color.warning
                                 )
 
                                     NavigationLink(destination: AdminAllRequestsView()) {
@@ -117,7 +117,7 @@ struct AdminDashboardView: View {
                                             title: L10n.t("طلبات المراجعة", "Review Requests"),
                                             subtitle: L10n.t("انضمام، أخبار، بلاغات، جوال، ديوانيات، وفاة، أبناء، صور، قصص، تعديل", "Join, news, reports, phone, diwaniyas, deceased, children, photos, stories, edits"),
                                             icon: "tray.full.fill",
-                                            color: DS.Color.error,
+                                            color: DS.Color.warning,
                                             badge: totalReviewRequestsCount
                                         )
                                     }
@@ -129,7 +129,7 @@ struct AdminDashboardView: View {
                                                 title: L10n.t("إدارة الأعضاء", "Members Management"),
                                                 subtitle: L10n.t("إدارة، صحة الشجرة، سجل ودليل العائلة", "Manage, tree health, registry & directory"),
                                                 icon: "person.2.badge.gearshape",
-                                                color: DS.Color.error,
+                                                color: DS.Color.warning,
                                                 badge: (issueMembersCount + treeIssuesCount) > 0 ? (issueMembersCount + treeIssuesCount) : nil
                                             )
                                         }
