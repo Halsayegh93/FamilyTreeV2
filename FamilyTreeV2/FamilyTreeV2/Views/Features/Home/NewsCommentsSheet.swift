@@ -35,22 +35,21 @@ struct NewsCommentsSheet: View {
                                             .font(DS.Font.caption2)
                                             .foregroundColor(DS.Color.textSecondary)
 
-                                        // حذف التعليق — مدير/مراقب/مالك أو صاحب التعليق
-                                        if authVM.canDeleteComments || comment.author_id == authVM.currentUser?.id {
-                                            Button {
-                                                Task {
-                                                    _ = await newsVM.deleteComment(commentId: comment.id, postId: news.id)
-                                                }
-                                            } label: {
-                                                Image(systemName: "trash")
-                                                    .font(DS.Font.caption2)
-                                                    .foregroundColor(DS.Color.error)
-                                            }
-                                        }
                                     }
                                 }
                                 .padding(DS.Spacing.md)
                                 .glassBackground(radius: DS.Radius.md)
+                                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                    if authVM.canDeleteComments || comment.author_id == authVM.currentUser?.id {
+                                        Button(role: .destructive) {
+                                            Task {
+                                                _ = await newsVM.deleteComment(commentId: comment.id, postId: news.id)
+                                            }
+                                        } label: {
+                                            Label(L10n.t("حذف", "Delete"), systemImage: "trash.fill")
+                                        }
+                                    }
+                                }
                             }
                         }
                         .padding(DS.Spacing.lg)

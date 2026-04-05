@@ -75,18 +75,11 @@ struct HomeNewsView: View {
                             Spacer()
                             HStack {
                                 Spacer()
-                                Button(action: { showingAddNews = true }) {
-                                    Image(systemName: "plus")
-                                        .font(DS.Font.scaled(22, weight: .bold))
-                                        .foregroundColor(.white)
-                                        .frame(width: 56, height: 56)
-                                        .background(DS.Color.gradientPrimary)
-                                        .clipShape(Circle())
-                                        .shadow(color: DS.Color.primary.opacity(0.3), radius: 8, y: 4)
+                                DSFloatingButton(icon: "plus") {
+                                    showingAddNews = true
                                 }
-                                .buttonStyle(DSBoldButtonStyle())
                                 .padding(.trailing, DS.Spacing.xl)
-                                .padding(.bottom, DS.Spacing.sm)
+                                .padding(.bottom, DS.Spacing.lg)
                             }
                         }
                     }

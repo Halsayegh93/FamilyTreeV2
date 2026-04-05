@@ -90,7 +90,7 @@ struct FamilyProjectsView: View {
                         showingAddProject = true
                     }
                     .padding(.trailing, DS.Spacing.xl)
-                    .padding(.bottom, DS.Spacing.xxl)
+                    .padding(.bottom, DS.Spacing.lg)
                 }
             }
         }

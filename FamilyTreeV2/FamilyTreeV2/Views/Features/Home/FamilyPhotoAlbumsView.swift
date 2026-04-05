@@ -144,7 +144,7 @@ struct FamilyPhotoAlbumsView: View {
                         Spacer()
                         addPhotoButton
                             .padding(.trailing, DS.Spacing.xl)
-                            .padding(.bottom, DS.Spacing.xl)
+                            .padding(.bottom, DS.Spacing.lg)
                     }
                 }
             }
@@ -532,18 +532,9 @@ struct FamilyPhotoAlbumsView: View {
     // MARK: - Add Photo Button (FAB)
 
     private var addPhotoButton: some View {
-        Button {
+        DSFloatingButton(icon: "plus") {
             checkPhotoPermission { showPhotoPicker = true }
-        } label: {
-            Image(systemName: "plus")
-                .font(DS.Font.scaled(22, weight: .bold))
-                .foregroundColor(DS.Color.textOnPrimary)
-                .frame(width: 56, height: 56)
-                .background(DS.Color.gradientPrimary)
-                .clipShape(Circle())
-                .dsCardShadow()
         }
-        .buttonStyle(DSBoldButtonStyle())
         .photosPicker(isPresented: $showPhotoPicker, selection: $selectedGalleryItems, maxSelectionCount: 5, matching: .images)
     }
 
