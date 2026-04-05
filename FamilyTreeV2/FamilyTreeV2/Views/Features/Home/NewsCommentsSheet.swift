@@ -21,39 +21,35 @@ struct NewsCommentsSheet: View {
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if let postComments = newsVM.commentsByPost[news.id], !postComments.isEmpty {
-                    ScrollView {
-                        LazyVStack(spacing: DS.Spacing.sm) {
-                            ForEach(postComments) { comment in
-                                HStack(alignment: .top, spacing: DS.Spacing.sm) {
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(comment.author_name).font(DS.Font.caption1).fontWeight(.bold)
-                                        Text(comment.content).font(DS.Font.callout)
-                                    }
-                                    Spacer()
-                                    VStack(alignment: .trailing, spacing: DS.Spacing.xs) {
-                                        Text(relativeTimeFromISO(comment.created_at))
-                                            .font(DS.Font.caption2)
-                                            .foregroundColor(DS.Color.textSecondary)
-
-                                    }
+                    List {
+                        ForEach(postComments) { comment in
+                            HStack(alignment: .top, spacing: DS.Spacing.sm) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(comment.author_name).font(DS.Font.caption1).fontWeight(.bold)
+                                    Text(comment.content).font(DS.Font.callout)
                                 }
-                                .padding(DS.Spacing.md)
-                                .glassBackground(radius: DS.Radius.md)
-                                .contextMenu {
-                                    if authVM.canDeleteComments || comment.author_id == authVM.currentUser?.id {
-                                        Button(role: .destructive) {
-                                            Task {
-                                                _ = await newsVM.deleteComment(commentId: comment.id, postId: news.id)
-                                            }
-                                        } label: {
-                                            Label(L10n.t("حذف التعليق", "Delete Comment"), systemImage: "trash")
+                                Spacer()
+                                Text(relativeTimeFromISO(comment.created_at))
+                                    .font(DS.Font.caption2)
+                                    .foregroundColor(DS.Color.textSecondary)
+                            }
+                            .padding(.vertical, DS.Spacing.xs)
+                            .listRowBackground(DS.Color.surface)
+                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                if authVM.canDeleteComments || comment.author_id == authVM.currentUser?.id {
+                                    Button(role: .destructive) {
+                                        Task {
+                                            _ = await newsVM.deleteComment(commentId: comment.id, postId: news.id)
                                         }
+                                    } label: {
+                                        Label(L10n.t("حذف", "Delete"), systemImage: "trash.fill")
                                     }
                                 }
                             }
                         }
-                        .padding(DS.Spacing.lg)
                     }
+                    .listStyle(.plain)
+                    .scrollContentBackground(.hidden)
                 } else {
                     VStack {
                         Image(systemName: "bubble.left.and.bubble.right.fill")
