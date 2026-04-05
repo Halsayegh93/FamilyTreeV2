@@ -277,10 +277,10 @@ struct HomeNewsView: View {
                 .padding(.vertical, DS.Spacing.sm)
             }
         }
-        .padding(.vertical, DS.Spacing.sm)
-        .background(DS.Color.surface.opacity(0.5))
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
-        .padding(.horizontal, DS.Spacing.md)
+        .padding(.vertical, DS.Spacing.xs)
+        .background(DS.Color.surface.opacity(0.4))
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
+        .padding(.horizontal, DS.Spacing.lg)
     }
 
     private var addStoryButton: some View {
