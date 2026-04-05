@@ -43,22 +43,12 @@ struct TreeEditRequestView: View {
 
     /// Dynamic label for member picker based on action
     private var memberPickerLabel: String {
-        switch selectedAction {
-        case "إضافة":
-            return L10n.t("الأب", "Father")
-        default:
-            return L10n.t("العضو المعني", "Target Member")
-        }
+        L10n.t("العضو المعني", "Target Member")
     }
 
     /// Dynamic placeholder for member picker
     private var memberPickerPlaceholder: String {
-        switch selectedAction {
-        case "إضافة":
-            return L10n.t("اختر الأب من القائمة...", "Select father from list...")
-        default:
-            return L10n.t("اختر العضو من القائمة...", "Select member from list...")
-        }
+        L10n.t("اختر العضو من القائمة...", "Select member from list...")
     }
 
     /// Dynamic label & placeholder for details section
