@@ -799,10 +799,10 @@ struct AdminAllRequestsView: View {
                         HStack(spacing: 4) {
                             Image(systemName: "checkmark.seal.fill")
                                 .font(DS.Font.scaled(10))
-                                .foregroundColor(DS.Color.success)
+                                .foregroundColor(DS.Color.textPrimary)
                             Text(L10n.t("اسم خماسي مكتمل", "Full 5-part name"))
                                 .font(DS.Font.scaled(10))
-                                .foregroundColor(DS.Color.success)
+                                .foregroundColor(DS.Color.textPrimary)
                         }
                     }
                 }
@@ -814,10 +814,10 @@ struct AdminAllRequestsView: View {
                     VStack(spacing: 2) {
                         Text("\(serverMatchCount)")
                             .font(DS.Font.scaled(14, weight: .black))
-                            .foregroundColor(DS.Color.info)
+                            .foregroundColor(DS.Color.textSecondary)
                         Text(L10n.t("مطابقة", "match"))
                             .font(DS.Font.scaled(8, weight: .bold))
-                            .foregroundColor(DS.Color.info)
+                            .foregroundColor(DS.Color.textSecondary)
                     }
                     .padding(.horizontal, DS.Spacing.sm)
                     .padding(.vertical, DS.Spacing.xs)
@@ -832,13 +832,13 @@ struct AdminAllRequestsView: View {
                     HStack(spacing: DS.Spacing.sm) {
                         Image(systemName: "person.2.fill")
                             .font(DS.Font.scaled(13, weight: .semibold))
-                            .foregroundColor(DS.Color.info)
+                            .foregroundColor(DS.Color.textSecondary)
                         Text(L10n.t(
                             "تطابق محتمل مع \(matches.count) عضو",
                             "Potential match with \(matches.count) member(s)"
                         ))
                         .font(DS.Font.scaled(12, weight: .bold))
-                        .foregroundColor(DS.Color.info)
+                        .foregroundColor(DS.Color.textSecondary)
                         Spacer()
                     }
 
@@ -864,7 +864,7 @@ struct AdminAllRequestsView: View {
                                 ))
                                 .font(DS.Font.scaled(11, weight: .bold))
                             }
-                            .foregroundColor(DS.Color.info)
+                            .foregroundColor(DS.Color.textSecondary)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, DS.Spacing.xs)
                         }
@@ -879,10 +879,10 @@ struct AdminAllRequestsView: View {
                 HStack(spacing: DS.Spacing.sm) {
                     Image(systemName: "checkmark.circle.fill")
                         .font(DS.Font.scaled(12, weight: .semibold))
-                        .foregroundColor(DS.Color.success)
+                        .foregroundColor(DS.Color.textPrimary)
                     Text(L10n.t("لا يوجد تطابق — اسم جديد", "No tree matches — new name"))
                         .font(DS.Font.scaled(11, weight: .bold))
-                        .foregroundColor(DS.Color.success)
+                        .foregroundColor(DS.Color.textPrimary)
                     Spacer()
                 }
                 .padding(.horizontal, DS.Spacing.sm)
@@ -1184,11 +1184,11 @@ struct AdminAllRequestsView: View {
                 VStack(spacing: 2) {
                     Text(L10n.t("الجديد", "New"))
                         .font(DS.Font.caption2)
-                        .foregroundColor(DS.Color.success)
+                        .foregroundColor(DS.Color.textPrimary)
                     Text(newPhone)
                         .font(DS.Font.caption1)
                         .fontWeight(.bold)
-                        .foregroundColor(DS.Color.success)
+                        .foregroundColor(DS.Color.textPrimary)
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, DS.Spacing.sm)
@@ -1409,14 +1409,14 @@ struct AdminAllRequestsView: View {
             HStack(spacing: DS.Spacing.xs) {
                 Image(systemName: "arrow.right")
                     .font(DS.Font.scaled(10, weight: .bold))
-                    .foregroundColor(DS.Color.success)
+                    .foregroundColor(DS.Color.textPrimary)
                 Text(L10n.t("الاسم الجديد:", "New name:"))
                     .font(DS.Font.caption2)
                     .foregroundColor(DS.Color.textSecondary)
                 Text(newName)
                     .font(DS.Font.subheadline)
                     .fontWeight(.semibold)
-                    .foregroundColor(DS.Color.success)
+                    .foregroundColor(DS.Color.textPrimary)
             }
             .padding(.horizontal, DS.Spacing.sm)
             .padding(.vertical, DS.Spacing.xs)
@@ -1526,7 +1526,7 @@ struct AdminAllRequestsView: View {
                         .foregroundColor(DS.Color.textSecondary)
                     Text(KuwaitPhone.display(request.newValue))
                         .font(DS.Font.calloutBold)
-                        .foregroundColor(DS.Color.success)
+                        .foregroundColor(DS.Color.textPrimary)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, DS.Spacing.lg)
@@ -1635,19 +1635,19 @@ struct AdminAllRequestsView: View {
                         if let newName = payload.newName, !newName.isEmpty {
                             Text(L10n.t("← \(newName)", "→ \(newName)"))
                                 .font(DS.Font.caption1)
-                                .foregroundColor(DS.Color.info)
+                                .foregroundColor(DS.Color.textSecondary)
                         }
                     case "إضافة":
                         if let parent = payload.parentMemberName, let child = payload.newMemberName {
                             Text(L10n.t("إضافة \(child) تحت \(parent)", "Add \(child) under \(parent)"))
                                 .font(DS.Font.caption1)
-                                .foregroundColor(DS.Color.success)
+                                .foregroundColor(DS.Color.textPrimary)
                         }
                     case "حذف":
                         if let reason = payload.reason, !reason.isEmpty {
                             Text(reason)
                                 .font(DS.Font.caption1)
-                                .foregroundColor(DS.Color.error)
+                                .foregroundColor(DS.Color.textSecondary)
                                 .lineLimit(1)
                         }
                     default:
