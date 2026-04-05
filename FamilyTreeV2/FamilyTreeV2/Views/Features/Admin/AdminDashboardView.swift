@@ -129,7 +129,7 @@ struct AdminDashboardView: View {
                                                 title: L10n.t("إدارة الأعضاء", "Members Management"),
                                                 subtitle: L10n.t("إدارة، صحة الشجرة، سجل ودليل العائلة", "Manage, tree health, registry & directory"),
                                                 icon: "person.2.badge.gearshape",
-                                                color: DS.Color.warning,
+                                                color: DS.Color.accent,
                                                 badge: (issueMembersCount + treeIssuesCount) > 0 ? (issueMembersCount + treeIssuesCount) : nil
                                             )
                                         }
@@ -279,7 +279,7 @@ struct AdminDashboardView: View {
                     title: L10n.t("طلبات", "Requests"),
                     value: "\(totalReviewRequestsCount)",
                     icon: "tray.full.fill",
-                    color: DS.Color.accent
+                    color: DS.Color.warning
                 )
             }
         }

@@ -131,7 +131,7 @@ struct AdminRegisterMemberView: View {
     // MARK: - Name Field Section
     private var nameFieldSection: some View {
         DSCard(padding: 0) {
-            DSSectionHeader(title: L10n.t("الاسم الخماسي", "Full Name (5 parts)"), icon: "person.fill")
+            DSSectionHeader(title: L10n.t("الاسم الخماسي", "Full Name (5 parts)"), icon: "person.fill", iconColor: DS.Color.primary)
 
             HStack(spacing: DS.Spacing.sm) {
                 DSIcon("person.fill", color: DS.Color.primary)
@@ -151,10 +151,10 @@ struct AdminRegisterMemberView: View {
     // MARK: - Family Name Section
     private var familyNameSection: some View {
         DSCard(padding: 0) {
-            DSSectionHeader(title: L10n.t("اسم العائلة", "Family Name"), icon: "person.2.fill")
+            DSSectionHeader(title: L10n.t("اسم العائلة", "Family Name"), icon: "person.2.fill", iconColor: DS.Color.primary)
 
             HStack(spacing: DS.Spacing.sm) {
-                DSIcon("person.2.fill", color: DS.Color.accent)
+                DSIcon("person.2.fill", color: DS.Color.primary)
                 TextField(L10n.t("مثال: آل محمد علي", "e.g. Al-Mohammad Ali"), text: $familyName)
                     .font(DS.Font.body)
                     .onChange(of: familyName) {
@@ -171,10 +171,10 @@ struct AdminRegisterMemberView: View {
     // MARK: - Gender Section
     private var genderSection: some View {
         DSCard(padding: 0) {
-            DSSectionHeader(title: L10n.t("الجنس", "Gender"), icon: "figure.dress.line.vertical.figure")
+            DSSectionHeader(title: L10n.t("الجنس", "Gender"), icon: "figure.dress.line.vertical.figure", iconColor: DS.Color.info)
 
             HStack(spacing: DS.Spacing.sm) {
-                DSIcon("figure.dress.line.vertical.figure", color: DS.Color.neonPurple)
+                DSIcon("figure.dress.line.vertical.figure", color: DS.Color.info)
 
                 Text(L10n.t("الجنس", "Gender"))
                     .font(DS.Font.body)
@@ -216,11 +216,11 @@ struct AdminRegisterMemberView: View {
     // MARK: - Birth Date Section
     private var birthDateSection: some View {
         DSCard(padding: 0) {
-            DSSectionHeader(title: L10n.t("تاريخ الميلاد", "Birth Date"), icon: "calendar")
+            DSSectionHeader(title: L10n.t("تاريخ الميلاد", "Birth Date"), icon: "calendar", iconColor: DS.Color.accent)
 
             VStack(spacing: 0) {
                 HStack(spacing: DS.Spacing.sm) {
-                    DSIcon("calendar.badge.checkmark", color: DS.Color.primary)
+                    DSIcon("calendar.badge.checkmark", color: DS.Color.accent)
                     Text(L10n.t("تاريخ الميلاد متوفر", "Birth date available"))
                         .font(DS.Font.body)
                         .foregroundColor(DS.Color.textSecondary)
@@ -236,7 +236,7 @@ struct AdminRegisterMemberView: View {
                 if hasBirthDate {
                     DSDivider()
                     HStack(spacing: DS.Spacing.sm) {
-                        DSIcon("calendar", color: DS.Color.neonPurple)
+                        DSIcon("calendar", color: DS.Color.accent)
                         Text(L10n.t("اختر التاريخ", "Pick Date"))
                             .font(DS.Font.body)
                             .foregroundColor(DS.Color.textSecondary)
@@ -255,7 +255,7 @@ struct AdminRegisterMemberView: View {
     // MARK: - Phone Section — بدون رمز الدولة
     private var phoneSection: some View {
         DSCard(padding: 0) {
-            DSSectionHeader(title: L10n.t("رقم الهاتف (اختياري)", "Phone Number (Optional)"), icon: "phone.fill")
+            DSSectionHeader(title: L10n.t("رقم الهاتف (اختياري)", "Phone Number (Optional)"), icon: "phone.fill", iconColor: DS.Color.success)
 
             PhoneNumberTextField(
                 text: $phoneNumber,

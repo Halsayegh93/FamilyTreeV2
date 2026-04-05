@@ -83,13 +83,14 @@ struct EditChildSheet: View {
         DSCard(padding: 0) {
             DSSectionHeader(
                 title: L10n.t("المعلومات الشخصية", "Personal Info"),
-                icon: "person.text.rectangle"
+                icon: "person.text.rectangle",
+                iconColor: DS.Color.primary
             )
 
                 VStack(spacing: 0) {
                     // Name field
                     HStack(spacing: DS.Spacing.md) {
-                        DSIcon("person.fill", color: DS.Color.secondary)
+                        DSIcon("person.fill", color: DS.Color.primary)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(L10n.t("الاسم الأول", "First Name"))
                                 .font(DS.Font.caption1)
@@ -112,7 +113,7 @@ struct EditChildSheet: View {
 
                     // Family name field
                     HStack(spacing: DS.Spacing.md) {
-                        DSIcon("person.2.fill", color: DS.Color.accent)
+                        DSIcon("person.2.fill", color: DS.Color.primary)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(L10n.t("اسم العائلة", "Family Name"))
                                 .font(DS.Font.caption1)
@@ -180,7 +181,7 @@ struct EditChildSheet: View {
 
                     // Phone field — بدون رمز الدولة
                     HStack(spacing: DS.Spacing.md) {
-                        DSIcon("phone.fill", color: DS.Color.primary)
+                        DSIcon("phone.fill", color: DS.Color.success)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(L10n.t("رقم الهاتف", "Phone Number"))
                                 .font(DS.Font.caption1)
@@ -226,7 +227,7 @@ struct EditChildSheet: View {
                     if isDeceased {
                         DSDivider()
                         HStack(spacing: DS.Spacing.md) {
-                            DSIcon("calendar", color: DS.Color.error)
+                            DSIcon("calendar", color: DS.Color.accent)
                             DatePicker(L10n.t("تاريخ الوفاة", "Death Date"), selection: $deathDate, in: ...Date(), displayedComponents: .date)
                                 .environment(\.locale, Locale(identifier: L10n.isArabic ? "ar" : "en_US"))
                         }

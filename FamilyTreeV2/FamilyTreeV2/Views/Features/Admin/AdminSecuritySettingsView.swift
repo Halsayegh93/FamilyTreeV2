@@ -36,7 +36,7 @@ struct AdminSecuritySettingsView: View {
                                 title: L10n.t("إعدادات التطبيق", "App Settings"),
                                 subtitle: L10n.t("تحكم بإعدادات التسجيل والأمان", "Manage registration and security settings"),
                                 icon: "gearshape.fill",
-                                color: DS.Color.gridContact
+                                color: DS.Color.primary
                             )
                         }
                     }

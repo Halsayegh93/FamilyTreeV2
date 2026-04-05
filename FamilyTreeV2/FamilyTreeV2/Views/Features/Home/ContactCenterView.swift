@@ -128,7 +128,8 @@ struct ContactCenterView: View {
         DSCard(padding: 0) {
             DSSectionHeader(
                 title: L10n.t("بيانات المرسل", "Sender Info"),
-                icon: "person.text.rectangle.fill"
+                icon: "person.text.rectangle.fill",
+                iconColor: DS.Color.primary
             )
 
             // الاسم

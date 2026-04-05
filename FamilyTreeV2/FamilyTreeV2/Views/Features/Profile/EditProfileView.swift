@@ -60,7 +60,8 @@ struct EditProfileView: View {
                         DSCard(padding: 0) {
                             DSSectionHeader(
                                 title: L10n.t("المعلومات الشخصية", "Personal Info"),
-                                icon: "person.text.rectangle"
+                                icon: "person.text.rectangle",
+                                iconColor: DS.Color.primary
                             )
 
                                 VStack(spacing: 0) {
@@ -192,7 +193,7 @@ struct EditProfileView: View {
                 }
             } label: {
                 HStack(spacing: DS.Spacing.md) {
-                    DSIcon("person.fill", color: DS.Color.secondary)
+                    DSIcon("person.fill", color: DS.Color.primary)
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(L10n.t("الاسم الكامل", "Full Name"))
@@ -343,7 +344,7 @@ struct EditProfileView: View {
 
     private var modernPhoneField: some View {
         HStack(spacing: DS.Spacing.sm) {
-            DSIcon("phone.fill", color: DS.Color.accent)
+            DSIcon("phone.fill", color: DS.Color.success)
 
             Text(L10n.t("رقم الهاتف", "Phone Number"))
                 .font(DS.Font.caption2)
@@ -372,7 +373,7 @@ struct EditProfileView: View {
 
     private func modernDatePicker(label: String, selection: Binding<Date>, icon: String) -> some View {
         HStack(spacing: DS.Spacing.md) {
-            DSIcon(icon, color: DS.Color.info)
+            DSIcon(icon, color: DS.Color.accent)
 
             Text(label)
                 .font(DS.Font.caption2)

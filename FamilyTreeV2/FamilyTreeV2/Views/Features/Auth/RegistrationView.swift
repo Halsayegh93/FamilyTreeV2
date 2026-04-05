@@ -176,7 +176,7 @@ struct RegistrationView: View {
     // MARK: - Birth Date
     private var birthDateSection: some View {
         HStack(spacing: DS.Spacing.md) {
-            DSIcon("calendar", color: DS.Color.neonPurple)
+            DSIcon("calendar", color: DS.Color.accent)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(L10n.t("تاريخ الميلاد", "Birth Date"))
@@ -208,7 +208,7 @@ struct RegistrationView: View {
     private var genderSection: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.xs) {
             HStack(spacing: DS.Spacing.md) {
-                DSIcon("figure.dress.line.vertical.figure", color: DS.Color.neonPurple)
+                DSIcon("figure.dress.line.vertical.figure", color: DS.Color.info)
 
                 Text(L10n.t("الجنس", "Gender"))
                     .font(DS.Font.caption1)

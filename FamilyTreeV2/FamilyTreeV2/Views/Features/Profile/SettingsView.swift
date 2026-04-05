@@ -29,7 +29,8 @@ struct SettingsView: View {
                             DSCard(padding: 0) {
                                 DSSectionHeader(
                                     title: t("تفضيلات التطبيق", "App Preferences"),
-                                    icon: "gearshape.2.fill"
+                                    icon: "gearshape.2.fill",
+                                    iconColor: DS.Color.primary
                                 )
 
                                 // Appearance Row
@@ -129,7 +130,7 @@ struct SettingsView: View {
                                         title: t("سياسة الخصوصية والشروط", "Privacy Policy & Terms"),
                                         subtitle: t("كيف نحمي بياناتك وشروط الاستخدام", "How we protect your data & usage terms"),
                                         icon: "doc.text.fill",
-                                        color: DS.Color.primary
+                                        color: DS.Color.info
                                     )
                                 }
                                 .buttonStyle(DSBoldButtonStyle())
@@ -363,7 +364,7 @@ struct AboutView: View {
 
                                 aboutItem(
                                     icon: "lock.shield.fill",
-                                    color: DS.Color.success,
+                                    color: DS.Color.gridContact,
                                     title: t("الخصوصية والأمان", "Privacy & Security"),
                                     desc: t("بياناتك محمية بالكامل وتتحكّم بمن يراها", "Your data is fully protected — you control visibility")
                                 )

@@ -275,7 +275,7 @@ struct AdminMemberDetailSheet: View {
 
                 formField(
                     icon: "person.2.fill",
-                    color: DS.Color.accent,
+                    color: DS.Color.primary,
                     placeholder: L10n.t("اسم العائلة", "Family Name"),
                     text: $familyName
                 )
@@ -296,7 +296,7 @@ struct AdminMemberDetailSheet: View {
                 DSSectionHeader(
                     title: L10n.t("الجنس", "Gender"),
                     icon: "person.fill",
-                    iconColor: DS.Color.info
+                    iconColor: DS.Color.primary
                 )
 
                 HStack(spacing: DS.Spacing.sm) {
@@ -491,7 +491,7 @@ struct AdminMemberDetailSheet: View {
                         title: L10n.t("الأبناء", "Children"),
                         icon: "person.2.fill",
                         trailing: localChildren.isEmpty ? nil : "\(localChildren.count)",
-                        iconColor: DS.Color.success
+                        iconColor: DS.Color.primary
                     )
 
                     if !localChildren.isEmpty {
@@ -758,12 +758,12 @@ struct AdminMemberDetailSheet: View {
                 DSSectionHeader(
                     title: L10n.t("التواريخ والحالة", "Dates & Status"),
                     icon: "calendar",
-                    iconColor: DS.Color.warning
+                    iconColor: DS.Color.accent
                 )
 
                 // Birth date toggle
                 HStack(spacing: DS.Spacing.sm) {
-                    DSIcon("calendar", color: DS.Color.primary, size: iconSm, iconSize: iconFontSm)
+                    DSIcon("calendar", color: DS.Color.accent, size: iconSm, iconSize: iconFontSm)
 
                     Text(L10n.t("تاريخ الميلاد متوفر", "Birth date available"))
                         .font(DS.Font.callout)
@@ -782,7 +782,7 @@ struct AdminMemberDetailSheet: View {
                 if hasBirthDate {
                     DSDivider()
                     HStack(spacing: DS.Spacing.sm) {
-                        DSIcon("calendar.badge.clock", color: DS.Color.info, size: iconSm, iconSize: iconFontSm)
+                        DSIcon("calendar.badge.clock", color: DS.Color.accent, size: iconSm, iconSize: iconFontSm)
 
                         DatePicker("", selection: $birthDate, in: ...Date(), displayedComponents: .date)
                             .labelsHidden()
