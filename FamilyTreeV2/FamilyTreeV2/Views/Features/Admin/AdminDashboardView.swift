@@ -117,7 +117,7 @@ struct AdminDashboardView: View {
                                             title: L10n.t("طلبات المراجعة", "Review Requests"),
                                             subtitle: L10n.t("انضمام، أخبار، بلاغات، جوال، ديوانيات، وفاة، أبناء، صور، قصص، تعديل", "Join, news, reports, phone, diwaniyas, deceased, children, photos, stories, edits"),
                                             icon: "tray.full.fill",
-                                            color: DS.Color.warning,
+                                            color: DS.Color.error,
                                             badge: totalReviewRequestsCount
                                         )
                                     }
@@ -129,7 +129,7 @@ struct AdminDashboardView: View {
                                                 title: L10n.t("إدارة الأعضاء", "Members Management"),
                                                 subtitle: L10n.t("إدارة، صحة الشجرة، سجل ودليل العائلة", "Manage, tree health, registry & directory"),
                                                 icon: "person.2.badge.gearshape",
-                                                color: DS.Color.accent,
+                                                color: DS.Color.error,
                                                 badge: (issueMembersCount + treeIssuesCount) > 0 ? (issueMembersCount + treeIssuesCount) : nil
                                             )
                                         }
@@ -154,11 +154,11 @@ struct AdminDashboardView: View {
                                         if authVM.isAdmin {
                                             DSDivider()
                                             NavigationLink(destination: AdminNotificationsView()) {
-                                                DSActionRow(title: L10n.t("إرسال إشعارات", "Send Notifications"), subtitle: L10n.t("إرسال إشعار عام أو مخصص", "Send a general or targeted notification"), icon: "bell.badge.fill", color: DS.Color.warning)
+                                                DSActionRow(title: L10n.t("إرسال إشعارات", "Send Notifications"), subtitle: L10n.t("إرسال إشعار عام أو مخصص", "Send a general or targeted notification"), icon: "bell.badge.fill", color: DS.Color.primary)
                                             }
                                             DSDivider()
                                             NavigationLink(destination: AdminReportsView()) {
-                                                DSActionRow(title: L10n.t("تقارير PDF", "PDF Reports"), subtitle: L10n.t("تقرير الأرقام والأعمار للأعضاء", "Member numbers and ages report"), icon: "doc.text.fill", color: DS.Color.info)
+                                                DSActionRow(title: L10n.t("تقارير PDF", "PDF Reports"), subtitle: L10n.t("تقرير الأرقام والأعمار للأعضاء", "Member numbers and ages report"), icon: "doc.text.fill", color: DS.Color.primary)
                                             }
                                         }
 
@@ -170,7 +170,7 @@ struct AdminDashboardView: View {
                                                     title: L10n.t("الأمان والإعدادات", "Security & Settings"),
                                                     subtitle: L10n.t("أجهزة، أرقام محظورة، إعدادات التطبيق", "Devices, banned numbers, app settings"),
                                                     icon: "lock.shield.fill",
-                                                    color: DS.Color.gridContact,
+                                                    color: DS.Color.primary,
                                                     badge: authVM.bannedPhones.count > 0 ? authVM.bannedPhones.count : nil
                                                 )
                                             }
