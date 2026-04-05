@@ -536,8 +536,8 @@ struct TreeEditRequestView: View {
             payload = TreeEditPayload(
                 v: 2,
                 action: selectedAction,
-                targetMemberId: nil,
-                targetMemberName: nil,
+                targetMemberId: member.id.uuidString,
+                targetMemberName: member.fullName,
                 newName: nil,
                 parentMemberId: member.id.uuidString,
                 parentMemberName: member.fullName,
