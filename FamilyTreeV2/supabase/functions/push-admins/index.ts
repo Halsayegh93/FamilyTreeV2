@@ -102,25 +102,28 @@ Deno.serve(async (req) => {
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
   const serviceRole = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-  const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
   if (!supabaseUrl || !serviceRole) {
     return json(500, { ok: false, message: "Missing Supabase service env" });
   }
 
-  // التحقق من هوية المرسل — لازم يكون مدير أو مالك
+  // التحقق من هوية المرسل عبر JWT
   const authHeader = req.headers.get("authorization") ?? "";
   if (!authHeader) {
     return json(401, { ok: false, message: "Missing authorization header" });
   }
-  const callerClient = createClient(supabaseUrl, anonKey, {
+
+  // استخدام service role client للتحقق من المستخدم
+  const adminClient = createClient(supabaseUrl, serviceRole, {
     auth: { persistSession: false, autoRefreshToken: false },
-    global: { headers: { authorization: authHeader } },
   });
-  const { data: { user: caller } } = await callerClient.auth.getUser();
+
+  // استخراج التوكن والتحقق منه
+  const token = authHeader.replace("Bearer ", "");
+  const { data: { user: caller } } = await adminClient.auth.getUser(token);
   if (!caller) {
     return json(401, { ok: false, message: "Invalid token" });
   }
-  const { data: callerProfile } = await callerClient
+  const { data: callerProfile } = await adminClient
     .from("profiles")
     .select("role")
     .eq("id", caller.id)
