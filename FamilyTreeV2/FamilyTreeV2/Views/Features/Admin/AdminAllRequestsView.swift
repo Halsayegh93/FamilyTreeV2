@@ -954,6 +954,18 @@ struct AdminAllRequestsView: View {
                             .clipShape(Capsule())
                     }
                 }
+
+                // رقم الهاتف
+                if let phone = match.member.phoneNumber, !phone.isEmpty {
+                    HStack(spacing: DS.Spacing.xs) {
+                        Image(systemName: "phone.fill")
+                            .font(DS.Font.scaled(9))
+                        Text(KuwaitPhone.display(phone))
+                            .font(DS.Font.scaled(10, weight: .medium))
+                            .monospacedDigit()
+                    }
+                    .foregroundColor(DS.Color.textTertiary)
+                }
             }
 
             Spacer()
@@ -1030,7 +1042,7 @@ struct AdminAllRequestsView: View {
             .map { String($0).trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty }
 
-        guard newParts.count >= 3 else { return [] }
+        guard newParts.count >= 2 else { return [] }
 
         let existingMembers = memberVM.allMembers.filter { $0.role != .pending && $0.id != member.id }
 
@@ -1055,7 +1067,7 @@ struct AdminAllRequestsView: View {
                 }
             }
 
-            if matchedParts.count >= 3 {
+            if matchedParts.count >= 2 {
                 matches.append((member: existing, matchCount: matchedParts.count, matchedParts: matchedParts))
             }
         }
