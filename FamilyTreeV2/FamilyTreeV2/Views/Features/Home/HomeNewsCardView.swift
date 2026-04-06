@@ -46,10 +46,10 @@ struct HomeNewsCardView: View {
     private var shortDisplayName: String {
         let name = authorMember?.fullName ?? authorName
         let parts = name.split(separator: " ")
-        guard parts.count > 4, let last = parts.last else { return name }
-        let first4 = parts.prefix(4).joined(separator: " ")
-        if parts[3] == last { return first4 }
-        return "\(first4) \(last)"
+        guard parts.count > 3, let last = parts.last else { return name }
+        let first3 = parts.prefix(3).joined(separator: " ")
+        if parts[2] == last { return first3 }
+        return "\(first3) \(last)"
     }
 
     var body: some View {
