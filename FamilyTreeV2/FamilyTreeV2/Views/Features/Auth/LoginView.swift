@@ -114,12 +114,12 @@ struct LoginView: View {
     // MARK: - Logo — App Icon
     private var logoSection: some View {
         VStack(spacing: DS.Spacing.xl) {
-            // أيقونة التطبيق
+            // أيقونة التطبيق — دائرية
             Image("AppIconImage")
                 .resizable()
                 .scaledToFill()
                 .frame(width: 100, height: 100)
-                .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                .clipShape(Circle())
                 .shadow(color: DS.Color.primary.opacity(0.2), radius: 12, y: 6)
 
             VStack(spacing: DS.Spacing.sm) {
