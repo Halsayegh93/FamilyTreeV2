@@ -57,37 +57,35 @@ struct WaitingForApprovalView: View {
 
     // MARK: - Waiting Icon
     private var waitingIcon: some View {
-        VStack(spacing: DS.Spacing.xl) {
-            ZStack {
-                // حلقة دوارة
-                Circle()
-                    .trim(from: 0, to: 0.7)
-                    .stroke(
-                        DS.Color.gradientPrimary,
-                        style: StrokeStyle(lineWidth: 2.5, lineCap: .round)
-                    )
-                    .frame(width: 130, height: 130)
-                    .rotationEffect(.degrees(ringRotation))
+        ZStack {
+            // حلقة دوارة
+            Circle()
+                .trim(from: 0, to: 0.7)
+                .stroke(
+                    DS.Color.gradientPrimary,
+                    style: StrokeStyle(lineWidth: 2.5, lineCap: .round)
+                )
+                .frame(width: 130, height: 130)
+                .rotationEffect(.degrees(ringRotation))
 
-                // أيقونة التطبيق
-                Image("AppIconImage")
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: 100, height: 100)
-                    .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-                    .shadow(color: DS.Color.primary.opacity(0.2), radius: 12, y: 6)
-            }
+            // حلقة نبض
+            Circle()
+                .stroke(DS.Color.warning.opacity(0.3), lineWidth: 1.5)
+                .frame(width: 120, height: 120)
+                .scaleEffect(pulseScale)
+                .opacity(pulseOpacity)
 
-            VStack(spacing: DS.Spacing.sm) {
-                Text(L10n.t("شجرة العائلة", "Family Tree"))
-                    .font(DS.Font.title1)
-                    .fontWeight(.black)
-                    .foregroundColor(DS.Color.textPrimary)
+            // الدائرة الرئيسية بتدرج
+            Circle()
+                .fill(DS.Color.gradientPrimary)
+                .frame(width: 100, height: 100)
+                .shadow(color: DS.Color.primary.opacity(0.3), radius: 12, y: 6)
 
-                Text(L10n.t("عائلة المحمد علي", "Al-Muhammad Ali Family"))
-                    .font(DS.Font.callout)
-                    .foregroundColor(DS.Color.textSecondary)
-            }
+            // أيقونة الانتظار
+            Image(systemName: "hourglass")
+                .font(DS.Font.scaled(40, weight: .semibold))
+                .foregroundColor(.white)
+                .offset(y: iconBounce)
         }
     }
 
@@ -113,9 +111,22 @@ struct WaitingForApprovalView: View {
     // MARK: - Info Card
     private var infoCard: some View {
         VStack(spacing: DS.Spacing.lg) {
+            // اسم التطبيق
+            VStack(spacing: DS.Spacing.xs) {
+                Text(L10n.t("شجرة العائلة", "Family Tree"))
+                    .font(DS.Font.title3)
+                    .fontWeight(.black)
+                    .foregroundColor(DS.Color.textPrimary)
+                Text(L10n.t("عائلة المحمد علي", "Al-Muhammad Ali Family"))
+                    .font(DS.Font.caption1)
+                    .foregroundColor(DS.Color.textSecondary)
+            }
+
+            DSDivider()
+
             // العنوان
             Text(L10n.t("طلبك قيد المراجعة", "Request Under Review"))
-                .font(DS.Font.title2)
+                .font(DS.Font.headline)
                 .foregroundColor(DS.Color.textPrimary)
 
             // الوصف
