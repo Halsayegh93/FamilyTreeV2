@@ -113,11 +113,11 @@ struct WaitingForApprovalView: View {
         VStack(spacing: DS.Spacing.lg) {
             // اسم التطبيق
             VStack(spacing: DS.Spacing.xs) {
-                Text(L10n.t("شجرة العائلة", "Family Tree"))
+                Text(L10n.t("عائلة المحمدعلي", "Al-Mohammadali Family"))
                     .font(DS.Font.title3)
                     .fontWeight(.black)
                     .foregroundColor(DS.Color.textPrimary)
-                Text(L10n.t("عائلة المحمد علي", "Al-Muhammad Ali Family"))
+                Text(L10n.t("شجرة العائلة", "Family Tree"))
                     .font(DS.Font.caption1)
                     .foregroundColor(DS.Color.textSecondary)
             }

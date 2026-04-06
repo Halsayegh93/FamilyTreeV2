@@ -123,12 +123,12 @@ struct LoginView: View {
                 .shadow(color: DS.Color.primary.opacity(0.2), radius: 12, y: 6)
 
             VStack(spacing: DS.Spacing.sm) {
-                Text(L10n.t("شجرة العائلة", "Family Tree"))
+                Text(L10n.t("عائلة المحمدعلي", "Al-Mohammadali Family"))
                     .font(DS.Font.title1)
                     .fontWeight(.black)
                     .foregroundColor(DS.Color.textPrimary)
 
-                Text(L10n.t("عائلة المحمد علي", "Al-Muhammad Ali Family"))
+                Text(L10n.t("شجرة العائلة", "Family Tree"))
                     .font(DS.Font.callout)
                     .foregroundColor(DS.Color.textSecondary)
             }
