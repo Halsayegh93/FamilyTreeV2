@@ -1,8 +1,11 @@
 import SwiftUI
+import UserNotifications
 
 struct MainTabView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @State private var selectedTab = 0
+    @State private var showNotificationAlert = false
+    @AppStorage("notificationAlertDismissCount") private var dismissCount = 0
 
     private var tabSelection: Binding<Int> {
         Binding(
@@ -59,6 +62,33 @@ struct MainTabView: View {
         }
         .tint(DS.Color.primary)
         .toolbarBackground(.ultraThinMaterial, for: .tabBar)
+        }
+        .task {
+            // تحقق من إذن الإشعارات — أقصى 3 تنبيهات
+            guard dismissCount < 3 else { return }
+            let settings = await UNUserNotificationCenter.current().notificationSettings()
+            if settings.authorizationStatus == .denied || settings.authorizationStatus == .notDetermined {
+                showNotificationAlert = true
+            }
+        }
+        .alert(
+            L10n.t("تفعيل الإشعارات", "Enable Notifications"),
+            isPresented: $showNotificationAlert
+        ) {
+            Button(L10n.t("فتح الإعدادات", "Open Settings")) {
+                dismissCount += 1
+                if let url = URL(string: UIApplication.openSettingsURLString) {
+                    UIApplication.shared.open(url)
+                }
+            }
+            Button(L10n.t("لاحقاً", "Later"), role: .cancel) {
+                dismissCount += 1
+            }
+        } message: {
+            Text(L10n.t(
+                "فعّل الإشعارات عشان توصلك أخبار العائلة والتحديثات المهمة",
+                "Enable notifications to receive family news and important updates"
+            ))
         }
     }
 }
