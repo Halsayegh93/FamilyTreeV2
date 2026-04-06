@@ -101,38 +101,35 @@ struct LoginView: View {
     // MARK: - Background
     private var backgroundView: some View {
         ZStack {
-            DS.Color.background.ignoresSafeArea()
+            // تدرج خفيف من أعلى
+            LinearGradient(
+                colors: [DS.Color.primary.opacity(0.06), DS.Color.background],
+                startPoint: .top,
+                endPoint: .center
+            )
+            .ignoresSafeArea()
         }
     }
 
-    // MARK: - Logo — Royal Gradient
+    // MARK: - Logo — App Icon
     private var logoSection: some View {
-        VStack(spacing: DS.Spacing.lg) {
-            ZStack {
-                // Outer glow ring
-                Circle()
-                    .fill(DS.Color.primary.opacity(0.08))
-                    .frame(width: 120, height: 120)
+        VStack(spacing: DS.Spacing.xl) {
+            // أيقونة التطبيق
+            Image("AppIconImage")
+                .resizable()
+                .scaledToFill()
+                .frame(width: 100, height: 100)
+                .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                .shadow(color: DS.Color.primary.opacity(0.2), radius: 12, y: 6)
 
-                // Gradient circle
-                Circle()
-                    .fill(DS.Color.gradientRoyal)
-                    .frame(width: 100, height: 100)
-
-                Image(systemName: "leaf.fill")
-                    .font(DS.Font.scaled(42, weight: .bold))
-                    .foregroundColor(DS.Color.textOnPrimary)
-            }
-            .dsGlowShadow()
-            .padding(.bottom, DS.Spacing.sm)
-
-            VStack(spacing: DS.Spacing.xs) {
-                Text(L10n.t("عائلة المحمد علي", "Al-Muhammad Ali Family"))
+            VStack(spacing: DS.Spacing.sm) {
+                Text(L10n.t("شجرة العائلة", "Family Tree"))
                     .font(DS.Font.title1)
+                    .fontWeight(.black)
                     .foregroundColor(DS.Color.textPrimary)
 
-                Text(L10n.t("مرحباً بك في تطبيق شجرة العائلة", "Welcome to the Family Tree App"))
-                    .font(DS.Font.subheadline)
+                Text(L10n.t("عائلة المحمد علي", "Al-Muhammad Ali Family"))
+                    .font(DS.Font.callout)
                     .foregroundColor(DS.Color.textSecondary)
             }
         }
