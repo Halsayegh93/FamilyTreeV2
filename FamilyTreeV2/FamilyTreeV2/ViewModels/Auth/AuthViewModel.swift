@@ -739,36 +739,39 @@ class AuthViewModel: ObservableObject {
     /// بحث عن مطابقات الاسم في الشجرة — يُرجع قائمة بمعرفات الأعضاء المتطابقين
     private func searchForNameMatches(fullName: String, firstName: String) async -> [String] {
         do {
-            // بحث بالاسم الكامل (تطابق جزئي)
-            let fullNameResults: [FamilyMember] = try await supabase
-                .from("profiles")
-                .select()
-                .ilike("full_name", pattern: "%\(fullName)%")
-                .neq("status", value: "pending")
-                .limit(10)
-                .execute()
-                .value
-            
-            if !fullNameResults.isEmpty {
-                return fullNameResults.map { $0.id.uuidString }
-            }
-            
-            // بحث بالاسم الأول فقط كـ fallback
-            let parts = fullName.split(whereSeparator: \.isWhitespace).map(String.init)
-            if parts.count >= 2 {
-                let firstTwo = parts.prefix(2).joined(separator: " ")
-                let partialResults: [FamilyMember] = try await supabase
+            let nameParts = fullName.split(whereSeparator: \.isWhitespace).map(String.init)
+            guard !nameParts.isEmpty else { return [] }
+
+            var allCandidates: [UUID: Int] = [:] // UUID → عدد الأجزاء المتطابقة
+
+            // بحث بكل جزء من الاسم — كل جزء يضيف نقطة
+            for part in nameParts {
+                guard part.count >= 2 else { continue }
+                let results: [FamilyMember] = try await supabase
                     .from("profiles")
                     .select()
-                    .ilike("full_name", pattern: "%\(firstTwo)%")
+                    .ilike("full_name", pattern: "%\(part)%")
                     .neq("status", value: "pending")
-                    .limit(10)
+                    .limit(50)
                     .execute()
                     .value
-                return partialResults.map { $0.id.uuidString }
+
+                for member in results {
+                    allCandidates[member.id, default: 0] += 1
+                }
             }
-            
-            return []
+
+            // رتب حسب عدد الأجزاء المتطابقة — اللي يطابق أكثر أول
+            // يعتبر تطابق إذا طابق اسمين على الأقل
+            let minParts = min(2, nameParts.count)
+            let matched = allCandidates
+                .filter { $0.value >= minParts }
+                .sorted { $0.value > $1.value }
+                .prefix(10)
+                .map { $0.key.uuidString }
+
+            Log.info("[MATCH] بحث عن '\(fullName)' — لقى \(allCandidates.count) مرشح، \(matched.count) تطابق (>= \(minParts) أجزاء)")
+            return Array(matched)
         } catch {
             Log.warning("فشل البحث عن مطابقات الاسم: \(error.localizedDescription)")
             return []
