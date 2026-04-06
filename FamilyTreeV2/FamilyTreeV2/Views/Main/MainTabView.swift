@@ -65,7 +65,7 @@ struct MainTabView: View {
         }
         .task {
             // تحقق من إذن الإشعارات — أقصى 3 تنبيهات
-            guard dismissCount < 3 else { return }
+            guard dismissCount < 2 else { return }
             let settings = await UNUserNotificationCenter.current().notificationSettings()
             if settings.authorizationStatus == .denied || settings.authorizationStatus == .notDetermined {
                 showNotificationAlert = true
