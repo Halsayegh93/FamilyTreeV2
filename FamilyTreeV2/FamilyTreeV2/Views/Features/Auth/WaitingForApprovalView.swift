@@ -31,14 +31,14 @@ struct WaitingForApprovalView: View {
                         .opacity(contentOpacity)
                         .scaleEffect(contentOpacity)
 
+                    // نقاط التحميل — تحت الدائرة
+                    animatedDots
+                        .opacity(contentOpacity)
+
                     // بطاقة المعلومات
                     infoCard
                         .opacity(cardAppeared ? 1 : 0)
                         .offset(y: cardAppeared ? 0 : 30)
-
-                    // نقاط التحميل — تحت الكرت
-                    animatedDots
-                        .opacity(contentOpacity)
 
                     // الأزرار
                     actionButtons
