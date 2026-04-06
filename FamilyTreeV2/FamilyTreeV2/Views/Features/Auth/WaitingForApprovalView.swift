@@ -31,14 +31,14 @@ struct WaitingForApprovalView: View {
                         .opacity(contentOpacity)
                         .scaleEffect(contentOpacity)
 
-                    // نقاط التحميل
-                    animatedDots
-                        .opacity(contentOpacity)
-
                     // بطاقة المعلومات
                     infoCard
                         .opacity(cardAppeared ? 1 : 0)
                         .offset(y: cardAppeared ? 0 : 30)
+
+                    // نقاط التحميل — تحت الكرت
+                    animatedDots
+                        .opacity(contentOpacity)
 
                     // الأزرار
                     actionButtons
@@ -70,7 +70,7 @@ struct WaitingForApprovalView: View {
 
             // حلقة نبض
             Circle()
-                .stroke(DS.Color.warning.opacity(0.3), lineWidth: 1.5)
+                .stroke(DS.Color.primary.opacity(0.3), lineWidth: 1.5)
                 .frame(width: 120, height: 120)
                 .scaleEffect(pulseScale)
                 .opacity(pulseOpacity)
@@ -94,7 +94,7 @@ struct WaitingForApprovalView: View {
         HStack(spacing: DS.Spacing.sm) {
             ForEach(0..<3, id: \.self) { index in
                 Circle()
-                    .fill(DS.Color.warning.opacity(dotPhase == CGFloat(index) ? 1.0 : 0.3))
+                    .fill(DS.Color.primary.opacity(dotPhase == CGFloat(index) ? 1.0 : 0.3))
                     .frame(width: 7, height: 7)
                     .scaleEffect(dotPhase == CGFloat(index) ? 1.3 : 0.8)
                     .animation(
@@ -142,16 +142,16 @@ struct WaitingForApprovalView: View {
             // شارة الحالة
             HStack(spacing: DS.Spacing.xs) {
                 Circle()
-                    .fill(DS.Color.warning)
+                    .fill(DS.Color.primary)
                     .frame(width: 8, height: 8)
                     .scaleEffect(pulseScale > 1.05 ? 1.2 : 1.0)
                 Text(L10n.t("قيد الانتظار", "Pending"))
                     .font(DS.Font.caption1)
-                    .foregroundColor(DS.Color.warning)
+                    .foregroundColor(DS.Color.primary)
             }
             .padding(.horizontal, DS.Spacing.lg)
             .padding(.vertical, DS.Spacing.sm)
-            .background(DS.Color.warning.opacity(0.08))
+            .background(DS.Color.primary.opacity(0.08))
             .cornerRadius(DS.Radius.full)
 
             DSDivider()
@@ -176,7 +176,7 @@ struct WaitingForApprovalView: View {
         .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
-                .stroke(DS.Color.warning.opacity(0.15), lineWidth: 1)
+                .stroke(DS.Color.primary.opacity(0.15), lineWidth: 1)
         )
         .dsSubtleShadow()
         .padding(.horizontal, DS.Spacing.xl)
