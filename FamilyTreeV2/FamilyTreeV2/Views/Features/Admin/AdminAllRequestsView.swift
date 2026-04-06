@@ -826,56 +826,39 @@ struct AdminAllRequestsView: View {
                 }
             }
 
-            // نتائج التطابق
-            if hasMatches {
-                VStack(spacing: DS.Spacing.sm) {
-                    HStack(spacing: DS.Spacing.sm) {
-                        Image(systemName: "person.2.fill")
-                            .font(DS.Font.scaled(13, weight: .semibold))
-                            .foregroundColor(DS.Color.primary)
-                        Text(L10n.t(
-                            "تطابق محتمل مع \(matches.count) عضو",
-                            "Potential match with \(matches.count) member(s)"
-                        ))
-                        .font(DS.Font.scaled(12, weight: .bold))
-                        .foregroundColor(DS.Color.textPrimary)
-                        Spacer()
-
-                        Text("\(matches.count)")
-                            .font(DS.Font.scaled(12, weight: .black))
-                            .foregroundColor(.white)
-                            .frame(width: 24, height: 24)
-                            .background(DS.Color.primary)
-                            .clipShape(Circle())
-                    }
-
-                    let isExpanded = expandedMatchMembers.contains(member.id)
-                    let visible = isExpanded ? matches : Array(matches.prefix(3))
-
-                    ForEach(visible, id: \.member.id) { match in
-                        joinMatchRow(match: match, pendingMember: member)
-                    }
-
-                    if matches.count > 3 && !isExpanded {
-                        Button {
-                            withAnimation(DS.Anim.snappy) {
-                                _ = expandedMatchMembers.insert(member.id)
-                            }
-                        } label: {
+            // نتائج التطابق — مجموعة لكل اسم
+            let groups = groupedMatches(for: member)
+            if !groups.isEmpty {
+                VStack(spacing: DS.Spacing.md) {
+                    ForEach(groups, id: \.namePart) { group in
+                        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                            // عنوان المجموعة
                             HStack(spacing: DS.Spacing.xs) {
-                                Image(systemName: "chevron.down")
+                                Image(systemName: "magnifyingglass")
                                     .font(DS.Font.scaled(11, weight: .bold))
-                                Text(L10n.t(
-                                    "عرض الكل (\(matches.count))",
-                                    "Show all (\(matches.count))"
-                                ))
-                                .font(DS.Font.scaled(11, weight: .bold))
+                                    .foregroundColor(DS.Color.primary)
+                                Text(group.namePart)
+                                    .font(DS.Font.scaled(13, weight: .black))
+                                    .foregroundColor(DS.Color.primary)
+                                Text("(\(group.members.count))")
+                                    .font(DS.Font.scaled(11, weight: .bold))
+                                    .foregroundColor(DS.Color.textTertiary)
+                                Spacer()
                             }
-                            .foregroundColor(DS.Color.primary)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, DS.Spacing.xs)
+
+                            ForEach(group.members, id: \.id) { treeMember in
+                                let allMatches = matches.first(where: { $0.member.id == treeMember.id })
+                                joinMatchRow(
+                                    match: (
+                                        member: treeMember,
+                                        matchCount: allMatches?.matchCount ?? 1,
+                                        matchedParts: allMatches?.matchedParts ?? [group.namePart],
+                                        isRegistrationMatch: allMatches?.isRegistrationMatch ?? false
+                                    ),
+                                    pendingMember: member
+                                )
+                            }
                         }
-                        .buttonStyle(DSScaleButtonStyle())
                     }
                 }
                 .padding(DS.Spacing.sm)
@@ -1042,7 +1025,7 @@ struct AdminAllRequestsView: View {
             .map { String($0).trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty }
 
-        guard newParts.count >= 2 else { return [] }
+        guard !newParts.isEmpty else { return [] }
 
         let existingMembers = memberVM.allMembers.filter { $0.role != .pending && $0.id != member.id }
 
@@ -1054,6 +1037,12 @@ struct AdminAllRequestsView: View {
                 .map { String($0).trimmingCharacters(in: .whitespaces) }
                 .filter { !$0.isEmpty }
 
+            // تحقق: هل الاسم الأول للعضو الموجود يطابق أي جزء من اسم المنضم؟
+            guard let existingFirst = existingParts.first else { continue }
+            let firstNameMatch = newParts.contains { $0.localizedCaseInsensitiveCompare(existingFirst) == .orderedSame }
+            guard firstNameMatch else { continue }
+
+            // عد كل الأجزاء المتطابقة
             var matchedParts: [String] = []
             var usedIndices: Set<Int> = []
 
@@ -1067,12 +1056,36 @@ struct AdminAllRequestsView: View {
                 }
             }
 
-            if matchedParts.count >= 2 {
+            if matchedParts.count >= 1 {
                 matches.append((member: existing, matchCount: matchedParts.count, matchedParts: matchedParts))
             }
         }
 
         return matches.sorted { $0.matchCount > $1.matchCount }
+    }
+
+    /// تجميع التطابقات حسب اسم البحث — كل جزء من الاسم ونتائجه
+    func groupedMatches(for member: FamilyMember) -> [(namePart: String, members: [FamilyMember])] {
+        let newParts = member.fullName
+            .split(whereSeparator: \.isWhitespace)
+            .map { String($0).trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+
+        let existingMembers = memberVM.allMembers.filter { $0.role != .pending && $0.id != member.id }
+        var groups: [(namePart: String, members: [FamilyMember])] = []
+
+        for part in newParts {
+            guard part.count >= 2 else { continue }
+            let matched = existingMembers.filter { existing in
+                let firstName = existing.fullName.split(whereSeparator: \.isWhitespace).first.map(String.init) ?? ""
+                return firstName.localizedCaseInsensitiveCompare(part) == .orderedSame
+            }
+            if !matched.isEmpty {
+                groups.append((namePart: part, members: Array(matched.prefix(5))))
+            }
+        }
+
+        return groups
     }
 
     // MARK: - News Row
