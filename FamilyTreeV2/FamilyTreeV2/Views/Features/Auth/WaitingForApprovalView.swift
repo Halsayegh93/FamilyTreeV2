@@ -15,7 +15,12 @@ struct WaitingForApprovalView: View {
 
     var body: some View {
         ZStack {
-            DS.Color.background.ignoresSafeArea()
+            LinearGradient(
+                colors: [DS.Color.primary.opacity(0.06), DS.Color.background],
+                startPoint: .top,
+                endPoint: .center
+            )
+            .ignoresSafeArea()
 
             ScrollView(showsIndicators: false) {
                 VStack(spacing: DS.Spacing.xxl) {
@@ -52,57 +57,37 @@ struct WaitingForApprovalView: View {
 
     // MARK: - Waiting Icon
     private var waitingIcon: some View {
-        ZStack {
-            // حلقة خارجية متقطعة دوّارة
-            Circle()
-                .trim(from: 0, to: 0.7)
-                .stroke(
-                    DS.Color.gradientPrimary,
-                    style: StrokeStyle(lineWidth: 2.5, lineCap: .round)
-                )
-                .frame(width: 150, height: 150)
-                .rotationEffect(.degrees(ringRotation))
-
-            // حلقة نبض
-            Circle()
-                .stroke(DS.Color.warning.opacity(0.3), lineWidth: 1.5)
-                .frame(width: 140, height: 140)
-                .scaleEffect(pulseScale)
-                .opacity(pulseOpacity)
-
-            // الخلفية المتدرجة
-            Circle()
-                .fill(
-                    RadialGradient(
-                        colors: [
-                            DS.Color.warning.opacity(0.12),
-                            DS.Color.warning.opacity(0.04),
-                            .clear
-                        ],
-                        center: .center,
-                        startRadius: 20,
-                        endRadius: 70
+        VStack(spacing: DS.Spacing.xl) {
+            ZStack {
+                // حلقة دوارة
+                Circle()
+                    .trim(from: 0, to: 0.7)
+                    .stroke(
+                        DS.Color.gradientPrimary,
+                        style: StrokeStyle(lineWidth: 2.5, lineCap: .round)
                     )
-                )
-                .frame(width: 130, height: 130)
+                    .frame(width: 130, height: 130)
+                    .rotationEffect(.degrees(ringRotation))
 
-            // الدائرة الرئيسية
-            Circle()
-                .fill(
-                    LinearGradient(
-                        colors: [DS.Color.warning, DS.Color.warning.opacity(0.75), DS.Color.primary],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .frame(width: 100, height: 100)
-                .dsNeonShadow()
+                // أيقونة التطبيق
+                Image("AppIconImage")
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 100, height: 100)
+                    .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                    .shadow(color: DS.Color.primary.opacity(0.2), radius: 12, y: 6)
+            }
 
-            // الأيقونة
-            Image(systemName: "hourglass")
-                .font(DS.Font.scaled(40, weight: .semibold))
-                .foregroundColor(DS.Color.textOnPrimary)
-                .offset(y: iconBounce)
+            VStack(spacing: DS.Spacing.sm) {
+                Text(L10n.t("شجرة العائلة", "Family Tree"))
+                    .font(DS.Font.title1)
+                    .fontWeight(.black)
+                    .foregroundColor(DS.Color.textPrimary)
+
+                Text(L10n.t("عائلة المحمد علي", "Al-Muhammad Ali Family"))
+                    .font(DS.Font.callout)
+                    .foregroundColor(DS.Color.textSecondary)
+            }
         }
     }
 
