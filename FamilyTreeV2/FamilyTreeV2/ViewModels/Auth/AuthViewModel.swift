@@ -832,30 +832,17 @@ class AuthViewModel: ObservableObject {
                 if isRateLimited || attempt == maxAttempts {
                     break
                 }
-                
+
                 try? await Task.sleep(nanoseconds: 200_000_000)
             }
         }
-        
-        // SMS فشل — ننتقل تلقائياً للواتساب
-        Log.warning("فشل إرسال SMS، جاري التحويل للواتساب...")
-        self.otpStatusMessage = L10n.t("جاري إرسال الرمز عبر واتساب...", "Sending code via WhatsApp...")
 
-        let fallbackResult = await triggerOTPFallback(phone: finalPhone, channels: [.whatsapp])
-
-        if fallbackResult.success {
-            withAnimation(.spring()) {
-                self.isOtpSent = true
-            }
-            self.otpErrorMessage = nil
-            self.otpStatusMessage = L10n.t("تم إرسال الرمز عبر واتساب ✓", "Code sent via WhatsApp ✓")
-        } else {
-            self.otpStatusMessage = ""
-            self.otpErrorMessage = L10n.t(
-                "تعذر إرسال رمز التحقق عبر SMS والواتساب. حاول مرة أخرى.",
-                "Unable to send code via SMS or WhatsApp. Please try again."
-            )
-        }
+        // SMS فشل
+        self.otpStatusMessage = ""
+        self.otpErrorMessage = L10n.t(
+            "تعذر إرسال رمز التحقق. حاول مرة أخرى.",
+            "Unable to send verification code. Please try again."
+        )
 
         self.isLoading = false
     }
@@ -1212,10 +1199,14 @@ class AuthViewModel: ObservableObject {
         guard let user = try? await supabase.auth.session.user else { return }
         
         let normalizedPhone = user.phone ?? self.phoneNumber
+        // تحقق إذا فيه profile كامل (مو فاضي من الترقر) — إذا كامل ما نكمل التسجيل
         if let existingProfile = await findProfileByPhone(normalizedPhone) {
-            await applyAuthenticatedProfile(existingProfile, normalizedPhone: normalizedPhone)
-            self.isLoading = false
-            return
+            let name = existingProfile.fullName.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !name.isEmpty {
+                await applyAuthenticatedProfile(existingProfile, normalizedPhone: normalizedPhone)
+                self.isLoading = false
+                return
+            }
         }
         
         let formatter = DateFormatter()
