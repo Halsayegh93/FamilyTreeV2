@@ -55,8 +55,25 @@ struct PrivacySettingsView: View {
         .onChange(of: notificationsEnabled) { _, newValue in
             Task {
                 if newValue {
-                    if let token = notificationVM.pushToken {
-                        await notificationVM.registerPushToken(token)
+                    // تحقق من إذن النظام — إذا مرفوض وديه للإعدادات
+                    let settings = await UNUserNotificationCenter.current().notificationSettings()
+                    if settings.authorizationStatus == .denied {
+                        // وديه لإعدادات الجهاز عشان يفعل
+                        if let url = URL(string: UIApplication.openSettingsURLString) {
+                            await MainActor.run { UIApplication.shared.open(url) }
+                        }
+                    } else if settings.authorizationStatus == .notDetermined {
+                        // أول مرة — اطلب الإذن
+                        let granted = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])
+                        if granted == true {
+                            await MainActor.run { UIApplication.shared.registerForRemoteNotifications() }
+                        }
+                    } else {
+                        // مسموح — سجل التوكن
+                        await MainActor.run { UIApplication.shared.registerForRemoteNotifications() }
+                        if let token = notificationVM.pushToken {
+                            await notificationVM.registerPushToken(token)
+                        }
                     }
                 } else {
                     await notificationVM.unregisterPushToken()
