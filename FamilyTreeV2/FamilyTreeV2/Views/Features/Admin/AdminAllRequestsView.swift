@@ -799,10 +799,10 @@ struct AdminAllRequestsView: View {
                         HStack(spacing: 4) {
                             Image(systemName: "checkmark.seal.fill")
                                 .font(DS.Font.scaled(10))
-                                .foregroundColor(DS.Color.textPrimary)
+                                .foregroundColor(DS.Color.success)
                             Text(L10n.t("اسم خماسي مكتمل", "Full 5-part name"))
                                 .font(DS.Font.scaled(10))
-                                .foregroundColor(DS.Color.textPrimary)
+                                .foregroundColor(DS.Color.success)
                         }
                     }
                 }
@@ -814,10 +814,10 @@ struct AdminAllRequestsView: View {
                     VStack(spacing: 2) {
                         Text("\(serverMatchCount)")
                             .font(DS.Font.scaled(14, weight: .black))
-                            .foregroundColor(DS.Color.textSecondary)
+                            .foregroundColor(DS.Color.info)
                         Text(L10n.t("مطابقة", "match"))
                             .font(DS.Font.scaled(8, weight: .bold))
-                            .foregroundColor(DS.Color.textSecondary)
+                            .foregroundColor(DS.Color.info)
                     }
                     .padding(.horizontal, DS.Spacing.sm)
                     .padding(.vertical, DS.Spacing.xs)
@@ -832,14 +832,21 @@ struct AdminAllRequestsView: View {
                     HStack(spacing: DS.Spacing.sm) {
                         Image(systemName: "person.2.fill")
                             .font(DS.Font.scaled(13, weight: .semibold))
-                            .foregroundColor(DS.Color.textSecondary)
+                            .foregroundColor(DS.Color.primary)
                         Text(L10n.t(
                             "تطابق محتمل مع \(matches.count) عضو",
                             "Potential match with \(matches.count) member(s)"
                         ))
                         .font(DS.Font.scaled(12, weight: .bold))
-                        .foregroundColor(DS.Color.textSecondary)
+                        .foregroundColor(DS.Color.textPrimary)
                         Spacer()
+
+                        Text("\(matches.count)")
+                            .font(DS.Font.scaled(12, weight: .black))
+                            .foregroundColor(.white)
+                            .frame(width: 24, height: 24)
+                            .background(DS.Color.primary)
+                            .clipShape(Circle())
                     }
 
                     let isExpanded = expandedMatchMembers.contains(member.id)
@@ -856,38 +863,37 @@ struct AdminAllRequestsView: View {
                             }
                         } label: {
                             HStack(spacing: DS.Spacing.xs) {
-                                Image(systemName: "ellipsis.circle.fill")
-                                    .font(DS.Font.scaled(12, weight: .semibold))
+                                Image(systemName: "chevron.down")
+                                    .font(DS.Font.scaled(11, weight: .bold))
                                 Text(L10n.t(
                                     "عرض الكل (\(matches.count))",
                                     "Show all (\(matches.count))"
                                 ))
                                 .font(DS.Font.scaled(11, weight: .bold))
                             }
-                            .foregroundColor(DS.Color.textSecondary)
+                            .foregroundColor(DS.Color.primary)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, DS.Spacing.xs)
                         }
                         .buttonStyle(DSScaleButtonStyle())
-                        .accessibilityLabel(L10n.t("عرض كل التطابقات", "Show all matches"))
                     }
                 }
                 .padding(DS.Spacing.sm)
-                .background(DS.Color.info.opacity(0.04))
+                .background(DS.Color.primary.opacity(0.04))
                 .cornerRadius(DS.Radius.md)
             } else {
                 HStack(spacing: DS.Spacing.sm) {
-                    Image(systemName: "checkmark.circle.fill")
+                    Image(systemName: "person.badge.plus")
                         .font(DS.Font.scaled(12, weight: .semibold))
-                        .foregroundColor(DS.Color.textPrimary)
+                        .foregroundColor(DS.Color.textSecondary)
                     Text(L10n.t("لا يوجد تطابق — اسم جديد", "No tree matches — new name"))
                         .font(DS.Font.scaled(11, weight: .bold))
-                        .foregroundColor(DS.Color.textPrimary)
+                        .foregroundColor(DS.Color.textSecondary)
                     Spacer()
                 }
                 .padding(.horizontal, DS.Spacing.sm)
                 .padding(.vertical, DS.Spacing.xs)
-                .background(DS.Color.success.opacity(0.06))
+                .background(DS.Color.surface)
                 .cornerRadius(DS.Radius.sm)
             }
 
@@ -910,43 +916,42 @@ struct AdminAllRequestsView: View {
             pendingMember.fullName.split(whereSeparator: \.isWhitespace).count,
             match.member.fullName.split(whereSeparator: \.isWhitespace).count
         )
-        let hasNameMatch = match.matchCount >= 3
-        let matchRatio = hasNameMatch ? Double(match.matchCount) / Double(max(totalParts, 1)) : 0
-        let strengthColor: Color = match.isRegistrationMatch ? DS.Color.info : (matchRatio >= 0.8 ? DS.Color.success : matchRatio >= 0.6 ? DS.Color.info : DS.Color.warning)
+        let hasNameMatch = match.matchCount >= 2
+        let matchPercent = hasNameMatch ? Int(Double(match.matchCount) / Double(max(totalParts, 1)) * 100) : 0
 
         return HStack(spacing: DS.Spacing.sm) {
+            // نسبة التطابق كدائرة
             ZStack {
                 Circle()
-                    .fill(strengthColor.opacity(0.15))
-                    .frame(width: 28, height: 28)
-                Image(systemName: match.isRegistrationMatch ? "link.circle.fill" : (matchRatio >= 0.8 ? "checkmark.circle.fill" : "person.fill.questionmark"))
-                    .font(DS.Font.scaled(12, weight: .semibold))
-                    .foregroundColor(strengthColor)
+                    .fill(DS.Color.primary.opacity(0.1))
+                    .frame(width: 36, height: 36)
+                Text("\(matchPercent)%")
+                    .font(DS.Font.scaled(11, weight: .black))
+                    .foregroundColor(DS.Color.primary)
             }
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(match.member.fullName)
-                    .font(DS.Font.caption1)
+                    .font(DS.Font.calloutBold)
                     .foregroundColor(DS.Color.textPrimary)
                     .lineLimit(1)
 
                 HStack(spacing: DS.Spacing.xs) {
+                    Text(L10n.t(
+                        "\(match.matchCount) من \(totalParts) أسماء متطابقة",
+                        "\(match.matchCount) of \(totalParts) names match"
+                    ))
+                    .font(DS.Font.scaled(10, weight: .medium))
+                    .foregroundColor(DS.Color.textSecondary)
+
                     if match.isRegistrationMatch {
-                        Text(L10n.t("مطابقة تسجيل", "Registration match"))
+                        Text(L10n.t("تسجيل", "Reg"))
                             .font(DS.Font.scaled(9, weight: .bold))
-                            .foregroundColor(DS.Color.textOnPrimary)
+                            .foregroundColor(.white)
                             .padding(.horizontal, 5)
                             .padding(.vertical, 1)
-                            .background(DS.Color.info)
+                            .background(DS.Color.primary)
                             .clipShape(Capsule())
-                    }
-                    if hasNameMatch {
-                        Text(L10n.t(
-                            "\(match.matchCount)/\(totalParts) متطابق",
-                            "\(match.matchCount)/\(totalParts) match"
-                        ))
-                        .font(DS.Font.scaled(10, weight: .semibold))
-                        .foregroundColor(strengthColor)
                     }
                 }
             }
@@ -957,24 +962,23 @@ struct AdminAllRequestsView: View {
                 mergeTarget = (pendingMember: pendingMember, treeMember: match.member)
                 showMergeConfirm = true
             } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: "arrow.triangle.merge")
-                        .font(DS.Font.scaled(10, weight: .bold))
-                    Text(L10n.t("دمج", "Merge"))
-                        .font(DS.Font.scaled(10, weight: .bold))
-                }
-                .foregroundColor(DS.Color.textOnPrimary)
-                .padding(.horizontal, DS.Spacing.sm)
-                .padding(.vertical, DS.Spacing.xs)
-                .background(DS.Color.gradientPrimary)
-                .clipShape(Capsule())
+                Text(L10n.t("ربط", "Link"))
+                    .font(DS.Font.scaled(12, weight: .bold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, DS.Spacing.md)
+                    .padding(.vertical, DS.Spacing.xs)
+                    .background(DS.Color.gradientPrimary)
+                    .clipShape(Capsule())
             }
             .buttonStyle(DSScaleButtonStyle())
-            .accessibilityLabel(L10n.t("دمج مع \(match.member.fullName)", "Merge with \(match.member.fullName)"))
         }
-        .padding(DS.Spacing.xs)
-        .background(strengthColor.opacity(0.04))
-        .cornerRadius(DS.Radius.sm)
+        .padding(DS.Spacing.sm)
+        .background(DS.Color.surface)
+        .cornerRadius(DS.Radius.md)
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Radius.md)
+                .stroke(DS.Color.primary.opacity(0.1), lineWidth: 1)
+        )
     }
 
     // MARK: - Registration Matches
@@ -1184,11 +1188,11 @@ struct AdminAllRequestsView: View {
                 VStack(spacing: 2) {
                     Text(L10n.t("الجديد", "New"))
                         .font(DS.Font.caption2)
-                        .foregroundColor(DS.Color.textPrimary)
+                        .foregroundColor(DS.Color.success)
                     Text(newPhone)
                         .font(DS.Font.caption1)
                         .fontWeight(.bold)
-                        .foregroundColor(DS.Color.textPrimary)
+                        .foregroundColor(DS.Color.success)
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, DS.Spacing.sm)
@@ -1409,14 +1413,14 @@ struct AdminAllRequestsView: View {
             HStack(spacing: DS.Spacing.xs) {
                 Image(systemName: "arrow.right")
                     .font(DS.Font.scaled(10, weight: .bold))
-                    .foregroundColor(DS.Color.textPrimary)
+                    .foregroundColor(DS.Color.success)
                 Text(L10n.t("الاسم الجديد:", "New name:"))
                     .font(DS.Font.caption2)
                     .foregroundColor(DS.Color.textSecondary)
                 Text(newName)
                     .font(DS.Font.subheadline)
                     .fontWeight(.semibold)
-                    .foregroundColor(DS.Color.textPrimary)
+                    .foregroundColor(DS.Color.success)
             }
             .padding(.horizontal, DS.Spacing.sm)
             .padding(.vertical, DS.Spacing.xs)
@@ -1526,7 +1530,7 @@ struct AdminAllRequestsView: View {
                         .foregroundColor(DS.Color.textSecondary)
                     Text(KuwaitPhone.display(request.newValue))
                         .font(DS.Font.calloutBold)
-                        .foregroundColor(DS.Color.textPrimary)
+                        .foregroundColor(DS.Color.success)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, DS.Spacing.lg)
@@ -1635,19 +1639,19 @@ struct AdminAllRequestsView: View {
                         if let newName = payload.newName, !newName.isEmpty {
                             Text(L10n.t("← \(newName)", "→ \(newName)"))
                                 .font(DS.Font.caption1)
-                                .foregroundColor(DS.Color.textSecondary)
+                                .foregroundColor(DS.Color.info)
                         }
                     case "إضافة":
                         if let parent = payload.parentMemberName, let child = payload.newMemberName {
                             Text(L10n.t("إضافة \(child) تحت \(parent)", "Add \(child) under \(parent)"))
                                 .font(DS.Font.caption1)
-                                .foregroundColor(DS.Color.textPrimary)
+                                .foregroundColor(DS.Color.success)
                         }
                     case "حذف":
                         if let reason = payload.reason, !reason.isEmpty {
                             Text(reason)
                                 .font(DS.Font.caption1)
-                                .foregroundColor(DS.Color.textSecondary)
+                                .foregroundColor(DS.Color.error)
                                 .lineLimit(1)
                         }
                     default:
