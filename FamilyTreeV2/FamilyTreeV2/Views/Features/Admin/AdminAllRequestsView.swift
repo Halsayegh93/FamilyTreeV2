@@ -794,6 +794,18 @@ struct AdminAllRequestsView: View {
                         .foregroundColor(DS.Color.textPrimary)
                         .lineLimit(2)
 
+                    // رقم هاتف المنضم
+                    if let phone = member.phoneNumber, !phone.isEmpty {
+                        HStack(spacing: DS.Spacing.xs) {
+                            Image(systemName: "phone.fill")
+                                .font(DS.Font.scaled(10))
+                            Text(KuwaitPhone.display(phone))
+                                .font(DS.Font.scaled(11, weight: .medium))
+                                .monospacedDigit()
+                        }
+                        .foregroundColor(DS.Color.textSecondary)
+                    }
+
                     let parts = member.fullName.split(whereSeparator: \.isWhitespace)
                     if parts.count >= 5 {
                         HStack(spacing: 4) {
