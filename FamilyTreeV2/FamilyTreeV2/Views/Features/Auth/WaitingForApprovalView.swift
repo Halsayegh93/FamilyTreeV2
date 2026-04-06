@@ -154,21 +154,6 @@ struct WaitingForApprovalView: View {
             .background(DS.Color.primary.opacity(0.08))
             .cornerRadius(DS.Radius.full)
 
-            DSDivider()
-
-            // ملاحظة الإشعار
-            HStack(spacing: DS.Spacing.sm) {
-                Image(systemName: "bell.badge.fill")
-                    .font(DS.Font.scaled(14, weight: .medium))
-                    .foregroundColor(DS.Color.primary)
-
-                Text(L10n.t(
-                    "سيصلك إشعار فور الموافقة على طلبك",
-                    "You'll be notified once your request is approved"
-                ))
-                .font(DS.Font.footnote)
-                .foregroundColor(DS.Color.textSecondary)
-            }
         }
         .padding(DS.Spacing.xl)
         .padding(.vertical, DS.Spacing.xs)
