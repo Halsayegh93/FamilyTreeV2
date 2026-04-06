@@ -64,10 +64,14 @@ struct MainTabView: View {
         .toolbarBackground(.ultraThinMaterial, for: .tabBar)
         }
         .task {
-            // تحقق من إذن الإشعارات — أقصى 3 تنبيهات
+            // أول مرة: النظام يطلب تلقائي من PushNotificationDelegate
+            // ننتظر 3 ثواني عشان المستخدم يرد على طلب النظام أول
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+
+            // تحقق إذا رفض — أقصى مرتين بعد طلب النظام
             guard dismissCount < 2 else { return }
             let settings = await UNUserNotificationCenter.current().notificationSettings()
-            if settings.authorizationStatus == .denied || settings.authorizationStatus == .notDetermined {
+            if settings.authorizationStatus == .denied {
                 showNotificationAlert = true
             }
         }
