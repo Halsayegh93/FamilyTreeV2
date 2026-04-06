@@ -5,7 +5,7 @@
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>CFBundleDisplayName</key>
-	<string>شجرة العائلة</string>
+	<string>عائلة المحمدعلي</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>remote-notification</string>
