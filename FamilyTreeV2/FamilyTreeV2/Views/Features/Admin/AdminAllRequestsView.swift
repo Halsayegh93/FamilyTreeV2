@@ -1075,12 +1075,14 @@ struct AdminAllRequestsView: View {
         return matches.sorted { $0.matchCount > $1.matchCount }
     }
 
-    /// لستة مرتبة: الاسم الأول أول، ثم الثاني، ثم الثالث... بدون تكرار
+    /// لستة مرتبة: الأكثر تطابقاً أول — يبحث بالاسم الأول ثم الأول+الثاني ثم الأول+الثاني+الثالث...
     func orderedMatchList(for member: FamilyMember) -> [(member: FamilyMember, matchCount: Int, matchedParts: [String], isRegistrationMatch: Bool)] {
         let newParts = member.fullName
             .split(whereSeparator: \.isWhitespace)
             .map { String($0).trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty }
+
+        guard !newParts.isEmpty else { return [] }
 
         // فقط الأعضاء: بدون هاتف + أحياء + مو pending
         let existingMembers = memberVM.allMembers.filter { m in
@@ -1089,28 +1091,40 @@ struct AdminAllRequestsView: View {
             m.isDeceased != true
         }
         let serverIds = Set(registrationMatches[member.id] ?? [])
-        var seen = Set<UUID>()
+
+        // لكل عضو موجود — كم اسم يطابق بالترتيب من البداية
         var results: [(member: FamilyMember, matchCount: Int, matchedParts: [String], isRegistrationMatch: Bool)] = []
 
-        // لكل جزء من اسم المنضم بالترتيب — أضف اللي اسمهم الأول يطابقه
-        for part in newParts {
-            guard part.count >= 2 else { continue }
-            let matched = existingMembers.filter { existing in
-                guard !seen.contains(existing.id) else { return false }
-                let firstName = existing.fullName.split(whereSeparator: \.isWhitespace).first.map(String.init) ?? ""
-                return firstName.localizedCaseInsensitiveCompare(part) == .orderedSame
+        for existing in existingMembers {
+            let existingParts = existing.fullName
+                .split(whereSeparator: \.isWhitespace)
+                .map { String($0).trimmingCharacters(in: .whitespaces) }
+                .filter { !$0.isEmpty }
+
+            // عد الأسماء المتطابقة بالترتيب من البداية
+            var matchedParts: [String] = []
+            let minCount = min(newParts.count, existingParts.count)
+            for i in 0..<minCount {
+                if newParts[i].localizedCaseInsensitiveCompare(existingParts[i]) == .orderedSame {
+                    matchedParts.append(newParts[i])
+                } else {
+                    break
+                }
             }
 
-            for m in matched.prefix(5) {
-                seen.insert(m.id)
-                // حساب عدد الأجزاء المتطابقة
-                let existingParts = m.fullName.split(whereSeparator: \.isWhitespace).map { String($0) }
-                let count = newParts.filter { np in existingParts.contains { $0.localizedCaseInsensitiveCompare(np) == .orderedSame } }.count
-                results.append((member: m, matchCount: count, matchedParts: [part], isRegistrationMatch: serverIds.contains(m.id)))
+            // لازم الاسم الأول على الأقل يتطابق
+            if !matchedParts.isEmpty {
+                results.append((
+                    member: existing,
+                    matchCount: matchedParts.count,
+                    matchedParts: matchedParts,
+                    isRegistrationMatch: serverIds.contains(existing.id)
+                ))
             }
         }
 
-        return results
+        // رتب: الأكثر تطابقاً أول
+        return results.sorted { $0.matchCount > $1.matchCount }.prefix(20).map { $0 }
     }
 
     /// (غير مستخدم) تجميع التطابقات حسب اسم البحث
