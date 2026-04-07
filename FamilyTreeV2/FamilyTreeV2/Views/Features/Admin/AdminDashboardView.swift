@@ -50,7 +50,7 @@ struct AdminDashboardView: View {
             guard m.status != .frozen else { return false }
             let isOrphan = m.fatherId == nil && !fatherIds.contains(m.id) && m.role != .pending
             let noName = m.fullName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || m.fullName == "بدون اسم"
-            let brokenParent = m.fatherId != nil && !activeIds.contains(m.fatherId!)
+            let brokenParent = m.fatherId != nil && !activeIds.contains(m.fatherId ?? UUID())
             let hidden = m.isHiddenFromTree
             return isOrphan || noName || brokenParent || hidden
         }.count
