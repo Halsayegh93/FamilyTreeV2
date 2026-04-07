@@ -258,7 +258,7 @@ struct AdminModeratorsView: View {
                         pendingRole = .monitor
                         showRoleConfirm = true
                     } label: {
-                        Label(L10n.t("ترقية لمراقب", "Promote to Monitor"), systemImage: "arrow.up.circle.fill")
+                        Label(L10n.t("مراقب", "Monitor"), systemImage: "arrow.up.circle.fill")
                     }
                     .tint(DS.Color.monitorRole)
                     Button {
@@ -266,7 +266,7 @@ struct AdminModeratorsView: View {
                         pendingRole = .admin
                         showRoleConfirm = true
                     } label: {
-                        Label(L10n.t("ترقية لمدير", "Promote to Admin"), systemImage: "arrow.up.circle.fill")
+                        Label(L10n.t("مدير", "Admin"), systemImage: "arrow.up.circle.fill")
                     }
                     .tint(DS.Color.neonPurple)
                 } else if member.role == .monitor {
@@ -275,7 +275,7 @@ struct AdminModeratorsView: View {
                         pendingRole = .admin
                         showRoleConfirm = true
                     } label: {
-                        Label(L10n.t("ترقية لمدير", "Promote to Admin"), systemImage: "arrow.up.circle.fill")
+                        Label(L10n.t("مدير", "Admin"), systemImage: "arrow.up.circle.fill")
                     }
                     .tint(DS.Color.neonPurple)
                     Button {
@@ -283,7 +283,7 @@ struct AdminModeratorsView: View {
                         pendingRole = .supervisor
                         showRoleConfirm = true
                     } label: {
-                        Label(L10n.t("تنزيل لمشرف", "Demote to Supervisor"), systemImage: "arrow.down.circle.fill")
+                        Label(L10n.t("مشرف", "Supervisor"), systemImage: "arrow.down.circle.fill")
                     }
                     .tint(DS.Color.warning)
                 } else if member.role == .admin {
@@ -292,7 +292,7 @@ struct AdminModeratorsView: View {
                         pendingRole = .monitor
                         showRoleConfirm = true
                     } label: {
-                        Label(L10n.t("تنزيل لمراقب", "Demote to Monitor"), systemImage: "arrow.down.circle.fill")
+                        Label(L10n.t("مراقب", "Monitor"), systemImage: "arrow.down.circle.fill")
                     }
                     .tint(DS.Color.monitorRole)
                     Button {
@@ -300,7 +300,7 @@ struct AdminModeratorsView: View {
                         pendingRole = .supervisor
                         showRoleConfirm = true
                     } label: {
-                        Label(L10n.t("تنزيل لمشرف", "Demote to Supervisor"), systemImage: "arrow.down.circle.fill")
+                        Label(L10n.t("مشرف", "Supervisor"), systemImage: "arrow.down.circle.fill")
                     }
                     .tint(DS.Color.warning)
                 }
@@ -314,14 +314,14 @@ struct AdminModeratorsView: View {
                         pendingRole = .monitor
                         showRoleConfirm = true
                     } label: {
-                        Label(L10n.t("ترقية لمراقب", "Promote to Monitor"), systemImage: "eye.fill")
+                        Label(L10n.t("مراقب", "Monitor"), systemImage: "eye.fill")
                     }
                     Button {
                         memberToChange = member
                         pendingRole = .admin
                         showRoleConfirm = true
                     } label: {
-                        Label(L10n.t("ترقية لمدير", "Promote to Admin"), systemImage: "shield.fill")
+                        Label(L10n.t("مدير", "Admin"), systemImage: "shield.fill")
                     }
                 } else if member.role == .monitor {
                     Button {
@@ -329,14 +329,14 @@ struct AdminModeratorsView: View {
                         pendingRole = .admin
                         showRoleConfirm = true
                     } label: {
-                        Label(L10n.t("ترقية لمدير", "Promote to Admin"), systemImage: "shield.fill")
+                        Label(L10n.t("مدير", "Admin"), systemImage: "shield.fill")
                     }
                     Button {
                         memberToChange = member
                         pendingRole = .supervisor
                         showRoleConfirm = true
                     } label: {
-                        Label(L10n.t("تنزيل لمشرف", "Demote to Supervisor"), systemImage: "star.fill")
+                        Label(L10n.t("مشرف", "Supervisor"), systemImage: "star.fill")
                     }
                 } else if member.role == .admin {
                     Button {
@@ -344,14 +344,14 @@ struct AdminModeratorsView: View {
                         pendingRole = .monitor
                         showRoleConfirm = true
                     } label: {
-                        Label(L10n.t("تنزيل لمراقب", "Demote to Monitor"), systemImage: "eye.fill")
+                        Label(L10n.t("مراقب", "Monitor"), systemImage: "eye.fill")
                     }
                     Button {
                         memberToChange = member
                         pendingRole = .supervisor
                         showRoleConfirm = true
                     } label: {
-                        Label(L10n.t("تنزيل لمشرف", "Demote to Supervisor"), systemImage: "star.fill")
+                        Label(L10n.t("مشرف", "Supervisor"), systemImage: "star.fill")
                     }
                 }
 
