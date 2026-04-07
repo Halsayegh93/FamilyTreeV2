@@ -877,6 +877,7 @@ class AuthViewModel: ObservableObject {
             )
             
             Log.info("تم التحقق من الرمز بنجاح!")
+            AppAnalytics.trackLogin()
             
             // حفظ الرقم محلياً — يبقى بعد إعادة فتح التطبيق
             self.lastAuthPhone = cleanPhone
@@ -1317,6 +1318,7 @@ class AuthViewModel: ObservableObject {
             )
             
             Log.info("تم تسجيل العضو وإرسال طلب الربط بنجاح")
+            AppAnalytics.trackRegister()
 
             // بعد نجاح الـ upsert — نضمن الانتقال لشاشة الانتظار مباشرة
             if let createdProfile = await loadProfile(by: user.id) {

@@ -16,6 +16,8 @@ struct MainTabView: View {
                 }
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
                 selectedTab = newValue
+                let tabs = ["home", "tree", "diwaniyas", "profile", "admin"]
+                if newValue < tabs.count { AppAnalytics.trackTabSwitch(tab: tabs[newValue]) }
             }
         )
     }

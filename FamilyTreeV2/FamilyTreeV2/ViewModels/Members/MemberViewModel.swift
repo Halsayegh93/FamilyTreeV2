@@ -171,6 +171,7 @@ class MemberViewModel: ObservableObject {
             }
         } catch {
             Log.error("خطأ برمجياً في الشجرة: \(error)")
+            CrashReporter.log(error, context: "fetchAllMembers")
         }
     }
     
