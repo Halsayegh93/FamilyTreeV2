@@ -36,7 +36,7 @@ struct RegistrationView: View {
                                 .font(DS.Font.title1)
                                 .foregroundColor(DS.Color.textPrimary)
 
-                            Text(L10n.t("أكمل بياناتك للانضمام إلى العائلة", "Complete your info to join the family"))
+                            Text(L10n.t("أكمل بياناتك للانضمام", "Complete profile to join"))
                                 .font(DS.Font.subheadline)
                                 .foregroundColor(DS.Color.textSecondary)
                                 .multilineTextAlignment(.center)

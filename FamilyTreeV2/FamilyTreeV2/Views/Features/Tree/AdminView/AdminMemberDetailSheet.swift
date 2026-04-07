@@ -612,7 +612,7 @@ struct AdminMemberDetailSheet: View {
                 Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { childToDelete = nil }
             } message: {
                 if let child = childToDelete {
-                    Text(L10n.t("هل أنت متأكد من حذف \(child.firstName)؟", "Are you sure you want to delete \(child.firstName)?"))
+                    Text(L10n.t("حذف \(child.firstName)؟", "Delete \(child.firstName)?"))
                 }
             }
         }

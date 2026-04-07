@@ -166,7 +166,7 @@ struct MemberDetailsView: View {
             Text(L10n.t("هذا العضو حذف حسابه", "This member deleted their account"))
                 .font(DS.Font.title3)
                 .foregroundColor(DS.Color.textSecondary)
-            Text(L10n.t("البيانات الشخصية لم تعد متوفرة", "Personal data is no longer available"))
+            Text(L10n.t("البيانات غير متوفرة", "Data unavailable"))
                 .font(DS.Font.caption1)
                 .foregroundColor(DS.Color.textTertiary)
             Spacer()

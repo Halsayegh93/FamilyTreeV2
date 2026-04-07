@@ -131,8 +131,8 @@ struct WaitingForApprovalView: View {
 
             // الوصف
             Text(L10n.t(
-                "تم إرسال بياناتك إلى إدارة شجرة العائلة.\nيرجى الانتظار حتى يتم تفعيل الحساب.",
-                "Your information has been submitted.\nPlease wait for account activation."
+                "تم إرسال بياناتك للإدارة.\nيرجى الانتظار حتى يتم التفعيل.",
+                "Info submitted.\nPlease wait for activation."
             ))
             .font(DS.Font.body)
             .foregroundColor(DS.Color.textPrimary.opacity(0.75))

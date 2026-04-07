@@ -282,7 +282,7 @@ struct AddNewsView: View {
                 HStack(spacing: DS.Spacing.xs) {
                     Image(systemName: "info.circle.fill")
                         .font(DS.Font.scaled(12))
-                    Text(L10n.t("سيتم مراجعة الخبر من الإدارة قبل النشر.", "Your post will be reviewed by admin before publishing."))
+                    Text(L10n.t("يحتاج موافقة الإدارة", "Pending admin review"))
                         .font(DS.Font.caption2)
                 }
                 .foregroundColor(DS.Color.textTertiary)

@@ -697,7 +697,7 @@ struct FamilyPhotoAlbumsView: View {
             VStack(spacing: DS.Spacing.sm) {
                 Text(L10n.t("لا توجد صور حالياً", "No photos yet"))
                     .font(DS.Font.title3).fontWeight(.black).foregroundColor(DS.Color.textPrimary)
-                Text(L10n.t("كن أول من يضيف صوراً لمعرض العائلة", "Be the first to add photos to the family gallery"))
+                Text(L10n.t("كن أول من يضيف صوراً", "Be first to add photos"))
                     .font(DS.Font.subheadline).foregroundColor(DS.Color.textSecondary)
                     .multilineTextAlignment(.center).padding(.horizontal, DS.Spacing.xxxl)
             }

@@ -118,7 +118,7 @@ struct HomeNewsView: View {
                     postToDelete = nil
                 }
                 Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { postToDelete = nil }
-            } message: { Text(L10n.t("هل تريد حذف هذا الخبر نهائياً؟", "Are you sure you want to delete this post?")) }
+            } message: { Text(L10n.t("حذف هذا الخبر؟", "Delete this post?")) }
             .alert(L10n.t("إبلاغ عن الخبر", "Report Post"), isPresented: Binding(
                 get: { postToReport != nil },
                 set: { if !$0 { postToReport = nil } }

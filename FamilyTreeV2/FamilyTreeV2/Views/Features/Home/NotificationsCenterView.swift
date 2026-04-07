@@ -528,7 +528,7 @@ struct NotificationsCenterView: View {
                     .font(DS.Font.title3)
                     .foregroundColor(DS.Color.textPrimary)
 
-                Text(L10n.t("ستظهر الإشعارات هنا عند وصولها", "Notifications will appear here when received"))
+                Text(L10n.t("الإشعارات تظهر هنا", "Notifications appear here"))
                     .font(DS.Font.subheadline)
                     .foregroundColor(DS.Color.textSecondary)
                     .multilineTextAlignment(.center)
