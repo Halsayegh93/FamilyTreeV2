@@ -126,9 +126,8 @@ struct AdminAllRequestsView: View {
     /// الأعضاء اللي المدير فتح كل المتطابقين حقهم
     @State private var expandedMatchMembers: Set<UUID> = []
 
-    private var pendingMembers: [FamilyMember] {
-        memberVM.allMembers.filter { $0.role == .pending }
-    }
+    @State private var cachedPendingMembers: [FamilyMember] = []
+    private var pendingMembers: [FamilyMember] { cachedPendingMembers }
 
     var body: some View {
         ZStack {
@@ -193,9 +192,10 @@ struct AdminAllRequestsView: View {
                 group.addTask { @MainActor in await storyVM.fetchPendingStories(force: true) }
             }
             await fetchAllRegistrationMatches()
+            recalculateCounts()
 
             // اختيار أول تاب فيه طلبات
-            if let firstWithItems = RequestTab.allCases.first(where: { itemCount(for: $0) > 0 }) {
+            if let firstWithItems = cachedAvailableTabs.first {
                 selectedTab = firstWithItems
             }
         }
@@ -329,14 +329,16 @@ struct AdminAllRequestsView: View {
         }
     }
 
-    private var totalCount: Int {
-        RequestTab.allCases.reduce(0) { $0 + itemCount(for: $1) }
-    }
+    @State private var cachedTotalCount: Int = 0
+    @State private var cachedAvailableTabs: [RequestTab] = RequestTab.allCases
 
-    // MARK: - Tab Bar
+    private var totalCount: Int { cachedTotalCount }
+    private var availableTabs: [RequestTab] { cachedAvailableTabs }
 
-    private var availableTabs: [RequestTab] {
-        RequestTab.allCases.filter { itemCount(for: $0) > 0 }
+    private func recalculateCounts() {
+        cachedPendingMembers = memberVM.allMembers.filter { $0.role == .pending }
+        cachedTotalCount = RequestTab.allCases.reduce(0) { $0 + itemCount(for: $1) }
+        cachedAvailableTabs = RequestTab.allCases.filter { itemCount(for: $0) > 0 }
     }
 
     private var tabBar: some View {

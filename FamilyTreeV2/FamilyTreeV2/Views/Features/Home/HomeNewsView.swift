@@ -25,6 +25,8 @@ struct HomeNewsView: View {
     @State private var showStoryViewer = false
     @State private var showNewsSearch = false
     @State private var newsSearchText = ""
+    @State private var debouncedNewsSearch = ""
+    @State private var newsSearchTask: Task<Void, Never>?
 
     private enum HomeSubPage {
         case photos, projects, contact
@@ -96,6 +98,17 @@ struct HomeNewsView: View {
             }
             .onChange(of: storyVM.membersWithStories.count) { _, _ in rebuildStoryGroups() }
             .onChange(of: memberVM.approvedGalleryPhotos.count) { _, _ in rebuildGalleryMembers() }
+            .onChange(of: newsSearchText) { _, newValue in
+                newsSearchTask?.cancel()
+                if newValue.isEmpty {
+                    debouncedNewsSearch = ""
+                } else {
+                    newsSearchTask = Task {
+                        try? await Task.sleep(nanoseconds: 250_000_000)
+                        if !Task.isCancelled { debouncedNewsSearch = newValue }
+                    }
+                }
+            }
             .sheet(isPresented: $showingAddNews) {
                 AddNewsView()
                     .presentationDetents([.medium, .large])
@@ -547,8 +560,8 @@ struct HomeNewsView: View {
     }
 
     private var filteredNews: [NewsPost] {
-        if newsSearchText.isEmpty { return newsVM.allNews }
-        let query = newsSearchText.lowercased()
+        if debouncedNewsSearch.isEmpty { return newsVM.allNews }
+        let query = debouncedNewsSearch.lowercased()
         return newsVM.allNews.filter {
             $0.content.lowercased().contains(query) ||
             $0.author_name.lowercased().contains(query)
