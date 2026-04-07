@@ -1134,10 +1134,6 @@ class AuthViewModel: ObservableObject {
             }
         }
         
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.dateFormat = "yyyy-MM-dd"
-        
         let cleanFirstName = firstName.trimmingCharacters(in: .whitespacesAndNewlines)
         let cleanFamilyName = familyName.trimmingCharacters(in: .whitespacesAndNewlines)
         let fullName = "\(cleanFirstName) \(cleanFamilyName)"
@@ -1150,7 +1146,7 @@ class AuthViewModel: ObservableObject {
             "full_name": AnyEncodable(fullName),
             "first_name": AnyEncodable(cleanFirstName),
             "phone_number": AnyEncodable(user.phone ?? toE164(dialingCode: dialingCode, localDigits: phoneNumber)),
-            "birth_date": AnyEncodable(formatter.string(from: birthDate)),
+            "birth_date": AnyEncodable(DateHelper.format(birthDate)),
             "role": AnyEncodable("pending"),
             "status": AnyEncodable("pending"),
             "father_id": AnyEncodable(fatherId?.uuidString),
@@ -1159,7 +1155,7 @@ class AuthViewModel: ObservableObject {
             "is_married": AnyEncodable(false),
             "is_hidden_from_tree": AnyEncodable(true),
             "sort_order": AnyEncodable(0),
-            "created_at": AnyEncodable(ISO8601DateFormatter().string(from: Date()))
+            "created_at": AnyEncodable(DateHelper.now)
         ]
         
         do {

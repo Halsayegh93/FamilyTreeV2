@@ -727,7 +727,7 @@ class NewsViewModel: ObservableObject {
                 let payload: [String: AnyEncodable] = [
                     "approval_status": AnyEncodable(ApprovalStatus.approved.rawValue),
                     "approved_by": AnyEncodable(approverId.uuidString),
-                    "approved_at": AnyEncodable(ISO8601DateFormatter().string(from: Date()))
+                    "approved_at": AnyEncodable(DateHelper.now)
                 ]
 
                 try await self?.supabase

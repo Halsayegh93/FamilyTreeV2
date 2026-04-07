@@ -225,7 +225,7 @@ class NotificationViewModel: ObservableObject {
 
         // تسجيل الجهاز — نرسل token فارغ احتياطاً لتفادي خطأ NOT NULL
         do {
-            let isoNow = ISO8601DateFormatter().string(from: Date())
+            let isoNow = DateHelper.now
             let payload: [String: AnyEncodable] = [
                 "member_id": AnyEncodable(memberId.uuidString),
                 "device_id": AnyEncodable(deviceId),

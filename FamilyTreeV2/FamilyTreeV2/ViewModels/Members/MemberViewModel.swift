@@ -987,25 +987,20 @@ class MemberViewModel: ObservableObject {
         // استخراج الاسم الأول تلقائياً
         let firstName = fullName.components(separatedBy: " ").first ?? fullName
 
-        // إعداد منسق التاريخ (Locale لضمان أرقام إنجليزية)
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-
         // 2. تجهيز مصفوفة البيانات وإضافة حقل الهاتف ✅
         let normalizedPhone = KuwaitPhone.normalizeForStorageFromInput(phoneNumber) ?? ""
         var updateData: [String: AnyEncodable] = [
             "full_name": AnyEncodable(fullName),
             "first_name": AnyEncodable(firstName),
             "phone_number": AnyEncodable(normalizedPhone),
-            "birth_date": AnyEncodable(formatter.string(from: birthDate)),
+            "birth_date": AnyEncodable(DateHelper.format(birthDate)),
             "is_married": AnyEncodable(isMarried),
             "is_deceased": AnyEncodable(isDeceased),
             "is_phone_hidden": AnyEncodable(isPhoneHidden)
         ]
 
         if isDeceased, let dDate = deathDate {
-            updateData["death_date"] = AnyEncodable(formatter.string(from: dDate))
+            updateData["death_date"] = AnyEncodable(DateHelper.format(dDate))
         }
 
         // تتبع المدير إذا كان يعدل بيانات عضو آخر
@@ -1641,13 +1636,8 @@ class MemberViewModel: ObservableObject {
         self.isLoading = true
 
         // 1. تنسيق التواريخ
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        
-        // تحويل التاريخ لنص فقط إذا كان المشرف قد أدخله، وإلا يبقى nil
-        let birthDateString = birthDate.map { formatter.string(from: $0) }
-        let deathDateString = isDeceased ? deathDate.map { formatter.string(from: $0) } : nil
+        let birthDateString = birthDate.map { DateHelper.format($0) }
+        let deathDateString = isDeceased ? deathDate.map { DateHelper.format($0) } : nil
         
         // 2. تجهيز البيانات للإرسال
         // نستخدم Optional<String>.none لإرسال NULL لقاعدة البيانات عند عدم توفر التاريخ

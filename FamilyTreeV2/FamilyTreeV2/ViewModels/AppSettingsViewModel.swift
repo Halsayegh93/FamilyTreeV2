@@ -78,7 +78,7 @@ class AppSettingsViewModel: ObservableObject {
         do {
             var updateData: [String: AnyEncodable] = [
                 key: AnyEncodable(value),
-                "updated_at": AnyEncodable(ISO8601DateFormatter().string(from: Date()))
+                "updated_at": AnyEncodable(DateHelper.now)
             ]
             if let updatedBy {
                 updateData["updated_by"] = AnyEncodable(updatedBy.uuidString)
@@ -112,7 +112,7 @@ class AppSettingsViewModel: ObservableObject {
                 "allow_new_registrations": AnyEncodable(true),
                 "maintenance_mode": AnyEncodable(false),
                 "max_devices_per_user": AnyEncodable(3),
-                "updated_at": AnyEncodable(ISO8601DateFormatter().string(from: Date())),
+                "updated_at": AnyEncodable(DateHelper.now),
                 "updated_by": AnyEncodable(updatedBy?.uuidString)
             ]
 

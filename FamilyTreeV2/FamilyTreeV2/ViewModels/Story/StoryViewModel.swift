@@ -71,7 +71,7 @@ class StoryViewModel: ObservableObject {
 
         lastFetchDate = Date()
 
-        let now = ISO8601DateFormatter().string(from: Date())
+        let now = DateHelper.now
 
         do {
             // القصص المعتمدة للكل
@@ -227,7 +227,7 @@ class StoryViewModel: ObservableObject {
             let payload: [String: AnyEncodable] = [
                 "approval_status": AnyEncodable(ApprovalStatus.approved.rawValue),
                 "approved_by": AnyEncodable(approverId.uuidString),
-                "approved_at": AnyEncodable(ISO8601DateFormatter().string(from: Date()))
+                "approved_at": AnyEncodable(DateHelper.now)
             ]
 
             try await supabase

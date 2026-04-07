@@ -313,9 +313,7 @@ class AdminRequestViewModel: ObservableObject {
     func requestDeceasedStatus(memberId: UUID, deathDate: Date?) async {
         self.isLoading = true
         do {
-            let formatter = DateFormatter()
-            formatter.dateFormat = "yyyy-MM-dd"
-            let dateString = deathDate.map { formatter.string(from: $0) } ?? "غير محدد"
+            let dateString = deathDate.map { DateHelper.format($0) } ?? "غير محدد"
 
             let requestData: [String: AnyEncodable] = [
                 "member_id": AnyEncodable(memberId.uuidString),
