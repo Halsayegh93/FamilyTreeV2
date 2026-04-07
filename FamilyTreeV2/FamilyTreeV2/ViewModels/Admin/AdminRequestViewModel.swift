@@ -92,22 +92,7 @@ class AdminRequestViewModel: ObservableObject {
         }
     }
 
-    private func schemaErrorDescription(_ error: Error) -> String {
-        let raw = String(describing: error)
-        return "\(raw) \(error.localizedDescription)".lowercased()
-    }
-
-    private func isMissingAdminRequestNewValueColumnError(_ error: Error) -> Bool {
-        let desc = schemaErrorDescription(error)
-        let mentionsNewValue = desc.contains("new_value")
-
-        return (desc.contains("42703") && mentionsNewValue) ||
-        (mentionsNewValue && (
-            desc.contains("could not find") ||
-            desc.contains("schema cache") ||
-            desc.contains("pgrst")
-        ))
-    }
+    // Schema error helpers delegated to ErrorHelper
 
     /// Helper to get a member name by ID — fallback to UUID if not found
     private func getSafeMemberName(for memberId: UUID) -> String {
@@ -152,7 +137,7 @@ class AdminRequestViewModel: ObservableObject {
                 dbPayload["new_value"] = AnyEncodable(payload.action)
                 try await supabase.from("admin_requests").insert(dbPayload).execute()
             } catch {
-                if isMissingAdminRequestNewValueColumnError(error) {
+                if ErrorHelper.isMissingColumn(error, column: "new_value") {
                     try await supabase.from("admin_requests").insert(basePayload).execute()
                 } else {
                     throw error
@@ -1500,7 +1485,7 @@ class AdminRequestViewModel: ObservableObject {
                 payload["new_value"] = AnyEncodable(urlString)
                 try await supabase.from("admin_requests").insert(payload).execute()
             } catch {
-                if isMissingAdminRequestNewValueColumnError(error) {
+                if ErrorHelper.isMissingColumn(error, column: "new_value") {
                     try await supabase.from("admin_requests").insert(basePayload).execute()
                 } else {
                     throw error

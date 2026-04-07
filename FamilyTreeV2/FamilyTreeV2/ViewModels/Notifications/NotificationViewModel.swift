@@ -169,32 +169,7 @@ class NotificationViewModel: ObservableObject {
         self.authVM = authVM
     }
     
-    // MARK: - Error Helpers
-    
-    private func schemaErrorDescription(_ error: Error) -> String {
-        let raw = String(describing: error)
-        return "\(raw) \(error.localizedDescription)".lowercased()
-    }
-    
-    private func isMissingNotificationsTableError(_ error: Error) -> Bool {
-        let desc = schemaErrorDescription(error)
-        return desc.contains("public.notifications") ||
-        desc.contains("could not find the table") ||
-        desc.contains("relation \"notifications\" does not exist") ||
-        desc.contains("42p01")
-    }
-    
-    private func isCancellationError(_ error: Error) -> Bool {
-        if error is CancellationError { return true }
-
-        let nsError = error as NSError
-        if nsError.domain == NSURLErrorDomain && nsError.code == NSURLErrorCancelled {
-            return true
-        }
-
-        let desc = schemaErrorDescription(error)
-        return desc.contains("cancelled") || desc.contains("canceled") || desc.contains("مُلغى")
-    }
+    // MARK: - Error Helpers (delegated to ErrorHelper)
     
     // MARK: - Device Registration
     
@@ -658,10 +633,10 @@ class NotificationViewModel: ObservableObject {
             self.notifications = allNotifications
             await updateBadgeCount()
         } catch {
-            if isMissingNotificationsTableError(error) {
+            if ErrorHelper.isMissingTable(error, table: "notifications") {
                 notificationsFeatureAvailable = false
                 notifications = []
-            } else if !isCancellationError(error) {
+            } else if !ErrorHelper.isCancellation(error) {
                 Log.error("[NOTIF] خطأ جلب الإشعارات: \(error.localizedDescription)")
             }
         }
@@ -845,7 +820,7 @@ class NotificationViewModel: ObservableObject {
 
             await fetchNotifications(force: true)
         } catch {
-            if isMissingNotificationsTableError(error) {
+            if ErrorHelper.isMissingTable(error, table: "notifications") {
                 notificationsFeatureAvailable = false
             } else {
                 Log.error("خطأ إرسال الإشعار: \(error.localizedDescription)")
@@ -871,7 +846,7 @@ class NotificationViewModel: ObservableObject {
             ]
             try await supabase.from("notifications").insert(payload).execute()
         } catch {
-            if isMissingNotificationsTableError(error) {
+            if ErrorHelper.isMissingTable(error, table: "notifications") {
                 notificationsFeatureAvailable = false
             } else {
                 Log.warning("تعذر إرسال إشعار للمدراء: \(error.localizedDescription)")

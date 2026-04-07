@@ -102,66 +102,7 @@ class NewsViewModel: ObservableObject {
         return currentUser?.id
     }
 
-    // MARK: - Schema Error Helpers
-
-    private func schemaErrorDescription(_ error: Error) -> String {
-        let raw = String(describing: error)
-        return "\(raw) \(error.localizedDescription)".lowercased()
-    }
-
-    private func isCancellationError(_ error: Error) -> Bool {
-        if error is CancellationError { return true }
-
-        let nsError = error as NSError
-        if nsError.domain == NSURLErrorDomain && nsError.code == NSURLErrorCancelled {
-            return true
-        }
-
-        let desc = schemaErrorDescription(error)
-        return desc.contains("cancelled") || desc.contains("canceled") || desc.contains("مُلغى")
-    }
-
-    private func isMissingNewsApprovalColumnError(_ error: Error) -> Bool {
-        let desc = schemaErrorDescription(error)
-        return (desc.contains("news.approval_status") && desc.contains("does not exist")) ||
-        (desc.contains("42703") && desc.contains("approval_status"))
-    }
-
-    private func isMissingNewsRichContentColumnError(_ error: Error) -> Bool {
-        let desc = schemaErrorDescription(error)
-        let mentionsRichColumns =
-            desc.contains("image_urls") ||
-            desc.contains("poll_question") ||
-            desc.contains("poll_options")
-
-        return (desc.contains("42703") && mentionsRichColumns) ||
-        (mentionsRichColumns && (
-            desc.contains("could not find") ||
-            desc.contains("schema cache") ||
-            desc.contains("pgrst")
-        ))
-    }
-
-    private func isMissingNewsSchemaColumnError(_ error: Error) -> Bool {
-        let desc = schemaErrorDescription(error)
-        guard desc.contains("42703") else { return false }
-
-        return desc.contains("approved_by") ||
-        desc.contains("approved_at") ||
-        desc.contains("author_id") ||
-        desc.contains("author_name") ||
-        desc.contains("author_role") ||
-        desc.contains("role_color") ||
-        desc.contains("content") ||
-        desc.contains("image_url") ||
-        desc.contains("type")
-    }
-
-    private func isMissingNewsPollVotesTableError(_ error: Error) -> Bool {
-        let desc = schemaErrorDescription(error)
-        return desc.contains("news_poll_votes") &&
-        (desc.contains("does not exist") || desc.contains("42p01"))
-    }
+    // MARK: - Schema Error Helpers (delegated to ErrorHelper)
 
     // MARK: - Fetch News
 
@@ -249,7 +190,7 @@ class NewsViewModel: ObservableObject {
             userVoteByPost = userSelection
             newsPollFeatureAvailable = true
         } catch {
-            if isMissingNewsPollVotesTableError(error) {
+            if ErrorHelper.isMissingTable(error, table: "news_poll_votes") {
                 newsPollFeatureAvailable = false
                 pollVotesByPost = [:]
                 userVoteByPost = [:]
@@ -292,7 +233,7 @@ class NewsViewModel: ObservableObject {
             self.likesCountByPost = counts
             self.likedPosts = userLikes
         } catch {
-            if isCancellationError(error) { return }
+            if ErrorHelper.isCancellation(error) { return }
             Log.error("خطأ جلب الاعجابات: \(error.localizedDescription)")
         }
     }
@@ -327,7 +268,7 @@ class NewsViewModel: ObservableObject {
             self.commentsByPost = aggregated
             self.commentsCountByPost = counts
         } catch {
-            if isCancellationError(error) { return }
+            if ErrorHelper.isCancellation(error) { return }
             Log.error("خطأ جلب التعليقات: \(error.localizedDescription)")
         }
     }
@@ -506,7 +447,7 @@ class NewsViewModel: ObservableObject {
             newsApprovalFeatureAvailable = true
             self.pendingNewsRequests = response
         } catch {
-            if isMissingNewsApprovalColumnError(error) {
+            if ErrorHelper.isMissingColumn(error, column: "approval_status") {
                 newsApprovalFeatureAvailable = false
                 pendingNewsRequests = []
             } else {
@@ -576,7 +517,7 @@ class NewsViewModel: ObservableObject {
             }
             pollVotesByPost[postId] = counts
         } catch {
-            if isMissingNewsPollVotesTableError(error) {
+            if ErrorHelper.isMissingTable(error, table: "news_poll_votes") {
                 newsPollFeatureAvailable = false
             } else {
                 Log.error("خطأ إرسال التصويت: \(error.localizedDescription)")
@@ -650,9 +591,10 @@ class NewsViewModel: ObservableObject {
             self.isLoading = false
             return true
         } catch {
-            if isMissingNewsApprovalColumnError(error) ||
-                isMissingNewsRichContentColumnError(error) ||
-                isMissingNewsSchemaColumnError(error) {
+            if ErrorHelper.isMissingColumn(error, column: "approval_status") ||
+                ErrorHelper.isMissingColumn(error, column: "image_urls") ||
+                ErrorHelper.isMissingColumn(error, column: "poll_question") ||
+                ErrorHelper.isMissingColumn(error, column: "approved_by") {
                 newsApprovalFeatureAvailable = false
                 let legacyPost: [String: AnyEncodable] = [
                     "author_id": AnyEncodable(user.id.uuidString),
@@ -734,8 +676,9 @@ class NewsViewModel: ObservableObject {
             self.isLoading = false
             return true
         } catch {
-            if isMissingNewsRichContentColumnError(error) ||
-                isMissingNewsSchemaColumnError(error) {
+            if ErrorHelper.isMissingColumn(error, column: "image_urls") ||
+                ErrorHelper.isMissingColumn(error, column: "poll_question") ||
+                ErrorHelper.isMissingColumn(error, column: "approved_by") {
                 let legacyPayload: [String: AnyEncodable] = [
                     "content": AnyEncodable(content),
                     "type": AnyEncodable(type),
@@ -802,7 +745,7 @@ class NewsViewModel: ObservableObject {
                 }
                 Log.info("تم اعتماد الخبر بنجاح")
             } catch {
-                if let self, self.isMissingNewsApprovalColumnError(error) {
+                if let self, ErrorHelper.isMissingColumn(error, column: "approval_status") {
                     await MainActor.run { self.newsApprovalFeatureAvailable = false }
                 } else {
                     Log.error("خطأ اعتماد الخبر: \(error.localizedDescription)")

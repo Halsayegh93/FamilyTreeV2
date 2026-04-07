@@ -192,86 +192,7 @@ class AuthViewModel: ObservableObject {
     /// حذف صور الأعضاء — مدير + مراقب + مالك
     var canDeletePhotos: Bool { isAdmin || currentUser?.role == .monitor }
 
-    // MARK: - Schema Error Helpers
-    
-    private func schemaErrorDescription(_ error: Error) -> String {
-        let raw = String(describing: error)
-        return "\(raw) \(error.localizedDescription)".lowercased()
-    }
-    
-    private func isMissingNotificationsTableError(_ error: Error) -> Bool {
-        let desc = schemaErrorDescription(error)
-        return desc.contains("public.notifications") ||
-        desc.contains("could not find the table") ||
-        desc.contains("relation \"notifications\" does not exist") ||
-        desc.contains("42p01")
-    }
-    
-    private func isMissingNewsApprovalColumnError(_ error: Error) -> Bool {
-        let desc = schemaErrorDescription(error)
-        return (desc.contains("news.approval_status") && desc.contains("does not exist")) ||
-        (desc.contains("42703") && desc.contains("approval_status"))
-    }
-
-    private func isMissingNewsRichContentColumnError(_ error: Error) -> Bool {
-        let desc = schemaErrorDescription(error)
-        let mentionsRichColumns =
-            desc.contains("image_urls") ||
-            desc.contains("poll_question") ||
-            desc.contains("poll_options")
-        
-        return (desc.contains("42703") && mentionsRichColumns) ||
-        (mentionsRichColumns && (
-            desc.contains("could not find") ||
-            desc.contains("schema cache") ||
-            desc.contains("pgrst")
-        ))
-    }
-    
-    private func isMissingNewsSchemaColumnError(_ error: Error) -> Bool {
-        let desc = schemaErrorDescription(error)
-        guard desc.contains("42703") else { return false }
-        
-        return desc.contains("approved_by") ||
-        desc.contains("approved_at") ||
-        desc.contains("author_id") ||
-        desc.contains("author_name") ||
-        desc.contains("author_role") ||
-        desc.contains("role_color") ||
-        desc.contains("content") ||
-        desc.contains("image_url") ||
-        desc.contains("type")
-    }
-    
-    private func isMissingAdminRequestNewValueColumnError(_ error: Error) -> Bool {
-        let desc = schemaErrorDescription(error)
-        let mentionsNewValue = desc.contains("new_value")
-        
-        return (desc.contains("42703") && mentionsNewValue) ||
-        (mentionsNewValue && (
-            desc.contains("could not find") ||
-            desc.contains("schema cache") ||
-            desc.contains("pgrst")
-        ))
-    }
-
-    private func isMissingNewsPollVotesTableError(_ error: Error) -> Bool {
-        let desc = schemaErrorDescription(error)
-        return desc.contains("news_poll_votes") &&
-        (desc.contains("does not exist") || desc.contains("42p01"))
-    }
-
-    private func isCancellationError(_ error: Error) -> Bool {
-        if error is CancellationError { return true }
-
-        let nsError = error as NSError
-        if nsError.domain == NSURLErrorDomain && nsError.code == NSURLErrorCancelled {
-            return true
-        }
-
-        let desc = schemaErrorDescription(error)
-        return desc.contains("cancelled") || desc.contains("canceled") || desc.contains("مُلغى")
-    }
+    // MARK: - Schema Error Helpers (delegated to ErrorHelper)
 
     private func parseServerDate(_ raw: String?) -> Date? {
         guard let raw, !raw.isEmpty else { return nil }
@@ -465,7 +386,7 @@ class AuthViewModel: ObservableObject {
             ]
             try await supabase.from("notifications").insert(payload).execute()
         } catch {
-            if isMissingNotificationsTableError(error) {
+            if ErrorHelper.isMissingTable(error, table: "notifications") {
                 notificationsFeatureAvailable = false
             } else {
                 Log.warning("تعذر إرسال إشعار للمدراء: \(error.localizedDescription)")
@@ -1383,7 +1304,7 @@ class AuthViewModel: ObservableObject {
                     .execute()
                 Log.info("[Contact] ✅ تم الحفظ في admin_requests بنجاح")
             } catch {
-                if isMissingAdminRequestNewValueColumnError(error) {
+                if ErrorHelper.isMissingColumn(error, column: "new_value") {
                     Log.warning("[Contact] ⚠️ عمود new_value غير موجود — إعادة المحاولة بدونه")
                     try await supabase
                         .from("admin_requests")
