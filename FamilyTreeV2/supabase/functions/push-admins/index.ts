@@ -1,4 +1,6 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
+import { handleCors, validatePost, json } from "../_shared/cors.ts";
+import { createServiceClient, authenticateRequest, parseBody } from "../_shared/auth.ts";
+import { createApnsJwt, getApnsConfig } from "../_shared/apns.ts";
 
 type PushRequest = {
   title: string;
@@ -6,149 +8,26 @@ type PushRequest = {
   kind?: string;
 };
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
-
-function json(status: number, body: unknown) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: {
-      ...corsHeaders,
-      "Content-Type": "application/json",
-    },
-  });
-}
-
-function pemToArrayBuffer(pem: string): ArrayBuffer {
-  const clean = pem
-    .replace("-----BEGIN PRIVATE KEY-----", "")
-    .replace("-----END PRIVATE KEY-----", "")
-    .replace(/\s+/g, "");
-
-  const binary = atob(clean);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return bytes.buffer;
-}
-
-function toBase64Url(input: string | Uint8Array): string {
-  const bytes = typeof input === "string" ? new TextEncoder().encode(input) : input;
-  let binary = "";
-  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
-}
-
-async function createApnsJwt(teamId: string, keyId: string, privateKeyPem: string): Promise<string> {
-  const header = { alg: "ES256", kid: keyId };
-  const payload = {
-    iss: teamId,
-    iat: Math.floor(Date.now() / 1000),
-  };
-
-  const encodedHeader = toBase64Url(JSON.stringify(header));
-  const encodedPayload = toBase64Url(JSON.stringify(payload));
-  const data = `${encodedHeader}.${encodedPayload}`;
-
-  const key = await crypto.subtle.importKey(
-    "pkcs8",
-    pemToArrayBuffer(privateKeyPem),
-    { name: "ECDSA", namedCurve: "P-256" },
-    false,
-    ["sign"],
-  );
-
-  const rawSig = await crypto.subtle.sign(
-    { name: "ECDSA", hash: "SHA-256" },
-    key,
-    new TextEncoder().encode(data),
-  );
-  const sigBytes = new Uint8Array(rawSig);
-  let finalSig = sigBytes;
-  if (sigBytes.length !== 64 && sigBytes[0] === 0x30) {
-    let offset = 2;
-    if (sigBytes[1] > 0x80) offset += (sigBytes[1] - 0x80);
-    const rLen = sigBytes[offset + 1];
-    const rStart = offset + 2;
-    let r = sigBytes.slice(rStart, rStart + rLen);
-    if (r.length === 33 && r[0] === 0) r = r.slice(1);
-    const sOffset = rStart + rLen;
-    const sLen = sigBytes[sOffset + 1];
-    const sStart = sOffset + 2;
-    let s = sigBytes.slice(sStart, sStart + sLen);
-    if (s.length === 33 && s[0] === 0) s = s.slice(1);
-    const rPad = new Uint8Array(32); rPad.set(r, 32 - r.length);
-    const sPad = new Uint8Array(32); sPad.set(s, 32 - s.length);
-    finalSig = new Uint8Array(64);
-    finalSig.set(rPad, 0);
-    finalSig.set(sPad, 32);
-  }
-  const signatureUrl = toBase64Url(finalSig);
-  return `${data}.${signatureUrl}`;
-}
-
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
-  }
+  const cors = handleCors(req);
+  if (cors) return cors;
 
-  if (req.method !== "POST") {
-    return json(405, { ok: false, message: "Method not allowed" });
-  }
+  const methodErr = validatePost(req);
+  if (methodErr) return methodErr;
 
-  const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
-  const serviceRole = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-  if (!supabaseUrl || !serviceRole) {
-    return json(500, { ok: false, message: "Missing Supabase service env" });
-  }
+  // التحقق من هوية المرسل — فقط فريق الإدارة
+  const auth = await authenticateRequest(req, [
+    "owner",
+    "admin",
+    "monitor",
+    "supervisor",
+  ]);
+  if (auth instanceof Response) return auth;
 
-  // التحقق من هوية المرسل عبر JWT
-  const authHeader = req.headers.get("authorization") ?? "";
-  if (!authHeader) {
-    return json(401, { ok: false, message: "Missing authorization header" });
-  }
-
-  // استخدام service role client للتحقق من المستخدم
-  const adminClient = createClient(supabaseUrl, serviceRole, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-
-  // استخراج التوكن والتحقق منه
-  const token = authHeader.replace("Bearer ", "");
-  const { data: { user: caller } } = await adminClient.auth.getUser(token);
-  if (!caller) {
-    return json(401, { ok: false, message: "Invalid token" });
-  }
-  const { data: callerProfile } = await adminClient
-    .from("profiles")
-    .select("role")
-    .eq("id", caller.id)
-    .single();
-  if (!callerProfile || !["owner", "admin", "monitor", "supervisor"].includes(callerProfile.role)) {
-    return json(403, { ok: false, message: "Only moderators can send push notifications" });
-  }
-
-  const teamId = Deno.env.get("APPLE_TEAM_ID") ?? "";
-  const keyId = Deno.env.get("APPLE_KEY_ID") ?? "";
-  const bundleId = Deno.env.get("APPLE_BUNDLE_ID") ?? "";
-  const rawKey = Deno.env.get("APPLE_APNS_KEY_P8") ?? "";
-  const privateKey = rawKey.includes("\\n") ? rawKey.replace(/\\n/g, "\n") : rawKey;
-  const apnsHost = Deno.env.get("APPLE_APNS_HOST") ?? "https://api.push.apple.com";
-
-  if (!teamId || !keyId || !bundleId || !privateKey) {
-    return json(500, { ok: false, message: "Missing APNs env vars" });
-  }
-
-  let payload: PushRequest;
-  try {
-    payload = await req.json();
-  } catch (_e) {
-    return json(400, { ok: false, message: "Invalid JSON body" });
-  }
+  // Parse body
+  const parsed = await parseBody<PushRequest>(req);
+  if (parsed instanceof Response) return parsed;
+  const payload = parsed;
 
   const title = (payload.title ?? "").trim();
   const body = (payload.body ?? "").trim();
@@ -156,17 +35,28 @@ Deno.serve(async (req) => {
     return json(400, { ok: false, message: "title/body required" });
   }
 
-  const supabase = createClient(supabaseUrl, serviceRole, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
+  // APNs config
+  let apnsConfig;
+  try {
+    apnsConfig = getApnsConfig();
+  } catch (e) {
+    return json(500, { ok: false, message: (e as Error).message });
+  }
+  const { teamId, keyId, bundleId, privateKey, apnsHost } = apnsConfig;
 
+  const supabase = createServiceClient();
+
+  // جلب أعضاء فريق الإدارة
   const { data: admins, error: adminsErr } = await supabase
     .from("profiles")
     .select("id")
     .in("role", ["owner", "admin", "monitor", "supervisor"]);
 
   if (adminsErr) {
-    return json(500, { ok: false, message: `Failed loading admins: ${adminsErr.message}` });
+    return json(500, {
+      ok: false,
+      message: `Failed loading admins: ${adminsErr.message}`,
+    });
   }
 
   const adminIds = (admins ?? []).map((a) => a.id as string);
@@ -174,6 +64,7 @@ Deno.serve(async (req) => {
     return json(200, { ok: true, sent: 0, message: "No admins found" });
   }
 
+  // جلب tokens الأجهزة
   const { data: tokenRows, error: tokenErr } = await supabase
     .from("device_tokens")
     .select("token, member_id")
@@ -181,7 +72,10 @@ Deno.serve(async (req) => {
     .in("platform", ["ios", "ipados"]);
 
   if (tokenErr) {
-    return json(500, { ok: false, message: `Failed loading tokens: ${tokenErr.message}` });
+    return json(500, {
+      ok: false,
+      message: `Failed loading tokens: ${tokenErr.message}`,
+    });
   }
 
   // Filter out null/empty tokens (token can be null after device_id migration)
@@ -225,6 +119,7 @@ Deno.serve(async (req) => {
     const reason = await apnsResponse.text();
     failures.push({ token, status: apnsResponse.status, reason });
 
+    // حذف tokens منتهية الصلاحية
     if (apnsResponse.status === 410 || apnsResponse.status === 400) {
       await supabase.from("device_tokens").delete().eq("token", token);
     }
