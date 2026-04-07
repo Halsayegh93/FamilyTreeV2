@@ -325,7 +325,7 @@ struct EditChildSheet: View {
             if success {
                 showSuccessAlert = true
             } else {
-                errorMessage = L10n.t("فشل حفظ التعديلات. حاول مرة أخرى.", "Failed to save changes. Please try again.")
+                errorMessage = L10n.t("فشل حفظ التعديلات. حاول مرة أخرى.", "Save failed. Try again.")
                 showErrorAlert = true
             }
         }

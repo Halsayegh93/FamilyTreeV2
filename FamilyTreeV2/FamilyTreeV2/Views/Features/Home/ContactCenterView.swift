@@ -77,12 +77,12 @@ struct ContactCenterView: View {
         .alert(L10n.t("تعذر الإرسال", "Failed to Send"), isPresented: $showErrorAlert) {
             Button(L10n.t("حسناً", "OK"), role: .cancel) {}
         } message: {
-            Text(authVM.contactMessageError ?? L10n.t("تعذر إرسال الرسالة حالياً. حاول مرة أخرى.", "Failed to send message. Please try again."))
+            Text(authVM.contactMessageError ?? L10n.t("تعذر الإرسال. حاول مرة أخرى.", "Send failed. Try again."))
         }
         .alert(L10n.t("الحد الأقصى", "Character Limit"), isPresented: $showCharacterLimitWarning) {
             Button(L10n.t("حسناً", "OK"), role: .cancel) {}
         } message: {
-            Text(L10n.t("تم الوصول إلى الحد الأقصى للرسالة (1000 حرف).", "You've reached the maximum message length (1000 characters)."))
+            Text(L10n.t("تم الوصول إلى الحد الأقصى للرسالة (1000 حرف).", "Message limit reached (1000 chars)"))
         }
         .onChange(of: selectedPhoto) { _, newItem in
             Task {
@@ -114,7 +114,7 @@ struct ContactCenterView: View {
                 .fontWeight(.black)
                 .foregroundColor(DS.Color.textPrimary)
 
-            Text(L10n.t("نسعد بتواصلك ونحرص على الرد بأسرع وقت", "We're happy to hear from you and will respond ASAP"))
+            Text(L10n.t("نسعد بتواصلك ونحرص على الرد بأسرع وقت", "We'll respond as soon as possible"))
                 .font(DS.Font.caption1)
                 .foregroundColor(DS.Color.textSecondary)
                 .multilineTextAlignment(.center)
@@ -537,7 +537,7 @@ struct ContactCenterView: View {
                     .font(DS.Font.title3)
                     .fontWeight(.black)
                     .foregroundColor(DS.Color.textPrimary)
-                Text(L10n.t("تم إرسال رسالتك وسيتم التواصل معك قريباً.", "Your message has been sent. We'll get back to you soon."))
+                Text(L10n.t("تم إرسال رسالتك وسيتم التواصل معك قريباً.", "Message sent. We'll reply soon."))
                     .font(DS.Font.callout)
                     .foregroundColor(DS.Color.textSecondary)
                     .multilineTextAlignment(.center)

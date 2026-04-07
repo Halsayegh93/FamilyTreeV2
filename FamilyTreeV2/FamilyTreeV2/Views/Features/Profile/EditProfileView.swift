@@ -157,7 +157,7 @@ struct EditProfileView: View {
             .alert(L10n.t("خطأ", "Error"), isPresented: $showSaveError) {
                 Button(L10n.t("حسناً", "OK"), role: .cancel) {}
             } message: {
-                Text(L10n.t("تعذر حفظ التغييرات. حاول مرة أخرى.", "Failed to save changes. Please try again."))
+                Text(L10n.t("تعذر الحفظ. حاول مرة أخرى.", "Save failed. Try again."))
             }
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)

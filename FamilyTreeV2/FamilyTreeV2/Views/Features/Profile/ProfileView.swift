@@ -650,7 +650,7 @@ struct ProfileView: View {
                                 Text(L10n.t("الإشعارات والخصوصية", "Notifications & Privacy"))
                                     .font(DS.Font.calloutBold)
                                     .foregroundColor(DS.Color.textPrimary)
-                                Text(L10n.t("إدارة الإشعارات وخصوصية بياناتك", "Manage notifications & data privacy"))
+                                Text(L10n.t("الإشعارات والخصوصية", "Notifications & privacy"))
                                     .font(DS.Font.caption1)
                                     .foregroundColor(DS.Color.textSecondary)
                             }
@@ -680,7 +680,7 @@ struct ProfileView: View {
                                 Text(L10n.t("الإعدادات", "Settings"))
                                     .font(DS.Font.calloutBold)
                                     .foregroundColor(DS.Color.textPrimary)
-                                Text(L10n.t("المظهر، اللغة، والأجهزة المرتبطة", "Appearance, language & linked devices"))
+                                Text(L10n.t("المظهر واللغة والأجهزة", "Display & devices"))
                                     .font(DS.Font.caption1)
                                     .foregroundColor(DS.Color.textSecondary)
                             }

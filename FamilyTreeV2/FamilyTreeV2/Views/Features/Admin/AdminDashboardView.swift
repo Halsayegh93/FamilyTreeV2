@@ -115,7 +115,7 @@ struct AdminDashboardView: View {
                                     NavigationLink(destination: AdminAllRequestsView()) {
                                         DSActionRow(
                                             title: L10n.t("طلبات المراجعة", "Review Requests"),
-                                            subtitle: L10n.t("انضمام، أخبار، بلاغات، جوال، ديوانيات، وفاة، أبناء، صور، قصص، تعديل", "Join, news, reports, phone, diwaniyas, deceased, children, photos, stories, edits"),
+                                            subtitle: L10n.t("انضمام، أخبار، بلاغات والمزيد", "Join, news, reports & more"),
                                             icon: "tray.full.fill",
                                             color: DS.Color.warning,
                                             badge: totalReviewRequestsCount
@@ -127,7 +127,7 @@ struct AdminDashboardView: View {
                                         NavigationLink(destination: AdminMembersManagementView()) {
                                             DSActionRow(
                                                 title: L10n.t("إدارة الأعضاء", "Members Management"),
-                                                subtitle: L10n.t("إدارة، صحة الشجرة، سجل ودليل العائلة", "Manage, tree health, registry & directory"),
+                                                subtitle: L10n.t("إدارة الشجرة والسجلات", "Tree management & records"),
                                                 icon: "person.2.badge.gearshape",
                                                 color: DS.Color.warning,
                                                 badge: (issueMembersCount + treeIssuesCount) > 0 ? (issueMembersCount + treeIssuesCount) : nil
@@ -147,18 +147,18 @@ struct AdminDashboardView: View {
                                     )
 
                                         NavigationLink(destination: AdminRegisterMemberView()) {
-                                            DSActionRow(title: L10n.t("تسجيل عضو جديد", "Register New Member"), subtitle: L10n.t("إضافة عضو جديد مباشرة للشجرة", "Add a new member directly to the tree"), icon: "person.badge.plus", color: DS.Color.primary)
+                                            DSActionRow(title: L10n.t("تسجيل عضو جديد", "Register New Member"), subtitle: L10n.t("إضافة عضو جديد للشجرة", "Add new member to tree"), icon: "person.badge.plus", color: DS.Color.primary)
                                         }
 
                                         // إشعارات وتقارير — مدير + مالك فقط
                                         if authVM.isAdmin {
                                             DSDivider()
                                             NavigationLink(destination: AdminNotificationsView()) {
-                                                DSActionRow(title: L10n.t("إرسال إشعارات", "Send Notifications"), subtitle: L10n.t("إرسال إشعار عام أو مخصص", "Send a general or targeted notification"), icon: "bell.badge.fill", color: DS.Color.primary)
+                                                DSActionRow(title: L10n.t("إرسال إشعارات", "Send Notifications"), subtitle: L10n.t("إرسال إشعار للأعضاء", "Send notification"), icon: "bell.badge.fill", color: DS.Color.primary)
                                             }
                                             DSDivider()
                                             NavigationLink(destination: AdminReportsView()) {
-                                                DSActionRow(title: L10n.t("تقارير PDF", "PDF Reports"), subtitle: L10n.t("تقرير الأرقام والأعمار للأعضاء", "Member numbers and ages report"), icon: "doc.text.fill", color: DS.Color.primary)
+                                                DSActionRow(title: L10n.t("تقارير PDF", "PDF Reports"), subtitle: L10n.t("تقرير إحصائيات الأعضاء", "Member stats report"), icon: "doc.text.fill", color: DS.Color.primary)
                                             }
                                         }
 
@@ -168,7 +168,7 @@ struct AdminDashboardView: View {
                                             NavigationLink(destination: AdminSecuritySettingsView()) {
                                                 DSActionRow(
                                                     title: L10n.t("الأمان والإعدادات", "Security & Settings"),
-                                                    subtitle: L10n.t("أجهزة، أرقام محظورة، إعدادات التطبيق", "Devices, banned numbers, app settings"),
+                                                    subtitle: L10n.t("الأجهزة والأمان والإعدادات", "Devices & security"),
                                                     icon: "lock.shield.fill",
                                                     color: DS.Color.primary,
                                                     badge: authVM.bannedPhones.count > 0 ? authVM.bannedPhones.count : nil
@@ -191,7 +191,7 @@ struct AdminDashboardView: View {
                                         NavigationLink(destination: AdminModeratorsView()) {
                                             DSActionRow(
                                                 title: L10n.t("فريق الإدارة", "Admin Team"),
-                                                subtitle: L10n.t("عرض أعضاء فريق الإدارة وصلاحياتهم", "View admin team members and permissions"),
+                                                subtitle: L10n.t("أعضاء الفريق والصلاحيات", "Team & permissions"),
                                                 icon: "person.3.fill",
                                                 color: DS.Color.neonPurple,
                                                 badge: moderatorCount

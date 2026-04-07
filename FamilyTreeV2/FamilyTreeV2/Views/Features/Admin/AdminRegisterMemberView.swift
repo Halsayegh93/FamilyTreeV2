@@ -82,7 +82,7 @@ struct AdminRegisterMemberView: View {
         .alert(L10n.t("خطأ", "Error"), isPresented: $showingError) {
             Button(L10n.t("حسناً", "OK"), role: .cancel) {}
         } message: {
-            Text(L10n.t("تعذر إضافة العضو. حاول مرة أخرى.", "Failed to add member. Please try again."))
+            Text(L10n.t("تعذر الإضافة. حاول مرة أخرى.", "Add failed. Try again."))
         }
         .onAppear {
             if !lastAuthDialingCode.isEmpty {
@@ -120,7 +120,7 @@ struct AdminRegisterMemberView: View {
                 .font(DS.Font.title1)
                 .foregroundColor(DS.Color.textPrimary)
 
-            Text(L10n.t("أدخل بيانات العضو الجديد وسيتم إضافته مباشرة للشجرة", "Enter the new member's details and they will be added to the tree directly"))
+            Text(L10n.t("أدخل بيانات العضو الجديد وسيتم إضافته مباشرة للشجرة", "New member will be added to tree"))
                 .font(DS.Font.subheadline)
                 .foregroundColor(DS.Color.textSecondary)
                 .multilineTextAlignment(.center)
@@ -135,7 +135,7 @@ struct AdminRegisterMemberView: View {
 
             HStack(spacing: DS.Spacing.sm) {
                 DSIcon("person.fill", color: DS.Color.primary)
-                TextField(L10n.t("مثال: حسن أحمد علي محمد السالم", "e.g. John Edward James Smith Jr"), text: $fullName)
+                TextField(L10n.t("مثال: حسن أحمد علي محمد السالم", "e.g. John Smith"), text: $fullName)
                     .font(DS.Font.body)
                     .onChange(of: fullName) {
                         if fullName.count > 100 {

@@ -92,7 +92,7 @@ struct AdminAppSettingsView: View {
                 icon: "person.badge.plus",
                 color: DS.Color.success,
                 title: L10n.t("السماح بالتسجيل", "Allow Registrations"),
-                subtitle: L10n.t("السماح لأعضاء جدد بالتسجيل في التطبيق", "Allow new members to register in the app"),
+                subtitle: L10n.t("السماح لأعضاء جدد بالتسجيل في التطبيق", "Allow new registrations"),
                 isOn: appSettingsVM.settings.allowNewRegistrations,
                 key: "allow_new_registrations"
             )
@@ -160,7 +160,7 @@ struct AdminAppSettingsView: View {
                 icon: "checkmark.shield.fill",
                 color: DS.Color.warning,
                 title: L10n.t("موافقة الأخبار", "News Approval"),
-                subtitle: L10n.t("يتطلب موافقة المدير قبل نشر الأخبار", "Require admin approval before publishing news"),
+                subtitle: L10n.t("يتطلب موافقة المدير قبل نشر الأخبار", "Require admin approval"),
                 isOn: appSettingsVM.settings.newsRequiresApproval,
                 key: "news_requires_approval"
             )
@@ -182,7 +182,7 @@ struct AdminAppSettingsView: View {
                 icon: "wrench.and.screwdriver.fill",
                 color: DS.Color.error,
                 title: L10n.t("وضع الصيانة", "Maintenance Mode"),
-                subtitle: L10n.t("إيقاف التطبيق مؤقتاً للصيانة (المدراء فقط)", "Temporarily disable app for maintenance (admins only)"),
+                subtitle: L10n.t("إيقاف التطبيق مؤقتاً للصيانة (المدراء فقط)", "Maintenance mode (admin only)"),
                 isOn: appSettingsVM.settings.maintenanceMode,
                 key: "maintenance_mode"
             )
@@ -207,7 +207,7 @@ struct AdminAppSettingsView: View {
                     Text(L10n.t("إيقاف العداد", "Disable Cooldown"))
                         .font(DS.Font.calloutBold)
                         .foregroundColor(DS.Color.textPrimary)
-                    Text(L10n.t("السماح بالتعديل بدون فترة انتظار", "Allow edits without waiting period"))
+                    Text(L10n.t("السماح بالتعديل بدون فترة انتظار", "Skip edit cooldown"))
                         .font(DS.Font.caption1)
                         .foregroundColor(DS.Color.textSecondary)
                 }
@@ -235,7 +235,7 @@ struct AdminAppSettingsView: View {
                         Text(L10n.t("تصفير العداد", "Reset Cooldown"))
                             .font(DS.Font.calloutBold)
                             .foregroundColor(DS.Color.warning)
-                        Text(L10n.t("إعادة تعيين جميع فترات الانتظار", "Reset all edit cooldown timers"))
+                        Text(L10n.t("إعادة تعيين جميع فترات الانتظار", "Reset cooldowns"))
                             .font(DS.Font.caption1)
                             .foregroundColor(DS.Color.textSecondary)
                     }
