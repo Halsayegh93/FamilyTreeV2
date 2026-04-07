@@ -17,7 +17,12 @@ struct RegistrationView: View {
 
     var body: some View {
         ZStack {
-            DS.Color.background.ignoresSafeArea()
+            LinearGradient(
+                colors: [DS.Color.primary.opacity(0.06), DS.Color.background],
+                startPoint: .top,
+                endPoint: .center
+            )
+            .ignoresSafeArea()
 
             VStack(spacing: 0) {
                 // Top bar
@@ -31,15 +36,15 @@ struct RegistrationView: View {
                             .opacity(headerOpacity)
 
                         // العنوان
-                        VStack(spacing: DS.Spacing.xs) {
-                            Text(L10n.t("إنشاء ملف تعريف", "Create Profile"))
+                        VStack(spacing: DS.Spacing.sm) {
+                            Text(L10n.t("عائلة المحمدعلي", "Al-Mohammadali Family"))
                                 .font(DS.Font.title1)
+                                .fontWeight(.black)
                                 .foregroundColor(DS.Color.textPrimary)
 
                             Text(L10n.t("أكمل بياناتك للانضمام", "Complete profile to join"))
-                                .font(DS.Font.subheadline)
+                                .font(DS.Font.callout)
                                 .foregroundColor(DS.Color.textSecondary)
-                                .multilineTextAlignment(.center)
                         }
                         .opacity(headerOpacity)
 
