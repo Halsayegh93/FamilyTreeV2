@@ -453,36 +453,12 @@ struct AdminModeratorsView: View {
 
     // MARK: - Empty State
     private var emptyState: some View {
-        VStack(spacing: DS.Spacing.xl) {
-            ZStack {
-                Circle()
-                    .fill(DS.Color.neonPurple.opacity(0.08))
-                    .frame(width: 120, height: 120)
-                Image(systemName: "shield.fill")
-                    .font(DS.Font.scaled(40, weight: .bold))
-                    .foregroundColor(DS.Color.neonPurple.opacity(0.5))
-            }
-            Text(L10n.t("لا يوجد أعضاء في فريق الإدارة", "No admin team members"))
-                .font(DS.Font.title3)
-                .foregroundColor(DS.Color.textSecondary)
-
-            if isOwner {
-                Button {
-                    showAddSheet = true
-                } label: {
-                    HStack(spacing: DS.Spacing.sm) {
-                        Image(systemName: "plus.circle.fill")
-                        Text(L10n.t("إضافة", "Add"))
-                    }
-                    .font(DS.Font.calloutBold)
-                    .foregroundColor(DS.Color.textOnPrimary)
-                    .padding(.horizontal, DS.Spacing.xl)
-                    .padding(.vertical, DS.Spacing.xs)
-                    .background(DS.Color.primary)
-                    .clipShape(Capsule())
-                }
-            }
-        }
+        DSEmptyState(
+            icon: "shield.fill",
+            title: L10n.t("لا يوجد أعضاء في فريق الإدارة", "No admin team members"),
+            buttonTitle: isOwner ? L10n.t("إضافة", "Add") : nil,
+            buttonAction: isOwner ? { showAddSheet = true } : nil
+        )
     }
 }
 
