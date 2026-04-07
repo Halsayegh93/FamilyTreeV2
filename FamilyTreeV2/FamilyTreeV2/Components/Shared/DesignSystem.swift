@@ -1123,3 +1123,94 @@ struct UnifiedButtonStyle: ButtonStyle {
             .animation(.spring(response: 0.25, dampingFraction: 0.6), value: configuration.isPressed)
     }
 }
+
+// MARK: - Production Components
+
+/// صورة عضو دائرية — قابلة لإعادة الاستخدام (بدل 57 تكرار)
+struct DSMemberAvatar: View {
+    let name: String
+    let avatarUrl: String?
+    var size: CGFloat = 44
+    var roleColor: Color = DS.Color.primary
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(
+                    LinearGradient(
+                        colors: [roleColor, roleColor.opacity(0.7)],
+                        startPoint: .topLeading, endPoint: .bottomTrailing
+                    )
+                )
+                .frame(width: size, height: size)
+
+            if let urlStr = avatarUrl, let url = URL(string: urlStr) {
+                CachedAsyncImage(url: url) { image in
+                    image.resizable().scaledToFill()
+                } placeholder: {
+                    Text(String(name.prefix(1)))
+                        .font(DS.Font.scaled(size * 0.35, weight: .bold))
+                        .foregroundColor(.white)
+                }
+                .frame(width: size, height: size)
+                .clipShape(Circle())
+            } else {
+                Text(String(name.prefix(1)))
+                    .font(DS.Font.scaled(size * 0.35, weight: .bold))
+                    .foregroundColor(.white)
+            }
+        }
+    }
+}
+
+/// حالة فارغة موحدة — أيقونة + عنوان + زر اختياري (بدل 31 تكرار)
+struct DSEmptyState: View {
+    let icon: String
+    let title: String
+    var subtitle: String? = nil
+    var buttonTitle: String? = nil
+    var buttonAction: (() -> Void)? = nil
+
+    var body: some View {
+        VStack(spacing: DS.Spacing.xl) {
+            Spacer()
+            ZStack {
+                Circle()
+                    .fill(DS.Color.primary.opacity(0.08))
+                    .frame(width: 100, height: 100)
+                Image(systemName: icon)
+                    .font(DS.Font.scaled(36, weight: .medium))
+                    .foregroundColor(DS.Color.primary.opacity(0.5))
+            }
+            VStack(spacing: DS.Spacing.sm) {
+                Text(title)
+                    .font(DS.Font.title3)
+                    .foregroundColor(DS.Color.textSecondary)
+                if let subtitle {
+                    Text(subtitle)
+                        .font(DS.Font.caption1)
+                        .foregroundColor(DS.Color.textTertiary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, DS.Spacing.xxxl)
+                }
+            }
+            if let buttonTitle, let buttonAction {
+                Button(action: buttonAction) {
+                    HStack(spacing: DS.Spacing.sm) {
+                        Image(systemName: "plus.circle.fill")
+                        Text(buttonTitle)
+                    }
+                    .font(DS.Font.calloutBold)
+                    .foregroundColor(.white)
+                    .padding(.horizontal, DS.Spacing.xl)
+                    .padding(.vertical, DS.Spacing.sm)
+                    .background(DS.Color.gradientPrimary)
+                    .clipShape(Capsule())
+                }
+                .buttonStyle(DSScaleButtonStyle())
+            }
+            Spacer()
+        }
+        .frame(maxWidth: .infinity)
+    }
+}
