@@ -36,8 +36,8 @@ class MemberViewModel: ObservableObject {
     /// آخر الصور المعتمدة (للرئيسية)
     @Published var approvedGalleryPhotos: [MemberGalleryPhoto] = []
     
-    // Fetch throttle timestamp
-    private var lastMembersFetchDate: Date?
+    // Fetch throttle
+    private let throttler = FetchThrottler()
     
     // MARK: - Dependencies
     
@@ -137,9 +137,7 @@ class MemberViewModel: ObservableObject {
         }
 
         // تجنب إعادة التحميل خلال 15 ثانية إلا إذا force
-        if !force, let last = lastMembersFetchDate, Date().timeIntervalSince(last) < 15, !allMembers.isEmpty {
-            return
-        }
+        guard throttler.canFetch(key: "members", interval: 15, force: force) || allMembers.isEmpty else { return }
 
         // لا نحمل من السيرفر إذا مو متصلين بالنت
         guard NetworkMonitor.shared.isConnected else { return }
@@ -156,7 +154,7 @@ class MemberViewModel: ObservableObject {
             let members = try JSONDecoder().decode([FamilyMember].self, from: response.data)
 
             self.allMembers = members
-            self.lastMembersFetchDate = Date()
+            self.throttler.didFetch(key: "members")
             self.membersVersion += 1
 
             // حفظ في الكاش

@@ -29,14 +29,9 @@ class AdminRequestViewModel: ObservableObject {
         case failure(String)
     }
 
-    // MARK: - Throttle Dates
+    // MARK: - Throttle
 
-    private var lastDeceasedFetchDate: Date?
-    private var lastChildAddFetchDate: Date?
-    private var lastPhoneChangeFetchDate: Date?
-    private var lastNewsReportFetchDate: Date?
-    private var lastTreeEditFetchDate: Date?
-    private var lastNameChangeFetchDate: Date?
+    private let throttler = FetchThrottler()
 
     // MARK: - Dependencies (weak to avoid retain cycles)
 
@@ -165,8 +160,8 @@ class AdminRequestViewModel: ObservableObject {
     // MARK: - Fetch / Approve / Reject Tree Edit Requests
 
     func fetchTreeEditRequests(force: Bool = false) async {
-        if !force, let last = lastTreeEditFetchDate, Date().timeIntervalSince(last) < 20, !treeEditRequests.isEmpty { return }
-        lastTreeEditFetchDate = Date()
+        guard throttler.canFetch(key: "treeEdit", interval: 20, force: force) || treeEditRequests.isEmpty else { return }
+        throttler.didFetch(key: "treeEdit")
         do {
             let requests: [AdminRequest] = try await supabase
                 .from("admin_requests")
@@ -347,8 +342,8 @@ class AdminRequestViewModel: ObservableObject {
     }
 
     func fetchDeceasedRequests(force: Bool = false) async {
-        if !force, let last = lastDeceasedFetchDate, Date().timeIntervalSince(last) < 20, !deceasedRequests.isEmpty { return }
-        lastDeceasedFetchDate = Date()
+        guard throttler.canFetch(key: "deceased", interval: 20, force: force) || deceasedRequests.isEmpty else { return }
+        throttler.didFetch(key: "deceased")
         do {
             let requests: [AdminRequest] = try await supabase
                 .from("admin_requests")
@@ -415,8 +410,8 @@ class AdminRequestViewModel: ObservableObject {
     // MARK: - Child Add Requests
 
     func fetchChildAddRequests(force: Bool = false) async {
-        if !force, let last = lastChildAddFetchDate, Date().timeIntervalSince(last) < 20, !childAddRequests.isEmpty { return }
-        lastChildAddFetchDate = Date()
+        guard throttler.canFetch(key: "childAdd", interval: 20, force: force) || childAddRequests.isEmpty else { return }
+        throttler.didFetch(key: "childAdd")
         do {
             let requests: [AdminRequest] = try await supabase
                 .from("admin_requests")
@@ -723,8 +718,8 @@ class AdminRequestViewModel: ObservableObject {
     // MARK: - Fetch / Approve / Reject Name Change Requests
 
     func fetchNameChangeRequests(force: Bool = false) async {
-        if !force, let last = lastNameChangeFetchDate, Date().timeIntervalSince(last) < 20, !nameChangeRequests.isEmpty { return }
-        lastNameChangeFetchDate = Date()
+        guard throttler.canFetch(key: "nameChange", interval: 20, force: force) || nameChangeRequests.isEmpty else { return }
+        throttler.didFetch(key: "nameChange")
         guard canModerate else {
             nameChangeRequests = []
             return
@@ -812,8 +807,8 @@ class AdminRequestViewModel: ObservableObject {
     }
 
     func fetchPhoneChangeRequests(force: Bool = false) async {
-        if !force, let last = lastPhoneChangeFetchDate, Date().timeIntervalSince(last) < 20, !phoneChangeRequests.isEmpty { return }
-        lastPhoneChangeFetchDate = Date()
+        guard throttler.canFetch(key: "phoneChange", interval: 20, force: force) || phoneChangeRequests.isEmpty else { return }
+        throttler.didFetch(key: "phoneChange")
         guard canModerate else {
             phoneChangeRequests = []
             return
@@ -1361,8 +1356,8 @@ class AdminRequestViewModel: ObservableObject {
     // MARK: - News Report Requests
 
     func fetchNewsReportRequests(force: Bool = false) async {
-        if !force, let last = lastNewsReportFetchDate, Date().timeIntervalSince(last) < 20, !newsReportRequests.isEmpty { return }
-        lastNewsReportFetchDate = Date()
+        guard throttler.canFetch(key: "newsReport", interval: 20, force: force) || newsReportRequests.isEmpty else { return }
+        throttler.didFetch(key: "newsReport")
         guard canModerate else {
             newsReportRequests = []
             return
@@ -1438,7 +1433,6 @@ class AdminRequestViewModel: ObservableObject {
     // MARK: - Photo Suggestion Requests
 
     @Published var photoSuggestionRequests: [AdminRequest] = []
-    private var lastPhotoSuggestionFetchDate: Date?
 
     /// إرسال اقتراح صورة لعضو — يرفع الصورة كملف مؤقت ويسجل طلب إداري
     func submitPhotoSuggestion(image: UIImage, for memberId: UUID) async -> Bool {
@@ -1509,8 +1503,8 @@ class AdminRequestViewModel: ObservableObject {
     }
 
     func fetchPhotoSuggestionRequests(force: Bool = false) async {
-        if !force, let last = lastPhotoSuggestionFetchDate, Date().timeIntervalSince(last) < 20, !photoSuggestionRequests.isEmpty { return }
-        lastPhotoSuggestionFetchDate = Date()
+        guard throttler.canFetch(key: "photoSuggestion", interval: 20, force: force) || photoSuggestionRequests.isEmpty else { return }
+        throttler.didFetch(key: "photoSuggestion")
 
         do {
             let requests: [AdminRequest] = try await supabase

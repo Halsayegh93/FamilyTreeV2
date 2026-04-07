@@ -33,8 +33,7 @@ class StoryViewModel: ObservableObject {
     private var canModerate: Bool { authVM?.canModerate ?? false }
 
     // Throttle
-    private var lastFetchDate: Date?
-    private var lastPendingFetchDate: Date?
+    private let throttler = FetchThrottler()
 
     /// أعضاء عندهم قصص نشطة (مجمعة حسب العضو)
     /// القصص المعتمدة تظهر للكل + قصص المستخدم الحالي المعلقة تظهر له
@@ -65,11 +64,11 @@ class StoryViewModel: ObservableObject {
             Log.info("[Stories] تم تحميل \(self.activeStories.count) قصة من الكاش")
         }
 
-        if !force, let last = lastFetchDate, Date().timeIntervalSince(last) < 15, !activeStories.isEmpty { return }
+        guard throttler.canFetch(key: "stories", interval: 15, force: force) || activeStories.isEmpty else { return }
 
         guard NetworkMonitor.shared.isConnected else { return }
 
-        lastFetchDate = Date()
+        throttler.didFetch(key: "stories")
 
         let now = DateHelper.now
 
@@ -127,8 +126,8 @@ class StoryViewModel: ObservableObject {
 
     func fetchPendingStories(force: Bool = false) async {
         guard canModerate else { return }
-        if !force, let last = lastPendingFetchDate, Date().timeIntervalSince(last) < 15, !pendingStories.isEmpty { return }
-        lastPendingFetchDate = Date()
+        guard throttler.canFetch(key: "pendingStories", interval: 15, force: force) || pendingStories.isEmpty else { return }
+        throttler.didFetch(key: "pendingStories")
 
         do {
             let stories: [FamilyStory] = try await supabase

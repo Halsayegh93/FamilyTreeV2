@@ -33,10 +33,9 @@ class NewsViewModel: ObservableObject {
     @Published var newsPostErrorMessage: String?
     @Published var isLoading: Bool = false
 
-    // MARK: - Fetch Throttle Timestamps
+    // MARK: - Fetch Throttle
 
-    private var lastNewsFetchDate: Date?
-    private var lastPendingNewsFetchDate: Date?
+    private let throttler = FetchThrottler()
 
     // MARK: - Dependencies
 
@@ -114,11 +113,11 @@ class NewsViewModel: ObservableObject {
             Log.info("[News] تم تحميل \(cached.count) خبر من الكاش")
         }
 
-        if !force, let last = lastNewsFetchDate, Date().timeIntervalSince(last) < 10, !allNews.isEmpty { return }
+        guard throttler.canFetch(key: "news", interval: 10, force: force) || allNews.isEmpty else { return }
 
         guard NetworkMonitor.shared.isConnected else { return }
 
-        lastNewsFetchDate = Date()
+        throttler.didFetch(key: "news")
         do {
             let response: [NewsPost] = try await supabase.from("news")
                 .select()
@@ -426,8 +425,8 @@ class NewsViewModel: ObservableObject {
     // MARK: - Fetch Pending News Requests
 
     func fetchPendingNewsRequests(force: Bool = false) async {
-        if !force, let last = lastPendingNewsFetchDate, Date().timeIntervalSince(last) < 20, !pendingNewsRequests.isEmpty { return }
-        lastPendingNewsFetchDate = Date()
+        guard throttler.canFetch(key: "pendingNews", interval: 20, force: force) || pendingNewsRequests.isEmpty else { return }
+        throttler.didFetch(key: "pendingNews")
         guard canModerate else {
             pendingNewsRequests = []
             return
