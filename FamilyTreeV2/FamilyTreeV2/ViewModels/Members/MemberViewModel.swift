@@ -383,9 +383,9 @@ class MemberViewModel: ObservableObject {
                 let requestData: [String: AnyEncodable] = [
                     "member_id": AnyEncodable(fatherId.uuidString),
                     "requester_id": AnyEncodable(requester.uuidString),
-                    "request_type": AnyEncodable("child_add"),
+                    "request_type": AnyEncodable(RequestType.childAdd.rawValue),
                     "new_value": AnyEncodable(newId.uuidString),
-                    "status": AnyEncodable("pending"),
+                    "status": AnyEncodable(ApprovalStatus.pending.rawValue),
                     "details": AnyEncodable(details)
                 ]
                 do {
@@ -400,7 +400,7 @@ class MemberViewModel: ObservableObject {
                             "طلب إضافة ابن: «\(firstNameOnly)» لـ: «\(father.fullName)»",
                             "Child add request: «\(firstNameOnly)» to: «\(father.fullName)»"
                         ),
-                        kind: "child_add"
+                        kind: RequestType.childAdd.rawValue
                     )
                 } catch {
                     Log.warning("لم يتم إدراج طلب child_add في admin_requests: \(error.localizedDescription)")
@@ -773,7 +773,7 @@ class MemberViewModel: ObservableObject {
             let photos: [MemberGalleryPhoto] = try await supabase
                 .from("member_gallery_photos")
                 .select()
-                .eq("approval_status", value: "approved")
+                .eq("approval_status", value: ApprovalStatus.approved.rawValue)
                 .order("created_at", ascending: false)
                 .limit(limit)
                 .execute()
@@ -790,7 +790,7 @@ class MemberViewModel: ObservableObject {
             let photos: [MemberGalleryPhoto] = try await supabase
                 .from("member_gallery_photos")
                 .select()
-                .eq("approval_status", value: "pending")
+                .eq("approval_status", value: ApprovalStatus.pending.rawValue)
                 .order("created_at", ascending: false)
                 .execute()
                 .value
@@ -805,7 +805,7 @@ class MemberViewModel: ObservableObject {
         do {
             try await supabase
                 .from("member_gallery_photos")
-                .update(["approval_status": AnyEncodable("approved")])
+                .update(["approval_status": AnyEncodable(ApprovalStatus.approved.rawValue)])
                 .eq("id", value: photoId.uuidString)
                 .execute()
             withAnimation { pendingGalleryPhotos.removeAll { $0.id == photoId } }
@@ -1497,13 +1497,13 @@ class MemberViewModel: ObservableObject {
                 // 3) اعتماد أي طلب انضمام معلق لنفس العضو
                 _ = try? await supabase
                     .from("admin_requests")
-                    .update(["status": AnyEncodable("approved")])
+                    .update(["status": AnyEncodable(ApprovalStatus.approved.rawValue)])
                     .eq("member_id", value: memberId.uuidString)
-                    .eq("request_type", value: "join_request")
-                    .eq("status", value: "pending")
+                    .eq("request_type", value: RequestType.joinRequest.rawValue)
+                    .eq("status", value: ApprovalStatus.pending.rawValue)
                     .execute()
             }
-            
+
             await fetchAllMembers(force: true) // تحديث البيانات فوراً ✅
             Log.info("تم تحديث الهاتف وتفعيل العضو للدخول المباشر")
         } catch {

@@ -516,7 +516,7 @@ class NotificationViewModel: ObservableObject {
         }
     }
     
-    private func sendExternalAdminPush(title: String, body: String, kind: String = "admin_request") async {
+    private func sendExternalAdminPush(title: String, body: String, kind: String = NotificationKind.adminRequest.rawValue) async {
         Log.info("[PUSH] إرسال push-admins: kind=\(kind)")
         do {
             let payload = [

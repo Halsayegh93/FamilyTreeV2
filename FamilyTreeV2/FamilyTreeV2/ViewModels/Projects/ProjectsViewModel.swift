@@ -33,7 +33,7 @@ class ProjectsViewModel: ObservableObject {
             let response: [Project] = try await supabase
                 .from("projects")
                 .select()
-                .eq("approval_status", value: "approved")
+                .eq("approval_status", value: ApprovalStatus.approved.rawValue)
                 .order("created_at", ascending: false)
                 .execute()
                 .value
@@ -67,7 +67,7 @@ class ProjectsViewModel: ObservableObject {
                 "owner_id": AnyEncodable(ownerId.uuidString),
                 "owner_name": AnyEncodable(ownerName),
                 "title": AnyEncodable(title),
-                "approval_status": AnyEncodable("pending")
+                "approval_status": AnyEncodable(ApprovalStatus.pending.rawValue)
             ]
             if let description, !description.isEmpty { payload["description"] = AnyEncodable(description) }
             if let logoUrl, !logoUrl.isEmpty { payload["logo_url"] = AnyEncodable(logoUrl) }
@@ -104,11 +104,11 @@ class ProjectsViewModel: ObservableObject {
             let response: [Project] = try await supabase
                 .from("projects")
                 .select()
-                .eq("approval_status", value: "pending")
+                .eq("approval_status", value: ApprovalStatus.pending.rawValue)
                 .order("created_at", ascending: false)
                 .execute()
                 .value
-            
+
             self.pendingProjects = response
         } catch {
             Log.error("خطأ جلب المشاريع المعلقة: \(error.localizedDescription)")
@@ -123,11 +123,11 @@ class ProjectsViewModel: ObservableObject {
                 .from("projects")
                 .select()
                 .eq("owner_id", value: ownerId.uuidString)
-                .eq("approval_status", value: "pending")
+                .eq("approval_status", value: ApprovalStatus.pending.rawValue)
                 .order("created_at", ascending: false)
                 .execute()
                 .value
-            
+
             self.myPendingProjects = response
         } catch {
             Log.error("خطأ جلب مشاريعي المعلقة: \(error.localizedDescription)")
@@ -146,7 +146,7 @@ class ProjectsViewModel: ObservableObject {
                 try await self?.supabase
                     .from("projects")
                     .update([
-                        "approval_status": "approved",
+                        "approval_status": ApprovalStatus.approved.rawValue,
                         "approved_by": approvedBy.uuidString
                     ])
                     .eq("id", value: id.uuidString)
@@ -171,7 +171,7 @@ class ProjectsViewModel: ObservableObject {
             do {
                 try await self?.supabase
                     .from("projects")
-                    .update(["approval_status": "rejected"])
+                    .update(["approval_status": ApprovalStatus.rejected.rawValue])
                     .eq("id", value: id.uuidString)
                     .execute()
             } catch {

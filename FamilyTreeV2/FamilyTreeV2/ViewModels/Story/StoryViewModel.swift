@@ -78,7 +78,7 @@ class StoryViewModel: ObservableObject {
             let approved: [FamilyStory] = try await supabase
                 .from("family_stories")
                 .select()
-                .eq("approval_status", value: "approved")
+                .eq("approval_status", value: ApprovalStatus.approved.rawValue)
                 .gte("expires_at", value: now)
                 .order("created_at", ascending: false)
                 .execute()
@@ -90,7 +90,7 @@ class StoryViewModel: ObservableObject {
                 pending = try await supabase
                     .from("family_stories")
                     .select()
-                    .eq("approval_status", value: "pending")
+                    .eq("approval_status", value: ApprovalStatus.pending.rawValue)
                     .gte("expires_at", value: now)
                     .order("created_at", ascending: false)
                     .execute()
@@ -99,7 +99,7 @@ class StoryViewModel: ObservableObject {
                 pending = try await supabase
                     .from("family_stories")
                     .select()
-                    .eq("approval_status", value: "pending")
+                    .eq("approval_status", value: ApprovalStatus.pending.rawValue)
                     .eq("created_by", value: userId.uuidString)
                     .gte("expires_at", value: now)
                     .order("created_at", ascending: false)
@@ -134,7 +134,7 @@ class StoryViewModel: ObservableObject {
             let stories: [FamilyStory] = try await supabase
                 .from("family_stories")
                 .select()
-                .eq("approval_status", value: "pending")
+                .eq("approval_status", value: ApprovalStatus.pending.rawValue)
                 .order("created_at", ascending: false)
                 .execute()
                 .value
@@ -172,7 +172,7 @@ class StoryViewModel: ObservableObject {
             let urlString = "\(publicURL.absoluteString)?v=\(timestamp)"
 
             // 3. تحديد حالة الموافقة
-            let status = canModerate ? "approved" : "pending"
+            let status = canModerate ? ApprovalStatus.approved.rawValue : ApprovalStatus.pending.rawValue
 
             // 4. إدراج بالقاعدة
             let payload: [String: AnyEncodable] = [
@@ -198,7 +198,7 @@ class StoryViewModel: ObservableObject {
                         "«\(memberName)» أضاف قصة جديدة تنتظر الموافقة",
                         "«\(memberName)» added a new story awaiting approval"
                     ),
-                    kind: "story_pending"
+                    kind: NotificationKind.storyPending.rawValue
                 )
             }
 
@@ -225,7 +225,7 @@ class StoryViewModel: ObservableObject {
 
         do {
             let payload: [String: AnyEncodable] = [
-                "approval_status": AnyEncodable("approved"),
+                "approval_status": AnyEncodable(ApprovalStatus.approved.rawValue),
                 "approved_by": AnyEncodable(approverId.uuidString),
                 "approved_at": AnyEncodable(ISO8601DateFormatter().string(from: Date()))
             ]

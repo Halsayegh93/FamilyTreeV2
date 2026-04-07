@@ -376,7 +376,7 @@ class NewsViewModel: ObservableObject {
                             "\(likerName) أعجب بمنشورك",
                             "\(likerName) liked your post"
                         ),
-                        kind: "news_like",
+                        kind: NotificationKind.newsLike.rawValue,
                         targetMemberIds: [postAuthorId]
                     )
                     // حفظ داخلي
@@ -384,7 +384,7 @@ class NewsViewModel: ObservableObject {
                         "target_member_id": AnyEncodable(postAuthorId.uuidString),
                         "title": AnyEncodable(L10n.t("إعجاب جديد ❤️", "New Like ❤️")),
                         "body": AnyEncodable(L10n.t("\(likerName) أعجب بخبرك", "\(likerName) liked your post")),
-                        "kind": AnyEncodable("news_like"),
+                        "kind": AnyEncodable(NotificationKind.newsLike.rawValue),
                         "created_by": AnyEncodable(memberId.uuidString)
                     ]
                     _ = try? await supabase.from("notifications").insert(payload).execute()
@@ -437,7 +437,7 @@ class NewsViewModel: ObservableObject {
                         "\(authorName) علّق على منشورك",
                         "\(authorName) commented on your post"
                     ),
-                    kind: "news_comment",
+                    kind: NotificationKind.newsComment.rawValue,
                     targetMemberIds: [postAuthorId]
                 )
                 // حفظ داخلي
@@ -446,7 +446,7 @@ class NewsViewModel: ObservableObject {
                         "target_member_id": AnyEncodable(postAuthorId.uuidString),
                         "title": AnyEncodable(L10n.t("تعليق جديد 💬", "New Comment 💬")),
                         "body": AnyEncodable(L10n.t("\(authorName) علّق على خبرك", "\(authorName) commented on your post")),
-                        "kind": AnyEncodable("news_comment"),
+                        "kind": AnyEncodable(NotificationKind.newsComment.rawValue),
                         "created_by": AnyEncodable(creator.uuidString)
                     ]
                     _ = try? await supabase.from("notifications").insert(payload).execute()
@@ -499,7 +499,7 @@ class NewsViewModel: ObservableObject {
         do {
             let response: [NewsPost] = try await supabase.from("news")
                 .select()
-                .eq("approval_status", value: "pending")
+                .eq("approval_status", value: ApprovalStatus.pending.rawValue)
                 .order("created_at", ascending: false)
                 .execute()
                 .value
@@ -615,7 +615,7 @@ class NewsViewModel: ObservableObject {
             "image_urls": AnyEncodable(imageURLs),
             "poll_question": AnyEncodable(pollQuestion),
             "poll_options": AnyEncodable(pollOptions),
-            "approval_status": AnyEncodable(shouldAutoApprove ? "approved" : "pending"),
+            "approval_status": AnyEncodable(shouldAutoApprove ? ApprovalStatus.approved.rawValue : ApprovalStatus.pending.rawValue),
             "approved_by": AnyEncodable(shouldAutoApprove ? user.id.uuidString : Optional<String>.none)
         ]
 
@@ -629,7 +629,7 @@ class NewsViewModel: ObservableObject {
                         "\(posterName) أرسل منشوراً جديداً يحتاج موافقتكم",
                         "\(posterName) submitted a new post for review"
                     ),
-                    kind: "news_add"
+                    kind: NotificationKind.newsAdd.rawValue
                 )
             }
             if shouldAutoApprove {
@@ -639,7 +639,7 @@ class NewsViewModel: ObservableObject {
                         "\(posterName) نشر منشوراً جديداً",
                         "\(posterName) published a new post"
                     ),
-                    kind: "news_published"
+                    kind: NotificationKind.newsPublished.rawValue
                 )
             }
             Log.info(shouldAutoApprove ? "تم نشر الخبر بنجاح" : "تم إرسال الخبر للمراجعة")
@@ -782,7 +782,7 @@ class NewsViewModel: ObservableObject {
         optimisticRemove(from: &pendingNewsRequests, id: postId, apiWork: { [weak self] in
             do {
                 let payload: [String: AnyEncodable] = [
-                    "approval_status": AnyEncodable("approved"),
+                    "approval_status": AnyEncodable(ApprovalStatus.approved.rawValue),
                     "approved_by": AnyEncodable(approverId.uuidString),
                     "approved_at": AnyEncodable(ISO8601DateFormatter().string(from: Date()))
                 ]
@@ -857,7 +857,7 @@ class NewsViewModel: ObservableObject {
             await notificationVM?.notifyAdminsWithPush(
                 title: L10n.t("حذف منشور", "Post Deleted"),
                 body: L10n.t("تم حذف منشور من الأخبار", "A news post has been deleted"),
-                kind: "news_add"
+                kind: NotificationKind.newsAdd.rawValue
             )
         } catch {
             Log.error("خطأ حذف الخبر: \(error.localizedDescription)")
@@ -877,9 +877,9 @@ class NewsViewModel: ObservableObject {
             let payload: [String: AnyEncodable] = [
                 "member_id": AnyEncodable(userId.uuidString),
                 "requester_id": AnyEncodable(userId.uuidString),
-                "request_type": AnyEncodable("news_report"),
+                "request_type": AnyEncodable(RequestType.newsReport.rawValue),
                 "new_value": AnyEncodable(postId.uuidString),
-                "status": AnyEncodable("pending"),
+                "status": AnyEncodable(ApprovalStatus.pending.rawValue),
                 "details": AnyEncodable(reason)
             ]
 
@@ -895,7 +895,7 @@ class NewsViewModel: ObservableObject {
                     "\(reporterName) أبلغ عن منشور يحتاج مراجعتكم",
                     "\(reporterName) reported a post that needs your review"
                 ),
-                kind: "news_report"
+                kind: NotificationKind.newsReport.rawValue
             )
 
             await notificationVM?.sendNotification(

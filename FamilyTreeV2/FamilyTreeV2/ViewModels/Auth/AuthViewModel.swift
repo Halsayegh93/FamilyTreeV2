@@ -431,7 +431,7 @@ class AuthViewModel: ObservableObject {
     
     // MARK: - Private Push / Notification Helpers
     
-    private func sendExternalAdminPush(title: String, body: String, kind: String = "admin_request") async {
+    private func sendExternalAdminPush(title: String, body: String, kind: String = NotificationKind.adminRequest.rawValue) async {
         do {
             let payload = [
                 "title": title,
@@ -1293,8 +1293,8 @@ class AuthViewModel: ObservableObject {
             let joinRequestData: [String: AnyEncodable] = [
                 "member_id": AnyEncodable(user.id.uuidString),
                 "requester_id": AnyEncodable(user.id.uuidString),
-                "request_type": AnyEncodable("link_request"),
-                "status": AnyEncodable("pending"),
+                "request_type": AnyEncodable(RequestType.linkRequest.rawValue),
+                "status": AnyEncodable(ApprovalStatus.pending.rawValue),
                 "details": AnyEncodable(matchInfo)
             ]
             
@@ -1314,7 +1314,7 @@ class AuthViewModel: ObservableObject {
             await notifyAdminsWithPush(
                 title: "طلب انضمام جديد",
                 body: pushBody,
-                kind: "link_request"
+                kind: NotificationKind.linkRequest.rawValue
             )
             
             Log.info("تم تسجيل العضو وإرسال طلب الربط بنجاح")
@@ -1369,7 +1369,7 @@ class AuthViewModel: ObservableObject {
                 "member_id": AnyEncodable(user.id.uuidString),
                 "requester_id": AnyEncodable(user.id.uuidString),
                 "request_type": AnyEncodable("contact_message"),
-                "status": AnyEncodable("pending"),
+                "status": AnyEncodable(ApprovalStatus.pending.rawValue),
                 "details": AnyEncodable(details)
             ]
             

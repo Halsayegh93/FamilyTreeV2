@@ -142,8 +142,8 @@ class AdminRequestViewModel: ObservableObject {
             let basePayload: [String: AnyEncodable] = [
                 "member_id": AnyEncodable(targetId),
                 "requester_id": AnyEncodable(user.id.uuidString),
-                "request_type": AnyEncodable("tree_edit"),
-                "status": AnyEncodable("pending"),
+                "request_type": AnyEncodable(RequestType.treeEdit.rawValue),
+                "status": AnyEncodable(ApprovalStatus.pending.rawValue),
                 "details": AnyEncodable(jsonString)
             ]
 
@@ -166,7 +166,7 @@ class AdminRequestViewModel: ObservableObject {
                     "طلب تعديل: \(payload.action) — \(memberName)",
                     "Edit request: \(payload.action) — \(memberName)"
                 ),
-                kind: "tree_edit"
+                kind: NotificationKind.treeEdit.rawValue
             )
 
             Log.info("[TreeEdit] Submitted: \(payload.action) — \(memberName)")
@@ -186,8 +186,8 @@ class AdminRequestViewModel: ObservableObject {
             let requests: [AdminRequest] = try await supabase
                 .from("admin_requests")
                 .select("*, member:profiles!member_id(*)")
-                .eq("request_type", value: "tree_edit")
-                .eq("status", value: "pending")
+                .eq("request_type", value: RequestType.treeEdit.rawValue)
+                .eq("status", value: ApprovalStatus.pending.rawValue)
                 .order("created_at", ascending: false)
                 .execute()
                 .value
@@ -244,7 +244,7 @@ class AdminRequestViewModel: ObservableObject {
                 // 2. Mark request as approved
                 try await self?.supabase
                     .from("admin_requests")
-                    .update(["status": AnyEncodable("approved")])
+                    .update(["status": AnyEncodable(ApprovalStatus.approved.rawValue)])
                     .eq("id", value: request.id.uuidString)
                     .execute()
 
@@ -295,7 +295,7 @@ class AdminRequestViewModel: ObservableObject {
             do {
                 try await self?.supabase
                     .from("admin_requests")
-                    .update(["status": AnyEncodable("rejected")])
+                    .update(["status": AnyEncodable(ApprovalStatus.rejected.rawValue)])
                     .eq("id", value: request.id.uuidString)
                     .execute()
 
@@ -335,8 +335,8 @@ class AdminRequestViewModel: ObservableObject {
             let requestData: [String: AnyEncodable] = [
                 "member_id": AnyEncodable(memberId.uuidString),
                 "requester_id": AnyEncodable(currentUser?.id.uuidString ?? ""),
-                "request_type": AnyEncodable("deceased_report"),
-                "status": AnyEncodable("pending"),
+                "request_type": AnyEncodable(RequestType.deceasedReport.rawValue),
+                "status": AnyEncodable(ApprovalStatus.pending.rawValue),
                 "details": AnyEncodable("طلب تأكيد وفاة بتاريخ: \(dateString)")
             ]
 
@@ -353,7 +353,7 @@ class AdminRequestViewModel: ObservableObject {
                     "\(requesterDeceasedName) يطلب تأكيد وفاة \(deceasedMemberName)",
                     "\(requesterDeceasedName) requests deceased confirmation for \(deceasedMemberName)"
                 ),
-                kind: "deceased_report"
+                kind: RequestType.deceasedReport.rawValue
             )
 
             Log.info("تم إرسال طلب تأكيد الوفاة للإدارة بنجاح")
@@ -370,8 +370,8 @@ class AdminRequestViewModel: ObservableObject {
             let requests: [AdminRequest] = try await supabase
                 .from("admin_requests")
                 .select("*, member:profiles!member_id(*)")
-                .eq("request_type", value: "deceased_report")
-                .eq("status", value: "pending")
+                .eq("request_type", value: RequestType.deceasedReport.rawValue)
+                .eq("status", value: ApprovalStatus.pending.rawValue)
                 .execute()
                 .value
 
@@ -392,7 +392,7 @@ class AdminRequestViewModel: ObservableObject {
 
                 try await self?.supabase
                     .from("admin_requests")
-                    .update(["status": AnyEncodable("approved")])
+                    .update(["status": AnyEncodable(ApprovalStatus.approved.rawValue)])
                     .eq("id", value: request.id.uuidString)
                     .execute()
 
@@ -417,7 +417,7 @@ class AdminRequestViewModel: ObservableObject {
             do {
                 try await self?.supabase
                     .from("admin_requests")
-                    .update(["status": AnyEncodable("rejected")])
+                    .update(["status": AnyEncodable(ApprovalStatus.rejected.rawValue)])
                     .eq("id", value: request.id.uuidString)
                     .execute()
                 Log.info("تم رفض طلب تأكيد الوفاة")
@@ -438,8 +438,8 @@ class AdminRequestViewModel: ObservableObject {
             let requests: [AdminRequest] = try await supabase
                 .from("admin_requests")
                 .select("*, member:profiles!member_id(*)")
-                .eq("request_type", value: "child_add")
-                .eq("status", value: "pending")
+                .eq("request_type", value: RequestType.childAdd.rawValue)
+                .eq("status", value: ApprovalStatus.pending.rawValue)
                 .execute()
                 .value
 
@@ -463,7 +463,7 @@ class AdminRequestViewModel: ObservableObject {
 
                 try await self?.supabase
                     .from("admin_requests")
-                    .update(["status": AnyEncodable("rejected")])
+                    .update(["status": AnyEncodable(ApprovalStatus.rejected.rawValue)])
                     .eq("id", value: request.id.uuidString)
                     .execute()
                 Log.info("تم رفض طلب إضافة الابن وحذفه من الشجرة")
@@ -481,7 +481,7 @@ class AdminRequestViewModel: ObservableObject {
             do {
                 try await self?.supabase
                     .from("admin_requests")
-                    .update(["status": AnyEncodable("approved")])
+                    .update(["status": AnyEncodable(ApprovalStatus.approved.rawValue)])
                     .eq("id", value: request.id.uuidString)
                     .execute()
 
@@ -524,7 +524,7 @@ class AdminRequestViewModel: ObservableObject {
             do {
                 try await supabase
                     .from("admin_requests")
-                    .update(["status": AnyEncodable("approved")])
+                    .update(["status": AnyEncodable(ApprovalStatus.approved.rawValue)])
                     .eq("id", value: request.id.uuidString)
                     .execute()
                 successCount += 1
@@ -578,7 +578,7 @@ class AdminRequestViewModel: ObservableObject {
             await notificationVM?.notifyAdminsWithPush(
                 title: L10n.t("تعديل الشجرة", "Tree Update"),
                 body: notifBody,
-                kind: "tree_edit"
+                kind: NotificationKind.treeEdit.rawValue
             )
 
         } catch {
@@ -645,10 +645,10 @@ class AdminRequestViewModel: ObservableObject {
                 // 3) Approve any pending join request for the same member
                 _ = try? await supabase
                     .from("admin_requests")
-                    .update(["status": AnyEncodable("approved")])
+                    .update(["status": AnyEncodable(ApprovalStatus.approved.rawValue)])
                     .eq("member_id", value: memberId.uuidString)
-                    .eq("request_type", value: "join_request")
-                    .eq("status", value: "pending")
+                    .eq("request_type", value: RequestType.joinRequest.rawValue)
+                    .eq("status", value: ApprovalStatus.pending.rawValue)
                     .execute()
             }
 
@@ -673,9 +673,9 @@ class AdminRequestViewModel: ObservableObject {
             let requestData: [String: AnyEncodable] = [
                 "member_id": AnyEncodable(memberId.uuidString),
                 "requester_id": AnyEncodable(currentUser?.id.uuidString),
-                "request_type": AnyEncodable("phone_change"),
+                "request_type": AnyEncodable(RequestType.phoneChange.rawValue),
                 "new_value": AnyEncodable(normalizedPhone),
-                "status": AnyEncodable("pending"),
+                "status": AnyEncodable(ApprovalStatus.pending.rawValue),
                 "details": AnyEncodable("طلب تغيير رقم الجوال")
             ]
 
@@ -691,7 +691,7 @@ class AdminRequestViewModel: ObservableObject {
                     "\(phoneRequesterName) يطلب تغيير رقم هاتفه",
                     "\(phoneRequesterName) requests a phone number change"
                 ),
-                kind: "phone_change"
+                kind: RequestType.phoneChange.rawValue
             )
 
             Log.info("تم إرسال طلب تغيير الرقم للإدارة: \(Log.masked(normalizedPhone))")
@@ -709,9 +709,9 @@ class AdminRequestViewModel: ObservableObject {
             let requestData: [String: AnyEncodable] = [
                 "member_id": AnyEncodable(memberId.uuidString),
                 "requester_id": AnyEncodable(currentUser?.id.uuidString),
-                "request_type": AnyEncodable("name_change"),
+                "request_type": AnyEncodable(RequestType.nameChange.rawValue),
                 "new_value": AnyEncodable(newName),
-                "status": AnyEncodable("pending"),
+                "status": AnyEncodable(ApprovalStatus.pending.rawValue),
                 "details": AnyEncodable("طلب تغيير الاسم إلى: \(newName)")
             ]
 
@@ -727,7 +727,7 @@ class AdminRequestViewModel: ObservableObject {
                     "طلب تغيير اسم: \(requesterFullName) إلى \(newName)",
                     "Name change request: \(requesterFullName) to \(newName)"
                 ),
-                kind: "name_change"
+                kind: RequestType.nameChange.rawValue
             )
 
             Log.info("تم إرسال طلب تغيير الاسم للإدارة: \(newName)")
@@ -751,8 +751,8 @@ class AdminRequestViewModel: ObservableObject {
             let requests: [AdminRequest] = try await supabase
                 .from("admin_requests")
                 .select("*, member:profiles!member_id(*)")
-                .eq("request_type", value: "name_change")
-                .eq("status", value: "pending")
+                .eq("request_type", value: RequestType.nameChange.rawValue)
+                .eq("status", value: ApprovalStatus.pending.rawValue)
                 .order("created_at", ascending: false)
                 .execute()
                 .value
@@ -785,7 +785,7 @@ class AdminRequestViewModel: ObservableObject {
 
                 try await self?.supabase
                     .from("admin_requests")
-                    .update(["status": AnyEncodable("approved")])
+                    .update(["status": AnyEncodable(ApprovalStatus.approved.rawValue)])
                     .eq("id", value: request.id.uuidString)
                     .execute()
 
@@ -810,7 +810,7 @@ class AdminRequestViewModel: ObservableObject {
             do {
                 try await self?.supabase
                     .from("admin_requests")
-                    .update(["status": AnyEncodable("rejected")])
+                    .update(["status": AnyEncodable(ApprovalStatus.rejected.rawValue)])
                     .eq("id", value: request.id.uuidString)
                     .execute()
 
@@ -840,8 +840,8 @@ class AdminRequestViewModel: ObservableObject {
             let requests: [PhoneChangeRequest] = try await supabase
                 .from("admin_requests")
                 .select("*, member:profiles!member_id(*)")
-                .eq("request_type", value: "phone_change")
-                .eq("status", value: "pending")
+                .eq("request_type", value: RequestType.phoneChange.rawValue)
+                .eq("status", value: ApprovalStatus.pending.rawValue)
                 .order("created_at", ascending: false)
                 .execute()
                 .value
@@ -874,7 +874,7 @@ class AdminRequestViewModel: ObservableObject {
 
                 try await self?.supabase
                     .from("admin_requests")
-                    .update(["status": AnyEncodable("approved")])
+                    .update(["status": AnyEncodable(ApprovalStatus.approved.rawValue)])
                     .eq("id", value: request.id.uuidString)
                     .execute()
 
@@ -901,7 +901,7 @@ class AdminRequestViewModel: ObservableObject {
             do {
                 try await self?.supabase
                     .from("admin_requests")
-                    .update(["status": AnyEncodable("rejected")])
+                    .update(["status": AnyEncodable(ApprovalStatus.rejected.rawValue)])
                     .eq("id", value: request.id.uuidString)
                     .execute()
 
@@ -997,10 +997,10 @@ class AdminRequestViewModel: ObservableObject {
             // Approve any pending join/link requests for this member
             _ = try? await supabase
                 .from("admin_requests")
-                .update(["status": AnyEncodable("approved")])
+                .update(["status": AnyEncodable(ApprovalStatus.approved.rawValue)])
                 .eq("member_id", value: memberId.uuidString)
-                .in("request_type", values: ["join_request", "link_request"])
-                .eq("status", value: "pending")
+                .in("request_type", values: [RequestType.joinRequest.rawValue, RequestType.linkRequest.rawValue])
+                .eq("status", value: ApprovalStatus.pending.rawValue)
                 .execute()
 
             // Update local data
@@ -1158,10 +1158,10 @@ class AdminRequestViewModel: ObservableObject {
             // 6) Approve pending admin requests for new member
             _ = try? await supabase
                 .from("admin_requests")
-                .update(["status": AnyEncodable("approved")])
+                .update(["status": AnyEncodable(ApprovalStatus.approved.rawValue)])
                 .eq("member_id", value: newMemberId.uuidString)
-                .in("request_type", values: ["join_request", "link_request"])
-                .eq("status", value: "pending")
+                .in("request_type", values: [RequestType.joinRequest.rawValue, RequestType.linkRequest.rawValue])
+                .eq("status", value: ApprovalStatus.pending.rawValue)
                 .execute()
             
             // 7) Clean up admin_requests referencing old record
@@ -1297,8 +1297,8 @@ class AdminRequestViewModel: ObservableObject {
                 .from("admin_requests")
                 .select("details")
                 .eq("member_id", value: memberId.uuidString)
-                .eq("request_type", value: "link_request")
-                .eq("status", value: "pending")
+                .eq("request_type", value: RequestType.linkRequest.rawValue)
+                .eq("status", value: ApprovalStatus.pending.rawValue)
                 .limit(1)
                 .execute()
                 .value
@@ -1389,8 +1389,8 @@ class AdminRequestViewModel: ObservableObject {
             let requests: [AdminRequest] = try await supabase
                 .from("admin_requests")
                 .select("*, member:profiles!member_id(*)")
-                .eq("request_type", value: "news_report")
-                .eq("status", value: "pending")
+                .eq("request_type", value: RequestType.newsReport.rawValue)
+                .eq("status", value: ApprovalStatus.pending.rawValue)
                 .order("created_at", ascending: false)
                 .execute()
                 .value
@@ -1416,7 +1416,7 @@ class AdminRequestViewModel: ObservableObject {
 
                 try await self?.supabase
                     .from("admin_requests")
-                    .update(["status": AnyEncodable("approved")])
+                    .update(["status": AnyEncodable(ApprovalStatus.approved.rawValue)])
                     .eq("id", value: request.id.uuidString)
                     .execute()
 
@@ -1441,7 +1441,7 @@ class AdminRequestViewModel: ObservableObject {
             do {
                 try await self?.supabase
                     .from("admin_requests")
-                    .update(["status": AnyEncodable("rejected")])
+                    .update(["status": AnyEncodable(ApprovalStatus.rejected.rawValue)])
                     .eq("id", value: request.id.uuidString)
                     .execute()
             } catch {
@@ -1489,8 +1489,8 @@ class AdminRequestViewModel: ObservableObject {
             let basePayload: [String: AnyEncodable] = [
                 "member_id": AnyEncodable(memberId.uuidString),
                 "requester_id": AnyEncodable(user.id.uuidString),
-                "request_type": AnyEncodable("photo_suggestion"),
-                "status": AnyEncodable("pending"),
+                "request_type": AnyEncodable(RequestType.photoSuggestion.rawValue),
+                "status": AnyEncodable(ApprovalStatus.pending.rawValue),
                 "details": AnyEncodable("اقتراح صورة لـ \(memberName)")
             ]
 
@@ -1514,7 +1514,7 @@ class AdminRequestViewModel: ObservableObject {
                     "اقتراح صورة جديدة لـ: \(memberName) تحتاج موافقتكم",
                     "New photo suggestion for: \(memberName) — needs approval"
                 ),
-                kind: "photo_suggestion"
+                kind: RequestType.photoSuggestion.rawValue
             )
 
             Log.info("[PhotoSuggestion] تم إرسال اقتراح صورة لـ \(memberName)")
@@ -1533,8 +1533,8 @@ class AdminRequestViewModel: ObservableObject {
             let requests: [AdminRequest] = try await supabase
                 .from("admin_requests")
                 .select("*, member:profiles!member_id(*)")
-                .eq("request_type", value: "photo_suggestion")
-                .eq("status", value: "pending")
+                .eq("request_type", value: RequestType.photoSuggestion.rawValue)
+                .eq("status", value: ApprovalStatus.pending.rawValue)
                 .order("created_at", ascending: false)
                 .execute()
                 .value
@@ -1566,7 +1566,7 @@ class AdminRequestViewModel: ObservableObject {
 
                 try await self?.supabase
                     .from("admin_requests")
-                    .update(["status": AnyEncodable("approved")])
+                    .update(["status": AnyEncodable(ApprovalStatus.approved.rawValue)])
                     .eq("id", value: request.id.uuidString)
                     .execute()
 
@@ -1602,7 +1602,7 @@ class AdminRequestViewModel: ObservableObject {
 
                 try await self?.supabase
                     .from("admin_requests")
-                    .update(["status": AnyEncodable("rejected")])
+                    .update(["status": AnyEncodable(ApprovalStatus.rejected.rawValue)])
                     .eq("id", value: request.id.uuidString)
                     .execute()
                 Log.info("[PhotoSuggestion] تم رفض اقتراح الصورة")

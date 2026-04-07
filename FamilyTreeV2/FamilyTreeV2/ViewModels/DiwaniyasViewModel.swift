@@ -67,7 +67,7 @@ class DiwaniyasViewModel: ObservableObject {
             let response: [Diwaniya] = try await supabase
                 .from("diwaniyas")
                 .select()
-                .in("approval_status", values: ["approved", "pending"])
+                .in("approval_status", values: [ApprovalStatus.approved.rawValue, ApprovalStatus.pending.rawValue])
                 .execute()
                 .value
 
@@ -93,10 +93,10 @@ class DiwaniyasViewModel: ObservableObject {
             let response: [Diwaniya] = try await supabase
                 .from("diwaniyas")
                 .select()
-                .eq("approval_status", value: "pending")
+                .eq("approval_status", value: ApprovalStatus.pending.rawValue)
                 .execute()
                 .value
-            
+
             self.pendingDiwaniyas = response
         } catch is CancellationError {
             Log.info("جلب الديوانيات المعلقة تم إلغاؤه")
@@ -135,7 +135,7 @@ class DiwaniyasViewModel: ObservableObject {
                 let approved_by: UUID?
             }
             let newId = UUID()
-            let status = autoApprove ? "approved" : "pending"
+            let status = autoApprove ? ApprovalStatus.approved.rawValue : ApprovalStatus.pending.rawValue
             try await supabase
                 .from("diwaniyas")
                 .insert(InsertData(
@@ -207,7 +207,7 @@ class DiwaniyasViewModel: ObservableObject {
                 }
                 try await self?.supabase
                     .from("diwaniyas")
-                    .update(UpdateData(approval_status: "approved", approved_by: adminId))
+                    .update(UpdateData(approval_status: ApprovalStatus.approved.rawValue, approved_by: adminId))
                     .eq("id", value: id.uuidString)
                     .execute()
 
