@@ -1,54 +1,21 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
-
-function json(status: number, body: unknown) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
-}
+import { handleCors, json } from "../_shared/cors.ts";
+import { authenticateRequest, createServiceClient } from "../_shared/auth.ts";
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
-  }
+  const cors = handleCors(req);
+  if (cors) return cors;
 
   try {
     // 1. Verify the user's JWT token
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return json(401, { ok: false, message: "Missing authorization header" });
-    }
+    const auth = await authenticateRequest(req);
+    if (auth instanceof Response) return auth;
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-
-    // Create client with user's JWT to get their identity
-    const userClient = createClient(supabaseUrl, serviceRoleKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
-
-    const {
-      data: { user },
-      error: userError,
-    } = await userClient.auth.getUser();
-
-    if (userError || !user) {
-      return json(401, { ok: false, message: "Invalid or expired token" });
-    }
-
-    const userId = user.id;
+    const userId = auth.user.id;
     console.log(`🗑️ Delete account requested for user: ${userId}`);
 
     // 2. Create admin client with service role key
-    const adminClient = createClient(supabaseUrl, serviceRoleKey);
+    const adminClient = createServiceClient();
 
     // 3. Delete user's personal activity data
     await adminClient.from("news_poll_votes").delete().eq("member_id", userId);

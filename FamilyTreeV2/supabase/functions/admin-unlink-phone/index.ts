@@ -1,66 +1,17 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
-
-function json(status: number, body: unknown) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
-}
+import { handleCors, json } from "../_shared/cors.ts";
+import { authenticateRequest, createServiceClient } from "../_shared/auth.ts";
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
-  }
+  const cors = handleCors(req);
+  if (cors) return cors;
 
   try {
     // 1. التحقق من توكن المدير
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return json(401, { ok: false, message: "Missing authorization header" });
-    }
+    const auth = await authenticateRequest(req, ["owner", "admin"]);
+    if (auth instanceof Response) return auth;
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-
-    // التحقق من أن المستدعي هو مدير
-    const callerClient = createClient(supabaseUrl, serviceRoleKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
-
-    const {
-      data: { user: caller },
-      error: callerError,
-    } = await callerClient.auth.getUser();
-
-    if (callerError || !caller) {
-      return json(401, { ok: false, message: "Invalid or expired token" });
-    }
-
-    // التحقق من صلاحية المدير
-    const adminClient = createClient(supabaseUrl, serviceRoleKey);
-    const { data: callerProfile } = await adminClient
-      .from("profiles")
-      .select("role")
-      .eq("id", caller.id)
-      .single();
-
-    if (
-      !callerProfile ||
-      !["owner", "admin"].includes(callerProfile.role)
-    ) {
-      return json(403, {
-        ok: false,
-        message: "Only admins can unlink phone numbers",
-      });
-    }
+    const adminClient = createServiceClient();
 
     // 2. قراءة memberId من الطلب
     const { memberId } = await req.json();
@@ -69,7 +20,7 @@ serve(async (req) => {
     }
 
     console.log(
-      `🔓 Admin ${caller.id} unlinking phone for member: ${memberId}`
+      `🔓 Admin ${auth.user.id} unlinking phone for member: ${memberId}`
     );
 
     // 3. جلب بيانات العضو لمعرفة رقمه

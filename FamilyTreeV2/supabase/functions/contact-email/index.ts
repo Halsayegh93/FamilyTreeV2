@@ -1,4 +1,6 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
+import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
+import { handleCors, validatePost, json } from "../_shared/cors.ts";
+import { authenticateRequest, parseBody } from "../_shared/auth.ts";
 
 type ContactEmailPayload = {
   category?: string;
@@ -8,47 +10,17 @@ type ContactEmailPayload = {
   sender_phone?: string;
 };
 
-const corsHeaders: Record<string, string> = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+serve(async (req) => {
+  const cors = handleCors(req);
+  if (cors) return cors;
 
-function jsonResponse(status: number, body: unknown): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: {
-      ...corsHeaders,
-      "Content-Type": "application/json",
-    },
-  });
-}
+  const notPost = validatePost(req);
+  if (notPost) return notPost;
 
-Deno.serve(async (req: Request): Promise<Response> => {
   try {
-    if (req.method === "OPTIONS") {
-      return new Response("ok", { headers: corsHeaders });
-    }
-
-    if (req.method !== "POST") {
-      return jsonResponse(405, { ok: false, message: "Method not allowed" });
-    }
-
     // JWT verification — require authenticated user
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return jsonResponse(401, { ok: false, message: "Missing authorization" });
-    }
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_ANON_KEY") ?? ""
-    );
-    const { error: authError } = await supabase.auth.getUser(
-      authHeader.replace("Bearer ", "")
-    );
-    if (authError) {
-      return jsonResponse(401, { ok: false, message: "Invalid or expired token" });
-    }
+    const auth = await authenticateRequest(req);
+    if (auth instanceof Response) return auth;
 
     const resendApiKey = (Deno.env.get("RESEND_API_KEY") ?? "").trim();
     const sendgridApiKey = (Deno.env.get("SENDGRID_API_KEY") ?? "").trim();
@@ -57,18 +29,15 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     if (!emailFrom || !emailTo || (!resendApiKey && !sendgridApiKey)) {
       console.error("Missing env vars: CONTACT_EMAIL_FROM / CONTACT_EMAIL_TO and/or provider key");
-      return jsonResponse(500, {
+      return json(500, {
         ok: false,
         message: "Email service not configured",
       });
     }
 
-    let payload: ContactEmailPayload;
-    try {
-      payload = await req.json();
-    } catch (_e) {
-      return jsonResponse(400, { ok: false, message: "Invalid JSON body" });
-    }
+    const body = await parseBody<ContactEmailPayload>(req);
+    if (body instanceof Response) return body;
+    const payload = body;
 
     const category = (payload.category ?? "تواصل").trim();
     const message = (payload.message ?? "").trim();
@@ -77,13 +46,13 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const senderPhone = (payload.sender_phone ?? "").trim();
 
     if (!message) {
-      return jsonResponse(400, { ok: false, message: "message is required" });
+      return json(400, { ok: false, message: "message is required" });
     }
 
     const recipients = emailTo
       .split(",")
-      .map((v: string) => v.trim())
-      .filter((v: string) => v.length > 0);
+      .map((v) => v.trim())
+      .filter((v) => v.length > 0);
 
     const subject = `رسالة تواصل جديدة - ${category}`;
     const textBody = [
@@ -102,7 +71,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         const response = await fetch("https://api.resend.com/emails", {
           method: "POST",
           headers: {
-            "Authorization": `Bearer ${resendApiKey}`,
+            Authorization: `Bearer ${resendApiKey}`,
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
@@ -116,18 +85,18 @@ Deno.serve(async (req: Request): Promise<Response> => {
         const raw = await response.text();
         if (!response.ok) {
           console.error(`Resend failed: ${response.status} — ${raw}`);
-          return jsonResponse(502, {
+          return json(502, {
             ok: false,
             message: "Email delivery failed. Please try again later.",
           });
         }
 
-        return jsonResponse(200, { ok: true, message: "Email sent" });
+        return json(200, { ok: true, message: "Email sent" });
       } catch (resendErr) {
         // If Resend fails and SendGrid is available, fall through
         if (!sendgridApiKey) {
           console.error(`Resend error: ${(resendErr as Error).message}`);
-          return jsonResponse(500, {
+          return json(500, {
             ok: false,
             message: "Email service error. Please try again later.",
           });
@@ -144,11 +113,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
       const sgResponse = await fetch("https://api.sendgrid.com/v3/mail/send", {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${sendgridApiKey}`,
+          Authorization: `Bearer ${sendgridApiKey}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          personalizations: [{ to: recipients.map((email: string) => ({ email })) }],
+          personalizations: [{ to: recipients.map((email) => ({ email })) }],
           from: { email: fromEmail },
           subject,
           content: [{ type: "text/plain", value: textBody }],
@@ -158,18 +127,18 @@ Deno.serve(async (req: Request): Promise<Response> => {
       const sgRaw = await sgResponse.text();
       if (!sgResponse.ok) {
         console.error(`SendGrid failed: ${sgResponse.status} — ${sgRaw}`);
-        return jsonResponse(502, {
+        return json(502, {
           ok: false,
           message: "Email delivery failed. Please try again later.",
         });
       }
 
-      return jsonResponse(200, { ok: true, message: "Email sent" });
+      return json(200, { ok: true, message: "Email sent" });
     }
 
-    return jsonResponse(500, { ok: false, message: "No email provider configured" });
+    return json(500, { ok: false, message: "No email provider configured" });
   } catch (err) {
     console.error(`Unhandled error: ${(err as Error).message}`);
-    return jsonResponse(500, { ok: false, message: "An unexpected error occurred" });
+    return json(500, { ok: false, message: "An unexpected error occurred" });
   }
 });

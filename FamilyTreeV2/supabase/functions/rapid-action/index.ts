@@ -1,4 +1,6 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
+import { handleCors, validatePost, json } from "../_shared/cors.ts";
+import { authenticateRequest, createServiceClient, parseBody } from "../_shared/auth.ts";
 
 type ContactEmailPayload = {
   category?: string;
@@ -8,30 +10,12 @@ type ContactEmailPayload = {
   sender_phone?: string;
 };
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
-
-function json(status: number, body: unknown) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: {
-      ...corsHeaders,
-      "Content-Type": "application/json",
-    },
-  });
-}
-
 serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
-  }
+  const cors = handleCors(req);
+  if (cors) return cors;
 
-  if (req.method !== "POST") {
-    return json(405, { ok: false, message: "Method not allowed" });
-  }
+  const notPost = validatePost(req);
+  if (notPost) return notPost;
 
   const resendApiKey = (Deno.env.get("RESEND_API_KEY") ?? "").trim();
   const sendgridApiKey = (Deno.env.get("SENDGRID_API_KEY") ?? "").trim();
@@ -45,12 +29,9 @@ serve(async (req) => {
     });
   }
 
-  let payload: ContactEmailPayload;
-  try {
-    payload = await req.json();
-  } catch {
-    return json(400, { ok: false, message: "Invalid JSON body" });
-  }
+  const body = await parseBody<ContactEmailPayload>(req);
+  if (body instanceof Response) return body;
+  const payload = body;
 
   const category = (payload.category ?? "تواصل").trim();
   const message = (payload.message ?? "").trim();
