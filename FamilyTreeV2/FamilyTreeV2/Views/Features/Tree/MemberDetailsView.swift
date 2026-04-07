@@ -547,6 +547,21 @@ struct MemberDetailsView: View {
                     }
                 }
 
+                // زر المفضلة
+                if member.id != authVM.currentUser?.id, !member.isDeleted {
+                    Button {
+                        FavoritesManager.shared.toggle(member.id)
+                    } label: {
+                        Image(systemName: FavoritesManager.shared.isFavorite(member.id) ? "heart.fill" : "heart")
+                            .font(DS.Font.scaled(14, weight: .bold))
+                            .foregroundColor(FavoritesManager.shared.isFavorite(member.id) ? DS.Color.error : DS.Color.textOnPrimary)
+                            .frame(width: 40, height: 40)
+                            .background(.ultraThinMaterial)
+                            .clipShape(Circle())
+                            .dsSubtleShadow()
+                    }
+                }
+
                 Spacer()
 
                 // زر الإغلاق

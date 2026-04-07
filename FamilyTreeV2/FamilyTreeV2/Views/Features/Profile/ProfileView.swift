@@ -81,6 +81,11 @@ struct ProfileView: View {
                                     .opacity(appeared ? 1 : 0)
                                     .offset(y: appeared ? 0 : 25)
 
+                                // المفضلة
+                                favoritesSection
+                                    .opacity(appeared ? 1 : 0)
+                                    .offset(y: appeared ? 0 : 28)
+
                                 // Children section
                                 serverSonsSection
                                     .opacity(appeared ? 1 : 0)
@@ -367,6 +372,65 @@ struct ProfileView: View {
     }
 
     // MARK: - Children Section
+    // MARK: - المفضلة
+    @ViewBuilder
+    private var favoritesSection: some View {
+        let favIds = FavoritesManager.shared.favoriteIds
+        let favMembers = favIds.compactMap { id in memberVM.member(byId: id) }
+
+        if !favMembers.isEmpty {
+            DSCard(padding: 0) {
+                DSSectionHeader(
+                    title: L10n.t("المفضلة", "Favorites"),
+                    icon: "heart.fill",
+                    iconColor: DS.Color.error
+                )
+
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: DS.Spacing.md) {
+                        ForEach(favMembers, id: \.id) { member in
+                            NavigationLink(destination: MemberDetailsView(member: member)) {
+                                VStack(spacing: DS.Spacing.xs) {
+                                    ZStack {
+                                        Circle()
+                                            .fill(member.roleColor.opacity(0.2))
+                                            .frame(width: 50, height: 50)
+
+                                        if let urlStr = member.avatarUrl, let url = URL(string: urlStr) {
+                                            CachedAsyncImage(url: url) { image in
+                                                image.resizable().scaledToFill()
+                                            } placeholder: {
+                                                Text(String(member.firstName.prefix(1)))
+                                                    .font(DS.Font.scaled(18, weight: .bold))
+                                                    .foregroundColor(member.roleColor)
+                                            }
+                                            .frame(width: 50, height: 50)
+                                            .clipShape(Circle())
+                                        } else {
+                                            Text(String(member.firstName.prefix(1)))
+                                                .font(DS.Font.scaled(18, weight: .bold))
+                                                .foregroundColor(member.roleColor)
+                                        }
+                                    }
+
+                                    Text(member.firstName)
+                                        .font(DS.Font.caption2)
+                                        .fontWeight(.semibold)
+                                        .foregroundColor(DS.Color.textPrimary)
+                                        .lineLimit(1)
+                                }
+                                .frame(width: 60)
+                            }
+                        }
+                    }
+                    .padding(.horizontal, DS.Spacing.lg)
+                    .padding(.vertical, DS.Spacing.sm)
+                }
+            }
+            .padding(.horizontal, DS.Spacing.lg)
+        }
+    }
+
     private var serverSonsSection: some View {
         VStack(alignment: .leading, spacing: 0) {
             DSCard(padding: 0) {

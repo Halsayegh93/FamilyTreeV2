@@ -23,6 +23,8 @@ struct HomeNewsView: View {
     @State private var showAddStory = false
     @State private var storyViewerGroup: Int? = nil
     @State private var showStoryViewer = false
+    @State private var showNewsSearch = false
+    @State private var newsSearchText = ""
 
     private enum HomeSubPage {
         case photos, projects, contact
@@ -490,22 +492,48 @@ struct HomeNewsView: View {
     // MARK: - News Feed Section
     private var newsFeedSection: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Section header
-            HStack(spacing: DS.Spacing.sm) {
-                Image(systemName: "newspaper.fill")
-                    .font(DS.Font.scaled(14, weight: .semibold))
-                    .foregroundColor(DS.Color.textOnPrimary)
-                    .frame(width: 30, height: 30)
-                    .background(DS.Color.gradientPrimary)
-                    .clipShape(Circle())
+            // Section header + بحث
+            VStack(spacing: DS.Spacing.xs) {
+                HStack(spacing: DS.Spacing.sm) {
+                    Image(systemName: "newspaper.fill")
+                        .font(DS.Font.scaled(14, weight: .semibold))
+                        .foregroundColor(DS.Color.textOnPrimary)
+                        .frame(width: 30, height: 30)
+                        .background(DS.Color.gradientPrimary)
+                        .clipShape(Circle())
 
-                Text(L10n.t("أخبار العائلة", "Family News"))
-                    .font(DS.Font.headline)
-                    .foregroundColor(DS.Color.textPrimary)
+                    Text(L10n.t("أخبار العائلة", "Family News"))
+                        .font(DS.Font.headline)
+                        .foregroundColor(DS.Color.textPrimary)
 
-                Spacer()
+                    Spacer()
 
-                // زر إضافة خبر منقول للأسفل كـ FAB
+                    Button {
+                        withAnimation(DS.Anim.snappy) { showNewsSearch.toggle() }
+                    } label: {
+                        Image(systemName: showNewsSearch ? "xmark.circle.fill" : "magnifyingglass")
+                            .font(DS.Font.scaled(16, weight: .semibold))
+                            .foregroundColor(DS.Color.textSecondary)
+                    }
+                }
+
+                if showNewsSearch {
+                    HStack(spacing: DS.Spacing.sm) {
+                        Image(systemName: "magnifyingglass")
+                            .foregroundColor(DS.Color.textTertiary)
+                        TextField(L10n.t("بحث بالأخبار...", "Search news..."), text: $newsSearchText)
+                            .font(DS.Font.body)
+                        if !newsSearchText.isEmpty {
+                            Button { newsSearchText = "" } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundColor(DS.Color.textTertiary)
+                            }
+                        }
+                    }
+                    .padding(DS.Spacing.sm)
+                    .background(DS.Color.surface)
+                    .cornerRadius(DS.Radius.md)
+                }
             }
             .padding(.horizontal, DS.Spacing.lg)
             .padding(.vertical, DS.Spacing.sm)
@@ -518,9 +546,18 @@ struct HomeNewsView: View {
         }
     }
 
+    private var filteredNews: [NewsPost] {
+        if newsSearchText.isEmpty { return newsVM.allNews }
+        let query = newsSearchText.lowercased()
+        return newsVM.allNews.filter {
+            $0.content.lowercased().contains(query) ||
+            $0.author_name.lowercased().contains(query)
+        }
+    }
+
     private var newsListView: some View {
         LazyVStack(spacing: DS.Spacing.lg) {
-            ForEach(newsVM.allNews) { news in
+            ForEach(filteredNews) { news in
                 newsCard(for: news)
                     .opacity(appeared ? 1 : 0)
                     .offset(y: appeared ? 0 : 20)
