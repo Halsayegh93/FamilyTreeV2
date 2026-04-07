@@ -62,44 +62,7 @@ struct HomeNewsCardView: View {
                     }
                 } label: {
                     HStack(spacing: DS.Spacing.sm) {
-                        ZStack {
-                            if let urlStr = authorMember?.avatarUrl, let url = URL(string: urlStr) {
-                                CachedAsyncImage(url: url) { img in
-                                    img.resizable().scaledToFill()
-                                } placeholder: {
-                                    Circle()
-                                        .fill(
-                                            LinearGradient(
-                                                colors: [NewsTypeHelper.color(for: type), NewsTypeHelper.color(for: type).opacity(0.7)],
-                                                startPoint: .topLeading,
-                                                endPoint: .bottomTrailing
-                                            )
-                                        )
-                                        .overlay(
-                                            Text(String(authorName.first ?? "A"))
-                                                .font(DS.Font.scaled(15, weight: .bold))
-                                                .foregroundColor(DS.Color.textOnPrimary)
-                                        )
-                                }
-                                .frame(width: 38, height: 38)
-                                .clipShape(Circle())
-                            } else {
-                                Circle()
-                                    .fill(
-                                        LinearGradient(
-                                            colors: [NewsTypeHelper.color(for: type), NewsTypeHelper.color(for: type).opacity(0.7)],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        )
-                                    )
-                                    .frame(width: 38, height: 38)
-                                Text(String(authorName.first ?? "A"))
-                                    .font(DS.Font.scaled(15, weight: .bold))
-                                    .foregroundColor(DS.Color.textOnPrimary)
-                            }
-                        }
-                        .frame(width: 38, height: 38)
-                        .clipShape(Circle())
+                        DSMemberAvatar(name: authorName, avatarUrl: authorMember?.avatarUrl, size: 38, roleColor: NewsTypeHelper.color(for: type))
                         .overlay(
                             Circle()
                                 .stroke(DS.Color.textTertiary.opacity(0.3), lineWidth: 1)

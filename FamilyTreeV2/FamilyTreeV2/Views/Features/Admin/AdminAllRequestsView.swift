@@ -1952,30 +1952,7 @@ struct AdminAllRequestsView: View {
     }
 
     private func memberAvatar(urlStr: String?, name: String) -> some View {
-        Group {
-            if let urlStr, let url = URL(string: urlStr) {
-                CachedAsyncImage(url: url) { img in
-                    img.resizable().scaledToFill()
-                } placeholder: {
-                    avatarPlaceholder(name: name)
-                }
-                .frame(width: 40, height: 40)
-                .clipShape(Circle())
-            } else {
-                avatarPlaceholder(name: name)
-            }
-        }
-    }
-
-    private func avatarPlaceholder(name: String) -> some View {
-        Circle()
-            .fill(DS.Color.primary.opacity(0.15))
-            .frame(width: 40, height: 40)
-            .overlay(
-                Text(String(name.first ?? "A"))
-                    .font(DS.Font.scaled(14, weight: .bold))
-                    .foregroundColor(DS.Color.primary)
-            )
+        DSMemberAvatar(name: name, avatarUrl: urlStr, size: 40, roleColor: DS.Color.primary)
     }
 
     private func typeBadge(text: String, color: Color) -> some View {

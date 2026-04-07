@@ -391,27 +391,7 @@ struct ProfileView: View {
                         ForEach(favMembers, id: \.id) { member in
                             NavigationLink(destination: MemberDetailsView(member: member)) {
                                 VStack(spacing: DS.Spacing.xs) {
-                                    ZStack {
-                                        Circle()
-                                            .fill(member.roleColor.opacity(0.2))
-                                            .frame(width: 50, height: 50)
-
-                                        if let urlStr = member.avatarUrl, let url = URL(string: urlStr) {
-                                            CachedAsyncImage(url: url) { image in
-                                                image.resizable().scaledToFill()
-                                            } placeholder: {
-                                                Text(String(member.firstName.prefix(1)))
-                                                    .font(DS.Font.scaled(18, weight: .bold))
-                                                    .foregroundColor(member.roleColor)
-                                            }
-                                            .frame(width: 50, height: 50)
-                                            .clipShape(Circle())
-                                        } else {
-                                            Text(String(member.firstName.prefix(1)))
-                                                .font(DS.Font.scaled(18, weight: .bold))
-                                                .foregroundColor(member.roleColor)
-                                        }
-                                    }
+                                    DSMemberAvatar(name: member.firstName, avatarUrl: member.avatarUrl, size: 50, roleColor: member.roleColor)
 
                                     Text(member.firstName)
                                         .font(DS.Font.caption2)
