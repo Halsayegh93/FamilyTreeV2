@@ -32,7 +32,6 @@ jobs:
 
       - name: Clean & Archive
         run: |
-          cd FamilyTreeV2
           xcodebuild -project FamilyTreeV2.xcodeproj \
             -scheme FamilyTreeV2 \
             -destination generic/platform=iOS \
