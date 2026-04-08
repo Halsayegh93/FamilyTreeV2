@@ -226,72 +226,55 @@ struct MemberDetailsView: View {
                 .padding(.horizontal, DS.Spacing.xxl)
                 .padding(.top, DS.Spacing.sm)
 
-            // رتبة الحساب + متوفى
-            HStack(spacing: DS.Spacing.sm) {
-                DSRoleBadge(
-                    title: member.roleName,
-                    color: member.isDeceased == true ? DS.Color.textTertiary : member.roleColor
-                )
-
-                if member.isDeceased == true {
-                    Text(L10n.t("رحمه الله", "Rest in peace"))
-                        .font(DS.Font.scaled(11, weight: .bold))
-                        .foregroundColor(DS.Color.textSecondary)
-                        .padding(.horizontal, DS.Spacing.sm)
-                        .padding(.vertical, DS.Spacing.xs)
-                        .background(DS.Color.textTertiary.opacity(0.12))
-                        .clipShape(Capsule())
-                }
-            }
+            // رتبة الحساب
+            DSRoleBadge(
+                title: member.roleName,
+                color: (member.isDeceased == true ? DS.Color.textTertiary : member.roleColor).opacity(0.7)
+            )
             .padding(.top, DS.Spacing.sm)
 
-            // زر صلة القرابة — تحت الاسم
+            // صلة القرابة + طلب إضافة صورة — جنب بعض
             if member.id != authVM.currentUser?.id, !member.isDeleted {
-                Button(action: showKinshipPath) {
-                    HStack(spacing: DS.Spacing.sm) {
-                        Image(systemName: "point.3.connected.trianglepath.dotted")
-                            .font(DS.Font.scaled(13, weight: .semibold))
-                        Text(L10n.t("صلة القرابة", "Kinship"))
-                            .font(DS.Font.calloutBold)
-                    }
-                    .foregroundColor(DS.Color.warning)
-                    .padding(.horizontal, DS.Spacing.xl)
-                    .padding(.vertical, DS.Spacing.sm)
-                    .background(DS.Color.warning.opacity(0.12))
-                    .clipShape(Capsule())
-                }
-                .buttonStyle(DSScaleButtonStyle())
-                .padding(.top, DS.Spacing.md)
-            }
-
-            // طلب إضافة صورة — يظهر فقط إذا العضو ما عنده صورة ومو صاحب الحساب
-            if member.id != authVM.currentUser?.id && !member.isDeleted,
-               member.avatarUrl == nil || (member.avatarUrl ?? "").isEmpty {
-                if isSubmittingPhotoSuggestion {
-                    HStack(spacing: DS.Spacing.sm) {
-                        ProgressView().tint(DS.Color.primary)
-                        Text(L10n.t("جاري الإرسال...", "Submitting..."))
-                            .font(DS.Font.calloutBold)
-                            .foregroundColor(DS.Color.primary)
-                    }
-                    .padding(.top, DS.Spacing.md)
-                } else {
-                    PhotosPicker(selection: $photoPickerItem, matching: .images) {
-                        HStack(spacing: DS.Spacing.sm) {
-                            Image(systemName: "camera.badge.ellipsis")
-                                .font(DS.Font.scaled(13, weight: .semibold))
-                            Text(L10n.t("طلب إضافة صورة", "Request Add Photo"))
-                                .font(DS.Font.calloutBold)
+                HStack(spacing: DS.Spacing.sm) {
+                    // صلة القرابة
+                    Button(action: showKinshipPath) {
+                        HStack(spacing: DS.Spacing.xs) {
+                            Image(systemName: "point.3.connected.trianglepath.dotted")
+                                .font(DS.Font.scaled(11, weight: .semibold))
+                            Text(L10n.t("صلة القرابة", "Kinship"))
+                                .font(DS.Font.scaled(12, weight: .bold))
                         }
-                        .foregroundColor(DS.Color.primary)
-                        .padding(.horizontal, DS.Spacing.xl)
-                        .padding(.vertical, DS.Spacing.sm)
-                        .background(DS.Color.primary.opacity(0.1))
+                        .foregroundColor(DS.Color.warning)
+                        .padding(.horizontal, DS.Spacing.md)
+                        .padding(.vertical, DS.Spacing.xs + 2)
+                        .background(DS.Color.warning.opacity(0.12))
                         .clipShape(Capsule())
                     }
                     .buttonStyle(DSScaleButtonStyle())
-                    .padding(.top, DS.Spacing.md)
+
+                    // طلب إضافة صورة
+                    if member.avatarUrl == nil || (member.avatarUrl ?? "").isEmpty {
+                        if isSubmittingPhotoSuggestion {
+                            ProgressView().tint(DS.Color.primary)
+                        } else {
+                            PhotosPicker(selection: $photoPickerItem, matching: .images) {
+                                HStack(spacing: DS.Spacing.xs) {
+                                    Image(systemName: "camera.badge.ellipsis")
+                                        .font(DS.Font.scaled(11, weight: .semibold))
+                                    Text(L10n.t("إضافة صورة", "Add Photo"))
+                                        .font(DS.Font.scaled(12, weight: .bold))
+                                }
+                                .foregroundColor(DS.Color.primary)
+                                .padding(.horizontal, DS.Spacing.md)
+                                .padding(.vertical, DS.Spacing.xs + 2)
+                                .background(DS.Color.primary.opacity(0.1))
+                                .clipShape(Capsule())
+                            }
+                            .buttonStyle(DSScaleButtonStyle())
+                        }
+                    }
                 }
+                .padding(.top, DS.Spacing.sm)
             }
         }
     }
