@@ -36,3 +36,4 @@ Pods/
 *~
 .env
 .env.*
+.claude/worktrees/
