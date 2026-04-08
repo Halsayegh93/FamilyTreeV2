@@ -15,7 +15,7 @@ struct ContentView: View {
             }
 
             OfflineBanner()
-                .padding(.top, DS.Spacing.xxxxl + DS.Spacing.lg)
+                .padding(.top, DS.Spacing.xxxl)
                 .animation(DS.Anim.snappy, value: NetworkMonitor.shared.isConnected)
         }
     }

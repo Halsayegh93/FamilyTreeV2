@@ -34,12 +34,14 @@ final class RealtimeManager {
         isSubscribed = true
         Log.info("[Realtime] 🔌 بدء الاشتراكات الحية...")
 
-        subscribeToTable("profiles", debounceKey: "members") { [weak self] in
-            await self?.memberVM?.fetchAllMembers(force: true)
+        // الأعضاء: debounce 5 ثوانٍ + force: false يخلي الـ FetchThrottler يتحكم
+        subscribeToTable("profiles", debounceKey: "members", debounceDelay: 5.0) { [weak self] in
+            await self?.memberVM?.fetchAllMembers(force: false)
         }
 
-        subscribeToTable("news", debounceKey: "news") { [weak self] in
-            await self?.newsVM?.fetchNews(force: true)
+        // الأخبار: debounce 5 ثوانٍ
+        subscribeToTable("news", debounceKey: "news", debounceDelay: 5.0) { [weak self] in
+            await self?.newsVM?.fetchNews(force: false)
         }
 
         subscribeToTable("family_stories", debounceKey: "stories") { [weak self] in
@@ -85,6 +87,7 @@ final class RealtimeManager {
     private func subscribeToTable(
         _ table: String,
         debounceKey: String,
+        debounceDelay: TimeInterval = 2.0,
         action: @escaping @MainActor () async -> Void
     ) {
         let task = Task { [weak self] in
@@ -104,8 +107,7 @@ final class RealtimeManager {
 
             for await _ in changes {
                 guard !Task.isCancelled else { break }
-                // Debounce: ثانيتين عشان ما نرسل طلبات كثيرة
-                self.debounce(key: debounceKey, delay: 2.0) {
+                self.debounce(key: debounceKey, delay: debounceDelay) {
                     await action()
                 }
             }

@@ -74,6 +74,7 @@ struct LoginView: View {
                 Spacer()
             }
         }
+        .contentShape(Rectangle())
         .onTapGesture {
             isFieldFocused = false
         }

@@ -65,8 +65,7 @@ struct FamilyTreeV2App: App {
                 .onReceive(NotificationCenter.default.publisher(for: .didReceivePushNotification).merge(with: NotificationCenter.default.publisher(for: .didTapPushNotification))) { _ in
                     Task {
                         await self.appState.notificationVM.fetchNotifications(force: true)
-                        // تحديث بيانات الشجرة + البروفايل لتعكس أي تغييرات (مثل تغيير الاسم)
-                        await self.appState.memberVM.fetchAllMembers(force: true)
+                        // الـ Realtime subscriptions تتكفل بتحديث بيانات الأعضاء عند التغيير
                     }
                 }
                 // Deep Link — QR Code → فتح الشجرة وعرض صلة القرابة

@@ -25,12 +25,58 @@ struct AdminDashboardView: View {
 
     private func recalculateBadges() {
         let all = memberVM.allMembers
-        pendingCount = all.filter { $0.role == .pending }.count
-        moderatorCount = all.filter { [.owner, .admin, .monitor, .supervisor].contains($0.role) }.count
-        totalMembersCount = all.filter { $0.role != .pending }.count
-        aliveMembersCount = all.filter { $0.role != .pending && $0.isDeceased != true }.count
-        deceasedMembersCount = all.filter { $0.isDeceased == true }.count
-        totalReviewRequestsCount = pendingCount
+
+        // مرور واحد لحساب كل الأعداد بدل 11 filter
+        var pending = 0, moderator = 0, total = 0, alive = 0, deceased = 0, issues = 0, treeIssues = 0
+        let moderatorRoles: Set<FamilyMember.UserRole> = [.owner, .admin, .monitor, .supervisor]
+
+        // بناء مجموعات الأعضاء النشطين وآبائهم (لفحص مشاكل الشجرة)
+        var activeIds = Set<UUID>()
+        var fatherIds = Set<UUID>()
+        for m in all where m.role != .pending && m.status != .frozen {
+            activeIds.insert(m.id)
+            if let fid = m.fatherId { fatherIds.insert(fid) }
+        }
+
+        for m in all {
+            if m.role == .pending { pending += 1; continue }
+            total += 1
+            if moderatorRoles.contains(m.role) { moderator += 1 }
+
+            if m.isDeceased == true {
+                deceased += 1
+            } else {
+                alive += 1
+                // فحص النواقص (أحياء فقط)
+                let noPhone = (m.phoneNumber ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                let noBirth = (m.birthDate ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                let noFather = m.fatherId == nil
+                let noGender = (m.gender ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                let notActivated = m.status == nil || m.status == .pending
+                if notActivated || noPhone || noBirth || noFather || noGender {
+                    issues += 1
+                }
+            }
+
+            // مشاكل الشجرة
+            if m.status != .frozen {
+                let isOrphan = m.fatherId == nil && !fatherIds.contains(m.id) && m.role != .pending
+                let noName = m.fullName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || m.fullName == "بدون اسم"
+                let brokenParent = m.fatherId != nil && !activeIds.contains(m.fatherId ?? UUID())
+                if isOrphan || noName || brokenParent || m.isHiddenFromTree {
+                    treeIssues += 1
+                }
+            }
+        }
+
+        pendingCount = pending
+        moderatorCount = moderator
+        totalMembersCount = total
+        aliveMembersCount = alive
+        deceasedMembersCount = deceased
+        issueMembersCount = issues
+        treeIssuesCount = treeIssues
+        totalReviewRequestsCount = pending
             + newsVM.pendingNewsRequests.count
             + adminRequestVM.newsReportRequests.count
             + adminRequestVM.phoneChangeRequests.count
@@ -42,30 +88,6 @@ struct AdminDashboardView: View {
             + adminRequestVM.nameChangeRequests.count
             + memberVM.pendingGalleryPhotos.count
             + storyVM.pendingStories.count
-
-        let active = memberVM.allMembers.filter { $0.role != .pending && $0.status != .frozen }
-        let activeIds = Set(active.map(\.id))
-        let fatherIds = Set(active.compactMap(\.fatherId))
-        treeIssuesCount = memberVM.allMembers.filter { m in
-            guard m.status != .frozen else { return false }
-            let isOrphan = m.fatherId == nil && !fatherIds.contains(m.id) && m.role != .pending
-            let noName = m.fullName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || m.fullName == "بدون اسم"
-            let brokenParent = m.fatherId != nil && !activeIds.contains(m.fatherId ?? UUID())
-            let hidden = m.isHiddenFromTree
-            return isOrphan || noName || brokenParent || hidden
-        }.count
-
-        issueMembersCount = memberVM.allMembers
-            .filter { $0.role != .pending && $0.isDeceased != true }
-            .filter { member in
-                let isNotActivated = member.status == nil || member.status == .pending
-                let hasNoPhone = (member.phoneNumber ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                let noBirth = (member.birthDate ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                let noFather = member.fatherId == nil
-                let noGender = (member.gender ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                return isNotActivated || hasNoPhone || noBirth || noFather || noGender
-            }
-            .count
     }
 
     var body: some View {

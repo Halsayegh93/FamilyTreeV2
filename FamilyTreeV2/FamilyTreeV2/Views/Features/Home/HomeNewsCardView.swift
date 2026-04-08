@@ -48,7 +48,7 @@ struct HomeNewsCardView: View {
         let parts = name.split(separator: " ")
         guard parts.count > 3, let last = parts.last else { return name }
         let first3 = parts.prefix(3).joined(separator: " ")
-        if parts[2] == last { return first3 }
+        if parts.dropFirst(2).first == last { return first3 }
         return "\(first3) \(last)"
     }
 

@@ -347,6 +347,13 @@ class NotificationViewModel: ObservableObject {
                 .execute()
             self.linkedDevices.removeAll { $0.id == device.id }
             Log.info("تم حذف الجهاز بنجاح")
+
+            // إذا حذف المستخدم جهازه الحالي — نعيد تسجيله فوراً ونحدث القائمة
+            if device.deviceId == currentDeviceId {
+                Log.info("[DEVICE] الجهاز المحذوف هو الجهاز الحالي — إعادة تسجيل تلقائية…")
+                await registerDevice()
+                await fetchLinkedDevices()
+            }
         } catch {
             Log.error("خطأ حذف الجهاز: \(error.localizedDescription)")
         }
@@ -388,6 +395,14 @@ class NotificationViewModel: ObservableObject {
                 .eq("id", value: device.id)
                 .execute()
             Log.info("[ADMIN-DEVICE] تم حذف جهاز العضو بنجاح: \(device.displayName)")
+
+            // إذا المدير حذف جهازه هو — نعيد تسجيله فوراً
+            if device.deviceId == currentDeviceId {
+                Log.info("[DEVICE] المدير حذف جهازه الحالي — إعادة تسجيل تلقائية…")
+                await registerDevice()
+                await fetchLinkedDevices()
+            }
+
             return true
         } catch {
             Log.error("[ADMIN-DEVICE] خطأ حذف جهاز العضو: \(error.localizedDescription)")

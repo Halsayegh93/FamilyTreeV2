@@ -651,8 +651,9 @@ class AuthViewModel: ObservableObject {
             self.phoneNumber = normalizedPhone
         }
         
-        // تسجيل الجهاز — حتى لو pendingApproval عشان يوصله إشعار الموافقة
-        if access == .fullyAuthenticated || access == .pendingApproval {
+        // تسجيل الجهاز يتم في AppState عند تغيير status لـ fullyAuthenticated
+        // pendingApproval يحتاج تسجيل هنا عشان يوصله إشعار الموافقة
+        if access == .pendingApproval {
             await notificationVM?.registerDevice()
         }
     }
@@ -841,6 +842,12 @@ class AuthViewModel: ObservableObject {
     }
 
     func checkUserProfile() async {
+        // بدون نت + المستخدم مسجل — نحتفظ بالحالة الحالية ولا نتشيك
+        if !NetworkMonitor.shared.isConnected && currentUser != nil {
+            Log.info("[AUTH] بدون اتصال — نحتفظ بالحالة الحالية")
+            return
+        }
+
         let user: Supabase.User
         do {
             user = try await supabase.auth.session.user
@@ -857,8 +864,35 @@ class AuthViewModel: ObservableObject {
                 Log.info("[AUTH] No session found → unauthenticated: \(error.localizedDescription)")
                 self.status = .unauthenticated
             } else {
-                // خطأ شبكة أو خطأ مؤقت — لا نسجل خروج، نحتفظ بالحالة الحالية
-                Log.warning("[AUTH] خطأ مؤقت في جلب الجلسة (لن نسجل خروج): \(error.localizedDescription)")
+                // خطأ شبكة أو خطأ مؤقت — لا نسجل خروج
+                // لو cold start بدون نت — نحاول نستعيد من الكاش
+                if currentUser == nil,
+                   let cached = CacheManager.shared.load([FamilyMember].self, for: .members),
+                   let sessionUser = try? await supabase.auth.session.user,
+                   let profile = cached.first(where: { $0.id == sessionUser.id }) {
+                    Log.info("[AUTH] استعادة المستخدم من الكاش (بدون نت): \(profile.fullName)")
+                    self.currentUser = profile
+                    self.isAuthenticated = true
+                    let access = self.resolveAuthAccess(for: profile)
+                    self.status = access
+                } else {
+                    Log.warning("[AUTH] خطأ مؤقت في جلب الجلسة (لن نسجل خروج): \(error.localizedDescription)")
+                }
+            }
+            return
+        }
+
+        // بدون نت بعد قراءة الجلسة — نستعيد من الكاش بدل جلب من السيرفر
+        if !NetworkMonitor.shared.isConnected {
+            if let cached = CacheManager.shared.load([FamilyMember].self, for: .members),
+               let profile = cached.first(where: { $0.id == user.id }) {
+                Log.info("[AUTH] استعادة المستخدم من الكاش (cold start بدون نت): \(profile.fullName)")
+                self.currentUser = profile
+                self.isAuthenticated = true
+                let access = self.resolveAuthAccess(for: profile)
+                self.status = access
+            } else {
+                Log.info("[AUTH] بدون اتصال — تخطي جلب البروفايل من السيرفر")
             }
             return
         }
@@ -888,6 +922,12 @@ class AuthViewModel: ObservableObject {
             )
             self.isOtpSent = false
             self.isLoading = false
+            return
+        }
+
+        // بدون نت — لا نحاول جلب البروفايل من السيرفر
+        if !NetworkMonitor.shared.isConnected {
+            Log.info("[AUTH] بدون اتصال — تخطي جلب البروفايل من السيرفر")
             return
         }
 

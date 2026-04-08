@@ -38,9 +38,8 @@ final class CacheManager {
     private let appGroupId = "group.Hasan.FamilyTreeV2"
 
     private init() {
-        guard let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first else {
-            fatalError("CacheManager: Cannot find caches directory")
-        }
+        let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
+            ?? FileManager.default.temporaryDirectory
         self.cacheDirectory = caches.appendingPathComponent("offline_cache", isDirectory: true)
 
         // إنشاء المجلد إذا مو موجود

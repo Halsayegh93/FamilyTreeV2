@@ -197,7 +197,7 @@ struct FamilyMember: Identifiable, Codable, Equatable {
     var shortFullName: String {
         let parts = fullName.split(separator: " ")
         guard parts.count >= 3, let first = parts.first, let last = parts.last else { return fullName }
-        let second = parts[1]
+        guard let second = parts.dropFirst().first else { return fullName }
         if second == last { return "\(first) \(second)" }
         return "\(first) \(second) \(last)"
     }

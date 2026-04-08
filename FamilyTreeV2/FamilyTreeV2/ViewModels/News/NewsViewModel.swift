@@ -166,11 +166,10 @@ class NewsViewModel: ObservableObject {
         }
 
         do {
-            let postIdSet = Set(postIds)
             let votes: [NewsPollVoteRecord] = try await supabase
                 .from("news_poll_votes")
                 .select("news_id,member_id,option_index")
-                .limit(10000)
+                .in("news_id", values: postIds.map(\.uuidString))
                 .execute()
                 .value
 
@@ -178,15 +177,15 @@ class NewsViewModel: ObservableObject {
             var userSelection: [UUID: Int] = [:]
             let currentUserId = currentUser?.id
 
-            for vote in votes where postIdSet.contains(vote.news_id) {
+            for vote in votes {
                 aggregated[vote.news_id, default: [:]][vote.option_index, default: 0] += 1
                 if let currentUserId, vote.member_id == currentUserId {
                     userSelection[vote.news_id] = vote.option_index
                 }
             }
 
-            pollVotesByPost = aggregated
-            userVoteByPost = userSelection
+            pollVotesByPost.merge(aggregated) { _, new in new }
+            userVoteByPost.merge(userSelection) { _, new in new }
             newsPollFeatureAvailable = true
         } catch {
             if ErrorHelper.isMissingTable(error, table: "news_poll_votes") {
@@ -209,12 +208,10 @@ class NewsViewModel: ObservableObject {
         }
 
         do {
-            let postIdSet = Set(postIds)
             let likes: [NewsLikeRecord] = try await supabase
                 .from("news_likes")
                 .select("id,news_id,member_id")
-                .order("news_id")
-                .limit(10000)
+                .in("news_id", values: postIds.map(\.uuidString))
                 .execute()
                 .value
 
@@ -222,15 +219,15 @@ class NewsViewModel: ObservableObject {
             var userLikes: Set<UUID> = []
             let currentUserId = await authenticatedUserId()
 
-            for like in likes where postIdSet.contains(like.news_id) {
+            for like in likes {
                 counts[like.news_id, default: 0] += 1
                 if let currentUserId, like.member_id == currentUserId {
                     userLikes.insert(like.news_id)
                 }
             }
 
-            self.likesCountByPost = counts
-            self.likedPosts = userLikes
+            self.likesCountByPost.merge(counts) { _, new in new }
+            self.likedPosts.formUnion(userLikes)
         } catch {
             if ErrorHelper.isCancellation(error) { return }
             Log.error("خطأ جلب الاعجابات: \(error.localizedDescription)")
@@ -247,25 +244,25 @@ class NewsViewModel: ObservableObject {
         }
 
         do {
-            let postIdSet = Set(postIds)
             let commentsData: [NewsCommentRecord] = try await supabase
                 .from("news_comments")
                 .select()
+                .in("news_id", values: postIds.map(\.uuidString))
                 .order("created_at", ascending: true)
-                .limit(10000)
                 .execute()
                 .value
 
             var aggregated: [UUID: [NewsCommentRecord]] = [:]
             var counts: [UUID: Int] = [:]
 
-            for comment in commentsData where postIdSet.contains(comment.news_id) {
+            for comment in commentsData {
                 aggregated[comment.news_id, default: []].append(comment)
                 counts[comment.news_id, default: 0] += 1
             }
 
-            self.commentsByPost = aggregated
-            self.commentsCountByPost = counts
+            // دمج النتائج مع البيانات الموجودة (لدعم تحديث خبر واحد)
+            self.commentsByPost.merge(aggregated) { _, new in new }
+            self.commentsCountByPost.merge(counts) { _, new in new }
         } catch {
             if ErrorHelper.isCancellation(error) { return }
             Log.error("خطأ جلب التعليقات: \(error.localizedDescription)")
@@ -365,8 +362,8 @@ class NewsViewModel: ObservableObject {
                 .insert(commentRecord)
                 .execute()
 
-            // Refresh comments to get new data
-            await fetchNewsComments(for: allNews.map(\.id))
+            // تحديث تعليقات الخبر المعني فقط بدل كل الأخبار
+            await fetchNewsComments(for: [postId])
 
             // إشعار صاحب الخبر بالتعليق الجديد (إذا مو هو نفسه)
             if let postAuthorId = allNews.first(where: { $0.id == postId })?.author_id,

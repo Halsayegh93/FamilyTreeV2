@@ -109,7 +109,8 @@ struct AdminDevicesView: View {
                         isRemoving = true
                         let success = await notificationVM.removeDeviceByAdmin(device)
                         if success {
-                            allDevices.removeAll { $0.id == device.id }
+                            // إعادة جلب القائمة — لأن الجهاز الحالي قد يكون تسجل تلقائي
+                            allDevices = await notificationVM.fetchAllDevices()
                         }
                         isRemoving = false
                     }

@@ -125,8 +125,44 @@ class MemberViewModel: ObservableObject {
         membersVersion += 1
     }
 
+    // MARK: - Single Member Update
+
+    /// تحديث أو إضافة عضو واحد محلياً بدون إعادة تحميل الكل
+    func upsertMemberLocally(_ member: FamilyMember) {
+        if let idx = allMembers.firstIndex(where: { $0.id == member.id }) {
+            allMembers[idx] = member
+        } else {
+            allMembers.append(member)
+        }
+        membersVersion += 1
+        CacheManager.shared.save(allMembers, for: .members)
+
+        // تحديث currentUser إذا هو نفسه
+        if member.id == currentUser?.id {
+            authVM?.currentUser = member
+        }
+    }
+
+    /// جلب عضو واحد من السيرفر وتحديثه محلياً
+    func fetchSingleMember(id: UUID) async {
+        guard NetworkMonitor.shared.isConnected else { return }
+        do {
+            let response = try await supabase
+                .from("profiles")
+                .select()
+                .eq("id", value: id.uuidString)
+                .single()
+                .execute()
+
+            let member = try JSONDecoder().decode(FamilyMember.self, from: response.data)
+            upsertMemberLocally(member)
+        } catch {
+            Log.error("[Members] خطأ جلب عضو واحد (\(id.uuidString.prefix(8))): \(error.localizedDescription)")
+        }
+    }
+
     // MARK: - Fetch Members
-    
+
     func fetchAllMembers(force: Bool = false) async {
         // تحميل من الكاش أولاً إذا لا توجد بيانات
         if allMembers.isEmpty,
@@ -252,7 +288,7 @@ class MemberViewModel: ObservableObject {
 
         do {
             try await supabase.from("profiles").insert(memberData).execute()
-            await fetchAllMembers(force: true)
+            await fetchSingleMember(id: newId)
             self.isLoading = false
             return true
         } catch {
@@ -405,8 +441,8 @@ class MemberViewModel: ObservableObject {
                 }
             }
             
-            // تحديث البيانات فوراً
-            await fetchAllMembers(force: true)
+            // تحديث البيانات فوراً — عضو واحد فقط
+            await fetchSingleMember(id: newId)
             await fetchChildren(for: fatherId)
             
             Log.info("تمت إضافة الابن بنجاح")
@@ -466,7 +502,7 @@ class MemberViewModel: ObservableObject {
                 .execute()
             
             // 5. تحديث البيانات محلياً فوراً
-            await fetchAllMembers(force: true)
+            await fetchSingleMember(id: memberId)
             if memberId == currentUser?.id {
                 await authVM?.checkUserProfile()
             }
@@ -540,7 +576,7 @@ class MemberViewModel: ObservableObject {
                 .execute()
             
             // 2. تحديث البيانات محلياً
-            await fetchAllMembers(force: true)
+            await fetchSingleMember(id: memberId)
             if memberId == currentUser?.id {
                 await authVM?.checkUserProfile()
             }
@@ -587,8 +623,8 @@ class MemberViewModel: ObservableObject {
                 .update(["cover_url": AnyEncodable(urlString)])
                 .eq("id", value: memberId.uuidString)
                 .execute()
-            
-            await fetchAllMembers(force: true)
+
+            await fetchSingleMember(id: memberId)
             if memberId == currentUser?.id {
                 await authVM?.checkUserProfile()
             }
@@ -628,14 +664,14 @@ class MemberViewModel: ObservableObject {
             let updateData: [String: AnyEncodable] = [
                 "cover_url": AnyEncodable(Optional<String>.none)
             ]
-            
+
             try await supabase
                 .from("profiles")
                 .update(updateData)
                 .eq("id", value: memberId.uuidString)
                 .execute()
-            
-            await fetchAllMembers(force: true)
+
+            await fetchSingleMember(id: memberId)
             if memberId == currentUser?.id {
                 await authVM?.checkUserProfile()
             }
@@ -678,8 +714,8 @@ class MemberViewModel: ObservableObject {
                 .update(["photo_url": AnyEncodable(publicURL)])
                 .eq("id", value: memberId.uuidString)
                 .execute()
-            
-            await fetchAllMembers(force: true)
+
+            await fetchSingleMember(id: memberId)
             if memberId == currentUser?.id {
                 await authVM?.checkUserProfile()
             }
@@ -718,8 +754,8 @@ class MemberViewModel: ObservableObject {
                 .update(["photo_url": AnyEncodable(Optional<String>.none)])
                 .eq("id", value: memberId.uuidString)
                 .execute()
-            
-            await fetchAllMembers(force: true)
+
+            await fetchSingleMember(id: memberId)
             if memberId == currentUser?.id {
                 await authVM?.checkUserProfile()
             }
@@ -1016,10 +1052,11 @@ class MemberViewModel: ObservableObject {
             let oldMember = _memberById[memberId]
             if oldMember?.fullName != fullName || oldMember?.firstName != firstName {
                 await propagateNameToDescendants(of: memberId)
+                // تحديث كل الأعضاء لأن الذرية تغيرت
+                await fetchAllMembers(force: true)
+            } else {
+                await fetchSingleMember(id: memberId)
             }
-
-            // 5. تحديث البيانات محلياً
-            await fetchAllMembers(force: true)
 
             // إذا كان المستخدم يحدّث ملفه الشخصي "هو"
             if memberId == currentUser?.id {
@@ -1046,7 +1083,7 @@ class MemberViewModel: ObservableObject {
                 .eq("id", value: memberId.uuidString)
                 .execute()
 
-            await fetchAllMembers(force: true)
+            await fetchSingleMember(id: memberId)
             if memberId == currentUser?.id {
                 await authVM?.checkUserProfile()
             }
@@ -1066,7 +1103,7 @@ class MemberViewModel: ObservableObject {
                 .update(["is_phone_hidden": AnyEncodable(isHidden)])
                 .eq("id", value: userId.uuidString)
                 .execute()
-            await fetchAllMembers(force: true)
+            await fetchSingleMember(id: userId)
             if let updated = _memberById[userId] {
                 authVM?.currentUser = updated
             }
@@ -1087,7 +1124,7 @@ class MemberViewModel: ObservableObject {
                 .update(["is_birth_date_hidden": AnyEncodable(isHidden)])
                 .eq("id", value: userId.uuidString)
                 .execute()
-            await fetchAllMembers(force: true)
+            await fetchSingleMember(id: userId)
             if let updated = _memberById[userId] {
                 authVM?.currentUser = updated
             }
@@ -1106,7 +1143,7 @@ class MemberViewModel: ObservableObject {
                 .update(["badge_enabled": AnyEncodable(isEnabled)])
                 .eq("id", value: userId.uuidString)
                 .execute()
-            await fetchAllMembers(force: true)
+            await fetchSingleMember(id: userId)
             if let updated = _memberById[userId] {
                 authVM?.currentUser = updated
             }
@@ -1293,7 +1330,10 @@ class MemberViewModel: ObservableObject {
                 .eq("id", value: memberId.uuidString)
                 .execute()
 
-            await fetchAllMembers(force: true)
+            // إزالة العضو محلياً
+            allMembers.removeAll { $0.id == memberId }
+            membersVersion += 1
+            CacheManager.shared.save(allMembers, for: .members)
             Log.info("تم حذف العضو بنجاح: \(memberId)")
             isLoading = false
             return true
@@ -1334,9 +1374,9 @@ class MemberViewModel: ObservableObject {
                 .update(roleUpdate)
                 .eq("id", value: memberId.uuidString)
                 .execute()
-            
-            // 2. تحديث البيانات محلياً لكي تظهر التغييرات فوراً في الشجرة
-            await fetchAllMembers(force: true)
+
+            // 2. تحديث البيانات محلياً
+            await fetchSingleMember(id: memberId)
             
             let memberName = _memberById[memberId]?.firstName ?? "عضو"
             let roleName: String = {
@@ -1430,7 +1470,7 @@ class MemberViewModel: ObservableObject {
         }
         
         // 3) مزامنة نهائية مع الشجرة بعد الحفظ
-        await fetchAllMembers(force: true)
+        await fetchAllMembers(force: false)
         if fatherId == self.currentUser?.id {
             await fetchChildren(for: fatherId)
         }
@@ -1497,7 +1537,7 @@ class MemberViewModel: ObservableObject {
                     .execute()
             }
 
-            await fetchAllMembers(force: true) // تحديث البيانات فوراً ✅
+            await fetchSingleMember(id: memberId)
             Log.info("تم تحديث الهاتف وتفعيل العضو للدخول المباشر")
         } catch {
             Log.error("خطأ تحديث الهاتف: \(error.localizedDescription)")
@@ -1516,8 +1556,8 @@ class MemberViewModel: ObservableObject {
                 "admin-unlink-phone",
                 options: .init(body: ["memberId": memberId.uuidString.lowercased()])
             )
-            
-            await fetchAllMembers(force: true)
+
+            await fetchSingleMember(id: memberId)
             Log.info("تم حذف رقم الهاتف وفك ارتباط حساب المصادقة بالكامل")
         } catch {
             Log.error("خطأ حذف الهاتف: \(error.localizedDescription)")
@@ -1540,8 +1580,8 @@ class MemberViewModel: ObservableObject {
                     .delete()
                     .eq("user_id", value: memberId.uuidString)
                     .execute()
-                
-                await fetchAllMembers(force: true)
+
+                await fetchSingleMember(id: memberId)
                 Log.info("تم حذف رقم الهاتف محلياً (بدون حذف auth user)")
             } catch {
                 Log.error("فشل التنظيف المحلي أيضاً: \(error.localizedDescription)")
@@ -1566,7 +1606,7 @@ class MemberViewModel: ObservableObject {
                 .eq("id", value: memberId.uuidString)
                 .execute()
 
-            await fetchAllMembers(force: true)
+            await fetchSingleMember(id: memberId)
             Log.info("تم تحديث الجنس")
         } catch {
             Log.error("خطأ تحديث الجنس: \(error.localizedDescription)")
@@ -1590,7 +1630,7 @@ class MemberViewModel: ObservableObject {
                 .eq("id", value: memberId.uuidString)
                 .execute()
 
-            await fetchAllMembers(force: true)
+            await fetchSingleMember(id: memberId)
             Log.info("تم تحديث تاريخ الميلاد")
         } catch {
             Log.error("خطأ تحديث تاريخ الميلاد: \(error.localizedDescription)")
@@ -1615,7 +1655,7 @@ class MemberViewModel: ObservableObject {
                 .eq("id", value: memberId.uuidString)
                 .execute()
             
-            await fetchAllMembers(force: true)
+            await fetchSingleMember(id: memberId)
             Log.info("تم تحديث ربط الأب بنجاح")
         } catch {
             Log.error("خطأ في ربط الأب: \(error.localizedDescription)")
@@ -1663,7 +1703,7 @@ class MemberViewModel: ObservableObject {
                 .execute()
             
             // 4. تحديث القائمة المحلية فوراً
-            await fetchAllMembers(force: true)
+            await fetchSingleMember(id: memberId)
             Log.info("تم تحديث البيانات بنجاح (مع دعم التواريخ المفقودة)")
             
         } catch {
@@ -1738,11 +1778,11 @@ class MemberViewModel: ObservableObject {
             }
         }
 
-        await fetchAllMembers(force: true)
+        await fetchSingleMember(id: member.id)
         if let fatherId = member.fatherId {
             await fetchChildren(for: fatherId)
         }
-        
+
         self.isLoading = false
         return true
     }
