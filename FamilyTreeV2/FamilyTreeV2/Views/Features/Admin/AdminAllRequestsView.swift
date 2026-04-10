@@ -1168,10 +1168,9 @@ struct AdminAllRequestsView: View {
     // MARK: - News Row
 
     private func newsRow(for post: NewsPost) -> some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+        VStack(alignment: .leading, spacing: DS.Spacing.md) {
             HStack(spacing: DS.Spacing.sm) {
-                let member = post.author_id.flatMap { memberVM.member(byId: $0) }
-                memberAvatar(urlStr: member?.avatarUrl, name: post.author_name)
+                iconCircle(icon: "newspaper.fill", color: newsTypeColor(post.type), size: 36)
 
                 Text(post.author_name)
                     .font(DS.Font.calloutBold)
@@ -1183,12 +1182,7 @@ struct AdminAllRequestsView: View {
                 typeBadge(text: post.type, color: newsTypeColor(post.type))
             }
 
-            Text(post.content)
-                .font(DS.Font.caption1)
-                .foregroundColor(DS.Color.textPrimary)
-                .lineSpacing(3)
-                .lineLimit(3)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            contentBlock(post.content)
 
             if !post.mediaURLs.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -1239,11 +1233,7 @@ struct AdminAllRequestsView: View {
                 Spacer()
             }
 
-            Text(request.details ?? L10n.t("بلاغ بدون تفاصيل", "Report without details"))
-                .font(DS.Font.caption1)
-                .foregroundColor(DS.Color.textPrimary)
-                .lineLimit(2)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            contentBlock(request.details ?? L10n.t("بلاغ بدون تفاصيل", "Report without details"))
 
             if let post = reportedPost {
                 Text(post.content)
@@ -1279,9 +1269,15 @@ struct AdminAllRequestsView: View {
             HStack(spacing: DS.Spacing.sm) {
                 iconCircle(icon: "phone.arrow.right", color: DS.Color.primary, size: 36)
 
-                Text(memberName)
-                    .font(DS.Font.calloutBold)
-                    .foregroundColor(DS.Color.textPrimary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(memberName)
+                        .font(DS.Font.calloutBold)
+                        .foregroundColor(DS.Color.textPrimary)
+
+                    Text(L10n.t("طلب تغيير رقم", "Phone change request"))
+                        .font(DS.Font.caption1)
+                        .foregroundColor(DS.Color.textSecondary)
+                }
 
                 Spacer()
             }
@@ -1290,15 +1286,15 @@ struct AdminAllRequestsView: View {
                 VStack(spacing: 2) {
                     Text(L10n.t("الجديد", "New"))
                         .font(DS.Font.caption2)
-                        .foregroundColor(DS.Color.success)
+                        .foregroundColor(DS.Color.textTertiary)
                     Text(newPhone)
                         .font(DS.Font.caption1)
                         .fontWeight(.bold)
-                        .foregroundColor(DS.Color.success)
+                        .foregroundColor(DS.Color.textPrimary)
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, DS.Spacing.sm)
-                .background(DS.Color.success.opacity(0.06))
+                .background(DS.Color.surfaceElevated)
                 .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm))
 
                 Image(systemName: L10n.isArabic ? "arrow.right" : "arrow.left")
@@ -1341,10 +1337,16 @@ struct AdminAllRequestsView: View {
             HStack(spacing: DS.Spacing.sm) {
                 iconCircle(icon: "tent.fill", color: DS.Color.gridDiwaniya, size: 36)
 
-                Text(diwaniya.title)
-                    .font(DS.Font.calloutBold)
-                    .foregroundColor(DS.Color.textPrimary)
-                    .lineLimit(1)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(diwaniya.title)
+                        .font(DS.Font.calloutBold)
+                        .foregroundColor(DS.Color.textPrimary)
+                        .lineLimit(1)
+
+                    Text(diwaniya.ownerName)
+                        .font(DS.Font.caption1)
+                        .foregroundColor(DS.Color.textSecondary)
+                }
 
                 Spacer()
             }
@@ -1354,16 +1356,6 @@ struct AdminAllRequestsView: View {
             }
             if let address = diwaniya.address, !address.isEmpty {
                 detailRow(icon: "mappin.and.ellipse", text: address)
-            }
-
-            // صاحب الديوانية تحت
-            HStack(spacing: DS.Spacing.xs) {
-                Image(systemName: "person.fill")
-                    .font(DS.Font.scaled(10, weight: .medium))
-                    .foregroundColor(DS.Color.textTertiary)
-                Text(diwaniya.ownerName)
-                    .font(DS.Font.caption2)
-                    .foregroundColor(DS.Color.textTertiary)
             }
         }
     }
@@ -1375,18 +1367,23 @@ struct AdminAllRequestsView: View {
             HStack(spacing: DS.Spacing.sm) {
                 iconCircle(icon: "bolt.heart.fill", color: DS.Color.error, size: 36)
 
-                Text(request.member?.fullName ?? L10n.t("عضو", "Member"))
-                    .font(DS.Font.calloutBold)
-                    .foregroundColor(DS.Color.textPrimary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(request.member?.fullName ?? L10n.t("عضو", "Member"))
+                        .font(DS.Font.calloutBold)
+                        .foregroundColor(DS.Color.textPrimary)
+
+                    if let requester = memberVM.allMembers.first(where: { $0.id == request.requesterId }) {
+                        Text(L10n.t("من: \(requester.fullName)", "By: \(requester.fullName)"))
+                            .font(DS.Font.caption1)
+                            .foregroundColor(DS.Color.textSecondary)
+                    }
+                }
 
                 Spacer()
             }
 
             if let details = request.details, !details.isEmpty {
-                Text(details)
-                    .font(DS.Font.caption2)
-                    .foregroundColor(DS.Color.textSecondary)
-                    .lineLimit(1)
+                contentBlock(details)
             }
 
             // التاريخ تحت
@@ -1410,18 +1407,23 @@ struct AdminAllRequestsView: View {
             HStack(spacing: DS.Spacing.sm) {
                 iconCircle(icon: "person.badge.plus", color: DS.Color.info, size: 36)
 
-                Text(request.member?.fullName ?? L10n.t("عضو", "Member"))
-                    .font(DS.Font.calloutBold)
-                    .foregroundColor(DS.Color.textPrimary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(request.member?.fullName ?? L10n.t("عضو", "Member"))
+                        .font(DS.Font.calloutBold)
+                        .foregroundColor(DS.Color.textPrimary)
+
+                    if let requester = memberVM.allMembers.first(where: { $0.id == request.requesterId }) {
+                        Text(L10n.t("من: \(requester.fullName)", "By: \(requester.fullName)"))
+                            .font(DS.Font.caption1)
+                            .foregroundColor(DS.Color.textSecondary)
+                    }
+                }
 
                 Spacer()
             }
 
             if let details = request.details, !details.isEmpty {
-                Text(details)
-                    .font(DS.Font.caption2)
-                    .foregroundColor(DS.Color.textSecondary)
-                    .lineLimit(1)
+                contentBlock(details)
             }
 
             // التاريخ تحت
@@ -1445,18 +1447,23 @@ struct AdminAllRequestsView: View {
             HStack(spacing: DS.Spacing.sm) {
                 iconCircle(icon: "camera.badge.ellipsis", color: DS.Color.neonBlue, size: 36)
 
-                Text(request.member?.fullName ?? L10n.t("عضو", "Member"))
-                    .font(DS.Font.calloutBold)
-                    .foregroundColor(DS.Color.textPrimary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(request.member?.fullName ?? L10n.t("عضو", "Member"))
+                        .font(DS.Font.calloutBold)
+                        .foregroundColor(DS.Color.textPrimary)
+
+                    if let requester = memberVM.allMembers.first(where: { $0.id == request.requesterId }) {
+                        Text(L10n.t("من: \(requester.fullName)", "By: \(requester.fullName)"))
+                            .font(DS.Font.caption1)
+                            .foregroundColor(DS.Color.textSecondary)
+                    }
+                }
 
                 Spacer()
             }
 
             if let details = request.details, !details.isEmpty {
-                Text(details)
-                    .font(DS.Font.caption2)
-                    .foregroundColor(DS.Color.textSecondary)
-                    .lineLimit(1)
+                contentBlock(details)
             }
 
             if let photoUrl = request.newValue, let url = URL(string: photoUrl) {
@@ -1497,37 +1504,42 @@ struct AdminAllRequestsView: View {
         let currentName = request.member?.fullName ?? L10n.t("عضو", "Member")
         let newName = request.newValue ?? "—"
 
-        return VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+        return VStack(alignment: .leading, spacing: DS.Spacing.md) {
             // الصف الأول: الأيقونة + الاسم + البادج
             HStack(spacing: DS.Spacing.sm) {
-                iconCircle(icon: "rectangle.and.pencil.and.ellipsis", color: DS.Color.neonPurple, size: 30)
+                iconCircle(icon: "rectangle.and.pencil.and.ellipsis", color: DS.Color.neonPurple, size: 36)
 
-                Text(currentName)
-                    .font(DS.Font.subheadline)
-                    .foregroundColor(DS.Color.textPrimary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(currentName)
+                        .font(DS.Font.calloutBold)
+                        .foregroundColor(DS.Color.textPrimary)
+
+                    if let requester = memberVM.allMembers.first(where: { $0.id == request.requesterId }) {
+                        Text(L10n.t("من: \(requester.fullName)", "By: \(requester.fullName)"))
+                            .font(DS.Font.caption1)
+                            .foregroundColor(DS.Color.textSecondary)
+                    }
+                }
 
                 Spacer()
-
-                typeBadge(text: L10n.t("تغيير اسم", "Name Change"), color: DS.Color.neonPurple)
             }
 
             // الاسم الجديد
             HStack(spacing: DS.Spacing.xs) {
                 Image(systemName: "arrow.right")
                     .font(DS.Font.scaled(10, weight: .bold))
-                    .foregroundColor(DS.Color.success)
+                    .foregroundColor(DS.Color.textTertiary)
                 Text(L10n.t("الاسم الجديد:", "New name:"))
                     .font(DS.Font.caption2)
-                    .foregroundColor(DS.Color.textSecondary)
+                    .foregroundColor(DS.Color.textTertiary)
                 Text(newName)
-                    .font(DS.Font.subheadline)
-                    .fontWeight(.semibold)
-                    .foregroundColor(DS.Color.success)
+                    .font(DS.Font.calloutBold)
+                    .foregroundColor(DS.Color.textPrimary)
             }
             .padding(.horizontal, DS.Spacing.sm)
             .padding(.vertical, DS.Spacing.xs)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(DS.Color.success.opacity(0.06))
+            .background(DS.Color.surfaceElevated)
             .cornerRadius(DS.Radius.sm)
 
             // التاريخ تحت
@@ -1711,7 +1723,7 @@ struct AdminAllRequestsView: View {
         // Display name: target member or new member name
         let displayName = payload?.targetMemberName ?? payload?.newMemberName ?? request.member?.fullName ?? L10n.t("عضو", "Member")
 
-        return VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+        return VStack(alignment: .leading, spacing: DS.Spacing.md) {
             HStack(spacing: DS.Spacing.sm) {
                 iconCircle(icon: rowIcon, color: rowColor, size: 36)
 
@@ -1739,34 +1751,22 @@ struct AdminAllRequestsView: View {
                     switch payload.action {
                     case "تعديل اسم":
                         if let newName = payload.newName, !newName.isEmpty {
-                            Text(L10n.t("← \(newName)", "→ \(newName)"))
-                                .font(DS.Font.caption1)
-                                .foregroundColor(DS.Color.info)
+                            contentBlock(L10n.t("← \(newName)", "→ \(newName)"))
                         }
                     case "إضافة":
                         if let parent = payload.parentMemberName, let child = payload.newMemberName {
-                            Text(L10n.t("إضافة \(child) تحت \(parent)", "Add \(child) under \(parent)"))
-                                .font(DS.Font.caption1)
-                                .foregroundColor(DS.Color.success)
+                            contentBlock(L10n.t("إضافة \(child) تحت \(parent)", "Add \(child) under \(parent)"))
                         }
                     case "حذف":
                         if let reason = payload.reason, !reason.isEmpty {
-                            Text(reason)
-                                .font(DS.Font.caption1)
-                                .foregroundColor(DS.Color.error)
-                                .lineLimit(1)
+                            contentBlock(reason)
                         }
                     default:
                         EmptyView()
                     }
                 }
             } else if let details = request.details, !details.isEmpty {
-                // Fallback for old format
-                Text(details)
-                    .font(DS.Font.caption1)
-                    .foregroundColor(DS.Color.textPrimary)
-                    .lineLimit(2)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                contentBlock(details)
             }
 
             // التاريخ تحت
@@ -1787,87 +1787,95 @@ struct AdminAllRequestsView: View {
 
     // MARK: - Gallery Pending Row
     private func galleryPendingRow(photo: MemberGalleryPhoto) -> some View {
-        HStack(spacing: DS.Spacing.md) {
+        VStack(alignment: .leading, spacing: DS.Spacing.md) {
+            HStack(spacing: DS.Spacing.sm) {
+                iconCircle(icon: "photo.on.rectangle.angled", color: DS.Color.gridDiwaniya, size: 36)
+
+                Text(memberVM.member(byId: photo.memberId)?.fullName ?? L10n.t("عضو", "Member"))
+                    .font(DS.Font.calloutBold)
+                    .foregroundColor(DS.Color.textPrimary)
+
+                Spacer()
+            }
+
+            if let caption = photo.caption, !caption.isEmpty {
+                contentBlock(caption)
+            }
+
+            // صورة مصغرة
             AsyncImage(url: URL(string: photo.photoURL)) { phase in
                 switch phase {
                 case .success(let image):
                     image.resizable().scaledToFill()
-                        .frame(width: 60, height: 60)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 140)
                         .clipped()
-                        .cornerRadius(DS.Radius.sm)
+                        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
                 default:
-                    RoundedRectangle(cornerRadius: DS.Radius.sm)
+                    RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
                         .fill(DS.Color.surface)
-                        .frame(width: 60, height: 60)
-                        .overlay(Image(systemName: "photo").foregroundColor(DS.Color.textTertiary))
+                        .frame(height: 140)
+                        .overlay(ProgressView().tint(DS.Color.primary))
                 }
             }
 
-            VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                if let member = memberVM.member(byId: photo.memberId) {
-                    Text(member.fullName)
-                        .font(DS.Font.calloutBold)
-                        .foregroundColor(DS.Color.textPrimary)
-                }
-                if let caption = photo.caption, !caption.isEmpty {
-                    Text(caption)
-                        .font(DS.Font.caption1)
-                        .foregroundColor(DS.Color.textSecondary)
-                        .lineLimit(1)
-                }
-                if let date = photo.createdAt {
+            // التاريخ تحت
+            if let date = photo.createdAt {
+                HStack(spacing: DS.Spacing.xs) {
+                    Image(systemName: "clock")
+                        .font(DS.Font.scaled(10, weight: .medium))
+                        .foregroundColor(DS.Color.textTertiary)
                     Text(String(date.prefix(10)))
                         .font(DS.Font.caption2)
                         .foregroundColor(DS.Color.textTertiary)
                 }
             }
-
-            Spacer()
-
-            DSPulseBadge(count: 1)
         }
-        .padding(.vertical, DS.Spacing.xs)
     }
 
     // MARK: - Story Pending Row
     private func storyPendingRow(story: FamilyStory) -> some View {
-        HStack(spacing: DS.Spacing.md) {
+        VStack(alignment: .leading, spacing: DS.Spacing.md) {
+            HStack(spacing: DS.Spacing.sm) {
+                iconCircle(icon: "circle.dashed", color: DS.Color.neonCyan, size: 36)
+
+                Text(memberVM.member(byId: story.memberId)?.firstName ?? L10n.t("عضو", "Member"))
+                    .font(DS.Font.calloutBold)
+                    .foregroundColor(DS.Color.textPrimary)
+
+                Spacer()
+            }
+
+            if let caption = story.caption, !caption.isEmpty {
+                contentBlock(caption)
+            }
+
+            // صورة مصغرة
             CachedAsyncPhaseImage(url: URL(string: story.imageUrl)) { phase in
                 if let image = phase.image {
                     image.resizable().scaledToFill()
-                        .frame(width: 60, height: 60)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 140)
                         .clipped()
-                        .cornerRadius(DS.Radius.sm)
+                        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
                 } else {
-                    RoundedRectangle(cornerRadius: DS.Radius.sm)
+                    RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
                         .fill(DS.Color.surface)
-                        .frame(width: 60, height: 60)
-                        .overlay(Image(systemName: "circle.dashed").foregroundColor(DS.Color.textTertiary))
+                        .frame(height: 140)
+                        .overlay(ProgressView().tint(DS.Color.primary))
                 }
             }
 
-            VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                if let member = memberVM.member(byId: story.memberId) {
-                    Text(member.firstName)
-                        .font(DS.Font.calloutBold)
-                        .foregroundColor(DS.Color.textPrimary)
-                }
-                if let caption = story.caption, !caption.isEmpty {
-                    Text(caption)
-                        .font(DS.Font.caption1)
-                        .foregroundColor(DS.Color.textSecondary)
-                        .lineLimit(1)
-                }
+            // التاريخ تحت
+            HStack(spacing: DS.Spacing.xs) {
+                Image(systemName: "clock")
+                    .font(DS.Font.scaled(10, weight: .medium))
+                    .foregroundColor(DS.Color.textTertiary)
                 Text(String(story.createdAt.prefix(10)))
                     .font(DS.Font.caption2)
                     .foregroundColor(DS.Color.textTertiary)
             }
-
-            Spacer()
-
-            DSPulseBadge(count: 1)
         }
-        .padding(.vertical, DS.Spacing.xs)
     }
 
     private func projectRow(for project: Project) -> some View {
@@ -1878,12 +1886,12 @@ struct AdminAllRequestsView: View {
                     CachedAsyncImage(url: url) { img in
                         img.resizable().scaledToFill()
                     } placeholder: {
-                        iconCircle(icon: "briefcase.fill", color: DS.Color.neonPurple, size: 40)
+                        iconCircle(icon: "briefcase.fill", color: DS.Color.neonPurple, size: 36)
                     }
-                    .frame(width: 40, height: 40)
+                    .frame(width: 36, height: 36)
                     .clipShape(Circle())
                 } else {
-                    iconCircle(icon: "briefcase.fill", color: DS.Color.neonPurple, size: 40)
+                    iconCircle(icon: "briefcase.fill", color: DS.Color.neonPurple, size: 36)
                 }
 
                 VStack(alignment: .leading, spacing: DS.Spacing.xs) {
@@ -1901,10 +1909,7 @@ struct AdminAllRequestsView: View {
             }
 
             if let desc = project.description, !desc.isEmpty {
-                Text(desc)
-                    .font(DS.Font.caption1)
-                    .foregroundColor(DS.Color.textSecondary)
-                    .lineLimit(3)
+                contentBlock(desc)
             }
 
             // التاريخ تحت
@@ -1979,6 +1984,23 @@ struct AdminAllRequestsView: View {
         }
     }
 
+    /// بلوك محتوى/تفاصيل موحد — ليبل + نص بخط أكبر
+    private func contentBlock(_ text: String) -> some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+            Text(L10n.t("التفاصيل", "Details"))
+                .font(DS.Font.caption2)
+                .foregroundColor(DS.Color.textTertiary)
+            Text(text)
+                .font(DS.Font.callout)
+                .foregroundColor(DS.Color.textSecondary)
+                .lineLimit(3)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(DS.Spacing.sm)
+        .background(DS.Color.surfaceElevated)
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm))
+    }
+
     // MARK: - Request Detail Sheet
 
     @ViewBuilder
@@ -2021,7 +2043,7 @@ struct AdminAllRequestsView: View {
                         detailField(L10n.t("التاريخ", "Date"), String((request.createdAt ?? "—").prefix(10)))
 
                     case .nameChange(let request):
-                        detailHeader(icon: "rectangle.and.pencil.and.ellipsis", color: DS.Color.neonPurple, title: L10n.t("طلب تغيير اسم", "Name Change"), iconSize: 38)
+                        detailHeader(icon: "rectangle.and.pencil.and.ellipsis", color: DS.Color.neonPurple, title: L10n.t("طلب تغيير اسم", "Name Change"))
                         detailField(L10n.t("الاسم الحالي", "Current Name"), request.member?.fullName ?? "—")
                         detailField(L10n.t("الاسم الجديد", "New Name"), request.newValue ?? "—", color: DS.Color.success)
                         detailField(L10n.t("التاريخ", "Date"), String((request.createdAt ?? "—").prefix(10)))
@@ -2137,6 +2159,9 @@ struct AdminAllRequestsView: View {
                             detailField(L10n.t("التاريخ", "Date"), String(date.prefix(10)))
                         }
                     }
+
+                    // أزرار الموافقة والرفض
+                    detailActions(for: detail)
                 }
                 .padding(DS.Spacing.lg)
             }
@@ -2154,7 +2179,7 @@ struct AdminAllRequestsView: View {
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
 
-    private func detailHeader(icon: String, color: Color, title: String, iconSize: CGFloat = 48) -> some View {
+    private func detailHeader(icon: String, color: Color, title: String, iconSize: CGFloat = 40) -> some View {
         HStack(spacing: DS.Spacing.md) {
             iconCircle(icon: icon, color: color, size: iconSize)
             Text(title)
@@ -2164,6 +2189,111 @@ struct AdminAllRequestsView: View {
             Spacer()
         }
         .padding(.bottom, DS.Spacing.sm)
+    }
+
+    @ViewBuilder
+    private func detailActions(for detail: RequestDetail) -> some View {
+        DSApproveRejectButtons(
+            approveTitle: {
+                switch detail {
+                case .join: return L10n.t("ربط بالشجرة", "Link to Tree")
+                default: return L10n.t("موافقة", "Approve")
+                }
+            }(),
+            rejectTitle: L10n.t("رفض", "Reject"),
+            isLoading: adminRequestVM.isLoading,
+            showReject: authVM.canRejectRequests
+        ) {
+            // موافقة
+            Task {
+                switch detail {
+                case .join(let member):
+                    let serverIds = registrationMatches[member.id] ?? []
+                    let localIds = findNameMatches(for: member).map(\.member.id)
+                    let combined = Array(Set(serverIds + localIds))
+                    await MainActor.run {
+                        matchedIdsForSelected = combined
+                        selectedMemberForLinking = member
+                        selectedDetail = nil
+                    }
+                case .news(let post):
+                    await newsVM.approveNewsPost(postId: post.id)
+                    selectedDetail = nil
+                case .report(let request):
+                    await adminRequestVM.approveNewsReport(request: request)
+                    selectedDetail = nil
+                case .phone(let request):
+                    await adminRequestVM.approvePhoneChangeRequest(request: request)
+                    selectedDetail = nil
+                case .nameChange(let request):
+                    await adminRequestVM.approveNameChangeRequest(request: request)
+                    selectedDetail = nil
+                case .diwaniya(let diwaniya):
+                    if let adminId = authVM.currentUser?.id {
+                        await diwaniyaVM.approveDiwaniya(id: diwaniya.id, adminId: adminId)
+                    }
+                    selectedDetail = nil
+                case .deceased(let request):
+                    await adminRequestVM.approveDeceasedRequest(request: request)
+                    selectedDetail = nil
+                case .child(let request):
+                    await adminRequestVM.acknowledgeChildAddRequest(request: request)
+                    selectedDetail = nil
+                case .photo(let request):
+                    await adminRequestVM.approvePhotoSuggestion(request: request)
+                    selectedDetail = nil
+                case .treeEdit(let request):
+                    await adminRequestVM.approveTreeEditRequest(request: request)
+                    selectedDetail = nil
+                case .project(let project):
+                    if let adminId = authVM.currentUser?.id {
+                        await projectsVM.approveProject(id: project.id, approvedBy: adminId)
+                    }
+                    selectedDetail = nil
+                }
+            }
+        } onReject: {
+            // رفض
+            Task {
+                switch detail {
+                case .join(let member):
+                    await adminRequestVM.rejectOrDeleteMember(memberId: member.id)
+                    selectedDetail = nil
+                case .news(let post):
+                    await newsVM.rejectNewsPost(postId: post.id)
+                    selectedDetail = nil
+                case .report(let request):
+                    await adminRequestVM.rejectNewsReport(request: request)
+                    selectedDetail = nil
+                case .phone(let request):
+                    await adminRequestVM.rejectPhoneChangeRequest(request: request)
+                    selectedDetail = nil
+                case .nameChange(let request):
+                    await adminRequestVM.rejectNameChangeRequest(request: request)
+                    selectedDetail = nil
+                case .diwaniya(let diwaniya):
+                    await diwaniyaVM.rejectDiwaniya(id: diwaniya.id)
+                    selectedDetail = nil
+                case .deceased(let request):
+                    await adminRequestVM.rejectDeceasedRequest(request: request)
+                    selectedDetail = nil
+                case .child(let request):
+                    await adminRequestVM.rejectChildAddRequest(request: request)
+                    selectedDetail = nil
+                case .photo(let request):
+                    await adminRequestVM.rejectPhotoSuggestion(request: request)
+                    selectedDetail = nil
+                case .treeEdit(let request):
+                    rejectReasonText = ""
+                    treeEditToReject = request
+                    showRejectReasonAlert = true
+                case .project(let project):
+                    await projectsVM.rejectProject(id: project.id)
+                    selectedDetail = nil
+                }
+            }
+        }
+        .padding(.top, DS.Spacing.md)
     }
 
     private func detailField(_ label: String, _ value: String, color: Color = DS.Color.textPrimary) -> some View {

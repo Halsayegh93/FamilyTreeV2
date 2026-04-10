@@ -1,0 +1,6 @@
+/* English - App Display Name & Privacy Descriptions */
+
+"CFBundleDisplayName" = "Al-Mohammadali Family";
+"CFBundleName" = "Al-Mohammadali Family";
+"NSPhotoLibraryUsageDescription" = "The app needs access to your photo library to select profile pictures and news photos";
+"NSCameraUsageDescription" = "The app needs access to your camera to take profile photos and scan QR codes";

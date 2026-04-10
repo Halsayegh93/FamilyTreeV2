@@ -738,11 +738,13 @@ class AuthViewModel: ObservableObject {
 
         for attempt in 1...maxAttempts {
             do {
+                Log.info("[OTP] محاولة \(attempt)/\(maxAttempts) — إرسال OTP لـ \(finalPhone)")
                 try await supabase.auth.signInWithOTP(
                     phone: finalPhone,
                     shouldCreateUser: true
                 )
-                
+
+                    Log.info("[OTP] ✅ تم إرسال OTP بنجاح")
                     withAnimation(.spring()) {
                         self.isOtpSent = true
                     }
@@ -753,8 +755,10 @@ class AuthViewModel: ObservableObject {
             } catch {
                 let raw = "\(error) \(error.localizedDescription)".lowercased()
                 let isRateLimited = raw.contains("429") || raw.contains("rate")
-                
+                Log.error("[OTP] ❌ محاولة \(attempt) فشلت: \(error)")
+
                 if isRateLimited || attempt == maxAttempts {
+                    Log.error("[OTP] ❌ توقف — rateLimited=\(isRateLimited), attempt=\(attempt)")
                     break
                 }
 

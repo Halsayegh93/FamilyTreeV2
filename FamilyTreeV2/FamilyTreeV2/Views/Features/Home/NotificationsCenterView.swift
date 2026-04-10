@@ -1,5 +1,64 @@
 import SwiftUI
 
+// MARK: - Notification Kind Style (data-driven icon/color/label mapping)
+
+private struct NotificationKindStyle {
+    let icon: String
+    let gradient: LinearGradient
+    let color: Color
+    let labelAr: String
+    let labelEn: String
+
+    var label: String { L10n.t(labelAr, labelEn) }
+
+    private static let styles: [String: NotificationKindStyle] = [
+        "approval":          .init(icon: "checkmark.circle.fill",                    gradient: DS.Color.gradientCool,    color: DS.Color.success,     labelAr: "عضوية",           labelEn: "Membership"),
+        "join_approved":     .init(icon: "checkmark.circle.fill",                    gradient: DS.Color.gradientCool,    color: DS.Color.success,     labelAr: "عضوية",           labelEn: "Membership"),
+        "news":              .init(icon: "newspaper.fill",                           gradient: DS.Color.gradientPrimary, color: DS.Color.primary,     labelAr: "أخبار",           labelEn: "News"),
+        "news_add":          .init(icon: "newspaper.fill",                           gradient: DS.Color.gradientPrimary, color: DS.Color.primary,     labelAr: "أخبار",           labelEn: "News"),
+        "admin":             .init(icon: "shield.fill",                              gradient: DS.Color.gradientAccent,  color: DS.Color.accent,      labelAr: "إدارة",           labelEn: "Admin"),
+        "admin_request":     .init(icon: "shield.fill",                              gradient: DS.Color.gradientAccent,  color: DS.Color.accent,      labelAr: "إدارة",           labelEn: "Admin"),
+        "deceased_report":   .init(icon: "heart.fill",                               gradient: DS.Color.gradientWarm,    color: DS.Color.neonPink,    labelAr: "وفاة",            labelEn: "Deceased"),
+        "child_add":         .init(icon: "person.badge.plus",                        gradient: DS.Color.gradientCool,    color: DS.Color.info,        labelAr: "إضافة ابن",       labelEn: "Child Add"),
+        "phone_change":      .init(icon: "phone.arrow.right",                        gradient: DS.Color.gradientNeon,    color: DS.Color.neonBlue,    labelAr: "تغيير رقم",       labelEn: "Phone Change"),
+        "news_report":       .init(icon: "exclamationmark.triangle.fill",            gradient: DS.Color.gradientFire,    color: DS.Color.warning,     labelAr: "بلاغ خبر",        labelEn: "News Report"),
+        "contact_message":   .init(icon: "envelope.fill",                            gradient: DS.Color.gradientOcean,   color: DS.Color.primary,     labelAr: "تواصل",           labelEn: "Contact"),
+        "link_request":      .init(icon: "link.circle.fill",                         gradient: DS.Color.gradientCool,    color: DS.Color.info,        labelAr: "طلب ربط",         labelEn: "Link Request"),
+        "gallery_add":       .init(icon: "photo.fill",                               gradient: DS.Color.gradientNeon,    color: DS.Color.neonCyan,    labelAr: "معرض صور",        labelEn: "Gallery"),
+        "news_comment":      .init(icon: "bubble.left.fill",                         gradient: DS.Color.gradientCool,    color: DS.Color.info,        labelAr: "تعليق",           labelEn: "Comment"),
+        "news_like":         .init(icon: "heart.fill",                               gradient: DS.Color.gradientFire,    color: DS.Color.error,       labelAr: "إعجاب",           labelEn: "Like"),
+        "news_published":    .init(icon: "megaphone.fill",                           gradient: DS.Color.gradientPrimary, color: DS.Color.primary,     labelAr: "خبر جديد",        labelEn: "New Post"),
+        "profile_update":    .init(icon: "person.crop.circle.badge.checkmark",       gradient: DS.Color.gradientAccent,  color: DS.Color.accent,      labelAr: "تحديث بيانات",    labelEn: "Profile Update"),
+        "account_activated": .init(icon: "checkmark.seal.fill",                      gradient: DS.Color.gradientCool,    color: DS.Color.success,     labelAr: "تفعيل حساب",      labelEn: "Activated"),
+        "role_change":       .init(icon: "shield.lefthalf.filled",                   gradient: DS.Color.gradientAccent,  color: DS.Color.warning,     labelAr: "تغيير الصلاحية",  labelEn: "Role Change"),
+        "weekly_digest":     .init(icon: "list.clipboard.fill",                      gradient: DS.Color.gradientOcean,   color: DS.Color.primaryDark, labelAr: "ملخص أسبوعي",     labelEn: "Weekly Digest"),
+        "tree_edit":         .init(icon: "pencil.circle.fill",                       gradient: DS.Color.gradientAccent,  color: DS.Color.accent,      labelAr: "تعديل شجرة",      labelEn: "Tree Edit"),
+        "story_pending":     .init(icon: "circle.dashed",                            gradient: DS.Color.gradientNeon,    color: DS.Color.neonCyan,    labelAr: "قصة معلقة",        labelEn: "Pending Story"),
+        "story_approved":    .init(icon: "circle.fill",                              gradient: DS.Color.gradientCool,    color: DS.Color.info,        labelAr: "قصة معتمدة",      labelEn: "Story Approved"),
+        "story_rejected":    .init(icon: "circle.fill",                              gradient: DS.Color.gradientCool,    color: DS.Color.info,        labelAr: "قصة مرفوضة",      labelEn: "Story Rejected"),
+    ]
+
+    private static let fallback = NotificationKindStyle(
+        icon: "bell.fill", gradient: DS.Color.gradientPrimary, color: DS.Color.primary,
+        labelAr: "عام", labelEn: "General"
+    )
+
+    static func style(for kind: String) -> NotificationKindStyle {
+        styles[kind] ?? fallback
+    }
+}
+
+// MARK: - Layout Constants
+
+private enum NotifLayout {
+    /// Detail info row icon column width (also used by detailDivider leading inset)
+    static let infoIconWidth: CGFloat = 28
+    /// Notification row icon circle size
+    static let rowIconSize: CGFloat = 44
+    /// Selection badge min dimension
+    static let badgeSize: CGFloat = 22
+}
+
 struct NotificationsCenterView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var notificationVM: NotificationViewModel
@@ -147,7 +206,7 @@ struct NotificationsCenterView: View {
                         Text("\(selectedIds.count)")
                             .font(DS.Font.scaled(11, weight: .black))
                             .foregroundColor(DS.Color.textOnPrimary)
-                            .frame(minWidth: 22, minHeight: 22)
+                            .frame(minWidth: NotifLayout.badgeSize, minHeight: NotifLayout.badgeSize)
                             .background(DS.Color.primary)
                             .clipShape(Circle())
                     }
@@ -302,7 +361,7 @@ struct NotificationsCenterView: View {
             ForEach(groupedNotifications, id: \.0) { section, items in
                 Section {
                     ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
-                        let iconInfo = notificationIcon(for: item.kind)
+                        let iconInfo = NotificationKindStyle.style(for: item.kind)
                         let isUnread = !item.read
 
                         notificationRow(item: item, iconInfo: iconInfo, isUnread: isUnread)
@@ -357,7 +416,7 @@ struct NotificationsCenterView: View {
 
     // MARK: - Notification Row
 
-    private func notificationRow(item: AppNotification, iconInfo: (icon: String, gradient: LinearGradient, color: Color), isUnread: Bool) -> some View {
+    private func notificationRow(item: AppNotification, iconInfo: NotificationKindStyle, isUnread: Bool) -> some View {
         Button {
             if isSelecting {
                 withAnimation(DS.Anim.snappy) {
@@ -389,7 +448,7 @@ struct NotificationsCenterView: View {
                 ZStack {
                     Circle()
                         .fill(isUnread ? iconInfo.color.opacity(0.12) : DS.Color.textTertiary.opacity(0.08))
-                        .frame(width: 44, height: 44)
+                        .frame(width: NotifLayout.rowIconSize, height: NotifLayout.rowIconSize)
 
                     Image(systemName: iconInfo.icon)
                         .font(DS.Font.scaled(18, weight: .semibold))
@@ -423,7 +482,7 @@ struct NotificationsCenterView: View {
                     // شريط سفلي: التصنيف + بادج المدير
                     HStack(spacing: DS.Spacing.sm) {
                         // التصنيف
-                        Text(kindLabel(for: item.kind))
+                        Text(iconInfo.label)
                             .font(DS.Font.scaled(10, weight: .bold))
                             .foregroundColor(isUnread ? iconInfo.color : DS.Color.textTertiary)
                             .padding(.horizontal, DS.Spacing.sm)
@@ -542,7 +601,7 @@ struct NotificationsCenterView: View {
     // MARK: - Detail Sheet
 
     private func notificationDetailSheet(_ notification: AppNotification) -> some View {
-        let iconInfo = notificationIcon(for: notification.kind)
+        let iconInfo = NotificationKindStyle.style(for: notification.kind)
         let date = notification.createdDate
 
         return NavigationStack {
@@ -557,14 +616,14 @@ struct NotificationsCenterView: View {
                             HStack(spacing: DS.Spacing.sm) {
                                 RoundedRectangle(cornerRadius: 8, style: .continuous)
                                     .fill(iconInfo.gradient)
-                                    .frame(width: 28, height: 28)
+                                    .frame(width: NotifLayout.infoIconWidth, height: NotifLayout.infoIconWidth)
                                     .overlay(
                                         Image(systemName: iconInfo.icon)
                                             .font(DS.Font.scaled(13, weight: .bold))
                                             .foregroundColor(DS.Color.textOnPrimary)
                                     )
 
-                                Text(kindLabel(for: notification.kind))
+                                Text(iconInfo.label)
                                     .font(DS.Font.scaled(14, weight: .semibold))
                                     .foregroundColor(DS.Color.textSecondary)
 
@@ -631,7 +690,7 @@ struct NotificationsCenterView: View {
                                     Circle()
                                         .fill(roleColor)
                                         .frame(width: 10, height: 10)
-                                        .frame(width: 28, alignment: .center)
+                                        .frame(width: NotifLayout.infoIconWidth, alignment: .center)
 
                                     Text(L10n.t("بواسطة", "By"))
                                         .font(DS.Font.caption1)
@@ -653,7 +712,7 @@ struct NotificationsCenterView: View {
                                 detailInfoRow(
                                     icon: "tag.fill",
                                     label: L10n.t("التصنيف", "Category"),
-                                    value: kindLabel(for: notification.kind),
+                                    value: iconInfo.label,
                                     color: DS.Color.accent
                                 )
                             }
@@ -741,7 +800,7 @@ struct NotificationsCenterView: View {
             Image(systemName: icon)
                 .font(DS.Font.scaled(14, weight: .semibold))
                 .foregroundColor(color)
-                .frame(width: 28, alignment: .center)
+                .frame(width: NotifLayout.infoIconWidth, alignment: .center)
 
             Text(label)
                 .font(DS.Font.caption1)
@@ -763,7 +822,7 @@ struct NotificationsCenterView: View {
         Rectangle()
             .fill(DS.Color.textTertiary.opacity(0.1))
             .frame(height: 0.5)
-            .padding(.leading, DS.Spacing.lg + 28 + DS.Spacing.md)
+            .padding(.leading, DS.Spacing.lg + NotifLayout.infoIconWidth + DS.Spacing.md)
     }
 
     // MARK: - Helpers
@@ -774,17 +833,15 @@ struct NotificationsCenterView: View {
             .joined(separator: "\n")
     }
 
-    /// يحلل النص ويبني عرض يحتوي على كبسولات للأسماء المحاطة بـ «»
+    /// Renders body text, wrapping «name» delimiters in styled capsules.
     @ViewBuilder
     private func richBodyView(_ body: String, font: Font, color: Color, lineLimit: Int? = nil) -> some View {
         let cleaned = cleanBody(body)
-        let segments = parseNameSegments(cleaned)
+        let segments = BodySegment.parse(cleaned)
 
-        if segments.contains(where: { $0.isCapsule }) {
-            // فيه أسماء — نعرضها كـ Flow layout
+        if segments.contains(where: \.isCapsule) {
             WrappingHStack(segments: segments, font: font, color: color, lineLimit: lineLimit)
         } else {
-            // نص عادي بدون كبسولات
             Text(cleaned)
                 .font(font)
                 .foregroundColor(color)
@@ -797,40 +854,30 @@ struct NotificationsCenterView: View {
         let id = UUID()
         let text: String
         let isCapsule: Bool
-    }
 
-    private func parseNameSegments(_ text: String) -> [BodySegment] {
-        var segments: [BodySegment] = []
-        var remaining = text[...]
+        /// Splits text on «name» delimiters into plain and capsule segments.
+        static func parse(_ text: String) -> [BodySegment] {
+            var segments: [BodySegment] = []
+            var remaining = text[...]
 
-        while let openRange = remaining.range(of: "«") {
-            // نص قبل «
-            let before = String(remaining[remaining.startIndex..<openRange.lowerBound])
-            if !before.isEmpty {
-                segments.append(BodySegment(text: before, isCapsule: false))
-            }
+            while let open = remaining.range(of: "«") {
+                let before = remaining[remaining.startIndex..<open.lowerBound]
+                if !before.isEmpty { segments.append(.init(text: String(before), isCapsule: false)) }
 
-            let afterOpen = remaining[openRange.upperBound...]
-            if let closeRange = afterOpen.range(of: "»") {
-                let name = String(afterOpen[afterOpen.startIndex..<closeRange.lowerBound])
-                if !name.isEmpty {
-                    segments.append(BodySegment(text: name, isCapsule: true))
+                let afterOpen = remaining[open.upperBound...]
+                guard let close = afterOpen.range(of: "»") else {
+                    // No closing delimiter -- treat the rest as plain text
+                    segments.append(.init(text: String(remaining[open.lowerBound...]), isCapsule: false))
+                    return segments
                 }
-                remaining = afterOpen[closeRange.upperBound...]
-            } else {
-                // لا يوجد إغلاق — نكمل كنص عادي
-                let rest = String(remaining[openRange.lowerBound...])
-                segments.append(BodySegment(text: rest, isCapsule: false))
-                remaining = remaining[remaining.endIndex...]
+                let name = afterOpen[afterOpen.startIndex..<close.lowerBound]
+                if !name.isEmpty { segments.append(.init(text: String(name), isCapsule: true)) }
+                remaining = afterOpen[close.upperBound...]
             }
-        }
 
-        // النص المتبقي
-        if !remaining.isEmpty {
-            segments.append(BodySegment(text: String(remaining), isCapsule: false))
+            if !remaining.isEmpty { segments.append(.init(text: String(remaining), isCapsule: false)) }
+            return segments
         }
-
-        return segments
     }
 
     private func createdByName(for notification: AppNotification) -> String? {
@@ -852,83 +899,6 @@ struct NotificationsCenterView: View {
         return nil
     }
 
-    // MARK: - Notification Icon
-
-    private func notificationIcon(for kind: String) -> (icon: String, gradient: LinearGradient, color: Color) {
-        switch kind {
-        case "approval", "join_approved":
-            return ("checkmark.circle.fill", DS.Color.gradientCool, DS.Color.success)
-        case "news", "news_add":
-            return ("newspaper.fill", DS.Color.gradientPrimary, DS.Color.primary)
-        case "admin", "admin_request":
-            return ("shield.fill", DS.Color.gradientAccent, DS.Color.accent)
-        case "deceased_report":
-            return ("heart.fill", DS.Color.gradientWarm, DS.Color.neonPink)
-        case "child_add":
-            return ("person.badge.plus", DS.Color.gradientCool, DS.Color.info)
-        case "phone_change":
-            return ("phone.arrow.right", DS.Color.gradientNeon, DS.Color.neonBlue)
-        case "news_report":
-            return ("exclamationmark.triangle.fill", DS.Color.gradientFire, DS.Color.warning)
-        case "contact_message":
-            return ("envelope.fill", DS.Color.gradientOcean, DS.Color.primary)
-        case "link_request":
-            return ("link.circle.fill", DS.Color.gradientCool, DS.Color.info)
-        case "gallery_add":
-            return ("photo.fill", DS.Color.gradientNeon, DS.Color.neonCyan)
-        case "news_comment":
-            return ("bubble.left.fill", DS.Color.gradientCool, DS.Color.info)
-        case "news_like":
-            return ("heart.fill", DS.Color.gradientFire, DS.Color.error)
-        case "news_published":
-            return ("megaphone.fill", DS.Color.gradientPrimary, DS.Color.primary)
-        case "profile_update":
-            return ("person.crop.circle.badge.checkmark", DS.Color.gradientAccent, DS.Color.accent)
-        case "account_activated":
-            return ("checkmark.seal.fill", DS.Color.gradientCool, DS.Color.success)
-        case "role_change":
-            return ("shield.lefthalf.filled", DS.Color.gradientAccent, DS.Color.warning)
-        case "weekly_digest":
-            return ("list.clipboard.fill", DS.Color.gradientOcean, DS.Color.primaryDark)
-        case "tree_edit":
-            return ("pencil.circle.fill", DS.Color.gradientAccent, DS.Color.accent)
-        case "story_pending":
-            return ("circle.dashed", DS.Color.gradientNeon, DS.Color.neonCyan)
-        case "story_approved", "story_rejected":
-            return ("circle.fill", DS.Color.gradientCool, DS.Color.info)
-        default:
-            return ("bell.fill", DS.Color.gradientPrimary, DS.Color.primary)
-        }
-    }
-
-    // MARK: - Kind Label
-
-    private func kindLabel(for kind: String) -> String {
-        switch kind {
-        case "approval", "join_approved": return L10n.t("عضوية", "Membership")
-        case "news", "news_add": return L10n.t("أخبار", "News")
-        case "admin", "admin_request": return L10n.t("إدارة", "Admin")
-        case "deceased_report": return L10n.t("وفاة", "Deceased")
-        case "child_add": return L10n.t("إضافة ابن", "Child Add")
-        case "phone_change": return L10n.t("تغيير رقم", "Phone Change")
-        case "news_report": return L10n.t("بلاغ خبر", "News Report")
-        case "contact_message": return L10n.t("تواصل", "Contact")
-        case "link_request": return L10n.t("طلب ربط", "Link Request")
-        case "gallery_add": return L10n.t("معرض صور", "Gallery")
-        case "news_comment": return L10n.t("تعليق", "Comment")
-        case "news_like": return L10n.t("إعجاب", "Like")
-        case "news_published": return L10n.t("خبر جديد", "New Post")
-        case "profile_update": return L10n.t("تحديث بيانات", "Profile Update")
-        case "account_activated": return L10n.t("تفعيل حساب", "Activated")
-        case "role_change": return L10n.t("تغيير الصلاحية", "Role Change")
-        case "weekly_digest": return L10n.t("ملخص أسبوعي", "Weekly Digest")
-        case "tree_edit": return L10n.t("تعديل شجرة", "Tree Edit")
-        case "story_pending": return L10n.t("قصة معلقة", "Pending Story")
-        case "story_approved": return L10n.t("قصة معتمدة", "Story Approved")
-        case "story_rejected": return L10n.t("قصة مرفوضة", "Story Rejected")
-        default: return L10n.t("عام", "General")
-        }
-    }
 }
 
 // MARK: - Wrapping HStack for capsule names

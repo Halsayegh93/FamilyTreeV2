@@ -69,7 +69,7 @@ struct DiwaniyasView: View {
                     }
                 }
             }
-            .navigationBarHidden(true)
+            .toolbar(.hidden, for: .navigationBar)
             .sheet(isPresented: $showingAddRequest) {
                 AddDiwaniyaRequestView()
                     .environmentObject(viewModel)
@@ -217,7 +217,7 @@ struct DiwaniyasView: View {
                                     startPoint: .topLeading, endPoint: .bottomTrailing
                                 )
                             )
-                            .frame(width: 52, height: 52)
+                            .frame(width: DS.Icon.size, height: DS.Icon.size)
                         Image(systemName: item.imageUrl ?? "map.fill")
                             .font(DS.Font.scaled(22, weight: .bold))
                             .foregroundColor(cardColor)
@@ -230,7 +230,7 @@ struct DiwaniyasView: View {
                                 .foregroundColor(isPending ? DS.Color.textSecondary : (isClosed ? DS.Color.textTertiary : DS.Color.textPrimary))
 
                             if isClosed && !isPending {
-                                HStack(spacing: 3) {
+                                HStack(spacing: DS.Spacing.xs) {
                                     Image(systemName: "lock.fill")
                                         .font(DS.Font.caption2)
                                     Text(L10n.t("مغلقة", "Closed"))
@@ -267,7 +267,7 @@ struct DiwaniyasView: View {
                             Image(systemName: "ellipsis")
                                 .font(DS.Font.scaled(16, weight: .bold))
                                 .foregroundColor(DS.Color.textSecondary)
-                                .frame(width: 38, height: 38)
+                                .frame(width: DS.Icon.sizeSm, height: DS.Icon.sizeSm)
                                 .background(DS.Color.textTertiary.opacity(0.08))
                                 .clipShape(Circle())
                         }
@@ -462,7 +462,7 @@ private struct AddDiwaniyaRequestView: View {
                                         endPoint: .bottomTrailing
                                     )
                                 )
-                                .frame(width: 80, height: 80)
+                                .frame(width: DS.Spacing.xxxxl * 2, height: DS.Spacing.xxxxl * 2)
                             Image(systemName: "map.fill")
                                 .font(DS.Font.scaled(32, weight: .bold))
                                 .foregroundColor(DS.Color.gridDiwaniya)
@@ -817,7 +817,7 @@ private struct EditDiwaniyaView: View {
                                         endPoint: .bottomTrailing
                                     )
                                 )
-                                .frame(width: 80, height: 80)
+                                .frame(width: DS.Spacing.xxxxl * 2, height: DS.Spacing.xxxxl * 2)
                             Image(systemName: "pencil.circle.fill")
                                 .font(DS.Font.scaled(32, weight: .bold))
                                 .foregroundColor(DS.Color.gridDiwaniya)

@@ -8,11 +8,15 @@
 
 /* Begin PBXBuildFile section */
 		9A8DF3002F406AED000B2DD7 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 9A8DF3012F406AED000B2DD7 /* Supabase */; };
+		9FCEA5582F870E6F00799C85 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 9FCEA5532F870E6F00799C85 /* InfoPlist.strings */; };
+		9FCEA5592F870E6F00799C85 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 9FCEA5562F870E6F00799C85 /* InfoPlist.strings */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		9A8DF20B2F406AEB000B2DD7 /* FamilyTreeV2.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FamilyTreeV2.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		9F71E7492F0D83E20001F8B7 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
+		9FCEA5522F870E6F00799C85 /* ar */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = ar; path = InfoPlist.strings; sourceTree = "<group>"; };
+		9FCEA5552F870E6F00799C85 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = InfoPlist.strings; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -38,10 +42,28 @@
 		9F71E69B2F0B04F70001F8B7 = {
 			isa = PBXGroup;
 			children = (
+				9FCEA5542F870E6F00799C85 /* ar.lproj */,
+				9FCEA5572F870E6F00799C85 /* en.lproj */,
 				9F71E7492F0D83E20001F8B7 /* Localizable.xcstrings */,
 				9F71E6A62F0B04F70001F8B7 /* FamilyTreeV2 */,
 				9A8DF20B2F406AEB000B2DD7 /* FamilyTreeV2.app */,
 			);
+			sourceTree = "<group>";
+		};
+		9FCEA5542F870E6F00799C85 /* ar.lproj */ = {
+			isa = PBXGroup;
+			children = (
+				9FCEA5532F870E6F00799C85 /* InfoPlist.strings */,
+			);
+			path = ar.lproj;
+			sourceTree = "<group>";
+		};
+		9FCEA5572F870E6F00799C85 /* en.lproj */ = {
+			isa = PBXGroup;
+			children = (
+				9FCEA5562F870E6F00799C85 /* InfoPlist.strings */,
+			);
+			path = en.lproj;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -89,9 +111,9 @@
 			developmentRegion = ar;
 			hasScannedForEncodings = 0;
 			knownRegions = (
-				en,
-				Base,
 				ar,
+				Base,
+				en,
 			);
 			mainGroup = 9F71E69B2F0B04F70001F8B7;
 			minimizedProjectReferenceProxies = 1;
@@ -113,6 +135,8 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				9FCEA5582F870E6F00799C85 /* InfoPlist.strings in Resources */,
+				9FCEA5592F870E6F00799C85 /* InfoPlist.strings in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -127,6 +151,25 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXVariantGroup section */
+		9FCEA5532F870E6F00799C85 /* InfoPlist.strings */ = {
+			isa = PBXVariantGroup;
+			children = (
+				9FCEA5522F870E6F00799C85 /* ar */,
+			);
+			name = InfoPlist.strings;
+			sourceTree = "<group>";
+		};
+		9FCEA5562F870E6F00799C85 /* InfoPlist.strings */ = {
+			isa = PBXVariantGroup;
+			children = (
+				9FCEA5552F870E6F00799C85 /* en */,
+			);
+			name = InfoPlist.strings;
+			sourceTree = "<group>";
+		};
+/* End PBXVariantGroup section */
 
 /* Begin XCBuildConfiguration section */
 		9A8DF2292F406AEC000B2DD7 /* Debug */ = {

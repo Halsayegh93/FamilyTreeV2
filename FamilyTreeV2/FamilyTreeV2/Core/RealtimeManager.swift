@@ -24,6 +24,11 @@ final class RealtimeManager {
     private var channels: [RealtimeChannelV2] = []
     private var isSubscribed = false
 
+    /// عدد محاولات إعادة الاتصال لكل قناة
+    private var retryCounts: [String: Int] = [:]
+    private static let maxRetries = 5
+    private static let baseRetryDelay: TimeInterval = 2.0
+
     private init() {}
 
     // MARK: - Subscribe
@@ -69,6 +74,8 @@ final class RealtimeManager {
         for (_, task) in debounceTasks { task.cancel() }
         debounceTasks.removeAll()
 
+        retryCounts.removeAll()
+
         // إزالة القنوات
         let channelsToRemove = channels
         channels.removeAll()
@@ -90,11 +97,13 @@ final class RealtimeManager {
         debounceDelay: TimeInterval = 2.0,
         action: @escaping @MainActor () async -> Void
     ) {
-        let task = Task { [weak self] in
+        let task = Task { @MainActor [weak self] in
             guard let self else { return }
 
-            let channel = SupabaseConfig.client.realtimeV2.channel("public:\(table)")
-            await MainActor.run { self.channels.append(channel) }
+            // الوصول للـ client على الـ MainActor عشان نتجنب unsafeForcedSync
+            let client = SupabaseConfig.client
+            let channel = client.realtimeV2.channel("public:\(table)")
+            self.channels.append(channel)
 
             let changes = channel.postgresChange(
                 AnyAction.self,
@@ -102,18 +111,59 @@ final class RealtimeManager {
                 table: table
             )
 
-            await channel.subscribe()
-            Log.info("[Realtime] ✅ مشترك في \(table)")
+            do {
+                await channel.subscribe()
+                Log.info("[Realtime] ✅ مشترك في \(table)")
+                self.retryCounts[table] = 0
 
-            for await _ in changes {
-                guard !Task.isCancelled else { break }
-                self.debounce(key: debounceKey, delay: debounceDelay) {
-                    await action()
+                for await _ in changes {
+                    guard !Task.isCancelled else { break }
+                    self.debounce(key: debounceKey, delay: debounceDelay) {
+                        await action()
+                    }
+                }
+
+                // الـ stream انتهى — نحاول نعيد الاتصال إذا ما تم الإلغاء
+                if !Task.isCancelled && self.isSubscribed {
+                    Log.warning("[Realtime] ⚠️ انقطع الاتصال بـ \(table) — محاولة إعادة الاتصال...")
+                    await self.retrySubscription(table: table, debounceKey: debounceKey, debounceDelay: debounceDelay, action: action)
+                }
+            } catch {
+                Log.error("[Realtime] ❌ خطأ بالاشتراك في \(table): \(error.localizedDescription)")
+                if !Task.isCancelled && self.isSubscribed {
+                    await self.retrySubscription(table: table, debounceKey: debounceKey, debounceDelay: debounceDelay, action: action)
                 }
             }
         }
 
         subscriptionTasks[table] = task
+    }
+
+    /// إعادة الاتصال مع exponential backoff
+    private func retrySubscription(
+        table: String,
+        debounceKey: String,
+        debounceDelay: TimeInterval,
+        action: @escaping @MainActor () async -> Void
+    ) async {
+        let currentRetry = (retryCounts[table] ?? 0) + 1
+        retryCounts[table] = currentRetry
+
+        guard currentRetry <= Self.maxRetries else {
+            Log.error("[Realtime] ❌ تجاوز الحد الأقصى لمحاولات إعادة الاتصال بـ \(table) (\(Self.maxRetries))")
+            return
+        }
+
+        // Exponential backoff: 2s, 4s, 8s, 16s, 32s
+        let delay = Self.baseRetryDelay * pow(2.0, Double(currentRetry - 1))
+        Log.info("[Realtime] 🔄 إعادة محاولة \(currentRetry)/\(Self.maxRetries) لـ \(table) بعد \(Int(delay))s...")
+
+        try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+
+        guard !Task.isCancelled && isSubscribed else { return }
+
+        // إعادة الاشتراك
+        subscribeToTable(table, debounceKey: debounceKey, debounceDelay: debounceDelay, action: action)
     }
 
     private func debounce(

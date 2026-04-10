@@ -23,7 +23,6 @@ struct ProfileView: View {
             ZStack {
                 DS.Color.background.ignoresSafeArea()
 
-
                 if let currentUser = user {
                     VStack(spacing: 0) {
                         MainHeaderView(
@@ -110,7 +109,7 @@ struct ProfileView: View {
                     ProgressView(L10n.t("جاري تحميل الملف...", "Loading profile..."))
                 }
             }
-            .navigationBarHidden(true)
+            .toolbar(.hidden, for: .navigationBar)
             .sheet(isPresented: $showEditProfile) { if let c = user { EditProfileView(member: c) } }
             .sheet(isPresented: $showQRCode) {
                 if let c = user {
@@ -254,12 +253,7 @@ struct ProfileView: View {
 
                         Spacer()
 
-                        Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
-                            .font(DS.Font.scaled(11, weight: .bold))
-                            .foregroundColor(DS.Color.textTertiary)
-                            .frame(width: 26, height: 26)
-                            .background(DS.Color.textTertiary.opacity(0.1))
-                            .clipShape(Circle())
+                        chevronCircle
                     }
                     .padding(.horizontal, DS.Spacing.lg)
                     .padding(.vertical, DS.Spacing.xs)
@@ -510,36 +504,10 @@ struct ProfileView: View {
     }
 
     private func childGridCell(son: FamilyMember) -> some View {
-        let isDeceased = son.isDeceased ?? false
-        let isFemale = son.gender?.lowercased() == "female"
-        let iconName: String = {
-            if isDeceased { return "person.fill.xmark" }
-            return isFemale ? "figure.stand.dress" : "person.fill"
-        }()
-        let iconColor = isDeceased ? DS.Color.error : (isFemale ? DS.Color.neonPink : DS.Color.primary)
+        let info = childIconInfo(for: son)
 
         return HStack(spacing: DS.Spacing.sm) {
-            ZStack {
-                if let urlStr = son.avatarUrl, let url = URL(string: urlStr) {
-                    CachedAsyncImage(url: url) { image in
-                        image.resizable().scaledToFill()
-                    } placeholder: {
-                        Image(systemName: iconName)
-                            .font(DS.Font.scaled(16, weight: .bold))
-                            .foregroundColor(iconColor)
-                    }
-                    .frame(width: 44, height: 44)
-                    .clipShape(Circle())
-                } else {
-                    Image(systemName: iconName)
-                        .font(DS.Font.scaled(16, weight: .bold))
-                        .foregroundColor(iconColor)
-                        .frame(width: 44, height: 44)
-                        .background(iconColor.opacity(0.12))
-                        .clipShape(Circle())
-                }
-
-            }
+            childAvatarView(for: son, iconFont: 16, size: 44)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(son.firstName.isEmpty ? L10n.t("الاسم", "Name") : son.firstName)
@@ -555,7 +523,7 @@ struct ProfileView: View {
                             .foregroundColor(DS.Color.textSecondary)
                             .lineLimit(1)
                     }
-                    if isDeceased {
+                    if son.isDeceased ?? false {
                         Text(L10n.t("متوفى", "Deceased"))
                             .font(DS.Font.scaled(8, weight: .bold))
                             .foregroundColor(DS.Color.textOnPrimary)
@@ -573,7 +541,7 @@ struct ProfileView: View {
         .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                .stroke(iconColor.opacity(0.15), lineWidth: 1)
+                .stroke(info.color.opacity(0.15), lineWidth: 1)
         )
     }
 
@@ -584,13 +552,7 @@ struct ProfileView: View {
             ForEach(Array(children.enumerated()), id: \.element.id) { index, son in
                 if index > 0 { DSDivider() }
 
-                let isDeceased = son.isDeceased ?? false
-                let isFemale = son.gender?.lowercased() == "female"
-                let iconName: String = {
-                    if isDeceased { return "person.fill.xmark" }
-                    return isFemale ? "figure.stand.dress" : "person.fill"
-                }()
-                let iconColor = isDeceased ? DS.Color.error : (isFemale ? DS.Color.neonPink : DS.Color.primary)
+                let info = childIconInfo(for: son)
 
                 HStack(spacing: DS.Spacing.md) {
                     // رقم الترتيب
@@ -598,30 +560,11 @@ struct ProfileView: View {
                         .font(DS.Font.scaled(13, weight: .bold))
                         .foregroundColor(DS.Color.textOnPrimary)
                         .frame(width: 28, height: 28)
-                        .background(iconColor.opacity(0.8))
+                        .background(info.color.opacity(0.8))
                         .clipShape(Circle())
 
                     // صورة
-                    ZStack {
-                        if let urlStr = son.avatarUrl, let url = URL(string: urlStr) {
-                            CachedAsyncImage(url: url) { image in
-                                image.resizable().scaledToFill()
-                            } placeholder: {
-                                Image(systemName: iconName)
-                                    .font(DS.Font.scaled(14, weight: .bold))
-                                    .foregroundColor(iconColor)
-                            }
-                            .frame(width: 44, height: 44)
-                            .clipShape(Circle())
-                        } else {
-                            Image(systemName: iconName)
-                                .font(DS.Font.scaled(14, weight: .bold))
-                                .foregroundColor(iconColor)
-                                .frame(width: 44, height: 44)
-                                .background(iconColor.opacity(0.12))
-                                .clipShape(Circle())
-                        }
-                    }
+                    childAvatarView(for: son, iconFont: 14, size: 44)
 
                     // الاسم
                     Text(son.firstName.isEmpty ? L10n.t("الاسم", "Name") : son.firstName)
@@ -675,6 +618,55 @@ struct ProfileView: View {
         .transition(.opacity.combined(with: .move(edge: .top)))
     }
 
+    // MARK: - Helpers
+
+    /// Directional chevron inside a tinted circle — used for navigation rows.
+    private var chevronCircle: some View {
+        Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
+            .font(DS.Font.scaled(11, weight: .bold))
+            .foregroundColor(DS.Color.textTertiary)
+            .frame(width: 26, height: 26)
+            .background(DS.Color.textTertiary.opacity(0.1))
+            .clipShape(Circle())
+    }
+
+    /// Derives the SF Symbol name and accent color for a child member.
+    private func childIconInfo(for member: FamilyMember) -> (name: String, color: Color) {
+        let isDeceased = member.isDeceased ?? false
+        let isFemale = member.gender?.lowercased() == "female"
+        let iconName: String = {
+            if isDeceased { return "person.fill.xmark" }
+            return isFemale ? "figure.stand.dress" : "person.fill"
+        }()
+        let iconColor = isDeceased ? DS.Color.error : (isFemale ? DS.Color.neonPink : DS.Color.primary)
+        return (iconName, iconColor)
+    }
+
+    /// Avatar circle for a child — shows the photo if available, otherwise an icon.
+    private func childAvatarView(for member: FamilyMember, iconFont: CGFloat, size: CGFloat) -> some View {
+        let info = childIconInfo(for: member)
+        return ZStack {
+            if let urlStr = member.avatarUrl, let url = URL(string: urlStr) {
+                CachedAsyncImage(url: url) { image in
+                    image.resizable().scaledToFill()
+                } placeholder: {
+                    Image(systemName: info.name)
+                        .font(DS.Font.scaled(iconFont, weight: .bold))
+                        .foregroundColor(info.color)
+                }
+                .frame(width: size, height: size)
+                .clipShape(Circle())
+            } else {
+                Image(systemName: info.name)
+                    .font(DS.Font.scaled(iconFont, weight: .bold))
+                    .foregroundColor(info.color)
+                    .frame(width: size, height: size)
+                    .background(info.color.opacity(0.12))
+                    .clipShape(Circle())
+            }
+        }
+    }
+
     // MARK: - General Section (Privacy, Settings)
     private func generalSection(user: FamilyMember) -> some View {
         VStack(alignment: .leading, spacing: DS.Spacing.md) {
@@ -701,12 +693,7 @@ struct ProfileView: View {
 
                             Spacer()
 
-                            Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
-                                .font(DS.Font.scaled(11, weight: .bold))
-                                .foregroundColor(DS.Color.textTertiary)
-                                .frame(width: 26, height: 26)
-                                .background(DS.Color.textTertiary.opacity(0.1))
-                                .clipShape(Circle())
+                            chevronCircle
                         }
                         .padding(.horizontal, DS.Spacing.lg)
                         .padding(.vertical, DS.Spacing.xs)
@@ -731,12 +718,7 @@ struct ProfileView: View {
 
                             Spacer()
 
-                            Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
-                                .font(DS.Font.scaled(11, weight: .bold))
-                                .foregroundColor(DS.Color.textTertiary)
-                                .frame(width: 26, height: 26)
-                                .background(DS.Color.textTertiary.opacity(0.1))
-                                .clipShape(Circle())
+                            chevronCircle
                         }
                         .padding(.horizontal, DS.Spacing.lg)
                         .padding(.vertical, DS.Spacing.xs)

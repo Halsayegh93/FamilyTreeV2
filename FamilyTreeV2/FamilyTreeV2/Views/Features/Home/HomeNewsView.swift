@@ -89,7 +89,7 @@ struct HomeNewsView: View {
                     }
                 }
             }
-            .navigationBarHidden(true)
+            .toolbar(.hidden, for: .navigationBar)
             .animation(DS.Anim.snappy, value: activeSubPage == nil)
             .task {
                 await memberVM.fetchApprovedGalleryPhotos()
@@ -434,31 +434,7 @@ struct HomeNewsView: View {
     }
 
     private func galleryMemberAvatar(_ member: FamilyMember, size: CGFloat) -> some View {
-        Group {
-            if let avatarUrl = member.avatarUrl, let url = URL(string: avatarUrl) {
-                AsyncImage(url: url) { phase in
-                    if let image = phase.image {
-                        image.resizable().scaledToFill()
-                    } else {
-                        ZStack {
-                            Circle().fill(DS.Color.primary.opacity(0.15))
-                            Text(String(member.firstName.prefix(1)))
-                                .font(DS.Font.scaled(size * 0.4, weight: .bold))
-                                .foregroundColor(DS.Color.primary)
-                        }
-                    }
-                }
-                .frame(width: size, height: size)
-                .clipShape(Circle())
-            } else {
-                ZStack {
-                    Circle().fill(DS.Color.primary.opacity(0.15)).frame(width: size, height: size)
-                    Text(String(member.firstName.prefix(1)))
-                        .font(DS.Font.scaled(size * 0.4, weight: .bold))
-                        .foregroundColor(DS.Color.primary)
-                }
-            }
-        }
+        DSMemberAvatar(name: member.firstName, avatarUrl: member.avatarUrl, size: size, roleColor: DS.Color.primary)
     }
 
     // MARK: - Quick Actions Section

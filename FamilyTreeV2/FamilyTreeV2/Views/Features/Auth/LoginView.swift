@@ -74,9 +74,8 @@ struct LoginView: View {
                 Spacer()
             }
         }
-        .contentShape(Rectangle())
         .onTapGesture {
-            isFieldFocused = false
+            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .animation(DS.Anim.bouncy, value: authVM.isOtpSent)

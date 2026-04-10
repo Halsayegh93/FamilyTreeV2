@@ -13,6 +13,30 @@ enum TreeDisplayMode: Hashable {
     case fullTree    // كامل: أداء عالي (نص فقط) + ترتيب أفقي كامل (الإخوان جنب بعض)
 }
 
+// MARK: - ثوابت الشجرة
+private enum TreeConst {
+    // Zoom
+    static let minScale: CGFloat = 0.2
+    static let maxScale: CGFloat = 3.0
+    static let zoomStep: CGFloat = 0.05
+    static let defaultScale: CGFloat = 0.60
+    static let openNodeScale: CGFloat = 0.75
+    static let closeNodeScale: CGFloat = 0.80
+    static let kinshipScale: CGFloat = 0.45
+
+    // Durations (nanoseconds)
+    static let shortDelay: UInt64 = 100_000_000     // 0.1s
+    static let scrollDelay: UInt64 = 250_000_000     // 0.25s
+    static let kinshipScrollDelay: UInt64 = 500_000_000 // 0.5s
+    static let kinshipSecondScroll: UInt64 = 400_000_000 // 0.4s
+    static let highlightDuration: UInt64 = 5_000_000_000 // 5s
+    static let kinshipBannerDuration: UInt64 = 20_000_000_000 // 20s
+
+    // Layout
+    static let toolButtonSize: CGFloat = 44
+    static let dividerWidth: CGFloat = 30
+}
+
 // MARK: - 1. واجهة الشجرة الرئيسية — Liquid Glass
 struct TreeView: View {
     @EnvironmentObject var authVM: AuthViewModel
@@ -33,10 +57,10 @@ struct TreeView: View {
     @State private var highlightTask: Task<Void, Never>?
     @State private var locationHighlightTask: Task<Void, Never>?
 
-    @State private var scale: CGFloat = 0.80
+    @State private var scale: CGFloat = TreeConst.closeNodeScale
     @State private var treeID = UUID()
     @State private var currentAnchor: UnitPoint = .center
-    @State private var baseScale: CGFloat = 0.80
+    @State private var baseScale: CGFloat = TreeConst.closeNodeScale
     @State private var zoomAnchor: UnitPoint = .center
 
     @Environment(\.verticalSizeClass) var verticalSizeClass
@@ -66,9 +90,9 @@ struct TreeView: View {
         return 150
     }
 
-    private var preferredBaseScale: CGFloat { 0.60 }
+    private var preferredBaseScale: CGFloat { TreeConst.defaultScale }
 
-    private func preferredScaleForCurrentExpansion() -> CGFloat { 0.60 }
+    private func preferredScaleForCurrentExpansion() -> CGFloat { TreeConst.defaultScale }
 
     private var currentZoomPercentText: String {
         let zoom = Int((scale * 100).rounded())
@@ -161,11 +185,11 @@ struct TreeView: View {
                                             y: min(max(loc.y / geometry.size.height, 0), 1)
                                         )
                                         let newScale = baseScale * value.magnification
-                                        scale = min(max(newScale, 0.2), 3.0)
+                                        scale = min(max(newScale, TreeConst.minScale), TreeConst.maxScale)
                                     }
                                     .onEnded { value in
                                         let newScale = baseScale * value.magnification
-                                        scale = min(max(newScale, 0.2), 3.0)
+                                        scale = min(max(newScale, TreeConst.minScale), TreeConst.maxScale)
                                         baseScale = scale
                                     }
                             )
@@ -214,7 +238,7 @@ struct TreeView: View {
                                     centerOnMember(userMember, highlight: true, includeFocusedMemberInPath: false)
                                     locationHighlightTask?.cancel()
                                     locationHighlightTask = Task {
-                                        try? await Task.sleep(nanoseconds: 5_000_000_000)
+                                        try? await Task.sleep(nanoseconds: TreeConst.highlightDuration)
                                         guard !Task.isCancelled else { return }
                                         withAnimation { currentLocationMemberID = nil }
                                     }
@@ -261,8 +285,8 @@ struct TreeView: View {
                                             kinshipHighlightedIds = []
                                             activePath = []
                                             searchedMemberID = nil
-                                            scale = 0.60
-                                            baseScale = 0.60
+                                            scale = TreeConst.defaultScale
+                                            baseScale = TreeConst.defaultScale
                                         }
                                     } label: {
                                         Image(systemName: "xmark.circle.fill")
@@ -289,7 +313,7 @@ struct TreeView: View {
                     UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
                 }
             }
-            .navigationBarHidden(true)
+            .toolbar(.hidden, for: .navigationBar)
             .sheet(item: $selectedMember) { member in
                 MemberDetailsView(member: member)
                     .presentationDetents([.medium, .large])
@@ -303,7 +327,7 @@ struct TreeView: View {
                     rebuildCache()
                     currentLocationMemberID = authVM.currentUser?.id
                     // أول تحميل — نبدأ من الجذر بالمنتصف (نفس إعادة الوضع)
-                    try? await Task.sleep(nanoseconds: 100_000_000)
+                    try? await Task.sleep(nanoseconds: TreeConst.shortDelay)
                     resetToTopRoot(animated: false)
                 }
             }
@@ -365,20 +389,20 @@ struct TreeView: View {
 
                 // تصغير الزوم عشان يبان المسار كامل
                 withAnimation(.easeInOut(duration: 0.3)) {
-                    scale = 0.45
-                    baseScale = 0.45
+                    scale = TreeConst.kinshipScale
+                    baseScale = TreeConst.kinshipScale
                 }
 
                 // سكرول للجد المشترك — عشان يكون بنص الشاشة
                 let scrollToId = commonAncestor ?? memberId
                 Task {
-                    try? await Task.sleep(nanoseconds: 500_000_000)
+                    try? await Task.sleep(nanoseconds: TreeConst.kinshipScrollDelay)
                     currentAnchor = .center
                     scrollTarget = scrollToId
                     scrollCounter += 1
 
                     // سكرول ثاني للتأكد من التمركز بعد ما الشجرة تتحدث
-                    try? await Task.sleep(nanoseconds: 400_000_000)
+                    try? await Task.sleep(nanoseconds: TreeConst.kinshipSecondScroll)
                     currentAnchor = .center
                     scrollTarget = scrollToId
                     scrollCounter += 1
@@ -386,7 +410,7 @@ struct TreeView: View {
 
                 // إخفاء البانر والهايلايت بعد 12 ثانية
                 Task {
-                    try? await Task.sleep(nanoseconds: 20_000_000_000)
+                    try? await Task.sleep(nanoseconds: TreeConst.kinshipBannerDuration)
                     withAnimation(DS.Anim.snappy) {
                         kinshipBanner = nil
                         kinshipHighlightedIds = []
@@ -435,7 +459,7 @@ struct TreeView: View {
         }
         // الانتقال للعضو بعد بناء العقد
         Task {
-            try? await Task.sleep(nanoseconds: 250_000_000)
+            try? await Task.sleep(nanoseconds: TreeConst.scrollDelay)
             guard !Task.isCancelled else { return }
             scrollTarget = member.id
             scrollCounter += 1
@@ -467,7 +491,7 @@ struct TreeView: View {
         }
         
         Task {
-            try? await Task.sleep(nanoseconds: 250_000_000)
+            try? await Task.sleep(nanoseconds: TreeConst.scrollDelay)
             guard !Task.isCancelled else { return }
             currentAnchor = .center
             scrollTarget = member.id
@@ -478,7 +502,7 @@ struct TreeView: View {
         if highlight {
             highlightTask?.cancel()
             highlightTask = Task {
-                try? await Task.sleep(nanoseconds: 5_000_000_000)
+                try? await Task.sleep(nanoseconds: TreeConst.highlightDuration)
                 guard !Task.isCancelled else { return }
                 withAnimation(.easeOut(duration: 0.3)) { searchedMemberID = nil }
             }
@@ -521,20 +545,20 @@ struct TreeView: View {
                     Text(currentZoomPercentText)
                         .font(DS.Font.scaled(13, weight: .bold))
                         .foregroundColor(DS.Color.primary)
-                        .frame(width: 44, height: 44)
+                        .frame(width: TreeConst.toolButtonSize, height: TreeConst.toolButtonSize)
 
-                    Divider().frame(width: 30)
+                    Divider().frame(width: TreeConst.dividerWidth)
 
-                    Button(action: { withAnimation(.easeInOut(duration: 0.2)) { scale = min(scale + 0.05, 3.0); baseScale = scale } }) {
+                    Button(action: { withAnimation(.easeInOut(duration: 0.2)) { scale = min(scale + TreeConst.zoomStep, TreeConst.maxScale); baseScale = scale } }) {
                         Image(systemName: "plus")
                             .font(DS.Font.scaled(16, weight: .bold))
                             .foregroundColor(DS.Color.primary)
-                            .frame(width: 44, height: 44)
+                            .frame(width: TreeConst.toolButtonSize, height: TreeConst.toolButtonSize)
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(L10n.t("تكبير", "Zoom in"))
 
-                    Divider().frame(width: 30)
+                    Divider().frame(width: TreeConst.dividerWidth)
 
                     Button(action: {
                         guard !isRefreshing else { return }
@@ -551,25 +575,25 @@ struct TreeView: View {
                             ProgressView()
                                 .tint(DS.Color.primary)
                                 .scaleEffect(0.7)
-                                .frame(width: 44, height: 44)
+                                .frame(width: TreeConst.toolButtonSize, height: TreeConst.toolButtonSize)
                         } else {
                             Image(systemName: "arrow.counterclockwise")
                                 .font(DS.Font.scaled(15, weight: .bold))
                                 .foregroundColor(DS.Color.primary)
-                                .frame(width: 44, height: 44)
+                                .frame(width: TreeConst.toolButtonSize, height: TreeConst.toolButtonSize)
                         }
                     }
                     .buttonStyle(.plain)
                     .disabled(isRefreshing)
                     .accessibilityLabel(L10n.t("تحديث الشجرة", "Refresh tree"))
 
-                    Divider().frame(width: 30)
+                    Divider().frame(width: TreeConst.dividerWidth)
 
-                    Button(action: { withAnimation(.easeInOut(duration: 0.2)) { scale = max(scale - 0.05, 0.2); baseScale = scale } }) {
+                    Button(action: { withAnimation(.easeInOut(duration: 0.2)) { scale = max(scale - TreeConst.zoomStep, TreeConst.minScale); baseScale = scale } }) {
                         Image(systemName: "minus")
                             .font(DS.Font.scaled(16, weight: .bold))
                             .foregroundColor(DS.Color.primary)
-                            .frame(width: 44, height: 44)
+                            .frame(width: TreeConst.toolButtonSize, height: TreeConst.toolButtonSize)
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(L10n.t("تصغير", "Zoom out"))
@@ -749,8 +773,8 @@ struct RecursiveTreeBranch: View {
                         // نضيف العقدة للمسار بدون ما نشيل الإخوان المفتوحين
                         activePath.insert(member.id)
                         // زوم 75% عند فتح عقدة
-                        scale = 0.75
-                        baseScale = 0.75
+                        scale = TreeConst.openNodeScale
+                        baseScale = TreeConst.openNodeScale
                     } else {
                         // نقفل هالعقدة وكل ذريتها
                         var idsToRemove: Set<UUID> = [member.id]
@@ -763,13 +787,13 @@ struct RecursiveTreeBranch: View {
                         collectDescendants(of: member.id)
                         activePath.subtract(idsToRemove)
                         searchedMemberID = nil
-                        // رجوع 60% عند إغلاق العقدة
-                        scale = 0.80
-                        baseScale = 0.80
+                        // رجوع عند إغلاق العقدة
+                        scale = TreeConst.closeNodeScale
+                        baseScale = TreeConst.closeNodeScale
                     }
                 }
                 Task {
-                    try? await Task.sleep(nanoseconds: 200_000_000)
+                    try? await Task.sleep(nanoseconds: TreeConst.scrollDelay)
                     guard !Task.isCancelled else { return }
                     scrollAnchor = .center
                     // عند الفتح نركز على العقدة، عند الإغلاق نركز على الأب لعرض الإخوان

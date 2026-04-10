@@ -1,6 +1,25 @@
 import SwiftUI
 import PhotosUI
 
+// MARK: - Cooldown Guard Modifier
+
+/// Reusable modifier that applies `.disabled` + `.opacity` based on cooldown state
+private struct CooldownGuardModifier: ViewModifier {
+    let canEdit: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .disabled(!canEdit)
+            .opacity(canEdit ? 1 : 0.5)
+    }
+}
+
+private extension View {
+    func cooldownGuarded(_ field: EditableField, cooldown: ProfileEditCooldown) -> some View {
+        modifier(CooldownGuardModifier(canEdit: cooldown.canEdit(field)))
+    }
+}
+
 struct EditProfileView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var memberVM: MemberViewModel
@@ -53,7 +72,7 @@ struct EditProfileView: View {
                         // 1. قسم الصورة الشخصية (تصميم دائري مع ظل فخم)
                         VStack(spacing: DS.Spacing.xs) {
                             imagePickerHeader
-                                .opacity(cooldown.canEdit(.avatar) ? 1 : 0.5)
+                                .cooldownGuarded(.avatar, cooldown: cooldown)
                             cooldownLabel(.avatar)
                         }
 
@@ -68,14 +87,12 @@ struct EditProfileView: View {
                                     nameFieldWithChangeRequest
                                     DSDivider()
                                     modernPhoneField
-                                        .disabled(!cooldown.canEdit(.phoneNumber))
-                                        .opacity(cooldown.canEdit(.phoneNumber) ? 1 : 0.5)
+                                        .cooldownGuarded(.phoneNumber, cooldown: cooldown)
                                     cooldownLabel(.phoneNumber)
 
                                     DSDivider()
                                     modernDatePicker(label: L10n.t("تاريخ الميلاد", "Birth Date"), selection: $birthDate, icon: "calendar")
-                                        .disabled(!cooldown.canEdit(.birthDate))
-                                        .opacity(cooldown.canEdit(.birthDate) ? 1 : 0.5)
+                                        .cooldownGuarded(.birthDate, cooldown: cooldown)
                                     cooldownLabel(.birthDate)
                                 }
                         }
@@ -99,8 +116,7 @@ struct EditProfileView: View {
                                         }
                                         .padding(.horizontal, DS.Spacing.lg)
                                         .padding(.vertical, DS.Spacing.xs)
-                                        .disabled(!cooldown.canEdit(.isMarried))
-                                        .opacity(cooldown.canEdit(.isMarried) ? 1 : 0.5)
+                                        .cooldownGuarded(.isMarried, cooldown: cooldown)
 
                                         cooldownLabel(.isMarried)
                                     }
@@ -109,8 +125,7 @@ struct EditProfileView: View {
 
                         // 4. السيرة الذاتية
                         aiBioSection
-                            .disabled(!cooldown.canEdit(.bio))
-                            .opacity(cooldown.canEdit(.bio) ? 1 : 0.5)
+                            .cooldownGuarded(.bio, cooldown: cooldown)
 
                         // 5. زر الحفظ (تصميم عائم)
                         saveButton
@@ -218,7 +233,7 @@ struct EditProfileView: View {
                 }
                 .padding(.horizontal, DS.Spacing.lg)
                 .padding(.vertical, DS.Spacing.xs)
-                .opacity(cooldown.canEdit(.fullName) ? 1 : 0.5)
+                .cooldownGuarded(.fullName, cooldown: cooldown)
             }
             .buttonStyle(.plain)
             .disabled(!cooldown.canEdit(.fullName))
@@ -360,8 +375,8 @@ struct EditProfileView: View {
                 textAlignment: .left,
                 maxLength: selectedPhoneCountry.maxDigits
             )
-            .frame(height: 30)
-            .frame(maxWidth: 130)
+            .frame(height: DS.Spacing.xxxl - 2)
+            .frame(maxWidth: DS.Spacing.xxxl * 4 + DS.Spacing.sm)
 
             Text("\(selectedPhoneCountry.flag) \(selectedPhoneCountry.dialingCode)")
                 .font(DS.Font.scaled(13, weight: .medium))
@@ -497,16 +512,29 @@ struct EditProfileView: View {
     @ViewBuilder
     private func cooldownLabel(_ field: EditableField) -> some View {
         if !cooldown.canEdit(field) {
+            // مقفل — يعرض الوقت المتبقي
             HStack(spacing: DS.Spacing.xs) {
                 Image(systemName: "lock.fill")
                     .font(DS.Font.caption2)
                 Text(L10n.t(
-                    "غير متاح حالياً",
-                    "Not available now"
+                    "مقفل — \(cooldown.formattedRemaining(field))",
+                    "Locked — \(cooldown.formattedRemaining(field))"
                 ))
                 .font(DS.Font.caption2)
             }
             .foregroundColor(DS.Color.warning)
+            .padding(.horizontal, DS.Spacing.xl + DS.Spacing.lg)
+            .padding(.vertical, DS.Spacing.xs)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        } else if cooldown.remainingEdits(field) < 3 && cooldown.remainingEdits(field) > 0 {
+            // يعرض عدد التعديلات المتبقية
+            HStack(spacing: DS.Spacing.xs) {
+                Image(systemName: "pencil.circle")
+                    .font(DS.Font.caption2)
+                Text(cooldown.formattedRemainingEdits(field))
+                    .font(DS.Font.caption2)
+            }
+            .foregroundColor(DS.Color.textTertiary)
             .padding(.horizontal, DS.Spacing.xl + DS.Spacing.lg)
             .padding(.vertical, DS.Spacing.xs)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -537,70 +565,97 @@ struct EditProfileView: View {
         self.isPhoneHidden = member.isPhoneHidden ?? false
     }
 
+    // MARK: - Save Changes (broken into helpers)
+
     private func saveChangesAction() {
         Task {
             let normalizedPhone = KuwaitPhone.normalizedForStorage(country: selectedPhoneCountry, rawLocalDigits: phoneNumber) ?? ""
-            let oldStoredPhone = KuwaitPhone.normalizeForStorageFromInput(member.phoneNumber) ?? ""
             guard phoneNumber.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !normalizedPhone.isEmpty else { return }
 
-            // تحديد الحقول المتغيرة
-            let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"
-            let oldBirthStr = member.birthDate ?? ""
-            let newBirthStr = f.string(from: birthDate)
-            let birthChanged = newBirthStr != oldBirthStr && cooldown.canEdit(.birthDate)
-            let marriedChanged = isMarried != (member.isMarried ?? false) && cooldown.canEdit(.isMarried)
-            let phoneHiddenChanged = isPhoneHidden != (member.isPhoneHidden ?? false) && cooldown.canEdit(.isPhoneHidden)
-            let isPhoneChanged = !normalizedPhone.isEmpty && (normalizedPhone != oldStoredPhone) && cooldown.canEdit(.phoneNumber)
-            let isDeceasedChanged = (isDeceased && !(member.isDeceased ?? false))
+            let changes = detectChangedFields(normalizedPhone: normalizedPhone)
+            await submitAdminRequests(changes: changes, normalizedPhone: normalizedPhone)
+            await saveBioIfChanged(changes: changes)
 
-            // السيرة
-            let trimmedBio = bioText.trimmingCharacters(in: .whitespacesAndNewlines)
-            let oldBioText = (member.bio ?? []).map { [$0.title, $0.details].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " - ") }.joined(separator: "\n")
-            let bioChanged = trimmedBio != oldBioText && cooldown.canEdit(.bio)
-
-            if isDeceasedChanged {
-                await adminRequestVM.requestDeceasedStatus(memberId: member.id, deathDate: deathDate)
-            }
-
-            if isPhoneChanged {
-                await adminRequestVM.requestPhoneNumberChange(memberId: member.id, newPhoneNumber: normalizedPhone)
-            }
-
-            // حفظ السيرة الذاتية
-            if bioChanged {
-                if !trimmedBio.isEmpty {
-                    let station = FamilyMember.BioStation(title: "", details: trimmedBio)
-                    await memberVM.updateMemberBio(memberId: member.id, bio: [station])
-                    member.bio = [station]
-                } else {
-                    await memberVM.updateMemberBio(memberId: member.id, bio: [])
-                    member.bio = nil
-                }
-            }
-
-            let success = await memberVM.updateMemberData(
-                memberId: member.id,
-                fullName: fullName,
-                phoneNumber: member.phoneNumber ?? "",
-                birthDate: birthDate,
-                isMarried: isMarried,
-                isDeceased: member.isDeceased ?? false,
-                deathDate: member.isDeceased ?? false ? deathDate : nil,
-                isPhoneHidden: isPhoneHidden
-            )
-
+            let success = await submitMemberData()
             if success {
-                // تسجيل cooldown للحقول المتغيرة فقط
-                if birthChanged { cooldown.recordEdit(.birthDate) }
-                if marriedChanged { cooldown.recordEdit(.isMarried) }
-                if phoneHiddenChanged { cooldown.recordEdit(.isPhoneHidden) }
-                if bioChanged { cooldown.recordEdit(.bio) }
-                if isPhoneChanged { cooldown.recordEdit(.phoneNumber) }
+                recordCooldowns(changes: changes)
                 dismiss()
             } else {
                 showSaveError = true
             }
         }
+    }
+
+    /// Holds which fields changed so cooldowns can be recorded after a successful save
+    private struct ChangedFields {
+        let birthChanged: Bool
+        let marriedChanged: Bool
+        let phoneHiddenChanged: Bool
+        let phoneChanged: Bool
+        let bioChanged: Bool
+        let deceasedChanged: Bool
+        let trimmedBio: String
+    }
+
+    private func detectChangedFields(normalizedPhone: String) -> ChangedFields {
+        let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"
+        let oldStoredPhone = KuwaitPhone.normalizeForStorageFromInput(member.phoneNumber) ?? ""
+        let oldBirthStr = member.birthDate ?? ""
+        let newBirthStr = f.string(from: birthDate)
+        let trimmedBio = bioText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let oldBioText = (member.bio ?? []).map { [$0.title, $0.details].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " - ") }.joined(separator: "\n")
+
+        return ChangedFields(
+            birthChanged: newBirthStr != oldBirthStr && cooldown.canEdit(.birthDate),
+            marriedChanged: isMarried != (member.isMarried ?? false) && cooldown.canEdit(.isMarried),
+            phoneHiddenChanged: isPhoneHidden != (member.isPhoneHidden ?? false) && cooldown.canEdit(.isPhoneHidden),
+            phoneChanged: !normalizedPhone.isEmpty && (normalizedPhone != oldStoredPhone) && cooldown.canEdit(.phoneNumber),
+            bioChanged: trimmedBio != oldBioText && cooldown.canEdit(.bio),
+            deceasedChanged: isDeceased && !(member.isDeceased ?? false),
+            trimmedBio: trimmedBio
+        )
+    }
+
+    private func submitAdminRequests(changes: ChangedFields, normalizedPhone: String) async {
+        if changes.deceasedChanged {
+            await adminRequestVM.requestDeceasedStatus(memberId: member.id, deathDate: deathDate)
+        }
+        if changes.phoneChanged {
+            await adminRequestVM.requestPhoneNumberChange(memberId: member.id, newPhoneNumber: normalizedPhone)
+        }
+    }
+
+    private func saveBioIfChanged(changes: ChangedFields) async {
+        guard changes.bioChanged else { return }
+        if !changes.trimmedBio.isEmpty {
+            let station = FamilyMember.BioStation(title: "", details: changes.trimmedBio)
+            await memberVM.updateMemberBio(memberId: member.id, bio: [station])
+            member.bio = [station]
+        } else {
+            await memberVM.updateMemberBio(memberId: member.id, bio: [])
+            member.bio = nil
+        }
+    }
+
+    private func submitMemberData() async -> Bool {
+        await memberVM.updateMemberData(
+            memberId: member.id,
+            fullName: fullName,
+            phoneNumber: member.phoneNumber ?? "",
+            birthDate: birthDate,
+            isMarried: isMarried,
+            isDeceased: member.isDeceased ?? false,
+            deathDate: member.isDeceased ?? false ? deathDate : nil,
+            isPhoneHidden: isPhoneHidden
+        )
+    }
+
+    private func recordCooldowns(changes: ChangedFields) {
+        if changes.birthChanged { cooldown.recordEdit(.birthDate) }
+        if changes.marriedChanged { cooldown.recordEdit(.isMarried) }
+        if changes.phoneHiddenChanged { cooldown.recordEdit(.isPhoneHidden) }
+        if changes.bioChanged { cooldown.recordEdit(.bio) }
+        if changes.phoneChanged { cooldown.recordEdit(.phoneNumber) }
     }
 
 }

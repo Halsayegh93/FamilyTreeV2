@@ -81,7 +81,7 @@ struct MemberDetailsView: View {
                     floatingNavButtons
                 }
             }
-            .navigationBarHidden(true)
+            .toolbar(.hidden, for: .navigationBar)
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
             .sheet(isPresented: $showAdminControl) {
                 if authVM.canEditMembers {
@@ -381,10 +381,10 @@ struct MemberDetailsView: View {
                                 ZStack {
                                     Circle()
                                         .fill(DS.Color.primary.opacity(0.15))
-                                        .frame(width: 24, height: 24)
+                                        .frame(width: DS.Spacing.xxl, height: DS.Spacing.xxl)
                                     Circle()
                                         .fill(DS.Color.gradientPrimary)
-                                        .frame(width: 12, height: 12)
+                                        .frame(width: DS.Spacing.md, height: DS.Spacing.md)
                                 }
                                 
                                 if index < bioStations.count - 1 {
@@ -399,7 +399,7 @@ struct MemberDetailsView: View {
                                         .frame(maxHeight: .infinity)
                                 }
                             }
-                            .frame(width: 24)
+                            .frame(width: DS.Spacing.xxl)
 
                             // كرت المحطة
                             VStack(alignment: .leading, spacing: DS.Spacing.sm) {
@@ -523,7 +523,7 @@ struct MemberDetailsView: View {
                         Image(systemName: "pencil")
                             .font(DS.Font.scaled(14, weight: .bold))
                             .foregroundColor(DS.Color.textOnPrimary)
-                            .frame(width: 40, height: 40)
+                            .frame(width: DS.Spacing.xxxxl, height: DS.Spacing.xxxxl)
                             .background(.ultraThinMaterial)
                             .clipShape(Circle())
                             .dsSubtleShadow()
@@ -538,7 +538,7 @@ struct MemberDetailsView: View {
                         Image(systemName: FavoritesManager.shared.isFavorite(member.id) ? "heart.fill" : "heart")
                             .font(DS.Font.scaled(14, weight: .bold))
                             .foregroundColor(FavoritesManager.shared.isFavorite(member.id) ? DS.Color.error : DS.Color.textOnPrimary)
-                            .frame(width: 40, height: 40)
+                            .frame(width: DS.Spacing.xxxxl, height: DS.Spacing.xxxxl)
                             .background(.ultraThinMaterial)
                             .clipShape(Circle())
                             .dsSubtleShadow()
@@ -552,7 +552,7 @@ struct MemberDetailsView: View {
                     Image(systemName: "xmark")
                         .font(DS.Font.scaled(12, weight: .bold))
                         .foregroundColor(DS.Color.textOnPrimary)
-                        .frame(width: 40, height: 40)
+                        .frame(width: DS.Spacing.xxxxl, height: DS.Spacing.xxxxl)
                         .background(.ultraThinMaterial)
                         .clipShape(Circle())
                         .dsSubtleShadow()

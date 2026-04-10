@@ -7,26 +7,28 @@ enum EditableField: String, CaseIterable {
     case isMarried
     case isPhoneHidden
     case bio
-    case avatar
+    case avatar       // تغيير الصورة
     case phoneNumber
+    case avatarDelete  // حذف الصورة
+    case avatarAdd     // إضافة صورة
+    case gallery       // صور المعرض
 }
 
 /// إدارة فترة الانتظار بين تعديلات الملف الشخصي
-/// - أول تعديل: يقفل الحقل 24 ساعة
-/// - تعديل ثاني خلال 48 ساعة: يقفل 48 ساعة
+/// - أول 3 تعديلات: بدون انتظار
+/// - بعد 3 تعديلات: يقفل 24 ساعة
 /// - كل حقل مستقل عن الآخر
 final class ProfileEditCooldown {
     static let shared = ProfileEditCooldown()
 
     private let defaults = UserDefaults.standard
-    // Cooldown timestamps also stored in Keychain for tamper resistance
     private let useKeychain = true
 
-    /// مدة الـ cooldown العادي (24 ساعة)
-    private let baseCooldown: TimeInterval = 24 * 60 * 60
+    /// عدد التعديلات المسموحة قبل القفل
+    private let maxFreeEdits = 3
 
-    /// مدة الـ cooldown الممتد (48 ساعة)
-    private let extendedCooldown: TimeInterval = 48 * 60 * 60
+    /// مدة الـ cooldown (24 ساعة)
+    private let cooldownDuration: TimeInterval = 24 * 60 * 60
 
     /// مفتاح إيقاف العداد
     private let disabledKey = "editCooldown_disabled"
@@ -44,22 +46,31 @@ final class ProfileEditCooldown {
     /// تصفير جميع العدادات
     func resetAllCooldowns() {
         for field in EditableField.allCases {
-            defaults.removeObject(forKey: lastEditKey(field))
-            defaults.removeObject(forKey: prevEditKey(field))
-            KeychainHelper.delete(forKey: lastEditKey(field))
-            KeychainHelper.delete(forKey: prevEditKey(field))
+            defaults.removeObject(forKey: editCountKey(field))
+            defaults.removeObject(forKey: lockDateKey(field))
+            KeychainHelper.delete(forKey: editCountKey(field))
+            KeychainHelper.delete(forKey: lockDateKey(field))
         }
         Log.info("[Cooldown] تم تصفير جميع العدادات")
     }
 
-    // MARK: - Keys
-
-    private func lastEditKey(_ field: EditableField) -> String {
-        "editCooldown_\(field.rawValue)_lastEdit"
+    /// تصفير عداد حقل معين
+    func resetCooldown(for field: EditableField) {
+        defaults.removeObject(forKey: editCountKey(field))
+        defaults.removeObject(forKey: lockDateKey(field))
+        KeychainHelper.delete(forKey: editCountKey(field))
+        KeychainHelper.delete(forKey: lockDateKey(field))
+        Log.info("[Cooldown] تم تصفير عداد \(field.rawValue)")
     }
 
-    private func prevEditKey(_ field: EditableField) -> String {
-        "editCooldown_\(field.rawValue)_prevEdit"
+    // MARK: - Keys
+
+    private func editCountKey(_ field: EditableField) -> String {
+        "editCooldown_\(field.rawValue)_count"
+    }
+
+    private func lockDateKey(_ field: EditableField) -> String {
+        "editCooldown_\(field.rawValue)_lockDate"
     }
 
     // MARK: - Public API
@@ -67,32 +78,57 @@ final class ProfileEditCooldown {
     /// هل المستخدم يقدر يعدل هالحقل الآن؟
     func canEdit(_ field: EditableField) -> Bool {
         if isDisabled { return true }
-        return remainingTime(field) <= 0
+
+        // إذا مقفل، شيك إذا خلص الوقت
+        if let lockDate = loadDate(forKey: lockDateKey(field)) {
+            let elapsed = Date().timeIntervalSince(lockDate)
+            if elapsed >= cooldownDuration {
+                // خلص الـ cooldown — نصفر العداد
+                resetCooldown(for: field)
+                return true
+            }
+            return false
+        }
+
+        return true
     }
 
     /// الوقت المتبقي بالثواني قبل ما يقدر يعدل
     func remainingTime(_ field: EditableField) -> TimeInterval {
-        // محاولة من Keychain أولاً (أصعب بالتلاعب)، ثم UserDefaults كـ fallback
-        let lastEdit: Date? = loadDate(forKey: lastEditKey(field))
-        guard let lastEdit else { return 0 }
+        guard let lockDate = loadDate(forKey: lockDateKey(field)) else { return 0 }
 
-        let cooldown = currentCooldown(for: field)
-        let elapsed = Date().timeIntervalSince(lastEdit)
-        let remaining = cooldown - elapsed
+        let elapsed = Date().timeIntervalSince(lockDate)
+        let remaining = cooldownDuration - elapsed
 
-        return max(remaining, 0)
+        if remaining <= 0 {
+            resetCooldown(for: field)
+            return 0
+        }
+
+        return remaining
+    }
+
+    /// عدد التعديلات المتبقية قبل القفل
+    func remainingEdits(_ field: EditableField) -> Int {
+        let count = loadCount(forKey: editCountKey(field))
+        return max(0, maxFreeEdits - count)
     }
 
     /// تسجيل تعديل جديد على حقل
     func recordEdit(_ field: EditableField) {
-        let now = Date()
+        if isDisabled { return }
 
-        // نقل آخر تعديل للسابق
-        if let lastEdit = loadDate(forKey: lastEditKey(field)) {
-            saveDate(lastEdit, forKey: prevEditKey(field))
+        var count = loadCount(forKey: editCountKey(field))
+        count += 1
+        saveCount(count, forKey: editCountKey(field))
+
+        // إذا وصل للحد → يقفل
+        if count >= maxFreeEdits {
+            saveDate(Date(), forKey: lockDateKey(field))
+            Log.info("[Cooldown] 🔒 تم قفل \(field.rawValue) بعد \(count) تعديلات — 24 ساعة")
+        } else {
+            Log.info("[Cooldown] تعديل \(count)/\(maxFreeEdits) على \(field.rawValue)")
         }
-
-        saveDate(now, forKey: lastEditKey(field))
     }
 
     /// نص الوقت المتبقي مثل "٣ ساعات و ١٥ دقيقة"
@@ -121,25 +157,28 @@ final class ProfileEditCooldown {
         }
     }
 
-    // MARK: - Private
-
-    /// حساب مدة الـ cooldown — 24 أو 48 ساعة
-    private func currentCooldown(for field: EditableField) -> TimeInterval {
-        guard let lastEdit = loadDate(forKey: lastEditKey(field)),
-              let prevEdit = loadDate(forKey: prevEditKey(field)) else {
-            return baseCooldown
-        }
-
-        // إذا التعديلين خلال 48 ساعة من بعض → cooldown ممتد
-        let gap = lastEdit.timeIntervalSince(prevEdit)
-        if gap <= extendedCooldown {
-            return extendedCooldown
-        }
-
-        return baseCooldown
+    /// نص عدد التعديلات المتبقية
+    func formattedRemainingEdits(_ field: EditableField) -> String {
+        let remaining = remainingEdits(field)
+        let isArabic = LanguageManager.shared.selectedLanguage == "ar"
+        return isArabic
+            ? "\(remaining) تعديلات متبقية"
+            : "\(remaining) edits remaining"
     }
 
-    // MARK: - Secure Storage Helpers
+    // MARK: - Private Storage
+
+    private func saveCount(_ count: Int, forKey key: String) {
+        defaults.set(count, forKey: key)
+        KeychainHelper.save(String(count), forKey: key)
+    }
+
+    private func loadCount(forKey key: String) -> Int {
+        if let stored = KeychainHelper.load(forKey: key), let val = Int(stored) {
+            return val
+        }
+        return defaults.integer(forKey: key)
+    }
 
     private func saveDate(_ date: Date, forKey key: String) {
         defaults.set(date, forKey: key)
@@ -147,12 +186,10 @@ final class ProfileEditCooldown {
     }
 
     private func loadDate(forKey key: String) -> Date? {
-        // Keychain أولاً (أصعب بالتلاعب)
         if let stored = KeychainHelper.load(forKey: key),
            let interval = Double(stored) {
             return Date(timeIntervalSince1970: interval)
         }
-        // Fallback إلى UserDefaults
         return defaults.object(forKey: key) as? Date
     }
 }

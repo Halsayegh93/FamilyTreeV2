@@ -1034,11 +1034,13 @@ struct DSApproveRejectButtons: View {
     var rejectTitle: String
     var isLoading: Bool = false
     var approveGradient: LinearGradient = DS.Color.gradientPrimary
+    var showReject: Bool = true
     var onApprove: () -> Void
     var onReject: () -> Void
 
     var body: some View {
         HStack(spacing: DS.Spacing.md) {
+            if showReject {
             Button(action: onReject) {
                 Text(rejectTitle)
                     .font(DS.Font.calloutBold)
@@ -1051,6 +1053,7 @@ struct DSApproveRejectButtons: View {
                         RoundedRectangle(cornerRadius: DS.Radius.md)
                             .stroke(DS.Color.error.opacity(0.3), lineWidth: 1.5)
                     )
+            }
             }
 
             Button(action: onApprove) {
@@ -1135,29 +1138,33 @@ struct DSMemberAvatar: View {
 
     var body: some View {
         ZStack {
-            Circle()
-                .fill(
-                    LinearGradient(
-                        colors: [roleColor, roleColor.opacity(0.7)],
-                        startPoint: .topLeading, endPoint: .bottomTrailing
-                    )
-                )
-                .frame(width: size, height: size)
-
             if let urlStr = avatarUrl, let url = URL(string: urlStr) {
+                Circle()
+                    .fill(
+                        LinearGradient(
+                            colors: [roleColor, roleColor.opacity(0.7)],
+                            startPoint: .topLeading, endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(width: size, height: size)
+
                 CachedAsyncImage(url: url) { image in
                     image.resizable().scaledToFill()
                 } placeholder: {
                     Text(String(name.prefix(1)))
-                        .font(DS.Font.scaled(size * 0.35, weight: .bold))
-                        .foregroundColor(.white)
+                        .font(DS.Font.scaled(16, weight: .bold))
+                        .foregroundColor(roleColor)
                 }
                 .frame(width: size, height: size)
                 .clipShape(Circle())
             } else {
+                Circle()
+                    .fill(roleColor.opacity(0.12))
+                    .frame(width: size, height: size)
+
                 Text(String(name.prefix(1)))
-                    .font(DS.Font.scaled(size * 0.35, weight: .bold))
-                    .foregroundColor(.white)
+                    .font(DS.Font.scaled(16, weight: .bold))
+                    .foregroundColor(roleColor)
             }
         }
     }

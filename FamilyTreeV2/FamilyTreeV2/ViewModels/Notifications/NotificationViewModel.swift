@@ -823,15 +823,8 @@ class NotificationViewModel: ObservableObject {
                 try await supabase.from("notifications").insert(payload).execute()
             }
             
-            // إرسال push حقيقي للأعضاء المستهدفين
-            if sendPush {
-                await sendPushToMembers(
-                    title: title,
-                    body: body,
-                    kind: "admin",
-                    targetMemberIds: targetMemberIds
-                )
-            }
+            // Push يتم تلقائياً عبر Database Webhook → push-on-notification
+            // لا نحتاج نرسل push يدوي هنا عشان ما يوصل مرتين
 
             await fetchNotifications(force: true)
         } catch {

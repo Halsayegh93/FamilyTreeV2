@@ -1,0 +1,6 @@
+/* Arabic - App Display Name & Privacy Descriptions */
+
+"CFBundleDisplayName" = "عائلة المحمدعلي";
+"CFBundleName" = "عائلة المحمدعلي";
+"NSPhotoLibraryUsageDescription" = "يحتاج التطبيق للوصول إلى مكتبة الصور لاختيار صور الملف الشخصي والأخبار";
+"NSCameraUsageDescription" = "يحتاج التطبيق للوصول إلى الكاميرا لالتقاط صور الملف الشخصي ومسح الباركود";

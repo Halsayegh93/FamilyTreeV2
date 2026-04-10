@@ -19,7 +19,7 @@ struct OfflineBanner: View {
                 icon: "wifi.slash",
                 title: L10n.t("لا يوجد اتصال", "No Connection"),
                 subtitle: L10n.t("تقدر تتصفح البيانات المحفوظة مؤقتاً", "You can browse cached data offline"),
-                color: DS.Color.primary
+                color: DS.Color.error
             )
             .offset(y: dragOffset)
             .gesture(

@@ -318,7 +318,7 @@ struct AdminDashboardView: View {
     ) -> some View {
         VStack(spacing: DS.Spacing.xs) {
             ZStack {
-                Circle().fill(color.opacity(0.12)).frame(width: 32, height: 32)
+                Circle().fill(color.opacity(0.12)).frame(width: DS.Icon.sizeSm, height: DS.Icon.sizeSm)
                 Image(systemName: icon).font(DS.Font.scaled(14, weight: .bold)).foregroundColor(color)
             }
 
@@ -348,7 +348,7 @@ struct AdminDashboardView: View {
     private var schemaWarningCard: some View {
         HStack(spacing: 0) {
             // Prominent yellow/orange left accent bar
-            RoundedRectangle(cornerRadius: 4)
+            RoundedRectangle(cornerRadius: DS.Radius.sm)
                 .fill(
                     LinearGradient(
                         colors: [DS.Color.warning, DS.Color.error],
@@ -356,7 +356,7 @@ struct AdminDashboardView: View {
                         endPoint: .bottom
                     )
                 )
-                .frame(width: 5)
+                .frame(width: DS.Spacing.xs)
 
             VStack(alignment: .leading, spacing: DS.Spacing.sm) {
                 HStack(spacing: DS.Spacing.sm) {

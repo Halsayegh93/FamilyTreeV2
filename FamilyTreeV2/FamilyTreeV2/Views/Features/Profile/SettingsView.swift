@@ -78,7 +78,7 @@ struct SettingsView: View {
                                     Spacer()
 
                                     Picker("", selection: $langManager.selectedLanguage) {
-                                        Text(t("الإنجليزية", "English")).tag("en")
+                                        Text("English").tag("en")
                                         Text("العربية").tag("ar")
                                     }
                                     .pickerStyle(.menu)
@@ -273,7 +273,12 @@ struct SettingsView: View {
         }
     }
 
-    private var appVersion: String {
+    private var appVersion: String { AppVersion.string }
+}
+
+// MARK: - App Version Helper
+private enum AppVersion {
+    static var string: String {
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
         let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
         return "\(version) (\(build))"
@@ -286,11 +291,7 @@ struct AboutView: View {
     private var isArabic: Bool { LanguageManager.shared.selectedLanguage == "ar" }
     private func t(_ ar: String, _ en: String) -> String { L10n.t(ar, en) }
 
-    private var appVersion: String {
-        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
-        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
-        return "\(version) (\(build))"
-    }
+    private var appVersion: String { AppVersion.string }
 
     var body: some View {
         NavigationStack {
@@ -409,7 +410,7 @@ struct AboutView: View {
                 .background(color.opacity(0.12))
                 .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: DS.Spacing.xs) {
                 Text(title)
                     .font(DS.Font.calloutBold)
                     .foregroundColor(DS.Color.textPrimary)
