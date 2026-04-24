@@ -7,16 +7,16 @@ enum EditableField: String, CaseIterable {
     case isMarried
     case isPhoneHidden
     case bio
-    case avatar       // تغيير الصورة
+    case avatar
     case phoneNumber
-    case avatarDelete  // حذف الصورة
-    case avatarAdd     // إضافة صورة
-    case gallery       // صور المعرض
+    case avatarDelete
+    case avatarAdd
+    case gallery
 }
 
 /// إدارة فترة الانتظار بين تعديلات الملف الشخصي
-/// - أول 3 تعديلات: بدون انتظار
-/// - بعد 3 تعديلات: يقفل 24 ساعة
+/// - أول 3 تعديلات لكل حقل: بدون انتظار
+/// - بعد 3 تعديلات: يقفل الحقل 24 ساعة
 /// - كل حقل مستقل عن الآخر
 final class ProfileEditCooldown {
     static let shared = ProfileEditCooldown()
@@ -24,8 +24,8 @@ final class ProfileEditCooldown {
     private let defaults = UserDefaults.standard
     private let useKeychain = true
 
-    /// عدد التعديلات المسموحة قبل القفل
-    private let maxFreeEdits = 3
+    /// عدد التعديلات المسموحة قبل القفل (تعديلين حرة، الثالثة تقفل)
+    private let maxFreeEdits = 2
 
     /// مدة الـ cooldown (24 ساعة)
     private let cooldownDuration: TimeInterval = 24 * 60 * 60
@@ -79,11 +79,9 @@ final class ProfileEditCooldown {
     func canEdit(_ field: EditableField) -> Bool {
         if isDisabled { return true }
 
-        // إذا مقفل، شيك إذا خلص الوقت
         if let lockDate = loadDate(forKey: lockDateKey(field)) {
             let elapsed = Date().timeIntervalSince(lockDate)
             if elapsed >= cooldownDuration {
-                // خلص الـ cooldown — نصفر العداد
                 resetCooldown(for: field)
                 return true
             }
@@ -122,7 +120,6 @@ final class ProfileEditCooldown {
         count += 1
         saveCount(count, forKey: editCountKey(field))
 
-        // إذا وصل للحد → يقفل
         if count >= maxFreeEdits {
             saveDate(Date(), forKey: lockDateKey(field))
             Log.info("[Cooldown] 🔒 تم قفل \(field.rawValue) بعد \(count) تعديلات — 24 ساعة")

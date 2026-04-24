@@ -10,6 +10,7 @@ struct QRCodeSheet: View {
     let member: FamilyMember
 
     @State private var qrImage: UIImage?
+    @State private var showShareSheet = false
 
     private var lineage: String {
         let path = KinshipCalculator.ancestorPath(for: member, lookup: memberVM._memberById)
@@ -67,6 +68,28 @@ struct QRCodeSheet: View {
                 .padding(.vertical, DS.Spacing.sm)
                 .background(DS.Color.primary.opacity(0.08))
                 .clipShape(Capsule())
+
+                // زر المشاركة
+                Button {
+                    showShareSheet = true
+                } label: {
+                    HStack(spacing: DS.Spacing.sm) {
+                        Image(systemName: "square.and.arrow.up")
+                            .font(DS.Font.scaled(15, weight: .bold))
+                        Text(L10n.t("مشاركة الرمز", "Share Code"))
+                            .font(DS.Font.calloutBold)
+                    }
+                    .foregroundColor(DS.Color.textOnPrimary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, DS.Spacing.md)
+                    .background(DS.Color.gradientPrimary)
+                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+                }
+                .buttonStyle(DSScaleButtonStyle())
+                .padding(.horizontal, DS.Spacing.xl)
+                .sheet(isPresented: $showShareSheet) {
+                    ShareSheet(items: [qrImage, lineage])
+                }
             } else {
                 ProgressView()
                     .tint(DS.Color.primary)
@@ -76,10 +99,23 @@ struct QRCodeSheet: View {
         .task {
             let id = member.id
             let image = await Task.detached {
-                let deepLink = QRCodeGenerator.memberDeepLink(memberId: id)
-                return QRCodeGenerator.generate(from: deepLink, size: 200)
+                await MainActor.run {
+                    let deepLink = QRCodeGenerator.memberDeepLink(memberId: id)
+                    return QRCodeGenerator.generate(from: deepLink, size: 200)
+                }
             }.value
             qrImage = image
         }
     }
+}
+
+// MARK: - ShareSheet
+private struct ShareSheet: UIViewControllerRepresentable {
+    let items: [Any]
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: items, applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ uvc: UIActivityViewController, context: Context) {}
 }

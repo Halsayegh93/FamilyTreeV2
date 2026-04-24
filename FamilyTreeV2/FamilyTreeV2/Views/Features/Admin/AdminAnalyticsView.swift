@@ -18,6 +18,23 @@ struct AdminAnalyticsView: View {
         ZStack {
             DS.Color.background.ignoresSafeArea()
 
+            if totalMembers == 0 {
+                VStack(spacing: DS.Spacing.lg) {
+                    Image(systemName: "chart.bar.xaxis")
+                        .font(DS.Font.scaled(48, weight: .light))
+                        .foregroundColor(DS.Color.textTertiary)
+                    Text(L10n.t("لا توجد بيانات كافية", "No data available"))
+                        .font(DS.Font.title3)
+                        .fontWeight(.bold)
+                        .foregroundColor(DS.Color.textPrimary)
+                    Text(L10n.t("أضف أعضاء للشجرة لعرض الإحصائيات", "Add members to the tree to see analytics"))
+                        .font(DS.Font.callout)
+                        .foregroundColor(DS.Color.textSecondary)
+                        .multilineTextAlignment(.center)
+                }
+                .padding(DS.Spacing.xl)
+            } else {
+
             ScrollView(showsIndicators: false) {
                 VStack(spacing: DS.Spacing.xxl) {
                     // ملخص عام
@@ -27,8 +44,8 @@ struct AdminAnalyticsView: View {
                     // توزيع الأدوار
                     rolesSection
 
-                    // توزيع الجنس
-                    genderSection
+                    // TODO: gender — re-enable when needed
+                    // genderSection
 
                     // الفئات العمرية
                     ageGroupsSection
@@ -42,6 +59,8 @@ struct AdminAnalyticsView: View {
                     Spacer(minLength: DS.Spacing.xxxl)
                 }
             }
+
+            } // end else totalMembers > 0
         }
         .navigationTitle(L10n.t("إحصائيات متقدمة", "Analytics"))
         .navigationBarTitleDisplayMode(.inline)

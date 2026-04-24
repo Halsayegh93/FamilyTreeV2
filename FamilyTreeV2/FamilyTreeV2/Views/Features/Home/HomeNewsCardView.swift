@@ -291,10 +291,18 @@ struct HomeNewsCardView: View {
             // Like
             Button(action: onLikeTap) {
                 HStack(spacing: DS.Spacing.xs) {
-                    Image(systemName: isLiked ? "heart.fill" : "heart")
-                        .font(DS.Font.scaled(15, weight: .medium))
-                        .foregroundColor(isLiked ? DS.Color.error : DS.Color.textSecondary)
-                        .symbolEffect(.bounce, value: isLiked)
+                    Group {
+                        if #available(iOS 17.0, *) {
+                            Image(systemName: isLiked ? "heart.fill" : "heart")
+                                .symbolEffect(.bounce, value: isLiked)
+                        } else {
+                            Image(systemName: isLiked ? "heart.fill" : "heart")
+                                .scaleEffect(isLiked ? 1.15 : 1.0)
+                                .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isLiked)
+                        }
+                    }
+                    .font(DS.Font.scaled(15, weight: .medium))
+                    .foregroundColor(isLiked ? DS.Color.error : DS.Color.textSecondary)
 
                     if likeCount > 0 {
                         Text("\(likeCount)")

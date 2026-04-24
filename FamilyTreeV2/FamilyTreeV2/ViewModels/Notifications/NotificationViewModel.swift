@@ -186,10 +186,15 @@ class NotificationViewModel: ObservableObject {
 
         let deviceModelName = NotificationViewModel.deviceModelName
         let platform = UIDevice.current.userInterfaceIdiom == .pad ? "ipados" : "ios"
+        #if DEBUG
+        let apnsEnvironment = "sandbox"
+        #else
+        let apnsEnvironment = "production"
+        #endif
 
-        Log.info("[DEVICE] بدء تسجيل الجهاز: \(deviceModelName) (\(platform)), deviceId=\(deviceId.prefix(8))...")
+        Log.info("[DEVICE] بدء تسجيل الجهاز: \(deviceModelName) (\(platform)/\(apnsEnvironment)), deviceId=\(deviceId.prefix(8))...")
 
-        // فحص حد الأجهزة — إذا وصل الحد، نشيل الأقدم تلقائياً
+        // فحص حد الأجهزة — إذا تجاوز الحد أظهر شاشة الإدارة بدل الحذف التلقائي
         do {
             let existingDevices: [LinkedDevice] = try await supabase
                 .from("device_tokens")
@@ -201,23 +206,12 @@ class NotificationViewModel: ObservableObject {
             let isAlreadyRegistered = existingDevices.contains { $0.deviceId == deviceId }
 
             if !isAlreadyRegistered && existingDevices.count >= maxDevicesAllowed {
-                Log.info("[DEVICE] الحد الأقصى (\(maxDevicesAllowed)) — إزالة الأقدم تلقائياً...")
-                // ترتيب حسب الأقدم (updated_at) وإزالة الأقدم حتى يصير في مكان
-                let sortedByOldest = existingDevices.sorted { $0.updatedAt < $1.updatedAt }
-                let devicesToRemove = sortedByOldest.prefix(existingDevices.count - maxDevicesAllowed + 1)
-
-                for oldDevice in devicesToRemove {
-                    do {
-                        try await supabase
-                            .from("device_tokens")
-                            .delete()
-                            .eq("id", value: oldDevice.id)
-                            .execute()
-                        Log.info("[DEVICE] تم إزالة الجهاز القديم: \(oldDevice.displayName) (id=\(oldDevice.id))")
-                    } catch {
-                        Log.error("[DEVICE] خطأ إزالة الجهاز القديم: \(error.localizedDescription)")
-                    }
+                Log.warning("[DEVICE] الحد الأقصى (\(maxDevicesAllowed)) — طلب المستخدم اختيار جهاز للإزالة")
+                self.linkedDevices = existingDevices.sorted { $0.updatedAt > $1.updatedAt }
+                await MainActor.run {
+                    authVM?.status = .deviceLimitExceeded
                 }
+                return
             }
         } catch {
             Log.error("[DEVICE] خطأ فحص حد الأجهزة: \(error.localizedDescription)")
@@ -230,23 +224,114 @@ class NotificationViewModel: ObservableObject {
                 "member_id": AnyEncodable(memberId.uuidString),
                 "device_id": AnyEncodable(deviceId),
                 "platform": AnyEncodable(platform),
+                "environment": AnyEncodable(apnsEnvironment),
                 "device_name": AnyEncodable(deviceModelName),
                 "token": AnyEncodable(pushToken ?? ""),
                 "updated_at": AnyEncodable(isoNow)
             ]
 
-            try await supabase
+            // نضيف .select() عشان نرجع الصفوف المتأثرة ونتحقق إن العملية نجحت فعلاً
+            // (RLS قد يمنع بصمت بدون خطأ ويرجع 0 rows)
+            let response: [LinkedDevice] = try await supabase
                 .from("device_tokens")
                 .upsert(payload, onConflict: "member_id,device_id")
+                .select()
                 .execute()
+                .value
 
             let tokenPreview = (pushToken ?? "").prefix(12)
-            Log.info("[DEVICE] تم تسجيل الجهاز بنجاح: \(deviceModelName), platform=\(platform), tokenLen=\(pushToken?.count ?? 0), token=\(tokenPreview)...")
+            if response.isEmpty {
+                Log.error("[DEVICE] ❌ فشل تسجيل الجهاز بصمت — 0 صفوف أُدرجت. RLS قد يمنع العملية. memberId=\(memberId.uuidString.prefix(8)), deviceId=\(deviceId.prefix(8))")
+            } else {
+                // ✅ نخزّن محلياً أن الجهاز مسجّل — يُستخدم للكشف إذا حُذف لاحقاً
+                NotificationViewModel.markDeviceAsRegistered(memberId: memberId.uuidString, deviceId: deviceId)
+                Log.info("[DEVICE] ✅ تم تسجيل الجهاز بنجاح: \(deviceModelName), platform=\(platform)/\(apnsEnvironment), tokenLen=\(pushToken?.count ?? 0), token=\(tokenPreview)..., rowsAffected=\(response.count)")
+            }
         } catch {
-            Log.error("[DEVICE] خطأ تسجيل الجهاز: \(error.localizedDescription) — deviceId=\(deviceId.prefix(8)), model=\(deviceModelName)")
+            Log.error("[DEVICE] ❌ خطأ تسجيل الجهاز: \(error.localizedDescription) — deviceId=\(deviceId.prefix(8)), model=\(deviceModelName)")
         }
     }
+
+    // MARK: - Device Registration State (Local Tracking)
+
+    /// مفتاح UserDefaults لتتبع حالة تسجيل الجهاز محلياً
+    private static func deviceRegisteredKey(memberId: String, deviceId: String) -> String {
+        "deviceRegistered_\(memberId)_\(deviceId)"
+    }
+
+    /// تخزين حالة التسجيل الناجح محلياً
+    static func markDeviceAsRegistered(memberId: String, deviceId: String) {
+        UserDefaults.standard.set(true, forKey: deviceRegisteredKey(memberId: memberId, deviceId: deviceId))
+    }
+
+    /// هل كان الجهاز مسجّلاً في السابق؟
+    static func wasDevicePreviouslyRegistered(memberId: String, deviceId: String) -> Bool {
+        UserDefaults.standard.bool(forKey: deviceRegisteredKey(memberId: memberId, deviceId: deviceId))
+    }
+
+    /// مسح علم التسجيل (عند تسجيل الخروج أو إعادة الإعداد)
+    static func clearDeviceRegistrationFlag(memberId: String, deviceId: String) {
+        UserDefaults.standard.removeObject(forKey: deviceRegisteredKey(memberId: memberId, deviceId: deviceId))
+    }
     
+    // MARK: - Enforce Device Limit
+
+    /// تطبيق حد الأجهزة فوراً على جميع الأعضاء — يُستدعى عند تغيير الإعداد من الإدارة
+    func enforceDeviceLimitForAll(_ maxDevices: Int) async {
+        guard maxDevices >= 1 else { return }
+
+        struct DeviceRow: Codable {
+            let id: Int
+            let memberId: UUID
+            let updatedAt: String
+            enum CodingKeys: String, CodingKey {
+                case id
+                case memberId  = "member_id"
+                case updatedAt = "updated_at"
+            }
+        }
+
+        do {
+            // جلب كل الأجهزة مرتبة من الأقدم إلى الأحدث
+            let allDevices: [DeviceRow] = try await supabase
+                .from("device_tokens")
+                .select("id, member_id, updated_at")
+                .order("updated_at", ascending: true)
+                .execute()
+                .value
+
+            // تجميع حسب member_id
+            var byMember: [UUID: [DeviceRow]] = [:]
+            for device in allDevices {
+                byMember[device.memberId, default: []].append(device)
+            }
+
+            // حذف الزائد عن الحد (الأقدم أولاً)
+            var deletedCount = 0
+            for (_, devices) in byMember {
+                guard devices.count > maxDevices else { continue }
+                let toDelete = devices.prefix(devices.count - maxDevices)
+                for device in toDelete {
+                    try? await supabase
+                        .from("device_tokens")
+                        .delete()
+                        .eq("id", value: device.id)
+                        .execute()
+                    deletedCount += 1
+                }
+            }
+
+            if deletedCount > 0 {
+                Log.info("[DEVICE] ✅ حُذف \(deletedCount) جهاز زائد عند تطبيق الحد الجديد (\(maxDevices))")
+                await fetchLinkedDevices()
+            } else {
+                Log.info("[DEVICE] لا أجهزة زائدة عند الحد (\(maxDevices))")
+            }
+        } catch {
+            Log.error("[DEVICE] خطأ تطبيق حد الأجهزة: \(error.localizedDescription)")
+        }
+    }
+
     // MARK: - Push Token
     
     /// إعادة تسجيل التوكن المحفوظ عند فتح التطبيق — يضمن إن السيرفر عنده أحدث توكن
@@ -266,7 +351,10 @@ class NotificationViewModel: ObservableObject {
 
     func registerPushToken(_ token: String) async {
         let cleanToken = token.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !cleanToken.isEmpty else { return }
+        guard !cleanToken.isEmpty else {
+            Log.error("[PUSH] ❌ توكن APNs فارغ — لن يتم التسجيل")
+            return
+        }
 
         self.pushToken = cleanToken
         Log.info("[PUSH] استلام توكن APNs: len=\(cleanToken.count), token=\(cleanToken.prefix(12))...")
@@ -274,33 +362,53 @@ class NotificationViewModel: ObservableObject {
         // لا ترسل التوكن للسيرفر إذا الإشعارات مغلقة
         let notificationsEnabled = UserDefaults.standard.object(forKey: "notificationsEnabled") as? Bool ?? true
         guard notificationsEnabled else {
-            Log.warning("[PUSH] الإشعارات معطّلة — لن يتم تحديث التوكن بالسيرفر")
+            Log.error("[PUSH] ❌ الإشعارات معطّلة من UserDefaults — لن يتم تحديث التوكن بالسيرفر. المستخدم لن يستلم إشعارات!")
             return
         }
 
         guard let memberId = currentUser?.id else {
-            Log.warning("[PUSH] لا يوجد مستخدم حالي — تخطي تحديث التوكن")
+            Log.error("[PUSH] ❌ لا يوجد مستخدم حالي — تخطي تحديث التوكن. (قد يكون التسجيل استُدعي قبل تحميل المستخدم)")
             return
         }
         guard let deviceId = currentDeviceId else {
-            Log.warning("[PUSH] لا يوجد معرّف جهاز — تخطي تحديث التوكن")
+            Log.error("[PUSH] ❌ لا يوجد معرّف جهاز — تخطي تحديث التوكن. (registerDevice لم يُستدعى بعد)")
             return
         }
 
-        // تحديث التوكن على سجل الجهاز الحالي
+        // تحديث التوكن على سجل الجهاز الحالي — upsert يضمن إنه يُنشئ لو ما كان موجود
         do {
-            try await supabase
-                .from("device_tokens")
-                .update([
-                    "token": AnyEncodable(cleanToken)
-                ])
-                .eq("member_id", value: memberId.uuidString)
-                .eq("device_id", value: deviceId)
-                .execute()
+            let platform = UIDevice.current.userInterfaceIdiom == .pad ? "ipados" : "ios"
+            let deviceModelName = NotificationViewModel.deviceModelName
+            #if DEBUG
+            let apnsEnvironment = "sandbox"
+            #else
+            let apnsEnvironment = "production"
+            #endif
+            let isoNow = DateHelper.now
+            let payload: [String: AnyEncodable] = [
+                "member_id": AnyEncodable(memberId.uuidString),
+                "device_id": AnyEncodable(deviceId),
+                "platform": AnyEncodable(platform),
+                "environment": AnyEncodable(apnsEnvironment),
+                "device_name": AnyEncodable(deviceModelName),
+                "token": AnyEncodable(cleanToken),
+                "updated_at": AnyEncodable(isoNow)
+            ]
 
-            Log.info("[PUSH] تم تحديث Push Token بنجاح — memberId=\(memberId.uuidString.prefix(8)), deviceId=\(deviceId.prefix(8))")
+            let response: [LinkedDevice] = try await supabase
+                .from("device_tokens")
+                .upsert(payload, onConflict: "member_id,device_id")
+                .select()
+                .execute()
+                .value
+
+            if response.isEmpty {
+                Log.error("[PUSH] ❌ فشل تحديث Push Token بصمت — 0 صفوف. RLS قد يمنع. memberId=\(memberId.uuidString.prefix(8)), deviceId=\(deviceId.prefix(8))")
+            } else {
+                Log.info("[PUSH] ✅ تم تحديث Push Token بنجاح — memberId=\(memberId.uuidString.prefix(8)), deviceId=\(deviceId.prefix(8)), rows=\(response.count)")
+            }
         } catch {
-            Log.error("[PUSH] خطأ تحديث Push Token: \(error.localizedDescription)")
+            Log.error("[PUSH] ❌ خطأ تحديث Push Token: \(error.localizedDescription)")
         }
     }
 
@@ -494,12 +602,36 @@ class NotificationViewModel: ObservableObject {
             let thisDeviceExists = allDevices.contains { $0.deviceId == deviceId }
 
             if thisDeviceExists {
-                Log.info("[DEVICE-VERIFY] الجهاز مصرّح ✓")
+                if allDevices.count > maxDevicesAllowed {
+                    // الجهاز مسجّل لكن المجموع تجاوز الحد (الأدمن قلّل الحد) → يجب حذف الزائد
+                    let excess = allDevices.count - maxDevicesAllowed
+                    Log.warning("[DEVICE-VERIFY] ⚠️ الجهاز مصرّح لكن العدد (\(allDevices.count)) تجاوز الحد (\(maxDevicesAllowed)) — حذف \(excess) جهاز")
+                    self.linkedDevices = allDevices.sorted { $0.updatedAt > $1.updatedAt }
+                    await MainActor.run { authVM?.status = .deviceOverLimit }
+                } else {
+                    Log.info("[DEVICE-VERIFY] الجهاز مصرّح ✓")
+                }
+            } else if allDevices.count >= maxDevicesAllowed {
+                // الحد ممتلئ بأجهزة غير هذا الجهاز
+                let wasRegistered = NotificationViewModel.wasDevicePreviouslyRegistered(
+                    memberId: memberId.uuidString,
+                    deviceId: deviceId
+                )
+                if wasRegistered {
+                    // كان مسجّلاً وانحذف ليحل محله جهاز آخر → شاشة "تم إزالة جهازك"
+                    Log.warning("[DEVICE-VERIFY] ❌ الجهاز حُذف والحد (\(maxDevicesAllowed)) ممتلئ — شاشة إدارة الأجهزة")
+                    self.linkedDevices = allDevices.sorted { $0.updatedAt > $1.updatedAt }
+                    await MainActor.run { authVM?.status = .deviceRevoked }
+                } else {
+                    // جهاز جديد تماماً والحد ممتلئ → اختر جهازاً للإزالة
+                    Log.warning("[DEVICE-VERIFY] جهاز جديد والحد (\(maxDevicesAllowed)) ممتلئ — شاشة حد الأجهزة")
+                    self.linkedDevices = allDevices.sorted { $0.updatedAt > $1.updatedAt }
+                    await MainActor.run { authVM?.status = .deviceLimitExceeded }
+                }
             } else {
-                // الجهاز غير مسجل — نسجله تلقائياً (registerDevice يشيل الأقدم لو وصل الحد)
-                Log.info("[DEVICE-VERIFY] الجهاز غير مسجل — تسجيل تلقائي…")
+                // في مكان شاغر (سواء جهاز جديد أو أُزيل وفُرغ المكان) → سجّل عادي
+                Log.info("[DEVICE-VERIFY] مكان شاغر (\(allDevices.count)/\(maxDevicesAllowed)) — تسجيل…")
                 await registerDevice()
-                Log.info("[DEVICE-VERIFY] تم تسجيل الجهاز ✓")
             }
         } catch {
             Log.error("[DEVICE-VERIFY] خطأ التحقق من تصريح الجهاز: \(error.localizedDescription)")
@@ -822,9 +954,18 @@ class NotificationViewModel: ObservableObject {
                 ]
                 try await supabase.from("notifications").insert(payload).execute()
             }
-            
-            // Push يتم تلقائياً عبر Database Webhook → push-on-notification
-            // لا نحتاج نرسل push يدوي هنا عشان ما يوصل مرتين
+
+            // Manual push fallback — يرسل push خارجي مباشرة من التطبيق
+            // ملاحظة: إذا الـ Database Webhook (push-on-notification) مُفعّل أيضاً، قد يصل الإشعار مرتين.
+            // الحل: إما تعطيل الـ webhook من Supabase، أو ترك هذا الاستدعاء كخط دفاع احتياطي.
+            if sendPush {
+                await sendPushToMembers(
+                    title: title,
+                    body: body,
+                    kind: "admin",
+                    targetMemberIds: targetMemberIds
+                )
+            }
 
             await fetchNotifications(force: true)
         } catch {

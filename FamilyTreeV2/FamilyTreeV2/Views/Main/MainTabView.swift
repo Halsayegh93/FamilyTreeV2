@@ -3,6 +3,7 @@ import UserNotifications
 
 struct MainTabView: View {
     @EnvironmentObject var authVM: AuthViewModel
+    @ObservedObject private var langManager = LanguageManager.shared
     @State private var selectedTab = 0
     @State private var showNotificationAlert = false
     @AppStorage("notificationAlertDismissCount") private var dismissCount = 0

@@ -99,7 +99,7 @@ struct MemberDetailsView: View {
         .fullScreenCover(isPresented: $showAvatarPreview) {
             avatarPreviewOverlay
         }
-        .onChange(of: photoPickerItem) { _, newItem in
+        .onChange(of: photoPickerItem) { newItem in
             guard let newItem else { return }
             Task {
                 if let data = try? await newItem.loadTransferable(type: Data.self),
@@ -138,14 +138,14 @@ struct MemberDetailsView: View {
             }
         }
         .alert(
-            L10n.t("تم الإرسال", "Submitted"),
+            L10n.t("تم إرسال الاقتراح ✓", "Suggestion Sent ✓"),
             isPresented: $showPhotoSuggestionSuccess
         ) {
             Button(L10n.t("حسناً", "OK"), role: .cancel) { }
         } message: {
             Text(L10n.t(
-                "تم إرسال اقتراح الصورة للإدارة وسيتم مراجعته",
-                "Photo suggestion sent to admin for review"
+                "وصل اقتراح الصورة للإدارة وسيظهر في الملف الشخصي بعد الموافقة.",
+                "Your photo suggestion was sent to admins. It will appear on the profile after approval."
             ))
         }
     }
@@ -517,32 +517,41 @@ struct MemberDetailsView: View {
     private var floatingNavButtons: some View {
         VStack {
             HStack {
-                // زر التعديل — مدير + مراقب + مالك (المشرف لا)
-                if authVM.canEditMembers, !member.isDeleted {
-                    Button { showAdminControl = true } label: {
-                        Image(systemName: "pencil")
-                            .font(DS.Font.scaled(14, weight: .bold))
-                            .foregroundColor(DS.Color.textOnPrimary)
-                            .frame(width: DS.Spacing.xxxxl, height: DS.Spacing.xxxxl)
-                            .background(.ultraThinMaterial)
-                            .clipShape(Circle())
-                            .dsSubtleShadow()
-                    }
-                }
+                // مجموعة أزرار اليسار — edit + heart في capsule واحدة
+                let showEdit = authVM.canEditMembers && !member.isDeleted
+                let showHeart = member.id != authVM.currentUser?.id && !member.isDeleted
+                if showEdit || showHeart {
+                    HStack(spacing: 0) {
+                        if showEdit {
+                            Button { showAdminControl = true } label: {
+                                Image(systemName: "pencil")
+                                    .font(DS.Font.scaled(14, weight: .bold))
+                                    .foregroundColor(DS.Color.textOnPrimary)
+                                    .frame(width: DS.Spacing.xxxxl, height: DS.Spacing.xxxxl)
+                            }
+                            .accessibilityLabel(L10n.t("تعديل", "Edit"))
 
-                // زر المفضلة
-                if member.id != authVM.currentUser?.id, !member.isDeleted {
-                    Button {
-                        FavoritesManager.shared.toggle(member.id)
-                    } label: {
-                        Image(systemName: FavoritesManager.shared.isFavorite(member.id) ? "heart.fill" : "heart")
-                            .font(DS.Font.scaled(14, weight: .bold))
-                            .foregroundColor(FavoritesManager.shared.isFavorite(member.id) ? DS.Color.error : DS.Color.textOnPrimary)
-                            .frame(width: DS.Spacing.xxxxl, height: DS.Spacing.xxxxl)
-                            .background(.ultraThinMaterial)
-                            .clipShape(Circle())
-                            .dsSubtleShadow()
+                            if showHeart {
+                                Rectangle()
+                                    .fill(DS.Color.textOnPrimary.opacity(0.2))
+                                    .frame(width: 1, height: 20)
+                            }
+                        }
+
+                        if showHeart {
+                            Button { FavoritesManager.shared.toggle(member.id) } label: {
+                                Image(systemName: FavoritesManager.shared.isFavorite(member.id) ? "heart.fill" : "heart")
+                                    .font(DS.Font.scaled(14, weight: .bold))
+                                    .foregroundColor(FavoritesManager.shared.isFavorite(member.id) ? DS.Color.error : DS.Color.textOnPrimary)
+                                    .frame(width: DS.Spacing.xxxxl, height: DS.Spacing.xxxxl)
+                            }
+                            .accessibilityLabel(L10n.t("المفضلة", "Favorite"))
+                        }
                     }
+                    .background(.ultraThinMaterial)
+                    .clipShape(Capsule())
+                    .overlay(Capsule().stroke(DS.Color.textOnPrimary.opacity(0.15), lineWidth: 0.5))
+                    .dsSubtleShadow()
                 }
 
                 Spacer()
@@ -555,8 +564,10 @@ struct MemberDetailsView: View {
                         .frame(width: DS.Spacing.xxxxl, height: DS.Spacing.xxxxl)
                         .background(.ultraThinMaterial)
                         .clipShape(Circle())
+                        .overlay(Circle().stroke(DS.Color.textOnPrimary.opacity(0.15), lineWidth: 0.5))
                         .dsSubtleShadow()
                 }
+                .accessibilityLabel(L10n.t("إغلاق", "Close"))
             }
             .padding(.horizontal, DS.Spacing.lg)
             .padding(.top, DS.Spacing.sm)
@@ -606,13 +617,14 @@ struct MemberDetailsView: View {
                     .scaleEffect(avatarPreviewScale, anchor: .center)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
                     .gesture(
-                        MagnifyGesture()
+                        MagnificationGesture()
                             .onChanged { value in
-                                let nextScale = lastAvatarPreviewScale * value.magnification
+                                let nextScale = lastAvatarPreviewScale * value
                                 avatarPreviewScale = min(max(nextScale, 1), 4)
                             }
-                            .onEnded { _ in
-                                lastAvatarPreviewScale = avatarPreviewScale
+                            .onEnded { value in
+                                lastAvatarPreviewScale = min(max(lastAvatarPreviewScale * value, 1), 4)
+                                avatarPreviewScale = lastAvatarPreviewScale
                             }
                     )
                     .onTapGesture(count: 2) {
@@ -640,8 +652,8 @@ struct MemberDetailsView: View {
                     .padding()
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(L10n.t("إغلاق", "Close"))
         }
     }
 
 }
-

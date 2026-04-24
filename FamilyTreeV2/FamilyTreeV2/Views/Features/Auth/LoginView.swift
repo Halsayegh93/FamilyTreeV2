@@ -52,6 +52,18 @@ struct LoginView: View {
                     .opacity(logoOpacity)
                     .padding(.bottom, DS.Spacing.xxxxl)
 
+                // مؤشر التقدم — خطوة ١ / خطوة ٢
+                HStack(spacing: DS.Spacing.sm) {
+                    stepDot(filled: true)
+                    Rectangle()
+                        .fill(authVM.isOtpSent ? DS.Color.primary : DS.Color.textTertiary.opacity(0.3))
+                        .frame(width: 28, height: 2)
+                        .clipShape(Capsule())
+                        .animation(DS.Anim.smooth, value: authVM.isOtpSent)
+                    stepDot(filled: authVM.isOtpSent)
+                }
+                .padding(.bottom, DS.Spacing.sm)
+
                 // منطقة الإدخال
                 VStack(spacing: DS.Spacing.xl) {
                     if !authVM.isOtpSent {
@@ -223,7 +235,8 @@ struct LoginView: View {
     var otpInputSection: some View {
         let isOtpValid = authVM.otpCode.count == 6
         let isLoading = authVM.isLoading
-        let otpDisabled = !isOtpValid || isLoading
+        let isExpired = otpTimeRemaining == 0
+        let otpDisabled = !isOtpValid || isLoading || isExpired
 
         VStack(spacing: DS.Spacing.xl) {
             VStack(spacing: DS.Spacing.sm) {
@@ -283,11 +296,11 @@ struct LoginView: View {
             }
 
             // حقل OTP — AutoFill compatible
-            TextField("", text: $otpText, prompt: Text("------").foregroundStyle(DS.Color.textTertiary))
+            TextField("", text: $otpText, prompt: Text("------").foregroundColor(DS.Color.textTertiary))
                 .keyboardType(.numberPad)
                 .textContentType(.oneTimeCode)
                 .font(DS.Font.scaled(32, weight: .bold))
-                .foregroundStyle(DS.Color.textPrimary)
+                .foregroundColor(DS.Color.textPrimary)
                 .multilineTextAlignment(.center)
                 .frame(height: 60)
                 .background(DS.Color.surface)
@@ -308,7 +321,7 @@ struct LoginView: View {
                     authVM.otpCode = ""
                     otpTimeRemaining = 300
                 }
-                .onChange(of: otpText) { _, newValue in
+                .onChange(of: otpText) { newValue in
                     let digits = newValue.filter(\.isNumber)
                     let limited = String(digits.prefix(6))
                     // فقط صحّح إذا فيه حروف غير أرقام
@@ -397,6 +410,21 @@ struct LoginView: View {
             .clipShape(Capsule())
             .transition(.scale.combined(with: .opacity))
         }
+    }
+
+    // MARK: - Step Dot
+    private func stepDot(filled: Bool) -> some View {
+        ZStack {
+            Circle()
+                .fill(filled ? DS.Color.primary : DS.Color.textTertiary.opacity(0.25))
+                .frame(width: 10, height: 10)
+            if filled {
+                Circle()
+                    .fill(DS.Color.textOnPrimary)
+                    .frame(width: 4, height: 4)
+            }
+        }
+        .animation(DS.Anim.smooth, value: filled)
     }
 
     // MARK: - Helpers

@@ -112,7 +112,7 @@ final class RealtimeManager {
             )
 
             do {
-                await channel.subscribe()
+                try await channel.subscribeWithError()
                 Log.info("[Realtime] ✅ مشترك في \(table)")
                 self.retryCounts[table] = 0
 

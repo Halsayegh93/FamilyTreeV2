@@ -5,6 +5,7 @@ struct AdminAppSettingsView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var memberVM: MemberViewModel
     @EnvironmentObject var appSettingsVM: AppSettingsViewModel
+    @EnvironmentObject var notificationVM: NotificationViewModel
 
     @State private var showResetConfirmation = false
     @State private var showResetCooldownAlert = false
@@ -17,21 +18,21 @@ struct AdminAppSettingsView: View {
             ScrollView(showsIndicators: false) {
                 VStack(spacing: DS.Spacing.xxl) {
 
+                    // معلومات النظام
+                    systemInfoSection
+                        .padding(.top, DS.Spacing.md)
+
                     // التسجيل والعضوية
                     registrationSection
-                        .padding(.top, DS.Spacing.md)
 
                     // الأخبار والمحتوى
                     contentSection
 
-                    // الأمان
-                    securitySection
-
                     // عداد التعديل
                     cooldownSection
 
-                    // معلومات النظام
-                    systemInfoSection
+                    // الأمان
+                    securitySection
 
                     // إعادة تعيين
                     resetSection
@@ -217,7 +218,7 @@ struct AdminAppSettingsView: View {
                 Toggle("", isOn: $cooldownDisabled)
                     .labelsHidden()
                     .tint(DS.Color.warning)
-                    .onChange(of: cooldownDisabled) { _, newValue in
+                    .onChange(of: cooldownDisabled) { newValue in
                         ProfileEditCooldown.shared.isDisabled = newValue
                     }
             }
@@ -263,26 +264,31 @@ struct AdminAppSettingsView: View {
             VStack(spacing: 0) {
                 infoRow(
                     label: L10n.t("إصدار التطبيق", "App Version"),
-                    value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—"
+                    value: (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0") + " (\(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"))"
                 )
                 DSDivider()
                 infoRow(
-                    label: L10n.t("رقم البناء", "Build Number"),
-                    value: Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "—"
+                    label: L10n.t("المنصة", "Platform"),
+                    value: UIDevice.current.systemName + " " + UIDevice.current.systemVersion
                 )
                 DSDivider()
                 infoRow(
-                    label: L10n.t("إجمالي الأعضاء", "Total Members"),
+                    label: L10n.t("أفراد الشجرة", "Tree Members"),
                     value: "\(memberVM.allMembers.count)"
                 )
                 DSDivider()
                 infoRow(
-                    label: L10n.t("الحد الأقصى للأجهزة", "Max Devices"),
-                    value: "\(appSettingsVM.settings.maxDevicesPerUser)"
+                    label: L10n.t("مستخدمين مسجلين", "Registered Users"),
+                    value: "\(memberVM.allMembers.filter { $0.phoneNumber != nil && !($0.phoneNumber ?? "").isEmpty }.count)"
                 )
                 DSDivider()
                 infoRow(
-                    label: L10n.t("آخر تحديث للإعدادات", "Last Settings Update"),
+                    label: L10n.t("السيرفر", "Server"),
+                    value: "Supabase · Stockholm"
+                )
+                DSDivider()
+                infoRow(
+                    label: L10n.t("آخر تحديث", "Last Update"),
                     value: formatDate(appSettingsVM.settings.updatedAt)
                 )
             }

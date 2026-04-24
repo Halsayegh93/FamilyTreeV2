@@ -23,6 +23,7 @@ class AdminRequestViewModel: ObservableObject {
     @Published var nameChangeRequests: [AdminRequest] = []
     @Published var isLoading: Bool = false
     @Published var mergeResult: MergeResult? = nil
+    @Published var errorMessage: String? = nil
     
     enum MergeResult {
         case success(String)
@@ -1003,220 +1004,69 @@ class AdminRequestViewModel: ObservableObject {
     /// Copies the tree position data (father, children, bio, photos) from the old tree record
     /// to the new registration record (which has the correct auth UUID), then deletes the old record.
     func mergeMemberIntoTreeMember(newMemberId: UUID, existingTreeMemberId: UUID) async {
-        guard canModerate else { Log.error("الدمج مرفوض: الصلاحية للمدير أو المشرف فقط"); return }
-        Log.info("[MERGE] ==============================")
-        Log.info("[MERGE] بدء الدمج:")
-        Log.info("[MERGE]   العضو الجديد (يبقى): \(newMemberId)")
-        Log.info("[MERGE]   عضو الشجرة (يُحذف): \(existingTreeMemberId)")
-        Log.info("[MERGE] ==============================")
+        guard canModerate else {
+            Log.error("[MERGE] مرفوض: الصلاحية للمدير فقط")
+            self.mergeResult = .failure(L10n.t("ليس لديك صلاحية لإجراء الدمج.", "You don't have permission to merge."))
+            return
+        }
+        guard newMemberId != existingTreeMemberId else {
+            self.mergeResult = .failure(L10n.t("لا يمكن دمج العضو مع نفسه.", "Cannot merge a member with itself."))
+            return
+        }
+
+        Log.info("[MERGE] بدء الدمج: \(newMemberId) ← \(existingTreeMemberId)")
         self.isLoading = true
+
         do {
-            // 0) التحقق من وجود سجل العضو الجديد أولاً
-            let newMemberResponse = try await supabase
-                .from("profiles")
-                .select()
-                .eq("id", value: newMemberId.uuidString)
-                .limit(1)
-                .execute()
-            let newMembers = try JSONDecoder().decode([FamilyMember].self, from: newMemberResponse.data)
-            guard let newMember = newMembers.first else {
-                Log.error("[MERGE] ❌ سجل العضو الجديد غير موجود! UUID: \(newMemberId)")
-                self.mergeResult = .failure(L10n.t(
-                    "سجل العضو الجديد غير موجود في قاعدة البيانات.",
-                    "New member record not found in database."
-                ))
-                self.isLoading = false
-                return
+            // استدعاء الـ atomic function على السيرفر — كل العمليات في transaction واحدة
+            struct MergeParams: Encodable {
+                let p_new_member_id: String
+                let p_tree_member_id: String
             }
-            Log.info("[MERGE] سجل العضو الجديد موجود: \(newMember.fullName), role=\(newMember.role)")
-            
-            // 1) Load the existing tree record to get tree data
-            let treeResponse = try await supabase
-                .from("profiles")
-                .select()
-                .eq("id", value: existingTreeMemberId.uuidString)
-                .limit(1)
-                .execute()
-            
-            let treeMembers = try JSONDecoder().decode([FamilyMember].self, from: treeResponse.data)
-            guard let treeMember = treeMembers.first else {
-                Log.error("[MERGE] ❌ سجل الشجرة غير موجود! UUID: \(existingTreeMemberId)")
-                self.mergeResult = .failure(L10n.t(
-                    "سجل عضو الشجرة غير موجود في قاعدة البيانات.",
-                    "Tree member record not found in database."
-                ))
-                self.isLoading = false
-                return
-            }
-            
-            // 2) Update the new registration record with tree data from old record
-            var updatePayload: [String: AnyEncodable] = [
-                "role": AnyEncodable("member"),
-                "status": AnyEncodable("active"),
-                "is_hidden_from_tree": AnyEncodable(false),
-                "full_name": AnyEncodable(treeMember.fullName),
-                "first_name": AnyEncodable(treeMember.firstName),
-                "father_id": AnyEncodable(treeMember.fatherId?.uuidString),
-                "sort_order": AnyEncodable(treeMember.sortOrder),
-                "is_deceased": AnyEncodable(treeMember.isDeceased ?? false),
-                "is_married": AnyEncodable(treeMember.isMarried ?? false)
-            ]
-            
-            // Transfer avatar/cover/photo from tree record if exists
-            if let avatarUrl = treeMember.avatarUrl, !avatarUrl.isEmpty {
-                updatePayload["avatar_url"] = AnyEncodable(avatarUrl)
-            }
-            if let coverUrl = treeMember.coverUrl, !coverUrl.isEmpty {
-                updatePayload["cover_url"] = AnyEncodable(coverUrl)
-            }
-            if let photoURL = treeMember.photoURL, !photoURL.isEmpty {
-                updatePayload["photo_url"] = AnyEncodable(photoURL)
-            }
-            
-            // Transfer bio if exists
-            if let bio = treeMember.bio, !bio.isEmpty {
-                updatePayload["bio"] = AnyEncodable(bio)
-            }
-            
-            // Transfer death date if exists
-            if let deathDate = treeMember.deathDate, !deathDate.isEmpty {
-                updatePayload["death_date"] = AnyEncodable(deathDate)
-            }
-            
-            try await supabase
-                .from("profiles")
-                .update(updatePayload)
-                .eq("id", value: newMemberId.uuidString)
-                .execute()
-            Log.info("[MERGE] تم إرسال تحديث السجل الجديد")
-            
-            // التحقق من نجاح التحديث فعلياً (RLS قد يمنع التحديث بصمت)
-            let verifyResponse = try await supabase
-                .from("profiles")
-                .select()
-                .eq("id", value: newMemberId.uuidString)
-                .limit(1)
-                .execute()
-            let verifyMembers = try JSONDecoder().decode([FamilyMember].self, from: verifyResponse.data)
-            if let verified = verifyMembers.first {
-                if verified.role == .member && verified.status == .active {
-                    Log.info("[MERGE] ✅ التحقق ناجح: role=\(verified.role), status=\(verified.status ?? .active), name=\(verified.fullName)")
-                } else {
-                    Log.error("[MERGE] ⚠️ التحديث لم يُطبق! role=\(verified.role), status=\(verified.status ?? .pending). قد يكون RLS يمنع التحديث.")
-                    self.mergeResult = .failure(L10n.t(
-                        "فشل تحديث حالة العضو. تحقق من صلاحيات قاعدة البيانات (RLS).",
-                        "Failed to update member status. Check database permissions (RLS)."
-                    ))
-                    self.isLoading = false
-                    return
+            struct MergeResponse: Decodable {
+                let success: Bool
+                let message: String
+                let mergedName: String?
+                enum CodingKeys: String, CodingKey {
+                    case success, message
+                    case mergedName = "merged_name"
                 }
             }
-            
-            // 3) Re-link children: change their father_id from old to new
-            _ = try? await supabase
-                .from("profiles")
-                .update(["father_id": AnyEncodable(newMemberId.uuidString)])
-                .eq("father_id", value: existingTreeMemberId.uuidString)
-                .execute()
-            
-            // 4) Transfer gallery photos from old to new
-            _ = try? await supabase
-                .from("member_gallery_photos")
-                .update(["member_id": AnyEncodable(newMemberId.uuidString)])
-                .eq("member_id", value: existingTreeMemberId.uuidString)
-                .execute()
-            
-            // 5) Transfer notifications from old to new
-            _ = try? await supabase
-                .from("notifications")
-                .update(["target_member_id": AnyEncodable(newMemberId.uuidString)])
-                .eq("target_member_id", value: existingTreeMemberId.uuidString)
-                .execute()
-            
-            // 6) Approve pending admin requests for new member
-            _ = try? await supabase
-                .from("admin_requests")
-                .update(["status": AnyEncodable(ApprovalStatus.approved.rawValue)])
-                .eq("member_id", value: newMemberId.uuidString)
-                .in("request_type", values: [RequestType.joinRequest.rawValue, RequestType.linkRequest.rawValue])
-                .eq("status", value: ApprovalStatus.pending.rawValue)
-                .execute()
-            
-            // 7) Clean up admin_requests referencing old record
-            _ = try? await supabase
-                .from("admin_requests")
-                .delete()
-                .eq("member_id", value: existingTreeMemberId.uuidString)
-                .execute()
-            _ = try? await supabase
-                .from("admin_requests")
-                .delete()
-                .eq("requester_id", value: existingTreeMemberId.uuidString)
-                .execute()
-            
-            // 8) Transfer device tokens from old to new
-            _ = try? await supabase
-                .from("device_tokens")
-                .update(["member_id": AnyEncodable(newMemberId.uuidString)])
-                .eq("member_id", value: existingTreeMemberId.uuidString)
-                .execute()
-            
-            // 9) Delete the old tree record (مع حماية ضد حذف السجل الخطأ)
-            guard existingTreeMemberId != newMemberId else {
-                Log.error("[MERGE] ❌ محاولة حذف نفس السجل المراد الاحتفاظ به! تم الإيقاف.")
-                self.mergeResult = .failure(L10n.t(
-                    "خطأ: لا يمكن دمج العضو مع نفسه.",
-                    "Error: Cannot merge a member with itself."
+
+            let response: MergeResponse = try await supabase
+                .rpc("merge_member_into_tree", params: MergeParams(
+                    p_new_member_id: newMemberId.uuidString,
+                    p_tree_member_id: existingTreeMemberId.uuidString
                 ))
-                self.isLoading = false
-                return
-            }
-            do {
-                Log.info("[MERGE] حذف السجل القديم: \(existingTreeMemberId) (العضو المحفوظ: \(newMemberId))")
-                try await supabase
-                    .from("profiles")
-                    .delete()
-                    .eq("id", value: existingTreeMemberId.uuidString)
-                    .execute()
-                Log.info("[MERGE] ✅ تم حذف السجل القديم بنجاح")
-            } catch {
-                Log.error("[MERGE] فشل حذف السجل القديم: \(error.localizedDescription)")
-                // حتى لو فشل الحذف، السجل الجديد اتحدث بنجاح
-            }
-            
-            // 10) التحقق النهائي: السجل الجديد لا يزال موجوداً بعد الحذف
-            let finalCheck = try? await supabase
-                .from("profiles")
-                .select("id, role, status, full_name")
-                .eq("id", value: newMemberId.uuidString)
-                .limit(1)
                 .execute()
-            if let checkData = finalCheck?.data,
-               let checkMembers = try? JSONDecoder().decode([FamilyMember].self, from: checkData),
-               let final = checkMembers.first {
-                Log.info("[MERGE] ✅ التحقق النهائي: السجل موجود — \(final.fullName), role=\(final.role), status=\(final.status?.rawValue ?? "nil")")
+                .value
+
+            if response.success {
+                let name = response.mergedName ?? ""
+                Log.info("[MERGE] ✅ نجح الدمج: \(name)")
+
+                // إشعار العضو بالقبول
+                await notifyJoinApproval(memberId: newMemberId, fatherName: nil)
+
+                // تحديث البيانات المحلية
+                await memberVM?.fetchAllMembers(force: true)
+
+                self.mergeResult = .success(L10n.t(
+                    "تم ربط \(name) بنجاح وتفعيل حسابه.",
+                    "Successfully linked \(name) and activated their account."
+                ))
             } else {
-                Log.error("[MERGE] ❌ التحقق النهائي: السجل الجديد اختفى بعد الحذف! UUID: \(newMemberId)")
+                Log.error("[MERGE] ❌ فشل: \(response.message)")
+                self.mergeResult = .failure(response.message)
             }
-            
-            // 11) Refresh local data
-            await memberVM?.fetchAllMembers()
-            
-            // 11) Notify the member
-            await notifyJoinApproval(memberId: newMemberId, fatherName: treeMember.fatherId.flatMap { id in memberById(id)?.fullName })
-            
-            Log.info("[MERGE] تم دمج العضو بنجاح: \(treeMember.fullName) → auth UUID: \(newMemberId)")
-            self.mergeResult = .success(L10n.t(
-                "تم دمج \(treeMember.fullName) بنجاح وتفعيل حسابه.",
-                "Successfully merged \(treeMember.fullName) and activated their account."
-            ))
         } catch {
-            Log.error("[MERGE] فشل دمج العضو: \(error.localizedDescription)")
+            Log.error("[MERGE] ❌ خطأ: \(error.localizedDescription)")
             self.mergeResult = .failure(L10n.t(
                 "حدث خطأ أثناء الدمج: \(error.localizedDescription)",
-                "Error during merge: \(error.localizedDescription)"
+                "Merge error: \(error.localizedDescription)"
             ))
         }
+
         self.isLoading = false
     }
 
@@ -1300,6 +1150,7 @@ class AdminRequestViewModel: ObservableObject {
     func rejectOrDeleteMember(memberId: UUID) async {
         guard authVM?.canDeleteMembers == true else {
             Log.error("تم رفض حذف السجل: الصلاحية للمالك فقط")
+            self.errorMessage = L10n.t("ليس لديك صلاحية لرفض الطلبات.", "You don't have permission to reject requests.")
             return
         }
 
@@ -1349,6 +1200,12 @@ class AdminRequestViewModel: ObservableObject {
                 Log.info("تم حذف العضو مع تنظيف المراجع المرتبطة بنجاح")
             } catch {
                 Log.error("خطأ في الحذف: \(error.localizedDescription)")
+                await MainActor.run {
+                    self?.errorMessage = L10n.t(
+                        "فشل حذف العضو: \(error.localizedDescription)",
+                        "Failed to delete member: \(error.localizedDescription)"
+                    )
+                }
             }
         }
     }

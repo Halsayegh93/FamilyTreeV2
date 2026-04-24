@@ -173,16 +173,10 @@ struct AdminDevicesView: View {
     // MARK: - Empty State
 
     private var emptyState: some View {
-        VStack(spacing: DS.Spacing.lg) {
-            Spacer()
-            Image(systemName: "iphone.slash")
-                .font(DS.Font.scaled(48, weight: .light))
-                .foregroundColor(DS.Color.textTertiary)
-            Text(t("لا توجد أجهزة مسجلة", "No registered devices"))
-                .font(DS.Font.headline)
-                .foregroundColor(DS.Color.textSecondary)
-            Spacer()
-        }
+        DSEmptyState(
+            icon: "iphone.slash",
+            title: t("لا توجد أجهزة مسجلة", "No registered devices")
+        )
     }
 
     // MARK: - Member Device Card

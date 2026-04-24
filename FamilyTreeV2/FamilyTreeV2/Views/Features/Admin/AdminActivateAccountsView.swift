@@ -25,12 +25,15 @@ struct AdminActivateAccountsView: View {
     // MARK: - Combined Filter
 
     enum MemberFilter: String, CaseIterable {
-        case notActivated, missingInfo, noFather, noGender
+        case notActivated, noBirthDate, noFather, noGender
+
+        /// الفلاتر الظاهرة حالياً — لتفعيل noGender أضفها هنا
+        static let visible: [MemberFilter] = [.notActivated, .noBirthDate, .noFather]
 
         var label: String {
             switch self {
-            case .notActivated: return L10n.t("غير مفعل", "Not Activated")
-            case .missingInfo:  return L10n.t("هاتف / ميلاد", "Phone / Birth")
+            case .notActivated: return L10n.t("بدون هاتف", "No Phone")
+            case .noBirthDate:  return L10n.t("بدون ميلاد", "No Birth Date")
             case .noFather:     return L10n.t("بدون أب", "No Father")
             case .noGender:     return L10n.t("بدون جنس", "No Gender")
             }
@@ -38,8 +41,8 @@ struct AdminActivateAccountsView: View {
 
         var icon: String {
             switch self {
-            case .notActivated: return "person.badge.minus"
-            case .missingInfo:  return "doc.badge.plus"
+            case .notActivated: return "phone.badge.exclamationmark"
+            case .noBirthDate:  return "calendar.badge.exclamationmark"
             case .noFather:     return "person.line.dotted.person"
             case .noGender:     return "person.fill.questionmark"
             }
@@ -47,10 +50,10 @@ struct AdminActivateAccountsView: View {
 
         var color: Color {
             switch self {
-            case .notActivated: return DS.Color.textTertiary
-            case .missingInfo:  return DS.Color.warning
+            case .notActivated: return DS.Color.error
+            case .noBirthDate:  return DS.Color.warning
             case .noFather:     return DS.Color.info
-            case .noGender:     return DS.Color.neonPurple
+            case .noGender:     return DS.Color.accent
             }
         }
     }
@@ -66,17 +69,13 @@ struct AdminActivateAccountsView: View {
     }
 
     private func memberHasAnyIssue(_ m: FamilyMember) -> Bool {
-        isNotActivated(m) || hasMissingInfo(m) || isMissingFather(m) || isMissingGender(m)
-    }
-
-    /// بدون هاتف (للأحياء فقط) أو بدون ميلاد
-    private func hasMissingInfo(_ m: FamilyMember) -> Bool {
-        hasNoPhone(m) || isMissingBirthDate(m)
+        isNotActivated(m) || isMissingBirthDate(m) || isMissingFather(m) || isMissingGender(m)
     }
 
     // Individual checks
     private func isNotActivated(_ m: FamilyMember) -> Bool {
-        m.status == nil || m.status == .pending
+        // غير مفعّل = حالة pending، أو بدون رقم هاتف (ما يقدر يسجل دخول)
+        m.status == nil || m.status == .pending || hasNoPhone(m)
     }
 
     private func hasNoPhone(_ m: FamilyMember) -> Bool {
@@ -103,7 +102,7 @@ struct AdminActivateAccountsView: View {
     private func matches(member: FamilyMember, filter: MemberFilter) -> Bool {
         switch filter {
         case .notActivated: return isNotActivated(member)
-        case .missingInfo:  return hasMissingInfo(member)
+        case .noBirthDate:  return isMissingBirthDate(member)
         case .noFather:     return isMissingFather(member)
         case .noGender:     return isMissingGender(member)
         }
@@ -124,15 +123,13 @@ struct AdminActivateAccountsView: View {
         case noPhone
         case noBirthDate
         case noFather
-        case noGender
 
         var label: String {
             switch self {
-            case .notActivated: return L10n.t("غير مفعل", "Not Activated")
+            case .notActivated: return L10n.t("بدون هاتف", "No Phone")
             case .noPhone:      return L10n.t("بدون هاتف", "No Phone")
             case .noBirthDate:  return L10n.t("بدون ميلاد", "No Birth Date")
             case .noFather:     return L10n.t("بدون أب", "No Father")
-            case .noGender:     return L10n.t("بدون جنس", "No Gender")
             }
         }
 
@@ -142,17 +139,15 @@ struct AdminActivateAccountsView: View {
             case .noPhone:      return "phone.badge.plus"
             case .noBirthDate:  return "calendar.badge.exclamationmark"
             case .noFather:     return "person.line.dotted.person"
-            case .noGender:     return "person.fill.questionmark"
             }
         }
 
         var color: Color {
             switch self {
-            case .notActivated: return DS.Color.textTertiary
+            case .notActivated: return DS.Color.error
             case .noPhone:      return DS.Color.error
             case .noBirthDate:  return DS.Color.warning
             case .noFather:     return DS.Color.info
-            case .noGender:     return DS.Color.neonPurple
             }
         }
     }
@@ -160,11 +155,15 @@ struct AdminActivateAccountsView: View {
     /// Returns all issue tags for a given member
     private func issueLabels(for m: FamilyMember) -> [IssueTag] {
         var issues: [IssueTag] = []
-        if isNotActivated(m)     { issues.append(.notActivated) }
-        if hasNoPhone(m)         { issues.append(.noPhone) }
+        // إذا pending وعنده هاتف → tag "غير مفعل" فقط
+        // إذا بدون هاتف → tag "بدون هاتف" (يغني عن "غير مفعل")
+        if hasNoPhone(m) {
+            issues.append(.noPhone)
+        } else if isNotActivated(m) {
+            issues.append(.notActivated)
+        }
         if isMissingBirthDate(m) { issues.append(.noBirthDate) }
         if isMissingFather(m)    { issues.append(.noFather) }
-        if isMissingGender(m)    { issues.append(.noGender) }
         return issues
     }
 
@@ -172,7 +171,17 @@ struct AdminActivateAccountsView: View {
 
     var body: some View {
         ZStack {
-            if allIssueMembers.isEmpty {
+            if memberVM.isLoading && memberVM.allMembers.isEmpty {
+                VStack(spacing: DS.Spacing.lg) {
+                    ProgressView()
+                        .tint(DS.Color.warning)
+                        .scaleEffect(1.3)
+                    Text(L10n.t("جاري فحص البيانات...", "Checking data..."))
+                        .font(DS.Font.callout)
+                        .foregroundColor(DS.Color.textSecondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if allIssueMembers.isEmpty {
                 emptyState
             } else {
                 VStack(spacing: 0) {
@@ -370,7 +379,7 @@ struct AdminActivateAccountsView: View {
         .sheet(item: $memberToEdit) { member in
             LinkFatherSheet(member: member, memberVM: memberVM)
         }
-        .onChange(of: selectedFilter) {
+        .onChange(of: selectedFilter) { _ in
             displayLimit = 20
             // Exit selection mode when switching filters
             if isSelectionMode {
@@ -464,7 +473,7 @@ struct AdminActivateAccountsView: View {
     // MARK: - Filter Chips
     /// الفلاتر التي تحتوي على أعضاء فقط
     private var availableFilters: [MemberFilter] {
-        MemberFilter.allCases.filter { count(for: $0) > 0 }
+        MemberFilter.visible.filter { count(for: $0) > 0 }
     }
 
     private var filterChips: some View {
@@ -476,7 +485,7 @@ struct AdminActivateAccountsView: View {
             }
             .padding(.horizontal, DS.Spacing.lg)
         }
-        .onChange(of: availableFilters) { _, newFilters in
+        .onChange(of: availableFilters) { newFilters in
             // إذا الفلتر المحدد صار فارغ، انقل تلقائياً لأول فلتر متاح
             if !newFilters.contains(selectedFilter), let first = newFilters.first {
                 withAnimation(DS.Anim.snappy) { selectedFilter = first }
@@ -494,7 +503,7 @@ struct AdminActivateAccountsView: View {
         } label: {
             HStack(spacing: DS.Spacing.xs) {
                 Image(systemName: filter.icon)
-                    .font(DS.Font.scaled(11, weight: .bold))
+                    .font(DS.Font.scaled(11, weight: .semibold))
                 Text(filter.label)
                     .font(DS.Font.caption1)
                     .fontWeight(.semibold)
@@ -503,17 +512,21 @@ struct AdminActivateAccountsView: View {
                         .font(DS.Font.caption2)
                         .fontWeight(.bold)
                         .foregroundColor(isSelected ? filter.color : DS.Color.textOnPrimary)
-                        .padding(.horizontal, 6)
+                        .padding(.horizontal, 5)
                         .padding(.vertical, 2)
-                        .background(isSelected ? DS.Color.textOnPrimary.opacity(0.3) : filter.color.opacity(0.8))
-                        .clipShape(Capsule())
+                        .background(
+                            Capsule()
+                                .fill(isSelected ? Color.white.opacity(0.28) : filter.color)
+                        )
                 }
             }
             .foregroundColor(isSelected ? DS.Color.textOnPrimary : filter.color)
             .padding(.horizontal, DS.Spacing.md)
-            .padding(.vertical, DS.Spacing.xs)
-            .background(isSelected ? filter.color : filter.color.opacity(0.1))
-            .clipShape(Capsule())
+            .padding(.vertical, DS.Spacing.sm)
+            .background(
+                Capsule()
+                    .fill(isSelected ? filter.color : filter.color.opacity(0.1))
+            )
             .overlay(
                 Capsule()
                     .stroke(isSelected ? Color.clear : filter.color.opacity(0.3), lineWidth: 1)
@@ -529,7 +542,7 @@ struct AdminActivateAccountsView: View {
                 .foregroundColor(DS.Color.textTertiary)
             TextField(L10n.t("بحث عن عضو...", "Search member..."), text: $searchText)
                 .font(DS.Font.callout)
-                .onChange(of: searchText) { displayLimit = 20 }
+                .onChange(of: searchText) { _ in displayLimit = 20 }
             if !searchText.isEmpty {
                 Button {
                     searchText = ""
@@ -537,6 +550,7 @@ struct AdminActivateAccountsView: View {
                     Image(systemName: "xmark.circle.fill")
                         .foregroundColor(DS.Color.textTertiary)
                 }
+                .accessibilityLabel(L10n.t("مسح البحث", "Clear search"))
             }
         }
         .padding(DS.Spacing.md)
@@ -661,34 +675,19 @@ struct AdminActivateAccountsView: View {
 
     // MARK: - Empty State
     private var emptyState: some View {
-        VStack(spacing: DS.Spacing.xl) {
-            ZStack {
-                Circle()
-                    .fill(DS.Color.success.opacity(0.08))
-                    .frame(width: 120, height: 120)
-                Image(systemName: "checkmark.shield.fill")
-                    .font(DS.Font.scaled(40, weight: .bold))
-                    .foregroundColor(DS.Color.success.opacity(0.5))
-            }
-            Text(L10n.t("جميع الحسابات مفعلة والبيانات مكتملة", "All accounts activated and data complete"))
-                .font(DS.Font.title3)
-                .foregroundColor(DS.Color.textSecondary)
-                .multilineTextAlignment(.center)
-        }
+        DSEmptyState(
+            icon: "checkmark.shield.fill",
+            title: L10n.t("جميع الحسابات مفعلة والبيانات مكتملة", "All accounts activated and data complete"),
+            tint: DS.Color.success
+        )
     }
 
     // MARK: - No Results
     private var noResultsState: some View {
-        VStack(spacing: DS.Spacing.lg) {
-            Spacer()
-            Image(systemName: "magnifyingglass")
-                .font(DS.Font.scaled(36, weight: .bold))
-                .foregroundColor(DS.Color.textTertiary.opacity(0.5))
-            Text(L10n.t("لا توجد نتائج", "No results found"))
-                .font(DS.Font.callout)
-                .foregroundColor(DS.Color.textSecondary)
-            Spacer()
-        }
+        DSEmptyState(
+            icon: "magnifyingglass",
+            title: L10n.t("لا توجد نتائج", "No results found")
+        )
     }
 
     // MARK: - Helpers
@@ -867,6 +866,7 @@ struct EditPhoneSheet: View {
                             .foregroundStyle(DS.Color.textTertiary)
                             .symbolRenderingMode(.hierarchical)
                     }
+                    .accessibilityLabel(L10n.t("إغلاق", "Close"))
                 }
             }
         }
@@ -1048,6 +1048,7 @@ struct LinkFatherSheet: View {
                             .foregroundStyle(DS.Color.textTertiary)
                             .symbolRenderingMode(.hierarchical)
                     }
+                    .accessibilityLabel(L10n.t("إغلاق", "Close"))
                 }
             }
         }
@@ -1112,15 +1113,7 @@ struct EditBirthDateSheet: View {
                             .font(DS.Font.caption1)
                             .foregroundColor(DS.Color.textSecondary)
 
-                        DatePicker(
-                            "",
-                            selection: $selectedDate,
-                            in: ...Date(),
-                            displayedComponents: .date
-                        )
-                        .datePickerStyle(.wheel)
-                        .labelsHidden()
-                        .environment(\.locale, Locale(identifier: "en_US_POSIX"))
+                        StableWheelDatePicker(selection: $selectedDate, in: ...Date())
                     }
                     .padding(.horizontal, DS.Spacing.lg)
 
@@ -1172,6 +1165,7 @@ struct EditBirthDateSheet: View {
                             .foregroundStyle(DS.Color.textTertiary)
                             .symbolRenderingMode(.hierarchical)
                     }
+                    .accessibilityLabel(L10n.t("إغلاق", "Close"))
                 }
             }
         }

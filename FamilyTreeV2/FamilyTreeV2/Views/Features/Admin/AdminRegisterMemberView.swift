@@ -46,10 +46,8 @@ struct AdminRegisterMemberView: View {
                                 .opacity(cardsAppeared ? 1 : 0)
                                 .offset(y: cardsAppeared ? 0 : 25)
 
-                            // Gender picker
-                            genderSection
-                                .opacity(cardsAppeared ? 1 : 0)
-                                .offset(y: cardsAppeared ? 0 : 28)
+                            // TODO: gender — re-enable when needed
+                            // genderSection
 
                             // Birth date field
                             birthDateSection
@@ -137,7 +135,7 @@ struct AdminRegisterMemberView: View {
                 DSIcon("person.fill", color: DS.Color.primary)
                 TextField(L10n.t("مثال: حسن أحمد علي محمد السالم", "e.g. John Smith"), text: $fullName)
                     .font(DS.Font.body)
-                    .onChange(of: fullName) {
+                    .onChange(of: fullName) { _ in
                         if fullName.count > 100 {
                             fullName = String(fullName.prefix(100))
                         }
@@ -157,7 +155,7 @@ struct AdminRegisterMemberView: View {
                 DSIcon("person.2.fill", color: DS.Color.primary)
                 TextField(L10n.t("مثال: آل محمد علي", "e.g. Al-Mohammad Ali"), text: $familyName)
                     .font(DS.Font.body)
-                    .onChange(of: familyName) {
+                    .onChange(of: familyName) { _ in
                         if familyName.count > 50 {
                             familyName = String(familyName.prefix(50))
                         }
@@ -235,15 +233,15 @@ struct AdminRegisterMemberView: View {
 
                 if hasBirthDate {
                     DSDivider()
-                    HStack(spacing: DS.Spacing.sm) {
-                        DSIcon("calendar", color: DS.Color.accent)
-                        Text(L10n.t("اختر التاريخ", "Pick Date"))
-                            .font(DS.Font.body)
-                            .foregroundColor(DS.Color.textSecondary)
-                        Spacer()
-                        DatePicker("", selection: $birthDate, in: ...Date(), displayedComponents: .date)
-                            .labelsHidden()
-                            .environment(\.locale, Locale(identifier: L10n.isArabic ? "ar" : "en_US"))
+                    VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                        HStack(spacing: DS.Spacing.sm) {
+                            DSIcon("calendar", color: DS.Color.accent)
+                            Text(L10n.t("تاريخ الميلاد", "Birth Date"))
+                                .font(DS.Font.callout)
+                                .foregroundColor(DS.Color.textPrimary)
+                            Spacer()
+                        }
+                        StableWheelDatePicker(selection: $birthDate, in: ...Date())
                     }
                     .padding(.horizontal, DS.Spacing.md)
                     .padding(.vertical, DS.Spacing.xs)

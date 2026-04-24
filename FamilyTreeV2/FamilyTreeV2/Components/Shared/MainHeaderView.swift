@@ -37,129 +37,145 @@ struct MainHeaderView<TrailingContent: View>: View {
     }
     
     var body: some View {
-        HStack(spacing: DS.Spacing.md) {
-            // Header Content
-            if let customTitle = customTitle {
-                // Custom Header (E.g. Tree, Diwaniyas, Admin)
-                HStack(spacing: DS.Spacing.md) {
-                    if let icon = customIcon {
-                        ZStack {
-                            Circle()
-                                .fill(DS.Color.overlayIcon)
-                                .frame(width: 48, height: 48)
-                                .overlay(
-                                    Circle().stroke(DS.Color.overlayIconBorder, lineWidth: 1.5)
-                                )
-                            Image(systemName: icon)
-                                .font(DS.Font.scaled(18, weight: .bold))
-                                .foregroundColor(DS.Color.textOnPrimary)
-                        }
-                        .scaleEffect(isAnimating ? 1.0 : 0.8)
-                        .opacity(isAnimating ? 1.0 : 0.0)
-                    }
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(customTitle)
-                            .font(DS.Font.title3)
-                            .foregroundColor(DS.Color.textOnPrimary)
-                        if let customSubtitle = customSubtitle, !customSubtitle.isEmpty {
-                            Text(customSubtitle)
-                                .font(DS.Font.scaled(13, weight: .medium))
-                                .foregroundColor(DS.Color.overlayText)
-                        }
-                    }
-                    .offset(x: isAnimating ? 0 : 15)
-                    .opacity(isAnimating ? 1.0 : 0.0)
-                }
-            } else {
-                // Default Profile Header (For Home)
-                Button(action: { selectedTab = 3 }) {
+        VStack(spacing: 0) {
+            HStack(spacing: DS.Spacing.md) {
+                if let customTitle = customTitle {
                     HStack(spacing: DS.Spacing.md) {
-                        ZStack {
-                            Circle()
-                                .fill(DS.Color.overlayIcon)
-                                .frame(width: 48, height: 48)
-                                .overlay(
-                                    Circle().stroke(DS.Color.overlayIconBorder, lineWidth: 1.5)
-                                )
-                            Text(String(authVM.currentUser?.fullName.first ?? "U"))
-                                .font(DS.Font.scaled(18, weight: .bold))
-                                .foregroundColor(DS.Color.textOnPrimary)
+                        if let icon = customIcon {
+                            leadingIcon(symbol: icon)
+                                .scaleEffect(isAnimating ? 1.0 : 0.8)
+                                .opacity(isAnimating ? 1.0 : 0.0)
                         }
-                        .scaleEffect(isAnimating ? 1.0 : 0.8)
-                        .opacity(isAnimating ? 1.0 : 0.0)
-                        
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(L10n.t("مرحباً 👋", "Hello 👋"))
-                                .font(DS.Font.scaled(13, weight: .medium))
-                                .foregroundColor(DS.Color.overlayText)
-                            Text(authVM.currentUser?.displayName ?? "Member")
-                                .font(DS.Font.title3)
+
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(customTitle)
+                                .font(DS.Font.scaled(21, weight: .bold))
                                 .foregroundColor(DS.Color.textOnPrimary)
+                            if let customSubtitle = customSubtitle, !customSubtitle.isEmpty {
+                                Text(customSubtitle)
+                                    .font(DS.Font.scaled(13, weight: .medium))
+                                    .foregroundColor(DS.Color.overlayText)
+                            }
                         }
                         .offset(x: isAnimating ? 0 : 15)
                         .opacity(isAnimating ? 1.0 : 0.0)
                     }
-                }
-                .buttonStyle(BounceButtonStyle())
-            }
+                } else {
+                    Button(action: { selectedTab = 3 }) {
+                        HStack(spacing: DS.Spacing.md) {
+                            leadingInitial
+                                .scaleEffect(isAnimating ? 1.0 : 0.8)
+                                .opacity(isAnimating ? 1.0 : 0.0)
 
-            Spacer()
-
-            // Actions
-            HStack(spacing: DS.Spacing.md) {
-                trailingContent
-                
-                if customTitle == nil {
-                    if authVM.canModerate {
-                        Button(action: { selectedTab = 4 }) {
-                            headerIconView(icon: "shield.fill")
-                        }
-                        .buttonStyle(BounceButtonStyle())
-                        .accessibilityLabel(L10n.t("لوحة الإدارة", "Admin Dashboard"))
-                    }
-                    NavigationLink(destination: NotificationsCenterView()) {
-                        ZStack(alignment: .topTrailing) {
-                            headerIconView(
-                                icon: notificationVM.unreadNotificationsCount > 0 ? "bell.badge.fill" : "bell.fill"
-                            )
-                            
-                            if notificationVM.unreadNotificationsCount > 0 {
-                                Text(notificationVM.unreadNotificationsCount > 99 ? "99+" : "\(notificationVM.unreadNotificationsCount)")
-                                    .font(DS.Font.scaled(10, weight: .bold))
-                                    .foregroundColor(.white)
-                                    .padding(.horizontal, 5)
-                                    .padding(.vertical, 2)
-                                    .background(DS.Color.error)
-                                    .clipShape(Capsule())
-                                    .offset(x: 6, y: -4)
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(L10n.t("مرحباً بك", "Welcome Back"))
+                                    .font(DS.Font.scaled(12, weight: .semibold))
+                                    .foregroundColor(DS.Color.overlayText)
+                                Text(authVM.currentUser?.displayName ?? "Member")
+                                    .font(DS.Font.scaled(21, weight: .bold))
+                                    .foregroundColor(DS.Color.textOnPrimary)
+                                    .lineLimit(1)
                             }
+                            .offset(x: isAnimating ? 0 : 15)
+                            .opacity(isAnimating ? 1.0 : 0.0)
                         }
                     }
                     .buttonStyle(BounceButtonStyle())
-                    .accessibilityLabel(notificationVM.unreadNotificationsCount > 0
-                        ? L10n.t("\(notificationVM.unreadNotificationsCount) إشعار غير مقروء", "\(notificationVM.unreadNotificationsCount) unread notifications")
-                        : L10n.t("الإشعارات", "Notifications"))
                 }
+
+                Spacer()
+
+                HStack(spacing: DS.Spacing.md) {
+                    trailingContent
+
+                    if customTitle == nil {
+                        if authVM.canModerate {
+                            Button(action: { selectedTab = 4 }) {
+                                headerIconView(icon: "shield.fill")
+                            }
+                            .buttonStyle(BounceButtonStyle())
+                            .accessibilityLabel(L10n.t("لوحة الإدارة", "Admin Dashboard"))
+                        }
+                        NavigationLink(destination: NotificationsCenterView()) {
+                            ZStack(alignment: .topTrailing) {
+                                headerIconView(
+                                    icon: notificationVM.unreadNotificationsCount > 0 ? "bell.badge.fill" : "bell.fill"
+                                )
+
+                                if notificationVM.unreadNotificationsCount > 0 {
+                                    Text(notificationVM.unreadNotificationsCount > 99 ? "99+" : "\(notificationVM.unreadNotificationsCount)")
+                                        .font(DS.Font.scaled(10, weight: .bold))
+                                        .foregroundColor(.white)
+                                        .padding(.horizontal, 5)
+                                        .padding(.vertical, 2)
+                                        .background(DS.Color.error)
+                                        .clipShape(Capsule())
+                                        .offset(x: 6, y: -4)
+                                }
+                            }
+                        }
+                        .buttonStyle(BounceButtonStyle())
+                        .accessibilityLabel(notificationVM.unreadNotificationsCount > 0
+                            ? L10n.t("\(notificationVM.unreadNotificationsCount) إشعار غير مقروء", "\(notificationVM.unreadNotificationsCount) unread notifications")
+                            : L10n.t("الإشعارات", "Notifications"))
+                    }
+                }
+                .scaleEffect(isAnimating ? 1.0 : 0.5)
+                .opacity(isAnimating ? 1.0 : 0.0)
             }
-            .scaleEffect(isAnimating ? 1.0 : 0.5)
-            .opacity(isAnimating ? 1.0 : 0.0)
+            .padding(.horizontal, DS.Spacing.lg)
+            .padding(.bottom, DS.Spacing.md)
+            .padding(.top, DS.Spacing.sm)
+            .frame(minHeight: 86, alignment: .bottom)
+
+            Rectangle()
+                .fill(DS.Color.headerBorder)
+                .frame(height: 1)
+                .opacity(0.55)
         }
-        .padding(.horizontal, DS.Spacing.lg)
-        .padding(.bottom, DS.Spacing.md)
-        .padding(.top, DS.Spacing.sm)
-        .background(
-            ZStack {
-                (backgroundGradient ?? DS.Color.gradientPrimary)
-                SwiftUI.Color.white.opacity(0.05)
-            }
-                .ignoresSafeArea(edges: .top)
-                .shadow(color: hasDropShadow ? DS.Shadow.card.color : .clear, radius: DS.Shadow.card.radius, x: DS.Shadow.card.x, y: DS.Shadow.card.y)
-        )
+        .background(headerBackground)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .onAppear {
             withAnimation(.spring(response: 0.5, dampingFraction: 0.7, blendDuration: 0.2)) {
                 isAnimating = true
             }
+        }
+    }
+
+    private var headerBackground: some View {
+        ZStack {
+            (backgroundGradient ?? DS.Color.gradientPrimary)
+            DS.Color.headerVeil
+        }
+        .ignoresSafeArea(edges: .top)
+        .shadow(color: hasDropShadow ? DS.Shadow.card.color : .clear, radius: DS.Shadow.card.radius, x: DS.Shadow.card.x, y: DS.Shadow.card.y)
+    }
+
+    private var leadingInitial: some View {
+        ZStack {
+            Circle()
+                .fill(DS.Color.overlayIcon)
+                .frame(width: 52, height: 52)
+                .overlay(
+                    Circle().stroke(DS.Color.overlayIconBorder, lineWidth: 1.5)
+                )
+            Text(String(authVM.currentUser?.fullName.first ?? "U"))
+                .font(DS.Font.scaled(20, weight: .bold))
+                .foregroundColor(DS.Color.textOnPrimary)
+        }
+    }
+
+    private func leadingIcon(symbol: String) -> some View {
+        ZStack {
+            Circle()
+                .fill(DS.Color.overlayIcon)
+                .frame(width: 52, height: 52)
+                .overlay(
+                    Circle().stroke(DS.Color.overlayIconBorder, lineWidth: 1.5)
+                )
+            Image(systemName: symbol)
+                .font(DS.Font.scaled(20, weight: .bold))
+                .foregroundColor(DS.Color.textOnPrimary)
         }
     }
     
@@ -168,7 +184,9 @@ struct MainHeaderView<TrailingContent: View>: View {
             Circle()
                 .fill(DS.Color.overlayIcon)
                 .frame(width: 44, height: 44)
-                .overlay(Circle().stroke(DS.Color.overlayIconBorder, lineWidth: 1.5))
+                .overlay(
+                    Circle().stroke(DS.Color.overlayIconBorder, lineWidth: 1.5)
+                )
             Image(systemName: icon)
                 .font(DS.Font.scaled(18, weight: .bold))
                 .foregroundColor(DS.Color.textOnPrimary)

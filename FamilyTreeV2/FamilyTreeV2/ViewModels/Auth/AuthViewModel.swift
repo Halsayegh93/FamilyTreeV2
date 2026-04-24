@@ -112,6 +112,9 @@ class AuthViewModel: ObservableObject {
         case fullyAuthenticated
         case pendingApproval
         case accountFrozen
+        case deviceLimitExceeded
+        case deviceRevoked
+        case deviceOverLimit   // مسجّل لكن عدد أجهزته تجاوز الحد الجديد
     }
     
     static let maxDevicesPerAccount = 3
@@ -121,8 +124,16 @@ class AuthViewModel: ObservableObject {
     
     // MARK: - صلاحيات الأدوار
 
-    /// المالك — UUID ثابت (غيّره لحساب المالك الفعلي)
-    static let ownerUUID = UUID(uuidString: "9849ab4f-fc16-495e-b82d-33811d4b8d3c")
+    /// المالك — يُقرأ من Info.plist (`OWNER_UUID`) مع fallback للقيمة الافتراضية.
+    /// لنقله إلى build config: أضف `INFOPLIST_KEY_OWNER_UUID = <uuid>` في pbxproj أو xcconfig.
+    static let ownerUUID: UUID? = {
+        if let raw = Bundle.main.object(forInfoDictionaryKey: "OWNER_UUID") as? String,
+           let uuid = UUID(uuidString: raw.trimmingCharacters(in: .whitespacesAndNewlines)) {
+            return uuid
+        }
+        // Default fallback (dev/legacy)
+        return UUID(uuidString: "9849ab4f-fc16-495e-b82d-33811d4b8d3c")
+    }()
 
     /// هل المستخدم الحالي مالك التطبيق
     var isOwner: Bool {
@@ -247,9 +258,18 @@ class AuthViewModel: ObservableObject {
     }
     
     // MARK: - Init
-    
+
+    /// Task الحالي لـ checkUserProfile — نحتفظ به لنلغي الـ calls المتزامنة المكررة
+    private var activeProfileCheckTask: Task<Void, Never>?
+
     init() {
-        Task { await checkUserProfile() }
+        activeProfileCheckTask = Task { [weak self] in
+            await self?.checkUserProfile()
+        }
+    }
+
+    deinit {
+        activeProfileCheckTask?.cancel()
     }
     
     // MARK: - نظام المصادقة (Auth)
@@ -517,22 +537,14 @@ class AuthViewModel: ObservableObject {
     /// يتم تحديث المعرف الأساسي + جميع مراجع father_id التي تشير للمعرف القديم
     private func linkProfileToAuthUser(oldProfileId: UUID, newAuthUserId: UUID) async {
         guard oldProfileId != newAuthUserId else { return } // لا حاجة إذا كانا متطابقين
-        
+
         let oldId = oldProfileId.uuidString.lowercased()
         let newId = newAuthUserId.uuidString.lowercased()
-        
+
         Log.info("[AUTH] ربط البروفايل: \(oldId) → \(newId)")
-        
+
         do {
-            // 1) تحديث father_id لجميع الأبناء الذين يشيرون للمعرف القديم
-            try await supabase
-                .from("profiles")
-                .update(["father_id": AnyEncodable(newId)])
-                .eq("father_id", value: oldId)
-                .execute()
-            
-            // 2) نسخ بيانات البروفايل القديم إلى صف جديد بالمعرف الجديد
-            //    (لأن id هو primary key ولا يمكن تحديثه مباشرة)
+            // 1) جلب بيانات البروفايل القديم
             let oldProfiles: [FamilyMember] = try await supabase
                 .from("profiles")
                 .select()
@@ -540,13 +552,21 @@ class AuthViewModel: ObservableObject {
                 .limit(1)
                 .execute()
                 .value
-            
+
             guard let oldProfile = oldProfiles.first else {
                 Log.warning("[AUTH] لم يُعثر على البروفايل القديم أثناء الربط")
                 return
             }
-            
-            // بناء payload بالبيانات الموجودة
+
+            // 2) مسح رقم التلفون من البروفايل القديم مؤقتاً
+            //    (لتجنب unique constraint عند إنشاء البروفايل الجديد بنفس الرقم)
+            try await supabase
+                .from("profiles")
+                .update(["phone_number": AnyEncodable(Optional<String>.none)])
+                .eq("id", value: oldId)
+                .execute()
+
+            // 3) إنشاء البروفايل الجديد بـ auth UUID الجديد + كل البيانات
             var payload: [String: AnyEncodable] = [
                 "id": AnyEncodable(newId),
                 "full_name": AnyEncodable(oldProfile.fullName),
@@ -560,7 +580,6 @@ class AuthViewModel: ObservableObject {
                 "sort_order": AnyEncodable(oldProfile.sortOrder),
                 "is_married": AnyEncodable(oldProfile.isMarried)
             ]
-            
             if let fatherId = oldProfile.fatherId {
                 payload["father_id"] = AnyEncodable(fatherId.uuidString.lowercased())
             }
@@ -586,45 +605,58 @@ class AuthViewModel: ObservableObject {
                     payload["bio_json"] = AnyEncodable(bioString)
                 }
             }
-            
-            // إدخال البروفايل الجديد (upsert لتجنب الخطأ إذا كان موجوداً)
+
             try await supabase
                 .from("profiles")
                 .upsert(payload)
                 .execute()
-            
-            // 3) حذف البروفايل القديم
+
+            // 4) تحديث كل الجداول المرتبطة من oldId → newId
+            //    (الآن newId موجود في profiles فلا يوجد FK violation)
+            do {
+                try await supabase.from("notifications")
+                    .update(["target_member_id": AnyEncodable(newId)])
+                    .eq("target_member_id", value: oldId).execute()
+            } catch { Log.warning("[AUTH] فشل تحديث notifications: \(error.localizedDescription)") }
+
+            do {
+                try await supabase.from("device_tokens")
+                    .update(["member_id": AnyEncodable(newId)])
+                    .eq("member_id", value: oldId).execute()
+            } catch { Log.warning("[AUTH] فشل تحديث device_tokens: \(error.localizedDescription)") }
+
+            do {
+                try await supabase.from("admin_requests")
+                    .update(["member_id": AnyEncodable(newId)])
+                    .eq("member_id", value: oldId).execute()
+            } catch { Log.warning("[AUTH] فشل تحديث admin_requests: \(error.localizedDescription)") }
+
+            do {
+                try await supabase.from("member_gallery_photos")
+                    .update(["member_id": AnyEncodable(newId)])
+                    .eq("member_id", value: oldId).execute()
+            } catch { Log.warning("[AUTH] فشل تحديث member_gallery_photos: \(error.localizedDescription)") }
+
+            do {
+                try await supabase.from("news")
+                    .update(["author_id": AnyEncodable(newId)])
+                    .eq("author_id", value: oldId).execute()
+            } catch { Log.warning("[AUTH] فشل تحديث news: \(error.localizedDescription)") }
+
+            // 5) تحديث father_id للأبناء
+            do {
+                try await supabase.from("profiles")
+                    .update(["father_id": AnyEncodable(newId)])
+                    .eq("father_id", value: oldId).execute()
+            } catch { Log.warning("[AUTH] فشل تحديث father_id: \(error.localizedDescription)") }
+
+            // 6) حذف البروفايل القديم (لا توجد FKs تشير إليه الآن)
             try await supabase
                 .from("profiles")
                 .delete()
                 .eq("id", value: oldId)
                 .execute()
-            
-            // 4) تحديث device_tokens إذا كانت موجودة
-            do {
-                try await supabase.from("device_tokens").update(["user_id": AnyEncodable(newId)]).eq("user_id", value: oldId).execute()
-            } catch { Log.warning("[AUTH] فشل تحديث device_tokens أثناء الربط: \(error.localizedDescription)") }
 
-            // 5) تحديث admin_requests
-            do {
-                try await supabase.from("admin_requests").update(["member_id": AnyEncodable(newId)]).eq("member_id", value: oldId).execute()
-            } catch { Log.warning("[AUTH] فشل تحديث admin_requests أثناء الربط: \(error.localizedDescription)") }
-
-            // 6) تحديث notifications
-            do {
-                try await supabase.from("notifications").update(["target_member_id": AnyEncodable(newId)]).eq("target_member_id", value: oldId).execute()
-            } catch { Log.warning("[AUTH] فشل تحديث notifications أثناء الربط: \(error.localizedDescription)") }
-
-            // 7) تحديث news
-            do {
-                try await supabase.from("news").update(["author_id": AnyEncodable(newId)]).eq("author_id", value: oldId).execute()
-            } catch { Log.warning("[AUTH] فشل تحديث news أثناء الربط: \(error.localizedDescription)") }
-
-            // 8) تحديث member_gallery_photos
-            do {
-                try await supabase.from("member_gallery_photos").update(["member_id": AnyEncodable(newId)]).eq("member_id", value: oldId).execute()
-            } catch { Log.warning("[AUTH] فشل تحديث member_gallery_photos أثناء الربط: \(error.localizedDescription)") }
-            
             Log.info("[AUTH] ✅ تم ربط البروفايل بنجاح: \(oldProfile.fullName) → auth.uid: \(newId)")
         } catch {
             Log.error("[AUTH] ❌ فشل ربط البروفايل: \(error.localizedDescription)")
@@ -659,43 +691,30 @@ class AuthViewModel: ObservableObject {
     }
     
     /// بحث عن مطابقات الاسم في الشجرة — يُرجع قائمة بمعرفات الأعضاء المتطابقين
+    /// يستخدم دالة security definer لتجاوز RLS (مستخدمو pending لا يرون الأعضاء)
     private func searchForNameMatches(fullName: String, firstName: String) async -> [String] {
-        do {
-            let nameParts = fullName.split(whereSeparator: \.isWhitespace).map(String.init)
-            guard !nameParts.isEmpty else { return [] }
-
-            var allCandidates: [UUID: Int] = [:] // UUID → عدد الأجزاء المتطابقة
-
-            // بحث بكل جزء من الاسم — كل جزء يضيف نقطة
-            for part in nameParts {
-                guard part.count >= 2 else { continue }
-                let results: [FamilyMember] = try await supabase
-                    .from("profiles")
-                    .select()
-                    .ilike("full_name", pattern: "%\(part)%")
-                    .neq("status", value: "pending")
-                    .limit(50)
-                    .execute()
-                    .value
-
-                for member in results {
-                    allCandidates[member.id, default: 0] += 1
-                }
+        struct NameMatchRow: Decodable {
+            let memberId: UUID
+            let fullName: String
+            let matchScore: Int
+            enum CodingKeys: String, CodingKey {
+                case memberId = "member_id"
+                case fullName = "full_name"
+                case matchScore = "match_score"
             }
+        }
 
-            // رتب حسب عدد الأجزاء المتطابقة — اللي يطابق أكثر أول
-            // يعتبر تطابق إذا طابق اسمين على الأقل
-            let minParts = min(2, nameParts.count)
-            let matched = allCandidates
-                .filter { $0.value >= minParts }
-                .sorted { $0.value > $1.value }
-                .prefix(10)
-                .map { $0.key.uuidString }
+        do {
+            let results: [NameMatchRow] = try await supabase
+                .rpc("search_members_by_name", params: ["p_query": AnyEncodable(fullName)])
+                .execute()
+                .value
 
-            Log.info("[MATCH] بحث عن '\(fullName)' — لقى \(allCandidates.count) مرشح، \(matched.count) تطابق (>= \(minParts) أجزاء)")
-            return Array(matched)
+            let matched = results.map { $0.memberId.uuidString }
+            Log.info("[MATCH] بحث عن '\(fullName)' — \(matched.count) تطابق")
+            return matched
         } catch {
-            Log.warning("فشل البحث عن مطابقات الاسم: \(error.localizedDescription)")
+            Log.warning("[MATCH] فشل البحث عن مطابقات الاسم: \(error.localizedDescription)")
             return []
         }
     }
@@ -1168,13 +1187,19 @@ class AuthViewModel: ObservableObject {
         guard let user = try? await supabase.auth.session.user else { return }
         
         let normalizedPhone = user.phone ?? self.phoneNumber
-        // تحقق إذا فيه profile كامل (مو فاضي من الترقر) — إذا كامل ما نكمل التسجيل
+        // تحقق إذا فيه profile كامل وفعّال — إذا كامل ونشط ما نكمل التسجيل
         if let existingProfile = await findProfileByPhone(normalizedPhone) {
             let name = existingProfile.fullName.trimmingCharacters(in: .whitespacesAndNewlines)
             if !name.isEmpty {
-                await applyAuthenticatedProfile(existingProfile, normalizedPhone: normalizedPhone)
-                self.isLoading = false
-                return
+                if existingProfile.status == .active {
+                    // عضو فعّال → أدخل التطبيق مباشرة بدون إعادة تسجيل
+                    Log.info("[REGISTER] بروفايل فعّال موجود — تطبيق مباشر: \(existingProfile.fullName)")
+                    await applyAuthenticatedProfile(existingProfile, normalizedPhone: normalizedPhone)
+                    self.isLoading = false
+                    return
+                }
+                // بروفايل pending أو frozen → أكمل التسجيل لإرسال طلب انضمام جديد
+                Log.info("[REGISTER] بروفايل موجود بحالة \(existingProfile.status?.rawValue ?? "unknown") — سيُعاد إرسال طلب الانضمام")
             }
         }
         
@@ -1203,11 +1228,22 @@ class AuthViewModel: ObservableObject {
         ]
         
         do {
+            // تحرير الرقم إذا كان موجوداً في عضو آخر (unique constraint)
+            // يحدث عندما يُحذف المستخدم ثم يُعيد التسجيل بنفس الرقم
+            let phoneToCheck = user.phone ?? toE164(dialingCode: dialingCode, localDigits: phoneNumber) ?? ""
+            if !phoneToCheck.isEmpty {
+                try? await supabase.rpc("free_phone_for_reregistration", params: [
+                    "p_phone": AnyEncodable(phoneToCheck),
+                    "p_new_member_id": AnyEncodable(user.id.uuidString)
+                ]).execute()
+                Log.info("[REGISTER] فحص تعارض الرقم قبل التسجيل: \(Log.masked(phoneToCheck))")
+            }
+
             try await supabase
                 .from("profiles")
                 .upsert(profileData)
                 .execute()
-            
+
             // التحقق من نجاح الإنشاء
             let verifyProfile = await loadProfile(by: user.id)
             if let vp = verifyProfile {
@@ -1259,11 +1295,16 @@ class AuthViewModel: ObservableObject {
                 "details": AnyEncodable(matchInfo)
             ]
             
-            _ = try? await supabase
-                .from("admin_requests")
-                .insert(joinRequestData)
-                .execute()
-            
+            do {
+                _ = try await supabase
+                    .from("admin_requests")
+                    .insert(joinRequestData)
+                    .execute()
+                Log.info("[REGISTER] ✅ تم إنشاء طلب الانضمام في admin_requests")
+            } catch {
+                Log.error("[REGISTER] ❌ فشل إنشاء طلب الانضمام: \(error.localizedDescription) — memberId=\(user.id.uuidString.prefix(8))")
+            }
+
             // إشعار المدير مع عدد المطابقات
             let pushBody: String
             if matchedMemberIds.isEmpty {

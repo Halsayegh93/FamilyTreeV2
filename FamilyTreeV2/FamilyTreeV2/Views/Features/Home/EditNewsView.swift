@@ -75,7 +75,7 @@ struct EditNewsView: View {
                 .padding(.top, DS.Spacing.sm)
                 .padding(.bottom, DS.Spacing.xxxl)
             }
-            .background(.ultraThinMaterial)
+            .background(DS.Color.surfaceElevated)
             .navigationTitle(L10n.t("تعديل الخبر", "Edit Post"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -88,7 +88,7 @@ struct EditNewsView: View {
             .alert(L10n.t("تعذر التعديل", "Edit Failed"), isPresented: $showEditErrorAlert) {
                 Button(L10n.t("حسناً", "OK"), role: .cancel) {}
             } message: { Text(newsVM.newsPostErrorMessage ?? L10n.t("حدث خطأ أثناء تعديل الخبر.", "An error occurred while updating.")) }
-            .onChange(of: pickerItems) { _, items in
+            .onChange(of: pickerItems) { items in
                 guard !items.isEmpty else { return }
                 loadImages(from: items)
             }

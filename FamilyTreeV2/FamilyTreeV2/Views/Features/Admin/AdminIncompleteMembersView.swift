@@ -5,6 +5,7 @@ struct AdminIncompleteMembersView: View {
     @EnvironmentObject var memberVM: MemberViewModel
     @State private var appeared = false
     @State private var searchText = ""
+    var initialFilter: IncompleteFilter = .noBirthDate
     @State private var selectedFilter: IncompleteFilter = .noBirthDate
     @State private var isSelectionMode = false
     @State private var selectedMembers: Set<UUID> = []
@@ -19,6 +20,9 @@ struct AdminIncompleteMembersView: View {
 
     enum IncompleteFilter: String, CaseIterable {
         case noBirthDate, noFather, noGender
+
+        /// الفلاتر الظاهرة حالياً — لتفعيل noGender أضفها هنا
+        static let visible: [IncompleteFilter] = [.noBirthDate, .noFather]
 
         var label: String {
             switch self {
@@ -106,7 +110,18 @@ struct AdminIncompleteMembersView: View {
 
     var body: some View {
         ZStack {
-            if allIncompleteMembers.isEmpty {
+            if memberVM.isLoading && memberVM.allMembers.isEmpty {
+                // حالة التحميل — البيانات لم تصل بعد
+                VStack(spacing: DS.Spacing.lg) {
+                    ProgressView()
+                        .tint(DS.Color.warning)
+                        .scaleEffect(1.3)
+                    Text(L10n.t("جاري فحص البيانات...", "Checking data..."))
+                        .font(DS.Font.callout)
+                        .foregroundColor(DS.Color.textSecondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if allIncompleteMembers.isEmpty {
                 emptyState
             } else {
                 VStack(spacing: 0) {
@@ -271,6 +286,7 @@ struct AdminIncompleteMembersView: View {
             ))
         }
         .onAppear {
+            selectedFilter = initialFilter
             withAnimation(DS.Anim.smooth.delay(0.15)) {
                 appeared = true
             }
@@ -316,7 +332,7 @@ struct AdminIncompleteMembersView: View {
     private var filterChips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: DS.Spacing.sm) {
-                ForEach(IncompleteFilter.allCases, id: \.self) { filter in
+                ForEach(IncompleteFilter.visible, id: \.self) { filter in
                     filterChip(filter)
                 }
             }
@@ -358,7 +374,7 @@ struct AdminIncompleteMembersView: View {
                 .foregroundColor(DS.Color.textTertiary)
             TextField(L10n.t("بحث عن عضو...", "Search member..."), text: $searchText)
                 .font(DS.Font.callout)
-                .onChange(of: searchText) { displayLimit = 20 }
+                .onChange(of: searchText) { _ in displayLimit = 20 }
             if !searchText.isEmpty {
                 Button {
                     searchText = ""
@@ -366,6 +382,7 @@ struct AdminIncompleteMembersView: View {
                     Image(systemName: "xmark.circle.fill")
                         .foregroundColor(DS.Color.textTertiary)
                 }
+                .accessibilityLabel(L10n.t("مسح البحث", "Clear search"))
             }
         }
         .padding(DS.Spacing.md)
@@ -502,44 +519,7 @@ struct AdminIncompleteMembersView: View {
             // الصف الثاني: أزرار الإجراءات
             if !selectedMembers.isEmpty {
                 HStack(spacing: DS.Spacing.sm) {
-                    // زر ذكر
-                    Button {
-                        pendingGender = "male"
-                        showGenderConfirm = true
-                    } label: {
-                        HStack(spacing: DS.Spacing.xs) {
-                            Image(systemName: "person.fill")
-                                .font(DS.Font.scaled(13, weight: .bold))
-                            Text(L10n.t("ذكر", "Male"))
-                                .font(DS.Font.calloutBold)
-                        }
-                        .foregroundColor(DS.Color.textOnPrimary)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, DS.Spacing.sm)
-                        .background(DS.Color.primary)
-                        .clipShape(Capsule())
-                    }
-                    .buttonStyle(DSBoldButtonStyle())
-
-                    // زر أنثى
-                    Button {
-                        pendingGender = "female"
-                        showGenderConfirm = true
-                    } label: {
-                        HStack(spacing: DS.Spacing.xs) {
-                            Image(systemName: "figure.stand.dress")
-                                .font(DS.Font.scaled(13, weight: .bold))
-                            Text(L10n.t("أنثى", "Female"))
-                                .font(DS.Font.calloutBold)
-                        }
-                        .foregroundColor(DS.Color.textOnPrimary)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, DS.Spacing.sm)
-                        .background(DS.Color.neonPink)
-                        .clipShape(Capsule())
-                    }
-                    .buttonStyle(DSBoldButtonStyle())
-
+                    // TODO: gender buttons — re-enable when needed
                     // زر تعديل فردي
                     Button {
                         if let firstSelectedId = selectedMembers.first,
@@ -555,6 +535,7 @@ struct AdminIncompleteMembersView: View {
                             .clipShape(Circle())
                     }
                     .buttonStyle(DSScaleButtonStyle())
+                    .accessibilityLabel(L10n.t("تعديل", "Edit"))
                 }
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
@@ -569,36 +550,19 @@ struct AdminIncompleteMembersView: View {
 
     // MARK: - Empty State
     private var emptyState: some View {
-        VStack(spacing: DS.Spacing.xl) {
-            ZStack {
-                Circle()
-                    .fill(DS.Color.success.opacity(0.08))
-                    .frame(width: 120, height: 120)
-                Image(systemName: "checkmark.shield.fill")
-                    .font(DS.Font.scaled(40, weight: .bold))
-                    .foregroundColor(DS.Color.success.opacity(0.5))
-            }
-            Text(L10n.t("جميع بيانات الأعضاء مكتملة", "All member data is complete"))
-                .font(DS.Font.title3)
-                .foregroundColor(DS.Color.textSecondary)
-        }
+        DSEmptyState(
+            icon: "checkmark.shield.fill",
+            title: L10n.t("جميع بيانات الأعضاء مكتملة", "All member data is complete"),
+            tint: DS.Color.success
+        )
     }
 
     // MARK: - No Results State
     private var noResultsState: some View {
-        VStack(spacing: DS.Spacing.lg) {
-            Spacer()
-            Image(systemName: "magnifyingglass")
-                .font(DS.Font.scaled(36, weight: .bold))
-                .foregroundColor(DS.Color.textTertiary.opacity(0.5))
-            Text(L10n.t(
-                "لا توجد نتائج",
-                "No results found"
-            ))
-            .font(DS.Font.title3)
-            .foregroundColor(DS.Color.textSecondary)
-            Spacer()
-        }
+        DSEmptyState(
+            icon: "magnifyingglass",
+            title: L10n.t("لا توجد نتائج", "No results found")
+        )
     }
 }
 

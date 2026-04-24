@@ -99,6 +99,7 @@ struct FamilyPhotoAlbumsView: View {
                                         .font(DS.Font.scaled(14))
                                         .foregroundColor(DS.Color.textTertiary)
                                 }
+                                .accessibilityLabel(L10n.t("إزالة الفلتر", "Clear filter"))
                             }
                             .padding(.horizontal, DS.Spacing.sm)
                             .padding(.vertical, DS.Spacing.xs)
@@ -169,7 +170,7 @@ struct FamilyPhotoAlbumsView: View {
             }
             Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { pendingDeletePhoto = nil }
         }
-        .onChange(of: selectedGalleryItems) { _, items in
+        .onChange(of: selectedGalleryItems) { items in
             handleGalleryImagesChange(items)
         }
         .sheet(isPresented: $showPendingPreview) {
@@ -355,6 +356,7 @@ struct FamilyPhotoAlbumsView: View {
                                 .clipShape(Circle())
                         }
                         .padding(DS.Spacing.xs)
+                        .accessibilityLabel(L10n.t("حذف", "Delete"))
                     }
                 }
                 // بادج pending
@@ -454,6 +456,7 @@ struct FamilyPhotoAlbumsView: View {
                                         Button { editingCaptionText = caption; isEditingCaption = true } label: {
                                             Image(systemName: "pencil.circle.fill").font(DS.Font.scaled(18)).foregroundColor(DS.Color.textTertiary)
                                         }
+                                        .accessibilityLabel(L10n.t("تعديل", "Edit"))
                                     }
                                 }
                                 .padding(.horizontal, DS.Spacing.xl)
@@ -523,7 +526,7 @@ struct FamilyPhotoAlbumsView: View {
                 withAnimation(DS.Anim.smooth) { isSheetLoading = false }
             }
         }
-        .onChange(of: selectedPhotoIndex) { _, newIndex in
+        .onChange(of: selectedPhotoIndex) { newIndex in
             isEditingCaption = false
             if let photo = filteredPhotos[safe: newIndex] { selectedPhoto = photo }
         }
@@ -562,6 +565,7 @@ struct FamilyPhotoAlbumsView: View {
                                         .dsCardShadow()
                                 }
                                 .padding(DS.Spacing.md)
+                                .accessibilityLabel(L10n.t("إزالة الصورة", "Remove photo"))
                             }
                             .tag(idx)
                         }
@@ -686,36 +690,15 @@ struct FamilyPhotoAlbumsView: View {
     }
 
     private var emptyStateView: some View {
-        VStack(spacing: DS.Spacing.xl) {
-            Spacer()
-            ZStack {
-                Circle().fill(DS.Color.primary.opacity(0.08)).frame(width: 140, height: 140)
-                Circle().fill(DS.Color.primary.opacity(0.15)).frame(width: 100, height: 100)
-                Image(systemName: "photo.on.rectangle.angled")
-                    .font(DS.Font.scaled(44, weight: .bold)).foregroundColor(DS.Color.primary)
-            }
-            VStack(spacing: DS.Spacing.sm) {
-                Text(L10n.t("لا توجد صور حالياً", "No photos yet"))
-                    .font(DS.Font.title3).fontWeight(.black).foregroundColor(DS.Color.textPrimary)
-                Text(L10n.t("كن أول من يضيف صوراً", "Be first to add photos"))
-                    .font(DS.Font.subheadline).foregroundColor(DS.Color.textSecondary)
-                    .multilineTextAlignment(.center).padding(.horizontal, DS.Spacing.xxxl)
-            }
-            Button {
-                checkPhotoPermission { showPhotoPicker = true }
-            } label: {
-                HStack(spacing: DS.Spacing.sm) {
-                    Image(systemName: "plus.circle.fill").font(DS.Font.scaled(18, weight: .bold))
-                    Text(L10n.t("إضافة صور", "Add Photos")).font(DS.Font.calloutBold)
-                }
-                .foregroundColor(DS.Color.textOnPrimary)
-                .padding(.horizontal, DS.Spacing.xxl).padding(.vertical, DS.Spacing.md)
-                .background(DS.Color.gradientPrimary).clipShape(Capsule())
-            }
-            .buttonStyle(DSBoldButtonStyle())
-            .photosPicker(isPresented: $showPhotoPicker, selection: $selectedGalleryItems, maxSelectionCount: 5, matching: .images)
-            Spacer()
-        }
+        DSEmptyState(
+            icon: "photo.on.rectangle.angled",
+            title: L10n.t("لا توجد صور حالياً", "No photos yet"),
+            subtitle: L10n.t("كن أول من يضيف صوراً", "Be first to add photos"),
+            buttonTitle: L10n.t("إضافة صور", "Add Photos"),
+            buttonAction: { checkPhotoPermission { showPhotoPicker = true } },
+            style: .halo
+        )
+        .photosPicker(isPresented: $showPhotoPicker, selection: $selectedGalleryItems, maxSelectionCount: 5, matching: .images)
     }
 
     private var errorStateView: some View {

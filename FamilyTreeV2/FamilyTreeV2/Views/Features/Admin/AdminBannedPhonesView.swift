@@ -194,22 +194,13 @@ struct AdminBannedPhonesView: View {
 
     // MARK: - Empty State
     private var emptyState: some View {
-        VStack(spacing: DS.Spacing.xl) {
-            Spacer()
-            DSIcon("checkmark.shield.fill", color: DS.Color.success, size: 70, iconSize: 30)
-            Text(t("لا توجد أرقام محظورة", "No Banned Numbers"))
-                .font(DS.Font.headline)
-                .foregroundColor(DS.Color.textPrimary)
-            Text(t(
-                "يمكنك حظر أرقام هواتف من زر + في الأعلى",
-                "You can ban phone numbers using the + button above"
-            ))
-            .font(DS.Font.subheadline)
-            .foregroundColor(DS.Color.textSecondary)
-            .multilineTextAlignment(.center)
-            Spacer()
-        }
-        .padding(DS.Spacing.xxl)
+        DSEmptyState(
+            icon: "checkmark.shield.fill",
+            title: t("لا توجد أرقام محظورة", "No Banned Numbers"),
+            subtitle: t("يمكنك حظر أرقام هواتف من زر + في الأعلى",
+                        "You can ban phone numbers using the + button above"),
+            tint: DS.Color.success
+        )
     }
 
     // MARK: - Helpers

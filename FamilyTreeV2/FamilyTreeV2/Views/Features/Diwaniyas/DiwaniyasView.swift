@@ -23,6 +23,7 @@ struct DiwaniyasView: View {
                         selectedTab: $selectedTab,
                         showingNotifications: $showingNotifications,
                         title: L10n.t("الديوانيات", "Diwaniyas"),
+                        subtitle: "\(filteredDiwaniyas.count) " + L10n.t("موقع ومجلس", "places"),
                         icon: "map.fill",
                         backgroundGradient: DS.Color.gradientPrimary
                     ) {
@@ -110,13 +111,17 @@ struct DiwaniyasView: View {
                 viewModel.authVM = authVM
                 rebuildFilteredDiwaniyas()
             }
-            .onChange(of: viewModel.diwaniyas.count) { _, _ in rebuildFilteredDiwaniyas() }
+            .onChange(of: viewModel.diwaniyas.count) { _ in rebuildFilteredDiwaniyas() }
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
             .alert(L10n.t("خطأ", "Error"), isPresented: .init(
                 get: { viewModel.errorMessage != nil },
                 set: { if !$0 { viewModel.errorMessage = nil } }
             )) {
-                Button(L10n.t("حسناً", "OK"), role: .cancel) { viewModel.errorMessage = nil }
+                Button(L10n.t("إعادة المحاولة", "Retry")) {
+                    viewModel.errorMessage = nil
+                    Task { await viewModel.fetchDiwaniyas() }
+                }
+                Button(L10n.t("إغلاق", "Dismiss"), role: .cancel) { viewModel.errorMessage = nil }
             } message: {
                 Text(viewModel.errorMessage ?? "")
             }
@@ -168,13 +173,17 @@ struct DiwaniyasView: View {
             }
 
             VStack(spacing: DS.Spacing.sm) {
-                Text(L10n.t("لا توجد ديوانيات مضافة", "No diwaniyas added yet"))
+                Text(L10n.t("لا توجد ديوانيات", "No Diwaniyas Yet"))
                     .font(DS.Font.title3)
                     .fontWeight(.black)
                     .foregroundColor(DS.Color.textPrimary)
-                Text(L10n.t("اضغط + لإضافة ديوانية جديدة", "Tap + to add a new diwaniya"))
-                    .font(DS.Font.callout)
-                    .foregroundColor(DS.Color.textSecondary)
+                Text(L10n.t(
+                    "اضغط + لإضافة ديوانيتك.\nتُعرض بعد موافقة الإدارة.",
+                    "Tap + to add your diwaniya.\nIt appears after admin approval."
+                ))
+                .font(DS.Font.callout)
+                .foregroundColor(DS.Color.textSecondary)
+                .multilineTextAlignment(.center)
             }
             Spacer()
         }
@@ -482,7 +491,7 @@ private struct AddDiwaniyaRequestView: View {
                                 placeholder: L10n.t("اسم الديوانية", "Diwaniya Name"),
                                 text: $name
                             )
-                            .onChange(of: name) {
+                            .onChange(of: name) { _ in
                                 if name.count > 100 { name = String(name.prefix(100)) }
                             }
 
@@ -494,7 +503,7 @@ private struct AddDiwaniyaRequestView: View {
                                 placeholder: L10n.t("صاحب الديوانية", "Diwaniya Owner"),
                                 text: $ownerName
                             )
-                            .onChange(of: ownerName) {
+                            .onChange(of: ownerName) { _ in
                                 if ownerName.count > 100 { ownerName = String(ownerName.prefix(100)) }
                             }
 

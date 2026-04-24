@@ -103,6 +103,7 @@ struct AdminDashboardView: View {
                         selectedTab: $selectedTab,
                         showingNotifications: $showingNotifications,
                         title: L10n.t("الادارة", "Admin Dashboard"),
+                        subtitle: L10n.t("المراجعة والإعدادات والتقارير", "Review, settings and reports"),
                         icon: "shield.lefthalf.filled",
                         backgroundGradient: DS.Color.gradientPrimary,
                         hasDropShadow: false
@@ -112,7 +113,6 @@ struct AdminDashboardView: View {
                         VStack(spacing: 0) {
 
                         VStack(spacing: DS.Spacing.md) {
-
                             // تحذير التوافق
                             if !authVM.notificationsFeatureAvailable || !authVM.newsApprovalFeatureAvailable {
                                 schemaWarningCard
@@ -257,11 +257,10 @@ struct AdminDashboardView: View {
             }
             recalculateBadges()
         }
-        .onChange(of: memberVM.membersVersion) { _, _ in recalculateBadges() }
+        .onChange(of: memberVM.membersVersion) { _ in recalculateBadges() }
     }
 
 
-    // MARK: - إحصائيات (Colorful Stat Cards)
     private var adminStatsGrid: some View {
         VStack(spacing: DS.Spacing.sm) {
             // السطر الأول: الأعضاء + الأحياء + المتوفين
@@ -393,4 +392,3 @@ struct AdminDashboardView: View {
         .dsCardShadow()
     }
 }
-

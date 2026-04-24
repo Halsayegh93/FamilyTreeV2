@@ -10,11 +10,13 @@ struct ProfileView: View {
     @State private var showEditProfile = false
     @State private var showQRCode = false
     @State private var showQRScanner = false
+    @State private var showSignOutConfirm = false
 
     @State private var showAddChild = false
     @State private var editingChild: FamilyMember? = nil
     @State private var isReorderingChildren = false
     @State private var appeared = false
+    @State private var isLoadingChildren = true
 
     var user: FamilyMember? { authVM.currentUser }
 
@@ -29,41 +31,22 @@ struct ProfileView: View {
                             selectedTab: $selectedTab,
                             showingNotifications: $showingNotifications,
                             title: L10n.t("حسابي", "My Profile"),
+                            subtitle: L10n.t("الملف الشخصي والإعدادات", "Profile and settings"),
                             icon: "person.fill",
                             backgroundGradient: DS.Color.gradientPrimary
                         ) {
                             HStack(spacing: DS.Spacing.sm) {
-                                // زر مسح باركود
-                                Button(action: { showQRScanner = true }) {
-                                    ZStack {
-                                        Circle()
-                                            .fill(DS.Color.overlayIcon)
-                                            .frame(width: 44, height: 44)
-                                            .overlay(Circle().stroke(DS.Color.overlayIconBorder, lineWidth: 1.5))
-                                        Image(systemName: "camera.viewfinder")
-                                            .font(DS.Font.scaled(18, weight: .bold))
-                                            .foregroundColor(DS.Color.textOnPrimary)
-                                    }
-                                    .contentShape(Circle())
-                                    .accessibilityLabel(L10n.t("مسح باركود", "Scan QR"))
+                                // زر تغيير اللغة
+                                DSIconButton(icon: "globe", iconColor: DS.Color.textOnPrimary) {
+                                    langManager.selectedLanguage = langManager.selectedLanguage == "ar" ? "en" : "ar"
                                 }
-                                .buttonStyle(BounceButtonStyle())
+                                .accessibilityLabel(L10n.t("تغيير اللغة", "Change Language"))
 
-                                // زر باركود العضو
-                                Button(action: { showQRCode = true }) {
-                                    ZStack {
-                                        Circle()
-                                            .fill(DS.Color.overlayIcon)
-                                            .frame(width: 44, height: 44)
-                                            .overlay(Circle().stroke(DS.Color.overlayIconBorder, lineWidth: 1.5))
-                                        Image(systemName: "qrcode")
-                                            .font(DS.Font.scaled(18, weight: .bold))
-                                            .foregroundColor(DS.Color.textOnPrimary)
-                                    }
-                                    .contentShape(Circle())
-                                    .accessibilityLabel(L10n.t("باركود", "QR Code"))
+                                // زر تسجيل الخروج
+                                DSIconButton(icon: "rectangle.portrait.and.arrow.right", iconColor: DS.Color.textOnPrimary) {
+                                    showSignOutConfirm = true
                                 }
-                                .buttonStyle(BounceButtonStyle())
+                                .accessibilityLabel(L10n.t("تسجيل الخروج", "Sign Out"))
                             }
                         }
 
@@ -98,7 +81,9 @@ struct ProfileView: View {
                             .padding(.bottom, DS.Spacing.xxl)
                         } // closes ScrollView
                         .task {
+                            isLoadingChildren = true
                             await memberVM.fetchChildren(for: currentUser.id)
+                            isLoadingChildren = false
                         }
                         .onAppear {
                             guard !appeared else { return }
@@ -120,12 +105,24 @@ struct ProfileView: View {
             }
             .fullScreenCover(isPresented: $showQRScanner) { QRScannerView(selectedTab: $selectedTab) }
             .sheet(isPresented: $showAddChild) { if let c = user { AddChildSheet(member: c) } }
+            .confirmationDialog(
+                L10n.t("تسجيل الخروج", "Sign Out"),
+                isPresented: $showSignOutConfirm,
+                titleVisibility: .visible
+            ) {
+                Button(L10n.t("تسجيل الخروج", "Sign Out"), role: .destructive) {
+                    Task { await authVM.signOut() }
+                }
+                Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
+            } message: {
+                Text(L10n.t("هل تريد الخروج من حسابك على هذا الجهاز؟", "Do you want to sign out of your account on this device?"))
+            }
             .sheet(item: $editingChild) { child in EditChildSheet(member: child) }
-            .onChange(of: showAddChild) { _, isPresented in
+            .onChange(of: showAddChild) { isPresented in
                 guard !isPresented, let currentUser = user else { return }
                 Task { await memberVM.fetchChildren(for: currentUser.id) }
             }
-            .onChange(of: editingChild) { _, newValue in
+            .onChange(of: editingChild) { newValue in
                 guard newValue == nil, let currentUser = user else { return }
                 Task { await memberVM.fetchChildren(for: currentUser.id) }
             }
@@ -223,43 +220,92 @@ struct ProfileView: View {
 
     // MARK: - Personal Info Section
     private func personalInfoSection(user: FamilyMember) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            let infoItems = buildInfoItems(user: user)
-            let columns = [GridItem(.flexible()), GridItem(.flexible())]
+        let infoItems = buildInfoItems(user: user)
+        let columns = [GridItem(.flexible()), GridItem(.flexible())]
 
-            DSCard(padding: 0) {
-                DSSectionHeader(
-                    title: L10n.t("المعلومات الشخصية", "Personal Info"),
-                    icon: "info.circle.fill",
-                    iconColor: DS.Color.textSecondary
-                )
-
-                LazyVGrid(columns: columns, spacing: DS.Spacing.md) {
-                    ForEach(infoItems, id: \.title) { item in
-                        infoGridCell(icon: item.icon, color: item.color, title: item.title, value: item.value)
+        return DSCard(padding: 0) {
+            // هيدر مخصص مع أزرار QR
+            VStack(spacing: 0) {
+                HStack(spacing: DS.Spacing.sm) {
+                    // عنوان القسم
+                    HStack(spacing: DS.Spacing.xs) {
+                        Image(systemName: "info.circle.fill")
+                            .font(DS.Font.scaled(12, weight: .bold))
+                            .foregroundColor(DS.Color.textSecondary)
+                        Text(L10n.t("المعلومات الشخصية", "Personal Info"))
+                            .font(DS.Font.scaled(13, weight: .semibold))
+                            .foregroundColor(DS.Color.textSecondary)
                     }
+                    .padding(.horizontal, DS.Spacing.md)
+                    .padding(.vertical, DS.Spacing.xs + 2)
+                    .background(DS.Color.textSecondary.opacity(0.08))
+                    .clipShape(Capsule())
+
+                    Spacer()
+
+                    // زر مسح QR
+                    Button(action: { showQRScanner = true }) {
+                        HStack(spacing: DS.Spacing.xs) {
+                            Image(systemName: "camera.viewfinder")
+                                .font(DS.Font.scaled(11, weight: .bold))
+                            Text(L10n.t("مسح", "Scan"))
+                                .font(DS.Font.scaled(11, weight: .bold))
+                        }
+                        .foregroundColor(DS.Color.accent)
+                        .padding(.horizontal, DS.Spacing.sm)
+                        .padding(.vertical, DS.Spacing.xs)
+                        .background(DS.Color.accent.opacity(0.1))
+                        .clipShape(Capsule())
+                    }
+                    .buttonStyle(DSScaleButtonStyle())
+                    .accessibilityLabel(L10n.t("مسح رمز QR", "Scan QR Code"))
+
+                    // زر عرض QR
+                    Button(action: { showQRCode = true }) {
+                        HStack(spacing: DS.Spacing.xs) {
+                            Image(systemName: "qrcode")
+                                .font(DS.Font.scaled(11, weight: .bold))
+                            Text(L10n.t("كودي", "My QR"))
+                                .font(DS.Font.scaled(11, weight: .bold))
+                        }
+                        .foregroundColor(DS.Color.secondary)
+                        .padding(.horizontal, DS.Spacing.sm)
+                        .padding(.vertical, DS.Spacing.xs)
+                        .background(DS.Color.secondary.opacity(0.1))
+                        .clipShape(Capsule())
+                    }
+                    .buttonStyle(DSScaleButtonStyle())
+                    .accessibilityLabel(L10n.t("عرض كودي", "Show My QR"))
                 }
-                .padding(DS.Spacing.md)
+                .padding(.horizontal, DS.Spacing.lg)
+                .padding(.top, DS.Spacing.md)
+                .padding(.bottom, DS.Spacing.sm)
 
                 DSDivider()
-
-                Button(action: { showEditProfile = true }) {
-                    HStack(spacing: DS.Spacing.md) {
-                        DSIcon("pencil", color: DS.Color.primary)
-
-                        Text(L10n.t("تعديل البيانات", "Edit Info"))
-                            .font(DS.Font.calloutBold)
-                            .foregroundColor(DS.Color.primary)
-
-                        Spacer()
-
-                        chevronCircle
-                    }
-                    .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.vertical, DS.Spacing.xs)
-                }
-                .buttonStyle(DSBoldButtonStyle())
             }
+
+            LazyVGrid(columns: columns, spacing: DS.Spacing.md) {
+                ForEach(infoItems, id: \.title) { item in
+                    infoGridCell(icon: item.icon, color: item.color, title: item.title, value: item.value)
+                }
+            }
+            .padding(DS.Spacing.md)
+
+            DSDivider()
+
+            Button(action: { showEditProfile = true }) {
+                HStack(spacing: DS.Spacing.md) {
+                    DSIcon("pencil", color: DS.Color.primary)
+                    Text(L10n.t("تعديل البيانات", "Edit Info"))
+                        .font(DS.Font.calloutBold)
+                        .foregroundColor(DS.Color.primary)
+                    Spacer()
+                    chevronCircle
+                }
+                .padding(.horizontal, DS.Spacing.lg)
+                .padding(.vertical, DS.Spacing.md)
+            }
+            .buttonStyle(DSBoldButtonStyle())
         }
         .padding(.horizontal, DS.Spacing.lg)
     }
@@ -443,7 +489,15 @@ struct ProfileView: View {
                     }
                 }
 
-                if isReorderingChildren {
+                if isLoadingChildren && memberVM.currentMemberChildren.isEmpty {
+                    HStack {
+                        Spacer()
+                        ProgressView()
+                            .tint(DS.Color.primary)
+                            .padding(DS.Spacing.lg)
+                        Spacer()
+                    }
+                } else if isReorderingChildren {
                     // وضع الترتيب — قائمة عمودية مع أسهم
                     childrenReorderView
                 } else {
@@ -493,8 +547,7 @@ struct ProfileView: View {
                     .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
                     .overlay(
                         RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                            .stroke(DS.Color.primary.opacity(0.3), lineWidth: 1)
-                            .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [5]))
+                            .stroke(DS.Color.primary.opacity(0.3), style: StrokeStyle(lineWidth: 1, dash: [5]))
                     )
                 }
                 .buttonStyle(PlainButtonStyle())
@@ -669,84 +722,33 @@ struct ProfileView: View {
 
     // MARK: - General Section (Privacy, Settings)
     private func generalSection(user: FamilyMember) -> some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            DSCard(padding: 0) {
-                DSSectionHeader(
-                    title: L10n.t("اعدادات التطبيق", "App Settings"),
-                    icon: "gearshape.2.fill",
-                    iconColor: DS.Color.textSecondary
+        DSCard(padding: 0) {
+            DSSectionHeader(
+                title: L10n.t("اعدادات التطبيق", "App Settings"),
+                icon: "gearshape.2.fill",
+                iconColor: DS.Color.textSecondary
+            )
+
+            // Privacy Row
+            NavigationLink(destination: PrivacySettingsView()) {
+                DSActionRow(
+                    title: L10n.t("الإشعارات والخصوصية", "Notifications & Privacy"),
+                    subtitle: L10n.t("إدارة الإشعارات وخصوصية بياناتك", "Manage notifications and data privacy"),
+                    icon: "lock.shield.fill",
+                    color: DS.Color.info
                 )
-                VStack(spacing: 0) {
-                    // Privacy Row
-                    NavigationLink(destination: PrivacySettingsView()) {
-                        HStack(spacing: DS.Spacing.md) {
-                            DSIcon("lock.shield.fill", color: DS.Color.textSecondary)
-
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(L10n.t("الإشعارات والخصوصية", "Notifications & Privacy"))
-                                    .font(DS.Font.calloutBold)
-                                    .foregroundColor(DS.Color.textPrimary)
-                                Text(L10n.t("الإشعارات والخصوصية", "Notifications & privacy"))
-                                    .font(DS.Font.caption1)
-                                    .foregroundColor(DS.Color.textSecondary)
-                            }
-
-                            Spacer()
-
-                            chevronCircle
-                        }
-                        .padding(.horizontal, DS.Spacing.lg)
-                        .padding(.vertical, DS.Spacing.xs)
-                    }
-                    .buttonStyle(DSBoldButtonStyle())
-
-                    DSDivider()
-
-                    // Settings Row
-                    NavigationLink(destination: SettingsView()) {
-                        HStack(spacing: DS.Spacing.md) {
-                            DSIcon("gearshape.fill", color: DS.Color.textSecondary)
-
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(L10n.t("الإعدادات", "Settings"))
-                                    .font(DS.Font.calloutBold)
-                                    .foregroundColor(DS.Color.textPrimary)
-                                Text(L10n.t("المظهر واللغة والأجهزة", "Display & devices"))
-                                    .font(DS.Font.caption1)
-                                    .foregroundColor(DS.Color.textSecondary)
-                            }
-
-                            Spacer()
-
-                            chevronCircle
-                        }
-                        .padding(.horizontal, DS.Spacing.lg)
-                        .padding(.vertical, DS.Spacing.xs)
-                    }
-                    .buttonStyle(DSBoldButtonStyle())
-                }
             }
+            .buttonStyle(DSBoldButtonStyle())
 
-            // Sign Out — standalone
-            Button(action: { Task { await authVM.signOut() } }) {
-                HStack(spacing: DS.Spacing.md) {
-                    Image(systemName: "rectangle.portrait.and.arrow.right")
-                        .font(DS.Font.scaled(16, weight: .bold))
-                        .foregroundColor(DS.Color.error)
+            DSDivider()
 
-                    Text(L10n.t("تسجيل الخروج", "Sign Out"))
-                        .font(DS.Font.calloutBold)
-                        .foregroundColor(DS.Color.error)
-
-                    Spacer()
-                }
-                .padding(.horizontal, DS.Spacing.lg)
-                .padding(.vertical, DS.Spacing.md)
-                .background(DS.Color.error.opacity(0.08))
-                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                        .stroke(DS.Color.error.opacity(0.2), lineWidth: 1)
+            // Settings Row
+            NavigationLink(destination: SettingsView()) {
+                DSActionRow(
+                    title: L10n.t("الإعدادات", "Settings"),
+                    subtitle: L10n.t("المظهر واللغة والأجهزة وإدارة الحساب", "Display, language, devices & account"),
+                    icon: "gearshape.fill",
+                    color: DS.Color.accent
                 )
             }
             .buttonStyle(DSBoldButtonStyle())
@@ -755,4 +757,3 @@ struct ProfileView: View {
         .padding(.bottom, DS.Spacing.lg)
     }
 }
-

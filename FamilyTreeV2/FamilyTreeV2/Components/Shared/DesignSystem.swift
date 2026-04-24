@@ -91,6 +91,15 @@ enum DS {
         static let background       = SwiftUI.Color(.systemBackground)
         static let surface          = SwiftUI.Color(.secondarySystemBackground)
         static let surfaceElevated  = SwiftUI.Color(.tertiarySystemBackground)
+        static let cardBackground   = SwiftUI.Color(.secondarySystemBackground)
+        static let cardBackgroundSoft = SwiftUI.Color(.tertiarySystemBackground)
+        static let cardBorder       = SwiftUI.Color.adaptive(light: "#E5E7EB", dark: "#2A2F3A")
+        static let cardBorderStrong = SwiftUI.Color.adaptive(light: "#D1D5DB", dark: "#3A404C")
+        static let sectionFill      = SwiftUI.Color.gray.opacity(0.08)
+        static let actionRowFill    = SwiftUI.Color(.secondarySystemBackground)
+        static let actionRowOverlay = SwiftUI.Color(.tertiarySystemBackground)
+        static let headerVeil       = SwiftUI.Color.white.opacity(0.08)
+        static let headerBorder     = SwiftUI.Color.white.opacity(0.16)
 
         // Text
         static let textPrimary   = SwiftUI.Color.adaptive(light: "#0A0E18", dark: "#F0F4FF") // Deep Navy / Cool White
@@ -434,11 +443,14 @@ struct DSCard<Content: View>: View {
     var body: some View {
         VStack(spacing: 0) { content }
             .padding(padding)
-            .background(.ultraThinMaterial)
+            .background(
+                RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
+                    .fill(DS.Color.cardBackground)
+            )
             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
-                    .stroke(Color.white.opacity(0.2), lineWidth: 0.5)
+                    .stroke(DS.Color.cardBorder, lineWidth: 1)
             )
             .dsCardShadow()
     }
@@ -513,8 +525,10 @@ struct DSPulseBadge: View {
 
     @State private var isPulsing = false
 
+    private var displayText: String { count > 99 ? "99+" : "\(count)" }
+
     var body: some View {
-        Text("\(count)")
+        Text(displayText)
             .font(DS.Font.caption2)
             .fontWeight(.bold)
             .foregroundColor(.white)
@@ -551,35 +565,46 @@ struct DSPrimaryButton: View {
 
     var body: some View {
         Button(action: action) {
-            Group {
+            HStack(spacing: DS.Spacing.sm) {
                 if isLoading {
                     ProgressView().tint(.white)
                 } else {
-                    HStack(spacing: DS.Spacing.sm) {
-                        if let icon { Image(systemName: icon).font(DS.Font.scaled(16, weight: .bold)) }
-                        Text(title).fontWeight(.bold)
+                    if let icon {
+                        Image(systemName: icon)
+                            .font(DS.Font.scaled(16, weight: .bold))
                     }
+                    Text(title)
+                        .fontWeight(.bold)
+                    Spacer(minLength: 0)
+                    Image(systemName: L10n.isArabic ? "arrow.left" : "arrow.right")
+                        .font(DS.Font.scaled(14, weight: .black))
+                        .opacity(0.9)
                 }
             }
             .font(DS.Font.headline)
             .foregroundColor(.white)
+            .padding(.horizontal, DS.Spacing.lg)
             .frame(maxWidth: .infinity)
             .frame(height: 58)
             .background(
-                Group {
-                    if useGradient {
-                        AnyView(DS.Color.gradientPrimary)
-                    } else {
-                        AnyView(isLoading ? color.opacity(0.7) : color)
-                    }
+                ZStack {
+                    RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                        .fill(
+                            useGradient
+                                ? AnyShapeStyle(DS.Color.gradientPrimary)
+                                : AnyShapeStyle(isLoading ? color.opacity(0.7) : color)
+                        )
+                    RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                        .fill(Color.white.opacity(0.08))
+                        .padding(1)
                 }
             )
             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                    .stroke(SwiftUI.Color.white.opacity(0.25), lineWidth: 0.7)
+                    .stroke(SwiftUI.Color.white.opacity(0.22), lineWidth: 1)
             )
-            .dsGlowShadow()
+            .shadow(color: color.opacity(useGradient ? 0.22 : 0.16), radius: 14, x: 0, y: 6)
         }
         .buttonStyle(DSBoldButtonStyle())
         .disabled(isLoading)
@@ -878,7 +903,8 @@ struct DSDivider: View {
     var body: some View {
         Divider()
             .padding(.horizontal, DS.Spacing.lg)
-            .opacity(0.3)
+            .overlay(DS.Color.cardBorder.opacity(0.9))
+            .opacity(0.9)
     }
 }
 
@@ -1076,6 +1102,133 @@ struct DSApproveRejectButtons: View {
     }
 }
 
+// MARK: - Icon Button — زر أيقوني دائري صغير
+/// زر أيقوني دائري — للـ headers, toolbars, zoom controls
+struct DSIconButton: View {
+    let icon: String
+    var size: CGFloat = 44
+    var iconSize: CGFloat = 18
+    var iconColor: Color = .white
+    var fillColor: Color = DS.Color.overlayIcon
+    var borderColor: Color = DS.Color.overlayIconBorder
+    var borderWidth: CGFloat = 1.5
+    var action: () -> Void
+
+    init(
+        icon: String,
+        size: CGFloat = 44,
+        iconSize: CGFloat = 18,
+        iconColor: Color = .white,
+        fillColor: Color = DS.Color.overlayIcon,
+        borderColor: Color = DS.Color.overlayIconBorder,
+        borderWidth: CGFloat = 1.5,
+        action: @escaping () -> Void
+    ) {
+        self.icon = icon
+        self.size = size
+        self.iconSize = iconSize
+        self.iconColor = iconColor
+        self.fillColor = fillColor
+        self.borderColor = borderColor
+        self.borderWidth = borderWidth
+        self.action = action
+    }
+
+    var body: some View {
+        Button(action: action) {
+            ZStack {
+                Circle()
+                    .fill(fillColor)
+                    .frame(width: size, height: size)
+                    .overlay(Circle().stroke(borderColor, lineWidth: borderWidth))
+                Image(systemName: icon)
+                    .font(DS.Font.scaled(iconSize, weight: .bold))
+                    .foregroundColor(iconColor)
+            }
+            .contentShape(Circle())
+        }
+        .buttonStyle(DSBoldButtonStyle())
+    }
+}
+
+// MARK: - Destructive Button — زر هدام (للحذف)
+/// زر الإجراءات الهدامة — الحذف، الإلغاء النهائي
+struct DSDestructiveButton: View {
+    let title: String
+    let icon: String?
+    let isLoading: Bool
+    let action: () -> Void
+
+    init(_ title: String, icon: String? = nil, isLoading: Bool = false, action: @escaping () -> Void) {
+        self.title = title
+        self.icon = icon
+        self.isLoading = isLoading
+        self.action = action
+    }
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: DS.Spacing.sm) {
+                if isLoading {
+                    ProgressView().tint(DS.Color.error)
+                } else {
+                    if let icon {
+                        Image(systemName: icon)
+                            .font(DS.Font.scaled(15, weight: .bold))
+                    }
+                    Text(title).fontWeight(.bold)
+                }
+            }
+            .font(DS.Font.calloutBold)
+            .foregroundColor(DS.Color.error)
+            .frame(maxWidth: .infinity)
+            .frame(height: 52)
+            .background(DS.Color.error.opacity(0.08))
+            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                    .stroke(DS.Color.error.opacity(0.3), lineWidth: 1.2)
+            )
+        }
+        .buttonStyle(DSBoldButtonStyle())
+        .disabled(isLoading)
+    }
+}
+
+// MARK: - Text Button — زر نصي بسيط (رابط)
+/// زر نصي — "إعادة المحاولة"، "إلغاء"، "إعادة الإرسال"
+struct DSTextButton: View {
+    let title: String
+    let icon: String?
+    var color: Color = DS.Color.primary
+    let action: () -> Void
+
+    init(_ title: String, icon: String? = nil, color: Color = DS.Color.primary, action: @escaping () -> Void) {
+        self.title = title
+        self.icon = icon
+        self.color = color
+        self.action = action
+    }
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: DS.Spacing.xs) {
+                if let icon {
+                    Image(systemName: icon)
+                        .font(DS.Font.scaled(13, weight: .semibold))
+                }
+                Text(title).fontWeight(.semibold)
+            }
+            .font(DS.Font.callout)
+            .foregroundColor(color)
+            .padding(.horizontal, DS.Spacing.sm)
+            .padding(.vertical, DS.Spacing.xs)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(DSBoldButtonStyle())
+    }
+}
+
 // MARK: - Bold Button Style
 struct DSBoldButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
@@ -1172,23 +1325,21 @@ struct DSMemberAvatar: View {
 
 /// حالة فارغة موحدة — أيقونة + عنوان + زر اختياري (بدل 31 تكرار)
 struct DSEmptyState: View {
+    enum Style { case simple, halo }
+
     let icon: String
     let title: String
     var subtitle: String? = nil
     var buttonTitle: String? = nil
     var buttonAction: (() -> Void)? = nil
+    var style: Style = .simple
+    /// لون الأيقونة — استخدم DS.Color.success لحالات "كل شيء تمام"
+    var tint: SwiftUI.Color = DS.Color.primary
 
     var body: some View {
         VStack(spacing: DS.Spacing.xl) {
             Spacer()
-            ZStack {
-                Circle()
-                    .fill(DS.Color.primary.opacity(0.08))
-                    .frame(width: 100, height: 100)
-                Image(systemName: icon)
-                    .font(DS.Font.scaled(36, weight: .medium))
-                    .foregroundColor(DS.Color.primary.opacity(0.5))
-            }
+            iconArea
             VStack(spacing: DS.Spacing.sm) {
                 Text(title)
                     .font(DS.Font.title3)
@@ -1219,5 +1370,35 @@ struct DSEmptyState: View {
             Spacer()
         }
         .frame(maxWidth: .infinity)
+    }
+
+    @ViewBuilder
+    private var iconArea: some View {
+        switch style {
+        case .simple:
+            ZStack {
+                Circle()
+                    .fill(tint.opacity(0.08))
+                    .frame(width: 100, height: 100)
+                Image(systemName: icon)
+                    .font(DS.Font.scaled(36, weight: .medium))
+                    .foregroundColor(tint.opacity(0.5))
+            }
+        case .halo:
+            ZStack {
+                Circle()
+                    .fill(tint.opacity(0.06))
+                    .frame(width: 130, height: 130)
+                Circle()
+                    .fill(tint.opacity(0.10))
+                    .frame(width: 95, height: 95)
+                Circle()
+                    .fill(tint)
+                    .frame(width: 64, height: 64)
+                Image(systemName: icon)
+                    .font(DS.Font.scaled(28, weight: .bold))
+                    .foregroundColor(.white)
+            }
+        }
     }
 }

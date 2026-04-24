@@ -22,7 +22,7 @@ struct FamilyMember: Identifiable, Codable, Equatable {
     let avatarUrl: String?
     let coverUrl: String?
     let isMarried: Bool?
-    let gender: String?
+    var gender: String?
     let createdAt: String?
 
     init(

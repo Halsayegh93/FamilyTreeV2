@@ -31,7 +31,7 @@ struct ImageCropperView: View {
                 // خلفية
                 DS.Color.background.ignoresSafeArea()
                 Rectangle()
-                    .fill(.ultraThinMaterial)
+                    .fill(DS.Color.textPrimary.opacity(0.5))
                     .ignoresSafeArea()
 
                 ZStack {
@@ -104,8 +104,8 @@ struct ImageCropperView: View {
             .onAppear {
                 containerSize = geometry.size
             }
-            .onChange(of: geometry.size) {
-                containerSize = geometry.size
+            .onChange(of: geometry.size) { newSize in
+                containerSize = newSize
             }
         }
         .ignoresSafeArea()
@@ -131,13 +131,14 @@ struct ImageCropperView: View {
     }
 
     private var pinchGesture: some Gesture {
-        MagnifyGesture()
+        MagnificationGesture()
             .onChanged { value in
-                let newScale = lastScale * value.magnification
+                let newScale = lastScale * value
                 scale = min(max(newScale, 0.5), 5.0)
             }
-            .onEnded { _ in
-                lastScale = scale
+            .onEnded { value in
+                lastScale = min(max(lastScale * value, 0.5), 5.0)
+                scale = lastScale
             }
     }
 

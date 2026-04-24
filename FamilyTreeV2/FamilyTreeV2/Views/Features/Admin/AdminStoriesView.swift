@@ -10,14 +10,11 @@ struct AdminStoriesView: View {
             DS.Color.background.ignoresSafeArea()
 
             if storyVM.pendingStories.isEmpty {
-                VStack(spacing: DS.Spacing.lg) {
-                    Image(systemName: "checkmark.circle")
-                        .font(DS.Font.scaled(48, weight: .regular))
-                        .foregroundColor(DS.Color.success.opacity(0.5))
-                    Text(L10n.t("لا توجد قصص معلقة", "No pending stories"))
-                        .font(DS.Font.headline)
-                        .foregroundColor(DS.Color.textSecondary)
-                }
+                DSEmptyState(
+                    icon: "checkmark.circle",
+                    title: L10n.t("لا توجد قصص معلقة", "No pending stories"),
+                    tint: DS.Color.success
+                )
             } else {
                 ScrollView {
                     LazyVStack(spacing: DS.Spacing.md) {

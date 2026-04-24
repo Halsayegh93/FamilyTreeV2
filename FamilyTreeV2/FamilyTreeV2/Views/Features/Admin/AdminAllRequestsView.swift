@@ -115,8 +115,7 @@ struct AdminAllRequestsView: View {
     @State private var showBulkApproveResult = false
 
     // Join request states
-    @State private var selectedMemberForLinking: FamilyMember?
-    @State private var matchedIdsForSelected: [UUID] = []
+    @State private var memberToLink: FamilyMember? = nil
     @State private var mergeTarget: (pendingMember: FamilyMember, treeMember: FamilyMember)? = nil
     @State private var showMergeConfirm = false
     @State private var showMergeSuccess = false
@@ -233,9 +232,8 @@ struct AdminAllRequestsView: View {
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
         }
-        .sheet(item: $selectedMemberForLinking) { member in
-            FatherLinkApprovalSheet(member: member, suggestedMatchIds: matchedIdsForSelected)
-                .environmentObject(authVM)
+        .sheet(item: $memberToLink) { member in
+            LinkToExistingMemberSheet(pendingMember: member)
                 .environmentObject(memberVM)
                 .environmentObject(adminRequestVM)
         }
@@ -351,7 +349,7 @@ struct AdminAllRequestsView: View {
             .padding(.horizontal, DS.Spacing.lg)
         }
         .padding(.vertical, DS.Spacing.xs)
-        .onChange(of: totalCount) { _, _ in
+        .onChange(of: totalCount) { _ in
             // إذا التاب المحدد صار فارغ، انقل لأول تاب متاح
             if itemCount(for: selectedTab) == 0, let first = availableTabs.first {
                 withAnimation(DS.Anim.snappy) { selectedTab = first }
@@ -368,7 +366,7 @@ struct AdminAllRequestsView: View {
         } label: {
             HStack(spacing: DS.Spacing.xs) {
                 Image(systemName: tab.icon)
-                    .font(DS.Font.scaled(11, weight: .medium))
+                    .font(DS.Font.scaled(11, weight: .semibold))
 
                 Text(tab.title)
                     .font(DS.Font.caption1)
@@ -379,21 +377,24 @@ struct AdminAllRequestsView: View {
                         .font(DS.Font.caption2)
                         .fontWeight(.bold)
                         .foregroundColor(isSelected ? tab.color : DS.Color.textOnPrimary)
-                        .frame(minWidth: 18, minHeight: 18)
-                        .background(isSelected ? DS.Color.surface : tab.color.opacity(0.6))
-                        .clipShape(Circle())
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(
+                            Capsule()
+                                .fill(isSelected ? Color.white.opacity(0.28) : tab.color)
+                        )
                 }
             }
-            .foregroundColor(isSelected ? DS.Color.textOnPrimary : DS.Color.textTertiary)
+            .foregroundColor(isSelected ? DS.Color.textOnPrimary : tab.color)
             .padding(.horizontal, DS.Spacing.md)
             .padding(.vertical, DS.Spacing.sm)
             .background(
                 Capsule()
-                    .fill(isSelected ? tab.color.opacity(0.85) : DS.Color.surface.opacity(0.6))
+                    .fill(isSelected ? tab.color : tab.color.opacity(0.1))
             )
             .overlay(
                 Capsule()
-                    .stroke(isSelected ? Color.clear : DS.Color.textTertiary.opacity(0.12), lineWidth: 0.5)
+                    .stroke(isSelected ? Color.clear : tab.color.opacity(0.3), lineWidth: 1)
             )
         }
         .buttonStyle(DSScaleButtonStyle())
@@ -445,15 +446,7 @@ struct AdminAllRequestsView: View {
                     .buttonStyle(.plain)
                     .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                         Button {
-                            Task {
-                                let serverIds = registrationMatches[member.id] ?? []
-                                let localIds = findNameMatches(for: member).map(\.member.id)
-                                let combined = Array(Set(serverIds + localIds))
-                                await MainActor.run {
-                                    matchedIdsForSelected = combined
-                                    selectedMemberForLinking = member
-                                }
-                            }
+                            memberToLink = member
                         } label: {
                             Label(L10n.t("ربط", "Link"), systemImage: "link.badge.plus")
                         }.tint(DS.Color.success)
@@ -758,25 +751,12 @@ struct AdminAllRequestsView: View {
     // MARK: - Empty State
 
     private var emptyState: some View {
-        VStack(spacing: DS.Spacing.lg) {
-            ZStack {
-                Circle()
-                    .fill(DS.Color.success.opacity(0.08))
-                    .frame(width: 120, height: 120)
-                Circle()
-                    .fill(DS.Color.success.opacity(0.12))
-                    .frame(width: 88, height: 88)
-                Circle()
-                    .fill(DS.Color.gradientPrimary)
-                    .frame(width: 60, height: 60)
-                Image(systemName: "checkmark.circle.fill")
-                    .font(DS.Font.scaled(26, weight: .semibold))
-                    .foregroundColor(DS.Color.textOnPrimary)
-            }
-            Text(L10n.t("لا توجد طلبات معلقة", "No pending requests"))
-                .font(DS.Font.headline)
-                .foregroundColor(DS.Color.textSecondary)
-        }
+        DSEmptyState(
+            icon: "checkmark.circle.fill",
+            title: L10n.t("لا توجد طلبات معلقة", "No pending requests"),
+            style: .halo,
+            tint: DS.Color.success
+        )
     }
 
     // MARK: - Join Request Row
@@ -2208,12 +2188,8 @@ struct AdminAllRequestsView: View {
             Task {
                 switch detail {
                 case .join(let member):
-                    let serverIds = registrationMatches[member.id] ?? []
-                    let localIds = findNameMatches(for: member).map(\.member.id)
-                    let combined = Array(Set(serverIds + localIds))
                     await MainActor.run {
-                        matchedIdsForSelected = combined
-                        selectedMemberForLinking = member
+                        memberToLink = member
                         selectedDetail = nil
                     }
                 case .news(let post):

@@ -318,14 +318,19 @@ struct AppIconPreviewMinimal: View {
     }
 }
 
-#Preview("App Icon - Family Bold", traits: .fixedLayout(width: 1024, height: 1024)) {
-    AppIconPreview()
-}
+struct AppIconPreview_Previews: PreviewProvider {
+    static var previews: some View {
+        Group {
+            AppIconPreview()
+                .previewDisplayName("App Icon - Family Bold")
 
-#Preview("App Icon - Dark Bold", traits: .fixedLayout(width: 1024, height: 1024)) {
-    AppIconPreviewAlt()
-}
+            AppIconPreviewAlt()
+                .previewDisplayName("App Icon - Dark Bold")
 
-#Preview("App Icon - م Minimal", traits: .fixedLayout(width: 1024, height: 1024)) {
-    AppIconPreviewMinimal()
+            AppIconPreviewMinimal()
+                .previewDisplayName("App Icon - م Minimal")
+        }
+        .frame(width: 1024, height: 1024)
+        .previewLayout(.fixed(width: 1024, height: 1024))
+    }
 }

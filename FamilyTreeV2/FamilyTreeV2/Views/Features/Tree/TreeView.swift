@@ -86,7 +86,7 @@ struct TreeView: View {
         if count > 8000 { return 30 }
         if count > 5000 { return 50 }
         if count > 2000 { return 70 }
-        if count > 500 { return 100 }
+        if count > 500  { return 100 }
         return 150
     }
 
@@ -171,29 +171,27 @@ struct TreeView: View {
                                     minHeight: geometry.size.height,
                                     alignment: .center
                                 )
-                                .padding(.top, DS.Spacing.xxxxl * 2)
-                                .padding(.bottom, DS.Spacing.xxxxl * 4)
+                                // top padding = مسافة تكفي لنزول الشجرة تحت الهيدر العائم (~120pt)
+                                .padding(.top, DS.Spacing.xxxxl * 3)
+                                .padding(.bottom, DS.Spacing.xxxxl * 3)
                                 .padding(.horizontal, DS.Spacing.xxxxl)
                             }
                             .simultaneousGesture(
-                                MagnifyGesture()
+                                MagnificationGesture()
                                     .onChanged { value in
-                                        // تحديد نقطة الزوم حسب موقع الأصابع
-                                        let loc = value.startLocation
-                                        zoomAnchor = UnitPoint(
-                                            x: min(max(loc.x / geometry.size.width, 0), 1),
-                                            y: min(max(loc.y / geometry.size.height, 0), 1)
-                                        )
-                                        let newScale = baseScale * value.magnification
+                                        // Note: MagnificationGesture (iOS 16+) ما يعطي startLocation
+                                        // فنستخدم مركز الشاشة كنقطة زوم افتراضية
+                                        zoomAnchor = .center
+                                        let newScale = baseScale * value
                                         scale = min(max(newScale, TreeConst.minScale), TreeConst.maxScale)
                                     }
                                     .onEnded { value in
-                                        let newScale = baseScale * value.magnification
+                                        let newScale = baseScale * value
                                         scale = min(max(newScale, TreeConst.minScale), TreeConst.maxScale)
                                         baseScale = scale
                                     }
                             )
-                            .onChange(of: scrollCounter) { _, _ in
+                            .onChange(of: scrollCounter) { _ in
                                 if let id = scrollTarget {
                                     withAnimation(.easeInOut(duration: 0.3)) {
                                         proxy.scrollTo(id, anchor: currentAnchor)
@@ -212,26 +210,12 @@ struct TreeView: View {
                             icon: "leaf.fill",
                             backgroundGradient: DS.Color.gradientPrimary
                         ) {
-                            // زر طلب تعديل الشجرة
-                            Button(action: {
+                            DSIconButton(icon: "pencil.line", iconSize: 16, iconColor: DS.Color.textOnPrimary, borderWidth: 1) {
                                 showingTreeEditRequest = true
-                            }) {
-                                ZStack {
-                                    Circle()
-                                        .fill(DS.Color.overlayIcon)
-                                        .frame(width: 44, height: 44)
-                                        .overlay(Circle().stroke(DS.Color.overlayIconBorder, lineWidth: 1))
-                                    Image(systemName: "pencil.line")
-                                        .font(DS.Font.scaled(16, weight: .bold))
-                                        .foregroundColor(DS.Color.textOnPrimary)
-                                }
-                                .contentShape(Circle())
                             }
-                            .buttonStyle(BounceButtonStyle())
                             .accessibilityLabel(L10n.t("طلب تعديل الشجرة", "Request tree edit"))
 
-                            // زر الموقع
-                            Button(action: {
+                            DSIconButton(icon: "location.fill", iconColor: DS.Color.textOnPrimary, borderWidth: 1) {
                                 if let currentUserID = authVM.currentUser?.id,
                                    let userMember = cachedMemberById[currentUserID] ?? memberVM.member(byId: currentUserID) {
                                     currentLocationMemberID = userMember.id
@@ -243,27 +227,15 @@ struct TreeView: View {
                                         withAnimation { currentLocationMemberID = nil }
                                     }
                                 }
-                            }) {
-                                ZStack {
-                                    Circle()
-                                        .fill(DS.Color.overlayIcon)
-                                        .frame(width: 44, height: 44)
-                                        .overlay(Circle().stroke(DS.Color.overlayIconBorder, lineWidth: 1))
-                                    Image(systemName: "location.fill")
-                                        .font(DS.Font.scaled(18, weight: .bold))
-                                        .foregroundColor(DS.Color.textOnPrimary)
-                                }
-                                .contentShape(Circle())
                             }
-                            .buttonStyle(BounceButtonStyle())
                             .accessibilityLabel(L10n.t("موقعي في الشجرة", "My location in tree"))
+
                         }
 
                         TreeSearchOverlay(onSelect: { member in
                             selectMemberFromSearch(member)
                         })
                         .padding(.horizontal, DS.Spacing.sm)
-
                     }
                     .zIndex(101)
 
@@ -321,7 +293,6 @@ struct TreeView: View {
             .fullScreenCover(isPresented: $showingTreeEditRequest) {
                 TreeEditRequestView()
             }
-
             .task {
                 if cachedVisibleMembers.isEmpty {
                     rebuildCache()
@@ -331,7 +302,14 @@ struct TreeView: View {
                     resetToTopRoot(animated: false)
                 }
             }
-            .onChange(of: memberVM.membersVersion) { _, _ in
+            .onDisappear {
+                // إلغاء أي highlight/location tasks عالقة لتفادي memory leaks عند التنقل السريع
+                highlightTask?.cancel()
+                highlightTask = nil
+                locationHighlightTask?.cancel()
+                locationHighlightTask = nil
+            }
+            .onChange(of: memberVM.membersVersion) { _ in
                 withAnimation(DS.Anim.snappy) {
                     rebuildCache()
                 }
@@ -421,7 +399,6 @@ struct TreeView: View {
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
-
 
     func getFullLineage(for member: FamilyMember, lookup: [UUID: FamilyMember]) -> String {
         var name = member.firstName
@@ -665,6 +642,7 @@ struct TreeView: View {
         }
         .frame(maxWidth: .infinity)
     }
+
 }
 
 
@@ -805,7 +783,6 @@ struct RecursiveTreeBranch: View {
 
             // ما نعرض الأبناء إلا إذا العقدة مفتوحة فعلياً (في المسار النشط)
             let isPathOpen = viewMode == .fullTree || activePath.contains(member.id)
-
             if isPathOpen && renderedCount < maxRendered {
                 let childrenToDisplay = self.visibleChildren
 
@@ -1158,7 +1135,7 @@ struct TreeMemberNode: View {
         VStack {
             Spacer()
             Text(getLifeSpan())
-                .font(DS.Font.scaled(9, weight: .black))
+                .font(DS.Font.scaled(14, weight: .black))
                 .foregroundColor(DS.Color.textOnPrimary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
@@ -1175,7 +1152,8 @@ struct TreeMemberNode: View {
     func getLifeSpan() -> String {
         let birth = member.birthDate?.prefix(4); let death = member.deathDate?.prefix(4)
         if (birth == nil || birth == "") && (death == nil || death == "") { return L10n.t("متوفى", "Deceased") }
-        return "\(birth ?? "?")-\(death ?? "?")"
+        // سنة الوفاة يسار، سنة الميلاد يمين — قراءة RTL تبدأ من الميلاد (يمين) للوفاة (يسار)
+        return "\(death ?? "?") - \(birth ?? "?")"
     }
 
     private var displayName: String {
@@ -1243,5 +1221,3 @@ private struct HexagonShape: Shape {
         return path
     }
 }
-
-

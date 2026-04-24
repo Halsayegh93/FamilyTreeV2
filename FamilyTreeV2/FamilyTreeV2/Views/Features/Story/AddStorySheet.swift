@@ -221,6 +221,7 @@ struct AddStorySheet: View {
                     .font(DS.Font.title3)
                     .foregroundColor(DS.Color.textOnPrimary)
             }
+            .accessibilityLabel(L10n.t("إغلاق", "Close"))
 
             Spacer()
 
@@ -483,7 +484,7 @@ struct StoryCropperWrapper: View {
                     .padding(.horizontal, DS.Spacing.lg)
                     .padding(.vertical, DS.Spacing.sm)
                     .frame(maxWidth: .infinity)
-                    .background(.ultraThinMaterial)
+                    .background(DS.Color.textPrimary.opacity(0.55))
                 }
                 captionField
             }
@@ -508,7 +509,7 @@ struct StoryCropperWrapper: View {
         }
         .padding(.horizontal, DS.Spacing.lg)
         .padding(.vertical, DS.Spacing.md)
-        .background(.ultraThinMaterial)
+        .background(DS.Color.textPrimary.opacity(0.55))
     }
 }
 

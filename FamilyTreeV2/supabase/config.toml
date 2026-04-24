@@ -364,6 +364,25 @@ deno_version = 2
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 
+# ============================================================================
+# Edge Functions — Auth Configuration (IMPORTANT: do not change without thought)
+# ============================================================================
+# هذه الدوال تستخدم فحص هوية داخلي في الكود (authenticateRequest) بدل فحص الـ gateway.
+# السبب: لو verify_jwt=true على gateway، الـ gateway يرفض الطلب قبل ما يوصل للكود،
+# حتى لو JWT المستخدم صحيح. لذا نترك الـ gateway يمرّر الطلب، والكود يتحقق من JWT والدور.
+#
+# ⚠️ قاعدة دائمة: أي deploy لهذه الدوال لازم يحافظ على verify_jwt=false.
+# الـ config.toml هنا يضمن إن supabase CLI يطبّق الإعداد الصحيح.
+
+[functions.push-notify]
+verify_jwt = false
+
+[functions.push-on-notification]
+verify_jwt = false
+
+[functions.push-admins]
+verify_jwt = false
+
 [analytics]
 enabled = true
 port = 54327

@@ -147,7 +147,17 @@ struct AdminTreeHealthView: View {
 
     var body: some View {
         ZStack {
-            if cachedIssueMembers.isEmpty {
+            if memberVM.isLoading && cachedIssueMembers.isEmpty {
+                VStack(spacing: DS.Spacing.md) {
+                    ProgressView()
+                        .tint(DS.Color.primary)
+                        .scaleEffect(1.2)
+                    Text(L10n.t("جاري فحص الشجرة...", "Checking tree health..."))
+                        .font(DS.Font.callout)
+                        .foregroundColor(DS.Color.textSecondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if cachedIssueMembers.isEmpty {
                 emptyState
             } else {
                 VStack(spacing: 0) {
@@ -325,7 +335,7 @@ struct AdminTreeHealthView: View {
                 }
             }
         }
-        .onChange(of: memberVM.membersVersion) { _, _ in
+        .onChange(of: memberVM.membersVersion) { _ in
             rebuildCache()
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
@@ -400,12 +410,13 @@ struct AdminTreeHealthView: View {
             TextField(L10n.t("بحث بالاسم أو الرقم...", "Search by name or phone..."), text: $searchText)
                 .font(DS.Font.callout)
                 .foregroundColor(DS.Color.textPrimary)
-                .onChange(of: searchText) { displayLimit = 20 }
+                .onChange(of: searchText) { _ in displayLimit = 20 }
             if !searchText.isEmpty {
                 Button { searchText = "" } label: {
                     Image(systemName: "xmark.circle.fill")
                         .foregroundColor(DS.Color.textTertiary)
                 }
+                .accessibilityLabel(L10n.t("مسح البحث", "Clear search"))
             }
         }
         .padding(DS.Spacing.md)
@@ -484,31 +495,20 @@ struct AdminTreeHealthView: View {
     // MARK: - Empty State
 
     private var emptyState: some View {
-        VStack(spacing: DS.Spacing.lg) {
-            Image(systemName: "checkmark.shield.fill")
-                .font(DS.Font.scaled(60, weight: .regular))
-                .foregroundColor(DS.Color.success)
-            Text(L10n.t("الشجرة سليمة!", "Tree is Healthy!"))
-                .font(DS.Font.title2)
-                .foregroundColor(DS.Color.textPrimary)
-            Text(L10n.t("ما في أعضاء مشكلين حالياً", "No problematic members found"))
-                .font(DS.Font.callout)
-                .foregroundColor(DS.Color.textSecondary)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        DSEmptyState(
+            icon: "checkmark.shield.fill",
+            title: L10n.t("الشجرة سليمة!", "Tree is Healthy!"),
+            subtitle: L10n.t("ما في أعضاء مشكلين حالياً", "No problematic members found"),
+            style: .halo,
+            tint: DS.Color.success
+        )
     }
 
     private var noResultsState: some View {
-        VStack(spacing: DS.Spacing.md) {
-            Image(systemName: "magnifyingglass")
-                .font(DS.Font.scaled(40, weight: .regular))
-                .foregroundColor(DS.Color.textTertiary)
-            Text(L10n.t("لا توجد نتائج", "No Results"))
-                .font(DS.Font.headline)
-                .foregroundColor(DS.Color.textSecondary)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(.top, DS.Spacing.xxxxl)
+        DSEmptyState(
+            icon: "magnifyingglass",
+            title: L10n.t("لا توجد نتائج", "No Results")
+        )
     }
 }
 

@@ -74,6 +74,15 @@ export async function createApnsJwt(
   return `${data}.${toBase64Url(finalSig)}`;
 }
 
+/// APNs hosts — ثابتة من Apple
+export const APNS_HOST_PRODUCTION = "https://api.push.apple.com";
+export const APNS_HOST_SANDBOX = "https://api.sandbox.push.apple.com";
+
+/// اختيار host حسب environment الجهاز (من device_tokens.environment)
+export function apnsHostFor(environment: string | null | undefined): string {
+  return environment === "sandbox" ? APNS_HOST_SANDBOX : APNS_HOST_PRODUCTION;
+}
+
 /// قراءة إعدادات APNs من البيئة
 export function getApnsConfig() {
   const teamId = Deno.env.get("APPLE_TEAM_ID") ?? "";
@@ -83,8 +92,9 @@ export function getApnsConfig() {
   const privateKey = rawKey.includes("\\n")
     ? rawKey.replace(/\\n/g, "\n")
     : rawKey;
+  // apnsHost للـ fallback فقط — المنطق الجديد يختار host لكل توكن حسب environment
   const apnsHost =
-    Deno.env.get("APPLE_APNS_HOST") ?? "https://api.push.apple.com";
+    Deno.env.get("APPLE_APNS_HOST") ?? APNS_HOST_PRODUCTION;
 
   if (!teamId || !keyId || !bundleId || !privateKey) {
     throw new Error("Missing APNs env vars");

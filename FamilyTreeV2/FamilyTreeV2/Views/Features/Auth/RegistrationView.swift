@@ -14,6 +14,7 @@ struct RegistrationView: View {
     @State private var headerOpacity: CGFloat = 0
     @State private var cardsAppeared = false
     @State private var hasAttemptedSubmit = false
+    @State private var showConfirmSubmit = false
 
     var body: some View {
         ZStack {
@@ -62,9 +63,10 @@ struct RegistrationView: View {
                                 .opacity(cardsAppeared ? 1 : 0)
                                 .offset(y: cardsAppeared ? 0 : 30)
 
-                            genderSection
-                                .opacity(cardsAppeared ? 1 : 0)
-                                .offset(y: cardsAppeared ? 0 : 35)
+                            // TODO: gender — re-enable when needed
+                            // genderSection
+                            //     .opacity(cardsAppeared ? 1 : 0)
+                            //     .offset(y: cardsAppeared ? 0 : 35)
                         }
                         .padding(.horizontal, DS.Spacing.lg)
 
@@ -143,7 +145,7 @@ struct RegistrationView: View {
                 required: true,
                 hint: L10n.t("(باللغة العربية)", "(in Arabic)")
             )
-            .onChange(of: fullName) {
+            .onChange(of: fullName) { _ in
                 if fullName.count > 100 {
                     fullName = String(fullName.prefix(100))
                 }
@@ -166,7 +168,7 @@ struct RegistrationView: View {
                 iconColor: DS.Color.accent,
                 required: true
             )
-            .onChange(of: familyName) {
+            .onChange(of: familyName) { _ in
                 if familyName.count > 50 {
                     familyName = String(familyName.prefix(50))
                 }
@@ -180,24 +182,15 @@ struct RegistrationView: View {
 
     // MARK: - Birth Date
     private var birthDateSection: some View {
-        HStack(spacing: DS.Spacing.md) {
-            DSIcon("calendar", color: DS.Color.accent)
-
-            VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            HStack(spacing: DS.Spacing.md) {
+                DSIcon("calendar", color: DS.Color.accent)
                 Text(L10n.t("تاريخ الميلاد", "Birth Date"))
-                    .font(DS.Font.caption1)
-                    .foregroundColor(DS.Color.textSecondary)
-
-                Text(L10n.t("اختر التاريخ", "Pick Date"))
-                    .font(DS.Font.body)
-                    .foregroundColor(DS.Color.textSecondary)
+                    .font(DS.Font.callout)
+                    .foregroundColor(DS.Color.textPrimary)
+                Spacer()
             }
-
-            Spacer()
-
-            DatePicker("", selection: $birthDate, in: ...Date(), displayedComponents: .date)
-                .labelsHidden()
-                .environment(\.locale, Locale(identifier: L10n.isArabic ? "ar" : "en_US"))
+            StableWheelDatePicker(selection: $birthDate, in: ...Date())
         }
         .padding(.horizontal, DS.Spacing.lg)
         .padding(.vertical, DS.Spacing.md)
@@ -253,7 +246,12 @@ struct RegistrationView: View {
         VStack(spacing: DS.Spacing.sm) {
             let trimmedFull = fullName.trimmingCharacters(in: .whitespacesAndNewlines)
             let trimmedFamily = familyName.trimmingCharacters(in: .whitespacesAndNewlines)
-            let isDisabled = trimmedFull.isEmpty || trimmedFamily.isEmpty || authVM.isLoading
+            // Validation أقوى: طول 2-50 + على الأقل حرفان أبجديان (يرفض "12" أو "...")
+            let fullLetterCount = trimmedFull.filter { $0.isLetter }.count
+            let familyLetterCount = trimmedFamily.filter { $0.isLetter }.count
+            let isValid = trimmedFull.count >= 2 && trimmedFull.count <= 50 && fullLetterCount >= 2
+                       && trimmedFamily.count >= 2 && trimmedFamily.count <= 50 && familyLetterCount >= 2
+            let isDisabled = !isValid || authVM.isLoading
 
             DSPrimaryButton(
                 L10n.t("إرسال طلب الانضمام", "Submit Join Request"),
@@ -262,25 +260,36 @@ struct RegistrationView: View {
                 useGradient: !isDisabled,
                 color: isDisabled ? DS.Color.inactive : DS.Color.primary
             ) {
-                withAnimation(DS.Anim.snappy) {
-                    hasAttemptedSubmit = true
-                }
-
-                guard !trimmedFull.isEmpty, !trimmedFamily.isEmpty else { return }
-
-                Task {
-                    await authVM.registerNewUser(
-                        firstName: trimmedFull,
-                        familyName: trimmedFamily,
-                        birthDate: birthDate,
-                        gender: selectedGender,
-                        avatarImage: selectedImage
-                    )
-                }
+                withAnimation(DS.Anim.snappy) { hasAttemptedSubmit = true }
+                guard isValid else { return }
+                showConfirmSubmit = true
             }
             .disabled(authVM.isLoading)
             .padding(.horizontal, DS.Spacing.lg)
             .padding(.bottom, DS.Spacing.xxl)
+            .confirmationDialog(
+                L10n.t("تأكيد إرسال الطلب", "Confirm Submission"),
+                isPresented: $showConfirmSubmit,
+                titleVisibility: .visible
+            ) {
+                Button(L10n.t("إرسال", "Submit")) {
+                    Task {
+                        await authVM.registerNewUser(
+                            firstName: trimmedFull,
+                            familyName: trimmedFamily,
+                            birthDate: birthDate,
+                            gender: selectedGender,
+                            avatarImage: selectedImage
+                        )
+                    }
+                }
+                Button(L10n.t("مراجعة البيانات", "Review"), role: .cancel) {}
+            } message: {
+                Text(L10n.t(
+                    "اسمك: \(trimmedFull) \(trimmedFamily)\nسيُرسل طلبك للإدارة وتنتظر الموافقة.",
+                    "Name: \(trimmedFull) \(trimmedFamily)\nYour request will be sent to admins for approval."
+                ))
+            }
         }
     }
 

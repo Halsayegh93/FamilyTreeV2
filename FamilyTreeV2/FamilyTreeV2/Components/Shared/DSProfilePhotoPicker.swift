@@ -59,7 +59,7 @@ struct DSProfilePhotoPicker: View {
             }
         }
         .padding(.vertical, DS.Spacing.sm)
-        .onChange(of: pickerItem) { _, newItem in
+        .onChange(of: pickerItem) { newItem in
             guard let newItem else { return }
             loadImage(from: newItem)
         }
@@ -596,7 +596,7 @@ struct DSMultiPhotoPicker: View {
                 thumbnailStrip
             }
         }
-        .onChange(of: pickerItems) { _, items in
+        .onChange(of: pickerItems) { items in
             guard !items.isEmpty else { return }
             loadImages(from: items)
         }
@@ -666,7 +666,7 @@ struct DSMultiPhotoPicker: View {
             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                    .strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [8]))
+                    .stroke(style: StrokeStyle(lineWidth: 1.5, dash: [8]))
                     .foregroundColor(DS.Color.primary.opacity(0.15))
             )
         }

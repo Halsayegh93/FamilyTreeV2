@@ -179,24 +179,20 @@ struct WaitingForApprovalView: View {
             }
             .padding(.horizontal, DS.Spacing.xl)
 
-            Button(action: {
+            DSSecondaryButton(
+                L10n.t("تعديل البيانات", "Edit Info"),
+                icon: "pencil"
+            ) {
+                authVM.status = .authenticatedNoProfile
+            }
+            .padding(.horizontal, DS.Spacing.xl)
+
+            DSSecondaryButton(
+                L10n.t("تسجيل الخروج", "Sign Out"),
+                icon: "rectangle.portrait.and.arrow.right",
+                color: DS.Color.error
+            ) {
                 Task { await authVM.signOut() }
-            }) {
-                HStack(spacing: DS.Spacing.sm) {
-                    Image(systemName: "rectangle.portrait.and.arrow.right")
-                        .font(DS.Font.scaled(14, weight: .semibold))
-                    Text(L10n.t("تسجيل الخروج", "Sign Out"))
-                }
-                .font(DS.Font.calloutBold)
-                .foregroundColor(DS.Color.error)
-                .frame(maxWidth: .infinity)
-                .frame(height: 50)
-                .background(DS.Color.error.opacity(0.06))
-                .cornerRadius(DS.Radius.lg)
-                .overlay(
-                    RoundedRectangle(cornerRadius: DS.Radius.lg)
-                        .stroke(DS.Color.error.opacity(0.2), lineWidth: 1)
-                )
             }
             .padding(.horizontal, DS.Spacing.xl)
             .padding(.bottom, DS.Spacing.xl)

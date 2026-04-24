@@ -217,7 +217,7 @@ struct TreeEditRequestView: View {
         .sheet(isPresented: $showMemberPicker) {
             memberPickerSheet
         }
-        .onChange(of: selectedAction) {
+        .onChange(of: selectedAction) { _ in
             // Reset all fields when action type changes
             selectedMember = nil
             memberName = ""
@@ -256,6 +256,7 @@ struct TreeEditRequestView: View {
                             .font(DS.Font.scaled(14, weight: .medium))
                             .foregroundColor(DS.Color.textTertiary)
                     }
+                    .accessibilityLabel(L10n.t("مسح", "Clear"))
                 }
             }
             .padding(.horizontal, DS.Spacing.md)
@@ -302,6 +303,7 @@ struct TreeEditRequestView: View {
                             .font(DS.Font.scaled(14, weight: .medium))
                             .foregroundColor(DS.Color.textTertiary)
                     }
+                    .accessibilityLabel(L10n.t("مسح", "Clear"))
                 }
             }
             .padding(.horizontal, DS.Spacing.md)
@@ -348,6 +350,7 @@ struct TreeEditRequestView: View {
                                     .font(DS.Font.scaled(14, weight: .medium))
                                     .foregroundColor(DS.Color.textTertiary)
                             }
+                            .accessibilityLabel(L10n.t("مسح البحث", "Clear search"))
                         }
                     }
                     .padding(.horizontal, DS.Spacing.md)

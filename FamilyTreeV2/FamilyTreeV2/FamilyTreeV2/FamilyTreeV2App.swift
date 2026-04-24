@@ -43,9 +43,7 @@ struct FamilyTreeV2App: App {
                 .environment(\.locale, langManager.locale)
                 .environment(\.layoutDirection, langManager.layoutDirection)
                 .environment(\.multilineTextAlignment, langManager.selectedLanguage == "ar" ? .leading : .trailing)
-                .offset(x: langManager.selectedLanguage == "ar" ? 1 : -1, y: 0)
                 .preferredColorScheme(preferredScheme)
-                .id(langManager.selectedLanguage)
                 .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
                     Task {
                         try? await UNUserNotificationCenter.current().setBadgeCount(0)
@@ -64,8 +62,10 @@ struct FamilyTreeV2App: App {
                 }
                 .onReceive(NotificationCenter.default.publisher(for: .didReceivePushNotification).merge(with: NotificationCenter.default.publisher(for: .didTapPushNotification))) { _ in
                     Task {
-                        await self.appState.notificationVM.fetchNotifications(force: true)
-                        // الـ Realtime subscriptions تتكفل بتحديث بيانات الأعضاء عند التغيير
+                        // تحديث الإشعارات + الأعضاء معاً (قد يصل push بطلب انضمام جديد)
+                        async let n: () = self.appState.notificationVM.fetchNotifications(force: true)
+                        async let m: () = self.appState.memberVM.fetchAllMembers(force: true)
+                        _ = await (n, m)
                     }
                 }
                 // Deep Link — QR Code → فتح الشجرة وعرض صلة القرابة
@@ -90,8 +90,9 @@ struct FamilyTreeV2App: App {
                     pathIds.append(currentUser.id)
                     pathIds.append(member.id)
 
-                    // إرسال notification للشجرة
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    // إرسال notification للشجرة — Task async بدل DispatchQueue لتجنب خلط concurrency models
+                    Task { @MainActor in
+                        try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s
                         NotificationCenter.default.post(
                             name: .showKinshipPath,
                             object: nil,

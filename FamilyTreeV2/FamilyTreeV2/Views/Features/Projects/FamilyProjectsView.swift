@@ -127,63 +127,14 @@ struct FamilyProjectsView: View {
     
     // MARK: - Empty State
     private var emptyStateView: some View {
-        VStack(spacing: DS.Spacing.xl) {
-            Spacer()
-            ZStack {
-                Circle()
-                    .fill(DS.Color.neonBlue.opacity(0.10))
-                    .frame(width: 120, height: 120)
-                
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                DS.Color.neonBlue.opacity(0.20),
-                                DS.Color.primary.opacity(0.10)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 96, height: 96)
-                
-                Image(systemName: "briefcase")
-                    .font(DS.Font.scaled(40, weight: .bold))
-                    .foregroundColor(DS.Color.neonBlue)
-            }
-            
-            VStack(spacing: DS.Spacing.sm) {
-                Text(L10n.t("لا توجد مشاريع", "No projects yet"))
-                    .font(DS.Font.title3)
-                    .fontWeight(.black)
-                    .foregroundColor(DS.Color.textPrimary)
-                Text(L10n.t("أضف مشروعك ليراه أفراد العائلة", "Add your project for family members to see"))
-                    .font(DS.Font.callout)
-                    .foregroundColor(DS.Color.textSecondary)
-                    .multilineTextAlignment(.center)
-            }
-            
-            Button {
-                showingAddProject = true
-            } label: {
-                HStack(spacing: DS.Spacing.sm) {
-                    Image(systemName: "plus.circle.fill")
-                        .font(DS.Font.scaled(20, weight: .bold))
-                    Text(L10n.t("إضافة مشروع", "Add Project"))
-                        .font(DS.Font.callout)
-                        .fontWeight(.bold)
-                }
-                .foregroundColor(DS.Color.textOnPrimary)
-                .padding(.horizontal, DS.Spacing.xxl)
-                .padding(.vertical, DS.Spacing.md)
-                .background(DS.Color.gradientPrimary)
-                .clipShape(Capsule())
-            }
-            .buttonStyle(DSBoldButtonStyle())
-            .padding(.top, DS.Spacing.sm)
-            
-            Spacer()
-        }
+        DSEmptyState(
+            icon: "briefcase",
+            title: L10n.t("لا توجد مشاريع", "No projects yet"),
+            subtitle: L10n.t("أضف مشروعك ليراه أفراد العائلة", "Add your project for family members to see"),
+            buttonTitle: L10n.t("إضافة مشروع", "Add Project"),
+            buttonAction: { showingAddProject = true },
+            style: .halo
+        )
     }
     
     // MARK: - Project Card

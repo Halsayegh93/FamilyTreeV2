@@ -109,7 +109,12 @@ struct NotificationsCenterView: View {
                 // شريط الأدوات الموحد
                 actionBar
 
-                if filteredNotifications.isEmpty {
+                if notificationVM.isLoading && filteredNotifications.isEmpty {
+                    Spacer()
+                    ProgressView(L10n.t("جاري التحميل...", "Loading..."))
+                        .tint(DS.Color.primary)
+                    Spacer()
+                } else if filteredNotifications.isEmpty {
                     emptyState
                         .frame(maxHeight: .infinity)
                 } else {
@@ -559,43 +564,12 @@ struct NotificationsCenterView: View {
     // MARK: - Empty State
 
     private var emptyState: some View {
-        VStack(spacing: DS.Spacing.xl) {
-            ZStack {
-                Circle()
-                    .fill(DS.Color.primary.opacity(0.06))
-                    .frame(width: 130, height: 130)
-                    .scaleEffect(appeared ? 1 : 0.5)
-
-                Circle()
-                    .fill(DS.Color.primary.opacity(0.10))
-                    .frame(width: 95, height: 95)
-                    .scaleEffect(appeared ? 1 : 0.6)
-
-                Circle()
-                    .fill(DS.Color.gradientPrimary)
-                    .frame(width: 64, height: 64)
-                    .scaleEffect(appeared ? 1 : 0.7)
-
-                Image(systemName: "bell.slash.fill")
-                    .font(DS.Font.scaled(28, weight: .bold))
-                    .foregroundColor(DS.Color.textOnPrimary)
-            }
-            .opacity(appeared ? 1 : 0)
-
-            VStack(spacing: DS.Spacing.sm) {
-                Text(L10n.t("لا توجد إشعارات", "No Notifications"))
-                    .font(DS.Font.title3)
-                    .foregroundColor(DS.Color.textPrimary)
-
-                Text(L10n.t("الإشعارات تظهر هنا", "Notifications appear here"))
-                    .font(DS.Font.subheadline)
-                    .foregroundColor(DS.Color.textSecondary)
-                    .multilineTextAlignment(.center)
-            }
-            .opacity(appeared ? 1 : 0)
-            .offset(y: appeared ? 0 : 15)
-        }
-        .padding(.horizontal, DS.Spacing.xxxl)
+        DSEmptyState(
+            icon: "bell.slash.fill",
+            title: L10n.t("لا توجد إشعارات", "No Notifications"),
+            subtitle: L10n.t("الإشعارات تظهر هنا", "Notifications appear here"),
+            style: .halo
+        )
     }
 
     // MARK: - Detail Sheet
@@ -787,6 +761,7 @@ struct NotificationsCenterView: View {
                             .foregroundStyle(DS.Color.textTertiary)
                             .symbolRenderingMode(.hierarchical)
                     }
+                    .accessibilityLabel(L10n.t("إغلاق", "Close"))
                 }
             }
         }

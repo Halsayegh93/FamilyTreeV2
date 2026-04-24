@@ -13,7 +13,7 @@ struct SplashScreenView: View {
 
     var body: some View {
         ZStack {
-            // خلفية
+            // خلفية بسيطة صافية
             DS.Color.background.ignoresSafeArea()
 
             VStack(spacing: DS.Spacing.xxl) {
@@ -95,12 +95,35 @@ struct SplashScreenView: View {
                 .scaleEffect(logoScale)
                 .opacity(logoOpacity)
 
-                // النصوص
+                // النصوص — مع فاصل تراثي ذهبي
                 VStack(spacing: DS.Spacing.sm) {
                     Text(L10n.t("عائلة المحمدعلي", "Al-Mohammadali Family"))
                         .font(DS.Font.title1)
                         .fontWeight(.black)
                         .foregroundColor(DS.Color.textPrimary)
+
+                    // فاصل ذهبي تراثي
+                    HStack(spacing: 6) {
+                        Rectangle()
+                            .fill(
+                                LinearGradient(
+                                    colors: [DS.Color.secondary.opacity(0), DS.Color.secondary.opacity(0.7)],
+                                    startPoint: .leading, endPoint: .trailing
+                                )
+                            )
+                            .frame(width: 40, height: 1)
+                        Image(systemName: "diamond.fill")
+                            .font(.system(size: 7, weight: .bold))
+                            .foregroundColor(DS.Color.secondary)
+                        Rectangle()
+                            .fill(
+                                LinearGradient(
+                                    colors: [DS.Color.secondary.opacity(0.7), DS.Color.secondary.opacity(0)],
+                                    startPoint: .leading, endPoint: .trailing
+                                )
+                            )
+                            .frame(width: 40, height: 1)
+                    }
 
                     Text(L10n.t("شجرة العائلة", "Family Tree"))
                         .font(DS.Font.title3)

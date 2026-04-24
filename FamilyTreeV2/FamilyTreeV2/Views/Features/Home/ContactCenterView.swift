@@ -84,7 +84,7 @@ struct ContactCenterView: View {
         } message: {
             Text(L10n.t("تم الوصول إلى الحد الأقصى للرسالة (1000 حرف).", "Message limit reached (1000 chars)"))
         }
-        .onChange(of: selectedPhoto) { _, newItem in
+        .onChange(of: selectedPhoto) { newItem in
             Task {
                 if let data = try? await newItem?.loadTransferable(type: Data.self),
                    let image = UIImage(data: data) {
@@ -239,7 +239,7 @@ struct ContactCenterView: View {
                     .font(DS.Font.body)
                     .foregroundColor(DS.Color.textPrimary)
                     .focused($focusedField, equals: .subject)
-                    .onChange(of: subject) { _, newValue in
+                    .onChange(of: subject) { newValue in
                         if newValue.count > 100 { subject = String(newValue.prefix(100)) }
                     }
 
@@ -249,6 +249,7 @@ struct ContactCenterView: View {
                                 .font(DS.Font.scaled(14))
                                 .foregroundColor(DS.Color.textTertiary)
                         }
+                        .accessibilityLabel(L10n.t("مسح", "Clear"))
                     }
                 }
                 .padding(.horizontal, DS.Spacing.md)
@@ -263,7 +264,7 @@ struct ContactCenterView: View {
                         .focused($focusedField, equals: .message)
                         .scrollContentBackground(.hidden)
                         .font(DS.Font.body)
-                        .onChange(of: message) { _, newValue in
+                        .onChange(of: message) { newValue in
                             if newValue.count > 1000 {
                                 message = String(newValue.prefix(1000))
                                 showCharacterLimitWarning = true
@@ -316,6 +317,7 @@ struct ContactCenterView: View {
                                 .dsCardShadow()
                         }
                         .padding(DS.Spacing.lg)
+                        .accessibilityLabel(L10n.t("إزالة الصورة", "Remove image"))
                     }
                 } else {
                     PhotosPicker(selection: $selectedPhoto, matching: .images) {

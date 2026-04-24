@@ -143,7 +143,7 @@ Deno.serve(async (req) => {
     }
 
     // رسالة OTP
-    const message = `almohammad ali: Your code is ${otp}`;
+    const message = `Your almohammad ali code is ${otp}`;
 
     // إرسال عبر AWS SNS
     await sendSNS(phone, message);

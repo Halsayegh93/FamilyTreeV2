@@ -33,77 +33,84 @@ struct AdminNotificationsView: View {
             DS.Color.background.ignoresSafeArea()
 
             VStack(spacing: 0) {
-                // Title + Body fields
                 VStack(spacing: DS.Spacing.sm) {
-                    // Title
-                    HStack(spacing: DS.Spacing.sm) {
-                        Image(systemName: "bell.badge")
-                            .foregroundColor(DS.Color.textTertiary)
-                            .font(DS.Font.scaled(14, weight: .medium))
-                        TextField(L10n.t("عنوان الإشعار", "Notification title"), text: $title)
-                            .font(DS.Font.callout)
-                            .onChange(of: title) {
-                                if title.count > 100 { title = String(title.prefix(100)) }
-                            }
-                        if !title.isEmpty {
-                            Button { title = "" } label: {
-                                Image(systemName: "xmark.circle.fill")
-                                    .foregroundColor(DS.Color.textTertiary)
-                            }
-                        }
-                    }
-                    .padding(DS.Spacing.md)
-                    .background(DS.Color.surface)
-                    .cornerRadius(DS.Radius.md)
-
-                    // Body (optional)
-                    HStack(alignment: .top, spacing: DS.Spacing.sm) {
-                        Image(systemName: "text.alignright")
-                            .foregroundColor(DS.Color.textTertiary)
-                            .font(DS.Font.scaled(14, weight: .medium))
-                            .padding(.top, DS.Spacing.sm)
-                        ZStack(alignment: L10n.isArabic ? .topTrailing : .topLeading) {
-                            if bodyText.isEmpty {
-                                Text(L10n.t("تفاصيل (اختياري)", "Details (optional)"))
-                                    .font(DS.Font.callout)
-                                    .foregroundColor(DS.Color.textTertiary)
-                                    .padding(.top, DS.Spacing.sm)
-                                    .allowsHitTesting(false)
-                            }
-                            TextEditor(text: $bodyText)
+                    VStack(alignment: .trailing, spacing: DS.Spacing.xs) {
+                        HStack(spacing: DS.Spacing.sm) {
+                            Image(systemName: "bell.badge")
+                                .foregroundColor(DS.Color.textTertiary)
+                                .font(DS.Font.scaled(14, weight: .medium))
+                            TextField(L10n.t("عنوان الإشعار", "Notification title"), text: $title)
                                 .font(DS.Font.callout)
-                                .frame(minHeight: 60, maxHeight: 100)
-                                .scrollContentBackground(.hidden)
-                                .background(Color.clear)
-                                .onChange(of: bodyText) {
-                                    if bodyText.count > 500 { bodyText = String(bodyText.prefix(500)) }
+                                .onChange(of: title) { _ in
+                                    if title.count > 100 { title = String(title.prefix(100)) }
                                 }
+                            if !title.isEmpty {
+                                Button { title = "" } label: {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .foregroundColor(DS.Color.textTertiary)
+                                }
+                                .accessibilityLabel(L10n.t("مسح العنوان", "Clear title"))
+                            }
                         }
+                        Text("\(title.count)/100")
+                            .font(DS.Font.caption2)
+                            .foregroundColor(title.count > 90 ? DS.Color.error : DS.Color.textTertiary)
                     }
                     .padding(DS.Spacing.md)
                     .background(DS.Color.surface)
                     .cornerRadius(DS.Radius.md)
 
-                    // Search
+                    VStack(alignment: .trailing, spacing: DS.Spacing.xs) {
+                        HStack(alignment: .top, spacing: DS.Spacing.sm) {
+                            Image(systemName: "text.alignright")
+                                .foregroundColor(DS.Color.textTertiary)
+                                .font(DS.Font.scaled(14, weight: .medium))
+                                .padding(.top, DS.Spacing.sm)
+                            ZStack(alignment: L10n.isArabic ? .topTrailing : .topLeading) {
+                                if bodyText.isEmpty {
+                                    Text(L10n.t("تفاصيل (اختياري)", "Details (optional)"))
+                                        .font(DS.Font.callout)
+                                        .foregroundColor(DS.Color.textTertiary)
+                                        .padding(.top, DS.Spacing.sm)
+                                        .allowsHitTesting(false)
+                                }
+                                TextEditor(text: $bodyText)
+                                    .font(DS.Font.callout)
+                                    .frame(minHeight: 60, maxHeight: 100)
+                                    .scrollContentBackground(.hidden)
+                                    .background(Color.clear)
+                                    .onChange(of: bodyText) { _ in
+                                        if bodyText.count > 500 { bodyText = String(bodyText.prefix(500)) }
+                                    }
+                            }
+                        }
+                        Text("\(bodyText.count)/500")
+                            .font(DS.Font.caption2)
+                            .foregroundColor(bodyText.count > 450 ? DS.Color.error : DS.Color.textTertiary)
+                    }
+                    .padding(DS.Spacing.md)
+                    .background(DS.Color.surface)
+                    .cornerRadius(DS.Radius.md)
+
                     HStack(spacing: DS.Spacing.sm) {
                         Image(systemName: "magnifyingglass")
                             .foregroundColor(DS.Color.textTertiary)
                             .font(DS.Font.scaled(14, weight: .medium))
                         TextField(L10n.t("بحث بالاسم أو الرقم...", "Search by name or phone..."), text: $searchText)
                             .font(DS.Font.callout)
-                            .onChange(of: searchText) { displayLimit = 20 }
+                            .onChange(of: searchText) { _ in displayLimit = 20 }
                         if !searchText.isEmpty {
                             Button { searchText = "" } label: {
                                 Image(systemName: "xmark.circle.fill")
                                     .foregroundColor(DS.Color.textTertiary)
                             }
+                            .accessibilityLabel(L10n.t("مسح البحث", "Clear search"))
                         }
                     }
                     .padding(DS.Spacing.md)
                     .background(DS.Color.surface)
                     .cornerRadius(DS.Radius.md)
 
-                    // Select/Deselect + count
                     HStack(spacing: DS.Spacing.sm) {
                         Button {
                             selectedMemberIds = Set(filteredMembers.map(\.id))
@@ -150,7 +157,6 @@ struct AdminNotificationsView: View {
                 .padding(.horizontal, DS.Spacing.lg)
                 .padding(.vertical, DS.Spacing.sm)
 
-                // Members list
                 if filteredMembers.isEmpty {
                     Spacer()
                     VStack(spacing: DS.Spacing.sm) {
@@ -198,7 +204,6 @@ struct AdminNotificationsView: View {
                     .scrollContentBackground(.hidden)
                 }
 
-                // Send button
                 VStack(spacing: DS.Spacing.xs) {
                     DSPrimaryButton(
                         L10n.t("إرسال الإشعار", "Send Notification"),
@@ -266,6 +271,7 @@ struct AdminNotificationsView: View {
 
             Spacer()
         }
+        .padding(DS.Spacing.md)
     }
 
     // MARK: - Helpers

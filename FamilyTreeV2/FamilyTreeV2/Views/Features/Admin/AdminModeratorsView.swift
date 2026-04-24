@@ -91,6 +91,7 @@ struct AdminModeratorsView: View {
                             .font(DS.Font.scaled(22, weight: .medium))
                             .foregroundStyle(DS.Color.primary)
                     }
+                    .accessibilityLabel(L10n.t("إضافة", "Add"))
                 }
             }
         }
@@ -457,7 +458,8 @@ struct AdminModeratorsView: View {
             icon: "shield.fill",
             title: L10n.t("لا يوجد أعضاء في فريق الإدارة", "No admin team members"),
             buttonTitle: isOwner ? L10n.t("إضافة", "Add") : nil,
-            buttonAction: isOwner ? { showAddSheet = true } : nil
+            buttonAction: isOwner ? { showAddSheet = true } : nil,
+            style: .halo
         )
     }
 }
@@ -579,6 +581,7 @@ struct AddModeratorSheet: View {
                             .foregroundStyle(DS.Color.textTertiary)
                             .symbolRenderingMode(.hierarchical)
                     }
+                    .accessibilityLabel(L10n.t("إغلاق", "Close"))
                 }
             }
         }

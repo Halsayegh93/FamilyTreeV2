@@ -11,6 +11,7 @@ struct TreeSearchOverlay: View {
     @State private var isSearchFocused = false
     @State private var searchResults: [SearchResult] = []
     @State private var searchTask: Task<Void, Never>?
+    @State private var statusFilter: StatusFilter = .all
 
     @AppStorage("recentTreeSearches") private var recentSearchesData: Data = Data()
 
@@ -26,6 +27,31 @@ struct TreeSearchOverlay: View {
         var id: UUID { member.id }
     }
 
+    enum StatusFilter: CaseIterable {
+        case all
+        case alive
+        case deceased
+
+        var label: String {
+            switch self {
+            case .all: return L10n.t("الكل", "All")
+            case .alive: return L10n.t("أحياء", "Alive")
+            case .deceased: return L10n.t("متوفين", "Deceased")
+            }
+        }
+    }
+
+    private var filteredResults: [SearchResult] {
+        switch statusFilter {
+        case .all:
+            return searchResults
+        case .alive:
+            return searchResults.filter { $0.member.isDeceased != true }
+        case .deceased:
+            return searchResults.filter { $0.member.isDeceased == true }
+        }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             searchBar
@@ -33,11 +59,12 @@ struct TreeSearchOverlay: View {
             resultsSection
         }
         .zIndex(100)
-        .onChange(of: searchText) { _, newValue in
+        .onChange(of: searchText) { newValue in
             debounceTask?.cancel()
             if newValue.isEmpty {
                 debouncedSearchText = ""
                 searchResults = []
+                statusFilter = .all
             } else {
                 debounceTask = Task {
                     try? await Task.sleep(nanoseconds: 250_000_000)
@@ -148,32 +175,55 @@ struct TreeSearchOverlay: View {
         if !searchResults.isEmpty {
             VStack(spacing: 0) {
                 HStack {
-                    Text(L10n.t("النتائج", "Results"))
-                        .font(DS.Font.scaled(11, weight: .semibold))
-                        .foregroundColor(DS.Color.textSecondary)
-                    Text("(\(searchResults.count))")
-                        .font(DS.Font.scaled(11, weight: .bold))
-                        .foregroundColor(DS.Color.primary)
+                    HStack(spacing: 4) {
+                        Text(L10n.t("النتائج", "Results"))
+                            .font(DS.Font.scaled(11, weight: .semibold))
+                            .foregroundColor(DS.Color.textSecondary)
+                        Text("(\(filteredResults.count))")
+                            .font(DS.Font.scaled(11, weight: .bold))
+                            .foregroundColor(DS.Color.primary)
+                    }
                     Spacer()
                 }
                 .padding(.horizontal, DS.Spacing.md)
                 .padding(.top, DS.Spacing.sm)
                 .padding(.bottom, DS.Spacing.xs)
 
-                if searchResults.count <= 4 {
+                Picker("", selection: $statusFilter) {
+                    ForEach(StatusFilter.allCases, id: \.self) { filter in
+                        Text(filter.label).tag(filter)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .padding(.horizontal, DS.Spacing.md)
+                .padding(.bottom, DS.Spacing.sm)
+
+                if filteredResults.isEmpty {
+                    HStack(spacing: DS.Spacing.sm) {
+                        Image(systemName: "line.3.horizontal.decrease.circle")
+                            .font(DS.Font.scaled(16))
+                            .foregroundColor(DS.Color.textTertiary)
+                        Text(L10n.t("لا توجد نتائج ضمن هذه التصفية", "No results for this filter"))
+                            .font(DS.Font.callout)
+                            .foregroundColor(DS.Color.textSecondary)
+                        Spacer()
+                    }
+                    .padding(DS.Spacing.md)
+                } else if filteredResults.count <= 4 {
                     // نتائج قليلة — بدون سكرول، حسب المحتوى
                     VStack(spacing: 0) {
-                        ForEach(searchResults) { result in
+                        ForEach(filteredResults) { result in
                             Button(action: {
                                 saveRecentSearch(searchText)
                                 searchText = ""
                                 isSearchFocused = false
                                 searchResults = []
+                                statusFilter = .all
                                 onSelect(result.member)
                             }) {
                                 searchResultRow(result)
                             }
-                            if result.id != searchResults.last?.id {
+                            if result.id != filteredResults.last?.id {
                                 Divider().padding(.horizontal, DS.Spacing.md)
                             }
                         }
@@ -182,17 +232,18 @@ struct TreeSearchOverlay: View {
                     // نتائج كثيرة — سكرول مع حد أقصى
                     ScrollView {
                         LazyVStack(spacing: 0) {
-                            ForEach(searchResults) { result in
+                            ForEach(filteredResults) { result in
                                 Button(action: {
                                     saveRecentSearch(searchText)
                                     searchText = ""
                                     isSearchFocused = false
                                     searchResults = []
+                                    statusFilter = .all
                                     onSelect(result.member)
                                 }) {
                                     searchResultRow(result)
                                 }
-                                if result.id != searchResults.last?.id {
+                                if result.id != filteredResults.last?.id {
                                     Divider().padding(.horizontal, DS.Spacing.md)
                                 }
                             }
@@ -292,6 +343,13 @@ struct TreeSearchOverlay: View {
                             score += 50
                         }
 
+                        // أفضلية قوية للاسم الذي يبدأ بنفس عبارة البحث
+                        if normalizedFull == normalizedQuery {
+                            score += 260
+                        } else if normalizedFull.hasPrefix(normalizedQuery) {
+                            score += 220
+                        }
+
                         // نقاط إضافية لكل كلمة تطابق بالترتيب
                         var matchedInOrder = 0
                         var wordIdx = 0
@@ -330,7 +388,16 @@ struct TreeSearchOverlay: View {
             }
         }
 
-        return Array(results.sorted { $0.score > $1.score }.prefix(50))
+        return Array(
+            results
+                .sorted {
+                    if $0.score != $1.score {
+                        return $0.score > $1.score
+                    }
+                    return $0.displayName.localizedCompare($1.displayName) == .orderedAscending
+                }
+                .prefix(50)
+        )
     }
 
     /// الاسم الرباعي + اسم العائلة
@@ -393,11 +460,11 @@ struct TreeSearchOverlay: View {
                         HStack {
                             Spacer()
                             Circle()
-                                .fill(DS.Color.deceased)
-                                .frame(width: 11, height: 11)
+                                .fill(Color.red)
+                                .frame(width: 16, height: 16)
                                 .overlay(
                                     Image(systemName: "heart.slash.fill")
-                                        .font(DS.Font.scaled(6, weight: .bold))
+                                        .font(DS.Font.scaled(8, weight: .bold))
                                         .foregroundColor(DS.Color.textOnPrimary)
                                 )
                         }
@@ -448,7 +515,7 @@ struct TreeSearchOverlay: View {
                 .foregroundColor(result.member.roleColor.opacity(0.6))
         }
         .padding(.horizontal, DS.Spacing.md)
-        .padding(.vertical, DS.Spacing.sm + 2)
+        .padding(.vertical, DS.Spacing.xs)
     }
 
     // MARK: - Recent Searches

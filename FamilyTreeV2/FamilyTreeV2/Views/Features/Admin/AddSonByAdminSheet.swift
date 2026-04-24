@@ -143,7 +143,7 @@ struct AddSonByAdminSheet: View {
                         .font(DS.Font.callout)
                         .foregroundColor(DS.Color.textPrimary)
                         .multilineTextAlignment(.leading)
-                        .onChange(of: firstName) {
+                        .onChange(of: firstName) { _ in
                             if firstName.count > 50 {
                                 firstName = String(firstName.prefix(50))
                             }
@@ -154,50 +154,7 @@ struct AddSonByAdminSheet: View {
 
                 DSDivider()
 
-                // Gender picker
-                HStack(spacing: DS.Spacing.sm) {
-                    DSIcon("person.2.fill", color: DS.Color.accent, size: iconSm, iconSize: iconFontSm)
-
-                    Text(L10n.t("الجنس", "Gender"))
-                        .font(DS.Font.callout)
-                        .foregroundColor(DS.Color.textPrimary)
-
-                    Spacer()
-
-                    HStack(spacing: 0) {
-                        Button {
-                            withAnimation(DS.Anim.snappy) { selectedGender = "male" }
-                        } label: {
-                            Text(L10n.t("ذكر", "Male"))
-                                .font(DS.Font.caption1)
-                                .fontWeight(.bold)
-                                .foregroundColor(selectedGender == "male" ? DS.Color.textOnPrimary : DS.Color.textSecondary)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, DS.Spacing.sm)
-                                .background(selectedGender == "male" ? DS.Color.primary : DS.Color.surface)
-                        }
-
-                        Button {
-                            withAnimation(DS.Anim.snappy) { selectedGender = "female" }
-                        } label: {
-                            Text(L10n.t("أنثى", "Female"))
-                                .font(DS.Font.caption1)
-                                .fontWeight(.bold)
-                                .foregroundColor(selectedGender == "female" ? DS.Color.textOnPrimary : DS.Color.textSecondary)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, DS.Spacing.sm)
-                                .background(selectedGender == "female" ? DS.Color.neonPink : DS.Color.surface)
-                        }
-                    }
-                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: DS.Radius.sm)
-                            .stroke(DS.Color.textTertiary.opacity(0.2), lineWidth: 1)
-                    )
-                    .frame(width: 160)
-                }
-                .padding(.horizontal, DS.Spacing.md)
-                .padding(.vertical, DS.Spacing.xs)
+                // TODO: gender — re-enable when needed
             }
         }
         .padding(.horizontal, DS.Spacing.lg)
@@ -268,18 +225,15 @@ struct AddSonByAdminSheet: View {
 
                 if hasBirthDate {
                     DSDivider()
-                    HStack(spacing: DS.Spacing.sm) {
-                        DSIcon("calendar.badge.clock", color: DS.Color.info, size: iconSm, iconSize: iconFontSm)
-
-                        DatePicker("", selection: $birthDate, in: ...Date(), displayedComponents: .date)
-                            .labelsHidden()
-                            .environment(\.locale, Locale(identifier: L10n.isArabic ? "ar" : "en_US"))
-
-                        Spacer()
-
-                        Text(L10n.t("اختر التاريخ", "Pick Date"))
-                            .font(DS.Font.caption1)
-                            .foregroundColor(DS.Color.textSecondary)
+                    VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                        HStack(spacing: DS.Spacing.sm) {
+                            DSIcon("calendar.badge.clock", color: DS.Color.info, size: iconSm, iconSize: iconFontSm)
+                            Text(L10n.t("تاريخ الميلاد", "Birth Date"))
+                                .font(DS.Font.callout)
+                                .foregroundColor(DS.Color.textPrimary)
+                            Spacer()
+                        }
+                        StableWheelDatePicker(selection: $birthDate, in: ...Date())
                     }
                     .padding(.horizontal, DS.Spacing.md)
                     .padding(.vertical, DS.Spacing.xs)
@@ -327,18 +281,15 @@ struct AddSonByAdminSheet: View {
 
                     if hasDeathDate {
                         DSDivider()
-                        HStack(spacing: DS.Spacing.sm) {
-                            DSIcon("calendar.badge.exclamationmark", color: DS.Color.error, size: iconSm, iconSize: iconFontSm)
-
-                            DatePicker("", selection: $deathDate, in: ...Date(), displayedComponents: .date)
-                                .labelsHidden()
-                                .environment(\.locale, Locale(identifier: L10n.isArabic ? "ar" : "en_US"))
-
-                            Spacer()
-
-                            Text(L10n.t("تاريخ الوفاة", "Death Date"))
-                                .font(DS.Font.caption1)
-                                .foregroundColor(DS.Color.textSecondary)
+                        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                            HStack(spacing: DS.Spacing.sm) {
+                                DSIcon("calendar.badge.exclamationmark", color: DS.Color.error, size: iconSm, iconSize: iconFontSm)
+                                Text(L10n.t("تاريخ الوفاة", "Death Date"))
+                                    .font(DS.Font.callout)
+                                    .foregroundColor(DS.Color.textPrimary)
+                                Spacer()
+                            }
+                            StableWheelDatePicker(selection: $deathDate, in: ...Date())
                         }
                         .padding(.horizontal, DS.Spacing.md)
                         .padding(.vertical, DS.Spacing.xs)

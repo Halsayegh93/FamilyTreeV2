@@ -1435,6 +1435,30 @@ class MemberViewModel: ObservableObject {
         self.isLoading = false
     }
     
+    // MARK: - Set Member Status (freeze / activate)
+
+    /// تجميد حساب عضو أو إعادة تفعيله — يمنع/يسمح بالدخول للتطبيق
+    func setMemberStatus(memberId: UUID, status: FamilyMember.MemberStatus) async {
+        guard authVM?.canEditMembers == true else {
+            Log.error("[MEMBER] تم رفض تغيير الحالة: لا توجد صلاحية")
+            return
+        }
+        do {
+            try await supabase
+                .from("profiles")
+                .update(["status": AnyEncodable(status.rawValue)])
+                .eq("id", value: memberId.uuidString)
+                .execute()
+
+            if let index = allMembers.firstIndex(where: { $0.id == memberId }) {
+                allMembers[index].status = status
+            }
+            Log.info("[MEMBER] تم تغيير حالة \(memberId) إلى \(status.rawValue)")
+        } catch {
+            Log.error("[MEMBER] فشل تغيير الحالة: \(error.localizedDescription)")
+        }
+    }
+
     // MARK: - Update Children Order
     
     // دالة لتحديث ترتيب الأبناء بناءً على القائمة الجديدة

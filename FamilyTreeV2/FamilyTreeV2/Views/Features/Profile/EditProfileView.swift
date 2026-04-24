@@ -40,13 +40,15 @@ struct EditProfileView: View {
     // متغيرات الصورة
     @State private var localPreviewImage: UIImage? = nil
     // Bio
-    @State private var bioText: String = ""
+    @State private var bioStations: [FamilyMember.BioStation] = []
+    @State private var showBioEditor = false
     @State private var showDeleteBioAlert = false
     @State private var showSaveError = false
     @State private var showNameChangeSheet = false
     @State private var newNameRequest: String = ""
     @State private var isSubmittingName = false
     @State private var showAvatarCooldownAlert = false
+    @State private var showDiscardAlert = false
 
     private let cooldown = ProfileEditCooldown.shared
 
@@ -123,8 +125,8 @@ struct EditProfileView: View {
                         }
                         .padding(.horizontal, DS.Spacing.lg)
 
-                        // 4. السيرة الذاتية
-                        aiBioSection
+                        // 4. المحطات الحياتية
+                        bioStationsSection
                             .cooldownGuarded(.bio, cooldown: cooldown)
 
                         // 5. زر الحفظ (تصميم عائم)
@@ -138,15 +140,33 @@ struct EditProfileView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button(L10n.t("إلغاء", "Cancel")) { dismiss() }
-                        .font(DS.Font.calloutBold)
-                        .foregroundColor(DS.Color.error)
+                    Button(L10n.t("إلغاء", "Cancel")) {
+                        if hasUnsavedChanges {
+                            showDiscardAlert = true
+                        } else {
+                            dismiss()
+                        }
+                    }
+                    .font(DS.Font.calloutBold)
+                    .foregroundColor(DS.Color.error)
                 }
+            }
+            .alert(
+                L10n.t("تجاهل التعديلات؟", "Discard Changes?"),
+                isPresented: $showDiscardAlert
+            ) {
+                Button(L10n.t("تجاهل", "Discard"), role: .destructive) { dismiss() }
+                Button(L10n.t("إكمال التعديل", "Keep Editing"), role: .cancel) {}
+            } message: {
+                Text(L10n.t(
+                    "لديك تعديلات غير محفوظة. هل تريد تجاهلها؟",
+                    "You have unsaved changes. Discard them?"
+                ))
             }
             .onAppear {
                 setupData()
             }
-            .onChange(of: localPreviewImage) { _, newImage in
+            .onChange(of: localPreviewImage) { newImage in
                 guard let newImage else { return }
                 if cooldown.canEdit(.avatar) {
                     Task {
@@ -387,111 +407,150 @@ struct EditProfileView: View {
     }
 
     private func modernDatePicker(label: String, selection: Binding<Date>, icon: String) -> some View {
-        HStack(spacing: DS.Spacing.md) {
-            DSIcon(icon, color: DS.Color.accent)
-
-            Text(label)
-                .font(DS.Font.caption2)
-                .foregroundColor(DS.Color.textTertiary)
-
-            Spacer()
-
-            DatePicker("", selection: selection, in: ...Date(), displayedComponents: .date)
-                .labelsHidden()
+        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+            HStack(spacing: DS.Spacing.md) {
+                DSIcon(icon, color: DS.Color.accent)
+                Text(label)
+                    .font(DS.Font.callout)
+                    .foregroundColor(DS.Color.textPrimary)
+                Spacer()
+            }
+            StableWheelDatePicker(selection: selection, in: ...Date())
         }
         .padding(.horizontal, DS.Spacing.lg)
         .padding(.vertical, DS.Spacing.xs)
     }
 
-    private var aiBioSection: some View {
+    private var bioStationsSection: some View {
         DSCard(padding: 0) {
             DSSectionHeader(
-                title: L10n.t("السيرة الذاتية", "Bio"),
+                title: L10n.t("المحطات الحياتية", "Life Stations"),
                 icon: "text.quote",
+                trailing: bioStations.isEmpty ? nil : "\(bioStations.count) \(L10n.t("محطة", "stations"))",
                 iconColor: DS.Color.accent
             )
 
-            VStack(spacing: DS.Spacing.md) {
-                // حقل كتابة السيرة
-                TextEditor(text: $bioText)
-                    .font(DS.Font.callout)
-                    .foregroundStyle(DS.Color.textPrimary)
-                    .frame(minHeight: 120, maxHeight: 200)
-                    .scrollContentBackground(.hidden)
-                    .padding(DS.Spacing.sm)
-                    .background(DS.Color.surface)
-                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                            .stroke(DS.Color.inactiveBorder, lineWidth: 1)
-                    )
-                    .padding(.horizontal, DS.Spacing.lg)
-
-                // عداد الحروف + توضيح
-                HStack {
-                    Text(L10n.t(
-                        "اكتب نبذة عن نفسك",
-                        "Write about yourself"
-                    ))
-                    .font(DS.Font.caption1)
-                    .foregroundColor(DS.Color.textTertiary)
-
-                    Spacer()
-
-                    Text("\(bioText.count)/500")
-                        .font(DS.Font.caption2)
-                        .foregroundColor(bioText.count > 500 ? DS.Color.error : DS.Color.textTertiary)
-                        .monospacedDigit()
-                }
-                .padding(.horizontal, DS.Spacing.lg + DS.Spacing.xs)
-
-                // زر حذف السيرة (إذا فيه نص)
-                if !bioText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    Button {
-                        showDeleteBioAlert = true
-                    } label: {
+            VStack(spacing: DS.Spacing.sm) {
+                if bioStations.isEmpty {
+                    // Empty state
+                    Button { showBioEditor = true } label: {
                         HStack(spacing: DS.Spacing.sm) {
-                            Image(systemName: "trash")
-                                .font(DS.Font.scaled(13, weight: .semibold))
-                            Text(L10n.t("حذف السيرة", "Delete Biography"))
-                                .font(DS.Font.calloutBold)
+                            Image(systemName: "plus.circle.fill")
+                                .font(DS.Font.scaled(18))
+                                .foregroundColor(DS.Color.primary)
+                            Text(L10n.t("أضف محطة حياتية", "Add life station"))
+                                .font(DS.Font.callout)
+                                .foregroundColor(DS.Color.primary)
                         }
-                        .foregroundColor(DS.Color.error)
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, DS.Spacing.xs)
-                        .background(DS.Color.error.opacity(0.08))
-                        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+                        .padding(.vertical, DS.Spacing.lg)
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    // معاينة المحطات
+                    VStack(spacing: 0) {
+                        ForEach(Array(bioStations.prefix(3).enumerated()), id: \.element.id) { index, station in
+                            if index > 0 { DSDivider() }
+                            stationPreviewRow(station)
+                        }
+                        if bioStations.count > 3 {
+                            DSDivider()
+                            Text(L10n.t("و \(bioStations.count - 3) محطات أخرى...", "and \(bioStations.count - 3) more..."))
+                                .font(DS.Font.caption1)
+                                .foregroundColor(DS.Color.textTertiary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, DS.Spacing.lg)
+                                .padding(.vertical, DS.Spacing.sm)
+                        }
+                    }
+
+                    // أزرار التعديل والحذف
+                    HStack(spacing: DS.Spacing.sm) {
+                        Button { showBioEditor = true } label: {
+                            Label(L10n.t("تعديل", "Edit"), systemImage: "pencil")
+                                .font(DS.Font.calloutBold)
+                                .foregroundColor(DS.Color.primary)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, DS.Spacing.sm)
+                                .background(DS.Color.primary.opacity(0.08))
+                                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+                        }
+                        .buttonStyle(.plain)
+
+                        Button { showDeleteBioAlert = true } label: {
+                            Label(L10n.t("حذف", "Delete"), systemImage: "trash")
+                                .font(DS.Font.calloutBold)
+                                .foregroundColor(DS.Color.error)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, DS.Spacing.sm)
+                                .background(DS.Color.error.opacity(0.08))
+                                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+                        }
+                        .buttonStyle(.plain)
                     }
                     .padding(.horizontal, DS.Spacing.lg)
                 }
             }
             .padding(.bottom, DS.Spacing.md)
-            .onChange(of: bioText) {
-                if bioText.count > 500 {
-                    bioText = String(bioText.prefix(500))
-                }
-            }
 
             cooldownLabel(.bio)
         }
         .padding(.horizontal, DS.Spacing.lg)
+        .sheet(isPresented: $showBioEditor) {
+            BioStationsEditorSheet(stations: $bioStations)
+        }
         .alert(
-            L10n.t("حذف السيرة", "Delete Biography"),
+            L10n.t("حذف المحطات", "Delete Stations"),
             isPresented: $showDeleteBioAlert
         ) {
             Button(L10n.t("حذف", "Delete"), role: .destructive) {
-                bioText = ""
+                bioStations = []
                 let memberId = member.id
                 member.bio = nil
                 Task { await memberVM.updateMemberBio(memberId: memberId, bio: []) }
             }
             Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { }
         } message: {
-            Text(L10n.t(
-                "هل تريد حذف السيرة الذاتية؟",
-                "Delete biography?"
-            ))
+            Text(L10n.t("سيتم حذف جميع المحطات الحياتية.", "All life stations will be deleted."))
         }
+    }
+
+    private func stationPreviewRow(_ station: FamilyMember.BioStation) -> some View {
+        HStack(spacing: DS.Spacing.md) {
+            if let year = station.year, !year.isEmpty {
+                Text(year)
+                    .font(DS.Font.caption2)
+                    .fontWeight(.bold)
+                    .foregroundColor(DS.Color.textOnPrimary)
+                    .padding(.horizontal, DS.Spacing.sm)
+                    .padding(.vertical, 3)
+                    .background(DS.Color.primary)
+                    .clipShape(Capsule())
+                    .fixedSize()
+            } else {
+                Circle()
+                    .fill(DS.Color.primary.opacity(0.3))
+                    .frame(width: 8, height: 8)
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                if !station.title.isEmpty {
+                    Text(station.title)
+                        .font(DS.Font.calloutBold)
+                        .foregroundColor(DS.Color.textPrimary)
+                        .lineLimit(1)
+                }
+                if !station.details.isEmpty {
+                    Text(station.details)
+                        .font(DS.Font.caption1)
+                        .foregroundColor(DS.Color.textSecondary)
+                        .lineLimit(1)
+                }
+            }
+            Spacer()
+        }
+        .padding(.horizontal, DS.Spacing.lg)
+        .padding(.vertical, DS.Spacing.sm)
     }
 
     private var saveButton: some View {
@@ -526,15 +585,16 @@ struct EditProfileView: View {
             .padding(.horizontal, DS.Spacing.xl + DS.Spacing.lg)
             .padding(.vertical, DS.Spacing.xs)
             .frame(maxWidth: .infinity, alignment: .leading)
-        } else if cooldown.remainingEdits(field) < 3 && cooldown.remainingEdits(field) > 0 {
-            // يعرض عدد التعديلات المتبقية
+        } else if cooldown.remainingEdits(field) == 1 {
+            // تحذير — آخر تعديل قبل القفل
             HStack(spacing: DS.Spacing.xs) {
-                Image(systemName: "pencil.circle")
+                Image(systemName: "exclamationmark.triangle.fill")
                     .font(DS.Font.caption2)
-                Text(cooldown.formattedRemainingEdits(field))
+                Text(L10n.t("آخر تعديل متاح — بعده يُقفل 24 ساعة", "Last edit — field locks for 24h after"))
                     .font(DS.Font.caption2)
+                    .fontWeight(.medium)
             }
-            .foregroundColor(DS.Color.textTertiary)
+            .foregroundColor(DS.Color.warning)
             .padding(.horizontal, DS.Spacing.xl + DS.Spacing.lg)
             .padding(.vertical, DS.Spacing.xs)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -550,15 +610,8 @@ struct EditProfileView: View {
         self.phoneNumber = detectedPhone.localDigits
         self.isMarried = member.isMarried ?? false
         self.isDeceased = member.isDeceased ?? false
-        // تحميل السيرة الذاتية الحالية
-        if let bioStations = member.bio, !bioStations.isEmpty {
-            self.bioText = bioStations.map { station in
-                [station.year, station.title, station.details]
-                    .compactMap { $0 }
-                    .filter { !$0.isEmpty }
-                    .joined(separator: " - ")
-            }.joined(separator: "\n")
-        }
+        // تحميل المحطات الحياتية
+        self.bioStations = member.bio ?? []
         let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"
         if let b = member.birthDate, let date = f.date(from: b) { self.birthDate = date }
         if let d = member.deathDate, let date = f.date(from: d) { self.deathDate = date }
@@ -594,7 +647,23 @@ struct EditProfileView: View {
         let phoneChanged: Bool
         let bioChanged: Bool
         let deceasedChanged: Bool
-        let trimmedBio: String
+    }
+
+    private var hasUnsavedChanges: Bool {
+        let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"
+        if isMarried != (member.isMarried ?? false) { return true }
+        if isPhoneHidden != (member.isPhoneHidden ?? false) { return true }
+        if isDeceased && !(member.isDeceased ?? false) { return true }
+        let oldBirthStr = member.birthDate ?? ""
+        if f.string(from: birthDate) != oldBirthStr { return true }
+        let oldBioKey = (member.bio ?? []).map { "\($0.year ?? "")|\($0.title)|\($0.details)" }.joined(separator: ";")
+        let newBioKey = bioStations.map { "\($0.year ?? "")|\($0.title)|\($0.details)" }.joined(separator: ";")
+        if oldBioKey != newBioKey { return true }
+        // phone quick check
+        let rawLocal = phoneNumber.filter(\.isNumber)
+        let originalLocal = KuwaitPhone.detectCountryAndLocal(member.phoneNumber).localDigits.filter(\.isNumber)
+        if rawLocal != originalLocal && !rawLocal.isEmpty { return true }
+        return false
     }
 
     private func detectChangedFields(normalizedPhone: String) -> ChangedFields {
@@ -602,17 +671,18 @@ struct EditProfileView: View {
         let oldStoredPhone = KuwaitPhone.normalizeForStorageFromInput(member.phoneNumber) ?? ""
         let oldBirthStr = member.birthDate ?? ""
         let newBirthStr = f.string(from: birthDate)
-        let trimmedBio = bioText.trimmingCharacters(in: .whitespacesAndNewlines)
-        let oldBioText = (member.bio ?? []).map { [$0.title, $0.details].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " - ") }.joined(separator: "\n")
+
+        // مقارنة المحطات بمحتواها
+        let oldBioKey = (member.bio ?? []).map { "\($0.year ?? "")|\($0.title)|\($0.details)" }.joined(separator: ";")
+        let newBioKey = bioStations.map { "\($0.year ?? "")|\($0.title)|\($0.details)" }.joined(separator: ";")
 
         return ChangedFields(
             birthChanged: newBirthStr != oldBirthStr && cooldown.canEdit(.birthDate),
             marriedChanged: isMarried != (member.isMarried ?? false) && cooldown.canEdit(.isMarried),
             phoneHiddenChanged: isPhoneHidden != (member.isPhoneHidden ?? false) && cooldown.canEdit(.isPhoneHidden),
             phoneChanged: !normalizedPhone.isEmpty && (normalizedPhone != oldStoredPhone) && cooldown.canEdit(.phoneNumber),
-            bioChanged: trimmedBio != oldBioText && cooldown.canEdit(.bio),
-            deceasedChanged: isDeceased && !(member.isDeceased ?? false),
-            trimmedBio: trimmedBio
+            bioChanged: oldBioKey != newBioKey && cooldown.canEdit(.bio),
+            deceasedChanged: isDeceased && !(member.isDeceased ?? false)
         )
     }
 
@@ -627,14 +697,9 @@ struct EditProfileView: View {
 
     private func saveBioIfChanged(changes: ChangedFields) async {
         guard changes.bioChanged else { return }
-        if !changes.trimmedBio.isEmpty {
-            let station = FamilyMember.BioStation(title: "", details: changes.trimmedBio)
-            await memberVM.updateMemberBio(memberId: member.id, bio: [station])
-            member.bio = [station]
-        } else {
-            await memberVM.updateMemberBio(memberId: member.id, bio: [])
-            member.bio = nil
-        }
+        let stationsToSave = bioStations.filter { !$0.title.isEmpty || !$0.details.isEmpty }
+        await memberVM.updateMemberBio(memberId: member.id, bio: stationsToSave)
+        member.bio = stationsToSave.isEmpty ? nil : stationsToSave
     }
 
     private func submitMemberData() async -> Bool {
@@ -685,13 +750,14 @@ struct GalleryPhotoViewer: View {
                             .offset(offset)
                             .gesture(
                                 SimultaneousGesture(
-                                    MagnifyGesture()
+                                    MagnificationGesture()
                                         .onChanged { value in
-                                            let newScale = lastZoomScale * value.magnification
+                                            let newScale = lastZoomScale * value
                                             zoomScale = min(max(newScale, 1), 4)
                                         }
-                                        .onEnded { _ in
-                                            lastZoomScale = zoomScale
+                                        .onEnded { value in
+                                            lastZoomScale = min(max(lastZoomScale * value, 1), 4)
+                                            zoomScale = lastZoomScale
                                             if zoomScale <= 1 {
                                                 withAnimation(.easeOut(duration: 0.2)) {
                                                     zoomScale = 1

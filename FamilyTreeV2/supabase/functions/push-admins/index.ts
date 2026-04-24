@@ -1,6 +1,6 @@
 import { handleCors, validatePost, json } from "../_shared/cors.ts";
 import { createServiceClient, authenticateRequest, parseBody } from "../_shared/auth.ts";
-import { createApnsJwt, getApnsConfig } from "../_shared/apns.ts";
+import { createApnsJwt, getApnsConfig, apnsHostFor } from "../_shared/apns.ts";
 
 type PushRequest = {
   title: string;
@@ -42,7 +42,7 @@ Deno.serve(async (req) => {
   } catch (e) {
     return json(500, { ok: false, message: (e as Error).message });
   }
-  const { teamId, keyId, bundleId, privateKey, apnsHost } = apnsConfig;
+  const { teamId, keyId, bundleId, privateKey } = apnsConfig;
 
   const supabase = createServiceClient();
 
@@ -64,10 +64,10 @@ Deno.serve(async (req) => {
     return json(200, { ok: true, sent: 0, message: "No admins found" });
   }
 
-  // جلب tokens الأجهزة
+  // جلب tokens الأجهزة (مع environment)
   const { data: tokenRows, error: tokenErr } = await supabase
     .from("device_tokens")
-    .select("token, member_id")
+    .select("token, member_id, environment")
     .in("member_id", adminIds)
     .in("platform", ["ios", "ipados"]);
 
@@ -79,22 +79,24 @@ Deno.serve(async (req) => {
   }
 
   // Filter out null/empty tokens (token can be null after device_id migration)
-  const tokens = (tokenRows ?? [])
+  const tokenEntries = (tokenRows ?? [])
     .filter((r) => r.token != null)
-    .map((r) => (r.token as string).trim())
-    .filter((t) => t.length > 20);
+    .map((r) => ({ token: (r.token as string).trim(), env: r.environment as string | null }))
+    .filter((e) => e.token.length > 20);
 
-  if (!tokens.length) {
+  if (!tokenEntries.length) {
     return json(200, { ok: true, sent: 0, message: "No admin push tokens" });
   }
 
   const jwt = await createApnsJwt(teamId, keyId, privateKey);
 
   let sent = 0;
-  const failures: Array<{ token: string; status: number; reason: string }> = [];
+  const failures: Array<{ token: string; status: number; reason: string; env: string | null }> = [];
 
-  for (const token of tokens) {
-    const apnsResponse = await fetch(`${apnsHost}/3/device/${token}`, {
+  for (const entry of tokenEntries) {
+    const { token, env } = entry;
+    const host = apnsHostFor(env);
+    const apnsResponse = await fetch(`${host}/3/device/${token}`, {
       method: "POST",
       headers: {
         authorization: `bearer ${jwt}`,
@@ -117,10 +119,10 @@ Deno.serve(async (req) => {
     }
 
     const reason = await apnsResponse.text();
-    failures.push({ token, status: apnsResponse.status, reason });
+    failures.push({ token: token.substring(0, 8) + "...", status: apnsResponse.status, reason, env });
 
-    // حذف tokens منتهية الصلاحية
-    if (apnsResponse.status === 410 || apnsResponse.status === 400) {
+    // حذف tokens المنتهية (410) فقط — 400 قد يكون environment mismatch مؤقت
+    if (apnsResponse.status === 410) {
       await supabase.from("device_tokens").delete().eq("token", token);
     }
   }
@@ -128,7 +130,7 @@ Deno.serve(async (req) => {
   return json(200, {
     ok: true,
     sent,
-    total: tokens.length,
+    total: tokenEntries.length,
     failed: failures.length,
     failures,
   });

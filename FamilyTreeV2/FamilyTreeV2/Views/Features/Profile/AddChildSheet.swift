@@ -97,7 +97,7 @@ struct AddChildSheet: View {
                             TextField(L10n.t("اسم الابن", "Child's name"), text: $firstName)
                                 .font(DS.Font.callout)
                                 .foregroundColor(DS.Color.textPrimary)
-                                .onChange(of: firstName) {
+                                .onChange(of: firstName) { _ in
                                     if firstName.count > 50 {
                                         firstName = String(firstName.prefix(50))
                                     }
@@ -120,7 +120,7 @@ struct AddChildSheet: View {
                             TextField(L10n.t("اسم العائلة", "Family name"), text: $familyName)
                                 .font(DS.Font.callout)
                                 .foregroundColor(DS.Color.textPrimary)
-                                .onChange(of: familyName) {
+                                .onChange(of: familyName) { _ in
                                     if familyName.count > 50 {
                                         familyName = String(familyName.prefix(50))
                                     }
@@ -133,50 +133,7 @@ struct AddChildSheet: View {
 
                     DSDivider()
 
-                    // Gender picker
-                    HStack(spacing: DS.Spacing.md) {
-                        DSIcon(selectedGender == "female" ? "figure.stand.dress" : "person.fill", color: selectedGender == "female" ? DS.Color.neonPink : DS.Color.primary)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(L10n.t("الجنس", "Gender"))
-                                .font(DS.Font.caption1)
-                                .foregroundColor(DS.Color.textSecondary)
-                            HStack(spacing: 0) {
-                                Button {
-                                    withAnimation(DS.Anim.snappy) { selectedGender = "male" }
-                                } label: {
-                                    Text(L10n.t("ذكر", "Male"))
-                                        .font(DS.Font.caption1)
-                                        .fontWeight(.bold)
-                                        .foregroundColor(selectedGender == "male" ? DS.Color.textOnPrimary : DS.Color.textSecondary)
-                                        .frame(maxWidth: .infinity)
-                                        .padding(.vertical, DS.Spacing.sm)
-                                        .background(selectedGender == "male" ? DS.Color.primary : DS.Color.surface)
-                                }
-
-                                Button {
-                                    withAnimation(DS.Anim.snappy) { selectedGender = "female" }
-                                } label: {
-                                    Text(L10n.t("أنثى", "Female"))
-                                        .font(DS.Font.caption1)
-                                        .fontWeight(.bold)
-                                        .foregroundColor(selectedGender == "female" ? DS.Color.textOnPrimary : DS.Color.textSecondary)
-                                        .frame(maxWidth: .infinity)
-                                        .padding(.vertical, DS.Spacing.sm)
-                                        .background(selectedGender == "female" ? DS.Color.neonPink : DS.Color.surface)
-                                }
-                            }
-                            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: DS.Radius.sm)
-                                    .stroke(DS.Color.textTertiary.opacity(0.2), lineWidth: 1)
-                            )
-                        }
-                        Spacer()
-                    }
-                    .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.vertical, DS.Spacing.xs)
-
-                    DSDivider()
+                    // TODO: gender — re-enable when needed
 
                     // Phone field — بدون رمز الدولة
                     HStack(spacing: DS.Spacing.md) {
@@ -202,10 +159,14 @@ struct AddChildSheet: View {
                     DSDivider()
 
                     // Birth date
-                    HStack(spacing: DS.Spacing.md) {
-                        DSIcon("calendar", color: DS.Color.accent)
-                        DatePicker(L10n.t("تاريخ الميلاد", "Birth Date"), selection: $birthDate, in: ...Date(), displayedComponents: .date)
-                            .environment(\.locale, Locale(identifier: L10n.isArabic ? "ar" : "en_US"))
+                    VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                        HStack(spacing: DS.Spacing.md) {
+                            DSIcon("calendar", color: DS.Color.accent)
+                            Text(L10n.t("تاريخ الميلاد", "Birth Date"))
+                                .font(DS.Font.callout)
+                                .foregroundColor(DS.Color.textPrimary)
+                        }
+                        StableWheelDatePicker(selection: $birthDate, in: ...Date())
                     }
                     .padding(.horizontal, DS.Spacing.lg)
                     .padding(.vertical, DS.Spacing.xs)
@@ -225,10 +186,14 @@ struct AddChildSheet: View {
 
                     if isDeceased {
                         DSDivider()
-                        HStack(spacing: DS.Spacing.md) {
-                            DSIcon("calendar", color: DS.Color.accent)
-                            DatePicker(L10n.t("تاريخ الوفاة", "Death Date"), selection: $deathDate, in: ...Date(), displayedComponents: .date)
-                                .environment(\.locale, Locale(identifier: L10n.isArabic ? "ar" : "en_US"))
+                        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                            HStack(spacing: DS.Spacing.md) {
+                                DSIcon("calendar", color: DS.Color.error)
+                                Text(L10n.t("تاريخ الوفاة", "Death Date"))
+                                    .font(DS.Font.callout)
+                                    .foregroundColor(DS.Color.textPrimary)
+                            }
+                            StableWheelDatePicker(selection: $deathDate, in: ...Date())
                         }
                         .padding(.horizontal, DS.Spacing.lg)
                         .padding(.vertical, DS.Spacing.xs)

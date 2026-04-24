@@ -46,7 +46,7 @@ struct HomeNewsView: View {
                         MainHeaderView(selectedTab: $selectedTab, showingNotifications: $showingNotifications)
 
                         ScrollView(showsIndicators: false) {
-                            VStack(spacing: DS.Spacing.md) {
+                            VStack(spacing: DS.Spacing.lg) {
                                 // الوصول السريع
                                 quickActionsSection
                                     .opacity(appeared ? 1 : 0)
@@ -96,9 +96,9 @@ struct HomeNewsView: View {
                 rebuildGalleryMembers()
                 rebuildStoryGroups()
             }
-            .onChange(of: storyVM.membersWithStories.count) { _, _ in rebuildStoryGroups() }
-            .onChange(of: memberVM.approvedGalleryPhotos.count) { _, _ in rebuildGalleryMembers() }
-            .onChange(of: newsSearchText) { _, newValue in
+            .onChange(of: storyVM.membersWithStories.count) { _ in rebuildStoryGroups() }
+            .onChange(of: memberVM.approvedGalleryPhotos.count) { _ in rebuildGalleryMembers() }
+            .onChange(of: newsSearchText) { newValue in
                 newsSearchTask?.cancel()
                 if newValue.isEmpty {
                     debouncedNewsSearch = ""
@@ -172,7 +172,7 @@ struct HomeNewsView: View {
                 }
             }
         }
-        .onChange(of: selectedTab) {
+        .onChange(of: selectedTab) { _ in
             if selectedTab != 0, activeSubPage != nil {
                 activeSubPage = nil
             }
@@ -211,16 +211,14 @@ struct HomeNewsView: View {
         }()
 
         return HStack(spacing: DS.Spacing.md) {
-            Button {
+            DSIconButton(
+                icon: L10n.isArabic ? "chevron.right" : "chevron.left",
+                iconColor: DS.Color.textPrimary,
+                fillColor: DS.Color.surface,
+                borderColor: DS.Color.primary.opacity(0.08),
+                borderWidth: 1
+            ) {
                 withAnimation(DS.Anim.snappy) { activeSubPage = nil }
-            } label: {
-                Image(systemName: L10n.isArabic ? "chevron.right" : "chevron.left")
-                    .font(DS.Font.scaled(18, weight: .bold))
-                    .foregroundColor(DS.Color.textPrimary)
-                    .frame(width: 44, height: 44)
-                    .background(DS.Color.surface)
-                    .clipShape(Circle())
-                    .overlay(Circle().stroke(DS.Color.primary.opacity(0.08), lineWidth: 1))
             }
 
             Text(title)
@@ -292,7 +290,7 @@ struct HomeNewsView: View {
                 .padding(.vertical, DS.Spacing.sm)
             }
         }
-        .padding(.vertical, DS.Spacing.xs)
+        .padding(.vertical, DS.Spacing.sm)
         .background(DS.Color.surface.opacity(0.4))
         .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
         .padding(.horizontal, DS.Spacing.lg)
@@ -440,7 +438,7 @@ struct HomeNewsView: View {
     // MARK: - Quick Actions Section
     private var quickActionsSection: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: DS.Spacing.sm) {
+            HStack(spacing: DS.Spacing.md) {
                 quickActionItem(icon: "photo.on.rectangle.angled.fill", title: L10n.t("الصور", "Photos"), color: DS.Color.primary) { withAnimation(DS.Anim.snappy) { activeSubPage = .photos } }
                 quickActionItem(icon: "briefcase.fill", title: L10n.t("مشاريع", "Projects"), color: DS.Color.accent) { withAnimation(DS.Anim.snappy) { activeSubPage = .projects } }
                 quickActionItem(icon: "bubble.left.and.bubble.right.fill", title: L10n.t("تواصل", "Contact"), color: DS.Color.primary) { withAnimation(DS.Anim.snappy) { activeSubPage = .contact } }
@@ -527,8 +525,29 @@ struct HomeNewsView: View {
             .padding(.horizontal, DS.Spacing.lg)
             .padding(.vertical, DS.Spacing.sm)
 
-            if newsVM.allNews.isEmpty {
+            if newsVM.isLoading && newsVM.allNews.isEmpty {
+                VStack(spacing: DS.Spacing.md) {
+                    Spacer().frame(height: DS.Spacing.xxxl)
+                    ProgressView()
+                        .tint(DS.Color.primary)
+                        .scaleEffect(1.3)
+                    Text(L10n.t("جاري تحميل الأخبار...", "Loading news..."))
+                        .font(DS.Font.caption1)
+                        .foregroundColor(DS.Color.textSecondary)
+                }
+            } else if newsVM.allNews.isEmpty {
                 emptyNewsView
+            } else if !debouncedNewsSearch.isEmpty && filteredNews.isEmpty {
+                VStack(spacing: DS.Spacing.md) {
+                    Spacer().frame(height: DS.Spacing.xxxl)
+                    Image(systemName: "magnifyingglass")
+                        .font(DS.Font.scaled(36))
+                        .foregroundColor(DS.Color.textTertiary)
+                    Text(L10n.t("لا توجد نتائج لـ \"\(debouncedNewsSearch)\"", "No results for \"\(debouncedNewsSearch)\""))
+                        .font(DS.Font.callout)
+                        .foregroundColor(DS.Color.textSecondary)
+                        .multilineTextAlignment(.center)
+                }
             } else {
                 newsListView
             }
@@ -565,13 +584,23 @@ struct HomeNewsView: View {
         .padding(.top, DS.Spacing.sm)
     }
 
+    private func roleColorFor(_ roleColor: String?) -> Color {
+        switch roleColor {
+        case "purple": return DS.Color.adminRole
+        case "orange": return DS.Color.supervisorRole
+        case "blue":   return DS.Color.primary
+        case "green":  return DS.Color.success
+        default:       return DS.Color.primary
+        }
+    }
+
     private func newsCard(for news: NewsPost) -> some View {
         HomeNewsCardView(
             postId: news.id,
             authorName: news.author_name,
             authorId: news.author_id,
             role: news.author_role,
-            roleColor: news.role_color == "purple" ? DS.Color.adminRole : (news.role_color == "orange" ? DS.Color.supervisorRole : DS.Color.primary),
+            roleColor: roleColorFor(news.role_color),
             time: getRelativeTime(for: news.timestamp),
             type: news.type,
             content: news.content,

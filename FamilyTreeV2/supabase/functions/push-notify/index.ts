@@ -1,6 +1,6 @@
 import { handleCors, validatePost, json } from "../_shared/cors.ts";
-import { createServiceClient, parseBody } from "../_shared/auth.ts";
-import { createApnsJwt, getApnsConfig } from "../_shared/apns.ts";
+import { createServiceClient, parseBody, authenticateRequest } from "../_shared/auth.ts";
+import { createApnsJwt, getApnsConfig, apnsHostFor } from "../_shared/apns.ts";
 
 type PushRequest = {
   title: string;
@@ -16,7 +16,16 @@ Deno.serve(async (req) => {
   const methodErr = validatePost(req);
   if (methodErr) return methodErr;
 
-  // Parse body — لا يوجد تحقق من الهوية (يُستدعى داخلياً بـ service role)
+  // التحقق من هوية المرسل — فقط فريق الإدارة يقدر يرسل push خارجي
+  const auth = await authenticateRequest(req, [
+    "owner",
+    "admin",
+    "monitor",
+    "supervisor",
+  ]);
+  if (auth instanceof Response) return auth;
+
+  // Parse body
   const parsed = await parseBody<PushRequest>(req);
   if (parsed instanceof Response) return parsed;
   const payload = parsed;
@@ -34,13 +43,13 @@ Deno.serve(async (req) => {
   } catch (e) {
     return json(500, { ok: false, message: (e as Error).message });
   }
-  const { teamId, keyId, bundleId, privateKey, apnsHost } = apnsConfig;
+  const { teamId, keyId, bundleId, privateKey } = apnsConfig;
 
   const supabase = createServiceClient();
 
-  // جلب tokens الأعضاء المستهدفين
+  // جلب tokens الأعضاء المستهدفين (مع environment لاختيار host صحيح)
   const memberIds = payload.member_ids;
-  let allTokenRows: Array<{ token: string; member_id: string }> = [];
+  let allTokenRows: Array<{ token: string; member_id: string; environment: string | null }> = [];
 
   if (memberIds && memberIds.length > 0) {
     // تقسيم member_ids لمجموعات عشان ما يطول الـ URL
@@ -49,7 +58,7 @@ Deno.serve(async (req) => {
       const chunk = memberIds.slice(i, i + CHUNK_SIZE);
       const { data, error } = await supabase
         .from("device_tokens")
-        .select("token, member_id")
+        .select("token, member_id, environment")
         .in("platform", ["ios", "ipados"])
         .in("member_id", chunk);
       if (error) {
@@ -64,7 +73,7 @@ Deno.serve(async (req) => {
     // broadcast لكل الأجهزة المسجلة
     const { data, error } = await supabase
       .from("device_tokens")
-      .select("token, member_id")
+      .select("token, member_id, environment")
       .in("platform", ["ios", "ipados"]);
     if (error) {
       return json(500, {
@@ -75,12 +84,12 @@ Deno.serve(async (req) => {
     if (data) allTokenRows = data;
   }
 
-  const tokens = allTokenRows
+  const tokenEntries = allTokenRows
     .filter((r) => r.token != null)
-    .map((r) => (r.token as string).trim())
-    .filter((t) => t.length > 20);
+    .map((r) => ({ token: (r.token as string).trim(), env: r.environment }))
+    .filter((e) => e.token.length > 20);
 
-  if (!tokens.length) {
+  if (!tokenEntries.length) {
     return json(200, { ok: true, sent: 0, message: "No push tokens found" });
   }
 
@@ -102,11 +111,13 @@ Deno.serve(async (req) => {
   }
 
   let sent = 0;
-  const failures: Array<{ token: string; status: number; reason: string }> = [];
+  const failures: Array<{ token: string; status: number; reason: string; env: string | null }> = [];
 
-  for (const token of tokens) {
+  for (const entry of tokenEntries) {
+    const { token, env } = entry;
+    const host = apnsHostFor(env);
     try {
-      const apnsResponse = await fetch(`${apnsHost}/3/device/${token}`, {
+      const apnsResponse = await fetch(`${host}/3/device/${token}`, {
         method: "POST",
         headers: {
           authorization: `bearer ${jwt}`,
@@ -133,10 +144,11 @@ Deno.serve(async (req) => {
         token: token.substring(0, 8) + "...",
         status: apnsResponse.status,
         reason,
+        env,
       });
 
-      // حذف tokens منتهية الصلاحية
-      if (apnsResponse.status === 410 || apnsResponse.status === 400) {
+      // حذف tokens المنتهية (410) فقط — 400 قد يكون environment mismatch مؤقت
+      if (apnsResponse.status === 410) {
         await supabase.from("device_tokens").delete().eq("token", token);
       }
     } catch (fetchErr) {
@@ -145,6 +157,7 @@ Deno.serve(async (req) => {
         token: token.substring(0, 8) + "...",
         status: 0,
         reason: `fetch error: ${err.message}`,
+        env,
       });
     }
   }
@@ -152,7 +165,7 @@ Deno.serve(async (req) => {
   return json(200, {
     ok: true,
     sent,
-    total: tokens.length,
+    total: tokenEntries.length,
     failed: failures.length,
     failures,
   });

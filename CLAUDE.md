@@ -42,8 +42,6 @@ FamilyTreeV2/                         ← Xcode project root
 │   │   └── NewsPost.swift            ← News posts + NewsPollVote + NewsLikeRecord + NewsCommentRecord
 │   ├── Diwaniyas/
 │   │   └── Diwaniya.swift            ← Diwaniya gathering model
-│   ├── AI/
-│   │   └── AIModels.swift            ← AIChatMessage + API response models
 │   └── Admin/
 │       ├── AdminRequest.swift        ← Admin action requests
 │       ├── PhoneChangeRequest.swift  ← Phone change requests
@@ -51,8 +49,6 @@ FamilyTreeV2/                         ← Xcode project root
 ├── ViewModels/
 │   ├── Auth/
 │   │   └── AuthViewModel.swift       ← Central ViewModel (~2800 lines, manages auth + data)
-│   ├── AI/
-│   │   └── AIViewModel.swift         ← AI chat & admin summary
 │   └── DiwaniyasViewModel.swift      ← Diwaniya CRUD operations
 ├── Views/
 │   ├── App/                          ← App-level views
@@ -70,7 +66,6 @@ FamilyTreeV2/                         ← Xcode project root
 │       ├── Profile/                  ← ProfileView, EditProfileView, SettingsView, AddChildSheet, EditChildSheet, AddChildRequestView
 │       ├── Diwaniyas/                ← DiwaniyasView
 │       ├── Admin/                    ← AdminDashboardView + 15 admin management views
-│       └── AI/                       ← AIChatView, AIAdminSummaryView
 ├── Core/
 │   ├── SupabaseConfig.swift          ← Supabase client setup + OTP fallback config
 │   ├── AppLogger.swift               ← Log enum (info, error, warning) via os.Logger
@@ -78,8 +73,7 @@ FamilyTreeV2/                         ← Xcode project root
 └── supabase/
     ├── config.toml                   ← Supabase CLI config
     ├── functions/                    ← Edge functions (TypeScript)
-    │   ├── claude-ai/               ← AI assistant backend
-    │   ├── contact-email/            ← Contact form email
+        │   ├── contact-email/            ← Contact form email
     │   ├── delete-account/           ← Account deletion
     │   ├── otp-fallback/             ← WhatsApp/Voice OTP delivery
     │   ├── push-admins/              ← Admin push notifications
@@ -308,7 +302,6 @@ Supabase has its own `QuietSupabaseLogger` (in `SupabaseConfig.swift`) that only
 
 | Function | Purpose |
 |----------|---------|
-| `claude-ai` | AI assistant backend (chat, news generation, admin summaries) |
 | `contact-email` | Contact form email delivery |
 | `delete-account` | Account deletion logic |
 | `otp-fallback` | Alternate OTP channels (WhatsApp, Voice) |
@@ -346,14 +339,6 @@ The largest file (~2800+ lines). Manages:
 - Feature flags for graceful degradation (`notificationsFeatureAvailable`, `newsApprovalFeatureAvailable`, `newsPollFeatureAvailable`)
 
 Key published properties: `status`, `currentUser`, `allMembers`, `allNews`, `notifications`, `deceasedRequests`, `childAddRequests`, `phoneChangeRequests`
-
-### AIViewModel
-
-Invokes Supabase edge function `claude-ai` for:
-- Chat conversations
-- News content generation
-- Admin dashboard summaries
-- Family tree analysis
 
 ### DiwaniyasViewModel
 

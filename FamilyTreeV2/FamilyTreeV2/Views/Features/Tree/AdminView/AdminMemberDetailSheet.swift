@@ -32,6 +32,10 @@ struct AdminMemberDetailSheet: View {
     @State private var isSortMode = false
     @State private var draggedChild: FamilyMember?
 
+    // المحطات الحياتية
+    @State private var bioStations: [FamilyMember.BioStation] = []
+    @State private var showBioEditor = false
+
     @State private var localAvatarPreview: UIImage? = nil
     @State private var currentAvatarURL: String?
     @State private var showAddSonSheet = false
@@ -74,6 +78,7 @@ struct AdminMemberDetailSheet: View {
             self._hasBirthDate = State(initialValue: false)
         }
 
+        self._bioStations = State(initialValue: member.bio ?? [])
         self._selectedGender = State(initialValue: member.gender ?? "male")
         self._isDeceased = State(initialValue: member.isDeceased ?? false)
         if let dDateStr = member.deathDate, !dDateStr.isEmpty, let date = formatter.date(from: dDateStr) {
@@ -100,14 +105,17 @@ struct AdminMemberDetailSheet: View {
                         // Basic info section — الاسم (الكل يقدر يعدل)
                         basicInfoSection
 
-                        // Gender section (الكل يقدر يعدل)
-                        genderSection
+                        // TODO: gender — re-enable when needed
+                        // genderSection
 
                         // Birth date & health section (الكل يقدر يعدل)
                         datesSection
 
                         // Phone section (الكل يقدر يعدل)
                         phoneSection
+
+                        // المحطات الحياتية (الكل يقدر يعدل)
+                        bioStationsSection
 
                         // الأقسام التالية للمدير والمالك فقط — المراقب لا
                         if !isMonitorOnly {
@@ -154,6 +162,9 @@ struct AdminMemberDetailSheet: View {
                         .foregroundColor(DS.Color.textSecondary)
                 }
             }
+            .sheet(isPresented: $showBioEditor) {
+                BioStationsEditorSheet(stations: $bioStations)
+            }
             .sheet(isPresented: $showFatherPicker) {
                 FatherPickerSheet(selectedId: $selectedFatherId)
             }
@@ -164,15 +175,11 @@ struct AdminMemberDetailSheet: View {
                 AddSonByAdminSheet(parent: member, editingChild: child)
             }
             .onAppear { setupLocalChildren() }
-            .onChange(of: memberVM.allMembers) { _, _ in
+            .onChange(of: memberVM.allMembers) { _ in
                 setupLocalChildren()
             }
-            // تحديث محلي فوري بالشجرة عند تغيير حالة المتوفي أو التواريخ
-            .onChange(of: isDeceased) { _, _ in updateLocalMemberState() }
-            .onChange(of: hasDeathDate) { _, _ in updateLocalMemberState() }
-            .onChange(of: deathDate) { _, _ in updateLocalMemberState() }
-            .onChange(of: hasBirthDate) { _, _ in updateLocalMemberState() }
-            .onChange(of: birthDate) { _, _ in updateLocalMemberState() }
+            // Live preview محذوف بالكامل — كل تغيير في memberVM.allMembers يسبب re-evaluation
+            // للـ body و ScrollView يقفز. التحديث الفعلي بالشجرة يصير عند زر "حفظ" فقط.
             .alert(L10n.t("حذف نهائي", "Permanent Delete"), isPresented: $showDeleteConfirmation) {
                 Button(L10n.t("حذف", "Delete"), role: .destructive) {
                     Task {
@@ -215,7 +222,7 @@ struct AdminMemberDetailSheet: View {
                     }
                 }
             )
-            .onChange(of: localAvatarPreview) { _, newImage in
+            .onChange(of: localAvatarPreview) { newImage in
                 guard let newImage else { return }
                 Task {
                     await memberVM.uploadAvatar(image: newImage, for: member.id)
@@ -265,7 +272,7 @@ struct AdminMemberDetailSheet: View {
                     placeholder: L10n.t("الاسم الكامل", "Full Name"),
                     text: $fullName
                 )
-                .onChange(of: fullName) {
+                .onChange(of: fullName) { _ in
                     if fullName.count > 100 {
                         fullName = String(fullName.prefix(100))
                     }
@@ -279,7 +286,7 @@ struct AdminMemberDetailSheet: View {
                     placeholder: L10n.t("اسم العائلة", "Family Name"),
                     text: $familyName
                 )
-                .onChange(of: familyName) {
+                .onChange(of: familyName) { _ in
                     if familyName.count > 50 {
                         familyName = String(familyName.prefix(50))
                     }
@@ -345,6 +352,92 @@ struct AdminMemberDetailSheet: View {
             )
         }
         .buttonStyle(.plain)
+    }
+
+    // MARK: - Bio Stations Section
+    private var bioStationsSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            DSCard(padding: 0) {
+                HStack {
+                    DSSectionHeader(
+                        title: L10n.t("المحطات الحياتية", "Life Stations"),
+                        icon: "book.pages.fill",
+                        trailing: bioStations.isEmpty ? nil : "\(bioStations.count)",
+                        iconColor: DS.Color.accent
+                    )
+                    Spacer()
+                    Button {
+                        showBioEditor = true
+                    } label: {
+                        HStack(spacing: DS.Spacing.xs) {
+                            Image(systemName: bioStations.isEmpty ? "plus" : "pencil")
+                            Text(bioStations.isEmpty ? L10n.t("إضافة", "Add") : L10n.t("تعديل", "Edit"))
+                        }
+                        .font(DS.Font.caption2)
+                        .fontWeight(.bold)
+                        .foregroundColor(DS.Color.accent)
+                        .padding(.horizontal, DS.Spacing.sm)
+                        .padding(.vertical, DS.Spacing.xs)
+                        .background(DS.Color.accent.opacity(0.1))
+                        .clipShape(Capsule())
+                    }
+                    .padding(.trailing, DS.Spacing.md)
+                }
+
+                if bioStations.isEmpty {
+                    Button {
+                        showBioEditor = true
+                    } label: {
+                        HStack(spacing: DS.Spacing.sm) {
+                            Image(systemName: "plus.circle.fill")
+                                .font(DS.Font.scaled(16))
+                                .foregroundColor(DS.Color.accent)
+                            Text(L10n.t("إضافة محطة حياتية", "Add Life Station"))
+                                .font(DS.Font.callout)
+                                .foregroundColor(DS.Color.accent)
+                            Spacer()
+                        }
+                        .padding(.horizontal, DS.Spacing.md)
+                        .padding(.vertical, DS.Spacing.sm)
+                    }
+                    .buttonStyle(DSBoldButtonStyle())
+                } else {
+                    VStack(spacing: DS.Spacing.xs) {
+                        ForEach(bioStations) { station in
+                            HStack(alignment: .top, spacing: DS.Spacing.sm) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    if let year = station.year, !year.isEmpty {
+                                        Text(year)
+                                            .font(DS.Font.caption1)
+                                            .foregroundColor(DS.Color.accent)
+                                            .fontWeight(.bold)
+                                    }
+                                    Text(station.title)
+                                        .font(DS.Font.callout)
+                                        .fontWeight(.semibold)
+                                        .foregroundColor(DS.Color.textPrimary)
+                                    if !station.details.isEmpty {
+                                        Text(station.details)
+                                            .font(DS.Font.caption1)
+                                            .foregroundColor(DS.Color.textSecondary)
+                                            .lineLimit(2)
+                                    }
+                                }
+                                Spacer()
+                            }
+                            .padding(.horizontal, DS.Spacing.md)
+                            .padding(.vertical, DS.Spacing.xs)
+
+                            if station.id != bioStations.last?.id {
+                                DSDivider()
+                            }
+                        }
+                    }
+                    .padding(.bottom, DS.Spacing.xs)
+                }
+            }
+        }
+        .padding(.horizontal, DS.Spacing.lg)
     }
 
     // MARK: - Father Section
@@ -447,6 +540,7 @@ struct AdminMemberDetailSheet: View {
                                 .foregroundColor(DS.Color.error.opacity(0.7))
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel(L10n.t("مسح الرقم", "Clear phone"))
                     }
 
                     DSIcon("phone.fill", color: DS.Color.success, size: iconSm, iconSize: iconFontSm)
@@ -454,11 +548,11 @@ struct AdminMemberDetailSheet: View {
                 .padding(.horizontal, DS.Spacing.md)
                 .padding(.vertical, DS.Spacing.xs)
                 .environment(\.layoutDirection, .leftToRight)
-                .onChange(of: phoneNumber) { _, newValue in
+                .onChange(of: phoneNumber) { newValue in
                     phoneNumber = KuwaitPhone.userTypedDigits(newValue, maxDigits: selectedPhoneCountry.maxDigits)
                     checkPhoneDuplicate()
                 }
-                .onChange(of: selectedPhoneCountry) { _, newCountry in
+                .onChange(of: selectedPhoneCountry) { newCountry in
                     phoneNumber = KuwaitPhone.userTypedDigits(phoneNumber, maxDigits: newCountry.maxDigits)
                     checkPhoneDuplicate()
                 }
@@ -586,7 +680,7 @@ struct AdminMemberDetailSheet: View {
                             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
                             .overlay(
                                 RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                                    .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [5]))
+                                    .stroke(style: StrokeStyle(lineWidth: 1, dash: [5]))
                                     .foregroundColor(DS.Color.success.opacity(0.3))
                             )
                         }
@@ -747,6 +841,7 @@ struct AdminMemberDetailSheet: View {
                 }
                 .buttonStyle(PlainButtonStyle())
                 .offset(x: 6, y: -6)
+                .accessibilityLabel(L10n.t("حذف", "Delete"))
             }
         }
     }
@@ -777,24 +872,25 @@ struct AdminMemberDetailSheet: View {
                 }
                 .padding(.horizontal, DS.Spacing.md)
                 .padding(.vertical, DS.Spacing.xs)
-                .animation(.default, value: hasBirthDate)
 
                 if hasBirthDate {
                     DSDivider()
-                    HStack(spacing: DS.Spacing.sm) {
-                        DSIcon("calendar.badge.clock", color: DS.Color.accent, size: iconSm, iconSize: iconFontSm)
+                    VStack(spacing: DS.Spacing.xs) {
+                        HStack(spacing: DS.Spacing.sm) {
+                            DSIcon("calendar.badge.clock", color: DS.Color.accent, size: iconSm, iconSize: iconFontSm)
+                            Text(L10n.t("التاريخ المختار:", "Selected:"))
+                                .font(DS.Font.caption1)
+                                .foregroundColor(DS.Color.textSecondary)
+                            Spacer()
+                            Text(formattedDate(birthDate))
+                                .font(DS.Font.calloutBold)
+                                .foregroundColor(DS.Color.accent)
+                        }
+                        .padding(.horizontal, DS.Spacing.md)
 
-                        DatePicker("", selection: $birthDate, in: ...Date(), displayedComponents: .date)
-                            .labelsHidden()
-                            .environment(\.locale, Locale(identifier: L10n.isArabic ? "ar" : "en_US"))
-
-                        Spacer()
-
-                        Text(L10n.t("اختر التاريخ", "Pick Date"))
-                            .font(DS.Font.caption1)
-                            .foregroundColor(DS.Color.textSecondary)
+                        StableWheelDatePicker(selection: $birthDate, in: ...Date())
+                            .padding(.horizontal, DS.Spacing.md)
                     }
-                    .padding(.horizontal, DS.Spacing.md)
                     .padding(.vertical, DS.Spacing.xs)
                 }
 
@@ -816,7 +912,6 @@ struct AdminMemberDetailSheet: View {
                 }
                 .padding(.horizontal, DS.Spacing.md)
                 .padding(.vertical, DS.Spacing.xs)
-                .animation(.default, value: isDeceased)
 
                 if isDeceased {
                     DSDivider()
@@ -836,24 +931,25 @@ struct AdminMemberDetailSheet: View {
                     }
                     .padding(.horizontal, DS.Spacing.md)
                     .padding(.vertical, DS.Spacing.xs)
-                    .animation(.default, value: hasDeathDate)
 
                     if hasDeathDate {
                         DSDivider()
-                        HStack(spacing: DS.Spacing.sm) {
-                            DSIcon("calendar.badge.exclamationmark", color: DS.Color.error, size: iconSm, iconSize: iconFontSm)
+                        VStack(spacing: DS.Spacing.xs) {
+                            HStack(spacing: DS.Spacing.sm) {
+                                DSIcon("calendar.badge.exclamationmark", color: DS.Color.error, size: iconSm, iconSize: iconFontSm)
+                                Text(L10n.t("التاريخ المختار:", "Selected:"))
+                                    .font(DS.Font.caption1)
+                                    .foregroundColor(DS.Color.textSecondary)
+                                Spacer()
+                                Text(formattedDate(deathDate))
+                                    .font(DS.Font.calloutBold)
+                                    .foregroundColor(DS.Color.error)
+                            }
+                            .padding(.horizontal, DS.Spacing.md)
 
-                            DatePicker("", selection: $deathDate, in: ...Date(), displayedComponents: .date)
-                                .labelsHidden()
-                                .environment(\.locale, Locale(identifier: L10n.isArabic ? "ar" : "en_US"))
-
-                            Spacer()
-
-                            Text(L10n.t("تاريخ الوفاة", "Death Date"))
-                                .font(DS.Font.caption1)
-                                .foregroundColor(DS.Color.textSecondary)
+                            StableWheelDatePicker(selection: $deathDate, in: ...Date())
+                                .padding(.horizontal, DS.Spacing.md)
                         }
-                        .padding(.horizontal, DS.Spacing.md)
                         .padding(.vertical, DS.Spacing.xs)
                     }
                 }
@@ -915,23 +1011,16 @@ struct AdminMemberDetailSheet: View {
 
     // MARK: - Helpers
 
-    /// تحديث محلي فوري — يظهر بالشجرة والتفاصيل لحظياً (الحفظ الفعلي يصير عند زر الحفظ)
-    private func updateLocalMemberState() {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        withAnimation(DS.Anim.snappy) {
-            memberVM.updateMemberLocally(
-                memberId: member.id,
-                isDeceased: isDeceased,
-                birthDate: hasBirthDate ? formatter.string(from: birthDate) : nil,
-                deathDate: (isDeceased && hasDeathDate) ? formatter.string(from: deathDate) : nil
-            )
-        }
-    }
-
     private let iconSm: CGFloat = 30
     private let iconFontSm: CGFloat = 13
+
+    private func formattedDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: L10n.isArabic ? "ar" : "en_US")
+        formatter.dateStyle = .long
+        formatter.timeStyle = .none
+        return formatter.string(from: date)
+    }
 
     private func formField(icon: String, color: Color, placeholder: String, text: Binding<String>) -> some View {
         HStack(spacing: DS.Spacing.sm) {
@@ -947,9 +1036,31 @@ struct AdminMemberDetailSheet: View {
     }
 
     private func setupLocalChildren() {
-        localChildren = memberVM.allMembers
+        let newChildren = memberVM.allMembers
             .filter { $0.fatherId == member.id }
             .sorted(by: { $0.sortOrder < $1.sortOrder })
+
+        // Only update if children actually changed (by id + sortOrder).
+        // This prevents re-layout when we're just editing the CURRENT member's dates —
+        // Updating memberVM.allMembers fires this observer, but children list itself
+        // hasn't changed, so we skip the state update and avoid ScrollView auto-scroll.
+        let currentKeys = localChildren.map { "\($0.id.uuidString)-\($0.sortOrder)" }
+        let newKeys = newChildren.map { "\($0.id.uuidString)-\($0.sortOrder)" }
+        if currentKeys != newKeys {
+            localChildren = newChildren
+        }
+    }
+
+    private func updateLocalMemberState() {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        memberVM.updateMemberLocally(
+            memberId: member.id,
+            isDeceased: isDeceased,
+            birthDate: hasBirthDate ? formatter.string(from: birthDate) : nil,
+            deathDate: (isDeceased && hasDeathDate) ? formatter.string(from: deathDate) : nil
+        )
     }
 
     @State private var isSaving = false
@@ -992,6 +1103,7 @@ struct AdminMemberDetailSheet: View {
         let capturedDeathDate = (isDeceased && hasDeathDate) ? deathDate : nil
         let capturedChildren = localChildren
         let capturedGender = selectedGender
+        let capturedBioStations = bioStations.filter { !$0.title.isEmpty || !$0.details.isEmpty }
 
         let cleanFamily = familyName.trimmingCharacters(in: .whitespacesAndNewlines)
         var finalFullName = fullName.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1030,6 +1142,11 @@ struct AdminMemberDetailSheet: View {
             return false
         }()
         let genderChanged = capturedGender != (member.gender ?? "male")
+        let bioChanged: Bool = {
+            let oldKey = (member.bio ?? []).map { "\($0.year ?? "")|\($0.title)|\($0.details)" }.joined(separator: ";")
+            let newKey = capturedBioStations.map { "\($0.year ?? "")|\($0.title)|\($0.details)" }.joined(separator: ";")
+            return oldKey != newKey
+        }()
         let childrenOrderChanged: Bool = {
             let originalChildren = memberVM.allMembers
                 .filter { $0.fatherId == capturedMemberId }
@@ -1042,13 +1159,50 @@ struct AdminMemberDetailSheet: View {
         }()
 
         // If nothing changed, just dismiss
-        guard nameChanged || roleChanged || phoneChanged || fatherChanged || datesChanged || genderChanged || childrenOrderChanged else {
+        guard nameChanged || roleChanged || phoneChanged || fatherChanged || datesChanged || genderChanged || childrenOrderChanged || bioChanged else {
             dismiss()
             return
         }
 
-        // Save then dismiss after completion
-        isSaving = true
+        // ═══════════════════════════════════════════════════════════════
+        // 1. تحديث محلي فوري لكل البيانات — الشجرة والتفاصيل تتحدّث مباشرة
+        // ═══════════════════════════════════════════════════════════════
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+
+        if var updatedMember = memberVM.member(byId: capturedMemberId) {
+            if nameChanged { updatedMember.fullName = capturedFullName }
+            if roleChanged { updatedMember.role = capturedRole }
+            if phoneChanged {
+                if capturedPhone.isEmpty {
+                    updatedMember.phoneNumber = nil
+                } else {
+                    let normalized = KuwaitPhone.normalizedForStorage(
+                        country: capturedPhoneCountry,
+                        rawLocalDigits: capturedPhone
+                    )
+                    updatedMember.phoneNumber = normalized ?? capturedPhone
+                }
+            }
+            if fatherChanged { updatedMember.fatherId = capturedFatherId }
+            if genderChanged { updatedMember.gender = capturedGender }
+            if datesChanged {
+                updatedMember.isDeceased = capturedIsDeceased
+                updatedMember.birthDate = capturedBirthDate.map { formatter.string(from: $0) }
+                updatedMember.deathDate = capturedDeathDate.map { formatter.string(from: $0) }
+            }
+            memberVM.upsertMemberLocally(updatedMember)
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // 2. إغلاق الشاشة فوراً — المستخدم يرجع للشجرة بدون انتظار
+        // ═══════════════════════════════════════════════════════════════
+        dismiss()
+
+        // ═══════════════════════════════════════════════════════════════
+        // 3. حفظ السيرفر في الخلفية (المستخدم ما ينتظر)
+        // ═══════════════════════════════════════════════════════════════
         Task {
             if nameChanged {
                 await memberVM.updateMemberName(memberId: capturedMemberId, fullName: capturedFullName)
@@ -1092,6 +1246,9 @@ struct AdminMemberDetailSheet: View {
                     deathDate: capturedDeathDate
                 )
             }
+            if bioChanged {
+                await memberVM.updateMemberBio(memberId: capturedMemberId, bio: capturedBioStations)
+            }
             if childrenOrderChanged && !capturedChildren.isEmpty {
                 var updatedChildren = capturedChildren
                 for i in 0..<updatedChildren.count {
@@ -1111,6 +1268,7 @@ struct AdminMemberDetailSheet: View {
             if genderChanged { changedFields.append(L10n.t("الجنس", "Gender")) }
             if datesChanged { changedFields.append(L10n.t("التواريخ", "Dates")) }
             if childrenOrderChanged { changedFields.append(L10n.t("ترتيب الأبناء", "Children order")) }
+            if bioChanged { changedFields.append(L10n.t("المحطات الحياتية", "Life Stations")) }
 
             if !changedFields.isEmpty {
                 let fieldsList = changedFields.joined(separator: "، ")
@@ -1125,11 +1283,16 @@ struct AdminMemberDetailSheet: View {
                 Log.info("[Admin] \(adminName) عدّل بيانات \(memberName): \(fieldsList)")
             }
 
-            // إعادة تحميل البيانات من السيرفر عشان الشجرة تتحدث
-            await memberVM.fetchAllMembers(force: true)
+            // مزامنة العضو الواحد فقط من السيرفر (بدل جلب 1723 عضو)
+            // لو فيه اختلاف بين التحديث المحلي والسيرفر، سيُصحح هنا.
+            await memberVM.fetchSingleMember(id: capturedMemberId)
 
-            isSaving = false
-            dismiss()
+            // لو ترتيب الأبناء اتغيّر، نجلبهم كمان
+            if childrenOrderChanged {
+                for child in capturedChildren {
+                    await memberVM.fetchSingleMember(id: child.id)
+                }
+            }
         }
     }
 }

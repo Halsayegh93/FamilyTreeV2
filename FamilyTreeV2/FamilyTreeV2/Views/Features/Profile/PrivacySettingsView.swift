@@ -52,7 +52,7 @@ struct PrivacySettingsView: View {
             isBirthDateHidden = authVM.currentUser?.isBirthDateHidden ?? false
             badgeEnabled = authVM.currentUser?.badgeEnabled ?? true
         }
-        .onChange(of: notificationsEnabled) { _, newValue in
+        .onChange(of: notificationsEnabled) { newValue in
             Task {
                 if newValue {
                     // تحقق من إذن النظام — إذا مرفوض وديه للإعدادات
@@ -80,7 +80,7 @@ struct PrivacySettingsView: View {
                 }
             }
         }
-        .onChange(of: badgeEnabled) { _, newValue in
+        .onChange(of: badgeEnabled) { newValue in
             Task {
                 await memberVM.updateBadgeEnabled(newValue)
                 if !newValue {
@@ -91,7 +91,7 @@ struct PrivacySettingsView: View {
                 }
             }
         }
-        .onChange(of: isPhoneHidden) { _, newValue in
+        .onChange(of: isPhoneHidden) { newValue in
             Task {
                 let success = await memberVM.updatePhoneHidden(newValue)
                 if !success {
@@ -100,7 +100,7 @@ struct PrivacySettingsView: View {
                 }
             }
         }
-        .onChange(of: isBirthDateHidden) { _, newValue in
+        .onChange(of: isBirthDateHidden) { newValue in
             Task {
                 let success = await memberVM.updateBirthDateHidden(newValue)
                 if !success {

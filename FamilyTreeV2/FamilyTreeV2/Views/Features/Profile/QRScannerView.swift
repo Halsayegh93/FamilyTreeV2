@@ -67,7 +67,7 @@ struct QRScannerView: View {
                 .foregroundColor(.white)
                 .padding(.horizontal, DS.Spacing.xl)
                 .padding(.vertical, DS.Spacing.md)
-                .background(.ultraThinMaterial)
+                .background(DS.Color.textPrimary.opacity(0.55))
                 .clipShape(Capsule())
                 .padding(.bottom, DS.Spacing.xxxxl)
         }

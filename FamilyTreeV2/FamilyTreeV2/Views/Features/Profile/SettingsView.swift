@@ -4,6 +4,7 @@ struct SettingsView: View {
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var notificationVM: NotificationViewModel
+    @EnvironmentObject var appSettingsVM: AppSettingsViewModel
 
     @ObservedObject var langManager = LanguageManager.shared
     @AppStorage("appearanceMode") private var appearanceMode: String = "system"
@@ -137,13 +138,36 @@ struct SettingsView: View {
                             }
                         .padding(.horizontal, DS.Spacing.lg)
 
-                        // MARK: - Danger Zone (Delete Account)
+                        // MARK: - Danger Zone (Sign Out + Delete Account)
                             DSCard(padding: 0) {
                                 DSSectionHeader(
                                     title: t("إدارة الحساب", "Account Management"),
                                     icon: "exclamationmark.triangle.fill",
                                     iconColor: DS.Color.error
                                 )
+
+                                // Sign Out
+                                Button(action: { Task { await authVM.signOut() } }) {
+                                    HStack(spacing: DS.Spacing.md) {
+                                        DSIcon("rectangle.portrait.and.arrow.right", color: DS.Color.warning)
+
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(t("تسجيل الخروج", "Sign Out"))
+                                                .font(DS.Font.calloutBold)
+                                                .foregroundColor(DS.Color.textPrimary)
+                                            Text(t("الخروج من الحساب على هذا الجهاز", "Sign out of your account on this device"))
+                                                .font(DS.Font.caption1)
+                                                .foregroundColor(DS.Color.textSecondary)
+                                        }
+
+                                        Spacer()
+                                    }
+                                    .padding(.horizontal, DS.Spacing.lg)
+                                    .padding(.vertical, DS.Spacing.md)
+                                }
+                                .buttonStyle(DSBoldButtonStyle())
+
+                                DSDivider()
 
                                 Button(action: { showDeleteConfirmation = true }) {
                                     HStack(spacing: DS.Spacing.md) {
@@ -205,8 +229,8 @@ struct SettingsView: View {
             }
         } message: {
             Text(t(
-                "هل أنت متأكد؟ سيتم حذف حسابك وجميع بياناتك نهائياً ولا يمكن التراجع عن هذا الإجراء.",
-                "Are you sure? Your account and all data will be permanently deleted. This action cannot be undone."
+                "سيتم حذف:\n• حسابك وبيانات تسجيل الدخول\n• صورتك الشخصية\n• محطاتك الحياتية\n\nستبقى بياناتك في شجرة العائلة. لا يمكن التراجع عن هذا الإجراء.",
+                "This will permanently delete:\n• Your account & login credentials\n• Your profile photo\n• Your life stations\n\nYour family tree data will remain. This cannot be undone."
             ))
         }
         .alert(
@@ -228,6 +252,7 @@ struct SettingsView: View {
         }
         .sheet(isPresented: $showLinkedDevices) {
             LinkedDevicesSettingsSheet()
+                .environmentObject(appSettingsVM)
         }
         .task {
             await notificationVM.fetchLinkedDevices()
@@ -591,7 +616,9 @@ struct PrivacyPolicyView: View {
 struct LinkedDevicesSettingsSheet: View {
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var notificationVM: NotificationViewModel
+    @EnvironmentObject var appSettingsVM: AppSettingsViewModel
 
+    private var maxDevices: Int { appSettingsVM.settings.maxDevicesPerUser }
     private var isArabic: Bool { LanguageManager.shared.selectedLanguage == "ar" }
     private func t(_ ar: String, _ en: String) -> String { L10n.t(ar, en) }
 
@@ -626,8 +653,8 @@ struct LinkedDevicesSettingsSheet: View {
                                         .font(DS.Font.caption2)
                                         .foregroundColor(DS.Color.textTertiary)
                                     Text(t(
-                                        "\(notificationVM.linkedDevices.count) من \(AuthViewModel.maxDevicesPerAccount) أجهزة",
-                                        "\(notificationVM.linkedDevices.count) of \(AuthViewModel.maxDevicesPerAccount) devices"
+                                        "\(notificationVM.linkedDevices.count) من \(maxDevices) أجهزة",
+                                        "\(notificationVM.linkedDevices.count) of \(maxDevices) devices"
                                     ))
                                         .font(DS.Font.caption1)
                                         .fontWeight(.bold)

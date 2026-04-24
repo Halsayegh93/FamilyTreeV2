@@ -114,8 +114,8 @@ struct StoryViewerView: View {
             recordAndFetchViews()
         }
         .onDisappear { stopTimer() }
-        .onChange(of: currentStoryIndex) { recordAndFetchViews() }
-        .onChange(of: currentGroupIndex) { recordAndFetchViews() }
+        .onChange(of: currentStoryIndex) { _ in recordAndFetchViews() }
+        .onChange(of: currentGroupIndex) { _ in recordAndFetchViews() }
     }
 
     // MARK: - Story Image (مربعة)
@@ -230,6 +230,7 @@ struct StoryViewerView: View {
                         .background(DS.Color.overlayIcon)
                         .clipShape(Circle())
                 }
+                .accessibilityLabel(L10n.t("حذف", "Delete"))
             }
 
             Button { closeViewer() } label: {
@@ -240,6 +241,7 @@ struct StoryViewerView: View {
                     .background(DS.Color.overlayIcon)
                     .clipShape(Circle())
             }
+            .accessibilityLabel(L10n.t("إغلاق", "Close"))
         }
     }
 

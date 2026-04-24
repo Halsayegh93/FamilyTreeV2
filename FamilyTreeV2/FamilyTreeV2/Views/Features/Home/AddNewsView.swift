@@ -58,7 +58,7 @@ struct AddNewsView: View {
                 .padding(.top, DS.Spacing.sm)
                 .padding(.bottom, DS.Spacing.xxxl)
             }
-            .background(.ultraThinMaterial)
+            .background(DS.Color.surfaceElevated)
             .navigationTitle(L10n.t("خبر جديد", "New Post"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -72,7 +72,7 @@ struct AddNewsView: View {
                 Button(L10n.t("حسناً", "OK"), role: .cancel) {}
             } message: { Text(newsVM.newsPostErrorMessage ?? L10n.t("حدث خطأ أثناء نشر الخبر.", "An error occurred.")) }
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-            .onChange(of: pickerItems) { _, items in
+            .onChange(of: pickerItems) { items in
                 guard !items.isEmpty else { return }
                 loadImages(from: items)
             }
