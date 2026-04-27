@@ -5,6 +5,7 @@ import PhotosUI
 struct AddNewsView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var newsVM: NewsViewModel
+    @EnvironmentObject var appSettingsVM: AppSettingsViewModel
     @Environment(\.dismiss) var dismiss
     @State private var content = ""
     @State private var selectedType = "خبر"
@@ -30,6 +31,11 @@ struct AddNewsView: View {
     }
 
     private var isPoll: Bool { selectedType == "تصويت" }
+
+    private var availableTypes: [String] {
+        let pollsOn = appSettingsVM.settings.pollsEnabled ?? true
+        return pollsOn ? NewsTypeHelper.mainTypes : NewsTypeHelper.mainTypes.filter { $0 != "تصويت" }
+    }
 
     private var canSubmit: Bool {
         if isPoll {
@@ -91,7 +97,7 @@ struct AddNewsView: View {
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: DS.Spacing.sm) {
-                    ForEach(NewsTypeHelper.mainTypes, id: \.self) { type in
+                    ForEach(availableTypes, id: \.self) { type in
                         let isSelected = selectedType == type
                         let typeColor = NewsTypeHelper.color(for: type)
 

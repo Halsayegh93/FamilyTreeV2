@@ -55,7 +55,7 @@ class ProjectsViewModel: ObservableObject {
     func addProject(ownerId: UUID, ownerName: String, title: String,
                     description: String?, logoUrl: String?,
                     websiteUrl: String?, instagramUrl: String?,
-                    twitterUrl: String?, tiktokUrl: String?,
+                    twitterUrl: String?,
                     snapchatUrl: String?, whatsappNumber: String?,
                     phoneNumber: String?) async -> Bool {
         isLoading = true
@@ -74,7 +74,6 @@ class ProjectsViewModel: ObservableObject {
             if let websiteUrl, !websiteUrl.isEmpty { payload["website_url"] = AnyEncodable(websiteUrl) }
             if let instagramUrl, !instagramUrl.isEmpty { payload["instagram_url"] = AnyEncodable(instagramUrl) }
             if let twitterUrl, !twitterUrl.isEmpty { payload["twitter_url"] = AnyEncodable(twitterUrl) }
-            if let tiktokUrl, !tiktokUrl.isEmpty { payload["tiktok_url"] = AnyEncodable(tiktokUrl) }
             if let snapchatUrl, !snapchatUrl.isEmpty { payload["snapchat_url"] = AnyEncodable(snapchatUrl) }
             if let whatsappNumber, !whatsappNumber.isEmpty { payload["whatsapp_number"] = AnyEncodable(whatsappNumber) }
             if let phoneNumber, !phoneNumber.isEmpty { payload["phone_number"] = AnyEncodable(phoneNumber) }
@@ -186,7 +185,7 @@ class ProjectsViewModel: ObservableObject {
     func updateProject(id: UUID, title: String, description: String?,
                        logoUrl: String?, websiteUrl: String?,
                        instagramUrl: String?, twitterUrl: String?,
-                       tiktokUrl: String?, snapchatUrl: String?,
+                       snapchatUrl: String?,
                        whatsappNumber: String?, phoneNumber: String?) async -> Bool {
         isLoading = true
         errorMessage = nil
@@ -200,7 +199,6 @@ class ProjectsViewModel: ObservableObject {
                     "website_url": websiteUrl ?? "",
                     "instagram_url": instagramUrl ?? "",
                     "twitter_url": twitterUrl ?? "",
-                    "tiktok_url": tiktokUrl ?? "",
                     "snapchat_url": snapchatUrl ?? "",
                     "whatsapp_number": whatsappNumber ?? "",
                     "phone_number": phoneNumber ?? ""

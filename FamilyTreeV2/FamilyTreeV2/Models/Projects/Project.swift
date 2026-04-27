@@ -10,7 +10,6 @@ struct Project: Identifiable, Codable {
     var websiteUrl: String?
     var instagramUrl: String?
     var twitterUrl: String?
-    var tiktokUrl: String?
     var snapchatUrl: String?
     var whatsappNumber: String?
     var phoneNumber: String?
@@ -28,7 +27,6 @@ struct Project: Identifiable, Codable {
         case websiteUrl = "website_url"
         case instagramUrl = "instagram_url"
         case twitterUrl = "twitter_url"
-        case tiktokUrl = "tiktok_url"
         case snapchatUrl = "snapchat_url"
         case whatsappNumber = "whatsapp_number"
         case phoneNumber = "phone_number"
@@ -48,7 +46,6 @@ struct Project: Identifiable, Codable {
         websiteUrl = try container.decodeIfPresent(String.self, forKey: .websiteUrl)
         instagramUrl = try container.decodeIfPresent(String.self, forKey: .instagramUrl)
         twitterUrl = try container.decodeIfPresent(String.self, forKey: .twitterUrl)
-        tiktokUrl = try container.decodeIfPresent(String.self, forKey: .tiktokUrl)
         snapchatUrl = try container.decodeIfPresent(String.self, forKey: .snapchatUrl)
         whatsappNumber = try container.decodeIfPresent(String.self, forKey: .whatsappNumber)
         phoneNumber = try container.decodeIfPresent(String.self, forKey: .phoneNumber)
@@ -60,7 +57,7 @@ struct Project: Identifiable, Codable {
     init(id: UUID = UUID(), ownerId: UUID, ownerName: String, title: String,
          description: String? = nil, logoUrl: String? = nil,
          websiteUrl: String? = nil, instagramUrl: String? = nil,
-         twitterUrl: String? = nil, tiktokUrl: String? = nil,
+         twitterUrl: String? = nil,
          snapchatUrl: String? = nil, whatsappNumber: String? = nil,
          phoneNumber: String? = nil, approvalStatus: String = "approved",
          approvedBy: UUID? = nil, createdAt: String? = nil) {
@@ -73,7 +70,6 @@ struct Project: Identifiable, Codable {
         self.websiteUrl = websiteUrl
         self.instagramUrl = instagramUrl
         self.twitterUrl = twitterUrl
-        self.tiktokUrl = tiktokUrl
         self.snapchatUrl = snapchatUrl
         self.whatsappNumber = whatsappNumber
         self.phoneNumber = phoneNumber
@@ -84,7 +80,7 @@ struct Project: Identifiable, Codable {
 
     /// Whether this project has any social media links
     var hasSocialLinks: Bool {
-        instagramUrl != nil || twitterUrl != nil || tiktokUrl != nil ||
+        instagramUrl != nil || twitterUrl != nil ||
         snapchatUrl != nil || whatsappNumber != nil || websiteUrl != nil ||
         phoneNumber != nil
     }

@@ -189,7 +189,7 @@ struct AdminDashboardView: View {
                                             DSDivider()
                                             NavigationLink(destination: AdminSecuritySettingsView()) {
                                                 DSActionRow(
-                                                    title: L10n.t("الأمان والإعدادات", "Security & Settings"),
+                                                    title: L10n.t("إعدادات النظام", "System Settings"),
                                                     subtitle: L10n.t("الأجهزة والأمان والإعدادات", "Devices & security"),
                                                     icon: "lock.shield.fill",
                                                     color: DS.Color.primary,

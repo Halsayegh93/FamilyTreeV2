@@ -55,11 +55,6 @@ struct LoginView: View {
                 // مؤشر التقدم — خطوة ١ / خطوة ٢
                 HStack(spacing: DS.Spacing.sm) {
                     stepDot(filled: true)
-                    Rectangle()
-                        .fill(authVM.isOtpSent ? DS.Color.primary : DS.Color.textTertiary.opacity(0.3))
-                        .frame(width: 28, height: 2)
-                        .clipShape(Capsule())
-                        .animation(DS.Anim.smooth, value: authVM.isOtpSent)
                     stepDot(filled: authVM.isOtpSent)
                 }
                 .padding(.bottom, DS.Spacing.sm)

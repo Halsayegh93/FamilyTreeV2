@@ -249,7 +249,6 @@ struct AddProjectView: View {
     @State private var websiteUrl = ""
     @State private var instagramUrl = ""
     @State private var twitterUrl = ""
-    @State private var tiktokUrl = ""
     @State private var whatsappNumber = ""
     @State private var phoneNumber = ""
     @State private var logoImage: UIImage? = nil
@@ -357,7 +356,6 @@ struct AddProjectView: View {
                         socialTextField(platform: .website, placeholder: "https://...", text: $websiteUrl)
                         socialTextField(platform: .instagram, placeholder: "@username", text: $instagramUrl)
                         socialTextField(platform: .twitter, placeholder: "@username", text: $twitterUrl)
-                        socialTextField(platform: .tiktok, placeholder: "@username", text: $tiktokUrl)
                         socialTextField(platform: .whatsapp, placeholder: "+965...", text: $whatsappNumber)
                         socialTextField(platform: .phone, placeholder: "+965...", text: $phoneNumber)
                         
@@ -388,7 +386,7 @@ struct AddProjectView: View {
     
     private func socialTextField(platform: SocialPlatform, placeholder: String, text: Binding<String>) -> some View {
         HStack(spacing: DS.Spacing.md) {
-            platform.iconView(size: 38)
+            platform.iconView(size: 28)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(platform.label)
@@ -548,7 +546,6 @@ struct AddProjectView: View {
             websiteUrl: websiteUrl.isEmpty ? nil : websiteUrl,
             instagramUrl: instagramUrl.isEmpty ? nil : instagramUrl,
             twitterUrl: twitterUrl.isEmpty ? nil : twitterUrl,
-            tiktokUrl: tiktokUrl.isEmpty ? nil : tiktokUrl,
             snapchatUrl: nil,
             whatsappNumber: whatsappNumber.isEmpty ? nil : whatsappNumber,
             phoneNumber: phoneNumber.isEmpty ? nil : phoneNumber

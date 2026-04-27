@@ -28,6 +28,9 @@ struct AdminAppSettingsView: View {
                     // الأخبار والمحتوى
                     contentSection
 
+                    // الميزات
+                    featuresSection
+
                     // عداد التعديل
                     cooldownSection
 
@@ -164,6 +167,73 @@ struct AdminAppSettingsView: View {
                 subtitle: L10n.t("يتطلب موافقة المدير قبل نشر الأخبار", "Require admin approval"),
                 isOn: appSettingsVM.settings.newsRequiresApproval,
                 key: "news_requires_approval"
+            )
+
+            DSDivider()
+
+            // الاستطلاعات
+            settingToggle(
+                icon: "chart.bar.fill",
+                color: DS.Color.info,
+                title: L10n.t("الاستطلاعات", "Polls"),
+                subtitle: L10n.t("السماح بإضافة استطلاعات في الأخبار", "Allow polls in news posts"),
+                isOn: appSettingsVM.settings.pollsEnabled ?? true,
+                key: "polls_enabled"
+            )
+
+            DSDivider()
+
+            // القصص
+            settingToggle(
+                icon: "book.pages.fill",
+                color: DS.Color.secondary,
+                title: L10n.t("قصص العائلة", "Family Stories"),
+                subtitle: L10n.t("السماح لأفراد العائلة بنشر القصص", "Allow family members to post stories"),
+                isOn: appSettingsVM.settings.storiesEnabled ?? true,
+                key: "stories_enabled"
+            )
+        }
+        .padding(.horizontal, DS.Spacing.lg)
+    }
+
+    // MARK: - Features
+    private var featuresSection: some View {
+        DSCard(padding: 0) {
+            DSSectionHeader(
+                title: L10n.t("الميزات", "Features"),
+                icon: "star.fill",
+                iconColor: DS.Color.warning
+            )
+
+            settingToggle(
+                icon: "map.fill",
+                color: DS.Color.primary,
+                title: L10n.t("الديوانيات", "Diwaniyas"),
+                subtitle: L10n.t("إظهار تاب الديوانيات للأعضاء", "Show Diwaniyas tab to members"),
+                isOn: appSettingsVM.settings.diwaniyasEnabled ?? true,
+                key: "diwaniyas_enabled"
+            )
+
+            DSDivider()
+
+            settingToggle(
+                icon: "briefcase.fill",
+                color: DS.Color.accent,
+                title: L10n.t("مشاريع العائلة", "Family Projects"),
+                subtitle: L10n.t("إظهار قسم المشاريع في الرئيسية", "Show Projects section on Home"),
+                isOn: appSettingsVM.settings.projectsEnabled ?? true,
+                key: "projects_enabled"
+            )
+
+            DSDivider()
+
+            settingToggle(
+                icon: "photo.on.rectangle.angled.fill",
+                color: DS.Color.info,
+                title: L10n.t("ألبوم الصور", "Photo Albums"),
+                subtitle: L10n.t("إظهار قسم الصور في الرئيسية", "Show Photos section on Home"),
+                isOn: appSettingsVM.settings.albumsEnabled ?? true,
+                key: "albums_enabled"
             )
         }
         .padding(.horizontal, DS.Spacing.lg)

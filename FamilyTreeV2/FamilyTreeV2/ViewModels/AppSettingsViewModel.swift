@@ -11,6 +11,11 @@ struct AppSettings: Codable {
     var allowNewRegistrations: Bool
     var maintenanceMode: Bool
     var maxDevicesPerUser: Int
+    var pollsEnabled: Bool?
+    var storiesEnabled: Bool?
+    var diwaniyasEnabled: Bool?
+    var projectsEnabled: Bool?
+    var albumsEnabled: Bool?
     var updatedAt: String?
     var updatedBy: UUID?
 
@@ -20,6 +25,11 @@ struct AppSettings: Codable {
         case allowNewRegistrations = "allow_new_registrations"
         case maintenanceMode = "maintenance_mode"
         case maxDevicesPerUser = "max_devices_per_user"
+        case pollsEnabled = "polls_enabled"
+        case storiesEnabled = "stories_enabled"
+        case diwaniyasEnabled = "diwaniyas_enabled"
+        case projectsEnabled = "projects_enabled"
+        case albumsEnabled = "albums_enabled"
         case updatedAt = "updated_at"
         case updatedBy = "updated_by"
     }
@@ -39,7 +49,12 @@ class AppSettingsViewModel: ObservableObject {
         newsRequiresApproval: true,
         allowNewRegistrations: true,
         maintenanceMode: false,
-        maxDevicesPerUser: 3
+        maxDevicesPerUser: 3,
+        pollsEnabled: true,
+        storiesEnabled: true,
+        diwaniyasEnabled: true,
+        projectsEnabled: true,
+        albumsEnabled: true
     )
     @Published var isLoading = false
     @Published var errorMessage: String?
@@ -112,6 +127,11 @@ class AppSettingsViewModel: ObservableObject {
                 "allow_new_registrations": AnyEncodable(true),
                 "maintenance_mode": AnyEncodable(false),
                 "max_devices_per_user": AnyEncodable(3),
+                "polls_enabled": AnyEncodable(true),
+                "stories_enabled": AnyEncodable(true),
+                "diwaniyas_enabled": AnyEncodable(true),
+                "projects_enabled": AnyEncodable(true),
+                "albums_enabled": AnyEncodable(true),
                 "updated_at": AnyEncodable(DateHelper.now),
                 "updated_by": AnyEncodable(updatedBy?.uuidString)
             ]

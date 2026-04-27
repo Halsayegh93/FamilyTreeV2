@@ -2,14 +2,13 @@ import SwiftUI
 
 // MARK: - Social Platform Brand Icons
 enum SocialPlatform {
-    case website, instagram, twitter, tiktok, snapchat, whatsapp, phone
+    case website, instagram, twitter, snapchat, whatsapp, phone
 
     var label: String {
         switch self {
         case .website: return L10n.t("الموقع الإلكتروني", "Website")
         case .instagram: return "Instagram"
         case .twitter: return "X"
-        case .tiktok: return "TikTok"
         case .snapchat: return "Snapchat"
         case .whatsapp: return "WhatsApp"
         case .phone: return L10n.t("الهاتف", "Phone")
@@ -21,7 +20,6 @@ enum SocialPlatform {
         case .website: return DS.Color.primary
         case .instagram: return Color(hex: "#E1306C")
         case .twitter: return Color(hex: "#000000")
-        case .tiktok: return Color(hex: "#010101")
         case .snapchat: return Color(hex: "#FFFC00")
         case .whatsapp: return Color(hex: "#25D366")
         case .phone: return DS.Color.success
@@ -31,7 +29,7 @@ enum SocialPlatform {
     var bgColor: Color {
         switch self {
         case .snapchat: return Color(hex: "#FFFC00")
-        case .twitter, .tiktok: return Color(hex: "#000000")
+        case .twitter: return Color(hex: "#000000")
         case .instagram: return Color(hex: "#E1306C")
         case .whatsapp: return Color(hex: "#25D366")
         case .website: return DS.Color.primary
@@ -61,10 +59,6 @@ enum SocialPlatform {
                 Text("𝕏")
                     .font(DS.Font.scaled(iconSize + 2, weight: .black))
                     .foregroundColor(DS.Color.primary)
-            case .tiktok:
-                Image(systemName: "music.note")
-                    .font(DS.Font.scaled(iconSize, weight: .bold))
-                    .foregroundColor(DS.Color.primary)
             case .snapchat:
                 Image(systemName: "ghost.fill")
                     .font(DS.Font.scaled(iconSize, weight: .bold))
@@ -87,7 +81,6 @@ enum SocialPlatform {
         case .website: return "globe"
         case .instagram: return "camera.fill"
         case .twitter: return "xmark"
-        case .tiktok: return "music.note"
         case .snapchat: return "ghost.fill"
         case .whatsapp: return "phone.bubble.fill"
         case .phone: return "phone.fill"
@@ -307,9 +300,6 @@ struct ProjectDetailView: View {
                 if let url = project.twitterUrl, !url.isEmpty {
                     socialLinkRow(platform: .twitter, value: url)
                 }
-                if let url = project.tiktokUrl, !url.isEmpty {
-                    socialLinkRow(platform: .tiktok, value: url)
-                }
                 if let number = project.whatsappNumber, !number.isEmpty {
                     socialLinkRow(platform: .whatsapp, value: number)
                 }
@@ -399,14 +389,6 @@ struct ProjectDetailView: View {
                 openURL(url)
             }
             
-        case .tiktok:
-            let username = trimmed.hasPrefix("@") ? trimmed : "@\(trimmed)"
-            if trimmed.contains("tiktok.com") || trimmed.hasPrefix("http") {
-                openWebURL(trimmed)
-            } else if let url = URL(string: "https://tiktok.com/\(username)") {
-                openURL(url)
-            }
-            
         case .snapchat:
             let username = trimmed.replacingOccurrences(of: "@", with: "")
             if trimmed.contains("snapchat.com") || trimmed.hasPrefix("http") {
@@ -444,7 +426,6 @@ struct EditProjectView: View {
     @State private var websiteUrl: String
     @State private var instagramUrl: String
     @State private var twitterUrl: String
-    @State private var tiktokUrl: String
     @State private var whatsappNumber: String
     @State private var phoneNumber: String
     @State private var logoImage: UIImage? = nil
@@ -458,7 +439,6 @@ struct EditProjectView: View {
         _websiteUrl = State(initialValue: project.websiteUrl ?? "")
         _instagramUrl = State(initialValue: project.instagramUrl ?? "")
         _twitterUrl = State(initialValue: project.twitterUrl ?? "")
-        _tiktokUrl = State(initialValue: project.tiktokUrl ?? "")
         _whatsappNumber = State(initialValue: project.whatsappNumber ?? "")
         _phoneNumber = State(initialValue: project.phoneNumber ?? "")
     }
@@ -511,7 +491,6 @@ struct EditProjectView: View {
                         socialTextField(platform: .website, placeholder: "https://...", text: $websiteUrl)
                         socialTextField(platform: .instagram, placeholder: "@username", text: $instagramUrl)
                         socialTextField(platform: .twitter, placeholder: "@username", text: $twitterUrl)
-                        socialTextField(platform: .tiktok, placeholder: "@username", text: $tiktokUrl)
                         socialTextField(platform: .whatsapp, placeholder: "+965...", text: $whatsappNumber)
                         socialTextField(platform: .phone, placeholder: "+965...", text: $phoneNumber)
                         
@@ -542,7 +521,7 @@ struct EditProjectView: View {
     
     private func socialTextField(platform: SocialPlatform, placeholder: String, text: Binding<String>) -> some View {
         HStack(spacing: DS.Spacing.md) {
-            platform.iconView(size: 38)
+            platform.iconView(size: 28)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(platform.label)
@@ -582,7 +561,6 @@ struct EditProjectView: View {
             websiteUrl: websiteUrl.isEmpty ? nil : websiteUrl,
             instagramUrl: instagramUrl.isEmpty ? nil : instagramUrl,
             twitterUrl: twitterUrl.isEmpty ? nil : twitterUrl,
-            tiktokUrl: tiktokUrl.isEmpty ? nil : tiktokUrl,
             snapchatUrl: nil,
             whatsappNumber: whatsappNumber.isEmpty ? nil : whatsappNumber,
             phoneNumber: phoneNumber.isEmpty ? nil : phoneNumber

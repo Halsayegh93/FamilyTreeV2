@@ -175,15 +175,15 @@ USING (
   OR public.current_user_role() IN ('supervisor', 'monitor', 'admin', 'owner')
 );
 
--- === stories ===
-DROP POLICY IF EXISTS "stories_update_moderator" ON public.stories;
-CREATE POLICY "stories_update_moderator" ON public.stories
+-- === family_stories ===
+DROP POLICY IF EXISTS "stories_update_moderator" ON public.family_stories;
+CREATE POLICY "stories_update_moderator" ON public.family_stories
 FOR UPDATE
 USING (
-  author_id = auth.uid()
+  created_by = auth.uid()
   OR public.current_user_role() IN ('supervisor', 'monitor', 'admin', 'owner')
 )
 WITH CHECK (
-  author_id = auth.uid()
+  created_by = auth.uid()
   OR public.current_user_role() IN ('supervisor', 'monitor', 'admin', 'owner')
 );

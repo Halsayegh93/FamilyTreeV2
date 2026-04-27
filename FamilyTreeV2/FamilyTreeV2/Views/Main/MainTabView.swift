@@ -3,6 +3,7 @@ import UserNotifications
 
 struct MainTabView: View {
     @EnvironmentObject var authVM: AuthViewModel
+    @EnvironmentObject var appSettingsVM: AppSettingsViewModel
     @ObservedObject private var langManager = LanguageManager.shared
     @State private var selectedTab = 0
     @State private var showNotificationAlert = false
@@ -41,12 +42,14 @@ struct MainTabView: View {
                 }
                 .tag(1)
 
-            DiwaniyasView(selectedTab: $selectedTab)
-                .tabItem {
-                    Image(systemName: selectedTab == 2 ? "map.fill" : "map")
-                    Text(L10n.t("الديوانيات", "Diwaniyas"))
-                }
-                .tag(2)
+            if appSettingsVM.settings.diwaniyasEnabled ?? true {
+                DiwaniyasView(selectedTab: $selectedTab)
+                    .tabItem {
+                        Image(systemName: selectedTab == 2 ? "map.fill" : "map")
+                        Text(L10n.t("الديوانيات", "Diwaniyas"))
+                    }
+                    .tag(2)
+            }
 
             ProfileView(selectedTab: $selectedTab)
                 .tabItem {

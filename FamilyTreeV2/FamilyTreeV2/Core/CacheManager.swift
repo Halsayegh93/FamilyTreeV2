@@ -2,9 +2,10 @@ import Foundation
 
 // MARK: - CacheManager
 // مدير الكاش — تخزين واسترجاع البيانات محلياً كملفات JSON مع TTL
+// ملاحظة: غير @MainActor عمداً — حتى يقدر يكتب الملفات في background.
+// كل المتغيرات immutable بعد init، فالـ class آمن متعدد الـ threads.
 
-@MainActor
-final class CacheManager {
+final class CacheManager: @unchecked Sendable {
     static let shared = CacheManager()
 
     // MARK: - Cache Keys
@@ -48,8 +49,13 @@ final class CacheManager {
 
     // MARK: - Save / Load
 
-    /// حفظ بيانات في الكاش المحلي
+    /// طابور الـ I/O الخاص بالكاش — serial queue يكتب الملفات بدون تنافس.
+    private static let ioQueue = DispatchQueue(label: "com.familytree.cache.io", qos: .utility)
+
+    /// حفظ بيانات في الكاش المحلي — الكتابة على disk في background thread
+    /// لتجنب تجميد الواجهة عند حفظ بيانات كبيرة (مثلاً ١.١ MB من الأعضاء).
     func save<T: Encodable>(_ data: T, for key: CacheKey) {
+        // الترميز في الـ caller (سريع نسبياً)، الكتابة على القرص في background
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
 
@@ -58,23 +64,25 @@ final class CacheManager {
             return
         }
 
-        let fileURL = cacheDirectory.appendingPathComponent("\(key.rawValue).json")
-        let metaURL = cacheDirectory.appendingPathComponent("\(key.rawValue)_meta.json")
-
-        // كتابة البيانات في background thread
         let meta = CacheMeta(savedAt: Date())
         let metaData = try? encoder.encode(meta)
+        let directory = cacheDirectory
+        let keyName = key.rawValue
 
-        // حفظ ملف البيانات والميتاداتا
-        try? jsonData.write(to: fileURL, options: .atomic)
-        if let metaData {
-            try? metaData.write(to: metaURL, options: .atomic)
+        Self.ioQueue.async {
+            let fileURL = directory.appendingPathComponent("\(keyName).json")
+            let metaURL = directory.appendingPathComponent("\(keyName)_meta.json")
+
+            try? jsonData.write(to: fileURL, options: .atomic)
+            if let metaData {
+                try? metaData.write(to: metaURL, options: .atomic)
+            }
+
+            Log.info("[Cache] 💾 حفظ \(keyName) (\(Self.formatBytes(jsonData.count)))")
         }
-
-        Log.info("[Cache] 💾 حفظ \(key.rawValue) (\(formatBytes(jsonData.count)))")
     }
 
-    /// تحميل بيانات من الكاش المحلي
+    /// تحميل بيانات من الكاش المحلي (synchronous — للبيانات الصغيرة)
     func load<T: Decodable>(_ type: T.Type, for key: CacheKey) -> T? {
         let fileURL = cacheDirectory.appendingPathComponent("\(key.rawValue).json")
 
@@ -89,6 +97,30 @@ final class CacheManager {
         }
 
         return decoded
+    }
+
+    /// تحميل غير متزامن للبيانات الكبيرة — يقرأ ويفك الترميز في background.
+    /// استخدمه للبيانات الكبيرة (مثل allMembers) لتجنب تجميد الواجهة.
+    func loadAsync<T: Decodable & Sendable>(_ type: T.Type, for key: CacheKey) async -> T? {
+        let fileURL = cacheDirectory.appendingPathComponent("\(key.rawValue).json")
+
+        return await withCheckedContinuation { continuation in
+            Self.ioQueue.async {
+                guard let data = try? Data(contentsOf: fileURL) else {
+                    continuation.resume(returning: nil)
+                    return
+                }
+
+                let decoder = JSONDecoder()
+                decoder.dateDecodingStrategy = .iso8601
+
+                let decoded = try? decoder.decode(type, from: data)
+                if decoded == nil {
+                    Log.warning("[Cache] فشل فك ترميز: \(key.rawValue)")
+                }
+                continuation.resume(returning: decoded)
+            }
+        }
     }
 
     /// هل الكاش منتهي الصلاحية؟
@@ -112,22 +144,24 @@ final class CacheManager {
 
     // MARK: - App Group (Widget)
 
-    /// حفظ بيانات في حاوية App Group المشتركة (للويدجت)
+    /// حفظ بيانات في حاوية App Group المشتركة (للويدجت) — الكتابة في background.
     func saveToSharedContainer<T: Encodable>(_ data: T, for key: CacheKey) {
-        guard let containerURL = FileManager.default.containerURL(
-            forSecurityApplicationGroupIdentifier: appGroupId
-        ) else {
-            // App Group مو مهيأ بعد — طبيعي قبل إعداد الويدجت
-            return
-        }
-
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
 
         guard let jsonData = try? encoder.encode(data) else { return }
 
-        let fileURL = containerURL.appendingPathComponent("\(key.rawValue).json")
-        try? jsonData.write(to: fileURL, options: .atomic)
+        let groupId = appGroupId
+        let keyName = key.rawValue
+
+        Self.ioQueue.async {
+            guard let containerURL = FileManager.default.containerURL(
+                forSecurityApplicationGroupIdentifier: groupId
+            ) else { return }
+
+            let fileURL = containerURL.appendingPathComponent("\(keyName).json")
+            try? jsonData.write(to: fileURL, options: .atomic)
+        }
     }
 
     /// تحميل من حاوية App Group المشتركة
@@ -146,11 +180,11 @@ final class CacheManager {
 
     // MARK: - Private
 
-    private struct CacheMeta: Codable {
+    private struct CacheMeta: Codable, Sendable {
         let savedAt: Date
     }
 
-    private func formatBytes(_ bytes: Int) -> String {
+    private static func formatBytes(_ bytes: Int) -> String {
         if bytes < 1024 { return "\(bytes) B" }
         let kb = Double(bytes) / 1024.0
         if kb < 1024 { return String(format: "%.0f KB", kb) }

@@ -12,20 +12,19 @@ struct AdminDevicesView: View {
     @State private var isRemoving = false
     @State private var isLoading = true
 
-    /// تجميع الأجهزة حسب العضو
+    /// تجميع الأجهزة حسب العضو — مرتبة بأحدث نشاط أولاً
     private var groupedDevices: [(member: FamilyMember?, memberId: UUID, devices: [NotificationViewModel.LinkedDevice])] {
         let grouped = Dictionary(grouping: allDevices) { $0.memberId }
         return grouped.map { (memberId, devices) in
             let member = memberVM.allMembers.first { $0.id == memberId }
-            return (member: member, memberId: memberId, devices: devices.sorted { $0.updatedAt > $1.updatedAt })
+            let sortedDevices = devices.sorted { $0.updatedAt > $1.updatedAt }
+            return (member: member, memberId: memberId, devices: sortedDevices)
         }
         .sorted { lhs, rhs in
-            // ترتيب: الأعضاء اللي لهم أسماء أول، ثم بالاسم
-            let lName = lhs.member?.fullName ?? ""
-            let rName = rhs.member?.fullName ?? ""
-            if lName.isEmpty && !rName.isEmpty { return false }
-            if !lName.isEmpty && rName.isEmpty { return true }
-            return lName < rName
+            // ترتيب: أحدث جهاز نشاطاً أولاً
+            let lLatest = lhs.devices.first?.updatedAt ?? ""
+            let rLatest = rhs.devices.first?.updatedAt ?? ""
+            return lLatest > rLatest
         }
     }
 

@@ -398,7 +398,7 @@ struct AdminModeratorsView: View {
             (L10n.t("إحصائيات", "Statistics"), [true, false, false]),
             // المالك فقط ❌❌❌
             (L10n.t("إدارة الأدوار", "Manage roles"), [false, false, false]),
-            (L10n.t("الأمان والإعدادات", "Security & Settings"), [false, false, false]),
+            (L10n.t("إعدادات النظام", "System Settings"), [false, false, false]),
         ]
 
         return VStack(spacing: 0) {

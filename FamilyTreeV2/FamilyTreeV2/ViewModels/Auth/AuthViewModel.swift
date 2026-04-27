@@ -3,16 +3,6 @@ import Supabase
 import SwiftUI
 import Combine
 
-private struct OTPFallbackRequest: Encodable {
-    let phone: String
-    let channels: [String]
-}
-
-private struct OTPFallbackResponse: Decodable {
-    let accepted: Bool?
-    let message: String?
-}
-
 private struct PhoneLookupProfile: Decodable {
     let id: UUID
     let phoneNumber: String?
@@ -54,22 +44,6 @@ class LanguageManager: ObservableObject {
 @MainActor
 class AuthViewModel: ObservableObject {
 
-    enum OTPDeliveryChannel: String, CaseIterable, Identifiable {
-        case sms
-        case whatsapp
-        case call
-
-        var id: String { rawValue }
-
-        var backendValue: String {
-            switch self {
-            case .sms: return "sms"
-            case .whatsapp: return "whatsapp"
-            case .call: return "call"
-            }
-        }
-    }
-    
     // استخدام النسخة المركزية من Supabase
     let supabase = SupabaseConfig.client
     
@@ -327,47 +301,6 @@ class AuthViewModel: ObservableObject {
         }
         
         return L10n.t("تعذر إرسال رمز التحقق حاليًا. حاول مرة أخرى.", "Unable to send verification code right now. Please try again.")
-    }
-    
-    private func triggerOTPFallback(phone: String, channels: [OTPDeliveryChannel]) async -> (success: Bool, message: String) {
-        guard let endpoint = SupabaseConfig.otpFallbackURL else {
-            return (false, L10n.t("لم يتم تفعيل القناة البديلة في إعدادات التطبيق.", "Fallback channel is not enabled in app settings."))
-        }
-        
-        var request = URLRequest(url: endpoint)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        if let apiKey = SupabaseConfig.otpFallbackAPIKey, !apiKey.isEmpty {
-            request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-            request.setValue(apiKey, forHTTPHeaderField: "apikey")
-        }
-        
-        let payload = OTPFallbackRequest(
-            phone: phone,
-            channels: channels.map(\.backendValue)
-        )
-        
-        do {
-            request.httpBody = try JSONEncoder().encode(payload)
-            let (data, response) = try await URLSession.shared.data(for: request)
-            guard let httpResponse = response as? HTTPURLResponse else {
-                return (false, L10n.t("فشل القناة البديلة: استجابة غير صالحة.", "Fallback channel failed: invalid response."))
-            }
-            
-            guard (200...299).contains(httpResponse.statusCode) else {
-                return (false, L10n.t("فشل القناة البديلة: رمز \(httpResponse.statusCode).", "Fallback channel failed: code \(httpResponse.statusCode)."))
-            }
-            
-            let decoded = try? JSONDecoder().decode(OTPFallbackResponse.self, from: data)
-            let accepted = decoded?.accepted ?? true
-            if accepted {
-                return (true, decoded?.message ?? L10n.t("تم إرسال الرمز عبر قناة بديلة.", "Code sent via fallback channel."))
-            } else {
-                return (false, decoded?.message ?? L10n.t("تم رفض طلب القناة البديلة.", "Fallback channel request was rejected."))
-            }
-        } catch {
-            return (false, L10n.t("فشل القناة البديلة: \(error.localizedDescription)", "Fallback channel failed: \(error.localizedDescription)"))
-        }
     }
     
     // MARK: - Private Push / Notification Helpers

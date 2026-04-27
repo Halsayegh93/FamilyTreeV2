@@ -6,6 +6,7 @@ struct HomeNewsView: View {
     @EnvironmentObject var memberVM: MemberViewModel
     @EnvironmentObject var storyVM: StoryViewModel
     @EnvironmentObject var notificationVM: NotificationViewModel
+    @EnvironmentObject var appSettingsVM: AppSettingsViewModel
     @Environment(\.colorScheme) private var colorScheme
     @Binding var selectedTab: Int
     @State private var showingAddNews = false
@@ -53,9 +54,11 @@ struct HomeNewsView: View {
                                     .offset(y: appeared ? 0 : 15)
 
                                 // ستوري العائلة
-                                realStoriesSection
-                                    .opacity(appeared ? 1 : 0)
-                                    .offset(y: appeared ? 0 : 18)
+                                if appSettingsVM.settings.storiesEnabled ?? true {
+                                    realStoriesSection
+                                        .opacity(appeared ? 1 : 0)
+                                        .offset(y: appeared ? 0 : 18)
+                                }
 
                                 // أخبار العائلة
                                 newsFeedSection
@@ -439,8 +442,12 @@ struct HomeNewsView: View {
     private var quickActionsSection: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: DS.Spacing.md) {
-                quickActionItem(icon: "photo.on.rectangle.angled.fill", title: L10n.t("الصور", "Photos"), color: DS.Color.primary) { withAnimation(DS.Anim.snappy) { activeSubPage = .photos } }
-                quickActionItem(icon: "briefcase.fill", title: L10n.t("مشاريع", "Projects"), color: DS.Color.accent) { withAnimation(DS.Anim.snappy) { activeSubPage = .projects } }
+                if appSettingsVM.settings.albumsEnabled ?? true {
+                    quickActionItem(icon: "photo.on.rectangle.angled.fill", title: L10n.t("الصور", "Photos"), color: DS.Color.primary) { withAnimation(DS.Anim.snappy) { activeSubPage = .photos } }
+                }
+                if appSettingsVM.settings.projectsEnabled ?? true {
+                    quickActionItem(icon: "briefcase.fill", title: L10n.t("مشاريع", "Projects"), color: DS.Color.accent) { withAnimation(DS.Anim.snappy) { activeSubPage = .projects } }
+                }
                 quickActionItem(icon: "bubble.left.and.bubble.right.fill", title: L10n.t("تواصل", "Contact"), color: DS.Color.primary) { withAnimation(DS.Anim.snappy) { activeSubPage = .contact } }
             }
             .padding(.horizontal, DS.Spacing.lg)

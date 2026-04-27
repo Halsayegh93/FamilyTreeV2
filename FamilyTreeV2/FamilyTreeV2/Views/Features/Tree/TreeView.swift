@@ -37,6 +37,20 @@ private enum TreeConst {
     static let dividerWidth: CGFloat = 30
 }
 
+/// تطبيق `.drawingGroup()` بشكل مشروط — يفعّله فقط للأشجار الكبيرة
+/// لتجنب overhead الـ rasterization على الأشجار الصغيرة.
+private struct ConditionalDrawingGroup: ViewModifier {
+    let enabled: Bool
+
+    func body(content: Content) -> some View {
+        if enabled {
+            content.drawingGroup()
+        } else {
+            content
+        }
+    }
+}
+
 // MARK: - 1. واجهة الشجرة الرئيسية — Liquid Glass
 struct TreeView: View {
     @EnvironmentObject var authVM: AuthViewModel
@@ -103,9 +117,18 @@ struct TreeView: View {
         cachedRootMembers.first
     }
 
-    /// يُعاد حساب البيانات المُخزنة عند تغيّر الأعضاء فقط
-    private func rebuildCache() {
-        let visible = memberVM.allMembers.filter {
+    /// نتيجة بناء الكاش — قابلة للتحويل بين threads (FamilyMember هو struct).
+    private struct TreeCache {
+        let visible: [FamilyMember]
+        let byId: [UUID: FamilyMember]
+        let roots: [FamilyMember]
+        let childrenMap: [UUID: [FamilyMember]]
+        let ids: Set<UUID>
+    }
+
+    /// حساب الكاش — pure function، تشتغل على أي thread.
+    private static func computeCache(from members: [FamilyMember]) -> TreeCache {
+        let visible = members.filter {
             !$0.isHiddenFromTree
             && $0.role != .pending
             && $0.status != .frozen
@@ -116,7 +139,7 @@ struct TreeView: View {
         // مجموعة الأعضاء اللي عندهم أبناء (آباء حقيقيين)
         let fatherIds = Set(visible.compactMap(\.fatherId))
 
-        let roots = sortedMembers(visible.filter { member in
+        let roots = staticSorted(visible.filter { member in
             guard let fatherId = member.fatherId else {
                 // عضو بدون أب: يظهر كجذر فقط إذا عنده أبناء (جد/أب أصلي)
                 return fatherIds.contains(member.id)
@@ -127,21 +150,46 @@ struct TreeView: View {
         let childrenMap = Dictionary(
             grouping: visible.compactMap { m in m.fatherId.map { (m, $0) } },
             by: { $0.1 }
-        ).mapValues { pairs in sortedMembers(pairs.map(\.0)) }
+        ).mapValues { pairs in staticSorted(pairs.map(\.0)) }
 
-        cachedVisibleMembers = visible
-        cachedMemberById = byId
-        cachedRootMembers = roots
-        cachedChildrenByFatherId = childrenMap
-        cachedMemberIds = Set(visible.map(\.id))
+        return TreeCache(
+            visible: visible,
+            byId: byId,
+            roots: roots,
+            childrenMap: childrenMap,
+            ids: Set(visible.map(\.id))
+        )
     }
 
-    private func sortedMembers(_ members: [FamilyMember]) -> [FamilyMember] {
+    private static func staticSorted(_ members: [FamilyMember]) -> [FamilyMember] {
         members.sorted { m1, m2 in
             if m1.sortOrder != m2.sortOrder { return m1.sortOrder < m2.sortOrder }
             if let b1 = m1.birthDate, let b2 = m2.birthDate, !b1.isEmpty, !b2.isEmpty { return b1 < b2 }
             return m1.firstName < m2.firstName
         }
+    }
+
+    /// تطبيق الكاش على @State — يحب يكون على MainActor.
+    private func applyCache(_ cache: TreeCache) {
+        cachedVisibleMembers = cache.visible
+        cachedMemberById = cache.byId
+        cachedRootMembers = cache.roots
+        cachedChildrenByFatherId = cache.childrenMap
+        cachedMemberIds = cache.ids
+    }
+
+    /// إعادة بناء سريعة (synchronous) — للتحميل الأول.
+    private func rebuildCache() {
+        applyCache(Self.computeCache(from: memberVM.allMembers))
+    }
+
+    /// إعادة بناء في خلفية — يمنع تجميد الواجهة عند 10K+ عضو.
+    private func rebuildCacheBackground() async {
+        let snapshot = memberVM.allMembers
+        let cache = await Task.detached(priority: .userInitiated) {
+            Self.computeCache(from: snapshot)
+        }.value
+        applyCache(cache)
     }
 
     // MARK: - بحث (منقول إلى TreeSearchOverlay)
@@ -164,7 +212,10 @@ struct TreeView: View {
                                             .frame(maxWidth: .infinity, alignment: .center)
                                     }
                                 }
-                                .drawingGroup()
+                                // drawingGroup() فقط للأشجار الكبيرة جداً —
+                                // للأشجار الصغيرة، يضيف overhead أكثر من الفائدة
+                                // ويعيد الـ rasterize عند كل zoom gesture مما يهنّق الواجهة
+                                .modifier(ConditionalDrawingGroup(enabled: cachedVisibleMembers.count > 300))
                                 .scaleEffect(scale, anchor: zoomAnchor)
                                 .frame(
                                     minWidth: geometry.size.width,
@@ -310,8 +361,14 @@ struct TreeView: View {
                 locationHighlightTask = nil
             }
             .onChange(of: memberVM.membersVersion) { _ in
-                withAnimation(DS.Anim.snappy) {
-                    rebuildCache()
+                Task {
+                    let snapshot = memberVM.allMembers
+                    let cache = await Task.detached(priority: .userInitiated) {
+                        Self.computeCache(from: snapshot)
+                    }.value
+                    withAnimation(DS.Anim.snappy) {
+                        applyCache(cache)
+                    }
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: .memberDeleted)) { _ in
@@ -543,7 +600,7 @@ struct TreeView: View {
                         Task {
                             await memberVM.fetchAllMembers(force: true)
                             guard !Task.isCancelled else { return }
-                            rebuildCache()
+                            await rebuildCacheBackground()
                             resetToTopRoot()
                             withAnimation { isRefreshing = false }
                         }

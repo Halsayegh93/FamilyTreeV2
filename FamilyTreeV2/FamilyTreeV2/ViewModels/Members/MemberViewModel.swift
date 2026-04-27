@@ -17,10 +17,23 @@ class MemberViewModel: ObservableObject {
     // MARK: - Published Properties
     
     @Published var allMembers: [FamilyMember] = [] {
-        didSet { _memberById = Dictionary(uniqueKeysWithValues: allMembers.map { ($0.id, $0) }) }
+        didSet { _memberByIdDirty = true }
     }
-    /// O(1) member lookup by ID — use instead of allMembers.first(where:)
-    private(set) var _memberById: [UUID: FamilyMember] = [:]
+
+    /// O(1) member lookup by ID — use instead of allMembers.first(where:).
+    /// الـ dict يُعاد بناؤه فقط عند أول قراءة بعد التعديل (lazy rebuild) —
+    /// يمنع التهنيق عند تعديلات متتالية في حلقة (مثلاً sortOrder loop).
+    private var _memberByIdCache: [UUID: FamilyMember] = [:]
+    private var _memberByIdDirty: Bool = false
+
+    var _memberById: [UUID: FamilyMember] {
+        if _memberByIdDirty {
+            _memberByIdCache = Dictionary(uniqueKeysWithValues: allMembers.map { ($0.id, $0) })
+            _memberByIdDirty = false
+        }
+        return _memberByIdCache
+    }
+
     func member(byId id: UUID) -> FamilyMember? { _memberById[id] }
     
     @Published var currentMemberChildren: [FamilyMember] = []
@@ -164,9 +177,9 @@ class MemberViewModel: ObservableObject {
     // MARK: - Fetch Members
 
     func fetchAllMembers(force: Bool = false) async {
-        // تحميل من الكاش أولاً إذا لا توجد بيانات
+        // تحميل من الكاش أولاً إذا لا توجد بيانات (في background لتجنب تجميد الواجهة)
         if allMembers.isEmpty,
-           let cached = CacheManager.shared.load([FamilyMember].self, for: .members) {
+           let cached = await CacheManager.shared.loadAsync([FamilyMember].self, for: .members) {
             self.allMembers = cached
             self.membersVersion += 1
             Log.info("[Members] تم تحميل \(cached.count) عضو من الكاش")

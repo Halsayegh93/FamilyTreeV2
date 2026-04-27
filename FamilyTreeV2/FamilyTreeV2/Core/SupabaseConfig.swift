@@ -25,8 +25,6 @@ struct SupabaseConfig {
     private enum InfoKeys {
         static let url = "SUPABASE_URL"
         static let anonKey = "SUPABASE_ANON_KEY"
-        static let otpFallbackURL = "OTP_FALLBACK_URL"
-        static let otpFallbackAPIKey = "OTP_FALLBACK_API_KEY"
     }
 
     // NOTE: Supabase anon key مقصود أن يكون علنياً في client bundle — الحماية الفعلية
@@ -60,18 +58,6 @@ struct SupabaseConfig {
 
     static let key: String = {
         readInfoValue(InfoKeys.anonKey) ?? Defaults.anonKey
-    }()
-    
-    // Optional endpoint for alternate OTP delivery (e.g. WhatsApp/Voice).
-    static let otpFallbackURL: URL? = {
-        if let value = readInfoValue(InfoKeys.otpFallbackURL) {
-            return URL(string: value)
-        }
-        return URL(string: "functions/v1/otp-fallback", relativeTo: url)?.absoluteURL
-    }()
-    
-    static let otpFallbackAPIKey: String? = {
-        readInfoValue(InfoKeys.otpFallbackAPIKey)
     }()
     
     /// Central Supabase client.
