@@ -1,7 +1,6 @@
 import Foundation
-import SwiftUI
 
-struct FamilyMember: Identifiable, Codable, Equatable {
+nonisolated struct FamilyMember: Identifiable, Codable, Equatable, Sendable {
     let id: UUID
     var firstName: String
     var fullName: String
@@ -131,28 +130,16 @@ struct FamilyMember: Identifiable, Codable, Equatable {
         }
 
     // MARK: - Enums
-    enum UserRole: String, Codable {
+    enum UserRole: String, Codable, Sendable {
         case owner, admin, monitor, supervisor, member, pending
-
-        // نضع التعريف هنا لكي يعمل كود authVM.currentUser?.role.color ✅
-        /// اللون العلني — المالك يظهر بنفس لون المدير
-        var color: Color {
-            switch self {
-            case .owner: return DS.Color.primary
-            case .admin: return DS.Color.adminRole
-            case .monitor: return DS.Color.monitorRole
-            case .supervisor: return DS.Color.supervisorRole
-            case .member: return DS.Color.memberRole
-            case .pending: return DS.Color.pendingRole
-            }
-        }
+        // ملاحظة: `color` تعرّف في FamilyMember+UI.swift (SwiftUI-dependent)
     }
 
-    enum MemberStatus: String, Codable {
+    enum MemberStatus: String, Codable, Sendable {
         case pending, active, frozen
     }
-    
-    struct BioStation: Codable, Identifiable {
+
+    struct BioStation: Codable, Identifiable, Sendable {
         var id: UUID = UUID()
         var year: String?
         var title: String
@@ -160,12 +147,8 @@ struct FamilyMember: Identifiable, Codable, Equatable {
     }
 
     // MARK: - Computed Properties
-    
-    // هذا المتغير يسهل الوصول للون من العضو مباشرة: member.roleColor ✅
-    var roleColor: Color {
-        return role.color
-    }
-    
+    // ملاحظة: `roleColor` تعرّف في FamilyMember+UI.swift (SwiftUI-dependent)
+
     // حالة الحذف أو التجميد
     var isDeleted: Bool {
         return status == .frozen

@@ -175,8 +175,11 @@ struct AdminMemberDetailSheet: View {
                 AddSonByAdminSheet(parent: member, editingChild: child)
             }
             .onAppear { setupLocalChildren() }
-            .onChange(of: memberVM.allMembers) { _ in
-                setupLocalChildren()
+            .onChange(of: showAddSonSheet) { isShowing in
+                if !isShowing { setupLocalChildren() }
+            }
+            .onChange(of: childToEdit) { child in
+                if child == nil { setupLocalChildren() }
             }
             // Live preview محذوف بالكامل — كل تغيير في memberVM.allMembers يسبب re-evaluation
             // للـ body و ScrollView يقفز. التحديث الفعلي بالشجرة يصير عند زر "حفظ" فقط.

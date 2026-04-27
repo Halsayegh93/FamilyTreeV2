@@ -74,6 +74,8 @@ struct AdminReportsView: View {
     @State private var showShareSheet = false
     @State private var showErrorAlert = false
     @State private var errorMessage = ""
+    @State private var branchRootId: UUID? = nil
+    @State private var branchPickerOpen = false
 
     private let reportColumns = [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)]
 
@@ -90,8 +92,43 @@ struct AdminReportsView: View {
         }
     }
 
+    private var childrenByFather: [UUID: [FamilyMember]] {
+        var map: [UUID: [FamilyMember]] = [:]
+        for m in memberVM.allMembers {
+            if let f = m.fatherId {
+                map[f, default: []].append(m)
+            }
+        }
+        return map
+    }
+
+    private func descendantIds(of rootId: UUID) -> Set<UUID> {
+        var ids: Set<UUID> = [rootId]
+        var stack = [rootId]
+        let kidsMap = childrenByFather
+        while let cur = stack.popLast() {
+            for c in kidsMap[cur] ?? [] {
+                if !ids.contains(c.id) {
+                    ids.insert(c.id)
+                    stack.append(c.id)
+                }
+            }
+        }
+        return ids
+    }
+
+    private var branchRootMember: FamilyMember? {
+        guard let id = branchRootId else { return nil }
+        return memberVM.allMembers.first { $0.id == id }
+    }
+
     private var filteredMembers: [FamilyMember] {
         var members = activeMembers
+
+        if let rootId = branchRootId {
+            let ids = descendantIds(of: rootId)
+            members = members.filter { ids.contains($0.id) }
+        }
 
         let trimmedSearch = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmedSearch.isEmpty {
@@ -161,6 +198,7 @@ struct AdminReportsView: View {
             ((Int(minAgeText) ?? 0) > 0 || (Int(maxAgeText) ?? 0) > 0) {
             count += 1
         }
+        if branchRootId != nil { count += 1 }
         return count
     }
 
@@ -188,6 +226,16 @@ struct AdminReportsView: View {
             ActivityView(items: shareItems) {
                 cleanupShareState()
             }
+        }
+        .sheet(isPresented: $branchPickerOpen) {
+            BranchPickerSheet(
+                allMembers: memberVM.allMembers,
+                onSelect: { id in
+                    branchRootId = id
+                    branchPickerOpen = false
+                    displayLimit = 20
+                }
+            )
         }
         .alert("خطأ", isPresented: $showErrorAlert) {
             Button("موافق", role: .cancel) {}
@@ -244,6 +292,9 @@ struct AdminReportsView: View {
 
     private var filtersSection: some View {
         VStack(spacing: DS.Spacing.md) {
+            // Branch filter
+            branchFilterRow
+
             VStack(alignment: .leading, spacing: DS.Spacing.xs) {
                 HStack {
                     Image(systemName: "slider.horizontal.3")
@@ -428,6 +479,81 @@ struct AdminReportsView: View {
         }
     }
 
+    private var branchFilterRow: some View {
+        Group {
+            if let m = branchRootMember {
+                HStack(spacing: DS.Spacing.sm) {
+                    Image(systemName: "tree.fill")
+                        .font(DS.Font.scaled(12, weight: .bold))
+                        .foregroundColor(selectedReport.tint)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("فرع: \(m.fullName)")
+                            .font(DS.Font.caption1)
+                            .fontWeight(.bold)
+                            .foregroundColor(selectedReport.tint)
+                            .lineLimit(1)
+                        Text("\(descendantIds(of: m.id).count) عضو في الفرع")
+                            .font(DS.Font.caption2)
+                            .foregroundColor(DS.Color.textTertiary)
+                    }
+                    Spacer()
+                    Button { branchPickerOpen = true } label: {
+                        Text("تغيير")
+                            .font(DS.Font.caption2)
+                            .fontWeight(.bold)
+                            .foregroundColor(selectedReport.tint)
+                            .padding(.horizontal, DS.Spacing.sm)
+                            .padding(.vertical, 4)
+                            .background(Capsule().fill(selectedReport.tint.opacity(0.12)))
+                    }
+                    Button {
+                        branchRootId = nil
+                        displayLimit = 20
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(DS.Color.error)
+                    }
+                }
+                .padding(.horizontal, DS.Spacing.md)
+                .padding(.vertical, DS.Spacing.sm)
+                .background(
+                    RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                        .fill(selectedReport.tint.opacity(0.08))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                        .stroke(selectedReport.tint.opacity(0.2), lineWidth: 1)
+                )
+            } else {
+                Button { branchPickerOpen = true } label: {
+                    HStack(spacing: DS.Spacing.sm) {
+                        Image(systemName: "tree")
+                            .font(DS.Font.scaled(12, weight: .semibold))
+                        Text("حصر على فرع معيّن")
+                            .font(DS.Font.caption1)
+                            .fontWeight(.semibold)
+                        Spacer()
+                        Image(systemName: "chevron.left")
+                            .font(DS.Font.scaled(10, weight: .bold))
+                            .opacity(0.5)
+                    }
+                    .foregroundColor(DS.Color.textSecondary)
+                    .padding(.horizontal, DS.Spacing.md)
+                    .padding(.vertical, DS.Spacing.sm)
+                    .background(
+                        RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                            .fill(DS.Color.surface)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                            .stroke(DS.Color.textTertiary.opacity(0.2), lineWidth: 1)
+                    )
+                }
+                .buttonStyle(DSScaleButtonStyle())
+            }
+        }
+    }
+
     private func reportQuickChip(_ report: ReportType) -> some View {
         let selected = highlightedReport == report
         return Button {
@@ -569,6 +695,7 @@ struct AdminReportsView: View {
         statusFilter = .all
         displayLimit = 20
         selectedMemberIds.removeAll()
+        branchRootId = nil
     }
 
     private func cleanupShareState() {
@@ -631,6 +758,9 @@ struct AdminReportsView: View {
         if statusFilter == .deceased { filters.append("متوفين فقط") }
         if !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             filters.append("بحث: \(searchText)")
+        }
+        if let m = branchRootMember {
+            filters.append("فرع: \(m.fullName)")
         }
 
         do {

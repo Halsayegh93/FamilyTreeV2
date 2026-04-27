@@ -11,6 +11,8 @@ struct AdminMembersDirectoryView: View {
     @State private var selectedFilter: RegistryFilter = .all
     @State private var memberToFreeze: FamilyMember?
     @State private var memberToActivate: FamilyMember?
+    @State private var branchRootId: UUID? = nil
+    @State private var branchPickerOpen = false
 
     // MARK: - Filter
 
@@ -50,11 +52,49 @@ struct AdminMembersDirectoryView: View {
             .sorted { $0.fullName < $1.fullName }
     }
 
+    /// أبناء كل أب — لحساب الذرّية بسرعة
+    private var childrenByFather: [UUID: [FamilyMember]] {
+        var map: [UUID: [FamilyMember]] = [:]
+        for m in memberVM.allMembers {
+            if let f = m.fatherId {
+                map[f, default: []].append(m)
+            }
+        }
+        return map
+    }
+
+    /// كل ذرّية عضو معيّن (يشمل العضو نفسه)
+    private func descendantIds(of rootId: UUID) -> Set<UUID> {
+        var ids: Set<UUID> = [rootId]
+        var stack = [rootId]
+        let kidsMap = childrenByFather
+        while let cur = stack.popLast() {
+            for c in kidsMap[cur] ?? [] {
+                if !ids.contains(c.id) {
+                    ids.insert(c.id)
+                    stack.append(c.id)
+                }
+            }
+        }
+        return ids
+    }
+
+    private var branchRootMember: FamilyMember? {
+        guard let id = branchRootId else { return nil }
+        return memberVM.allMembers.first { $0.id == id }
+    }
+
     private func count(for filter: RegistryFilter) -> Int {
+        // إذا في فرع محدّد، نعدّ من ذرّيته فقط
+        var pool = baseMembers
+        if let rootId = branchRootId {
+            let ids = descendantIds(of: rootId)
+            pool = pool.filter { ids.contains($0.id) }
+        }
         switch filter {
-        case .all:      return baseMembers.count
-        case .living:   return baseMembers.filter { $0.isDeceased != true }.count
-        case .deceased: return baseMembers.filter { $0.isDeceased == true }.count
+        case .all:      return pool.count
+        case .living:   return pool.filter { $0.isDeceased != true }.count
+        case .deceased: return pool.filter { $0.isDeceased == true }.count
         }
     }
 
@@ -64,6 +104,11 @@ struct AdminMembersDirectoryView: View {
         case .all:      members = baseMembers
         case .living:   members = baseMembers.filter { $0.isDeceased != true }
         case .deceased: members = baseMembers.filter { $0.isDeceased == true }
+        }
+        // حصر على فرع معيّن (إذا اختار)
+        if let rootId = branchRootId {
+            let ids = descendantIds(of: rootId)
+            members = members.filter { ids.contains($0.id) }
         }
         if !searchText.isEmpty {
             let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -81,13 +126,20 @@ struct AdminMembersDirectoryView: View {
         ZStack {
             DS.Color.background.ignoresSafeArea()
 
-            VStack(spacing: 0) {
-                // Filter chips
-                filterChips
+            VStack(spacing: DS.Spacing.sm) {
+                // 1) البحث — أعلى شي
+                searchBar
+                    .padding(.horizontal, DS.Spacing.lg)
                     .padding(.top, DS.Spacing.sm)
-                    .padding(.bottom, DS.Spacing.xs)
 
-                // Swipe hint
+                // 2) فلتر الحالة (الكل/أحياء/متوفون)
+                filterChips
+
+                // 3) فلتر الفرع
+                branchFilterRow
+                    .padding(.horizontal, DS.Spacing.lg)
+
+                // 4) تلميح السحب
                 if authVM.canEditMembers && selectedFilter != .deceased {
                     HStack(spacing: DS.Spacing.xs) {
                         Image(systemName: "hand.draw")
@@ -100,13 +152,7 @@ struct AdminMembersDirectoryView: View {
                     }
                     .foregroundColor(DS.Color.textTertiary)
                     .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.bottom, DS.Spacing.xs)
                 }
-
-                // Search bar
-                searchBar
-                    .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.bottom, DS.Spacing.xs)
 
                 if filteredMembers.isEmpty {
                     noResultsState
@@ -120,9 +166,9 @@ struct AdminMembersDirectoryView: View {
                             .listRowBackground(Color.clear)
                             .listRowSeparator(.hidden)
                             .listRowInsets(EdgeInsets(
-                                top: DS.Spacing.xs,
+                                top: 3,
                                 leading: DS.Spacing.lg,
-                                bottom: DS.Spacing.xs,
+                                bottom: 3,
                                 trailing: DS.Spacing.lg
                             ))
                             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
@@ -169,6 +215,7 @@ struct AdminMembersDirectoryView: View {
                     }
                     .listStyle(.plain)
                     .scrollContentBackground(.hidden)
+                    .environment(\.defaultMinListRowHeight, 0)
                 }
             }
             .onAppear {
@@ -176,6 +223,16 @@ struct AdminMembersDirectoryView: View {
             }
         }
         // Freeze confirm
+        .sheet(isPresented: $branchPickerOpen) {
+            BranchPickerSheet(
+                allMembers: memberVM.allMembers,
+                onSelect: { id in
+                    branchRootId = id
+                    branchPickerOpen = false
+                    displayLimit = 20
+                }
+            )
+        }
         .confirmationDialog(
             memberToFreeze.map {
                 L10n.t("تجميد حساب \($0.fullName)؟", "Freeze \($0.fullName)'s account?")
@@ -344,13 +401,97 @@ struct AdminMembersDirectoryView: View {
 
             Spacer()
         }
-        .padding(.vertical, DS.Spacing.xs)
+        .padding(.vertical, DS.Spacing.sm)
         .padding(.horizontal, DS.Spacing.md)
         .background(DS.Color.surface)
         .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
         .opacity(appeared ? 1 : 0)
         .offset(y: appeared ? 0 : 15)
         .animation(DS.Anim.smooth.delay(Double(index) * 0.03), value: appeared)
+    }
+
+    // MARK: - Branch Filter Row
+
+    private var branchFilterRow: some View {
+        Group {
+            if let m = branchRootMember {
+                HStack(spacing: DS.Spacing.sm) {
+                    Image(systemName: "tree.fill")
+                        .font(DS.Font.scaled(12, weight: .bold))
+                        .foregroundColor(DS.Color.accent)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(L10n.t("فرع: \(m.fullName)", "Branch: \(m.fullName)"))
+                            .font(DS.Font.caption1)
+                            .fontWeight(.bold)
+                            .foregroundColor(DS.Color.accent)
+                            .lineLimit(1)
+                        Text(L10n.t(
+                            "\(descendantIds(of: m.id).count) عضو في الفرع",
+                            "\(descendantIds(of: m.id).count) members in branch"
+                        ))
+                        .font(DS.Font.caption2)
+                        .foregroundColor(DS.Color.textTertiary)
+                    }
+                    Spacer()
+                    Button {
+                        branchPickerOpen = true
+                    } label: {
+                        Text(L10n.t("تغيير", "Change"))
+                            .font(DS.Font.caption2)
+                            .fontWeight(.bold)
+                            .foregroundColor(DS.Color.accent)
+                            .padding(.horizontal, DS.Spacing.sm)
+                            .padding(.vertical, 4)
+                            .background(Capsule().fill(DS.Color.accent.opacity(0.12)))
+                    }
+                    Button {
+                        branchRootId = nil
+                        displayLimit = 20
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(DS.Color.error)
+                    }
+                }
+                .padding(.horizontal, DS.Spacing.md)
+                .padding(.vertical, DS.Spacing.sm)
+                .background(
+                    RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                        .fill(DS.Color.accent.opacity(0.08))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                        .stroke(DS.Color.accent.opacity(0.2), lineWidth: 1)
+                )
+            } else {
+                Button {
+                    branchPickerOpen = true
+                } label: {
+                    HStack(spacing: DS.Spacing.sm) {
+                        Image(systemName: "tree")
+                            .font(DS.Font.scaled(12, weight: .semibold))
+                        Text(L10n.t("حصر على فرع معيّن", "Filter by branch"))
+                            .font(DS.Font.caption1)
+                            .fontWeight(.semibold)
+                        Spacer()
+                        Image(systemName: "chevron.left")
+                            .font(DS.Font.scaled(10, weight: .bold))
+                            .opacity(0.5)
+                    }
+                    .foregroundColor(DS.Color.textSecondary)
+                    .padding(.horizontal, DS.Spacing.md)
+                    .padding(.vertical, DS.Spacing.sm)
+                    .background(
+                        RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                            .fill(DS.Color.surface)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                            .stroke(DS.Color.textTertiary.opacity(0.2), lineWidth: 1)
+                    )
+                }
+                .buttonStyle(DSScaleButtonStyle())
+            }
+        }
     }
 
     // MARK: - Search Bar
@@ -389,3 +530,4 @@ struct AdminMembersDirectoryView: View {
         .padding(.vertical, DS.Spacing.xxxl)
     }
 }
+
