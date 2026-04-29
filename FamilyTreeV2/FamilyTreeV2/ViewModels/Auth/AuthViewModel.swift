@@ -1143,6 +1143,8 @@ class AuthViewModel: ObservableObject {
         // بحث تلقائي عن مطابقات في الشجرة بالاسم الكامل أو أجزاء منه
         let matchedMemberIds = await searchForNameMatches(fullName: fullName, firstName: cleanFirstName)
 
+        let registrationPlatform = UIDevice.current.userInterfaceIdiom == .pad ? "ipados" : "ios"
+
         let profileData: [String: AnyEncodable] = [
             "id": AnyEncodable(user.id),
             "full_name": AnyEncodable(fullName),
@@ -1157,6 +1159,7 @@ class AuthViewModel: ObservableObject {
             "is_married": AnyEncodable(false),
             "is_hidden_from_tree": AnyEncodable(true),
             "sort_order": AnyEncodable(0),
+            "registration_platform": AnyEncodable(registrationPlatform),
             "created_at": AnyEncodable(DateHelper.now)
         ]
         
