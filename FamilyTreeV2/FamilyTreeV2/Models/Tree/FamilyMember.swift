@@ -23,6 +23,8 @@ nonisolated struct FamilyMember: Identifiable, Codable, Equatable, Sendable {
     let isMarried: Bool?
     var gender: String?
     let createdAt: String?
+    let registrationPlatform: String?
+    let username: String?
 
     init(
         id: UUID = UUID(),
@@ -46,7 +48,9 @@ nonisolated struct FamilyMember: Identifiable, Codable, Equatable, Sendable {
         coverUrl: String? = nil,
         isMarried: Bool? = nil,
         gender: String? = nil,
-        createdAt: String? = nil
+        createdAt: String? = nil,
+        registrationPlatform: String? = nil,
+        username: String? = nil
     ) {
         self.id = id
         self.firstName = firstName
@@ -70,6 +74,8 @@ nonisolated struct FamilyMember: Identifiable, Codable, Equatable, Sendable {
         self.isMarried = isMarried
         self.gender = gender
         self.createdAt = createdAt
+        self.registrationPlatform = registrationPlatform
+        self.username = username
     }
 
     init(from decoder: Decoder) throws {
@@ -115,6 +121,8 @@ nonisolated struct FamilyMember: Identifiable, Codable, Equatable, Sendable {
         self.isMarried = try container.decodeIfPresent(Bool.self, forKey: .isMarried)
         self.gender = try container.decodeIfPresent(String.self, forKey: .gender)
         self.createdAt = try container.decodeIfPresent(String.self, forKey: .createdAt)
+        self.registrationPlatform = try container.decodeIfPresent(String.self, forKey: .registrationPlatform)
+        self.username = try container.decodeIfPresent(String.self, forKey: .username)
     }
     
     static func == (lhs: FamilyMember, rhs: FamilyMember) -> Bool {
@@ -206,6 +214,8 @@ nonisolated struct FamilyMember: Identifiable, Codable, Equatable, Sendable {
         case isMarried = "is_married"
         case gender
         case createdAt = "created_at"
+        case registrationPlatform = "registration_platform"
+        case username
     }
 }
 
@@ -385,9 +395,21 @@ enum KuwaitPhone {
             return fallback
         }
         let normalized = normalizeDigits(raw).trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // أرقام دولية بكود — افصل الكود عن الرقم بمسافة
         if normalized.hasPrefix("+") {
+            let digits = String(normalized.dropFirst())
+            let codes = ["965", "966", "971", "974", "973", "968", "20", "44", "1"]
+            for code in codes {
+                if digits.hasPrefix(code) {
+                    let rest = String(digits.dropFirst(code.count))
+                    return rest.isEmpty ? "+\(code)" : "+\(code) \(rest)"
+                }
+            }
             return normalized
         }
+
+        // رقم محلي بدون كود — افتراض كويتي
         let local = localEightDigits(normalized)
         guard local.count == 8 else { return normalized }
         return withPlus ? "+965 \(local)" : "965 \(local)"

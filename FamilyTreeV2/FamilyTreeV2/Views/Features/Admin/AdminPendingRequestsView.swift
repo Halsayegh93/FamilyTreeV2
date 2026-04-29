@@ -268,6 +268,18 @@ struct AdminPendingRequestsView: View {
                             .font(DS.Font.calloutBold)
                             .foregroundColor(DS.Color.textPrimary)
 
+                        // اسم المستخدم (من الموقع)
+                        if let uname = member.username {
+                            HStack(spacing: 4) {
+                                Image(systemName: "at")
+                                    .font(DS.Font.scaled(10, weight: .bold))
+                                    .foregroundColor(DS.Color.primary)
+                                Text(uname)
+                                    .font(DS.Font.scaled(11, weight: .bold))
+                                    .foregroundColor(DS.Color.primary)
+                            }
+                        }
+
                         // عرض الاسم الخماسي بشكل واضح
                         let parts = member.fullName.split(whereSeparator: \.isWhitespace)
                         if parts.count >= 5 {
@@ -281,9 +293,33 @@ struct AdminPendingRequestsView: View {
                             }
                         }
 
-                        Text(L10n.t("سجل في: \(member.createdAt?.prefix(10) ?? "—")", "Registered: \(member.createdAt?.prefix(10) ?? "—")"))
-                            .font(DS.Font.caption2)
-                            .foregroundColor(DS.Color.textSecondary)
+                        // التاريخ والوقت + المصدر
+                        HStack(spacing: DS.Spacing.sm) {
+                            // الوقت والتاريخ
+                            if let createdAt = member.createdAt {
+                                HStack(spacing: 3) {
+                                    Image(systemName: "clock.fill")
+                                        .font(DS.Font.scaled(9))
+                                    Text(formatRegistrationDate(createdAt))
+                                        .font(DS.Font.scaled(10, weight: .semibold))
+                                }
+                                .foregroundColor(DS.Color.textSecondary)
+                            }
+
+                            // المصدر
+                            let platform = member.registrationPlatform ?? "ios"
+                            HStack(spacing: 3) {
+                                Image(systemName: platform == "web" ? "globe" : "iphone")
+                                    .font(DS.Font.scaled(9))
+                                Text(platform == "web" ? L10n.t("الموقع", "Web") : L10n.t("التطبيق", "App"))
+                                    .font(DS.Font.scaled(10, weight: .bold))
+                            }
+                            .foregroundColor(platform == "web" ? DS.Color.info : DS.Color.success)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background((platform == "web" ? DS.Color.info : DS.Color.success).opacity(0.12))
+                            .clipShape(Capsule())
+                        }
                     }
 
                     Spacer()
@@ -560,6 +596,21 @@ struct AdminPendingRequestsView: View {
         }
         .lineLimit(2)
         .fixedSize(horizontal: false, vertical: true)
+    }
+
+    // MARK: - تنسيق تاريخ التسجيل مع الوقت
+    private func formatRegistrationDate(_ isoString: String) -> String {
+        let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let iso2 = ISO8601DateFormatter()
+        iso2.formatOptions = [.withInternetDateTime]
+        guard let date = iso.date(from: isoString) ?? iso2.date(from: isoString) else {
+            return String(isoString.prefix(16)).replacingOccurrences(of: "T", with: " ")
+        }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ar")
+        formatter.dateFormat = "d MMM · h:mm a"
+        return formatter.string(from: date)
     }
 
     // MARK: - وصف قوة التطابق
