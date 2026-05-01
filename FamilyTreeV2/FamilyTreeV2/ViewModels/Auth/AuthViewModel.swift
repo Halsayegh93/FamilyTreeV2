@@ -609,18 +609,21 @@ class AuthViewModel: ObservableObject {
 
         self.currentUser = profile
         self.status = access
-        
+
         // جلب إعدادات التطبيق من السيرفر
         await appSettingsVM?.fetchSettings()
         if let normalizedPhone, normalizedPhone.count == 8 {
             self.phoneNumber = normalizedPhone
         }
-        
+
         // تسجيل الجهاز يتم في AppState عند تغيير status لـ fullyAuthenticated
         // pendingApproval يحتاج تسجيل هنا عشان يوصله إشعار الموافقة
         if access == .pendingApproval {
             await notificationVM?.registerDevice()
         }
+
+        // تحديث last_active_at — يضمن ظهور العضو "نشط" في لوحة الإدارة
+        _ = try? await supabase.rpc("touch_last_active").execute()
     }
     
     /// بحث عن مطابقات الاسم في الشجرة — يُرجع قائمة بمعرفات الأعضاء المتطابقين
