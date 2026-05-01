@@ -762,9 +762,17 @@ struct AdminAllRequestsView: View {
     // MARK: - Join Request Row
 
     private func joinRequestRow(for member: FamilyMember) -> some View {
+        // كل المتغيرات خارج ViewBuilder لتفادي مشاكل @ViewBuilder مع let
         let matches = combinedMatches(for: member)
         let hasMatches = !matches.isEmpty
         let serverMatchCount = registrationMatches[member.id]?.count ?? 0
+        let platform = member.registrationPlatform ?? "ios"
+        let registrationTime = member.createdAt.map { formatRegistrationDate($0) } ?? "—"
+        let uname = member.username
+        let isFullName = member.fullName.split(whereSeparator: \.isWhitespace).count >= 5
+        let orderedResults = orderedMatchList(for: member)
+        let isExpanded = expandedMatchMembers.contains(member.id)
+        let visible = isExpanded ? orderedResults : Array(orderedResults.prefix(5))
 
         return VStack(alignment: .leading, spacing: DS.Spacing.md) {
             HStack(spacing: DS.Spacing.sm) {
@@ -775,6 +783,17 @@ struct AdminAllRequestsView: View {
                         .font(DS.Font.calloutBold)
                         .foregroundColor(DS.Color.textPrimary)
                         .lineLimit(2)
+
+                    // اسم المستخدم (من الموقع)
+                    if let uname {
+                        HStack(spacing: 3) {
+                            Image(systemName: "at")
+                                .font(DS.Font.scaled(9, weight: .bold))
+                            Text(uname)
+                                .font(DS.Font.scaled(11, weight: .bold))
+                        }
+                        .foregroundColor(DS.Color.primary)
+                    }
 
                     // رقم هاتف المنضم
                     if let phone = member.phoneNumber, !phone.isEmpty {
@@ -788,8 +807,7 @@ struct AdminAllRequestsView: View {
                         .foregroundColor(DS.Color.textSecondary)
                     }
 
-                    let parts = member.fullName.split(whereSeparator: \.isWhitespace)
-                    if parts.count >= 5 {
+                    if isFullName {
                         HStack(spacing: 4) {
                             Image(systemName: "checkmark.seal.fill")
                                 .font(DS.Font.scaled(10))
@@ -799,6 +817,28 @@ struct AdminAllRequestsView: View {
                                 .foregroundColor(DS.Color.success)
                         }
                     }
+
+                    // الوقت والتاريخ
+                    HStack(spacing: 3) {
+                        Image(systemName: "clock.fill")
+                            .font(DS.Font.scaled(9))
+                        Text(registrationTime)
+                            .font(DS.Font.scaled(10, weight: .semibold))
+                    }
+                    .foregroundColor(DS.Color.textSecondary)
+
+                    // المصدر
+                    HStack(spacing: 3) {
+                        Image(systemName: platform == "web" ? "globe" : "iphone")
+                            .font(DS.Font.scaled(9))
+                        Text(platform == "web" ? L10n.t("الموقع", "Web") : L10n.t("التطبيق", "App"))
+                            .font(DS.Font.scaled(10, weight: .bold))
+                    }
+                    .foregroundColor(platform == "web" ? DS.Color.info : DS.Color.success)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background((platform == "web" ? DS.Color.info : DS.Color.success).opacity(0.12))
+                    .clipShape(Capsule())
                 }
 
                 Spacer()
@@ -821,7 +861,6 @@ struct AdminAllRequestsView: View {
             }
 
             // نتائج التطابق — لستة مرتبة من الاسم الأول للأخير
-            let orderedResults = orderedMatchList(for: member)
             if !orderedResults.isEmpty {
                 VStack(spacing: DS.Spacing.xs) {
                     HStack(spacing: DS.Spacing.sm) {
@@ -836,9 +875,6 @@ struct AdminAllRequestsView: View {
                         .foregroundColor(DS.Color.textPrimary)
                         Spacer()
                     }
-
-                    let isExpanded = expandedMatchMembers.contains(member.id)
-                    let visible = isExpanded ? orderedResults : Array(orderedResults.prefix(5))
 
                     ForEach(visible, id: \.member.id) { match in
                         joinMatchRow(match: match, pendingMember: member)
@@ -884,19 +920,22 @@ struct AdminAllRequestsView: View {
                 .background(DS.Color.surface)
                 .cornerRadius(DS.Radius.sm)
             }
-
-            // التاريخ تحت
-            if let createdAt = member.createdAt {
-                HStack(spacing: DS.Spacing.xs) {
-                    Image(systemName: "clock")
-                        .font(DS.Font.scaled(10, weight: .medium))
-                        .foregroundColor(DS.Color.textTertiary)
-                    Text(L10n.t("سجل في: \(createdAt.prefix(10))", "Registered: \(createdAt.prefix(10))"))
-                        .font(DS.Font.caption2)
-                        .foregroundColor(DS.Color.textTertiary)
-                }
-            }
         }
+    }
+
+    // MARK: - تنسيق تاريخ التسجيل مع الوقت
+    private func formatRegistrationDate(_ isoString: String) -> String {
+        let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let iso2 = ISO8601DateFormatter()
+        iso2.formatOptions = [.withInternetDateTime]
+        guard let date = iso.date(from: isoString) ?? iso2.date(from: isoString) else {
+            return String(isoString.prefix(16)).replacingOccurrences(of: "T", with: " ")
+        }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ar")
+        formatter.dateFormat = "d MMM · h:mm a"
+        return formatter.string(from: date)
     }
 
     private func joinMatchRow(match: (member: FamilyMember, matchCount: Int, matchedParts: [String], isRegistrationMatch: Bool), pendingMember: FamilyMember) -> some View {
