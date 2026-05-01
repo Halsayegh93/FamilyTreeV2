@@ -233,6 +233,9 @@ struct AdminPendingRequestsView: View {
         let hasMatches = !nameMatches.isEmpty
         let isLoading = loadingMatchFor == member.id
         let hasSearched = nameMatchResults.keys.contains(member.id)
+        let platform = member.registrationPlatform ?? "ios"
+        let registrationTime = member.createdAt.map { formatRegistrationDate($0) } ?? "—"
+        let uname = member.username
 
         return DSCard {
             VStack(spacing: DS.Spacing.lg) {
@@ -269,7 +272,7 @@ struct AdminPendingRequestsView: View {
                             .foregroundColor(DS.Color.textPrimary)
 
                         // اسم المستخدم (من الموقع)
-                        if let uname = member.username {
+                        if let uname {
                             HStack(spacing: 4) {
                                 Image(systemName: "at")
                                     .font(DS.Font.scaled(10, weight: .bold))
@@ -281,8 +284,7 @@ struct AdminPendingRequestsView: View {
                         }
 
                         // عرض الاسم الخماسي بشكل واضح
-                        let parts = member.fullName.split(whereSeparator: \.isWhitespace)
-                        if parts.count >= 5 {
+                        if member.fullName.split(whereSeparator: \.isWhitespace).count >= 5 {
                             HStack(spacing: 4) {
                                 Image(systemName: "checkmark.seal.fill")
                                     .font(DS.Font.scaled(10))
@@ -293,33 +295,27 @@ struct AdminPendingRequestsView: View {
                             }
                         }
 
-                        // التاريخ والوقت + المصدر
-                        HStack(spacing: DS.Spacing.sm) {
-                            // الوقت والتاريخ
-                            if let createdAt = member.createdAt {
-                                HStack(spacing: 3) {
-                                    Image(systemName: "clock.fill")
-                                        .font(DS.Font.scaled(9))
-                                    Text(formatRegistrationDate(createdAt))
-                                        .font(DS.Font.scaled(10, weight: .semibold))
-                                }
-                                .foregroundColor(DS.Color.textSecondary)
-                            }
-
-                            // المصدر
-                            let platform = member.registrationPlatform ?? "ios"
-                            HStack(spacing: 3) {
-                                Image(systemName: platform == "web" ? "globe" : "iphone")
-                                    .font(DS.Font.scaled(9))
-                                Text(platform == "web" ? L10n.t("الموقع", "Web") : L10n.t("التطبيق", "App"))
-                                    .font(DS.Font.scaled(10, weight: .bold))
-                            }
-                            .foregroundColor(platform == "web" ? DS.Color.info : DS.Color.success)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background((platform == "web" ? DS.Color.info : DS.Color.success).opacity(0.12))
-                            .clipShape(Capsule())
+                        // الوقت والتاريخ
+                        HStack(spacing: 3) {
+                            Image(systemName: "clock.fill")
+                                .font(DS.Font.scaled(9))
+                            Text(registrationTime)
+                                .font(DS.Font.scaled(10, weight: .semibold))
                         }
+                        .foregroundColor(DS.Color.textSecondary)
+
+                        // المصدر
+                        HStack(spacing: 3) {
+                            Image(systemName: platform == "web" ? "globe" : "iphone")
+                                .font(DS.Font.scaled(9))
+                            Text(platform == "web" ? L10n.t("الموقع", "Web") : L10n.t("التطبيق", "App"))
+                                .font(DS.Font.scaled(10, weight: .bold))
+                        }
+                        .foregroundColor(platform == "web" ? DS.Color.info : DS.Color.success)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background((platform == "web" ? DS.Color.info : DS.Color.success).opacity(0.12))
+                        .clipShape(Capsule())
                     }
 
                     Spacer()
