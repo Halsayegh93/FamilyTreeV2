@@ -85,8 +85,10 @@ struct MemberDetailsView: View {
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
             .sheet(isPresented: $showAdminControl) {
                 if authVM.canEditMembers {
-                    AdminMemberDetailSheet(member: member)
-                        .id(memberVM.membersVersion)
+                    NavigationStack {
+                        AdminMemberDetailSheet(member: member)
+                            .id(memberVM.membersVersion)
+                    }
                 }
             }
         }

@@ -91,110 +91,108 @@ struct AdminMemberDetailSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                DS.Color.background.ignoresSafeArea()
+        ZStack {
+            DS.Color.background.ignoresSafeArea()
 
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: DS.Spacing.sm) {
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: DS.Spacing.sm) {
 
-                        // Profile header
-                        memberHeader
-                            .padding(.top, DS.Spacing.sm)
+                    // Profile header
+                    memberHeader
+                        .padding(.top, DS.Spacing.sm)
 
-                        // Basic info section — الاسم (الكل يقدر يعدل)
-                        basicInfoSection
+                    // Basic info section — الاسم (الكل يقدر يعدل)
+                    basicInfoSection
 
-                        // TODO: gender — re-enable when needed
-                        // genderSection
+                    // TODO: gender — re-enable when needed
+                    // genderSection
 
-                        // Birth date & health section (الكل يقدر يعدل)
-                        datesSection
+                    // Birth date & health section (الكل يقدر يعدل)
+                    datesSection
 
-                        // Phone section (الكل يقدر يعدل)
-                        phoneSection
+                    // Phone section (الكل يقدر يعدل)
+                    phoneSection
 
-                        // المحطات الحياتية (الكل يقدر يعدل)
-                        bioStationsSection
+                    // المحطات الحياتية (الكل يقدر يعدل)
+                    bioStationsSection
 
-                        // الأقسام التالية للمدير والمالك فقط — المراقب لا
-                        if !isMonitorOnly {
-                            // Father link section
-                            fatherSection
+                    // الأقسام التالية للمدير والمالك فقط — المراقب لا
+                    if !isMonitorOnly {
+                        // Father link section
+                        fatherSection
 
-                            // Children section
-                            childrenSection
+                        // Children section
+                        childrenSection
 
-                            // Role section — المالك فقط
-                            if authVM.isOwner {
-                                roleSection
-                            }
+                        // Role section — المالك فقط
+                        if authVM.isOwner {
+                            roleSection
+                        }
 
-                            // Delete button (admin only)
-                            if canManageAccessPermissions {
-                                deleteSection
-                            }
+                        // Delete button (admin only)
+                        if canManageAccessPermissions {
+                            deleteSection
                         }
                     }
-                    .padding(.bottom, DS.Spacing.xxxl)
                 }
+                .padding(.bottom, DS.Spacing.xxxl)
             }
-            .navigationTitle(L10n.t("إدارة السجل", "Member Admin"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button(action: saveAction) {
-                        if isSaving {
-                            ProgressView()
-                                .tint(DS.Color.primary)
-                        } else {
-                            Text(L10n.t("حفظ", "Save"))
-                                .font(DS.Font.caption1)
-                                .fontWeight(.bold)
-                                .foregroundColor(DS.Color.primary)
-                        }
-                    }
-                    .disabled(isSaving)
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button(L10n.t("إغلاق", "Close")) { dismiss() }
-                        .font(DS.Font.caption1)
-                        .foregroundColor(DS.Color.textSecondary)
-                }
-            }
-            .sheet(isPresented: $showBioEditor) {
-                BioStationsEditorSheet(stations: $bioStations)
-            }
-            .sheet(isPresented: $showFatherPicker) {
-                FatherPickerSheet(selectedId: $selectedFatherId)
-            }
-            .sheet(isPresented: $showAddSonSheet) {
-                AddSonByAdminSheet(parent: member)
-            }
-            .sheet(item: $childToEdit) { child in
-                AddSonByAdminSheet(parent: member, editingChild: child)
-            }
-            .onAppear { setupLocalChildren() }
-            .onChange(of: showAddSonSheet) { isShowing in
-                if !isShowing { setupLocalChildren() }
-            }
-            .onChange(of: childToEdit) { child in
-                if child == nil { setupLocalChildren() }
-            }
-            // Live preview محذوف بالكامل — كل تغيير في memberVM.allMembers يسبب re-evaluation
-            // للـ body و ScrollView يقفز. التحديث الفعلي بالشجرة يصير عند زر "حفظ" فقط.
-            .alert(L10n.t("حذف نهائي", "Permanent Delete"), isPresented: $showDeleteConfirmation) {
-                Button(L10n.t("حذف", "Delete"), role: .destructive) {
-                    Task {
-                        guard canManageAccessPermissions else { return }
-                        await adminRequestVM.rejectOrDeleteMember(memberId: member.id)
-                        dismiss()
-                        // إغلاق شاشة تفاصيل العضو أيضاً
-                        NotificationCenter.default.post(name: .memberDeleted, object: member.id)
+        }
+        .navigationTitle(L10n.t("إدارة السجل", "Member Admin"))
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button(action: saveAction) {
+                    if isSaving {
+                        ProgressView()
+                            .tint(DS.Color.primary)
+                    } else {
+                        Text(L10n.t("حفظ", "Save"))
+                            .font(DS.Font.caption1)
+                            .fontWeight(.bold)
+                            .foregroundColor(DS.Color.primary)
                     }
                 }
-                Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { }
+                .disabled(isSaving)
             }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button(L10n.t("إغلاق", "Close")) { dismiss() }
+                    .font(DS.Font.caption1)
+                    .foregroundColor(DS.Color.textSecondary)
+            }
+        }
+        .sheet(isPresented: $showBioEditor) {
+            BioStationsEditorSheet(stations: $bioStations)
+        }
+        .sheet(isPresented: $showFatherPicker) {
+            FatherPickerSheet(selectedId: $selectedFatherId)
+        }
+        .sheet(isPresented: $showAddSonSheet) {
+            AddSonByAdminSheet(parent: member)
+        }
+        .sheet(item: $childToEdit) { child in
+            AddSonByAdminSheet(parent: member, editingChild: child)
+        }
+        .onAppear { setupLocalChildren() }
+        .onChange(of: showAddSonSheet) { isShowing in
+            if !isShowing { setupLocalChildren() }
+        }
+        .onChange(of: childToEdit) { child in
+            if child == nil { setupLocalChildren() }
+        }
+        // Live preview محذوف بالكامل — كل تغيير في memberVM.allMembers يسبب re-evaluation
+        // للـ body و ScrollView يقفز. التحديث الفعلي بالشجرة يصير عند زر "حفظ" فقط.
+        .alert(L10n.t("حذف نهائي", "Permanent Delete"), isPresented: $showDeleteConfirmation) {
+            Button(L10n.t("حذف", "Delete"), role: .destructive) {
+                Task {
+                    guard canManageAccessPermissions else { return }
+                    await adminRequestVM.rejectOrDeleteMember(memberId: member.id)
+                    dismiss()
+                    // إغلاق شاشة تفاصيل العضو أيضاً
+                    NotificationCenter.default.post(name: .memberDeleted, object: member.id)
+                }
+            }
+            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { }
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
