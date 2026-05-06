@@ -1,6 +1,6 @@
 import Foundation
 
-struct Project: Identifiable, Codable {
+nonisolated struct Project: Identifiable, Codable, Sendable {
     let id: UUID
     var ownerId: UUID
     var ownerName: String

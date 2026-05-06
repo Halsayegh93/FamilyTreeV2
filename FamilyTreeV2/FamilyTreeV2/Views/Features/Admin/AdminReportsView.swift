@@ -51,12 +51,69 @@ struct AdminReportsView: View {
         case all
         case alive
         case deceased
+        case withPhone
+        case withoutPhone
 
         var label: String {
             switch self {
             case .all: return L10n.t("الكل", "All")
             case .alive: return L10n.t("أحياء", "Alive")
-            case .deceased: return L10n.t("متوفين", "Deceased")
+            case .deceased: return L10n.t("متوفون", "Deceased")
+            case .withPhone: return L10n.t("بهاتف", "With phone")
+            case .withoutPhone: return L10n.t("بدون هاتف", "No phone")
+            }
+        }
+    }
+
+    /// الحقول الديناميكية المتاحة للتقرير
+    enum ReportField: String, CaseIterable, Identifiable {
+        case fullName, firstName, phone, age, birthDate, deathDate, role, status, gender, married
+
+        var id: String { rawValue }
+
+        var label: String {
+            switch self {
+            case .fullName: return "الاسم الكامل"
+            case .firstName: return "الاسم الأول"
+            case .phone: return "رقم الهاتف"
+            case .age: return "العمر"
+            case .birthDate: return "تاريخ الميلاد"
+            case .deathDate: return "تاريخ الوفاة"
+            case .role: return "الدور"
+            case .status: return "الحالة"
+            case .gender: return "الجنس"
+            case .married: return "متزوج"
+            }
+        }
+
+        var icon: String {
+            switch self {
+            case .fullName: return "person.fill"
+            case .firstName: return "tag.fill"
+            case .phone: return "phone.fill"
+            case .age: return "calendar"
+            case .birthDate: return "calendar.badge.plus"
+            case .deathDate: return "leaf.fill"
+            case .role: return "star.fill"
+            case .status: return "circle.lefthalf.filled"
+            case .gender: return "person.2.fill"
+            case .married: return "heart.fill"
+            }
+        }
+
+        /// نسبة العرض النسبية في PDF
+        var ratio: CGFloat {
+            switch self {
+            case .fullName: return 0.40
+            case .firstName: return 0.18
+            case .phone: return 0.20
+            case .age: return 0.10
+            case .birthDate: return 0.16
+            case .deathDate: return 0.16
+            case .role: return 0.12
+            case .status: return 0.14
+            case .gender: return 0.10
+            case .married: return 0.10
             }
         }
     }
@@ -76,6 +133,8 @@ struct AdminReportsView: View {
     @State private var errorMessage = ""
     @State private var branchRootId: UUID? = nil
     @State private var branchPickerOpen = false
+    @State private var customTitle: String = "تقرير عائلة المحمدعلي"
+    @State private var selectedFields: Set<ReportField> = [.fullName, .phone, .age]
 
     private let reportColumns = [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)]
 
@@ -146,6 +205,10 @@ struct AdminReportsView: View {
             members = members.filter { $0.isDeceased != true }
         case .deceased:
             members = members.filter { $0.isDeceased == true }
+        case .withPhone:
+            members = members.filter { !normalizedPhone(for: $0).isEmpty && $0.isDeceased != true }
+        case .withoutPhone:
+            members = members.filter { normalizedPhone(for: $0).isEmpty && $0.isDeceased != true }
         }
 
         if selectedReport == .age || selectedReport == .phone {
@@ -208,8 +271,8 @@ struct AdminReportsView: View {
 
     var body: some View {
         ScrollView(showsIndicators: false) {
-            VStack(spacing: DS.Spacing.lg) {
-                overviewSection
+            VStack(spacing: DS.Spacing.md) {
+                settingsCard
                 resultsSection
                 exportSection
             }
@@ -244,155 +307,268 @@ struct AdminReportsView: View {
         }
     }
 
-    private var overviewSection: some View {
-        VStack(spacing: DS.Spacing.md) {
-            ZStack {
-                RoundedRectangle(cornerRadius: DS.Radius.xxl, style: .continuous)
-                    .fill(DS.Color.surface)
+    // MARK: - كرت الإعدادات (موحّد)
 
-                RoundedRectangle(cornerRadius: DS.Radius.xxl, style: .continuous)
-                    .stroke(selectedReport.tint.opacity(0.2), lineWidth: 1.2)
+    private var settingsCard: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // رأس
+            HStack(spacing: DS.Spacing.xs) {
+                Image(systemName: "slider.horizontal.3")
+                    .font(DS.Font.scaled(14, weight: .bold))
+                    .foregroundColor(DS.Color.primary)
+                Text("إعدادات التقرير")
+                    .font(DS.Font.calloutBold)
+                    .foregroundColor(DS.Color.primary)
+                Spacer()
+            }
+            .padding(.horizontal, DS.Spacing.md)
+            .padding(.top, DS.Spacing.md)
+            .padding(.bottom, DS.Spacing.sm)
 
-                VStack(alignment: .leading, spacing: DS.Spacing.md) {
-                    HStack(alignment: .top) {
-                        Text("تقارير الإدارة")
-                            .font(DS.Font.title3)
-                            .fontWeight(.black)
-                            .foregroundColor(DS.Color.textPrimary)
+            Divider().opacity(0.5)
 
-                        Spacer()
+            // (1) معلومات التقرير: عنوان + فرع
+            innerSection(icon: "doc.text", title: "معلومات التقرير") {
+                VStack(spacing: DS.Spacing.sm) {
+                    // عنوان
+                    TextField("عنوان التقرير", text: $customTitle)
+                        .font(DS.Font.callout)
+                        .fontWeight(.semibold)
+                        .padding(.horizontal, DS.Spacing.md)
+                        .padding(.vertical, 10)
+                        .background(DS.Color.background)
+                        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                                .stroke(DS.Color.textTertiary.opacity(0.15), lineWidth: 1)
+                        )
 
-                        Image(systemName: selectedReport.icon)
-                            .font(DS.Font.scaled(22, weight: .bold))
-                            .foregroundColor(selectedReport.tint)
-                            .frame(width: 48, height: 48)
-                            .background(selectedReport.tint.opacity(0.1))
-                            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
-                    }
+                    // فرع
+                    branchFilterRow
+                }
+            }
 
-                    HStack {
-                        Text("اختيار التقرير")
-                            .font(DS.Font.calloutBold)
-                            .foregroundColor(DS.Color.textPrimary)
-                        Spacer()
-                    }
+            Divider().opacity(0.4).padding(.horizontal, DS.Spacing.md)
 
-                    LazyVGrid(columns: reportColumns, spacing: DS.Spacing.sm) {
-                        ForEach(ReportType.allCases, id: \.self) { report in
-                            reportQuickChip(report)
+            // (2) تصفية الأعضاء + بحث
+            innerSection(icon: "person.crop.circle.badge.checkmark", title: "تصفية") {
+                VStack(spacing: DS.Spacing.sm) {
+                    // فلتر الحالة
+                    Picker("", selection: $statusFilter) {
+                        ForEach(StatusFilter.allCases, id: \.self) { s in
+                            Text(s.label).tag(s)
                         }
                     }
+                    .pickerStyle(.segmented)
+                    .onChange(of: statusFilter) { _ in displayLimit = 20 }
 
-                    filtersSection
-                }
-                .padding(DS.Spacing.lg)
-            }
-        }
-    }
-
-    private var filtersSection: some View {
-        VStack(spacing: DS.Spacing.md) {
-            // Branch filter
-            branchFilterRow
-
-            VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                HStack {
-                    Image(systemName: "slider.horizontal.3")
-                        .font(DS.Font.scaled(12))
-                    Text("تصفية")
-                        .font(DS.Font.calloutBold)
-                }
-
-                if selectedReport == .age || selectedReport == .phone {
-                    HStack(spacing: DS.Spacing.md) {
-                        Spacer()
-
-                        TextField(L10n.t("من", "Min"), text: $minAgeText)
-                            .keyboardType(.numberPad)
-                            .font(DS.Font.headline)
-                            .multilineTextAlignment(.center)
-                            .frame(width: 78, height: 44)
-                            .background(DS.Color.surface)
-                            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                                    .stroke(ageRangeInvalid ? DS.Color.error.opacity(0.5) : selectedReport.tint.opacity(0.3), lineWidth: 1)
-                            )
-                            .onChange(of: minAgeText) { _ in displayLimit = 20 }
-
-                        VStack(spacing: 2) {
-                            Text(L10n.t("إلى", "to"))
+                    // نطاق العمر (إن لزم)
+                    if needsAgeFilter {
+                        HStack(spacing: DS.Spacing.sm) {
+                            Image(systemName: "calendar")
+                                .font(DS.Font.scaled(11, weight: .semibold))
+                                .foregroundColor(DS.Color.warning)
+                            Text("العمر:")
                                 .font(DS.Font.caption1)
                                 .foregroundColor(DS.Color.textSecondary)
+                            TextField("من", text: $minAgeText)
+                                .keyboardType(.numberPad)
+                                .multilineTextAlignment(.center)
+                                .font(DS.Font.callout)
+                                .frame(width: 56, height: 32)
+                                .background(DS.Color.background)
+                                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous)
+                                        .stroke(ageRangeInvalid ? DS.Color.error.opacity(0.5) : DS.Color.textTertiary.opacity(0.2), lineWidth: 1)
+                                )
+                                .onChange(of: minAgeText) { _ in displayLimit = 20 }
+                            Text("→")
+                                .font(DS.Font.caption2)
+                                .foregroundColor(DS.Color.textTertiary)
+                            TextField("إلى", text: $maxAgeText)
+                                .keyboardType(.numberPad)
+                                .multilineTextAlignment(.center)
+                                .font(DS.Font.callout)
+                                .frame(width: 56, height: 32)
+                                .background(DS.Color.background)
+                                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous)
+                                        .stroke(ageRangeInvalid ? DS.Color.error.opacity(0.5) : DS.Color.textTertiary.opacity(0.2), lineWidth: 1)
+                                )
+                                .onChange(of: maxAgeText) { _ in displayLimit = 20 }
                             if ageRangeInvalid {
-                                Text(L10n.t("خطأ!", "Invalid!"))
+                                Text("غلط")
                                     .font(DS.Font.caption2)
                                     .foregroundColor(DS.Color.error)
                             }
-                        }
-
-                        TextField(L10n.t("إلى", "Max"), text: $maxAgeText)
-                            .keyboardType(.numberPad)
-                            .font(DS.Font.headline)
-                            .multilineTextAlignment(.center)
-                            .frame(width: 78, height: 44)
-                            .background(DS.Color.surface)
-                            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                                    .stroke(ageRangeInvalid ? DS.Color.error.opacity(0.5) : selectedReport.tint.opacity(0.3), lineWidth: 1)
-                            )
-                            .onChange(of: maxAgeText) { _ in displayLimit = 20 }
-
-                        Spacer()
-                    }
-                }
-
-                Picker("", selection: $statusFilter) {
-                    ForEach(StatusFilter.allCases, id: \.self) { status in
-                        Text(status.label).tag(status)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .onChange(of: statusFilter) { _ in displayLimit = 20 }
-            }
-
-            VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                HStack {
-                    Image(systemName: "magnifyingglass")
-                        .font(DS.Font.scaled(12))
-                    Text("بحث")
-                        .font(DS.Font.calloutBold)
-                }
-
-                HStack(spacing: DS.Spacing.sm) {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundColor(DS.Color.textTertiary)
-
-                    TextField("بحث بالاسم أو الرقم...", text: $searchText)
-                        .font(DS.Font.callout)
-                        .onChange(of: searchText) { _ in displayLimit = 20 }
-
-                    if !searchText.isEmpty {
-                        Button {
-                            searchText = ""
-                            displayLimit = 20
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundColor(DS.Color.textTertiary)
+                            Spacer()
                         }
                     }
+
+                    // البحث
+                    HStack(spacing: DS.Spacing.sm) {
+                        Image(systemName: "magnifyingglass")
+                            .foregroundColor(DS.Color.textTertiary)
+                        TextField("بحث بالاسم أو الرقم...", text: $searchText)
+                            .font(DS.Font.callout)
+                            .onChange(of: searchText) { _ in displayLimit = 20 }
+                        if !searchText.isEmpty {
+                            Button {
+                                searchText = ""
+                                displayLimit = 20
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundColor(DS.Color.textTertiary)
+                            }
+                        }
+                    }
+                    .padding(.horizontal, DS.Spacing.md)
+                    .padding(.vertical, 10)
+                    .background(DS.Color.background)
+                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                            .stroke(DS.Color.textTertiary.opacity(0.15), lineWidth: 1)
+                    )
                 }
-                .padding(DS.Spacing.md)
-                .background(DS.Color.surface)
-                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                        .stroke(Color.gray.opacity(0.12), lineWidth: 1)
-                )
             }
+
+            Divider().opacity(0.4).padding(.horizontal, DS.Spacing.md)
+
+            // (3) الحقول
+            innerSection(
+                icon: "list.bullet.rectangle",
+                title: "الحقول",
+                trailing: "\(selectedFields.count) مختارة"
+            ) {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 75), spacing: 6)],
+                          alignment: .leading,
+                          spacing: 6) {
+                    ForEach(ReportField.allCases) { field in
+                        fieldChip(field)
+                    }
+                }
+            }
+            .padding(.bottom, DS.Spacing.md)
         }
+        .background(DS.Color.surface)
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
+                .stroke(DS.Color.primary.opacity(0.12), lineWidth: 1)
+        )
     }
+
+    /// قسم فرعي داخل كرت الإعدادات
+    @ViewBuilder
+    private func innerSection<Content: View>(
+        icon: String,
+        title: String,
+        trailing: String? = nil,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+            HStack(spacing: 5) {
+                Image(systemName: icon)
+                    .font(DS.Font.scaled(11, weight: .semibold))
+                    .foregroundColor(DS.Color.textSecondary)
+                Text(title)
+                    .font(DS.Font.caption1)
+                    .fontWeight(.bold)
+                    .foregroundColor(DS.Color.textSecondary)
+                Spacer()
+                if let trailing {
+                    Text(trailing)
+                        .font(DS.Font.caption2)
+                        .fontWeight(.bold)
+                        .foregroundColor(DS.Color.textTertiary)
+                }
+            }
+            content()
+        }
+        .padding(.horizontal, DS.Spacing.md)
+        .padding(.vertical, DS.Spacing.sm)
+    }
+
+    private func fieldChip(_ field: ReportField) -> some View {
+        let active = selectedFields.contains(field)
+        return Button {
+            if active {
+                if selectedFields.count > 1 {
+                    selectedFields.remove(field)
+                }
+            } else {
+                selectedFields.insert(field)
+            }
+        } label: {
+            Text(field.label)
+                .font(DS.Font.caption2)
+                .fontWeight(active ? .bold : .semibold)
+                .foregroundColor(active ? DS.Color.textOnPrimary : DS.Color.textSecondary)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(active ? DS.Color.primary : Color.clear)
+                .clipShape(Capsule())
+                .overlay(
+                    Capsule().stroke(
+                        active ? Color.clear : DS.Color.textTertiary.opacity(0.25),
+                        lineWidth: 0.8
+                    )
+                )
+        }
+        .buttonStyle(.plain)
+    }
+
+    // متى نظهر نطاق العمر
+    private var needsAgeFilter: Bool {
+        selectedReport == .age || selectedReport == .phone || selectedFields.contains(.age)
+    }
+
+    // MARK: - بطاقة قسم موحّدة (مستخدمة للنتائج/التصدير فقط)
+
+    @ViewBuilder
+    private func sectionCard<Content: View>(
+        icon: String,
+        title: String,
+        color: Color,
+        trailing: String? = nil,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            HStack(spacing: DS.Spacing.xs) {
+                Image(systemName: icon)
+                    .font(DS.Font.scaled(13, weight: .bold))
+                    .foregroundColor(color)
+                Text(title)
+                    .font(DS.Font.calloutBold)
+                    .foregroundColor(DS.Color.textPrimary)
+                Spacer()
+                if let trailing {
+                    Text(trailing)
+                        .font(DS.Font.caption2)
+                        .fontWeight(.bold)
+                        .foregroundColor(DS.Color.textSecondary)
+                        .padding(.horizontal, DS.Spacing.sm)
+                        .padding(.vertical, 3)
+                        .background(Capsule().fill(DS.Color.surface))
+                        .overlay(
+                            Capsule().stroke(DS.Color.textTertiary.opacity(0.2), lineWidth: 0.8)
+                        )
+                }
+            }
+            content()
+        }
+        .padding(DS.Spacing.md)
+        .background(DS.Color.surface)
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                .stroke(color.opacity(0.15), lineWidth: 1)
+        )
+    }
+
 
     private var resultsSection: some View {
         DSCard(padding: 0) {
@@ -712,8 +888,55 @@ struct AdminReportsView: View {
     }
 
     private func ageForMember(_ member: FamilyMember) -> Int? {
+        // ما نحسب عمر للمتوفى
+        if member.isDeceased == true { return nil }
         guard let birthDate = parsedBirthDate(member.birthDate) else { return nil }
         return Calendar.current.dateComponents([.year], from: birthDate, to: Date()).year
+    }
+
+    /// استخراج قيمة حقل لعضو — يستخدم في الـ PDF
+    static func formatField(
+        _ field: ReportField,
+        for member: FamilyMember,
+        ageResolver: (FamilyMember) -> Int?
+    ) -> String {
+        switch field {
+        case .fullName:
+            return member.fullName
+        case .firstName:
+            return member.firstName
+        case .phone:
+            let phone = (member.phoneNumber ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            return phone.isEmpty ? "—" : KuwaitPhone.display(phone)
+        case .age:
+            return ageResolver(member).map { "\($0)" } ?? "—"
+        case .birthDate:
+            return (member.birthDate ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                ? "—" : (member.birthDate ?? "—")
+        case .deathDate:
+            return (member.deathDate ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                ? "—" : (member.deathDate ?? "—")
+        case .role:
+            return member.roleName
+        case .status:
+            if member.isDeceased == true { return "متوفى" }
+            if member.status == .frozen { return "مجمّد" }
+            let phone = (member.phoneNumber ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            if phone.isEmpty { return "بدون هاتف" }
+            return "نشط"
+        case .gender:
+            switch member.gender {
+            case "male": return "ذكر"
+            case "female": return "أنثى"
+            default: return "—"
+            }
+        case .married:
+            switch member.isMarried {
+            case true: return "نعم"
+            case false: return "لا"
+            default: return "—"
+            }
+        }
     }
 
     private func parsedBirthDate(_ raw: String?) -> Date? {
@@ -763,23 +986,33 @@ struct AdminReportsView: View {
             filters.append("فرع: \(m.fullName)")
         }
 
+        // ابنِ أعمدة ديناميكية من الحقول المختارة (مرتبة حسب الـ enum)
+        let orderedFields = ReportField.allCases.filter { selectedFields.contains($0) }
+
         do {
-            let reportData: Data
+            let reportData = try MembersPDFBuilder.makeCustomReport(
+                members: sourceMembers,
+                filters: filters,
+                title: customTitle.isEmpty ? "تقرير عائلة المحمدعلي" : customTitle,
+                accent: selectedReport.tint,
+                fields: orderedFields,
+                ageResolver: { ageForMember($0) },
+                branchName: branchRootMember?.fullName,
+                filterLabel: statusFilter.label
+            )
 
-            switch selectedReport {
-            case .family:
-                reportData = try MembersPDFBuilder.makeFamilyReport(members: sourceMembers, filters: filters)
-            case .age:
-                reportData = try MembersPDFBuilder.makeAgeReport(members: sourceMembers, filters: filters, ageResolver: { ageForMember($0) })
-            case .phone:
-                reportData = try MembersPDFBuilder.makePhoneReport(members: sourceMembers, filters: filters, ageResolver: { ageForMember($0) })
-            case .missingPhone:
-                reportData = try MembersPDFBuilder.makeMissingPhoneReport(members: sourceMembers, filters: filters)
-            }
-
+            // اسم الملف يشمل الفرع لو محدّد
             let formatter = DateFormatter()
             formatter.dateFormat = "yyyyMMdd_HHmmss"
-            let fileName = "\(selectedReport.exportBaseName)_\(formatter.string(from: Date())).pdf"
+            var nameParts: [String] = [
+                customTitle.isEmpty ? "report" : customTitle.replacingOccurrences(of: " ", with: "_")
+            ]
+            if let m = branchRootMember {
+                let firstWord = m.fullName.split(separator: " ").first.map(String.init) ?? ""
+                if !firstWord.isEmpty { nameParts.append("فرع-\(firstWord)") }
+            }
+            nameParts.append(formatter.string(from: Date()))
+            let fileName = "\(nameParts.joined(separator: "-")).pdf"
             let fileURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
             try reportData.write(to: fileURL, options: .atomic)
 
@@ -801,18 +1034,25 @@ struct AdminReportsView: View {
 private enum MembersPDFBuilder {
     private static let pageWidth: CGFloat = 595
     private static let pageHeight: CGFloat = 842
-    private static let margin: CGFloat = 28
-    private static let rowHeight: CGFloat = 28
-    private static let pageBodyTop: CGFloat = 120
-    private static let border = UIColor(red: 0.86, green: 0.88, blue: 0.90, alpha: 1.0)
-    private static let softGray = UIColor(red: 0.96, green: 0.97, blue: 0.98, alpha: 1.0)
-    private static let textPrimary = UIColor(red: 0.11, green: 0.15, blue: 0.20, alpha: 1.0)
+    private static let margin: CGFloat = 36
+    private static let rowHeight: CGFloat = 24
+    private static let pageBodyTop: CGFloat = 150     // الصفحة الأولى: تحت الهيدر مباشرة (مقرّب)
+    private static let pageBodyTopOther: CGFloat = 50 // الصفحات الباقية: قريب من الأعلى
+    private static let border = UIColor(red: 0.89, green: 0.91, blue: 0.93, alpha: 1.0)
+    private static let softGray = UIColor(red: 0.97, green: 0.98, blue: 0.99, alpha: 1.0)
+    private static let headerGray = UIColor(red: 0.94, green: 0.96, blue: 0.97, alpha: 1.0)
+    private static let textPrimary = UIColor(red: 0.06, green: 0.09, blue: 0.16, alpha: 1.0)
     private static let textMuted = UIColor(red: 0.39, green: 0.45, blue: 0.52, alpha: 1.0)
+    private static let textTertiary = UIColor(red: 0.58, green: 0.64, blue: 0.72, alpha: 1.0)
 
-    private static let titleFont = UIFont.boldSystemFont(ofSize: 20)
-    private static let bodyFont = UIFont.systemFont(ofSize: 10.5, weight: .regular)
-    private static let bodyBoldFont = UIFont.systemFont(ofSize: 10.5, weight: .semibold)
-    private static let smallFont = UIFont.systemFont(ofSize: 9, weight: .medium)
+    private static let titleFont = UIFont.systemFont(ofSize: 26, weight: .black)
+    private static let brandFont = UIFont.systemFont(ofSize: 9, weight: .semibold)
+    private static let bodyFont = UIFont.systemFont(ofSize: 10, weight: .regular)
+    private static let bodyBoldFont = UIFont.systemFont(ofSize: 10, weight: .semibold)
+    private static let metaFont = UIFont.systemFont(ofSize: 9, weight: .regular)
+    private static let metaBoldFont = UIFont.systemFont(ofSize: 9, weight: .bold)
+    private static let smallFont = UIFont.systemFont(ofSize: 8.5, weight: .medium)
+    private static let branchFont = UIFont.systemFont(ofSize: 11, weight: .bold)
 
     private struct ReportColumn {
         let title: String
@@ -823,6 +1063,45 @@ private enum MembersPDFBuilder {
     private struct PDFTheme {
         let accent: UIColor
         let title: String
+    }
+
+    /// تقرير ديناميكي بالحقول المختارة من قبل المستخدم
+    static func makeCustomReport(
+        members: [FamilyMember],
+        filters: [String],
+        title: String,
+        accent: Color,
+        fields: [AdminReportsView.ReportField],
+        ageResolver: @escaping (FamilyMember) -> Int?,
+        branchName: String? = nil,
+        filterLabel: String? = nil
+    ) throws -> Data {
+        let uiAccent = UIColor(accent)
+
+        var columns: [ReportColumn] = [
+            ReportColumn(title: "م", ratio: 0.06) { _, index in "\(index)" }
+        ]
+        let fieldsTotalRatio = fields.reduce(0.0) { $0 + $1.ratio }
+        let availableRatio: CGFloat = 0.94
+        let normalizer: CGFloat = fieldsTotalRatio > 0 ? availableRatio / fieldsTotalRatio : 1.0
+        for field in fields {
+            let normalizedRatio = field.ratio * normalizer
+            columns.append(ReportColumn(title: field.label, ratio: normalizedRatio) { member, _ in
+                AdminReportsView.formatField(field, for: member, ageResolver: ageResolver)
+            })
+        }
+
+        let fieldLabels = fields.map { $0.label }.joined(separator: " • ")
+
+        return try makeMembersTableReport(
+            members: members,
+            filters: filters,
+            theme: PDFTheme(accent: uiAccent, title: title),
+            columns: columns,
+            branchName: branchName,
+            fieldLabels: fieldLabels,
+            filterLabel: filterLabel
+        )
     }
 
     static func makePhoneReport(members: [FamilyMember], filters: [String], ageResolver: @escaping (FamilyMember) -> Int?) throws -> Data {
@@ -894,16 +1173,33 @@ private enum MembersPDFBuilder {
         let count: Int
         let filters: [String]
         let accent: UIColor
+        let branchName: String?      // اسم الفرع لو محدد
+        let fieldLabels: String?     // أسماء الحقول مفصولة بـ •
+        let filterLabel: String?     // فلتر الأعضاء (أحياء/متوفون...)
+        let reportNumber: String     // رقم تقرير قصير
     }
 
     private static func makeMembersTableReport(
         members: [FamilyMember],
         filters: [String],
         theme: PDFTheme,
-        columns: [ReportColumn]
+        columns: [ReportColumn],
+        branchName: String? = nil,
+        fieldLabels: String? = nil,
+        filterLabel: String? = nil
     ) throws -> Data {
         let renderer = makeRenderer(title: theme.title)
-        let context = ReportContext(title: theme.title, count: members.count, filters: filters, accent: theme.accent)
+        let reportNumber = String(Int.random(in: 100000...999999))
+        let context = ReportContext(
+            title: theme.title,
+            count: members.count,
+            filters: filters,
+            accent: theme.accent,
+            branchName: branchName,
+            fieldLabels: fieldLabels,
+            filterLabel: filterLabel,
+            reportNumber: reportNumber
+        )
 
         return renderer.pdfData { pdf in
             var pageNumber = 1
@@ -943,29 +1239,104 @@ private enum MembersPDFBuilder {
         pdf.beginPage()
         UIColor.white.setFill()
         UIBezierPath(rect: CGRect(x: 0, y: 0, width: pageWidth, height: pageHeight)).fill()
-        drawHeaderCard(context: context)
-        drawFooter(pageNumber: pageNumber, drawNow: false)
-        return pageBodyTop
+        // الهيدر فقط في الصفحة الأولى
+        if pageNumber == 1 {
+            drawHeaderCard(context: context)
+            return pageBodyTop
+        } else {
+            return pageBodyTopOther
+        }
     }
 
     private static func drawHeaderCard(context: ReportContext) {
-        let cardRect = CGRect(x: margin, y: 18, width: pageWidth - margin * 2, height: 84)
-        fillRoundedRect(cardRect, color: UIColor.white)
-        strokeRoundedRect(cardRect, color: border, lineWidth: 1)
+        let leftEdge = margin
+        let rightEdge = pageWidth - margin
+        let topY: CGFloat = 36
+        let contentWidth = rightEdge - leftEdge
 
-        if let logo = UIImage(named: "AppIconImage") {
-            let logoRect = CGRect(x: cardRect.maxX - 54, y: cardRect.minY + 16, width: 28, height: 28)
-            let currentContext = UIGraphicsGetCurrentContext()
-            currentContext?.saveGState()
-            UIBezierPath(roundedRect: logoRect.insetBy(dx: -3, dy: -3), cornerRadius: 10).addClip()
-            logo.draw(in: logoRect)
-            currentContext?.restoreGState()
+        // (1) شعار العائلة "ALMOHAMMADALI FAMILY" — يمين أعلى الصفحة (RTL = visual right)
+        let brand = "ALMOHAMMADALI FAMILY"
+        drawRTLText(
+            brand,
+            in: CGRect(x: leftEdge, y: topY, width: contentWidth, height: 12),
+            font: brandFont,
+            color: textTertiary,
+            alignment: .right,
+            kern: 2.5
+        )
+
+        // (2) التاريخ + رقم التقرير — يسار أعلى الصفحة
+        let dateStr = formattedFullDate()
+        drawRTLText(
+            dateStr,
+            in: CGRect(x: leftEdge, y: topY, width: 220, height: 12),
+            font: metaBoldFont,
+            color: textPrimary,
+            alignment: .left
+        )
+        drawRTLText(
+            "تقرير #\(context.reportNumber)",
+            in: CGRect(x: leftEdge, y: topY + 14, width: 220, height: 12),
+            font: metaFont,
+            color: textMuted,
+            alignment: .left
+        )
+
+        // (3) عنوان التقرير الرئيسي — كبير وعريض
+        drawRTLText(
+            context.title,
+            in: CGRect(x: leftEdge, y: topY + 16, width: contentWidth, height: 36),
+            font: titleFont,
+            color: textPrimary,
+            alignment: .right
+        )
+
+        // (4) اسم الفرع (لو موجود) — بلون الـ accent + أيقونة شجرة
+        var branchY: CGFloat = topY + 16 + 36
+        if let branch = context.branchName, !branch.isEmpty {
+            drawRTLText(
+                "🌳 فرع \(branch)",
+                in: CGRect(x: leftEdge, y: branchY, width: contentWidth, height: 16),
+                font: branchFont,
+                color: context.accent,
+                alignment: .right
+            )
+            branchY += 18
         }
 
-        drawRTFText(context.title, in: CGRect(x: cardRect.minX + 18, y: cardRect.minY + 14, width: cardRect.width - 76, height: 24), font: titleFont, color: textPrimary)
-        let filterText = context.filters.isEmpty ? "بدون تصفية" : context.filters.joined(separator: " • ")
-        let meta = "عدد السجلات: \(context.count)    |    التاريخ: \(formattedNow())    |    التصفية: \(filterText)"
-        drawRTFText(meta, in: CGRect(x: cardRect.minX + 18, y: cardRect.minY + 46, width: cardRect.width - 36, height: 18), font: bodyFont, color: textMuted)
+        // (5) خط فاصل خفيف
+        let separatorY = branchY + 6
+        let separator = UIBezierPath()
+        separator.move(to: CGPoint(x: leftEdge, y: separatorY))
+        separator.addLine(to: CGPoint(x: rightEdge, y: separatorY))
+        separator.lineWidth = 0.6
+        border.setStroke()
+        separator.stroke()
+
+        // (6) سطر التفاصيل: العدد + الفلتر + الحقول
+        let metaY = separatorY + 6
+        var metaParts: [String] = []
+        metaParts.append("👥 العدد: \(context.count) عضو")
+        if let f = context.filterLabel, !f.isEmpty {
+            metaParts.append("🏷️ الفلتر: \(f)")
+        }
+        if let fields = context.fieldLabels, !fields.isEmpty {
+            metaParts.append("📋 الحقول: \(fields)")
+        }
+        drawRTLText(
+            metaParts.joined(separator: "    "),
+            in: CGRect(x: leftEdge, y: metaY, width: contentWidth, height: 14),
+            font: metaFont,
+            color: textMuted,
+            alignment: .right
+        )
+    }
+
+    private static func formattedFullDate() -> String {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "ar")
+        f.dateFormat = "EEEE، d MMMM، yyyy"
+        return f.string(from: Date())
     }
 
     private static func drawTableHeader(y: CGFloat, columns: [ReportColumn], accent: UIColor) {
@@ -1040,6 +1411,27 @@ private enum MembersPDFBuilder {
                 .paragraphStyle: paragraph
             ]
         )
+    }
+
+    /// رسم نص بمحاذاة يسار/يمين/وسط مع دعم RTL والتباعد الحرفي
+    private static func drawRTLText(
+        _ text: String,
+        in rect: CGRect,
+        font: UIFont,
+        color: UIColor,
+        alignment: NSTextAlignment = .right,
+        kern: CGFloat = 0
+    ) {
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.alignment = alignment
+        paragraph.baseWritingDirection = .rightToLeft
+        var attrs: [NSAttributedString.Key: Any] = [
+            .font: font,
+            .foregroundColor: color,
+            .paragraphStyle: paragraph
+        ]
+        if kern > 0 { attrs[.kern] = kern }
+        (text as NSString).draw(in: rect, withAttributes: attrs)
     }
 
     private static func standardizedPhone(_ phone: String?) -> String {

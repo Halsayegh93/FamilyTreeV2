@@ -6,6 +6,12 @@
       "runtimeExecutable": "bash",
       "runtimeArgs": ["-c", "echo 'Supabase Functions running on port 54321' && while true; do sleep 3600; done"],
       "port": 54321
+    },
+    {
+      "name": "docs-preview",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "http.server", "8080", "--directory", "docs"],
+      "port": 8080
     }
   ]
 }

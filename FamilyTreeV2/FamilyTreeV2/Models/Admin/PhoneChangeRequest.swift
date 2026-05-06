@@ -1,6 +1,6 @@
 import Foundation
 
-struct PhoneChangeRequest: Identifiable, Codable {
+nonisolated struct PhoneChangeRequest: Identifiable, Codable, Sendable {
     let id: UUID
     let memberId: UUID
     let requesterId: UUID?

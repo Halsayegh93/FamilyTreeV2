@@ -98,9 +98,9 @@ struct ProfileView: View {
             .sheet(isPresented: $showEditProfile) { if let c = user { EditProfileView(member: c) } }
             .sheet(isPresented: $showQRCode) {
                 if let c = user {
-                    QRCodeSheet(member: c)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .presentationDetents([.height(420)])
+                    QRCodeSheet(member: c, selectedTab: $selectedTab)
+                        .presentationDetents([.medium, .large])
+                        .presentationDragIndicator(.visible)
                 }
             }
             .fullScreenCover(isPresented: $showQRScanner) { QRScannerView(selectedTab: $selectedTab) }
@@ -265,7 +265,7 @@ struct ProfileView: View {
                         HStack(spacing: DS.Spacing.xs) {
                             Image(systemName: "qrcode")
                                 .font(DS.Font.scaled(11, weight: .bold))
-                            Text(L10n.t("كودي", "My QR"))
+                            Text(L10n.t("رمز QR", "QR Code"))
                                 .font(DS.Font.scaled(11, weight: .bold))
                         }
                         .foregroundColor(DS.Color.secondary)
@@ -275,7 +275,7 @@ struct ProfileView: View {
                         .clipShape(Capsule())
                     }
                     .buttonStyle(DSScaleButtonStyle())
-                    .accessibilityLabel(L10n.t("عرض كودي", "Show My QR"))
+                    .accessibilityLabel(L10n.t("عرض رمز QR", "Show QR Code"))
                 }
                 .padding(.horizontal, DS.Spacing.lg)
                 .padding(.top, DS.Spacing.md)

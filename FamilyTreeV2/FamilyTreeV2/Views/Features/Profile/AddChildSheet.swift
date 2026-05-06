@@ -9,7 +9,6 @@ struct AddChildSheet: View {
     let member: FamilyMember
 
     @State private var firstName: String = ""
-    @State private var familyName: String = ""
     @AppStorage("lastAuthDialingCode") private var lastAuthDialingCode: String = ""
     @State private var selectedPhoneCountry: KuwaitPhone.Country = KuwaitPhone.defaultCountry
     @State private var phoneNumber: String = ""
@@ -110,29 +109,6 @@ struct AddChildSheet: View {
 
                     DSDivider()
 
-                    // Family name field
-                    HStack(spacing: DS.Spacing.md) {
-                        DSIcon("person.2.fill", color: DS.Color.primary)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(L10n.t("اسم العائلة", "Family Name"))
-                                .font(DS.Font.caption1)
-                                .foregroundColor(DS.Color.textSecondary)
-                            TextField(L10n.t("اسم العائلة", "Family name"), text: $familyName)
-                                .font(DS.Font.callout)
-                                .foregroundColor(DS.Color.textPrimary)
-                                .onChange(of: familyName) { _ in
-                                    if familyName.count > 50 {
-                                        familyName = String(familyName.prefix(50))
-                                    }
-                                }
-                        }
-                        Spacer()
-                    }
-                    .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.vertical, DS.Spacing.xs)
-
-                    DSDivider()
-
                     // TODO: gender — re-enable when needed
 
                     // Phone field — بدون رمز الدولة
@@ -209,8 +185,8 @@ struct AddChildSheet: View {
             isLoading: memberVM.isLoading,
             action: saveChild
         )
-        .opacity(firstName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || familyName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.5 : 1.0)
-        .disabled(firstName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || familyName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || memberVM.isLoading)
+        .opacity(firstName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.5 : 1.0)
+        .disabled(firstName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || memberVM.isLoading)
     }
 
     private func saveChild() {

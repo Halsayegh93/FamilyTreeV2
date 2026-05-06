@@ -68,6 +68,43 @@ struct FamilyTreeV2App: App {
                         _ = await (n, m)
                     }
                 }
+                .onReceive(NotificationCenter.default.publisher(for: .didTapApproveRequestAction)) { note in
+                    guard let userInfo    = note.userInfo,
+                          let idString    = userInfo["request_id"]   as? String,
+                          let requestId   = UUID(uuidString: idString),
+                          let requestType = userInfo["request_type"] as? String else { return }
+                    Task {
+                        let ok = await self.appState.notificationVM.approveRequest(requestId: requestId, requestType: requestType)
+                        if ok {
+                            async let n: () = self.appState.notificationVM.fetchNotifications(force: true)
+                            async let m: () = self.appState.memberVM.fetchAllMembers(force: true)
+                            _ = await (n, m)
+                        }
+                    }
+                }
+                .onReceive(NotificationCenter.default.publisher(for: .didTapRejectRequestAction)) { note in
+                    guard let userInfo    = note.userInfo,
+                          let idString    = userInfo["request_id"]   as? String,
+                          let requestId   = UUID(uuidString: idString),
+                          let requestType = userInfo["request_type"] as? String else { return }
+                    Task {
+                        let ok = await self.appState.notificationVM.rejectRequest(requestId: requestId, requestType: requestType)
+                        if ok {
+                            async let n: () = self.appState.notificationVM.fetchNotifications(force: true)
+                            async let m: () = self.appState.memberVM.fetchAllMembers(force: true)
+                            _ = await (n, m)
+                        }
+                    }
+                }
+                .onReceive(NotificationCenter.default.publisher(for: .didTapOpenRequestAction)) { _ in
+                    // يفتح تاب الإدارة — MainTabView يتولى التبديل
+                    NotificationCenter.default.post(name: .openAdminRequests, object: nil)
+                    Task {
+                        async let n: () = self.appState.notificationVM.fetchNotifications(force: true)
+                        async let m: () = self.appState.memberVM.fetchAllMembers(force: true)
+                        _ = await (n, m)
+                    }
+                }
                 // Deep Link — QR Code → فتح الشجرة وعرض صلة القرابة
                 .onOpenURL { url in
                     // familytree://member/{memberId}

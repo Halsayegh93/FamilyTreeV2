@@ -1,7 +1,7 @@
 import Foundation
 import CoreLocation
 
-struct Diwaniya: Identifiable, Codable {
+nonisolated struct Diwaniya: Identifiable, Codable, Sendable {
     let id: UUID
     var ownerId: UUID
     var ownerName: String

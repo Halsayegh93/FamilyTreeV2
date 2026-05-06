@@ -1,6 +1,6 @@
 import Foundation
 
-struct BannedPhone: Identifiable, Codable {
+nonisolated struct BannedPhone: Identifiable, Codable, Sendable {
     let id: UUID
     var phoneNumber: String
     let reason: String?

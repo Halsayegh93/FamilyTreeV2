@@ -12,6 +12,7 @@ struct PrivacySettingsView: View {
     @AppStorage("notif_comments") private var notifComments: Bool = true
     @AppStorage("notif_likes") private var notifLikes: Bool = true
     @AppStorage("notif_profile_updates") private var notifProfileUpdates: Bool = true
+    @AppStorage("notif_admin_activity") private var notifAdminActivity: Bool = true
     @State private var badgeEnabled: Bool = true
     @State private var isPhoneHidden: Bool = false
     @State private var isBirthDateHidden: Bool = false
@@ -182,6 +183,20 @@ struct PrivacySettingsView: View {
                     isOn: $notifProfileUpdates,
                     disabled: !notificationsEnabled
                 )
+
+                // إشعارات المستجدات — للإدارة فقط
+                if authVM.canModerate {
+                    DSDivider()
+
+                    privacyToggleRow(
+                        icon: "bell.badge.fill",
+                        color: DS.Color.accent,
+                        title: L10n.t("إشعارات المستجدات", "Activity Notifications"),
+                        subtitle: L10n.t("طلبات الانضمام والتعديلات ومستجدات التطبيق", "Join requests, edits, and app activity"),
+                        isOn: $notifAdminActivity,
+                        disabled: !notificationsEnabled
+                    )
+                }
             }
             .opacity(notificationsEnabled ? 1.0 : 0.45)
             .animation(DS.Anim.snappy, value: notificationsEnabled)

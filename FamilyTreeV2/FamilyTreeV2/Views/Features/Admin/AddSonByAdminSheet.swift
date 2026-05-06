@@ -393,7 +393,7 @@ struct AddSonByAdminSheet: View {
                         "تم إضافة ابن: \(capturedFirstName) لـ: \(parentName)",
                         "Child added: \(capturedFirstName) to: \(parentName)"
                     ),
-                    kind: "admin_child_add"
+                    kind: "admin_edit_child_add"
                 )
                 Log.info("[Admin] \(adminName) أضاف الابن \(capturedFirstName) لـ \(parentName)")
             }

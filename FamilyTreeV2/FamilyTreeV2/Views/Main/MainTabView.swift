@@ -20,7 +20,10 @@ struct MainTabView: View {
                 selectedTab = newValue
                 NotificationCenter.default.post(name: Notification.Name("TabChanged"), object: nil)
                 let tabs = ["home", "tree", "diwaniyas", "profile", "admin"]
-                if newValue < tabs.count { AppAnalytics.trackTabSwitch(tab: tabs[newValue]) }
+                if newValue < tabs.count {
+                    AppAnalytics.trackTabSwitch(tab: tabs[newValue])
+                    MemberActivityTracker.report(tabs[newValue])
+                }
             }
         )
     }
@@ -69,8 +72,14 @@ struct MainTabView: View {
         }
         .tint(DS.Color.primary)
         .toolbarBackground(.ultraThinMaterial, for: .tabBar)
+        .onReceive(NotificationCenter.default.publisher(for: .openAdminRequests)) { _ in
+            guard authVM.canModerate else { return }
+            withAnimation { selectedTab = 4 }
+        }
         }
         .task {
+            // تتبع أول شاشة عند الفتح
+            MemberActivityTracker.report("home")
             // أول مرة: النظام يطلب تلقائي من PushNotificationDelegate
             // ننتظر 3 ثواني عشان المستخدم يرد على طلب النظام أول
             try? await Task.sleep(nanoseconds: 3_000_000_000)
@@ -105,5 +114,6 @@ struct MainTabView: View {
 }
 
 extension Notification.Name {
-    static let didReselectTab = Notification.Name("didReselectTab")
+    static let didReselectTab       = Notification.Name("didReselectTab")
+    static let openAdminRequests    = Notification.Name("openAdminRequests")
 }

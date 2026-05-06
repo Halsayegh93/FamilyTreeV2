@@ -14,6 +14,7 @@ private struct NotificationKindStyle {
     private static let styles: [String: NotificationKindStyle] = [
         "approval":          .init(icon: "checkmark.circle.fill",                    gradient: DS.Color.gradientCool,    color: DS.Color.success,     labelAr: "عضوية",           labelEn: "Membership"),
         "join_approved":     .init(icon: "checkmark.circle.fill",                    gradient: DS.Color.gradientCool,    color: DS.Color.success,     labelAr: "عضوية",           labelEn: "Membership"),
+        "join_request":      .init(icon: "link.circle.fill",                         gradient: DS.Color.gradientCool,    color: DS.Color.info,        labelAr: "طلب انضمام",      labelEn: "Join Request"),
         "news":              .init(icon: "newspaper.fill",                           gradient: DS.Color.gradientPrimary, color: DS.Color.primary,     labelAr: "أخبار",           labelEn: "News"),
         "news_add":          .init(icon: "newspaper.fill",                           gradient: DS.Color.gradientPrimary, color: DS.Color.primary,     labelAr: "أخبار",           labelEn: "News"),
         "admin":             .init(icon: "shield.fill",                              gradient: DS.Color.gradientAccent,  color: DS.Color.accent,      labelAr: "إدارة",           labelEn: "Admin"),
@@ -318,12 +319,32 @@ struct NotificationsCenterView: View {
         return kinds
     }
 
+    /// أنواع الإشعارات الإدارية — المدير والمالك فقط يشوفونها
+    private let adminOnlyKinds: Set<String> = [
+        NotificationKind.adminEdit.rawValue,
+        NotificationKind.adminRequest.rawValue,
+        NotificationKind.treeEdit.rawValue,
+        NotificationKind.linkRequest.rawValue,
+        NotificationKind.adminEditName.rawValue,
+        NotificationKind.adminEditDates.rawValue,
+        NotificationKind.adminEditPhone.rawValue,
+        NotificationKind.adminEditRole.rawValue,
+        NotificationKind.adminEditFather.rawValue,
+        NotificationKind.adminEditAvatar.rawValue,
+        NotificationKind.adminEditChildAdd.rawValue,
+        NotificationKind.adminEditChildRemove.rawValue,
+    ]
+
     private var filteredNotifications: [AppNotification] {
         let base: [AppNotification]
         if authVM.isAdmin {
+            // المدير يشوف كل شي
             base = notificationVM.notifications
         } else {
-            base = notificationVM.notifications.filter { $0.targetMemberId != nil }
+            // الباقي يشوفون: الموجهة لهم + العامة (بدون الإدارية)
+            base = notificationVM.notifications.filter { notif in
+                notif.targetMemberId != nil || !adminOnlyKinds.contains(notif.kind)
+            }
         }
         if hiddenKinds.isEmpty { return base }
         return base.filter { !hiddenKinds.contains($0.kind) }

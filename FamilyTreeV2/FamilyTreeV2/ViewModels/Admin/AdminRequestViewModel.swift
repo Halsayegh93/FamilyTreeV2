@@ -120,7 +120,9 @@ class AdminRequestViewModel: ObservableObject {
                 targetId = user.id.uuidString
             }
 
+            let requestId = UUID()
             let basePayload: [String: AnyEncodable] = [
+                "id": AnyEncodable(requestId.uuidString),
                 "member_id": AnyEncodable(targetId),
                 "requester_id": AnyEncodable(user.id.uuidString),
                 "request_type": AnyEncodable(RequestType.treeEdit.rawValue),
@@ -147,7 +149,9 @@ class AdminRequestViewModel: ObservableObject {
                     "طلب تعديل: \(payload.action) — \(memberName)",
                     "Edit request: \(payload.action) — \(memberName)"
                 ),
-                kind: NotificationKind.treeEdit.rawValue
+                kind: NotificationKind.treeEdit.rawValue,
+                requestId: requestId,
+                requestType: RequestType.treeEdit.rawValue
             )
 
             Log.info("[TreeEdit] Submitted: \(payload.action) — \(memberName)")
@@ -293,7 +297,8 @@ class AdminRequestViewModel: ObservableObject {
                 await self?.notificationVM?.sendNotification(
                     title: L10n.t("لم يتم قبول طلبك", "Your Request Was Declined"),
                     body: L10n.t(bodyAr, bodyEn),
-                    targetMemberIds: [request.requesterId]
+                    targetMemberIds: [request.requesterId],
+                    kind: "request_rejected"
                 )
                 Log.info("[TreeEdit] Rejected: \(actionDesc)")
             } catch {
@@ -311,7 +316,9 @@ class AdminRequestViewModel: ObservableObject {
         do {
             let dateString = deathDate.map { DateHelper.format($0) } ?? "غير محدد"
 
+            let deceasedRequestId = UUID()
             let requestData: [String: AnyEncodable] = [
+                "id": AnyEncodable(deceasedRequestId.uuidString),
                 "member_id": AnyEncodable(memberId.uuidString),
                 "requester_id": AnyEncodable(currentUser?.id.uuidString ?? ""),
                 "request_type": AnyEncodable(RequestType.deceasedReport.rawValue),
@@ -332,7 +339,9 @@ class AdminRequestViewModel: ObservableObject {
                     "\(requesterDeceasedName) يطلب تأكيد وفاة \(deceasedMemberName)",
                     "\(requesterDeceasedName) requests deceased confirmation for \(deceasedMemberName)"
                 ),
-                kind: RequestType.deceasedReport.rawValue
+                kind: RequestType.deceasedReport.rawValue,
+                requestId: deceasedRequestId,
+                requestType: RequestType.deceasedReport.rawValue
             )
 
             Log.info("تم إرسال طلب تأكيد الوفاة للإدارة بنجاح")
@@ -519,6 +528,40 @@ class AdminRequestViewModel: ObservableObject {
         return successCount
     }
 
+    func bulkApproveJoinRequests(memberIds: [UUID]) async -> Int {
+        guard !memberIds.isEmpty else { return 0 }
+        isLoading = true
+        var approved = 0
+        do {
+            let payload: [String: AnyEncodable] = [
+                "role": AnyEncodable("member"),
+                "status": AnyEncodable("active"),
+                "is_hidden_from_tree": AnyEncodable(false)
+            ]
+            try await supabase
+                .from("profiles")
+                .update(payload)
+                .in("id", values: memberIds.map { $0.uuidString })
+                .execute()
+
+            for id in memberIds {
+                if let index = memberVM?.allMembers.firstIndex(where: { $0.id == id }) {
+                    memberVM?.allMembers[index].role = .member
+                    memberVM?.allMembers[index].status = .active
+                    memberVM?.allMembers[index].isHiddenFromTree = false
+                    approved += 1
+                }
+            }
+            memberVM?.objectWillChange.send()
+            Log.info("تم قبول \(approved) عضو جماعياً")
+        } catch {
+            self.errorMessage = L10n.t("فشل القبول الجماعي", "Bulk approve failed")
+            Log.error("فشل القبول الجماعي: \(error.localizedDescription)")
+        }
+        isLoading = false
+        return approved
+    }
+
     // MARK: - Admin Add Son
 
     func adminAddSon(firstName: String, parent: FamilyMember?) async {
@@ -649,7 +692,9 @@ class AdminRequestViewModel: ObservableObject {
             return
         }
         do {
+            let phoneRequestId = UUID()
             let requestData: [String: AnyEncodable] = [
+                "id": AnyEncodable(phoneRequestId.uuidString),
                 "member_id": AnyEncodable(memberId.uuidString),
                 "requester_id": AnyEncodable(currentUser?.id.uuidString),
                 "request_type": AnyEncodable(RequestType.phoneChange.rawValue),
@@ -670,7 +715,9 @@ class AdminRequestViewModel: ObservableObject {
                     "\(phoneRequesterName) يطلب تغيير رقم هاتفه",
                     "\(phoneRequesterName) requests a phone number change"
                 ),
-                kind: RequestType.phoneChange.rawValue
+                kind: RequestType.phoneChange.rawValue,
+                requestId: phoneRequestId,
+                requestType: RequestType.phoneChange.rawValue
             )
 
             Log.info("تم إرسال طلب تغيير الرقم للإدارة: \(Log.masked(normalizedPhone))")
@@ -685,7 +732,9 @@ class AdminRequestViewModel: ObservableObject {
     func requestNameChange(memberId: UUID, newName: String) async {
         self.isLoading = true
         do {
+            let nameRequestId = UUID()
             let requestData: [String: AnyEncodable] = [
+                "id": AnyEncodable(nameRequestId.uuidString),
                 "member_id": AnyEncodable(memberId.uuidString),
                 "requester_id": AnyEncodable(currentUser?.id.uuidString),
                 "request_type": AnyEncodable(RequestType.nameChange.rawValue),
@@ -706,7 +755,9 @@ class AdminRequestViewModel: ObservableObject {
                     "طلب تغيير اسم: \(requesterFullName) إلى \(newName)",
                     "Name change request: \(requesterFullName) to \(newName)"
                 ),
-                kind: RequestType.nameChange.rawValue
+                kind: RequestType.nameChange.rawValue,
+                requestId: nameRequestId,
+                requestType: RequestType.nameChange.rawValue
             )
 
             Log.info("تم إرسال طلب تغيير الاسم للإدارة: \(newName)")
@@ -796,7 +847,8 @@ class AdminRequestViewModel: ObservableObject {
                 await self?.notificationVM?.sendNotification(
                     title: L10n.t("لم يتم قبول طلبك", "Your Request Was Declined"),
                     body: L10n.t("طلب تغيير الاسم لم تتم الموافقة عليه", "Your name change request was not approved"),
-                    targetMemberIds: [request.requesterId]
+                    targetMemberIds: [request.requesterId],
+                    kind: "request_rejected"
                 )
                 Log.info("[NameChange] تم رفض طلب تغيير الاسم")
             } catch {
@@ -888,7 +940,8 @@ class AdminRequestViewModel: ObservableObject {
                     await self?.notificationVM?.sendNotification(
                         title: L10n.t("لم يتم قبول طلبك", "Your Request Was Declined"),
                         body: L10n.t("طلب تغيير رقم الهاتف لم تتم الموافقة عليه", "Your phone change request was not approved"),
-                        targetMemberIds: [requesterId]
+                        targetMemberIds: [requesterId],
+                        kind: "request_rejected"
                     )
                 }
                 Log.info("[PhoneChange] تم رفض طلب تغيير الرقم")
@@ -1192,10 +1245,10 @@ class AdminRequestViewModel: ObservableObject {
                 await self?.notificationVM?.notifyAdminsWithPush(
                     title: L10n.t("حذف عضو", "Member Removed"),
                     body: L10n.t(
-                        "تم حذف \(deletedName) من شجرة العائلة",
-                        "\(deletedName) was removed from the family tree"
+                        "تم حذف «\(deletedName)» من شجرة العائلة",
+                        "«\(deletedName)» was removed from the family tree"
                     ),
-                    kind: "admin"
+                    kind: "member_delete"
                 )
                 Log.info("تم حذف العضو مع تنظيف المراجع المرتبطة بنجاح")
             } catch {
@@ -1319,8 +1372,10 @@ class AdminRequestViewModel: ObservableObject {
 
             // 2. إنشاء طلب إداري
             let memberName = memberById(memberId)?.fullName ?? "عضو"
+            let photoRequestId = UUID()
 
             let basePayload: [String: AnyEncodable] = [
+                "id": AnyEncodable(photoRequestId.uuidString),
                 "member_id": AnyEncodable(memberId.uuidString),
                 "requester_id": AnyEncodable(user.id.uuidString),
                 "request_type": AnyEncodable(RequestType.photoSuggestion.rawValue),
@@ -1348,7 +1403,9 @@ class AdminRequestViewModel: ObservableObject {
                     "اقتراح صورة جديدة لـ: \(memberName) تحتاج موافقتكم",
                     "New photo suggestion for: \(memberName) — needs approval"
                 ),
-                kind: RequestType.photoSuggestion.rawValue
+                kind: RequestType.photoSuggestion.rawValue,
+                requestId: photoRequestId,
+                requestType: RequestType.photoSuggestion.rawValue
             )
 
             Log.info("[PhotoSuggestion] تم إرسال اقتراح صورة لـ \(memberName)")

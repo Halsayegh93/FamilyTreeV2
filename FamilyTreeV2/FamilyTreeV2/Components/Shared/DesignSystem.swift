@@ -563,8 +563,16 @@ struct DSPrimaryButton: View {
         self.action = action
     }
 
+    private var debouncedAction: () -> Void {
+        let key = "DSPrimary_\(title)"
+        let original = action
+        return {
+            if TapDebouncer.shared.canFire(key) { original() }
+        }
+    }
+
     var body: some View {
-        Button(action: action) {
+        Button(action: debouncedAction) {
             HStack(spacing: DS.Spacing.sm) {
                 if isLoading {
                     ProgressView().tint(.white)
@@ -625,8 +633,16 @@ struct DSSecondaryButton: View {
         self.action = action
     }
 
+    private var debouncedAction: () -> Void {
+        let key = "DSSecondary_\(title)"
+        let original = action
+        return {
+            if TapDebouncer.shared.canFire(key) { original() }
+        }
+    }
+
     var body: some View {
-        Button(action: action) {
+        Button(action: debouncedAction) {
             HStack(spacing: DS.Spacing.sm) {
                 if let icon { Image(systemName: icon).font(DS.Font.scaled(14, weight: .bold)) }
                 Text(title).fontWeight(.bold)
@@ -855,6 +871,7 @@ struct DSSheetHeader: View {
     var confirmTitle: String = L10n.t("حفظ", "Save")
     var isLoading: Bool = false
     var confirmDisabled: Bool = false
+    var showBackground: Bool = true
     var onCancel: () -> Void
     var onConfirm: () -> Void
 
@@ -894,7 +911,7 @@ struct DSSheetHeader: View {
 
             Divider().opacity(0.3)
         }
-        .background(DS.Color.surface)
+        .background(showBackground ? DS.Color.surface : Color.clear)
     }
 }
 
@@ -966,8 +983,14 @@ struct DSFloatingButton: View {
 
     @State private var appeared = false
 
+    private var debouncedAction: () -> Void {
+        let key = "DSFloating_\(icon)_\(label ?? "")"
+        let original = action
+        return { if TapDebouncer.shared.canFire(key) { original() } }
+    }
+
     var body: some View {
-        Button(action: action) {
+        Button(action: debouncedAction) {
             HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: icon)
                     .font(DS.Font.scaled(20, weight: .black))
@@ -1064,10 +1087,21 @@ struct DSApproveRejectButtons: View {
     var onApprove: () -> Void
     var onReject: () -> Void
 
+    private var debouncedApprove: () -> Void {
+        let key = "DSApprove_\(approveTitle)"
+        let original = onApprove
+        return { if TapDebouncer.shared.canFire(key) { original() } }
+    }
+    private var debouncedReject: () -> Void {
+        let key = "DSReject_\(rejectTitle)"
+        let original = onReject
+        return { if TapDebouncer.shared.canFire(key) { original() } }
+    }
+
     var body: some View {
         HStack(spacing: DS.Spacing.md) {
             if showReject {
-            Button(action: onReject) {
+            Button(action: debouncedReject) {
                 Text(rejectTitle)
                     .font(DS.Font.calloutBold)
                     .foregroundColor(DS.Color.error)
@@ -1082,7 +1116,7 @@ struct DSApproveRejectButtons: View {
             }
             }
 
-            Button(action: onApprove) {
+            Button(action: debouncedApprove) {
                 ZStack {
                     if isLoading {
                         ProgressView().tint(.white)
@@ -1134,8 +1168,14 @@ struct DSIconButton: View {
         self.action = action
     }
 
+    private var debouncedAction: () -> Void {
+        let key = "DSIconButton_\(icon)"
+        let original = action
+        return { if TapDebouncer.shared.canFire(key) { original() } }
+    }
+
     var body: some View {
-        Button(action: action) {
+        Button(action: debouncedAction) {
             ZStack {
                 Circle()
                     .fill(fillColor)
@@ -1166,8 +1206,14 @@ struct DSDestructiveButton: View {
         self.action = action
     }
 
+    private var debouncedAction: () -> Void {
+        let key = "DSDestructive_\(title)"
+        let original = action
+        return { if TapDebouncer.shared.canFire(key) { original() } }
+    }
+
     var body: some View {
-        Button(action: action) {
+        Button(action: debouncedAction) {
             HStack(spacing: DS.Spacing.sm) {
                 if isLoading {
                     ProgressView().tint(DS.Color.error)
@@ -1210,8 +1256,14 @@ struct DSTextButton: View {
         self.action = action
     }
 
+    private var debouncedAction: () -> Void {
+        let key = "DSText_\(title)"
+        let original = action
+        return { if TapDebouncer.shared.canFire(key) { original() } }
+    }
+
     var body: some View {
-        Button(action: action) {
+        Button(action: debouncedAction) {
             HStack(spacing: DS.Spacing.xs) {
                 if let icon {
                     Image(systemName: icon)

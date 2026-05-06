@@ -52,34 +52,48 @@ final class CacheManager: @unchecked Sendable {
     /// طابور الـ I/O الخاص بالكاش — serial queue يكتب الملفات بدون تنافس.
     private static let ioQueue = DispatchQueue(label: "com.familytree.cache.io", qos: .utility)
 
-    /// حفظ بيانات في الكاش المحلي — الكتابة على disk في background thread
-    /// لتجنب تجميد الواجهة عند حفظ بيانات كبيرة (مثلاً ١.١ MB من الأعضاء).
-    func save<T: Encodable>(_ data: T, for key: CacheKey) {
-        // الترميز في الـ caller (سريع نسبياً)، الكتابة على القرص في background
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
+    /// مهام الحفظ المعلّقة — debounce يمنع حفظات متتالية سريعة لنفس المفتاح
+    private var pendingSaves: [String: DispatchWorkItem] = [:]
 
-        guard let jsonData = try? encoder.encode(data) else {
-            Log.warning("[Cache] فشل ترميز البيانات: \(key.rawValue)")
-            return
+    /// debounce delay لكل مفتاح — البيانات الكبيرة تنتظر أطول لتجميع التعديلات
+    private func saveDelay(for key: CacheKey) -> TimeInterval {
+        switch key {
+        case .members: return 1.5   // ١.٤ MB — نجمّع التعديلات قدر الإمكان
+        default:       return 0.3   // بيانات صغيرة — تأخير قصير يكفي
         }
+    }
 
-        let meta = CacheMeta(savedAt: Date())
-        let metaData = try? encoder.encode(meta)
+    /// حفظ بيانات في الكاش المحلي.
+    /// الترميز والكتابة يحدثان كلاهما في background مع debounce.
+    func save<T: Encodable & Sendable>(_ data: T, for key: CacheKey) {
+        // إلغاء أي حفظة معلّقة لنفس المفتاح
+        pendingSaves[key.rawValue]?.cancel()
+
         let directory = cacheDirectory
         let keyName = key.rawValue
+        let delay = saveDelay(for: key)
 
-        Self.ioQueue.async {
+        let workItem = DispatchWorkItem {
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+
+            guard let jsonData = try? encoder.encode(data) else {
+                Log.warning("[Cache] فشل ترميز البيانات: \(keyName)")
+                return
+            }
+
+            let metaData = try? encoder.encode(CacheMeta(savedAt: Date()))
             let fileURL = directory.appendingPathComponent("\(keyName).json")
             let metaURL = directory.appendingPathComponent("\(keyName)_meta.json")
-
             try? jsonData.write(to: fileURL, options: .atomic)
             if let metaData {
                 try? metaData.write(to: metaURL, options: .atomic)
             }
-
             Log.info("[Cache] 💾 حفظ \(keyName) (\(Self.formatBytes(jsonData.count)))")
         }
+
+        pendingSaves[key.rawValue] = workItem
+        Self.ioQueue.asyncAfter(deadline: .now() + delay, execute: workItem)
     }
 
     /// تحميل بيانات من الكاش المحلي (synchronous — للبيانات الصغيرة)

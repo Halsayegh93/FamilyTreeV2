@@ -1,114 +1,57 @@
 import { Webhook } from "https://esm.sh/standardwebhooks@1.0.0";
-import { createHmac } from "node:crypto";
 
-// MARK: - Supabase SMS Hook → AWS SNS
-// يستقبل طلب OTP من Supabase Auth ويرسل SMS عبر AWS SNS
+// MARK: - Supabase SMS Hook → Unifonic SMS
+// يستقبل طلب OTP من Supabase Auth ويرسل SMS عبر Unifonic
+// متصل مباشرة بشبكات الكويت والخليج (Zain, Ooredoo, STC, du, Etisalat)
 
-// AWS Signature V4 helpers
-function hmacSHA256(key: Uint8Array | string, data: string): Uint8Array {
-  const hmac = createHmac("sha256", key);
-  hmac.update(data);
-  return new Uint8Array(hmac.digest());
-}
+const FETCH_TIMEOUT_MS = 12_000;
+const MAX_RETRIES = 2;
 
-function toHex(bytes: Uint8Array): string {
-  return Array.from(bytes)
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-}
+async function sendUnifonic(phone: string, message: string): Promise<void> {
+  const appSid = Deno.env.get("UNIFONIC_APP_SID");
+  const senderId = Deno.env.get("UNIFONIC_SMS_SENDER_ID") ?? "almohali";
 
-async function sha256Hex(data: string): Promise<string> {
-  const encoded = new TextEncoder().encode(data);
-  const hash = await crypto.subtle.digest("SHA-256", encoded);
-  return toHex(new Uint8Array(hash));
-}
-
-function getSignatureKey(
-  key: string,
-  dateStamp: string,
-  region: string,
-  service: string
-): Uint8Array {
-  const kDate = hmacSHA256(`AWS4${key}`, dateStamp);
-  const kRegion = hmacSHA256(kDate, region);
-  const kService = hmacSHA256(kRegion, service);
-  return hmacSHA256(kService, "aws4_request");
-}
-
-async function sendSNS(phone: string, message: string): Promise<void> {
-  const accessKey = Deno.env.get("AWS_ACCESS_KEY_ID");
-  const secretKey = Deno.env.get("AWS_SECRET_ACCESS_KEY");
-  const region = Deno.env.get("AWS_REGION") ?? "eu-north-1";
-
-  if (!accessKey || !secretKey) {
-    throw new Error("AWS credentials not configured");
+  if (!appSid) {
+    throw new Error("UNIFONIC_APP_SID not configured");
   }
 
-  const host = `sns.${region}.amazonaws.com`;
-  const endpoint = `https://${host}/`;
-  const service = "sns";
-  const method = "POST";
+  // Unifonic يقبل الرقم بدون + (مثال: 96512345678)
+  const recipient = phone.replace(/^\+/, "");
 
-  const params = new URLSearchParams({
-    Action: "Publish",
-    PhoneNumber: phone,
-    Message: message,
-    "MessageAttributes.entry.1.Name": "AWS.SNS.SMS.SMSType",
-    "MessageAttributes.entry.1.Value.DataType": "String",
-    "MessageAttributes.entry.1.Value.StringValue": "Transactional",
-    "MessageAttributes.entry.2.Name": "AWS.SNS.SMS.SenderID",
-    "MessageAttributes.entry.2.Value.DataType": "String",
-    "MessageAttributes.entry.2.Value.StringValue": Deno.env.get("SMS_SENDER_ID") ?? "almohali",
-    Version: "2010-03-31",
-  });
-  const body = params.toString();
-
-  const now = new Date();
-  const amzDate =
-    now.toISOString().replace(/[:-]|\.\d{3}/g, "").slice(0, 15) + "Z";
-  const dateStamp = amzDate.slice(0, 8);
-
-  const payloadHash = await sha256Hex(body);
-
-  const canonicalHeaders = `content-type:application/x-www-form-urlencoded\nhost:${host}\nx-amz-date:${amzDate}\n`;
-  const signedHeaders = "content-type;host;x-amz-date";
-
-  const canonicalRequest = [
-    method,
-    "/",
-    "",
-    canonicalHeaders,
-    signedHeaders,
-    payloadHash,
-  ].join("\n");
-
-  const credentialScope = `${dateStamp}/${region}/${service}/aws4_request`;
-  const stringToSign = [
-    "AWS4-HMAC-SHA256",
-    amzDate,
-    credentialScope,
-    await sha256Hex(canonicalRequest),
-  ].join("\n");
-
-  const signingKey = getSignatureKey(secretKey, dateStamp, region, service);
-  const signature = toHex(hmacSHA256(signingKey, stringToSign));
-
-  const authHeader = `AWS4-HMAC-SHA256 Credential=${accessKey}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`;
-
-  const response = await fetch(endpoint, {
-    method,
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-      "X-Amz-Date": amzDate,
-      Authorization: authHeader,
-    },
-    body,
+  const body = new URLSearchParams({
+    AppSid: appSid,
+    SenderID: senderId,
+    Body: message,
+    Recipient: recipient,
   });
 
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`AWS SNS failed: ${response.status} ${text}`);
+  let lastError: Error | undefined;
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const response = await fetch("https://el.cloud.unifonic.com/rest/SMS/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: body.toString(),
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      });
+
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`Unifonic SMS failed: ${response.status} ${text}`);
+      }
+
+      const result = await response.json().catch(() => ({}));
+      if (result?.success === false || result?.Success === false) {
+        throw new Error(`Unifonic SMS error: ${JSON.stringify(result)}`);
+      }
+      return;
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      console.warn(`[SMS Hook] attempt ${attempt}/${MAX_RETRIES} failed: ${lastError.message}`);
+      if (attempt < MAX_RETRIES) await new Promise((r) => setTimeout(r, 1_500));
+    }
   }
+  throw lastError!;
 }
 
 Deno.serve(async (req) => {
@@ -142,12 +85,11 @@ Deno.serve(async (req) => {
       });
     }
 
-    // رسالة OTP
-    const message = `Your almohammad ali code is ${otp}`;
+    const senderName = Deno.env.get("UNIFONIC_SMS_SENDER_ID") ?? "almohali";
+    const message = `رمز التحقق الخاص بك في ${senderName}: ${otp}`;
 
-    // إرسال عبر AWS SNS
-    await sendSNS(phone, message);
-    console.log(`[SMS Hook] ✅ OTP sent to ${phone.slice(0, 6)}***`);
+    await sendUnifonic(phone, message);
+    console.log(`[SMS Hook] ✅ OTP sent via Unifonic to ${phone.slice(0, 6)}***`);
 
     // Supabase يتوقع response فاضي مع 200
     return new Response(JSON.stringify({}), {

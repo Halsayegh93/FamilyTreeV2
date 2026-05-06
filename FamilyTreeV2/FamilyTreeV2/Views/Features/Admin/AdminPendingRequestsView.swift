@@ -605,7 +605,7 @@ struct AdminPendingRequestsView: View {
         }
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "ar")
-        formatter.dateFormat = "d MMM · h:mm a"
+        formatter.dateFormat = "d MMM yyyy · h:mm a"
         return formatter.string(from: date)
     }
 

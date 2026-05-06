@@ -42,6 +42,8 @@ function extractBearerToken(authHeader: string | null): string {
   return raw.replace(/^['"]|['"]$/g, "");
 }
 
+const FETCH_TIMEOUT_MS = 12_000;
+
 async function callTwilioWhatsApp(phone: string, message: string): Promise<void> {
   const sid = Deno.env.get("TWILIO_ACCOUNT_SID");
   const token = Deno.env.get("TWILIO_AUTH_TOKEN");
@@ -64,6 +66,7 @@ async function callTwilioWhatsApp(phone: string, message: string): Promise<void>
       "Content-Type": "application/x-www-form-urlencoded",
     },
     body,
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
   });
 
   if (!response.ok) {
@@ -81,7 +84,13 @@ async function callTwilioVoice(phone: string, message: string): Promise<void> {
     throw new Error("Twilio Voice env vars are missing");
   }
 
-  const twiml = `<Response><Say language=\"ar-SA\">${message}</Say></Response>`;
+  // Escape XML special chars to avoid TwiML parse errors that silently hang the call
+  const safeMessage = message
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+  const twiml = `<Response><Say language="ar-SA">${safeMessage}</Say></Response>`;
   const body = new URLSearchParams({
     To: phone,
     From: from,
@@ -95,6 +104,7 @@ async function callTwilioVoice(phone: string, message: string): Promise<void> {
       "Content-Type": "application/x-www-form-urlencoded",
     },
     body,
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
   });
 
   if (!response.ok) {
@@ -114,6 +124,7 @@ async function callWebhook(channel: Channel, phone: string, message: string): Pr
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ phone, channel, message }),
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
   });
 
   if (!response.ok) {
@@ -138,13 +149,18 @@ async function callUnifonicWhatsApp(phone: string, message: string): Promise<voi
     Body: message,
   });
 
-  const response = await fetch("https://el.cloud.unifonic.com/rest/SMS/messages", {
+  // Correct Unifonic WhatsApp endpoint (not the SMS endpoint)
+  const endpoint = Deno.env.get("UNIFONIC_WHATSAPP_ENDPOINT") ??
+    "https://el.cloud.unifonic.com/rest/WhatsApp/messages";
+
+  const response = await fetch(endpoint, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/x-www-form-urlencoded",
     },
     body,
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
   });
 
   if (!response.ok) {
@@ -175,6 +191,7 @@ async function callUnifonicVoice(phone: string, message: string): Promise<void> 
       text: message,
       language: "ar-SA",
     }),
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
   });
 
   if (!response.ok) {

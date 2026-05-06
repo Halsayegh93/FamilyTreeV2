@@ -1,6 +1,6 @@
 import Foundation
 
-struct FamilyStory: Identifiable, Codable, Equatable {
+nonisolated struct FamilyStory: Identifiable, Codable, Equatable, Sendable {
     let id: UUID
     let memberId: UUID
     let imageUrl: String

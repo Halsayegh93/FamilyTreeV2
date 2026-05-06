@@ -302,6 +302,17 @@ class MemberViewModel: ObservableObject {
         do {
             try await supabase.from("profiles").insert(memberData).execute()
             await fetchSingleMember(id: newId)
+
+            let adminName = currentUser?.firstName ?? "مدير"
+            await notificationVM?.notifyAdminsWithPush(
+                title: L10n.t("إضافة عضو جديد", "New Member Added"),
+                body: L10n.t(
+                    "\(adminName) أضاف «\(fullName)» للشجرة العائلية",
+                    "\(adminName) added «\(fullName)» to the family tree"
+                ),
+                kind: "member_add"
+            )
+
             self.isLoading = false
             return true
         } catch {
@@ -427,7 +438,9 @@ class MemberViewModel: ObservableObject {
             if !silent {
                 let requester = currentUser?.id ?? fatherId
                 let details = "تمت إضافة ابن جديد: \(firstNameOnly) (\(isDeceased ? "متوفى" : "حي"))."
+                let childRequestId = UUID()
                 let requestData: [String: AnyEncodable] = [
+                    "id": AnyEncodable(childRequestId.uuidString),
                     "member_id": AnyEncodable(fatherId.uuidString),
                     "requester_id": AnyEncodable(requester.uuidString),
                     "request_type": AnyEncodable(RequestType.childAdd.rawValue),
@@ -440,14 +453,16 @@ class MemberViewModel: ObservableObject {
                         .from("admin_requests")
                         .insert(requestData)
                         .execute()
-                    
+
                     await notificationVM?.notifyAdminsWithPush(
                         title: L10n.t("طلب إضافة ابن", "Child Add Request"),
                         body: L10n.t(
-                            "طلب إضافة ابن: «\(firstNameOnly)» لـ: «\(father.fullName)»",
-                            "Child add request: «\(firstNameOnly)» to: «\(father.fullName)»"
+                            "\(firstNameOnly) لـ: \(father.fullName)",
+                            "\(firstNameOnly) to: \(father.fullName)"
                         ),
-                        kind: RequestType.childAdd.rawValue
+                        kind: RequestType.childAdd.rawValue,
+                        requestId: childRequestId,
+                        requestType: RequestType.childAdd.rawValue
                     )
                 } catch {
                     Log.warning("لم يتم إدراج طلب child_add في admin_requests: \(error.localizedDescription)")

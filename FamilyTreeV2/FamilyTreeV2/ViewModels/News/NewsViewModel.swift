@@ -796,7 +796,7 @@ class NewsViewModel: ObservableObject {
             await notificationVM?.notifyAdminsWithPush(
                 title: L10n.t("حذف منشور", "Post Deleted"),
                 body: L10n.t("تم حذف منشور من الأخبار", "A news post has been deleted"),
-                kind: NotificationKind.newsAdd.rawValue
+                kind: NotificationKind.newsReport.rawValue
             )
         } catch {
             Log.error("خطأ حذف الخبر: \(error.localizedDescription)")

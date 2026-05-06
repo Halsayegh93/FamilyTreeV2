@@ -1,0 +1,995 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>آل محمدعلي — إدارة الأعضاء</title>
+    <style>
+        :root {
+            --brand:    #357DED;
+            --secondary:#10B981;
+            --accent:   #5438DC;
+            --error:    #EF4444;
+            --warning:  #F59E0B;
+            --bg:       #F8FAFC;
+            --surface:  #FFFFFF;
+            --surface-2:#F1F5F9;
+            --border:   #E2E8F0;
+            --text:     #0F172A;
+            --text-soft:#475569;
+            --text-muted:#94A3B8;
+        }
+        * { margin:0; padding:0; box-sizing:border-box; }
+        html, body {
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro", "Segoe UI",
+                         "Cairo", "Tajawal", system-ui, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            -webkit-font-smoothing: antialiased;
+            line-height: 1.5;
+        }
+
+        /* ─── Header ─── */
+        header {
+            position: sticky;
+            top: 0;
+            z-index: 50;
+            background: rgba(255,255,255,0.95);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border);
+        }
+        .header-inner {
+            max-width: 1152px;
+            margin: 0 auto;
+            padding: 0 16px;
+            height: 56px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            text-decoration: none;
+            margin-left: 8px;
+            flex-shrink: 0;
+        }
+        .brand-icon {
+            width: 32px; height: 32px;
+            background: var(--brand);
+            border-radius: 8px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 16px;
+        }
+        .brand-name {
+            font-weight: 700;
+            font-size: 15px;
+            color: var(--text);
+        }
+        .nav-desktop {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .nav-link {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 0 12px;
+            height: 32px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-soft);
+            text-decoration: none;
+            transition: background 0.15s, color 0.15s;
+        }
+        .nav-link:hover { background: var(--surface-2); color: var(--text); }
+        .nav-link.active { background: var(--brand); color: white; }
+        .nav-link.admin-link { color: var(--accent); }
+        .nav-link.admin-link:hover { background: rgba(84,56,220,0.08); }
+        .nav-link.admin-link.active { background: var(--accent); color: white; }
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .btn-logout {
+            height: 36px;
+            padding: 0 12px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--error);
+            background: none;
+            border: none;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        .btn-logout:hover { background: #FEF2F2; }
+
+        /* ─── Page ─── */
+        .page {
+            max-width: 1152px;
+            margin: 0 auto;
+            padding: 24px 16px 80px;
+        }
+
+        /* ─── Page Hero ─── */
+        .page-hero {
+            border-radius: 16px;
+            padding: 20px 24px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(53,125,237,0.15);
+            background: linear-gradient(135deg, rgba(53,125,237,0.07) 0%, rgba(16,185,129,0.04) 100%);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .hero-left {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+        .hero-icon {
+            width: 52px; height: 52px;
+            background: white;
+            border-radius: 16px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 26px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+            flex-shrink: 0;
+            color: var(--brand);
+        }
+        .hero-title {
+            font-size: 22px;
+            font-weight: 800;
+            color: var(--text);
+            line-height: 1.2;
+        }
+        .hero-sub {
+            font-size: 14px;
+            color: var(--text-soft);
+            margin-top: 2px;
+        }
+        .hero-badge {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 700;
+            background: rgba(53,125,237,0.1);
+            color: var(--brand);
+        }
+
+        /* ─── Stats Grid ─── */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        @media (min-width: 640px) {
+            .stats-grid { grid-template-columns: repeat(4, 1fr); }
+        }
+        .stat-card {
+            background: var(--surface);
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            padding: 12px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: box-shadow 0.15s, transform 0.15s;
+            position: relative;
+        }
+        .stat-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.06); transform: translateY(-1px); }
+        .stat-icon-box {
+            width: 40px; height: 40px;
+            border-radius: 12px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 18px;
+            flex-shrink: 0;
+        }
+        .stat-info { flex: 1; min-width: 0; }
+        .stat-value {
+            font-size: 20px;
+            font-weight: 900;
+            line-height: 1;
+            margin-bottom: 2px;
+        }
+        .stat-label {
+            font-size: 11px;
+            color: var(--text-muted);
+            font-weight: 600;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .stat-pulse {
+            position: absolute;
+            top: 8px; left: 8px;
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            background: var(--error);
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(0.8); }
+        }
+
+        /* ─── Members Section Card ─── */
+        .members-card {
+            background: var(--surface);
+            border-radius: 16px;
+            border: 1px solid var(--border);
+            overflow: hidden;
+            border-top: 3px solid var(--brand);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+        }
+        .members-card-header {
+            padding: 12px 20px;
+            border-bottom: 1px solid var(--surface-2);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .section-label {
+            font-size: 13px;
+            font-weight: 900;
+            color: var(--brand);
+        }
+        .section-count {
+            margin-right: auto;
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--text-muted);
+        }
+
+        /* ─── Controls ─── */
+        .controls {
+            padding: 12px 16px;
+            display: flex;
+            gap: 8px;
+            border-bottom: 1px solid var(--surface-2);
+            flex-wrap: wrap;
+        }
+        .search-box {
+            flex: 1;
+            min-width: 160px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: var(--surface-2);
+            border-radius: 12px;
+            padding: 0 12px;
+            height: 38px;
+        }
+        .search-box input {
+            flex: 1;
+            border: none;
+            background: none;
+            font-size: 13px;
+            color: var(--text);
+            font-family: inherit;
+            outline: none;
+            direction: rtl;
+        }
+        .search-box input::placeholder { color: var(--text-muted); }
+        .view-toggle {
+            height: 38px;
+            width: 38px;
+            border-radius: 10px;
+            background: var(--surface-2);
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+            color: var(--text-soft);
+            display: flex; align-items: center; justify-content: center;
+            transition: background 0.15s;
+            flex-shrink: 0;
+        }
+        .view-toggle:hover { background: var(--border); }
+
+        /* ─── Filter Chips ─── */
+        .filter-row {
+            padding: 0 16px 12px;
+            display: flex;
+            gap: 6px;
+            overflow-x: auto;
+            scrollbar-width: none;
+        }
+        .filter-row::-webkit-scrollbar { display: none; }
+        .chip {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: all 0.15s;
+            border: 1.5px solid transparent;
+            user-select: none;
+        }
+        .chip.inactive {
+            background: var(--surface-2);
+            color: var(--text-muted);
+        }
+        .chip.active-all      { background: rgba(84,56,220,0.1);   color: var(--accent);    border-color: rgba(84,56,220,0.2); }
+        .chip.active-living   { background: rgba(16,185,129,0.1);  color: var(--secondary); border-color: rgba(16,185,129,0.2); }
+        .chip.active-deceased { background: rgba(107,123,141,0.1); color: #6B7B8D;          border-color: rgba(107,123,141,0.2); }
+        .chip.active-frozen   { background: rgba(239,68,68,0.1);   color: var(--error);     border-color: rgba(239,68,68,0.2); }
+        .chip-cnt {
+            background: rgba(0,0,0,0.12);
+            border-radius: 20px;
+            padding: 0 5px;
+            font-size: 10px;
+        }
+
+        /* ─── Member List ─── */
+        #memberList { }
+
+        .member-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 16px;
+            border-bottom: 1px solid var(--surface-2);
+            transition: background 0.12s;
+            cursor: pointer;
+            text-decoration: none;
+        }
+        .member-row:last-child { border-bottom: none; }
+        .member-row:hover { background: var(--surface-2); }
+
+        /* Avatar */
+        .avatar {
+            width: 40px; height: 40px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, var(--brand), var(--secondary));
+            color: white;
+            font-size: 15px;
+            font-weight: 800;
+            display: flex; align-items: center; justify-content: center;
+            flex-shrink: 0;
+            overflow: hidden;
+            position: relative;
+        }
+        .avatar img { width: 100%; height: 100%; object-fit: cover; }
+
+        /* Member info */
+        .member-info { flex: 1; min-width: 0; }
+        .member-name-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+        .member-name {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--text);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 180px;
+        }
+        .member-name.deceased, .member-name.frozen { color: var(--text-muted); }
+
+        .badge {
+            padding: 1px 7px;
+            border-radius: 20px;
+            font-size: 10px;
+            font-weight: 700;
+        }
+        .badge-admin      { background: rgba(53,125,237,0.1);   color: var(--brand); }
+        .badge-supervisor { background: rgba(84,56,220,0.1);    color: var(--accent); }
+        .badge-member     { background: var(--surface-2);       color: var(--text-soft); }
+        .badge-monitor    { background: rgba(16,185,129,0.1);   color: var(--secondary); }
+        .badge-deceased   { background: rgba(107,123,141,0.1);  color: #6B7B8D; }
+        .badge-frozen     { background: rgba(239,68,68,0.1);    color: var(--error); }
+
+        .member-phone {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-top: 2px;
+            direction: ltr;
+            text-align: right;
+        }
+
+        /* Row actions */
+        .row-actions {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-shrink: 0;
+        }
+        .btn-sm {
+            height: 28px;
+            padding: 0 10px;
+            border-radius: 8px;
+            font-size: 11px;
+            font-weight: 700;
+            border: none;
+            cursor: pointer;
+            transition: all 0.15s;
+            font-family: inherit;
+            display: flex; align-items: center; gap: 4px;
+        }
+        .btn-freeze  { background: var(--surface-2); color: var(--error); }
+        .btn-freeze:hover  { background: rgba(239,68,68,0.1); }
+        .btn-activate { background: var(--secondary); color: white; }
+        .btn-activate:hover { opacity: 0.9; }
+        .btn-detail   { background: var(--surface-2); color: var(--text-soft); }
+        .btn-detail:hover  { background: var(--border); }
+        .btn-detail.arrow  { font-size: 13px; }
+
+        /* ─── Grid View ─── */
+        #gridView {
+            display: none;
+            padding: 16px;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+        }
+        @media (min-width: 480px) { #gridView { grid-template-columns: repeat(3, 1fr); } }
+        @media (min-width: 640px) { #gridView { grid-template-columns: repeat(4, 1fr); } }
+        .grid-cell {
+            background: var(--surface);
+            border-radius: 16px;
+            border: 1px solid var(--border);
+            padding: 16px 12px;
+            text-align: center;
+            cursor: pointer;
+            transition: box-shadow 0.15s, border-color 0.15s;
+            text-decoration: none;
+            display: block;
+        }
+        .grid-cell:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.06); border-color: var(--brand); }
+        .grid-avatar {
+            width: 64px; height: 64px;
+            border-radius: 16px;
+            background: linear-gradient(135deg, var(--brand), var(--secondary));
+            color: white;
+            font-size: 22px;
+            font-weight: 800;
+            display: flex; align-items: center; justify-content: center;
+            margin: 0 auto 10px;
+            overflow: hidden;
+        }
+        .grid-name {
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--text);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .grid-badges {
+            display: flex;
+            justify-content: center;
+            gap: 4px;
+            margin-top: 4px;
+            flex-wrap: wrap;
+        }
+
+        /* ─── Load more ─── */
+        .load-more {
+            padding: 14px;
+            text-align: center;
+            border-top: 1px solid var(--surface-2);
+        }
+        .btn-load-more {
+            height: 34px;
+            padding: 0 20px;
+            border-radius: 20px;
+            border: 1.5px solid var(--brand);
+            color: var(--brand);
+            background: none;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            font-family: inherit;
+            transition: background 0.15s;
+        }
+        .btn-load-more:hover { background: rgba(53,125,237,0.06); }
+
+        /* ─── Empty ─── */
+        .empty {
+            padding: 48px 16px;
+            text-align: center;
+        }
+        .empty-icon { font-size: 48px; margin-bottom: 10px; }
+        .empty-text { color: var(--text-soft); font-size: 14px; }
+
+        /* ─── Confirm Modal ─── */
+        .overlay {
+            position: fixed; inset: 0;
+            background: rgba(15,23,42,0.4);
+            z-index: 100;
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s;
+        }
+        .overlay.open { opacity: 1; pointer-events: all; }
+        .modal {
+            background: var(--surface);
+            border-radius: 24px 24px 0 0;
+            width: 100%;
+            max-width: 480px;
+            padding: 20px 20px 40px;
+            transform: translateY(100%);
+            transition: transform 0.3s cubic-bezier(0.34,1.26,0.64,1);
+        }
+        .overlay.open .modal { transform: translateY(0); }
+        .modal-handle {
+            width: 36px; height: 4px;
+            background: var(--border);
+            border-radius: 2px;
+            margin: 0 auto 16px;
+        }
+        .modal-member {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background: var(--surface-2);
+            border-radius: 12px;
+            padding: 12px;
+            margin-bottom: 16px;
+            border: 1px solid var(--border);
+        }
+        .modal-title {
+            font-size: 16px;
+            font-weight: 800;
+            margin-bottom: 4px;
+        }
+        .modal-msg { font-size: 13px; color: var(--text-soft); margin-bottom: 16px; }
+        .modal-btns { display: flex; gap: 10px; }
+        .modal-btn {
+            flex: 1; height: 44px;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 700;
+            border: none;
+            cursor: pointer;
+            font-family: inherit;
+            transition: opacity 0.15s;
+        }
+        .modal-btn:hover { opacity: 0.88; }
+        .modal-cancel { background: var(--surface-2); color: var(--text-soft); border: 1px solid var(--border); }
+        .modal-confirm-freeze   { background: var(--error); color: white; }
+        .modal-confirm-activate { background: var(--secondary); color: white; }
+
+        /* ─── Toast ─── */
+        .toast {
+            position: fixed;
+            bottom: 28px; left: 50%;
+            transform: translateX(-50%) translateY(80px);
+            background: var(--text);
+            color: white;
+            padding: 10px 18px;
+            border-radius: 12px;
+            font-size: 13px;
+            font-weight: 600;
+            z-index: 200;
+            transition: transform 0.3s cubic-bezier(0.34,1.26,0.64,1);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+            white-space: nowrap;
+        }
+        .toast.show { transform: translateX(-50%) translateY(0); }
+        .toast.success { background: var(--secondary); }
+        .toast.error   { background: var(--error); }
+
+        @media (max-width: 640px) {
+            .brand-name { display: none; }
+            .nav-desktop { display: none; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- ═══ Header ═══ -->
+<header>
+    <div class="header-inner">
+        <a class="brand" href="index.html">
+            <div class="brand-icon">🌳</div>
+            <span class="brand-name">عائلة المحمدعلي</span>
+        </a>
+        <nav class="nav-desktop">
+            <a class="nav-link" href="#">🏠 الرئيسية</a>
+            <a class="nav-link" href="#">🌳 الشجرة</a>
+            <a class="nav-link" href="#">🏛️ الديوانيات</a>
+            <a class="nav-link" href="#">💼 المشاريع</a>
+            <a class="nav-link" href="#">👤 حسابي</a>
+            <a class="nav-link admin-link active" href="#">🛡️ الإدارة</a>
+        </nav>
+        <div class="header-right">
+            <button class="btn-logout">خروج</button>
+        </div>
+    </div>
+</header>
+
+<!-- ═══ Page ═══ -->
+<div class="page">
+
+    <!-- Hero -->
+    <div class="page-hero">
+        <div class="hero-left">
+            <div class="hero-icon">📇</div>
+            <div>
+                <div class="hero-title">الأعضاء</div>
+                <div class="hero-sub" id="heroSub">0 عضو في النظام</div>
+            </div>
+        </div>
+        <span class="hero-badge">🛡️ الإدارة</span>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-icon-box" style="background:rgba(53,125,237,0.1)">👥</div>
+            <div class="stat-info">
+                <div class="stat-value" id="s-all" style="color:var(--brand)">0</div>
+                <div class="stat-label">إجمالي الأعضاء</div>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon-box" style="background:rgba(16,185,129,0.1)">✅</div>
+            <div class="stat-info">
+                <div class="stat-value" id="s-living" style="color:var(--secondary)">0</div>
+                <div class="stat-label">أحياء</div>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon-box" style="background:rgba(107,123,141,0.1)">🕊️</div>
+            <div class="stat-info">
+                <div class="stat-value" id="s-deceased" style="color:#6B7B8D">0</div>
+                <div class="stat-label">متوفون</div>
+            </div>
+        </div>
+        <div class="stat-card" id="s-frozen-card" style="display:none">
+            <div class="stat-pulse"></div>
+            <div class="stat-icon-box" style="background:rgba(239,68,68,0.1)">🔒</div>
+            <div class="stat-info">
+                <div class="stat-value" id="s-frozen" style="color:var(--error)">0</div>
+                <div class="stat-label">مجمّدون</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Members Card -->
+    <div class="members-card">
+        <!-- Card header -->
+        <div class="members-card-header">
+            <span style="font-size:14px">📇</span>
+            <span class="section-label">سجل الأعضاء</span>
+            <span class="section-count" id="resultCount"></span>
+        </div>
+
+        <!-- Controls: search + view toggle -->
+        <div class="controls">
+            <div class="search-box">
+                <span style="color:var(--text-muted);font-size:14px">🔍</span>
+                <input id="searchInput" type="text" placeholder="بحث بالاسم أو رقم الهاتف..." oninput="applyFilters()">
+            </div>
+            <button class="view-toggle" id="viewToggleBtn" onclick="toggleView()" title="تبديل العرض">🔲</button>
+        </div>
+
+        <!-- Filter chips -->
+        <div class="filter-row">
+            <div class="chip active-all" id="chip-all" onclick="setFilter('all')">
+                الكل <span class="chip-cnt" id="c-all">0</span>
+            </div>
+            <div class="chip inactive" id="chip-living" onclick="setFilter('living')">
+                الأحياء <span class="chip-cnt" id="c-living">0</span>
+            </div>
+            <div class="chip inactive" id="chip-deceased" onclick="setFilter('deceased')">
+                المتوفون <span class="chip-cnt" id="c-deceased">0</span>
+            </div>
+            <div class="chip inactive" id="chip-frozen" onclick="setFilter('frozen')">
+                🔒 مجمّدون <span class="chip-cnt" id="c-frozen">0</span>
+            </div>
+        </div>
+
+        <!-- List view -->
+        <div id="listView"></div>
+
+        <!-- Grid view -->
+        <div id="gridView"></div>
+
+        <!-- Empty state -->
+        <div class="empty" id="emptyState" style="display:none">
+            <div class="empty-icon">🔍</div>
+            <div class="empty-text">لا توجد نتائج</div>
+        </div>
+
+        <!-- Load more -->
+        <div class="load-more" id="loadMoreWrap" style="display:none">
+            <button class="btn-load-more" onclick="loadMore()">عرض المزيد ▾</button>
+        </div>
+    </div>
+
+</div><!-- /page -->
+
+<!-- Confirm Modal -->
+<div class="overlay" id="overlay" onclick="maybeClose(event)">
+    <div class="modal">
+        <div class="modal-handle"></div>
+        <div class="modal-member" id="modalMember"></div>
+        <div class="modal-title" id="modalTitle"></div>
+        <div class="modal-msg"   id="modalMsg"></div>
+        <div class="modal-btns">
+            <button class="modal-btn modal-cancel" onclick="closeModal()">إلغاء</button>
+            <button class="modal-btn" id="modalConfirmBtn" onclick="confirmAction()">تأكيد</button>
+        </div>
+    </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ─── Sample Data ──────────────────────────────────────────────────────────
+const MEMBERS = [
+    { id:1,  name:"محمد علي الكريم",  phone:"+96541234567", role:"admin",      deceased:false, frozen:false },
+    { id:2,  name:"أحمد محمد علي",    phone:"+96598765432", role:"member",     deceased:false, frozen:false },
+    { id:3,  name:"فاطمة علي النور",  phone:"+96555544433", role:"member",     deceased:false, frozen:true  },
+    { id:4,  name:"عبدالله محمد",     phone:"+96566677788", role:"supervisor", deceased:false, frozen:false },
+    { id:5,  name:"خالد علي الكريم", phone:"+96511122233", role:"member",     deceased:true,  frozen:false },
+    { id:6,  name:"نورة محمد علي",   phone:"+96544455566", role:"member",     deceased:false, frozen:false },
+    { id:7,  name:"سلمان الكريم",    phone:"+96577788899", role:"monitor",    deceased:false, frozen:false },
+    { id:8,  name:"مريم علي",        phone:"+96533322211", role:"member",     deceased:false, frozen:true  },
+    { id:9,  name:"يوسف محمد",       phone:"+96500011122", role:"member",     deceased:false, frozen:false },
+    { id:10, name:"جاسم الكريم",     phone:"+96566633344", role:"member",     deceased:true,  frozen:false },
+    { id:11, name:"ليلى علي النور",  phone:"+96522233344", role:"member",     deceased:false, frozen:false },
+    { id:12, name:"عمر محمد علي",    phone:"+96588899900", role:"member",     deceased:false, frozen:false },
+    { id:13, name:"هند الكريم",      phone:"+96533311199", role:"supervisor", deceased:false, frozen:false },
+    { id:14, name:"ناصر محمد",       phone:"+96544466677", role:"member",     deceased:false, frozen:false },
+    { id:15, name:"رانيا علي",       phone:"+96511133355", role:"member",     deceased:false, frozen:false },
+];
+
+// ─── State ────────────────────────────────────────────────────────────────
+let currentFilter = "all";
+let currentView   = "list";
+let displayLimit  = 10;
+let pendingAction = null;
+
+const roleLabel = { admin:"مدير", supervisor:"مشرف", member:"عضو", monitor:"مراقب" };
+const roleClass = {
+    admin:"badge-admin", supervisor:"badge-supervisor",
+    member:"badge-member", monitor:"badge-monitor"
+};
+
+function initials(name) {
+    const w = name.trim().split(" ");
+    return (w[0]?.[0] ?? "") + (w[1]?.[0] ?? "");
+}
+
+// ─── Init ─────────────────────────────────────────────────────────────────
+document.addEventListener("DOMContentLoaded", () => {
+    updateStats();
+    applyFilters();
+});
+
+// ─── Stats ────────────────────────────────────────────────────────────────
+function updateStats() {
+    const all      = MEMBERS.length;
+    const living   = MEMBERS.filter(m => !m.deceased && !m.frozen).length;
+    const deceased = MEMBERS.filter(m => m.deceased).length;
+    const frozen   = MEMBERS.filter(m => m.frozen).length;
+
+    document.getElementById("s-all").textContent      = all;
+    document.getElementById("s-living").textContent   = living;
+    document.getElementById("s-deceased").textContent = deceased;
+    document.getElementById("s-frozen").textContent   = frozen;
+    document.getElementById("heroSub").textContent    = `${all} عضو في النظام`;
+
+    document.getElementById("c-all").textContent      = all;
+    document.getElementById("c-living").textContent   = living;
+    document.getElementById("c-deceased").textContent = deceased;
+    document.getElementById("c-frozen").textContent   = frozen;
+
+    // إظهار بطاقة المجمّدين فقط لو فيه مجمّدين
+    document.getElementById("s-frozen-card").style.display = frozen > 0 ? "" : "none";
+    // إظهار chip المجمّدين دائماً لو في مجمّدين
+    document.getElementById("chip-frozen").style.display = frozen > 0 ? "" : "none";
+}
+
+// ─── Filter ───────────────────────────────────────────────────────────────
+function setFilter(f) {
+    currentFilter = f;
+    displayLimit  = 10;
+    ["all","living","deceased","frozen"].forEach(k => {
+        const chip = document.getElementById("chip-" + k);
+        if (!chip) return;
+        chip.className = "chip " + (k === f ? "active-" + k : "inactive");
+    });
+    applyFilters();
+}
+
+function applyFilters() {
+    const q = document.getElementById("searchInput").value.trim().toLowerCase();
+    let pool = [...MEMBERS];
+
+    if (currentFilter === "living")   pool = pool.filter(m => !m.deceased && !m.frozen);
+    if (currentFilter === "deceased") pool = pool.filter(m => m.deceased);
+    if (currentFilter === "frozen")   pool = pool.filter(m => m.frozen);
+    if (q) pool = pool.filter(m => m.name.toLowerCase().includes(q) || m.phone.includes(q));
+
+    document.getElementById("resultCount").textContent = `${pool.length} عضو`;
+
+    if (pool.length === 0) {
+        document.getElementById("listView").innerHTML  = "";
+        document.getElementById("gridView").innerHTML  = "";
+        document.getElementById("emptyState").style.display   = "";
+        document.getElementById("loadMoreWrap").style.display = "none";
+        return;
+    }
+    document.getElementById("emptyState").style.display = "none";
+
+    const visible = pool.slice(0, displayLimit);
+    renderList(visible);
+    renderGrid(visible);
+
+    if (pool.length > displayLimit) {
+        const remaining = pool.length - displayLimit;
+        document.getElementById("loadMoreWrap").style.display = "";
+        document.getElementById("loadMoreWrap").innerHTML = `
+            <div class="load-more">
+                <button class="btn-load-more" onclick="loadMore()">
+                    عرض المزيد (${remaining} متبقي) ▾
+                </button>
+            </div>`;
+    } else {
+        document.getElementById("loadMoreWrap").style.display = "none";
+    }
+}
+
+function loadMore() { displayLimit += 10; applyFilters(); }
+
+// ─── Render List ──────────────────────────────────────────────────────────
+function renderList(members) {
+    const el = document.getElementById("listView");
+    el.innerHTML = members.map(m => {
+        const nameClass = m.deceased ? "deceased" : m.frozen ? "frozen" : "";
+        const roleBadge = `<span class="badge ${roleClass[m.role]}">${roleLabel[m.role]}</span>`;
+        const decBadge  = m.deceased ? `<span class="badge badge-deceased">🕊️</span>` : "";
+        const frzBadge  = m.frozen   ? `<span class="badge badge-frozen">🔒 مجمّد</span>` : "";
+
+        let actionBtn = "";
+        if (!m.deceased) {
+            if (m.frozen) {
+                actionBtn = `<button class="btn-sm btn-activate" onclick="openAction(event,${m.id},'activate')">تفعيل</button>`;
+            } else {
+                actionBtn = `<button class="btn-sm btn-freeze" onclick="openAction(event,${m.id},'freeze')">تجميد</button>`;
+            }
+        }
+
+        return `
+        <div class="member-row" onclick="showDetail(${m.id})">
+            <div class="avatar">${initials(m.name)}</div>
+            <div class="member-info">
+                <div class="member-name-row">
+                    <span class="member-name ${nameClass}">${m.name}</span>
+                    ${roleBadge}${decBadge}${frzBadge}
+                </div>
+                ${m.phone ? `<div class="member-phone">${m.phone}</div>` : ""}
+            </div>
+            <div class="row-actions">
+                ${actionBtn}
+                <button class="btn-sm btn-detail arrow" onclick="showDetail(event,${m.id})">←</button>
+            </div>
+        </div>`;
+    }).join("");
+}
+
+// ─── Render Grid ──────────────────────────────────────────────────────────
+function renderGrid(members) {
+    const el = document.getElementById("gridView");
+    el.innerHTML = members.map(m => {
+        const roleBadge = `<span class="badge ${roleClass[m.role]}">${roleLabel[m.role]}</span>`;
+        const decBadge  = m.deceased ? `<span class="badge badge-deceased">🕊️</span>` : "";
+        const frzBadge  = m.frozen   ? `<span class="badge badge-frozen">🔒</span>` : "";
+        return `
+        <div class="grid-cell" onclick="showDetail(${m.id})">
+            <div class="grid-avatar">${initials(m.name)}</div>
+            <div class="grid-name">${m.name}</div>
+            <div class="grid-badges">${roleBadge}${decBadge}${frzBadge}</div>
+        </div>`;
+    }).join("");
+}
+
+// ─── View toggle ──────────────────────────────────────────────────────────
+function toggleView() {
+    currentView = currentView === "list" ? "grid" : "list";
+    const lv = document.getElementById("listView");
+    const gv = document.getElementById("gridView");
+    const btn = document.getElementById("viewToggleBtn");
+    if (currentView === "grid") {
+        lv.style.display = "none";
+        gv.style.display = "grid";
+        btn.textContent = "☰";
+    } else {
+        lv.style.display = "";
+        gv.style.display = "none";
+        btn.textContent = "🔲";
+    }
+}
+
+// ─── Action Modal ─────────────────────────────────────────────────────────
+function openAction(evt, memberId, action) {
+    if (evt && evt.stopPropagation) evt.stopPropagation();
+    const m = MEMBERS.find(x => x.id === memberId);
+    if (!m) return;
+    pendingAction = { memberId, action };
+
+    const isFreeze = action === "freeze";
+    document.getElementById("modalTitle").textContent =
+        isFreeze ? `تجميد حساب ${m.name}` : `تفعيل حساب ${m.name}`;
+    document.getElementById("modalMsg").textContent =
+        isFreeze ? "لن يتمكن من الدخول للتطبيق بعد التجميد."
+                 : "سيتمكن من الدخول للتطبيق مجدداً.";
+
+    const confirmBtn = document.getElementById("modalConfirmBtn");
+    confirmBtn.textContent = isFreeze ? "🔒 تجميد" : "✅ تفعيل";
+    confirmBtn.className   = "modal-btn " + (isFreeze ? "modal-confirm-freeze" : "modal-confirm-activate");
+
+    document.getElementById("modalMember").innerHTML = `
+        <div class="avatar" style="width:36px;height:36px;font-size:12px;border-radius:10px">${initials(m.name)}</div>
+        <div>
+            <div style="font-weight:700;font-size:13px">${m.name}</div>
+            <div style="font-size:11px;color:var(--text-muted)">${roleLabel[m.role]} · ${m.phone}</div>
+        </div>`;
+
+    document.getElementById("overlay").classList.add("open");
+}
+
+function maybeClose(evt) {
+    if (evt.target === document.getElementById("overlay")) closeModal();
+}
+function closeModal() {
+    document.getElementById("overlay").classList.remove("open");
+    pendingAction = null;
+}
+function confirmAction() {
+    if (!pendingAction) return;
+    const { memberId, action } = pendingAction;
+    const m = MEMBERS.find(x => x.id === memberId);
+    if (!m) return;
+    m.frozen = action === "freeze";
+    closeModal();
+    updateStats();
+    applyFilters();
+    showToast(
+        action === "freeze" ? `🔒 تم تجميد ${m.name}` : `✅ تم تفعيل ${m.name}`,
+        action === "freeze" ? "error" : "success"
+    );
+}
+
+// ─── Detail ───────────────────────────────────────────────────────────────
+function showDetail(evtOrId, id) {
+    if (evtOrId && evtOrId.stopPropagation) evtOrId.stopPropagation();
+    const memberId = id ?? evtOrId;
+    const m = MEMBERS.find(x => x.id === memberId);
+    if (m) showToast(`📋 ${m.name}`);
+}
+
+// ─── Toast ────────────────────────────────────────────────────────────────
+function showToast(msg, type = "") {
+    const t = document.getElementById("toast");
+    t.textContent = msg;
+    t.className = "toast " + type + " show";
+    setTimeout(() => { t.className = "toast " + type; }, 2800);
+}
+</script>
+</body>
+</html>

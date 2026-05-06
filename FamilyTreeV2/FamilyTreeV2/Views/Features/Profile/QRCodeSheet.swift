@@ -8,9 +8,11 @@ struct QRCodeSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     let member: FamilyMember
+    @Binding var selectedTab: Int
 
     @State private var qrImage: UIImage?
     @State private var showShareSheet = false
+    @State private var showScanner = false
 
     private var lineage: String {
         let path = KinshipCalculator.ancestorPath(for: member, lookup: memberVM._memberById)
@@ -18,26 +20,25 @@ struct QRCodeSheet: View {
     }
 
     var body: some View {
-        VStack(spacing: DS.Spacing.xl) {
+        VStack(spacing: DS.Spacing.lg) {
             // هيدر
             HStack {
                 Button(action: { dismiss() }) {
                     Image(systemName: "xmark.circle.fill")
-                        .font(DS.Font.scaled(30))
+                        .font(DS.Font.scaled(28))
                         .foregroundStyle(DS.Color.textTertiary)
                 }
                 Spacer()
-                Text(L10n.t("الرمز التعريفي", "ID Code"))
+                Text(L10n.t("رمز QR", "QR Code"))
                     .font(DS.Font.headline)
                     .foregroundColor(DS.Color.textPrimary)
                 Spacer()
-                // spacer للتوازن
                 Image(systemName: "xmark.circle.fill")
-                    .font(DS.Font.scaled(30))
+                    .font(DS.Font.scaled(28))
                     .foregroundStyle(.clear)
             }
             .padding(.horizontal, DS.Spacing.lg)
-            .padding(.top, DS.Spacing.lg)
+            .padding(.top, DS.Spacing.sm)
 
             if let qrImage {
                 // الباركود
@@ -55,19 +56,24 @@ struct QRCodeSheet: View {
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, DS.Spacing.lg)
 
-                // التعليمات
-                HStack(spacing: DS.Spacing.sm) {
-                    Image(systemName: "camera.viewfinder")
-                        .font(DS.Font.scaled(14, weight: .semibold))
-                    Text(L10n.t("امسح الباركود لمعرفة صلة القرابة", "Scan to discover kinship"))
-                        .font(DS.Font.caption1)
-                        .fontWeight(.medium)
+                // زر فتح الماسح
+                Button {
+                    showScanner = true
+                } label: {
+                    HStack(spacing: DS.Spacing.sm) {
+                        Image(systemName: "camera.viewfinder")
+                            .font(DS.Font.scaled(14, weight: .semibold))
+                        Text(L10n.t("امسح رمز QR لمعرفة صلة القرابة", "Scan QR to discover kinship"))
+                            .font(DS.Font.caption1)
+                            .fontWeight(.medium)
+                    }
+                    .foregroundColor(DS.Color.primary)
+                    .padding(.horizontal, DS.Spacing.lg)
+                    .padding(.vertical, DS.Spacing.sm)
+                    .background(DS.Color.primary.opacity(0.08))
+                    .clipShape(Capsule())
                 }
-                .foregroundColor(DS.Color.primary)
-                .padding(.horizontal, DS.Spacing.lg)
-                .padding(.vertical, DS.Spacing.sm)
-                .background(DS.Color.primary.opacity(0.08))
-                .clipShape(Capsule())
+                .buttonStyle(DSScaleButtonStyle())
 
                 // زر المشاركة
                 Button {
@@ -96,6 +102,9 @@ struct QRCodeSheet: View {
             }
         }
         .padding(.bottom, DS.Spacing.xl)
+        .fullScreenCover(isPresented: $showScanner) {
+            QRScannerView(selectedTab: $selectedTab)
+        }
         .task {
             let id = member.id
             let image = await Task.detached {

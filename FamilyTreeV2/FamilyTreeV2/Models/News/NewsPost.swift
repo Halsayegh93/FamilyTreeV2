@@ -1,6 +1,6 @@
 import Foundation
 
-struct NewsPost: Identifiable, Codable {
+nonisolated struct NewsPost: Identifiable, Codable, Sendable {
     let id: UUID
     let created_at: String // التاريخ كنص كما يأتي من قاعدة البيانات
     let author_name: String
@@ -18,12 +18,12 @@ struct NewsPost: Identifiable, Codable {
     var approved_at: String?
     
     // ✅ الإضافة السحرية: متغير يحول النص إلى تاريخ تلقائياً ليقرأه كود الواجهة
-    private static let isoWithFraction: ISO8601DateFormatter = {
+    nonisolated(unsafe) private static let isoWithFraction: ISO8601DateFormatter = {
         let f = ISO8601DateFormatter()
         f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return f
     }()
-    private static let isoWithout: ISO8601DateFormatter = {
+    nonisolated(unsafe) private static let isoWithout: ISO8601DateFormatter = {
         let f = ISO8601DateFormatter()
         f.formatOptions = [.withInternetDateTime]
         return f
@@ -71,7 +71,7 @@ struct NewsPost: Identifiable, Codable {
     }
 }
 
-struct NewsPollVote: Identifiable, Codable {
+nonisolated struct NewsPollVote: Identifiable, Codable, Sendable {
     let id: UUID
     let news_id: UUID
     let member_id: UUID
@@ -79,14 +79,14 @@ struct NewsPollVote: Identifiable, Codable {
     let created_at: String
 }
 
-struct NewsLikeRecord: Identifiable, Codable {
+nonisolated struct NewsLikeRecord: Identifiable, Codable, Sendable {
     let id: UUID
     let news_id: UUID
     let member_id: UUID
     let created_at: String?
 }
 
-struct NewsCommentRecord: Identifiable, Codable {
+nonisolated struct NewsCommentRecord: Identifiable, Codable, Sendable {
     let id: UUID
     let news_id: UUID
     let author_id: UUID?

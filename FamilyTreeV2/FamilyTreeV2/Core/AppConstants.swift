@@ -49,15 +49,28 @@ enum NotificationKind: String {
     case general = "general"
     case admin = "admin"
     case adminRequest = "admin_request"
+    // تعديلات المدراء المباشرة
     case adminEdit = "admin_edit"
+    case adminEditName = "admin_edit_name"
+    case adminEditDates = "admin_edit_dates"
+    case adminEditPhone = "admin_edit_phone"
+    case adminEditRole = "admin_edit_role"
+    case adminEditFather = "admin_edit_father"
+    case adminEditAvatar = "admin_edit_avatar"
+    case adminEditChildAdd = "admin_edit_child_add"
+    case adminEditChildRemove = "admin_edit_child_remove"
+    // شجرة وعضوية
     case treeEdit = "tree_edit"
+    case linkRequest = "link_request"
+    case joinApproved = "join_approved"
+    case accountActivated = "account_activated"
+    // أخبار وقصص
     case newsAdd = "news_add"
     case newsPublished = "news_published"
     case newsComment = "news_comment"
     case newsLike = "news_like"
     case newsReport = "news_report"
     case storyPending = "story_pending"
-    case linkRequest = "link_request"
     case test = "test"
 }
 

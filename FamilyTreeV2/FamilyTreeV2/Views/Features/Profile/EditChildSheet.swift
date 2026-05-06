@@ -8,7 +8,6 @@ struct EditChildSheet: View {
     let member: FamilyMember
 
     @State private var firstName: String = ""
-    @State private var familyName: String = ""
     @State private var selectedPhoneCountry: KuwaitPhone.Country = KuwaitPhone.defaultCountry
     @State private var phoneNumber: String = ""
     @State private var birthDate: Date = Date()
@@ -111,29 +110,6 @@ struct EditChildSheet: View {
 
                     DSDivider()
 
-                    // Family name field
-                    HStack(spacing: DS.Spacing.md) {
-                        DSIcon("person.2.fill", color: DS.Color.primary)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(L10n.t("اسم العائلة", "Family Name"))
-                                .font(DS.Font.caption1)
-                                .foregroundColor(DS.Color.textSecondary)
-                            TextField(L10n.t("اسم العائلة", "Family name"), text: $familyName)
-                                .font(DS.Font.callout)
-                                .foregroundColor(DS.Color.textPrimary)
-                                .onChange(of: familyName) { _ in
-                                    if familyName.count > 50 {
-                                        familyName = String(familyName.prefix(50))
-                                    }
-                                }
-                        }
-                        Spacer()
-                    }
-                    .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.vertical, DS.Spacing.xs)
-
-                    DSDivider()
-
                     // TODO: gender — re-enable when needed
 
                     // Phone field — بدون رمز الدولة
@@ -210,15 +186,12 @@ struct EditChildSheet: View {
             isLoading: isSaving,
             action: saveChanges
         )
-        .opacity(firstName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || familyName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.5 : 1.0)
-        .disabled(firstName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || familyName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSaving)
+        .opacity(firstName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.5 : 1.0)
+        .disabled(firstName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSaving)
     }
 
     private func setupData() {
         firstName = member.firstName
-        // استخراج اسم العائلة من الاسم الكامل (آخر كلمة)
-        let nameParts = member.fullName.trimmingCharacters(in: .whitespacesAndNewlines).split(whereSeparator: \.isWhitespace).map(String.init)
-        familyName = nameParts.count > 1 ? (nameParts.last ?? "") : ""
         selectedGender = member.gender ?? "male"
         let detectedPhone = KuwaitPhone.detectCountryAndLocal(member.phoneNumber)
         selectedPhoneCountry = detectedPhone.country
@@ -252,19 +225,13 @@ struct EditChildSheet: View {
             let deathDateString: String? = isDeceased ? formatter.string(from: deathDate) : nil
 
             let cleanFirst = firstName.trimmingCharacters(in: .whitespacesAndNewlines)
-            let cleanFamily = familyName.trimmingCharacters(in: .whitespacesAndNewlines)
 
-            // بناء الاسم الكامل الجديد
+            // بناء الاسم الكامل الجديد — نستبدل الاسم الأول فقط ونحافظ على باقي السلسلة
             let originalParts = member.fullName.split(whereSeparator: \.isWhitespace).map(String.init)
-            var finalFullName: String
-            if originalParts.count > 2 {
-                let middleParts = originalParts.dropFirst().dropLast().joined(separator: " ")
-                finalFullName = cleanFamily.isEmpty ? "\(cleanFirst) \(middleParts)" : "\(cleanFirst) \(middleParts) \(cleanFamily)"
-            } else {
-                finalFullName = cleanFamily.isEmpty ? cleanFirst : "\(cleanFirst) \(cleanFamily)"
-            }
+            let finalFullName: String = originalParts.count > 1
+                ? ([cleanFirst] + originalParts.dropFirst()).joined(separator: " ")
+                : cleanFirst
 
-            // إنشاء نسخة معدلة من العضو بالاسم الجديد عشان updateChildData يستخدمه
             var updatedMember = member
             updatedMember.fullName = finalFullName
             updatedMember.firstName = cleanFirst

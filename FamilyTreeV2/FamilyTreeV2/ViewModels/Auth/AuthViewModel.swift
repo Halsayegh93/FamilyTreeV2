@@ -305,52 +305,66 @@ class AuthViewModel: ObservableObject {
     
     // MARK: - Private Push / Notification Helpers
     
-    private func sendExternalAdminPush(title: String, body: String, kind: String = NotificationKind.adminRequest.rawValue) async {
+    private func sendExternalAdminPush(
+        title: String,
+        body: String,
+        kind: String = NotificationKind.adminRequest.rawValue,
+        requestId: UUID? = nil,
+        requestType: String? = nil
+    ) async {
         do {
-            let payload = [
-                "title": title,
-                "body": body,
-                "kind": kind
+            var payload: [String: AnyEncodable] = [
+                "title": AnyEncodable(title),
+                "body": AnyEncodable(body),
+                "kind": AnyEncodable(kind)
             ]
-            
+            if let rid = requestId   { payload["request_id"]   = AnyEncodable(rid.uuidString) }
+            if let rt  = requestType { payload["request_type"] = AnyEncodable(rt) }
             try await supabase.functions
-                .invoke(
-                    "push-admins",
-                    options: FunctionInvokeOptions(body: payload)
-                )
+                .invoke("push-admins", options: FunctionInvokeOptions(body: payload))
         } catch {
             Log.warning("تعذر إرسال Push خارجي للمدير: \(error.localizedDescription)")
         }
     }
     
     /// إرسال إشعار واحد في مركز الإشعارات (broadcast) يراه المدراء والمشرفون
-    /// target_member_id = NULL يعني broadcast — الـ RLS يتكفل بإظهاره للمدراء فقط
-    private func notifyAdmins(title: String, body: String, kind: String) async {
+    private func notifyAdmins(title: String, body: String, kind: String, requestId: UUID? = nil, requestType: String? = nil) async {
         let creatorId = currentUser?.id
         guard notificationsFeatureAvailable else { return }
-        
+
         do {
-            let payload: [String: AnyEncodable] = [
+            var payload: [String: AnyEncodable] = [
                 "target_member_id": AnyEncodable(Optional<String>.none),
                 "title": AnyEncodable(title),
                 "body": AnyEncodable(body),
                 "kind": AnyEncodable(kind),
                 "created_by": AnyEncodable(creatorId?.uuidString)
             ]
+            if let rid = requestId   { payload["request_id"]   = AnyEncodable(rid.uuidString) }
+            if let rt  = requestType { payload["request_type"] = AnyEncodable(rt) }
             try await supabase.from("notifications").insert(payload).execute()
         } catch {
             if ErrorHelper.isMissingTable(error, table: "notifications") {
                 notificationsFeatureAvailable = false
-            } else {
+            } else if !ErrorHelper.isMissingColumn(error, column: "request_id") {
                 Log.warning("تعذر إرسال إشعار للمدراء: \(error.localizedDescription)")
+            } else {
+                let fallback: [String: AnyEncodable] = [
+                    "target_member_id": AnyEncodable(Optional<String>.none),
+                    "title": AnyEncodable(title),
+                    "body": AnyEncodable(body),
+                    "kind": AnyEncodable(kind),
+                    "created_by": AnyEncodable(creatorId?.uuidString)
+                ]
+                try? await supabase.from("notifications").insert(fallback).execute()
             }
         }
     }
-    
+
     /// إشعار موحّد: يرسل push خارجي + إشعار داخلي في استدعاء واحد
-    private func notifyAdminsWithPush(title: String, body: String, kind: String) async {
-        async let push: Void = sendExternalAdminPush(title: title, body: body, kind: kind)
-        async let inApp: Void = notifyAdmins(title: title, body: body, kind: kind)
+    private func notifyAdminsWithPush(title: String, body: String, kind: String, requestId: UUID? = nil, requestType: String? = nil) async {
+        async let push: Void = sendExternalAdminPush(title: title, body: body, kind: kind, requestId: requestId, requestType: requestType)
+        async let inApp: Void = notifyAdmins(title: title, body: body, kind: kind, requestId: requestId, requestType: requestType)
         _ = await (push, inApp)
     }
     
@@ -1252,7 +1266,9 @@ class AuthViewModel: ObservableObject {
             await notifyAdminsWithPush(
                 title: "طلب انضمام جديد",
                 body: pushBody,
-                kind: NotificationKind.linkRequest.rawValue
+                kind: NotificationKind.linkRequest.rawValue,
+                requestId: user.id,
+                requestType: RequestType.joinRequest.rawValue
             )
             
             Log.info("تم تسجيل العضو وإرسال طلب الربط بنجاح")

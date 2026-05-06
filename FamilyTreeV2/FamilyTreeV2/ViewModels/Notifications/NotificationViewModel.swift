@@ -638,29 +638,39 @@ class NotificationViewModel: ObservableObject {
         }
     }
     
-    private func sendExternalAdminPush(title: String, body: String, kind: String = NotificationKind.adminRequest.rawValue) async {
-        Log.info("[PUSH] إرسال push-admins: kind=\(kind)")
+    private func sendExternalAdminPush(
+        title: String,
+        body: String,
+        kind: String = NotificationKind.adminRequest.rawValue,
+        requestId: UUID? = nil,
+        requestType: String? = nil
+    ) async {
+        Log.info("[PUSH] إرسال push-admins: kind=\(kind), requestType=\(requestType ?? "none")")
         do {
-            let payload = [
-                "title": title,
-                "body": body,
-                "kind": kind
+            var payload: [String: AnyEncodable] = [
+                "title": AnyEncodable(title),
+                "body": AnyEncodable(body),
+                "kind": AnyEncodable(kind)
             ]
+            if let rid = requestId  { payload["request_id"]   = AnyEncodable(rid.uuidString) }
+            if let rt  = requestType { payload["request_type"] = AnyEncodable(rt) }
 
             try await supabase.functions
-                .invoke(
-                    "push-admins",
-                    options: FunctionInvokeOptions(body: payload)
-                )
+                .invoke("push-admins", options: FunctionInvokeOptions(body: payload))
 
             Log.info("[PUSH] push-admins اكتمل بنجاح")
         } catch {
-            Log.warning("[PUSH] push-admins فشل، محاولة تحديث الجلسة وإعادة الإرسال: \(error.localizedDescription)")
-            // إعادة محاولة بعد refresh session
+            Log.warning("[PUSH] push-admins فشل، محاولة تحديث الجلسة: \(error.localizedDescription)")
             do {
                 _ = try await supabase.auth.refreshSession()
-                let payload = ["title": title, "body": body, "kind": kind]
-                try await supabase.functions.invoke("push-admins", options: FunctionInvokeOptions(body: payload))
+                var retryPayload: [String: AnyEncodable] = [
+                    "title": AnyEncodable(title),
+                    "body": AnyEncodable(body),
+                    "kind": AnyEncodable(kind)
+                ]
+                if let rid = requestId  { retryPayload["request_id"]   = AnyEncodable(rid.uuidString) }
+                if let rt  = requestType { retryPayload["request_type"] = AnyEncodable(rt) }
+                try await supabase.functions.invoke("push-admins", options: FunctionInvokeOptions(body: retryPayload))
                 Log.info("[PUSH] push-admins نجح بعد تحديث الجلسة")
             } catch {
                 Log.error("[PUSH] push-admins فشل نهائياً: \(error.localizedDescription)")
@@ -927,11 +937,11 @@ class NotificationViewModel: ObservableObject {
         }
     }
     
-    func sendNotification(title: String, body: String, targetMemberIds: [UUID]?, sendPush: Bool = true) async {
+    func sendNotification(title: String, body: String, targetMemberIds: [UUID]?, sendPush: Bool = true, kind: String = "admin") async {
         guard authVM?.isAdmin == true, let creator = currentUser?.id else { return }
         guard notificationsFeatureAvailable else { return }
         self.isLoading = true
-        
+
         do {
             if let ids = targetMemberIds, !ids.isEmpty {
                 let payloads = ids.map { memberId in
@@ -939,7 +949,7 @@ class NotificationViewModel: ObservableObject {
                         "target_member_id": AnyEncodable(memberId.uuidString),
                         "title": AnyEncodable(title),
                         "body": AnyEncodable(body),
-                        "kind": AnyEncodable("admin"),
+                        "kind": AnyEncodable(kind),
                         "created_by": AnyEncodable(creator.uuidString)
                     ]
                 }
@@ -949,20 +959,17 @@ class NotificationViewModel: ObservableObject {
                     "target_member_id": AnyEncodable(Optional<String>.none),
                     "title": AnyEncodable(title),
                     "body": AnyEncodable(body),
-                    "kind": AnyEncodable("admin"),
+                    "kind": AnyEncodable(kind),
                     "created_by": AnyEncodable(creator.uuidString)
                 ]
                 try await supabase.from("notifications").insert(payload).execute()
             }
 
-            // Manual push fallback — يرسل push خارجي مباشرة من التطبيق
-            // ملاحظة: إذا الـ Database Webhook (push-on-notification) مُفعّل أيضاً، قد يصل الإشعار مرتين.
-            // الحل: إما تعطيل الـ webhook من Supabase، أو ترك هذا الاستدعاء كخط دفاع احتياطي.
             if sendPush {
                 await sendPushToMembers(
                     title: title,
                     body: body,
-                    kind: "admin",
+                    kind: kind,
                     targetMemberIds: targetMemberIds
                 )
             }
@@ -981,32 +988,149 @@ class NotificationViewModel: ObservableObject {
 
     /// إرسال إشعار واحد في مركز الإشعارات (broadcast) يراه المدراء والمشرفون
     /// target_member_id = NULL يعني broadcast — الـ RLS يتكفل بإظهاره للمدراء فقط
-    func notifyAdmins(title: String, body: String, kind: String) async {
+    func notifyAdmins(
+        title: String,
+        body: String,
+        kind: String,
+        requestId: UUID? = nil,
+        requestType: String? = nil
+    ) async {
         let creatorId = currentUser?.id
         guard notificationsFeatureAvailable else { return }
-        
+
         do {
-            let payload: [String: AnyEncodable] = [
+            var payload: [String: AnyEncodable] = [
                 "target_member_id": AnyEncodable(Optional<String>.none),
                 "title": AnyEncodable(title),
                 "body": AnyEncodable(body),
                 "kind": AnyEncodable(kind),
                 "created_by": AnyEncodable(creatorId?.uuidString)
             ]
+            if let rid = requestId  { payload["request_id"]   = AnyEncodable(rid.uuidString) }
+            if let rt  = requestType { payload["request_type"] = AnyEncodable(rt) }
+
             try await supabase.from("notifications").insert(payload).execute()
         } catch {
             if ErrorHelper.isMissingTable(error, table: "notifications") {
                 notificationsFeatureAvailable = false
-            } else {
+            } else if !ErrorHelper.isMissingColumn(error, column: "request_id") {
                 Log.warning("تعذر إرسال إشعار للمدراء: \(error.localizedDescription)")
+            } else {
+                // migration not applied yet — fallback without request fields
+                let fallback: [String: AnyEncodable] = [
+                    "target_member_id": AnyEncodable(Optional<String>.none),
+                    "title": AnyEncodable(title),
+                    "body": AnyEncodable(body),
+                    "kind": AnyEncodable(kind),
+                    "created_by": AnyEncodable(creatorId?.uuidString)
+                ]
+                try? await supabase.from("notifications").insert(fallback).execute()
             }
         }
     }
-    
+
     /// إشعار موحّد: يرسل push خارجي + إشعار داخلي في استدعاء واحد
-    func notifyAdminsWithPush(title: String, body: String, kind: String) async {
-        async let push: Void = sendExternalAdminPush(title: title, body: body, kind: kind)
-        async let inApp: Void = notifyAdmins(title: title, body: body, kind: kind)
+    func notifyAdminsWithPush(
+        title: String,
+        body: String,
+        kind: String,
+        requestId: UUID? = nil,
+        requestType: String? = nil
+    ) async {
+        async let push: Void = sendExternalAdminPush(title: title, body: body, kind: kind, requestId: requestId, requestType: requestType)
+        async let inApp: Void = notifyAdmins(title: title, body: body, kind: kind, requestId: requestId, requestType: requestType)
         _ = await (push, inApp)
+    }
+
+    // MARK: - Approve Request from Notification
+
+    /// موافقة سريعة على طلب من الإشعار — تحديث DB مباشرة بدون side-effects كاملة
+    /// للموافقة الكاملة مع جميع الإجراءات استخدم AdminRequestViewModel
+    func approveRequest(requestId: UUID, requestType: String) async -> Bool {
+        guard canModerate else { return false }
+
+        do {
+            if requestType == RequestType.joinRequest.rawValue {
+                // طلب انضمام: تفعيل العضو مباشرة
+                try await supabase.from("profiles")
+                    .update([
+                        "role": AnyEncodable("member"),
+                        "status": AnyEncodable("active"),
+                        "is_hidden_from_tree": AnyEncodable(false)
+                    ])
+                    .eq("id", value: requestId.uuidString)
+                    .execute()
+
+                // إشعار للعضو بأنه تم قبوله
+                let adminName = currentUser?.firstName ?? "الإدارة"
+                let approvedPayload: [String: AnyEncodable] = [
+                    "target_member_id": AnyEncodable(requestId.uuidString),
+                    "title": AnyEncodable(L10n.t("تم قبول طلبك", "Your Request Was Approved")),
+                    "body": AnyEncodable(L10n.t(
+                        "وافق \(adminName) على انضمامك — مرحباً في عائلة المحمدعلي 🌿",
+                        "\(adminName) approved your membership — Welcome to the Al-Mohammad Ali family 🌿"
+                    )),
+                    "kind": AnyEncodable("join_approved"),
+                    "created_by": AnyEncodable(currentUser?.id.uuidString ?? "")
+                ]
+                _ = try? await supabase.from("notifications").insert(approvedPayload).execute()
+                await sendPushToMembers(
+                    title: L10n.t("تم قبول طلبك", "Your Request Was Approved"),
+                    body: L10n.t("مرحباً في عائلة المحمدعلي 🌿", "Welcome to the Al-Mohammad Ali family 🌿"),
+                    kind: "join_approved",
+                    targetMemberIds: [requestId]
+                )
+            } else {
+                // بقية الطلبات: تحديث status في admin_requests
+                try await supabase.from("admin_requests")
+                    .update(["status": AnyEncodable("approved")])
+                    .eq("id", value: requestId.uuidString)
+                    .execute()
+            }
+            Log.info("[APPROVE] ✅ تمت الموافقة: requestType=\(requestType), id=\(requestId.uuidString.prefix(8))")
+            return true
+        } catch {
+            Log.error("[APPROVE] ❌ فشل: \(error.localizedDescription)")
+            return false
+        }
+    }
+
+    func rejectRequest(requestId: UUID, requestType: String) async -> Bool {
+        guard canModerate else { return false }
+
+        do {
+            if requestType == RequestType.joinRequest.rawValue {
+                _ = try? await supabase
+                    .from("admin_requests")
+                    .delete()
+                    .eq("requester_id", value: requestId.uuidString)
+                    .execute()
+                _ = try? await supabase
+                    .from("admin_requests")
+                    .delete()
+                    .eq("member_id", value: requestId.uuidString)
+                    .execute()
+                _ = try? await supabase
+                    .from("profiles")
+                    .update(["father_id": AnyEncodable(Optional<String>.none)])
+                    .eq("father_id", value: requestId.uuidString)
+                    .execute()
+                try await supabase
+                    .from("profiles")
+                    .delete()
+                    .eq("id", value: requestId.uuidString)
+                    .execute()
+            } else {
+                try await supabase.from("admin_requests")
+                    .update(["status": AnyEncodable(ApprovalStatus.rejected.rawValue)])
+                    .eq("id", value: requestId.uuidString)
+                    .execute()
+            }
+            Log.info("[REJECT] ✅ تم الرفض: requestType=\(requestType), id=\(requestId.uuidString.prefix(8))")
+            return true
+        } catch {
+            Log.error("[REJECT] ❌ فشل: \(error.localizedDescription)")
+            return false
+        }
     }
 }

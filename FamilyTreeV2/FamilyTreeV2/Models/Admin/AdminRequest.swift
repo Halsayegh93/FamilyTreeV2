@@ -14,7 +14,7 @@ struct TreeEditPayload: Codable {
     let notes: String?            // optional free text
 }
 
-struct AdminRequest: Identifiable, Codable {
+nonisolated struct AdminRequest: Identifiable, Codable, Sendable {
     let id: UUID
     let memberId: UUID
     let requesterId: UUID

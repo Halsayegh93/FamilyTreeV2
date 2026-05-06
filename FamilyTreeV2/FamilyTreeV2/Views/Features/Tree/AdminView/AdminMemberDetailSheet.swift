@@ -36,6 +36,9 @@ struct AdminMemberDetailSheet: View {
     @State private var bioStations: [FamilyMember.BioStation] = []
     @State private var showBioEditor = false
 
+    @State private var showBirthDateSheet = false
+    @State private var showDeathDateSheet = false
+
     @State private var localAvatarPreview: UIImage? = nil
     @State private var currentAvatarURL: String?
     @State private var showAddSonSheet = false
@@ -95,48 +98,37 @@ struct AdminMemberDetailSheet: View {
             ZStack {
                 DS.Color.background.ignoresSafeArea()
 
-                ScrollView(showsIndicators: false) {
+                StableScrollView {
                     VStack(spacing: DS.Spacing.sm) {
 
                         // Profile header
                         memberHeader
                             .padding(.top, DS.Spacing.sm)
 
-                        // Basic info section — الاسم (الكل يقدر يعدل)
+                        // Basic info section
                         basicInfoSection
 
-                        // TODO: gender — re-enable when needed
-                        // genderSection
-
-                        // Birth date & health section (الكل يقدر يعدل)
+                        // Birth date & health section
                         datesSection
 
-                        // Phone section (الكل يقدر يعدل)
+                        // Phone section
                         phoneSection
 
-                        // المحطات الحياتية (الكل يقدر يعدل)
+                        // المحطات الحياتية
                         bioStationsSection
 
                         // الأقسام التالية للمدير والمالك فقط — المراقب لا
                         if !isMonitorOnly {
-                            // Father link section
                             fatherSection
-
-                            // Children section
                             childrenSection
-
-                            // Role section — المالك فقط
-                            if authVM.isOwner {
-                                roleSection
-                            }
-
-                            // Delete button (admin only)
-                            if canManageAccessPermissions {
-                                deleteSection
-                            }
+                            if authVM.isOwner { roleSection }
+                            if canManageAccessPermissions { deleteSection }
                         }
                     }
                     .padding(.bottom, DS.Spacing.xxxl)
+                    .environmentObject(authVM)
+                    .environmentObject(memberVM)
+                    .environmentObject(adminRequestVM)
                 }
             }
             .navigationTitle(L10n.t("إدارة السجل", "Member Admin"))
@@ -181,8 +173,6 @@ struct AdminMemberDetailSheet: View {
             .onChange(of: childToEdit) { child in
                 if child == nil { setupLocalChildren() }
             }
-            // Live preview محذوف بالكامل — كل تغيير في memberVM.allMembers يسبب re-evaluation
-            // للـ body و ScrollView يقفز. التحديث الفعلي بالشجرة يصير عند زر "حفظ" فقط.
             .alert(L10n.t("حذف نهائي", "Permanent Delete"), isPresented: $showDeleteConfirmation) {
                 Button(L10n.t("حذف", "Delete"), role: .destructive) {
                     Task {
@@ -202,47 +192,71 @@ struct AdminMemberDetailSheet: View {
     // MARK: - Member Header (Avatar + Name + Role)
     private var memberHeader: some View {
         VStack(spacing: DS.Spacing.xs) {
-            DSProfilePhotoPicker(
-                selectedImage: $localAvatarPreview,
-                existingURL: currentAvatarURL,
-                enableCrop: true,
-                cropShape: .circle,
-                trailing: nil,
-                showDeleteForExisting: currentAvatarURL != nil,
-                onDeleteExisting: {
+            // الصورة قابلة للتعديل فقط للمتوفى — العضو الحي يرفع صورته بنفسه
+            if isDeceased {
+                DSProfilePhotoPicker(
+                    selectedImage: $localAvatarPreview,
+                    existingURL: currentAvatarURL,
+                    enableCrop: true,
+                    cropShape: .circle,
+                    trailing: nil,
+                    showDeleteForExisting: currentAvatarURL != nil,
+                    onDeleteExisting: {
+                        Task {
+                            await memberVM.deleteAvatar(for: member.id)
+                            await MainActor.run { currentAvatarURL = nil }
+                            _ = authVM.currentUser?.firstName ?? "مدير"
+                            await memberVM.notificationVM?.notifyAdminsWithPush(
+                                title: L10n.t("حذف صورة عضو", "Member Photo Removed"),
+                                body: L10n.t(
+                                    "تم حذف صورة: «\(member.fullName)»",
+                                    "Photo removed for: «\(member.fullName)»"
+                                ),
+                                kind: "admin_edit_avatar_remove"
+                            )
+                        }
+                    }
+                )
+                .onChange(of: localAvatarPreview) { newImage in
+                    guard let newImage else { return }
                     Task {
-                        await memberVM.deleteAvatar(for: member.id)
-                        await MainActor.run { currentAvatarURL = nil }
-                        _ = authVM.currentUser?.firstName ?? "مدير"
+                        await memberVM.uploadAvatar(image: newImage, for: member.id)
+                        if let updated = memberVM.member(byId: member.id) {
+                            await MainActor.run { currentAvatarURL = updated.avatarUrl }
+                        }
+                        let adminName = authVM.currentUser?.firstName ?? "مدير"
                         await memberVM.notificationVM?.notifyAdminsWithPush(
-                            title: L10n.t("تعديل بيانات عضو", "Member Data Updated"),
+                            title: L10n.t("تحديث صورة عضو", "Member Photo Updated"),
                             body: L10n.t(
-                                "تم حذف صورة: \(member.fullName)",
-                                "Photo removed: \(member.fullName)"
+                                "تم تحديث صورة: «\(member.fullName)»",
+                                "Photo updated: «\(member.fullName)»"
                             ),
-                            kind: "admin_edit"
+                            kind: "admin_edit_avatar"
                         )
+                        Log.info("[Admin] \(adminName) عدّل صورة \(member.firstName)")
                     }
                 }
-            )
-            .onChange(of: localAvatarPreview) { newImage in
-                guard let newImage else { return }
-                Task {
-                    await memberVM.uploadAvatar(image: newImage, for: member.id)
-                    // تحديث URL محلياً عشان يعرض الصورة الجديدة
-                    if let updated = memberVM.member(byId: member.id) {
-                        await MainActor.run { currentAvatarURL = updated.avatarUrl }
+            } else {
+                // عضو حي: عرض الصورة فقط بدون إمكانية التعديل
+                ZStack {
+                    Circle()
+                        .fill(DS.Color.primary.opacity(0.12))
+                        .frame(width: 110, height: 110)
+                    if let urlString = currentAvatarURL, let url = URL(string: urlString) {
+                        AsyncImage(url: url) { image in
+                            image.resizable().aspectRatio(contentMode: .fill)
+                        } placeholder: {
+                            Image(systemName: "person.fill")
+                                .font(.system(size: 44))
+                                .foregroundColor(DS.Color.primary)
+                        }
+                        .frame(width: 110, height: 110)
+                        .clipShape(Circle())
+                    } else {
+                        Image(systemName: "person.fill")
+                            .font(.system(size: 44))
+                            .foregroundColor(DS.Color.primary)
                     }
-                    let adminName = authVM.currentUser?.firstName ?? "مدير"
-                    await memberVM.notificationVM?.notifyAdminsWithPush(
-                        title: L10n.t("تحديث صورة عضو", "Member Photo Updated"),
-                        body: L10n.t(
-                            "تم تحديث صورة: \(member.fullName)",
-                            "Photo updated: \(member.fullName)"
-                        ),
-                        kind: "admin_edit"
-                    )
-                    Log.info("[Admin] \(adminName) عدّل صورة \(member.firstName)")
                 }
             }
 
@@ -699,10 +713,20 @@ struct AdminMemberDetailSheet: View {
             )) {
                 Button(L10n.t("حذف", "Delete"), role: .destructive) {
                     if let child = childToDelete {
+                        let capturedChild = child
                         Task {
-                            await adminRequestVM.rejectOrDeleteMember(memberId: child.id)
-                            localChildren.removeAll { $0.id == child.id }
+                            await adminRequestVM.rejectOrDeleteMember(memberId: capturedChild.id)
+                            localChildren.removeAll { $0.id == capturedChild.id }
                             childToDelete = nil
+                            let adminName = authVM.currentUser?.firstName ?? "مدير"
+                            await memberVM.notificationVM?.notifyAdminsWithPush(
+                                title: L10n.t("حذف ابن", "Child Removed"),
+                                body: L10n.t(
+                                    "\(adminName) حذف «\(capturedChild.firstName)» من أبناء «\(member.fullName)»",
+                                    "\(adminName) removed «\(capturedChild.firstName)» from «\(member.fullName)»'s children"
+                                ),
+                                kind: "admin_edit_child_remove"
+                            )
                         }
                     }
                 }
@@ -878,23 +902,32 @@ struct AdminMemberDetailSheet: View {
 
                 if hasBirthDate {
                     DSDivider()
-                    VStack(spacing: DS.Spacing.xs) {
+                    Button { showBirthDateSheet = true } label: {
                         HStack(spacing: DS.Spacing.sm) {
                             DSIcon("calendar.badge.clock", color: DS.Color.accent, size: iconSm, iconSize: iconFontSm)
-                            Text(L10n.t("التاريخ المختار:", "Selected:"))
-                                .font(DS.Font.caption1)
-                                .foregroundColor(DS.Color.textSecondary)
+                            Text(L10n.t("تاريخ الميلاد", "Birth Date"))
+                                .font(DS.Font.callout)
+                                .foregroundColor(DS.Color.textPrimary)
                             Spacer()
                             Text(formattedDate(birthDate))
                                 .font(DS.Font.calloutBold)
                                 .foregroundColor(DS.Color.accent)
+                            Image(systemName: "chevron.up")
+                                .font(DS.Font.scaled(10, weight: .bold))
+                                .foregroundColor(DS.Color.textTertiary)
                         }
                         .padding(.horizontal, DS.Spacing.md)
-
-                        StableWheelDatePicker(selection: $birthDate, in: ...Date())
-                            .padding(.horizontal, DS.Spacing.md)
+                        .padding(.vertical, DS.Spacing.xs)
                     }
-                    .padding(.vertical, DS.Spacing.xs)
+                    .buttonStyle(DSBoldButtonStyle())
+                    .sheet(isPresented: $showBirthDateSheet) {
+                        DSDatePickerSheet(
+                            selection: $birthDate,
+                            isPresented: $showBirthDateSheet,
+                            in: ...Date(),
+                            title: L10n.t("تاريخ الميلاد", "Birth Date")
+                        )
+                    }
                 }
 
                 DSDivider()
@@ -937,23 +970,32 @@ struct AdminMemberDetailSheet: View {
 
                     if hasDeathDate {
                         DSDivider()
-                        VStack(spacing: DS.Spacing.xs) {
+                        Button { showDeathDateSheet = true } label: {
                             HStack(spacing: DS.Spacing.sm) {
                                 DSIcon("calendar.badge.exclamationmark", color: DS.Color.error, size: iconSm, iconSize: iconFontSm)
-                                Text(L10n.t("التاريخ المختار:", "Selected:"))
-                                    .font(DS.Font.caption1)
-                                    .foregroundColor(DS.Color.textSecondary)
+                                Text(L10n.t("تاريخ الوفاة", "Death Date"))
+                                    .font(DS.Font.callout)
+                                    .foregroundColor(DS.Color.textPrimary)
                                 Spacer()
                                 Text(formattedDate(deathDate))
                                     .font(DS.Font.calloutBold)
                                     .foregroundColor(DS.Color.error)
+                                Image(systemName: "chevron.up")
+                                    .font(DS.Font.scaled(10, weight: .bold))
+                                    .foregroundColor(DS.Color.textTertiary)
                             }
                             .padding(.horizontal, DS.Spacing.md)
-
-                            StableWheelDatePicker(selection: $deathDate, in: ...Date())
-                                .padding(.horizontal, DS.Spacing.md)
+                            .padding(.vertical, DS.Spacing.xs)
                         }
-                        .padding(.vertical, DS.Spacing.xs)
+                        .buttonStyle(DSBoldButtonStyle())
+                        .sheet(isPresented: $showDeathDateSheet) {
+                            DSDatePickerSheet(
+                                selection: $deathDate,
+                                isPresented: $showDeathDateSheet,
+                                in: ...Date(),
+                                title: L10n.t("تاريخ الوفاة", "Death Date")
+                            )
+                        }
                     }
                 }
             }
@@ -1043,10 +1085,6 @@ struct AdminMemberDetailSheet: View {
             .filter { $0.fatherId == member.id }
             .sorted(by: { $0.sortOrder < $1.sortOrder })
 
-        // Only update if children actually changed (by id + sortOrder).
-        // This prevents re-layout when we're just editing the CURRENT member's dates —
-        // Updating memberVM.allMembers fires this observer, but children list itself
-        // hasn't changed, so we skip the state update and avoid ScrollView auto-scroll.
         let currentKeys = localChildren.map { "\($0.id.uuidString)-\($0.sortOrder)" }
         let newKeys = newChildren.map { "\($0.id.uuidString)-\($0.sortOrder)" }
         if currentKeys != newKeys {
@@ -1127,6 +1165,10 @@ struct AdminMemberDetailSheet: View {
         let phoneChanged: Bool = {
             let original = KuwaitPhone.detectCountryAndLocal(member.phoneNumber)
             return capturedPhoneCountry.id != original.country.id || capturedPhone != original.localDigits
+        }()
+        let phoneRemoved: Bool = {
+            let originalDigits = KuwaitPhone.detectCountryAndLocal(member.phoneNumber).localDigits
+            return phoneChanged && capturedPhone.isEmpty && !originalDigits.isEmpty
         }()
         let fatherChanged = capturedFatherId != member.fatherId
         let datesChanged: Bool = {
@@ -1266,7 +1308,7 @@ struct AdminMemberDetailSheet: View {
             var changedFields: [String] = []
             if nameChanged { changedFields.append(L10n.t("الاسم", "Name")) }
             if roleChanged { changedFields.append(L10n.t("مستوى الحساب", "Account Level")) }
-            if phoneChanged { changedFields.append(L10n.t("الهاتف", "Phone")) }
+            if phoneChanged { changedFields.append(phoneRemoved ? L10n.t("حذف الهاتف", "Phone removed") : L10n.t("الهاتف", "Phone")) }
             if fatherChanged { changedFields.append(L10n.t("الأب", "Father")) }
             if genderChanged { changedFields.append(L10n.t("الجنس", "Gender")) }
             if datesChanged { changedFields.append(L10n.t("التواريخ", "Dates")) }
@@ -1275,13 +1317,31 @@ struct AdminMemberDetailSheet: View {
 
             if !changedFields.isEmpty {
                 let fieldsList = changedFields.joined(separator: "، ")
+                // نختار kind محدد إذا تعديل واحد فقط، وإلا admin_edit عام
+                let editKind: String = {
+                    let changed = (
+                        name: nameChanged, role: roleChanged, phone: phoneChanged,
+                        father: fatherChanged, gender: genderChanged,
+                        dates: datesChanged, order: childrenOrderChanged, bio: bioChanged
+                    )
+                    let count = [changed.name, changed.role, changed.phone,
+                                 changed.father, changed.gender, changed.dates,
+                                 changed.order, changed.bio].filter { $0 }.count
+                    guard count == 1 else { return "admin_edit" }
+                    if changed.name   { return "admin_edit_name" }
+                    if changed.dates  { return "admin_edit_dates" }
+                    if changed.phone  { return phoneRemoved ? "admin_edit_phone_remove" : "admin_edit_phone" }
+                    if changed.role   { return "admin_edit_role" }
+                    if changed.father { return "admin_edit_father" }
+                    return "admin_edit"
+                }()
                 await memberVM.notificationVM?.notifyAdminsWithPush(
                     title: L10n.t("تعديل بيانات عضو", "Member Data Updated"),
                     body: L10n.t(
                         "\(adminName) عدّل (\(fieldsList)) لـ \(memberName)",
                         "\(adminName) updated (\(fieldsList)) for \(memberName)"
                     ),
-                    kind: "admin_edit"
+                    kind: editKind
                 )
                 Log.info("[Admin] \(adminName) عدّل بيانات \(memberName): \(fieldsList)")
             }
