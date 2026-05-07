@@ -353,7 +353,7 @@ struct NotificationsCenterView: View {
                     tab: .activity
                 )
             }
-            .padding(2)
+            .padding(3)
             .background(
                 Capsule()
                     .fill(DS.Color.surfaceElevated.opacity(0.7))
@@ -386,22 +386,22 @@ struct NotificationsCenterView: View {
                         .matchedGeometryEffect(id: "tabIndicator", in: tabIndicator)
                 }
 
-                HStack(spacing: 4) {
+                HStack(spacing: 5) {
                     Image(systemName: icon)
-                        .font(.system(size: 10, weight: .bold))
+                        .font(.system(size: 13, weight: .bold))
                         .symbolRenderingMode(.hierarchical)
 
                     Text(title)
-                        .font(.system(size: 11, weight: .bold, design: .rounded))
+                        .font(.system(size: 14, weight: .bold, design: .rounded))
                         .lineLimit(1)
                         .minimumScaleFactor(0.85)
 
                     if count > 0 {
                         Text("\(count)")
-                            .font(.system(size: 8, weight: .black, design: .rounded))
+                            .font(.system(size: 10, weight: .black, design: .rounded))
                             .foregroundColor(isSelected ? DS.Color.primary : DS.Color.textOnPrimary)
-                            .frame(minWidth: 12, minHeight: 12)
-                            .padding(.horizontal, 2)
+                            .frame(minWidth: 16, minHeight: 16)
+                            .padding(.horizontal, 3)
                             .background(
                                 Capsule()
                                     .fill(isSelected ? Color.white : DS.Color.error)
@@ -410,8 +410,8 @@ struct NotificationsCenterView: View {
                     }
                 }
                 .foregroundColor(isSelected ? DS.Color.textOnPrimary : DS.Color.textSecondary)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
             }
             .contentShape(Capsule())
         }
