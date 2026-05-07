@@ -581,11 +581,12 @@ struct NotificationsCenterView: View {
                             .background((isUnread ? iconInfo.color : DS.Color.textTertiary).opacity(0.08))
                             .clipShape(Capsule())
 
-                        // اسم المرسل الثلاثي — يظهر فقط للمدراء والمشرفين
+                        // اسم المرسل — إداري يعرض "الإدارة"
                         if authVM.isAdmin, let creatorId = item.createdBy {
+                            let isAdminNotif = adminOnlyKinds.contains(item.kind)
                             let creator = memberVM.member(byId: creatorId)
-                            let creatorName = creator?.shortFullName ?? L10n.t("مدير", "Admin")
-                            let roleColor: Color = creator?.roleColor ?? DS.Color.accent
+                            let creatorName = isAdminNotif ? L10n.t("الإدارة", "Admin") : (creator?.shortFullName ?? L10n.t("الإدارة", "Admin"))
+                            let roleColor: Color = isAdminNotif ? DS.Color.primary : (creator?.roleColor ?? DS.Color.accent)
 
                             HStack(spacing: 3) {
                                 Circle()
@@ -739,10 +740,11 @@ struct NotificationsCenterView: View {
                                 color: DS.Color.primary
                             )
 
-                            // اسم المرسل الثلاثي — يظهر فقط للمدراء والمشرفين
+                            // اسم المرسل — إداري يعرض "الإدارة"
                             if authVM.isAdmin, let creatorId = notification.createdBy {
+                                let isAdminNotif = adminOnlyKinds.contains(notification.kind)
                                 let creator = memberVM.member(byId: creatorId)
-                                let creatorName = creator?.shortFullName ?? L10n.t("مدير", "Admin")
+                                let creatorName = isAdminNotif ? L10n.t("الإدارة", "Admin") : (creator?.shortFullName ?? L10n.t("الإدارة", "Admin"))
                                 let roleColor: Color = creator?.roleColor ?? DS.Color.accent
 
                                 detailDivider
