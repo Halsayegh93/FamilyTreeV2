@@ -11,6 +11,7 @@ struct ProfileView: View {
     @State private var showQRCode = false
     @State private var showQRScanner = false
     @State private var showSignOutConfirm = false
+    @State private var showSettings = false
 
     @State private var showAddChild = false
     @State private var editingChild: FamilyMember? = nil
@@ -35,19 +36,11 @@ struct ProfileView: View {
                             icon: "person.fill",
                             backgroundGradient: DS.Color.gradientPrimary
                         ) {
-                            HStack(spacing: DS.Spacing.sm) {
-                                // زر تغيير اللغة
-                                DSIconButton(icon: "globe", iconColor: DS.Color.textOnPrimary) {
-                                    langManager.selectedLanguage = langManager.selectedLanguage == "ar" ? "en" : "ar"
-                                }
-                                .accessibilityLabel(L10n.t("تغيير اللغة", "Change Language"))
-
-                                // زر تسجيل الخروج
-                                DSIconButton(icon: "rectangle.portrait.and.arrow.right", iconColor: DS.Color.textOnPrimary) {
-                                    showSignOutConfirm = true
-                                }
-                                .accessibilityLabel(L10n.t("تسجيل الخروج", "Sign Out"))
+                            // زر الإعدادات — يفتح كل تفضيلات التطبيق
+                            DSIconButton(icon: "gearshape.fill", iconColor: DS.Color.textOnPrimary) {
+                                showSettings = true
                             }
+                            .accessibilityLabel(L10n.t("الإعدادات", "Settings"))
                         }
 
                         ScrollView(showsIndicators: false) {
@@ -73,8 +66,8 @@ struct ProfileView: View {
                                     .opacity(appeared ? 1 : 0)
                                     .offset(y: appeared ? 0 : 30)
 
-                                // General: Gallery, Privacy, Settings, Sign Out
-                                generalSection(user: currentUser)
+                                // زر تسجيل الخروج بأسفل الصفحة
+                                signOutButton
                                     .opacity(appeared ? 1 : 0)
                                     .offset(y: appeared ? 0 : 35)
                             }
@@ -95,6 +88,9 @@ struct ProfileView: View {
                 }
             }
             .toolbar(.hidden, for: .navigationBar)
+            .sheet(isPresented: $showSettings) {
+                NavigationStack { SettingsView() }
+            }
             .sheet(isPresented: $showEditProfile) { if let c = user { EditProfileView(member: c) } }
             .sheet(isPresented: $showQRCode) {
                 if let c = user {
@@ -721,39 +717,29 @@ struct ProfileView: View {
     }
 
     // MARK: - General Section (Privacy, Settings)
-    private func generalSection(user: FamilyMember) -> some View {
-        DSCard(padding: 0) {
-            DSSectionHeader(
-                title: L10n.t("اعدادات التطبيق", "App Settings"),
-                icon: "gearshape.2.fill",
-                iconColor: DS.Color.textSecondary
+    private var signOutButton: some View {
+        Button {
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            showSignOutConfirm = true
+        } label: {
+            HStack(spacing: DS.Spacing.sm) {
+                Image(systemName: "rectangle.portrait.and.arrow.right")
+                    .font(DS.Font.scaled(15, weight: .semibold))
+                Text(L10n.t("تسجيل الخروج", "Sign Out"))
+                    .font(DS.Font.calloutBold)
+            }
+            .foregroundColor(DS.Color.error)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, DS.Spacing.md)
+            .background(DS.Color.error.opacity(0.10))
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                    .stroke(DS.Color.error.opacity(0.20), lineWidth: 0.5)
             )
-
-            // Privacy Row
-            NavigationLink(destination: PrivacySettingsView()) {
-                DSActionRow(
-                    title: L10n.t("الإشعارات والخصوصية", "Notifications & Privacy"),
-                    subtitle: L10n.t("إدارة الإشعارات وخصوصية بياناتك", "Manage notifications and data privacy"),
-                    icon: "lock.shield.fill",
-                    color: DS.Color.info
-                )
-            }
-            .buttonStyle(DSBoldButtonStyle())
-
-            DSDivider()
-
-            // Settings Row
-            NavigationLink(destination: SettingsView()) {
-                DSActionRow(
-                    title: L10n.t("الإعدادات", "Settings"),
-                    subtitle: L10n.t("المظهر واللغة والأجهزة وإدارة الحساب", "Display, language, devices & account"),
-                    icon: "gearshape.fill",
-                    color: DS.Color.accent
-                )
-            }
-            .buttonStyle(DSBoldButtonStyle())
+            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
         }
+        .buttonStyle(DSScaleButtonStyle())
         .padding(.horizontal, DS.Spacing.lg)
-        .padding(.bottom, DS.Spacing.lg)
+        .padding(.top, DS.Spacing.md)
     }
 }
