@@ -74,6 +74,12 @@ struct NotificationsCenterView: View {
     @State private var isSelecting = false
     @State private var selectedIds: Set<UUID> = []
     @State private var selectedNotification: AppNotification? = nil
+    @State private var selectedTab: NotifTab = .notifications
+
+    enum NotifTab {
+        case notifications // إشعاراتي + موافقات
+        case activity      // المستجدات — للمدراء فقط
+    }
 
     // MARK: - Date Formatters
 
@@ -107,6 +113,17 @@ struct NotificationsCenterView: View {
             DS.Color.background.ignoresSafeArea()
 
             VStack(spacing: 0) {
+                // تابات الإشعارات
+                if authVM.isAdmin {
+                    Picker("", selection: $selectedTab) {
+                        Text(L10n.t("الإشعارات", "Notifications")).tag(NotifTab.notifications)
+                        Text(L10n.t("المستجدات", "Activity")).tag(NotifTab.activity)
+                    }
+                    .pickerStyle(.segmented)
+                    .padding(.horizontal, DS.Spacing.lg)
+                    .padding(.vertical, DS.Spacing.sm)
+                }
+
                 // شريط الأدوات الموحد
                 actionBar
 
@@ -336,16 +353,27 @@ struct NotificationsCenterView: View {
     ]
 
     private var filteredNotifications: [AppNotification] {
+        let all = notificationVM.notifications
+
         let base: [AppNotification]
-        if authVM.isAdmin {
-            // المدير يشوف كل شي
-            base = notificationVM.notifications
-        } else {
-            // الباقي يشوفون: الموجهة لهم + العامة (بدون الإدارية)
-            base = notificationVM.notifications.filter { notif in
-                notif.targetMemberId != nil || !adminOnlyKinds.contains(notif.kind)
+        switch selectedTab {
+        case .notifications:
+            // الإشعارات: الموجهة لي شخصياً + الموافقات (admin_request, link_request)
+            let myId = authVM.currentUser?.id
+            base = all.filter { notif in
+                notif.targetMemberId == myId ||
+                notif.kind == NotificationKind.adminRequest.rawValue ||
+                notif.kind == NotificationKind.linkRequest.rawValue ||
+                notif.kind == NotificationKind.newsReport.rawValue
+            }
+        case .activity:
+            // المستجدات: كل التغييرات بالتطبيق (إدارية + عامة) — للمدراء فقط
+            base = all.filter { notif in
+                adminOnlyKinds.contains(notif.kind) ||
+                notif.targetMemberId == nil
             }
         }
+
         if hiddenKinds.isEmpty { return base }
         return base.filter { !hiddenKinds.contains($0.kind) }
     }
