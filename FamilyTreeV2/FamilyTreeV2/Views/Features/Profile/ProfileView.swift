@@ -168,25 +168,20 @@ struct ProfileView: View {
             
             // User Info
             VStack(spacing: DS.Spacing.sm) {
-                HStack(spacing: DS.Spacing.sm) {
-                    Text(user.fullName.isEmpty ? L10n.t("غير معروف", "Unknown") : user.fullName)
-                        .font(DS.Font.title2)
-                        .fontWeight(.bold)
-                        .foregroundColor(DS.Color.textPrimary)
-                        .multilineTextAlignment(.center)
-
-                    Button { showEditProfile = true } label: {
-                        Image(systemName: "pencil")
-                            .font(DS.Font.scaled(13, weight: .bold))
+                Button { showEditProfile = true } label: {
+                    (
+                        Text(user.fullName.isEmpty ? L10n.t("غير معروف", "Unknown") : user.fullName)
+                            .font(DS.Font.title2.bold())
+                            .foregroundColor(DS.Color.textPrimary)
+                        + Text("  ")
+                        + Text(Image(systemName: "pencil.circle.fill"))
+                            .font(DS.Font.scaled(20, weight: .bold))
                             .foregroundColor(DS.Color.primary)
-                            .frame(width: 28, height: 28)
-                            .background(DS.Color.primary.opacity(0.12))
-                            .clipShape(Circle())
-                            .overlay(Circle().stroke(DS.Color.primary.opacity(0.25), lineWidth: 0.5))
-                    }
-                    .buttonStyle(DSScaleButtonStyle())
-                    .accessibilityLabel(L10n.t("تعديل البيانات", "Edit Profile"))
+                    )
+                    .multilineTextAlignment(.center)
                 }
+                .buttonStyle(DSScaleButtonStyle())
+                .accessibilityLabel(L10n.t("تعديل البيانات", "Edit Profile"))
                 .padding(.horizontal, DS.Spacing.lg)
 
                 // مستوى الحساب + عدد الأبناء
