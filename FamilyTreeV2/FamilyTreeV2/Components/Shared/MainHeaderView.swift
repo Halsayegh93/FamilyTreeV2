@@ -7,6 +7,7 @@ struct MainHeaderView<TrailingContent: View>: View {
     @Binding var showingNotifications: Bool
     
     @State private var isAnimating = false
+    @State private var showSignOutConfirm = false
     
     // Customization properties
     let customTitle: String?
@@ -89,13 +90,12 @@ struct MainHeaderView<TrailingContent: View>: View {
                     trailingContent
 
                     if customTitle == nil {
-                        if authVM.canModerate {
-                            Button(action: { selectedTab = 4 }) {
-                                headerIconView(icon: "shield.fill")
-                            }
-                            .buttonStyle(BounceButtonStyle())
-                            .accessibilityLabel(L10n.t("لوحة الإدارة", "Admin Dashboard"))
+                        Button(action: { showSignOutConfirm = true }) {
+                            headerIconView(icon: "rectangle.portrait.and.arrow.right")
                         }
+                        .buttonStyle(BounceButtonStyle())
+                        .accessibilityLabel(L10n.t("تسجيل الخروج", "Sign Out"))
+
                         NavigationLink(destination: NotificationsCenterView()) {
                             ZStack(alignment: .topTrailing) {
                                 headerIconView(
@@ -135,6 +135,18 @@ struct MainHeaderView<TrailingContent: View>: View {
         }
         .background(headerBackground)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+        .confirmationDialog(
+            L10n.t("تسجيل الخروج", "Sign Out"),
+            isPresented: $showSignOutConfirm,
+            titleVisibility: .visible
+        ) {
+            Button(L10n.t("تسجيل الخروج", "Sign Out"), role: .destructive) {
+                Task { await authVM.signOut() }
+            }
+            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
+        } message: {
+            Text(L10n.t("هل تريد الخروج من حسابك على هذا الجهاز؟", "Do you want to sign out of your account on this device?"))
+        }
         .onAppear {
             withAnimation(.spring(response: 0.5, dampingFraction: 0.7, blendDuration: 0.2)) {
                 isAnimating = true

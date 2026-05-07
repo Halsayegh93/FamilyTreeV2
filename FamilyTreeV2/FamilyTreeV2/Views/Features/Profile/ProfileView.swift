@@ -168,12 +168,26 @@ struct ProfileView: View {
             
             // User Info
             VStack(spacing: DS.Spacing.sm) {
-                Text(user.fullName.isEmpty ? L10n.t("غير معروف", "Unknown") : user.fullName)
-                    .font(DS.Font.title2)
-                    .fontWeight(.bold)
-                    .foregroundColor(DS.Color.textPrimary)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, DS.Spacing.lg)
+                HStack(spacing: DS.Spacing.sm) {
+                    Text(user.fullName.isEmpty ? L10n.t("غير معروف", "Unknown") : user.fullName)
+                        .font(DS.Font.title2)
+                        .fontWeight(.bold)
+                        .foregroundColor(DS.Color.textPrimary)
+                        .multilineTextAlignment(.center)
+
+                    Button { showEditProfile = true } label: {
+                        Image(systemName: "pencil")
+                            .font(DS.Font.scaled(13, weight: .bold))
+                            .foregroundColor(DS.Color.primary)
+                            .frame(width: 28, height: 28)
+                            .background(DS.Color.primary.opacity(0.12))
+                            .clipShape(Circle())
+                            .overlay(Circle().stroke(DS.Color.primary.opacity(0.25), lineWidth: 0.5))
+                    }
+                    .buttonStyle(DSScaleButtonStyle())
+                    .accessibilityLabel(L10n.t("تعديل البيانات", "Edit Profile"))
+                }
+                .padding(.horizontal, DS.Spacing.lg)
 
                 // مستوى الحساب + عدد الأبناء
                 HStack(spacing: DS.Spacing.sm) {
@@ -286,22 +300,6 @@ struct ProfileView: View {
                 }
             }
             .padding(DS.Spacing.md)
-
-            DSDivider()
-
-            Button(action: { showEditProfile = true }) {
-                HStack(spacing: DS.Spacing.md) {
-                    DSIcon("pencil", color: DS.Color.primary)
-                    Text(L10n.t("تعديل البيانات", "Edit Info"))
-                        .font(DS.Font.calloutBold)
-                        .foregroundColor(DS.Color.primary)
-                    Spacer()
-                    chevronCircle
-                }
-                .padding(.horizontal, DS.Spacing.lg)
-                .padding(.vertical, DS.Spacing.md)
-            }
-            .buttonStyle(DSBoldButtonStyle())
         }
         .padding(.horizontal, DS.Spacing.lg)
     }
@@ -668,16 +666,6 @@ struct ProfileView: View {
     }
 
     // MARK: - Helpers
-
-    /// Directional chevron inside a tinted circle — used for navigation rows.
-    private var chevronCircle: some View {
-        Image(systemName: "chevron.forward")
-            .font(DS.Font.scaled(11, weight: .bold))
-            .foregroundColor(DS.Color.textTertiary)
-            .frame(width: 26, height: 26)
-            .background(DS.Color.textTertiary.opacity(0.1))
-            .clipShape(Circle())
-    }
 
     /// Derives the SF Symbol name and accent color for a child member.
     private func childIconInfo(for member: FamilyMember) -> (name: String, color: Color) {
