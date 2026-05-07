@@ -346,11 +346,11 @@ struct NotificationsCenterView: View {
         }
         .padding(3)
         .background(
-            Capsule()
+            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
                 .fill(DS.Color.surfaceElevated.opacity(0.7))
         )
         .overlay(
-            Capsule()
+            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
                 .stroke(DS.Color.textTertiary.opacity(0.1), lineWidth: 0.5)
         )
         .fixedSize(horizontal: false, vertical: true)
@@ -369,7 +369,7 @@ struct NotificationsCenterView: View {
             ZStack {
                 // مؤشر الاختيار المتحرك (sliding indicator)
                 if isSelected {
-                    Capsule()
+                    RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous)
                         .fill(DS.Color.gradientPrimary)
                         .shadow(color: DS.Color.primary.opacity(0.3), radius: 6, x: 0, y: 2)
                         .matchedGeometryEffect(id: "tabIndicator", in: tabIndicator)
@@ -403,7 +403,7 @@ struct NotificationsCenterView: View {
                 .padding(.vertical, 8)
                 .frame(maxWidth: .infinity)
             }
-            .contentShape(Capsule())
+            .contentShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
         }
         .buttonStyle(.plain)
     }
