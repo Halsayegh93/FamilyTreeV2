@@ -351,15 +351,16 @@ struct NotificationsCenterView: View {
                 tab: .activity
             )
         }
-        .padding(4)
+        .padding(3)
         .background(
-            RoundedRectangle(cornerRadius: DS.Radius.full, style: .continuous)
+            Capsule()
                 .fill(DS.Color.surfaceElevated.opacity(0.7))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: DS.Radius.full, style: .continuous)
+            Capsule()
                 .stroke(DS.Color.textTertiary.opacity(0.1), lineWidth: 0.5)
         )
+        .dynamicTypeSize(...DynamicTypeSize.large)
     }
 
     private func segmentTab(icon: String, title: String, count: Int, tab: NotifTab) -> some View {
@@ -376,26 +377,26 @@ struct NotificationsCenterView: View {
                 if isSelected {
                     Capsule()
                         .fill(DS.Color.gradientPrimary)
-                        .shadow(color: DS.Color.primary.opacity(0.35), radius: 8, x: 0, y: 3)
+                        .shadow(color: DS.Color.primary.opacity(0.3), radius: 6, x: 0, y: 2)
                         .matchedGeometryEffect(id: "tabIndicator", in: tabIndicator)
                 }
 
-                HStack(spacing: DS.Spacing.xs) {
+                HStack(spacing: 5) {
                     Image(systemName: icon)
-                        .font(DS.Font.scaled(13, weight: .bold))
+                        .font(.system(size: 11, weight: .bold))
                         .symbolRenderingMode(.hierarchical)
-                        .scaleEffect(isSelected ? 1.05 : 1.0)
 
                     Text(title)
-                        .font(DS.Font.scaled(13, weight: .bold))
+                        .font(.system(size: 12, weight: .bold, design: .rounded))
                         .lineLimit(1)
+                        .minimumScaleFactor(0.85)
 
                     if count > 0 {
                         Text("\(count)")
-                            .font(DS.Font.scaled(10, weight: .black))
+                            .font(.system(size: 9, weight: .black, design: .rounded))
                             .foregroundColor(isSelected ? DS.Color.primary : DS.Color.textOnPrimary)
-                            .frame(minWidth: 18, minHeight: 18)
-                            .padding(.horizontal, 4)
+                            .frame(minWidth: 14, minHeight: 14)
+                            .padding(.horizontal, 3)
                             .background(
                                 Capsule()
                                     .fill(isSelected ? Color.white : DS.Color.error)
@@ -404,8 +405,8 @@ struct NotificationsCenterView: View {
                     }
                 }
                 .foregroundColor(isSelected ? DS.Color.textOnPrimary : DS.Color.textSecondary)
-                .padding(.horizontal, DS.Spacing.md)
-                .padding(.vertical, 10)
+                .padding(.horizontal, DS.Spacing.sm)
+                .padding(.vertical, 7)
                 .frame(maxWidth: .infinity)
             }
             .contentShape(Capsule())
