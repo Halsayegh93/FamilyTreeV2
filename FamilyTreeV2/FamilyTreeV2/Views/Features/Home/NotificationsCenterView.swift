@@ -113,13 +113,41 @@ struct NotificationsCenterView: View {
             DS.Color.background.ignoresSafeArea()
 
             VStack(spacing: 0) {
-                // تابات الإشعارات
+                // تابات الإشعارات — أزرار صفحات
                 if authVM.isAdmin {
-                    Picker("", selection: $selectedTab) {
-                        Text(L10n.t("الإشعارات", "Notifications")).tag(NotifTab.notifications)
-                        Text(L10n.t("المستجدات", "Activity")).tag(NotifTab.activity)
+                    HStack(spacing: DS.Spacing.sm) {
+                        Button {
+                            withAnimation(DS.Anim.snappy) { selectedTab = .notifications }
+                        } label: {
+                            Text(L10n.t("الإشعارات", "Notifications"))
+                                .font(DS.Font.scaled(14, weight: .bold))
+                                .foregroundColor(selectedTab == .notifications ? .white : DS.Color.textSecondary)
+                                .padding(.horizontal, DS.Spacing.lg)
+                                .padding(.vertical, DS.Spacing.sm)
+                                .background(selectedTab == .notifications ? DS.Color.gradientPrimary : LinearGradient(colors: [DS.Color.surface], startPoint: .leading, endPoint: .trailing))
+                                .clipShape(Capsule())
+                                .overlay(
+                                    Capsule().stroke(selectedTab == .notifications ? Color.clear : DS.Color.textTertiary.opacity(0.2), lineWidth: 1)
+                                )
+                        }
+
+                        Button {
+                            withAnimation(DS.Anim.snappy) { selectedTab = .activity }
+                        } label: {
+                            Text(L10n.t("المستجدات", "Activity"))
+                                .font(DS.Font.scaled(14, weight: .bold))
+                                .foregroundColor(selectedTab == .activity ? .white : DS.Color.textSecondary)
+                                .padding(.horizontal, DS.Spacing.lg)
+                                .padding(.vertical, DS.Spacing.sm)
+                                .background(selectedTab == .activity ? DS.Color.gradientPrimary : LinearGradient(colors: [DS.Color.surface], startPoint: .leading, endPoint: .trailing))
+                                .clipShape(Capsule())
+                                .overlay(
+                                    Capsule().stroke(selectedTab == .activity ? Color.clear : DS.Color.textTertiary.opacity(0.2), lineWidth: 1)
+                                )
+                        }
+
+                        Spacer()
                     }
-                    .pickerStyle(.segmented)
                     .padding(.horizontal, DS.Spacing.lg)
                     .padding(.vertical, DS.Spacing.sm)
                 }
