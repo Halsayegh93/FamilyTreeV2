@@ -337,30 +337,34 @@ struct NotificationsCenterView: View {
     // MARK: - Segmented Tab Bar (sliding indicator)
 
     private func segmentedTabBar(notifCount: Int, activityCount: Int) -> some View {
-        HStack(spacing: 0) {
-            segmentTab(
-                icon: "bell.badge.fill",
-                title: L10n.t("الإشعارات", "Notifications"),
-                count: notifCount,
-                tab: .notifications
+        HStack {
+            Spacer(minLength: 0)
+            HStack(spacing: 2) {
+                segmentTab(
+                    icon: "bell.badge.fill",
+                    title: L10n.t("الإشعارات", "Notifications"),
+                    count: notifCount,
+                    tab: .notifications
+                )
+                segmentTab(
+                    icon: "sparkles",
+                    title: L10n.t("المستجدات", "Activity"),
+                    count: activityCount,
+                    tab: .activity
+                )
+            }
+            .padding(3)
+            .background(
+                Capsule()
+                    .fill(DS.Color.surfaceElevated.opacity(0.7))
             )
-            segmentTab(
-                icon: "sparkles",
-                title: L10n.t("المستجدات", "Activity"),
-                count: activityCount,
-                tab: .activity
+            .overlay(
+                Capsule()
+                    .stroke(DS.Color.textTertiary.opacity(0.1), lineWidth: 0.5)
             )
+            .dynamicTypeSize(...DynamicTypeSize.large)
+            Spacer(minLength: 0)
         }
-        .padding(3)
-        .background(
-            Capsule()
-                .fill(DS.Color.surfaceElevated.opacity(0.7))
-        )
-        .overlay(
-            Capsule()
-                .stroke(DS.Color.textTertiary.opacity(0.1), lineWidth: 0.5)
-        )
-        .dynamicTypeSize(...DynamicTypeSize.large)
     }
 
     private func segmentTab(icon: String, title: String, count: Int, tab: NotifTab) -> some View {
@@ -405,9 +409,9 @@ struct NotificationsCenterView: View {
                     }
                 }
                 .foregroundColor(isSelected ? DS.Color.textOnPrimary : DS.Color.textSecondary)
-                .padding(.horizontal, DS.Spacing.sm)
+                .padding(.horizontal, DS.Spacing.md)
                 .padding(.vertical, 7)
-                .frame(maxWidth: .infinity)
+                .fixedSize(horizontal: true, vertical: false)
             }
             .contentShape(Capsule())
         }
