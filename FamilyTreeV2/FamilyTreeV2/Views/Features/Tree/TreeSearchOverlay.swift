@@ -148,7 +148,7 @@ struct TreeSearchOverlay: View {
                             Button(action: { searchText = query }) {
                                 HStack(spacing: DS.Spacing.xs) {
                                     Image(systemName: "clock.arrow.circlepath")
-                                        .font(.system(size: 10))
+                                        .font(DS.Font.scaled(10, weight: .regular))
                                     Text(query)
                                         .font(DS.Font.caption1)
                                 }

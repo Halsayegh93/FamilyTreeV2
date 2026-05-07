@@ -196,7 +196,7 @@ struct TreeEditRequestView: View {
 
                     Spacer()
 
-                    Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
+                    Image(systemName: "chevron.forward")
                         .font(DS.Font.scaled(12, weight: .medium))
                         .foregroundColor(DS.Color.textTertiary)
                 }

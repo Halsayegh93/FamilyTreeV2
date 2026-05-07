@@ -199,7 +199,7 @@ struct LoginView: View {
                 timeRemaining > 0
                     ? L10n.t("إعادة الطلب بعد \(timeRemaining)ث", "Resend in \(timeRemaining)s")
                     : L10n.t("متابعة", "Continue"),
-                icon: timeRemaining > 0 ? nil : "arrow.right",
+                icon: timeRemaining > 0 ? nil : "arrow.forward",
                 isLoading: authVM.isLoading,
                 useGradient: !isDisabled,
                 color: isDisabled ? DS.Color.inactive : DS.Color.primary

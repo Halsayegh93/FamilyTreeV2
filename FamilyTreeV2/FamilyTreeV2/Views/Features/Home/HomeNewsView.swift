@@ -215,7 +215,7 @@ struct HomeNewsView: View {
 
         return HStack(spacing: DS.Spacing.md) {
             DSIconButton(
-                icon: L10n.isArabic ? "chevron.right" : "chevron.left",
+                icon: "chevron.backward",
                 iconColor: DS.Color.textPrimary,
                 fillColor: DS.Color.surface,
                 borderColor: DS.Color.primary.opacity(0.08),

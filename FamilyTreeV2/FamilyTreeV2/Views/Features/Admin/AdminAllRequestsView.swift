@@ -1020,7 +1020,7 @@ struct AdminAllRequestsView: View {
             HStack(spacing: DS.Spacing.sm) {
                 if isSelectMode {
                     Image(systemName: selectedIds.contains(id) ? "checkmark.circle.fill" : "circle")
-                        .font(.system(size: 22))
+                        .font(DS.Font.scaled(22, weight: .regular))
                         .foregroundColor(selectedIds.contains(id) ? DS.Color.primary : DS.Color.textTertiary)
                         .transition(.scale.combined(with: .opacity))
                 }
@@ -1794,7 +1794,7 @@ struct AdminAllRequestsView: View {
                 .background(DS.Color.surfaceElevated)
                 .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm))
 
-                Image(systemName: L10n.isArabic ? "arrow.right" : "arrow.left")
+                Image(systemName: "arrow.forward")
                     .font(DS.Font.scaled(12, weight: .semibold))
                     .foregroundColor(DS.Color.textTertiary)
 
@@ -2023,7 +2023,7 @@ struct AdminAllRequestsView: View {
 
             // الاسم الجديد
             HStack(spacing: DS.Spacing.xs) {
-                Image(systemName: "arrow.right")
+                Image(systemName: "arrow.forward")
                     .font(DS.Font.scaled(10, weight: .bold))
                     .foregroundColor(DS.Color.textTertiary)
                 Text(L10n.t("الاسم الجديد:", "New name:"))

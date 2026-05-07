@@ -675,7 +675,7 @@ struct ProfileView: View {
 
     /// Directional chevron inside a tinted circle — used for navigation rows.
     private var chevronCircle: some View {
-        Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
+        Image(systemName: "chevron.forward")
             .font(DS.Font.scaled(11, weight: .bold))
             .foregroundColor(DS.Color.textTertiary)
             .frame(width: 26, height: 26)

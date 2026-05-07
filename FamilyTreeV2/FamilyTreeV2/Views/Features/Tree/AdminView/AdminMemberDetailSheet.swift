@@ -489,7 +489,7 @@ struct AdminMemberDetailSheet: View {
 
                         Spacer()
 
-                        Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
+                        Image(systemName: "chevron.forward")
                             .font(DS.Font.scaled(11, weight: .bold))
                             .foregroundColor(DS.Color.textTertiary)
                             .frame(width: 24, height: 24)
@@ -840,7 +840,7 @@ struct AdminMemberDetailSheet: View {
                     }
 
                     Spacer()
-                    Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
+                    Image(systemName: "chevron.forward")
                         .font(DS.Font.scaled(9, weight: .bold))
                         .foregroundColor(DS.Color.textTertiary)
                 }

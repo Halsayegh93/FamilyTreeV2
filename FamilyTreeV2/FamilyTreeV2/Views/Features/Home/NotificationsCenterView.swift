@@ -116,16 +116,9 @@ struct NotificationsCenterView: View {
             VStack(spacing: 0) {
                 // صفحتين — الإشعارات + المستجدات
                 if authVM.isAdmin {
-                    let myId = authVM.currentUser?.id
-                    let notifCount = notificationVM.notifications.filter { n in
-                        n.targetMemberId == myId ||
-                        n.kind == NotificationKind.adminRequest.rawValue ||
-                        n.kind == NotificationKind.linkRequest.rawValue ||
-                        n.kind == NotificationKind.newsReport.rawValue
-                    }.count
-                    let activityCount = notificationVM.notifications.filter { n in
-                        adminOnlyKinds.contains(n.kind) || n.targetMemberId == nil
-                    }.count
+                    let visible = visibleNotifications
+                    let notifCount = visible.filter(belongsToNotificationsTab).count
+                    let activityCount = visible.filter(belongsToActivityTab).count
 
                     segmentedTabBar(notifCount: notifCount, activityCount: activityCount)
                         .padding(.horizontal, DS.Spacing.lg)
@@ -431,30 +424,34 @@ struct NotificationsCenterView: View {
         NotificationKind.adminEditChildRemove.rawValue,
     ]
 
-    private var filteredNotifications: [AppNotification] {
+    /// كل الإشعارات بعد تطبيق فلتر الإعدادات (الأنواع المخفية)
+    private var visibleNotifications: [AppNotification] {
         let all = notificationVM.notifications
+        guard !hiddenKinds.isEmpty else { return all }
+        return all.filter { !hiddenKinds.contains($0.kind) }
+    }
 
-        let base: [AppNotification]
+    /// إشعار شخصي/إجرائي: موجه لي أو يحتاج موافقتي كمسؤول
+    private func belongsToNotificationsTab(_ n: AppNotification) -> Bool {
+        let myId = authVM.currentUser?.id
+        return n.targetMemberId == myId ||
+            n.kind == NotificationKind.adminRequest.rawValue ||
+            n.kind == NotificationKind.linkRequest.rawValue ||
+            n.kind == NotificationKind.newsReport.rawValue
+    }
+
+    /// مستجد: نشاط إداري/عام لا يدخل في تاب الإشعارات (يمنع التكرار بين التابين)
+    private func belongsToActivityTab(_ n: AppNotification) -> Bool {
+        guard !belongsToNotificationsTab(n) else { return false }
+        return adminOnlyKinds.contains(n.kind) || n.targetMemberId == nil
+    }
+
+    private var filteredNotifications: [AppNotification] {
+        let visible = visibleNotifications
         switch selectedTab {
-        case .notifications:
-            // الإشعارات: الموجهة لي شخصياً + الموافقات (admin_request, link_request)
-            let myId = authVM.currentUser?.id
-            base = all.filter { notif in
-                notif.targetMemberId == myId ||
-                notif.kind == NotificationKind.adminRequest.rawValue ||
-                notif.kind == NotificationKind.linkRequest.rawValue ||
-                notif.kind == NotificationKind.newsReport.rawValue
-            }
-        case .activity:
-            // المستجدات: كل التغييرات بالتطبيق (إدارية + عامة) — للمدراء فقط
-            base = all.filter { notif in
-                adminOnlyKinds.contains(notif.kind) ||
-                notif.targetMemberId == nil
-            }
+        case .notifications: return visible.filter(belongsToNotificationsTab)
+        case .activity:      return visible.filter(belongsToActivityTab)
         }
-
-        if hiddenKinds.isEmpty { return base }
-        return base.filter { !hiddenKinds.contains($0.kind) }
     }
 
     // MARK: - Date Grouping
@@ -465,7 +462,8 @@ struct NotificationsCenterView: View {
             return L10n.t("اليوم", "Today")
         } else if calendar.isDateInYesterday(date) {
             return L10n.t("أمس", "Yesterday")
-        } else if let weekAgo = calendar.date(byAdding: .day, value: -7, to: Date()), date >= weekAgo {
+        } else if let weekStart = calendar.dateInterval(of: .weekOfYear, for: Date())?.start,
+                  date >= weekStart {
             return L10n.t("هذا الأسبوع", "This Week")
         } else {
             return L10n.t("أقدم", "Older")
@@ -693,10 +691,15 @@ struct NotificationsCenterView: View {
     // MARK: - Empty State
 
     private var emptyState: some View {
-        DSEmptyState(
-            icon: "bell.slash.fill",
-            title: L10n.t("لا توجد إشعارات", "No Notifications"),
-            subtitle: L10n.t("الإشعارات تظهر هنا", "Notifications appear here"),
+        let isActivity = authVM.isAdmin && selectedTab == .activity
+        return DSEmptyState(
+            icon: isActivity ? "sparkles" : "bell.slash.fill",
+            title: isActivity
+                ? L10n.t("لا يوجد نشاط", "No Activity")
+                : L10n.t("لا توجد إشعارات", "No Notifications"),
+            subtitle: isActivity
+                ? L10n.t("نشاط النظام يظهر هنا", "System activity appears here")
+                : L10n.t("الإشعارات الموجهة لك تظهر هنا", "Notifications for you appear here"),
             style: .halo
         )
     }
@@ -983,25 +986,6 @@ struct NotificationsCenterView: View {
             if !remaining.isEmpty { segments.append(.init(text: String(remaining), isCapsule: false)) }
             return segments
         }
-    }
-
-    private func createdByName(for notification: AppNotification) -> String? {
-        guard authVM.isAdmin else { return nil }
-        if let creatorId = notification.createdBy {
-            if let member = memberVM.member(byId: creatorId) {
-                return member.fullName
-            }
-            if creatorId == authVM.currentUser?.id {
-                return authVM.currentUser?.fullName
-            }
-        }
-        for line in notification.body.components(separatedBy: "\n") {
-            if line.hasPrefix("بواسطة: ") {
-                let name = String(line.dropFirst("بواسطة: ".count)).trimmingCharacters(in: .whitespacesAndNewlines)
-                if !name.isEmpty { return name }
-            }
-        }
-        return nil
     }
 
 }

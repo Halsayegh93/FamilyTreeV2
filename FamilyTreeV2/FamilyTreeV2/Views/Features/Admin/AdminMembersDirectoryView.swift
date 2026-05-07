@@ -340,9 +340,9 @@ struct AdminMembersDirectoryView: View {
             .overlay(alignment: .bottomTrailing) {
                 if member.status == .frozen {
                     Image(systemName: "lock.fill")
-                        .font(.system(size: 10, weight: .bold))
+                        .font(DS.Font.scaled(10, weight: .bold))
                         .foregroundColor(.white)
-                        .padding(3)
+                        .padding(DS.Spacing.xs)
                         .background(DS.Color.error)
                         .clipShape(Circle())
                 }
@@ -473,7 +473,7 @@ struct AdminMembersDirectoryView: View {
                             .font(DS.Font.caption1)
                             .fontWeight(.semibold)
                         Spacer()
-                        Image(systemName: "chevron.left")
+                        Image(systemName: "chevron.forward")
                             .font(DS.Font.scaled(10, weight: .bold))
                             .opacity(0.5)
                     }

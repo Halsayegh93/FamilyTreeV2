@@ -8,6 +8,9 @@ struct SettingsView: View {
 
     @ObservedObject var langManager = LanguageManager.shared
     @AppStorage("appearanceMode") private var appearanceMode: String = "system"
+    @AppStorage("notif_comments") private var notifComments: Bool = true
+    @AppStorage("notif_likes") private var notifLikes: Bool = true
+    @AppStorage("notif_profile_updates") private var notifProfileUpdates: Bool = true
     @State private var showDeleteConfirmation = false
     @State private var showAbout = false
     @State private var showTerms = false
@@ -107,6 +110,44 @@ struct SettingsView: View {
                             }
                         .padding(.horizontal, DS.Spacing.lg)
 
+                        // MARK: - Notification Preferences Section
+                        DSCard(padding: 0) {
+                            DSSectionHeader(
+                                title: t("تفضيلات الإشعارات", "Notification Preferences"),
+                                icon: "bell.badge.fill",
+                                iconColor: DS.Color.warning
+                            )
+
+                            notifToggleRow(
+                                title: t("التعليقات", "Comments"),
+                                subtitle: t("إشعارات تعليقات الأخبار", "News comment notifications"),
+                                icon: "bubble.left.fill",
+                                color: DS.Color.info,
+                                isOn: $notifComments
+                            )
+
+                            DSDivider()
+
+                            notifToggleRow(
+                                title: t("الإعجابات", "Likes"),
+                                subtitle: t("إشعارات إعجابات الأخبار", "News like notifications"),
+                                icon: "heart.fill",
+                                color: DS.Color.error,
+                                isOn: $notifLikes
+                            )
+
+                            DSDivider()
+
+                            notifToggleRow(
+                                title: t("تحديثات الملف الشخصي", "Profile Updates"),
+                                subtitle: t("إشعارات تحديث بيانات الأعضاء", "Member profile update notifications"),
+                                icon: "person.crop.circle.badge.checkmark",
+                                color: DS.Color.accent,
+                                isOn: $notifProfileUpdates
+                            )
+                        }
+                        .padding(.horizontal, DS.Spacing.lg)
+
                         // MARK: - Information Section
                             DSCard(padding: 0) {
                                 DSSectionHeader(
@@ -184,7 +225,7 @@ struct SettingsView: View {
 
                                         Spacer()
 
-                                        Image(systemName: isArabic ? "chevron.left" : "chevron.right")
+                                        Image(systemName: "chevron.forward")
                                             .font(DS.Font.scaled(13, weight: .bold))
                                             .foregroundColor(DS.Color.textTertiary)
                                     }
@@ -277,13 +318,37 @@ struct SettingsView: View {
 
             Spacer()
 
-            Image(systemName: isArabic ? "chevron.left" : "chevron.right")
+            Image(systemName: "chevron.forward")
                 .font(DS.Font.scaled(13, weight: .bold))
                 .foregroundColor(DS.Color.textTertiary)
         }
         .padding(.horizontal, DS.Spacing.lg)
         .padding(.vertical, DS.Spacing.md)
         .contentShape(Rectangle())
+    }
+
+    // MARK: - Notification Toggle Row
+    private func notifToggleRow(title: String, subtitle: String, icon: String, color: Color, isOn: Binding<Bool>) -> some View {
+        HStack(spacing: DS.Spacing.md) {
+            DSIcon(icon, color: color)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(DS.Font.calloutBold)
+                    .foregroundColor(DS.Color.textPrimary)
+                Text(subtitle)
+                    .font(DS.Font.caption1)
+                    .foregroundColor(DS.Color.textSecondary)
+            }
+
+            Spacer()
+
+            Toggle("", isOn: isOn)
+                .labelsHidden()
+                .tint(DS.Color.primary)
+        }
+        .padding(.horizontal, DS.Spacing.lg)
+        .padding(.vertical, DS.Spacing.md)
     }
 
     private var languageLabel: String {

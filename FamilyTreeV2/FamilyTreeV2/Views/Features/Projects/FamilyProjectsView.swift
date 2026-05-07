@@ -316,7 +316,7 @@ struct AddProjectView: View {
                                         
                                         Spacer()
                                         
-                                        Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
+                                        Image(systemName: "chevron.forward")
                                             .font(DS.Font.caption1)
                                             .foregroundColor(DS.Color.textTertiary)
                                     }

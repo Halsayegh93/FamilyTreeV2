@@ -709,7 +709,7 @@ struct AdminReportsView: View {
                             .font(DS.Font.caption1)
                             .fontWeight(.semibold)
                         Spacer()
-                        Image(systemName: "chevron.left")
+                        Image(systemName: "chevron.forward")
                             .font(DS.Font.scaled(10, weight: .bold))
                             .opacity(0.5)
                     }
@@ -810,7 +810,7 @@ struct AdminReportsView: View {
 
             Spacer()
 
-            Image(systemName: "chevron.left")
+            Image(systemName: "chevron.forward")
                 .font(DS.Font.scaled(12, weight: .bold))
                 .foregroundColor(selected ? selectedReport.tint : DS.Color.textTertiary)
         }

@@ -1170,12 +1170,13 @@ struct TreeMemberNode: View {
                 // سهم التوسيع — نص دائرة أسفل الاسم
                 if hasChildren {
                     Button(action: onToggle) {
-                        HStack(spacing: 4) {
+                        HStack(spacing: DS.Spacing.xs) {
                             Text("\(childrenCount)")
-                                .font(.system(size: 15, weight: .heavy, design: .rounded))
+                                .font(DS.Font.scaled(15, weight: .heavy))
                             Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                                .font(.system(size: 14, weight: .heavy))
+                                .font(DS.Font.scaled(14, weight: .heavy))
                         }
+                        .dynamicTypeSize(...DynamicTypeSize.xLarge)
                         .foregroundColor(.white)
                         .frame(width: 60, height: 28)
                         .background(isKinshipHighlighted ? DS.Color.warning : DS.Color.primaryDark)
