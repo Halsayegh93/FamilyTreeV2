@@ -113,40 +113,19 @@ struct NotificationsCenterView: View {
             DS.Color.background.ignoresSafeArea()
 
             VStack(spacing: 0) {
-                // تابات الإشعارات — أزرار صفحات
+                // صفحتين — الإشعارات + المستجدات
                 if authVM.isAdmin {
                     HStack(spacing: DS.Spacing.sm) {
-                        Button {
-                            withAnimation(DS.Anim.snappy) { selectedTab = .notifications }
-                        } label: {
-                            Text(L10n.t("الإشعارات", "Notifications"))
-                                .font(DS.Font.scaled(14, weight: .bold))
-                                .foregroundColor(selectedTab == .notifications ? .white : DS.Color.textSecondary)
-                                .padding(.horizontal, DS.Spacing.lg)
-                                .padding(.vertical, DS.Spacing.sm)
-                                .background(selectedTab == .notifications ? DS.Color.gradientPrimary : LinearGradient(colors: [DS.Color.surface], startPoint: .leading, endPoint: .trailing))
-                                .clipShape(Capsule())
-                                .overlay(
-                                    Capsule().stroke(selectedTab == .notifications ? Color.clear : DS.Color.textTertiary.opacity(0.2), lineWidth: 1)
-                                )
-                        }
-
-                        Button {
-                            withAnimation(DS.Anim.snappy) { selectedTab = .activity }
-                        } label: {
-                            Text(L10n.t("المستجدات", "Activity"))
-                                .font(DS.Font.scaled(14, weight: .bold))
-                                .foregroundColor(selectedTab == .activity ? .white : DS.Color.textSecondary)
-                                .padding(.horizontal, DS.Spacing.lg)
-                                .padding(.vertical, DS.Spacing.sm)
-                                .background(selectedTab == .activity ? DS.Color.gradientPrimary : LinearGradient(colors: [DS.Color.surface], startPoint: .leading, endPoint: .trailing))
-                                .clipShape(Capsule())
-                                .overlay(
-                                    Capsule().stroke(selectedTab == .activity ? Color.clear : DS.Color.textTertiary.opacity(0.2), lineWidth: 1)
-                                )
-                        }
-
-                        Spacer()
+                        notifTabButton(
+                            icon: "bell.fill",
+                            title: L10n.t("الإشعارات", "Notifications"),
+                            tab: .notifications
+                        )
+                        notifTabButton(
+                            icon: "bolt.fill",
+                            title: L10n.t("المستجدات", "Activity"),
+                            tab: .activity
+                        )
                     }
                     .padding(.horizontal, DS.Spacing.lg)
                     .padding(.vertical, DS.Spacing.sm)
@@ -362,6 +341,31 @@ struct NotificationsCenterView: View {
         if !notifLikes { kinds.insert("news_like") }
         if !notifProfileUpdates { kinds.insert("profile_update") }
         return kinds
+    }
+
+    // MARK: - Tab Button
+    private func notifTabButton(icon: String, title: String, tab: NotifTab) -> some View {
+        let isSelected = selectedTab == tab
+        return Button {
+            withAnimation(DS.Anim.snappy) { selectedTab = tab }
+        } label: {
+            HStack(spacing: DS.Spacing.sm) {
+                Image(systemName: icon)
+                    .font(DS.Font.scaled(16, weight: .bold))
+                Text(title)
+                    .font(DS.Font.scaled(14, weight: .bold))
+            }
+            .foregroundColor(isSelected ? .white : DS.Color.textSecondary)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, DS.Spacing.md)
+            .background(isSelected ? DS.Color.gradientPrimary : LinearGradient(colors: [DS.Color.surface], startPoint: .leading, endPoint: .trailing))
+            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                    .stroke(isSelected ? Color.clear : DS.Color.textTertiary.opacity(0.15), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
     }
 
     /// أنواع الإشعارات الإدارية — المدير والمالك فقط يشوفونها
