@@ -115,33 +115,25 @@ struct NotificationsCenterView: View {
             VStack(spacing: 0) {
                 // صفحتين — الإشعارات + المستجدات
                 if authVM.isAdmin {
-                    HStack(spacing: DS.Spacing.sm) {
-                        let myId = authVM.currentUser?.id
-                        let notifCount = notificationVM.notifications.filter { n in
-                            n.targetMemberId == myId ||
-                            n.kind == NotificationKind.adminRequest.rawValue ||
-                            n.kind == NotificationKind.linkRequest.rawValue ||
-                            n.kind == NotificationKind.newsReport.rawValue
-                        }.count
-                        let activityCount = notificationVM.notifications.filter { n in
-                            adminOnlyKinds.contains(n.kind) || n.targetMemberId == nil
-                        }.count
+                    let myId = authVM.currentUser?.id
+                    let notifCount = notificationVM.notifications.filter { n in
+                        n.targetMemberId == myId ||
+                        n.kind == NotificationKind.adminRequest.rawValue ||
+                        n.kind == NotificationKind.linkRequest.rawValue ||
+                        n.kind == NotificationKind.newsReport.rawValue
+                    }.count
+                    let activityCount = notificationVM.notifications.filter { n in
+                        adminOnlyKinds.contains(n.kind) || n.targetMemberId == nil
+                    }.count
 
-                        notifTabButton(
-                            icon: "bell.fill",
-                            title: L10n.t("الإشعارات", "Notifications"),
-                            count: notifCount,
-                            tab: .notifications
-                        )
-                        notifTabButton(
-                            icon: "bolt.fill",
-                            title: L10n.t("المستجدات", "Activity"),
-                            count: activityCount,
-                            tab: .activity
-                        )
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: DS.Spacing.sm) {
+                            notifTabButton(icon: "bell.fill", title: L10n.t("الإشعارات", "Notifications"), count: notifCount, tab: .notifications)
+                            notifTabButton(icon: "bolt.fill", title: L10n.t("المستجدات", "Activity"), count: activityCount, tab: .activity)
+                        }
+                        .padding(.horizontal, DS.Spacing.lg)
                     }
-                    .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.vertical, DS.Spacing.sm)
+                    .padding(.vertical, DS.Spacing.xs)
                 }
 
                 // شريط الأدوات الموحد
@@ -345,51 +337,31 @@ struct NotificationsCenterView: View {
         return kinds
     }
 
-    // MARK: - Tab Button
+    // MARK: - Tab Chip
     private func notifTabButton(icon: String, title: String, count: Int, tab: NotifTab) -> some View {
         let isSelected = selectedTab == tab
         return Button {
             withAnimation(DS.Anim.snappy) { selectedTab = tab }
         } label: {
-            HStack(spacing: DS.Spacing.md) {
-                // أيقونة بدائرة
-                ZStack {
-                    Circle()
-                        .fill(isSelected ? DS.Color.primary.opacity(0.12) : DS.Color.textTertiary.opacity(0.08))
-                        .frame(width: 40, height: 40)
-                    Image(systemName: icon)
-                        .font(DS.Font.scaled(16, weight: .semibold))
-                        .foregroundColor(isSelected ? DS.Color.primary : DS.Color.textTertiary)
-                }
-
-                // النص + العدد
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                        .font(DS.Font.scaled(14, weight: .bold))
-                        .foregroundColor(isSelected ? DS.Color.textPrimary : DS.Color.textSecondary)
+            HStack(spacing: DS.Spacing.xs) {
+                Image(systemName: icon)
+                    .font(DS.Font.scaled(13, weight: .semibold))
+                Text(title)
+                    .font(DS.Font.scaled(13, weight: .bold))
+                if count > 0 {
                     Text("\(count)")
-                        .font(DS.Font.scaled(11, weight: .medium))
-                        .foregroundColor(DS.Color.textTertiary)
-                }
-
-                Spacer()
-
-                // مؤشر المختار
-                if isSelected {
-                    Circle()
-                        .fill(DS.Color.primary)
-                        .frame(width: 8, height: 8)
+                        .font(DS.Font.scaled(11, weight: .black))
+                        .foregroundColor(isSelected ? .white : DS.Color.textTertiary)
+                        .frame(minWidth: 20, minHeight: 20)
+                        .background(isSelected ? DS.Color.primary : DS.Color.textTertiary.opacity(0.15))
+                        .clipShape(Circle())
                 }
             }
-            .padding(.horizontal, DS.Spacing.md)
-            .padding(.vertical, DS.Spacing.md)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(isSelected ? DS.Color.primary.opacity(0.05) : DS.Color.surface)
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                    .stroke(isSelected ? DS.Color.primary.opacity(0.2) : DS.Color.textTertiary.opacity(0.1), lineWidth: 1)
-            )
+            .foregroundColor(isSelected ? DS.Color.primary : DS.Color.textSecondary)
+            .padding(.horizontal, DS.Spacing.lg)
+            .padding(.vertical, DS.Spacing.sm)
+            .background(isSelected ? DS.Color.primary.opacity(0.08) : Color.clear)
+            .clipShape(Capsule())
         }
         .buttonStyle(.plain)
     }
