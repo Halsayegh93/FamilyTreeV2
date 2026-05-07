@@ -362,6 +362,7 @@ struct NotificationsCenterView: View {
                 Capsule()
                     .stroke(DS.Color.textTertiary.opacity(0.1), lineWidth: 0.5)
             )
+            .fixedSize()
             .dynamicTypeSize(...DynamicTypeSize.large)
             Spacer(minLength: 0)
         }
@@ -411,7 +412,6 @@ struct NotificationsCenterView: View {
                 .foregroundColor(isSelected ? DS.Color.textOnPrimary : DS.Color.textSecondary)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 5)
-                .fixedSize(horizontal: true, vertical: false)
             }
             .contentShape(Capsule())
         }
