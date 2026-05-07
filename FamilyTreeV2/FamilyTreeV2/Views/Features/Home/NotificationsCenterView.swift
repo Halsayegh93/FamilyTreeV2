@@ -116,14 +116,27 @@ struct NotificationsCenterView: View {
                 // صفحتين — الإشعارات + المستجدات
                 if authVM.isAdmin {
                     HStack(spacing: DS.Spacing.sm) {
+                        let myId = authVM.currentUser?.id
+                        let notifCount = notificationVM.notifications.filter { n in
+                            n.targetMemberId == myId ||
+                            n.kind == NotificationKind.adminRequest.rawValue ||
+                            n.kind == NotificationKind.linkRequest.rawValue ||
+                            n.kind == NotificationKind.newsReport.rawValue
+                        }.count
+                        let activityCount = notificationVM.notifications.filter { n in
+                            adminOnlyKinds.contains(n.kind) || n.targetMemberId == nil
+                        }.count
+
                         notifTabButton(
                             icon: "bell.fill",
                             title: L10n.t("الإشعارات", "Notifications"),
+                            count: notifCount,
                             tab: .notifications
                         )
                         notifTabButton(
                             icon: "bolt.fill",
                             title: L10n.t("المستجدات", "Activity"),
+                            count: activityCount,
                             tab: .activity
                         )
                     }
@@ -244,17 +257,6 @@ struct NotificationsCenterView: View {
                 } else {
                     // ── الوضع العادي ──
 
-                    // تحديث
-                    pillButton(
-                        icon: "arrow.clockwise",
-                        label: L10n.t("تحديث", "Refresh"),
-                        fg: DS.Color.primary,
-                        bg: DS.Color.primary.opacity(0.10),
-                        disabled: notificationVM.isLoading
-                    ) {
-                        Task { await notificationVM.fetchNotifications(force: true) }
-                    }
-
                     // تحديد
                     if !filteredNotifications.isEmpty {
                         pillButton(
@@ -344,25 +346,28 @@ struct NotificationsCenterView: View {
     }
 
     // MARK: - Tab Button
-    private func notifTabButton(icon: String, title: String, tab: NotifTab) -> some View {
+    private func notifTabButton(icon: String, title: String, count: Int, tab: NotifTab) -> some View {
         let isSelected = selectedTab == tab
         return Button {
             withAnimation(DS.Anim.snappy) { selectedTab = tab }
         } label: {
-            HStack(spacing: DS.Spacing.sm) {
+            VStack(spacing: DS.Spacing.xs) {
                 Image(systemName: icon)
-                    .font(DS.Font.scaled(16, weight: .bold))
+                    .font(DS.Font.scaled(22, weight: .bold))
                 Text(title)
-                    .font(DS.Font.scaled(14, weight: .bold))
+                    .font(DS.Font.scaled(13, weight: .bold))
+                Text("\(count)")
+                    .font(DS.Font.scaled(11, weight: .medium))
+                    .foregroundColor(isSelected ? DS.Color.primary : DS.Color.textTertiary)
             }
-            .foregroundColor(isSelected ? .white : DS.Color.textSecondary)
+            .foregroundColor(isSelected ? DS.Color.primary : DS.Color.textSecondary)
             .frame(maxWidth: .infinity)
             .padding(.vertical, DS.Spacing.md)
-            .background(isSelected ? DS.Color.gradientPrimary : LinearGradient(colors: [DS.Color.surface], startPoint: .leading, endPoint: .trailing))
+            .background(isSelected ? DS.Color.primary.opacity(0.08) : DS.Color.surface)
             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                    .stroke(isSelected ? Color.clear : DS.Color.textTertiary.opacity(0.15), lineWidth: 1)
+                    .stroke(isSelected ? DS.Color.primary.opacity(0.3) : DS.Color.textTertiary.opacity(0.15), lineWidth: 1)
             )
         }
         .buttonStyle(.plain)
