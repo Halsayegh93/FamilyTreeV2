@@ -41,7 +41,7 @@ private struct NotificationKindStyle {
 
     private static let fallback = NotificationKindStyle(
         icon: "bell.fill", gradient: DS.Color.gradientPrimary, color: DS.Color.primary,
-        labelAr: "عام", labelEn: "General"
+        labelAr: "إشعار", labelEn: "Notification"
     )
 
     static func style(for kind: String) -> NotificationKindStyle {
