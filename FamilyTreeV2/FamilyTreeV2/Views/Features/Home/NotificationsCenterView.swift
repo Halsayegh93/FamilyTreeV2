@@ -117,10 +117,10 @@ struct NotificationsCenterView: View {
                 // صفحتين — الإشعارات + المستجدات
                 if authVM.isAdmin {
                     let visible = visibleNotifications
-                    let notifCount = visible.filter(belongsToNotificationsTab).count
-                    let activityCount = visible.filter(belongsToActivityTab).count
+                    let notifUnread = visible.filter { belongsToNotificationsTab($0) && !$0.read }.count
+                    let activityUnread = visible.filter { belongsToActivityTab($0) && !$0.read }.count
 
-                    segmentedTabBar(notifCount: notifCount, activityCount: activityCount)
+                    segmentedTabBar(notifCount: notifUnread, activityCount: activityUnread)
                         .padding(.horizontal, DS.Spacing.lg)
                         .padding(.top, DS.Spacing.sm)
                         .padding(.bottom, DS.Spacing.xs)
@@ -716,170 +716,14 @@ struct NotificationsCenterView: View {
 
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: DS.Spacing.xl) {
-
-                        // ── Push-notification style card ──
-                        VStack(alignment: .leading, spacing: 0) {
-                            HStack(spacing: DS.Spacing.sm) {
-                                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                    .fill(iconInfo.gradient)
-                                    .frame(width: NotifLayout.infoIconWidth, height: NotifLayout.infoIconWidth)
-                                    .overlay(
-                                        Image(systemName: iconInfo.icon)
-                                            .font(DS.Font.scaled(13, weight: .bold))
-                                            .foregroundColor(DS.Color.textOnPrimary)
-                                    )
-
-                                Text(iconInfo.label)
-                                    .font(DS.Font.scaled(14, weight: .semibold))
-                                    .foregroundColor(DS.Color.textSecondary)
-
-                                Spacer(minLength: 0)
-
-                                Text(relativeTime(date))
-                                    .font(DS.Font.scaled(13, weight: .regular))
-                                    .foregroundColor(DS.Color.textTertiary)
-                            }
-
-                            Spacer().frame(height: DS.Spacing.md)
-
-                            Text(notification.title)
-                                .font(DS.Font.scaled(16, weight: .bold))
-                                .foregroundColor(DS.Color.textPrimary)
-
-                            Spacer().frame(height: DS.Spacing.sm)
-
-                            richBodyView(
-                                notification.body,
-                                font: DS.Font.scaled(15, weight: .regular),
-                                color: DS.Color.textPrimary
-                            )
-                        }
-                        .padding(DS.Spacing.lg)
-                        .background(
-                            RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
-                                .fill(DS.Color.surface)
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
-                                .stroke(DS.Color.textTertiary.opacity(0.1), lineWidth: 0.5)
-                        )
-                        .dsSubtleShadow()
-                        .padding(.horizontal, DS.Spacing.lg)
-                        .padding(.top, DS.Spacing.xl)
-
-                        // ── Info rows ──
-                        VStack(spacing: 0) {
-                            detailInfoRow(
-                                icon: notification.read ? "envelope.open.fill" : "envelope.badge.fill",
-                                label: L10n.t("الحالة", "Status"),
-                                value: notification.read ? L10n.t("مقروء", "Read") : L10n.t("غير مقروء", "Unread"),
-                                color: notification.read ? DS.Color.success : DS.Color.error
-                            )
-
-                            detailDivider
-
-                            detailInfoRow(
-                                icon: "calendar.badge.clock",
-                                label: L10n.t("التاريخ", "Date"),
-                                value: fullDateTime(date),
-                                color: DS.Color.primary
-                            )
-
-                            // اسم المرسل — إداري يعرض "الإدارة"
-                            if authVM.isAdmin, let creatorId = notification.createdBy {
-                                let isAdminNotif = adminOnlyKinds.contains(notification.kind)
-                                let creator = memberVM.member(byId: creatorId)
-                                let creatorName = isAdminNotif ? L10n.t("الإدارة", "Admin") : (creator?.shortFullName ?? L10n.t("الإدارة", "Admin"))
-                                let roleColor: Color = creator?.roleColor ?? DS.Color.accent
-
-                                detailDivider
-                                HStack(spacing: DS.Spacing.md) {
-                                    Circle()
-                                        .fill(roleColor)
-                                        .frame(width: 10, height: 10)
-                                        .frame(width: NotifLayout.infoIconWidth, alignment: .center)
-
-                                    Text(L10n.t("بواسطة", "By"))
-                                        .font(DS.Font.caption1)
-                                        .foregroundColor(DS.Color.textTertiary)
-                                        .frame(width: 80, alignment: .leading)
-
-                                    Text(creatorName)
-                                        .font(DS.Font.scaled(12, weight: .bold))
-                                        .foregroundColor(roleColor)
-
-                                    Spacer(minLength: 0)
-                                }
-                                .padding(.horizontal, DS.Spacing.lg)
-                                .padding(.vertical, DS.Spacing.md)
-                            }
-
-                            if authVM.isAdmin {
-                                detailDivider
-                                detailInfoRow(
-                                    icon: "tag.fill",
-                                    label: L10n.t("التصنيف", "Category"),
-                                    value: iconInfo.label,
-                                    color: DS.Color.accent
-                                )
-                            }
-                        }
-                        .background(DS.Color.surface)
-                        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                                .stroke(DS.Color.textTertiary.opacity(0.1), lineWidth: 0.5)
-                        )
-                        .padding(.horizontal, DS.Spacing.lg)
-
-                        // ── Actions ──
-                        VStack(spacing: DS.Spacing.md) {
-                            if !notification.read {
-                                Button {
-                                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                                    let id = notification.id
-                                    selectedNotification = nil
-                                    Task { await notificationVM.markNotificationAsRead(id: id) }
-                                } label: {
-                                    HStack(spacing: DS.Spacing.sm) {
-                                        Image(systemName: "envelope.open.fill")
-                                            .font(DS.Font.scaled(14, weight: .semibold))
-                                        Text(L10n.t("تعليم كمقروء", "Mark as Read"))
-                                            .font(DS.Font.calloutBold)
-                                    }
-                                    .foregroundColor(DS.Color.primary)
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, DS.Spacing.md)
-                                    .background(DS.Color.primary.opacity(0.08))
-                                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
-                                }
-                                .buttonStyle(DSScaleButtonStyle())
-                            }
-
-                            Button(role: .destructive) {
-                                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                                let id = notification.id
-                                selectedNotification = nil
-                                Task { await notificationVM.deleteNotification(id: id) }
-                            } label: {
-                                HStack(spacing: DS.Spacing.sm) {
-                                    Image(systemName: "trash.fill")
-                                        .font(DS.Font.scaled(14, weight: .semibold))
-                                    Text(L10n.t("حذف الإشعار", "Delete Notification"))
-                                        .font(DS.Font.calloutBold)
-                                }
-                                .foregroundColor(DS.Color.error)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, DS.Spacing.md)
-                                .background(DS.Color.error.opacity(0.08))
-                                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
-                            }
-                            .buttonStyle(DSScaleButtonStyle())
-                        }
-                        .padding(.horizontal, DS.Spacing.lg)
-
+                        detailHero(notification: notification, iconInfo: iconInfo, date: date)
+                        detailContentCard(notification: notification)
+                        detailMetaCard(notification: notification, iconInfo: iconInfo, date: date)
+                        detailActions(notification: notification)
                         Spacer(minLength: DS.Spacing.xxxl)
                     }
+                    .padding(.horizontal, DS.Spacing.lg)
+                    .padding(.top, DS.Spacing.lg)
                 }
             }
             .navigationTitle(L10n.t("تفاصيل الإشعار", "Notification Details"))
@@ -899,6 +743,206 @@ struct NotificationsCenterView: View {
             }
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+    }
+
+    // MARK: - Detail: Hero
+    private func detailHero(notification: AppNotification, iconInfo: NotificationKindStyle, date: Date) -> some View {
+        VStack(spacing: DS.Spacing.md) {
+            ZStack {
+                Circle()
+                    .fill(iconInfo.gradient)
+                    .frame(width: 84, height: 84)
+                    .shadow(color: iconInfo.color.opacity(0.35), radius: 14, x: 0, y: 6)
+                Image(systemName: iconInfo.icon)
+                    .font(.system(size: 36, weight: .bold))
+                    .foregroundColor(.white)
+                    .symbolRenderingMode(.hierarchical)
+            }
+
+            Text(notification.title)
+                .font(DS.Font.scaled(20, weight: .bold))
+                .foregroundColor(DS.Color.textPrimary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, DS.Spacing.md)
+
+            HStack(spacing: DS.Spacing.sm) {
+                detailChip(text: iconInfo.label, color: iconInfo.color)
+                detailChip(
+                    text: notification.read ? L10n.t("مقروء", "Read") : L10n.t("غير مقروء", "Unread"),
+                    color: notification.read ? DS.Color.success : DS.Color.error,
+                    icon: notification.read ? "envelope.open.fill" : "envelope.badge.fill"
+                )
+            }
+
+            Text(relativeTime(date))
+                .font(DS.Font.scaled(12, weight: .medium))
+                .foregroundColor(DS.Color.textTertiary)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private func detailChip(text: String, color: Color, icon: String? = nil) -> some View {
+        HStack(spacing: 4) {
+            if let icon {
+                Image(systemName: icon)
+                    .font(DS.Font.scaled(10, weight: .bold))
+            }
+            Text(text)
+                .font(DS.Font.scaled(11, weight: .bold))
+        }
+        .foregroundColor(color)
+        .padding(.horizontal, DS.Spacing.sm)
+        .padding(.vertical, 5)
+        .background(color.opacity(0.12))
+        .clipShape(Capsule())
+        .overlay(Capsule().stroke(color.opacity(0.25), lineWidth: 0.5))
+    }
+
+    // MARK: - Detail: Content card
+    private func detailContentCard(notification: AppNotification) -> some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            Text(L10n.t("المحتوى", "Content"))
+                .font(DS.Font.scaled(11, weight: .bold))
+                .foregroundColor(DS.Color.textTertiary)
+                .textCase(.uppercase)
+
+            richBodyView(
+                notification.body,
+                font: DS.Font.scaled(15, weight: .regular),
+                color: DS.Color.textPrimary
+            )
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(DS.Spacing.lg)
+        .background(
+            RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
+                .fill(DS.Color.surface)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
+                .stroke(DS.Color.textTertiary.opacity(0.1), lineWidth: 0.5)
+        )
+        .dsSubtleShadow()
+    }
+
+    // MARK: - Detail: Meta card
+    private func detailMetaCard(notification: AppNotification, iconInfo: NotificationKindStyle, date: Date) -> some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            Text(L10n.t("التفاصيل", "Details"))
+                .font(DS.Font.scaled(11, weight: .bold))
+                .foregroundColor(DS.Color.textTertiary)
+                .textCase(.uppercase)
+                .padding(.horizontal, DS.Spacing.lg)
+                .padding(.top, DS.Spacing.lg)
+
+            VStack(spacing: 0) {
+                detailInfoRow(
+                    icon: "calendar.badge.clock",
+                    label: L10n.t("التاريخ", "Date"),
+                    value: fullDateTime(date),
+                    color: DS.Color.primary
+                )
+
+                if authVM.isAdmin, let creatorId = notification.createdBy {
+                    let isAdminNotif = adminOnlyKinds.contains(notification.kind)
+                    let creator = memberVM.member(byId: creatorId)
+                    let creatorName = isAdminNotif ? L10n.t("الإدارة", "Admin") : (creator?.shortFullName ?? L10n.t("الإدارة", "Admin"))
+                    let roleColor: Color = isAdminNotif ? DS.Color.primary : (creator?.roleColor ?? DS.Color.accent)
+
+                    detailDivider
+                    HStack(spacing: DS.Spacing.md) {
+                        Circle()
+                            .fill(roleColor)
+                            .frame(width: 10, height: 10)
+                            .frame(width: NotifLayout.infoIconWidth, alignment: .center)
+
+                        Text(L10n.t("بواسطة", "By"))
+                            .font(DS.Font.caption1)
+                            .foregroundColor(DS.Color.textTertiary)
+                            .frame(width: 80, alignment: .leading)
+
+                        Text(creatorName)
+                            .font(DS.Font.scaled(13, weight: .bold))
+                            .foregroundColor(roleColor)
+
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, DS.Spacing.lg)
+                    .padding(.vertical, DS.Spacing.md)
+                }
+
+                if authVM.isAdmin {
+                    detailDivider
+                    detailInfoRow(
+                        icon: "tag.fill",
+                        label: L10n.t("التصنيف", "Category"),
+                        value: iconInfo.label,
+                        color: iconInfo.color
+                    )
+                }
+            }
+        }
+        .padding(.bottom, DS.Spacing.xs)
+        .background(
+            RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
+                .fill(DS.Color.surface)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
+                .stroke(DS.Color.textTertiary.opacity(0.1), lineWidth: 0.5)
+        )
+        .dsSubtleShadow()
+    }
+
+    // MARK: - Detail: Actions
+    @ViewBuilder
+    private func detailActions(notification: AppNotification) -> some View {
+        VStack(spacing: DS.Spacing.sm) {
+            if !notification.read {
+                detailActionButton(
+                    icon: "envelope.open.fill",
+                    label: L10n.t("تعليم كمقروء", "Mark as Read"),
+                    color: DS.Color.primary
+                ) {
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    let id = notification.id
+                    selectedNotification = nil
+                    Task { await notificationVM.markNotificationAsRead(id: id) }
+                }
+            }
+
+            detailActionButton(
+                icon: "trash.fill",
+                label: L10n.t("حذف الإشعار", "Delete Notification"),
+                color: DS.Color.error
+            ) {
+                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                let id = notification.id
+                selectedNotification = nil
+                Task { await notificationVM.deleteNotification(id: id) }
+            }
+        }
+    }
+
+    private func detailActionButton(icon: String, label: String, color: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: DS.Spacing.sm) {
+                Image(systemName: icon)
+                    .font(DS.Font.scaled(14, weight: .semibold))
+                Text(label)
+                    .font(DS.Font.calloutBold)
+            }
+            .foregroundColor(color)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, DS.Spacing.md)
+            .background(color.opacity(0.10))
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                    .stroke(color.opacity(0.20), lineWidth: 0.5)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+        }
+        .buttonStyle(DSScaleButtonStyle())
     }
 
     // MARK: - Detail Info Row
