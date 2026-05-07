@@ -353,11 +353,11 @@ struct NotificationsCenterView: View {
         } label: {
             VStack(spacing: DS.Spacing.xs) {
                 Image(systemName: icon)
-                    .font(DS.Font.scaled(22, weight: .bold))
+                    .font(DS.Font.scaled(15, weight: .bold))
                 Text(title)
-                    .font(DS.Font.scaled(13, weight: .bold))
+                    .font(DS.Font.scaled(12, weight: .bold))
                 Text("\(count)")
-                    .font(DS.Font.scaled(11, weight: .medium))
+                    .font(DS.Font.scaled(10, weight: .medium))
                     .foregroundColor(isSelected ? DS.Color.primary : DS.Color.textTertiary)
             }
             .foregroundColor(isSelected ? DS.Color.primary : DS.Color.textSecondary)
