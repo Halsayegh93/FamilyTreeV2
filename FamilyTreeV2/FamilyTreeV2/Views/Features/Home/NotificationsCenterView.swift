@@ -75,8 +75,9 @@ struct NotificationsCenterView: View {
     @State private var selectedIds: Set<UUID> = []
     @State private var selectedNotification: AppNotification? = nil
     @State private var selectedTab: NotifTab = .notifications
+    @Namespace private var tabIndicator
 
-    enum NotifTab {
+    enum NotifTab: Hashable {
         case notifications // إشعاراتي + موافقات
         case activity      // المستجدات — للمدراء فقط
     }
@@ -126,14 +127,10 @@ struct NotificationsCenterView: View {
                         adminOnlyKinds.contains(n.kind) || n.targetMemberId == nil
                     }.count
 
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: DS.Spacing.sm) {
-                            notifTabButton(icon: "bell.fill", title: L10n.t("الإشعارات", "Notifications"), count: notifCount, tab: .notifications)
-                            notifTabButton(icon: "bolt.fill", title: L10n.t("المستجدات", "Activity"), count: activityCount, tab: .activity)
-                        }
+                    segmentedTabBar(notifCount: notifCount, activityCount: activityCount)
                         .padding(.horizontal, DS.Spacing.lg)
-                    }
-                    .padding(.vertical, DS.Spacing.xs)
+                        .padding(.top, DS.Spacing.sm)
+                        .padding(.bottom, DS.Spacing.xs)
                 }
 
                 // شريط الأدوات الموحد
@@ -337,31 +334,81 @@ struct NotificationsCenterView: View {
         return kinds
     }
 
-    // MARK: - Tab Chip
-    private func notifTabButton(icon: String, title: String, count: Int, tab: NotifTab) -> some View {
+    // MARK: - Segmented Tab Bar (sliding indicator)
+
+    private func segmentedTabBar(notifCount: Int, activityCount: Int) -> some View {
+        HStack(spacing: 0) {
+            segmentTab(
+                icon: "bell.badge.fill",
+                title: L10n.t("الإشعارات", "Notifications"),
+                count: notifCount,
+                tab: .notifications
+            )
+            segmentTab(
+                icon: "sparkles",
+                title: L10n.t("المستجدات", "Activity"),
+                count: activityCount,
+                tab: .activity
+            )
+        }
+        .padding(4)
+        .background(
+            RoundedRectangle(cornerRadius: DS.Radius.full, style: .continuous)
+                .fill(DS.Color.surfaceElevated.opacity(0.7))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Radius.full, style: .continuous)
+                .stroke(DS.Color.textTertiary.opacity(0.1), lineWidth: 0.5)
+        )
+    }
+
+    private func segmentTab(icon: String, title: String, count: Int, tab: NotifTab) -> some View {
         let isSelected = selectedTab == tab
+
         return Button {
-            withAnimation(DS.Anim.snappy) { selectedTab = tab }
-        } label: {
-            HStack(spacing: DS.Spacing.xs) {
-                Image(systemName: icon)
-                    .font(DS.Font.scaled(13, weight: .semibold))
-                Text(title)
-                    .font(DS.Font.scaled(13, weight: .bold))
-                if count > 0 {
-                    Text("\(count)")
-                        .font(DS.Font.scaled(11, weight: .black))
-                        .foregroundColor(isSelected ? .white : DS.Color.textTertiary)
-                        .frame(minWidth: 20, minHeight: 20)
-                        .background(isSelected ? DS.Color.primary : DS.Color.textTertiary.opacity(0.15))
-                        .clipShape(Circle())
-                }
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.78)) {
+                selectedTab = tab
             }
-            .foregroundColor(isSelected ? DS.Color.primary : DS.Color.textSecondary)
-            .padding(.horizontal, DS.Spacing.lg)
-            .padding(.vertical, DS.Spacing.sm)
-            .background(isSelected ? DS.Color.primary.opacity(0.08) : Color.clear)
-            .clipShape(Capsule())
+            UISelectionFeedbackGenerator().selectionChanged()
+        } label: {
+            ZStack {
+                // مؤشر الاختيار المتحرك (sliding indicator)
+                if isSelected {
+                    Capsule()
+                        .fill(DS.Color.gradientPrimary)
+                        .shadow(color: DS.Color.primary.opacity(0.35), radius: 8, x: 0, y: 3)
+                        .matchedGeometryEffect(id: "tabIndicator", in: tabIndicator)
+                }
+
+                HStack(spacing: DS.Spacing.xs) {
+                    Image(systemName: icon)
+                        .font(DS.Font.scaled(13, weight: .bold))
+                        .symbolRenderingMode(.hierarchical)
+                        .scaleEffect(isSelected ? 1.05 : 1.0)
+
+                    Text(title)
+                        .font(DS.Font.scaled(13, weight: .bold))
+                        .lineLimit(1)
+
+                    if count > 0 {
+                        Text("\(count)")
+                            .font(DS.Font.scaled(10, weight: .black))
+                            .foregroundColor(isSelected ? DS.Color.primary : DS.Color.textOnPrimary)
+                            .frame(minWidth: 18, minHeight: 18)
+                            .padding(.horizontal, 4)
+                            .background(
+                                Capsule()
+                                    .fill(isSelected ? Color.white : DS.Color.error)
+                            )
+                            .transition(.scale.combined(with: .opacity))
+                    }
+                }
+                .foregroundColor(isSelected ? DS.Color.textOnPrimary : DS.Color.textSecondary)
+                .padding(.horizontal, DS.Spacing.md)
+                .padding(.vertical, 10)
+                .frame(maxWidth: .infinity)
+            }
+            .contentShape(Capsule())
         }
         .buttonStyle(.plain)
     }
