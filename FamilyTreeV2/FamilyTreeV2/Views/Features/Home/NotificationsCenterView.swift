@@ -351,23 +351,44 @@ struct NotificationsCenterView: View {
         return Button {
             withAnimation(DS.Anim.snappy) { selectedTab = tab }
         } label: {
-            VStack(spacing: DS.Spacing.xs) {
-                Image(systemName: icon)
-                    .font(DS.Font.scaled(15, weight: .bold))
-                Text(title)
-                    .font(DS.Font.scaled(12, weight: .bold))
-                Text("\(count)")
-                    .font(DS.Font.scaled(10, weight: .medium))
-                    .foregroundColor(isSelected ? DS.Color.primary : DS.Color.textTertiary)
+            HStack(spacing: DS.Spacing.md) {
+                // أيقونة بدائرة
+                ZStack {
+                    Circle()
+                        .fill(isSelected ? DS.Color.primary.opacity(0.12) : DS.Color.textTertiary.opacity(0.08))
+                        .frame(width: 40, height: 40)
+                    Image(systemName: icon)
+                        .font(DS.Font.scaled(16, weight: .semibold))
+                        .foregroundColor(isSelected ? DS.Color.primary : DS.Color.textTertiary)
+                }
+
+                // النص + العدد
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(DS.Font.scaled(14, weight: .bold))
+                        .foregroundColor(isSelected ? DS.Color.textPrimary : DS.Color.textSecondary)
+                    Text("\(count)")
+                        .font(DS.Font.scaled(11, weight: .medium))
+                        .foregroundColor(DS.Color.textTertiary)
+                }
+
+                Spacer()
+
+                // مؤشر المختار
+                if isSelected {
+                    Circle()
+                        .fill(DS.Color.primary)
+                        .frame(width: 8, height: 8)
+                }
             }
-            .foregroundColor(isSelected ? DS.Color.primary : DS.Color.textSecondary)
-            .frame(maxWidth: .infinity)
+            .padding(.horizontal, DS.Spacing.md)
             .padding(.vertical, DS.Spacing.md)
-            .background(isSelected ? DS.Color.primary.opacity(0.08) : DS.Color.surface)
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(isSelected ? DS.Color.primary.opacity(0.05) : DS.Color.surface)
+            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                    .stroke(isSelected ? DS.Color.primary.opacity(0.3) : DS.Color.textTertiary.opacity(0.15), lineWidth: 1)
+                RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                    .stroke(isSelected ? DS.Color.primary.opacity(0.2) : DS.Color.textTertiary.opacity(0.1), lineWidth: 1)
             )
         }
         .buttonStyle(.plain)
