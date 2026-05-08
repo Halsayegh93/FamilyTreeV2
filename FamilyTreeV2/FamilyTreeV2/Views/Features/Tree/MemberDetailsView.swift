@@ -35,7 +35,7 @@ struct MemberDetailsView: View {
 
     @State private var showActionSheet = false
     @State private var pendingEditAction: TreeEditAction? = nil
-    @State private var showChildrenSheet = false
+    @State private var childrenExpanded = false
 
     // MARK: - Cached State (تحسب مرة عند تغيير العضو لتفادي إعادة الحساب O(n) في كل rebuild)
 
@@ -119,10 +119,6 @@ struct MemberDetailsView: View {
                     pendingEditAction = action
                 }
                 .presentationDetents([.medium, .large])
-            }
-            .sheet(isPresented: $showChildrenSheet) {
-                childrenListSheet
-                    .presentationDetents([.medium, .large])
             }
             .fullScreenCover(item: $pendingEditAction) { action in
                 TreeEditRequestView(member: member, action: action)
@@ -501,16 +497,23 @@ struct MemberDetailsView: View {
 
                         if !cachedChildren.isEmpty {
                             Button {
-                                showChildrenSheet = true
+                                withAnimation(DS.Anim.snappy) {
+                                    childrenExpanded.toggle()
+                                }
                             } label: {
-                                familyRow(
-                                    icon: "person.3.fill",
+                                childrenRow(
                                     label: L10n.t("الأبناء", "Children"),
                                     value: childrenCountText,
-                                    color: DS.Color.info
+                                    color: DS.Color.info,
+                                    expanded: childrenExpanded
                                 )
                             }
                             .buttonStyle(.plain)
+
+                            if childrenExpanded {
+                                childrenInlineGrid
+                                    .transition(.opacity.combined(with: .move(edge: .top)))
+                            }
                         }
                     }
                     .padding(.horizontal, DS.Spacing.md)
@@ -518,6 +521,98 @@ struct MemberDetailsView: View {
                 }
             }
         }
+    }
+
+    /// شبكة الأبناء inline — اسم أول فقط مع avatar مدوّر، 3 أعمدة
+    private var childrenInlineGrid: some View {
+        let columns = Array(repeating: GridItem(.flexible(), spacing: DS.Spacing.sm), count: 3)
+        return LazyVGrid(columns: columns, spacing: DS.Spacing.md) {
+            ForEach(cachedChildren) { child in
+                Button {
+                    currentMemberId = child.id
+                } label: {
+                    childTileFirstName(child)
+                }
+                .buttonStyle(DSScaleButtonStyle())
+            }
+        }
+        .padding(.top, DS.Spacing.sm)
+        .padding(.bottom, DS.Spacing.xs)
+    }
+
+    private func childTileFirstName(_ child: FamilyMember) -> some View {
+        VStack(spacing: DS.Spacing.xs) {
+            ZStack {
+                if let url = child.avatarUrl, let imgUrl = URL(string: url) {
+                    CachedAsyncImage(url: imgUrl) { img in
+                        img.resizable().scaledToFill()
+                    } placeholder: {
+                        Circle().fill(DS.Color.primary.opacity(0.12))
+                    }
+                    .frame(width: 56, height: 56)
+                    .clipShape(Circle())
+                    .overlay(Circle().stroke(DS.Color.primary.opacity(0.18), lineWidth: 1))
+                } else {
+                    ZStack {
+                        Circle()
+                            .fill(DS.Color.primary.opacity(0.12))
+                            .frame(width: 56, height: 56)
+                        Text(String(child.firstName.prefix(1)))
+                            .font(DS.Font.title3)
+                            .fontWeight(.bold)
+                            .foregroundColor(DS.Color.primary)
+                    }
+                    .overlay(Circle().stroke(DS.Color.primary.opacity(0.18), lineWidth: 1))
+                }
+
+                if child.isDeceased == true {
+                    Circle()
+                        .fill(DS.Color.background)
+                        .frame(width: 18, height: 18)
+                        .overlay(
+                            Image(systemName: "heart.slash.fill")
+                                .font(DS.Font.scaled(10, weight: .bold))
+                                .foregroundColor(DS.Color.textTertiary)
+                        )
+                        .offset(x: 22, y: 22)
+                }
+            }
+
+            Text(child.firstName)
+                .font(DS.Font.caption1)
+                .fontWeight(.semibold)
+                .foregroundColor(DS.Color.textPrimary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    /// صف الأبناء مع chevron قابل للتوسعة
+    private func childrenRow(label: String, value: String, color: Color, expanded: Bool) -> some View {
+        HStack(spacing: DS.Spacing.md) {
+            ZStack {
+                Circle()
+                    .fill(color.opacity(0.12))
+                    .frame(width: 32, height: 32)
+                Image(systemName: "person.3.fill")
+                    .font(DS.Font.scaled(13, weight: .semibold))
+                    .foregroundColor(color)
+            }
+            Text(label)
+                .font(DS.Font.callout)
+                .foregroundColor(DS.Color.textSecondary)
+            Spacer()
+            Text(value)
+                .font(DS.Font.calloutBold)
+                .foregroundColor(DS.Color.textPrimary)
+                .lineLimit(1)
+            Image(systemName: "chevron.down")
+                .font(DS.Font.scaled(11, weight: .semibold))
+                .foregroundColor(DS.Color.textTertiary)
+                .rotationEffect(.degrees(expanded ? 180 : 0))
+        }
+        .padding(.vertical, DS.Spacing.sm + 2)
     }
 
     private var childrenCountText: String {
@@ -800,99 +895,6 @@ struct MemberDetailsView: View {
             .padding(.top, DS.Spacing.md)
             Spacer()
         }
-    }
-
-    // MARK: - Children Sheet
-
-    private var childrenListSheet: some View {
-        NavigationStack {
-            ZStack {
-                DS.Color.background.ignoresSafeArea()
-
-                ScrollView(showsIndicators: false) {
-                    LazyVStack(spacing: DS.Spacing.sm) {
-                        ForEach(cachedChildren) { child in
-                            Button {
-                                showChildrenSheet = false
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                                    currentMemberId = child.id
-                                }
-                            } label: {
-                                childRow(child)
-                            }
-                            .buttonStyle(DSScaleButtonStyle())
-                        }
-                    }
-                    .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.vertical, DS.Spacing.md)
-                    .padding(.bottom, DS.Spacing.xxxl)
-                }
-            }
-            .navigationTitle(L10n.t("أبناء \(member.firstName)", "\(member.firstName)'s Children"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button(L10n.t("إغلاق", "Close")) { showChildrenSheet = false }
-                        .font(DS.Font.calloutBold)
-                        .foregroundColor(DS.Color.textSecondary)
-                }
-            }
-            .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-        }
-    }
-
-    private func childRow(_ child: FamilyMember) -> some View {
-        HStack(spacing: DS.Spacing.md) {
-            ZStack {
-                if let url = child.avatarUrl, let imgUrl = URL(string: url) {
-                    CachedAsyncImage(url: imgUrl) { img in
-                        img.resizable().scaledToFill()
-                    } placeholder: {
-                        Circle().fill(DS.Color.primary.opacity(0.12))
-                    }
-                    .frame(width: 44, height: 44)
-                    .clipShape(Circle())
-                } else {
-                    ZStack {
-                        Circle()
-                            .fill(DS.Color.primary.opacity(0.12))
-                            .frame(width: 44, height: 44)
-                        Text(String(child.firstName.prefix(1)))
-                            .font(DS.Font.calloutBold)
-                            .foregroundColor(DS.Color.primary)
-                    }
-                }
-            }
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(child.fullName)
-                    .font(DS.Font.calloutBold)
-                    .foregroundColor(DS.Color.textPrimary)
-                    .lineLimit(1)
-                if let birth = child.birthDate, !birth.isEmpty {
-                    HStack(spacing: 4) {
-                        Image(systemName: "calendar")
-                            .font(DS.Font.scaled(10))
-                        Text(birth)
-                            .font(DS.Font.caption1)
-                    }
-                    .foregroundColor(DS.Color.textTertiary)
-                }
-            }
-
-            Spacer()
-
-            Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
-                .font(DS.Font.scaled(12, weight: .semibold))
-                .foregroundColor(DS.Color.textTertiary)
-        }
-        .padding(DS.Spacing.md)
-        .background(DS.Color.surface)
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.Radius.lg)
-                .stroke(DS.Color.textTertiary.opacity(0.1), lineWidth: 1)
-        )
     }
 
     // MARK: - Kinship Path
