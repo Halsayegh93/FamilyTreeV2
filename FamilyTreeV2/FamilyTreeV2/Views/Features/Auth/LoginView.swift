@@ -347,36 +347,46 @@ struct LoginView: View {
 
             statusMessage
 
-            // إعادة طلب الرمز — SMS أو واتساب
+            // إعادة طلب الرمز — SMS أو واتساب (cooldown مشترك لمنع spam)
             HStack(spacing: DS.Spacing.md) {
                 Button(action: {
                     authVM.otpCode = ""; otpText = ""
                     authVM.otpErrorMessage = nil
                     authVM.otpStatusMessage = ""
                     otpTimeRemaining = 300
-                    Task { await authVM.sendOTP(channel: .sms) }
+                    timeRemaining = 60
+                    Task {
+                        await authVM.sendOTP(channel: .sms)
+                        if authVM.otpErrorMessage != nil { timeRemaining = 30 }
+                    }
                 }) {
                     HStack(spacing: DS.Spacing.xs) {
                         Image(systemName: "message.fill")
                             .font(DS.Font.scaled(13, weight: .semibold))
-                        Text(L10n.t("إعادة عبر SMS", "Resend via SMS"))
+                        Text(timeRemaining > 0
+                             ? L10n.t("بعد \(timeRemaining)ث", "in \(timeRemaining)s")
+                             : L10n.t("إعادة عبر SMS", "Resend via SMS"))
                             .font(DS.Font.footnote)
                             .fontWeight(.semibold)
                     }
-                    .foregroundStyle(DS.Color.primary)
+                    .foregroundStyle(timeRemaining > 0 ? DS.Color.textTertiary : DS.Color.primary)
                     .padding(.horizontal, DS.Spacing.md)
                     .padding(.vertical, DS.Spacing.xs + 2)
-                    .background(DS.Color.primary.opacity(0.10))
+                    .background((timeRemaining > 0 ? DS.Color.textTertiary : DS.Color.primary).opacity(0.10))
                     .clipShape(Capsule())
                 }
-                .disabled(authVM.isLoading)
+                .disabled(authVM.isLoading || timeRemaining > 0)
 
                 Button(action: {
                     authVM.otpCode = ""; otpText = ""
                     authVM.otpErrorMessage = nil
                     authVM.otpStatusMessage = ""
                     otpTimeRemaining = 300
-                    Task { await authVM.sendOTP(channel: .whatsapp) }
+                    timeRemaining = 60
+                    Task {
+                        await authVM.sendOTP(channel: .whatsapp)
+                        if authVM.otpErrorMessage != nil { timeRemaining = 30 }
+                    }
                 }) {
                     HStack(spacing: DS.Spacing.xs) {
                         Image(systemName: "bubble.left.and.bubble.right.fill")
@@ -385,10 +395,10 @@ struct LoginView: View {
                             .font(DS.Font.footnote)
                             .fontWeight(.semibold)
                     }
-                    .foregroundStyle(DS.Color.success)
+                    .foregroundStyle(authVM.isLoading ? DS.Color.textTertiary : DS.Color.success)
                     .padding(.horizontal, DS.Spacing.md)
                     .padding(.vertical, DS.Spacing.xs + 2)
-                    .background(DS.Color.success.opacity(0.10))
+                    .background((authVM.isLoading ? DS.Color.textTertiary : DS.Color.success).opacity(0.10))
                     .clipShape(Capsule())
                 }
                 .disabled(authVM.isLoading)
