@@ -418,12 +418,10 @@ struct NotificationsCenterView: View {
         .buttonStyle(.plain)
     }
 
-    /// أنواع الإشعارات الإدارية — المدير والمالك فقط يشوفونها (تظهر في تاب "المستجدات")
-    private let adminOnlyKinds: Set<String> = [
+    /// إجراءات تمّت — تظهر في تاب "المستجدات" للأدمن فقط (موافقة/رفض/تعديل/تفعيل/نشر)
+    private static let completedActionKinds: Set<String> = [
+        // تعديلات أدمن مباشرة
         NotificationKind.adminEdit.rawValue,
-        NotificationKind.adminRequest.rawValue,
-        NotificationKind.treeEdit.rawValue,
-        NotificationKind.linkRequest.rawValue,
         NotificationKind.adminEditName.rawValue,
         NotificationKind.adminEditDates.rawValue,
         NotificationKind.adminEditPhone.rawValue,
@@ -432,24 +430,21 @@ struct NotificationsCenterView: View {
         NotificationKind.adminEditAvatar.rawValue,
         NotificationKind.adminEditChildAdd.rawValue,
         NotificationKind.adminEditChildRemove.rawValue,
-        // طلبات الأعضاء
-        NotificationKind.deceasedReport.rawValue,
-        NotificationKind.childAdd.rawValue,
-        NotificationKind.phoneChange.rawValue,
-        NotificationKind.nameChange.rawValue,
-        NotificationKind.photoSuggestion.rawValue,
-        // معرض/قصص
-        NotificationKind.galleryPending.rawValue,
-        NotificationKind.storyPending.rawValue,
-        // ديوانيات/مشاريع
-        NotificationKind.diwaniyaPending.rawValue,
-        NotificationKind.projectPending.rawValue,
-        // أخبار وبلاغات
-        NotificationKind.newsAdd.rawValue,
-        NotificationKind.newsReport.rawValue,
-        NotificationKind.contactMessage.rawValue,
-        // إدارة الصلاحيات
+        // عضوية (تم تفعيل)
+        NotificationKind.joinApproved.rawValue,
+        NotificationKind.accountActivated.rawValue,
         NotificationKind.roleChange.rawValue,
+        // موافقات/رفض على إجراءات
+        NotificationKind.diwaniyaApproved.rawValue,
+        NotificationKind.diwaniyaRejected.rawValue,
+        NotificationKind.projectApproved.rawValue,
+        NotificationKind.projectRejected.rawValue,
+        NotificationKind.storyApproved.rawValue,
+        NotificationKind.storyRejected.rawValue,
+        NotificationKind.galleryApproved.rawValue,
+        NotificationKind.galleryRejected.rawValue,
+        // نشر محتوى
+        NotificationKind.newsPublished.rawValue,
     ]
 
     /// كل الإشعارات بعد تطبيق فلتر الإعدادات (الأنواع المخفية)
@@ -459,16 +454,24 @@ struct NotificationsCenterView: View {
         return all.filter { !hiddenKinds.contains($0.kind) }
     }
 
-    /// إشعار شخصي/إجرائي: موجه لي أو يحتاج موافقتي كمسؤول (تاب "إشعاراتي")
+    /// تاب "إشعاراتي":
+    /// - الطلبات اللي تنتظر موافقتي (للأدمن)
+    /// - الإشعارات الموجّهة لي شخصياً (ليست إجراءً تمّ على آخرين)
     private func belongsToNotificationsTab(_ n: AppNotification) -> Bool {
         let myId = authVM.currentUser?.id
-        // إشعار موجّه لي شخصياً
-        if n.targetMemberId == myId { return true }
-        // طلبات تحتاج موافقة الأدمن
-        return Self.pendingApprovalKinds.contains(n.kind)
+        let isCompletedAction = Self.completedActionKinds.contains(n.kind)
+
+        // للأدمن: الإجراءات اللي تمّت تذهب لـ "المستجدات" (مو "إشعاراتي")
+        if authVM.canModerate && isCompletedAction { return false }
+
+        // طلبات تنتظر موافقة الأدمن
+        if Self.pendingApprovalKinds.contains(n.kind) { return true }
+
+        // إشعار موجّه لي شخصياً (نتيجة موافقة/رفض/تعليق على شيء يخصني)
+        return n.targetMemberId == myId
     }
 
-    /// أنواع الطلبات اللي تحتاج موافقة الأدمن — تظهر في "إشعاراتي" للأدمن
+    /// أنواع الطلبات الجديدة اللي تنتظر موافقة الأدمن — تظهر في "إشعاراتي" فقط
     private static let pendingApprovalKinds: Set<String> = [
         NotificationKind.adminRequest.rawValue,
         NotificationKind.linkRequest.rawValue,
@@ -487,10 +490,10 @@ struct NotificationsCenterView: View {
         NotificationKind.contactMessage.rawValue,
     ]
 
-    /// مستجد: نشاط إداري/عام لا يدخل في تاب الإشعارات (يمنع التكرار بين التابين)
+    /// تاب "المستجدات" (للأدمن فقط): الإجراءات اللي تمّت
     private func belongsToActivityTab(_ n: AppNotification) -> Bool {
         guard !belongsToNotificationsTab(n) else { return false }
-        return adminOnlyKinds.contains(n.kind) || n.targetMemberId == nil
+        return Self.completedActionKinds.contains(n.kind)
     }
 
     private var filteredNotifications: [AppNotification] {
@@ -670,7 +673,7 @@ struct NotificationsCenterView: View {
 
                         // اسم المرسل — إداري يعرض "الإدارة"
                         if authVM.isAdmin, let creatorId = item.createdBy {
-                            let isAdminNotif = adminOnlyKinds.contains(item.kind)
+                            let isAdminNotif = Self.completedActionKinds.contains(item.kind)
                             let creator = memberVM.member(byId: creatorId)
                             let creatorName = isAdminNotif ? L10n.t("الإدارة", "Admin") : (creator?.shortFullName ?? L10n.t("الإدارة", "Admin"))
                             let roleColor: Color = isAdminNotif ? DS.Color.primary : (creator?.roleColor ?? DS.Color.accent)
@@ -891,7 +894,7 @@ struct NotificationsCenterView: View {
                 )
 
                 if authVM.isAdmin, let creatorId = notification.createdBy {
-                    let isAdminNotif = adminOnlyKinds.contains(notification.kind)
+                    let isAdminNotif = Self.completedActionKinds.contains(notification.kind)
                     let creator = memberVM.member(byId: creatorId)
                     let creatorName = isAdminNotif ? L10n.t("الإدارة", "Admin") : (creator?.shortFullName ?? L10n.t("الإدارة", "Admin"))
                     let roleColor: Color = isAdminNotif ? DS.Color.primary : (creator?.roleColor ?? DS.Color.accent)
