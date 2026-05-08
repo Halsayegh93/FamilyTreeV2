@@ -5,6 +5,9 @@ import Foundation
 extension Notification.Name {
     static let memberDeleted = Notification.Name("memberDeleted")
     static let showKinshipPath = Notification.Name("showKinshipPath")
+    /// Posted to navigate the tree to a specific member and open their details sheet.
+    /// userInfo: ["memberId": UUID]
+    static let openMemberInTree = Notification.Name("openMemberInTree")
 }
 
 // MARK: - أنماط العرض
@@ -366,6 +369,23 @@ struct TreeView: View {
                 // إغلاق شاشة التفاصيل تلقائياً بعد حذف العضو
                 withAnimation(DS.Anim.snappy) {
                     selectedMember = nil
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .openMemberInTree)) { note in
+                // فتح بطاقة عضو من الشيت الحالي + توجيه الشجرة لمكانه
+                guard let info = note.userInfo,
+                      let memberId = info["memberId"] as? UUID,
+                      let target = cachedMemberById[memberId] ?? memberVM.member(byId: memberId) else { return }
+                // 1. أغلق الشيت الحالي ليبدأ التحريك
+                selectedMember = nil
+                // 2. حرّك الشجرة لمكان العضو الجديد
+                selectMemberFromSearch(target)
+                // 3. أعد فتح الشيت للعضو الجديد بعد التحريك
+                Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: 350_000_000)
+                    withAnimation(DS.Anim.snappy) {
+                        selectedMember = target
+                    }
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: .showKinshipPath)) { note in

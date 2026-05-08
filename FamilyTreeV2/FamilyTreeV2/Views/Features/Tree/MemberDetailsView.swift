@@ -479,7 +479,16 @@ struct MemberDetailsView: View {
                     VStack(spacing: 0) {
                         if let father = cachedFather {
                             Button {
-                                currentMemberId = father.id
+                                // إغلاق الشيت + توجيه الشجرة للأب + إعادة فتح الشيت
+                                let fatherId = father.id
+                                dismiss()
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                                    NotificationCenter.default.post(
+                                        name: .openMemberInTree,
+                                        object: nil,
+                                        userInfo: ["memberId": fatherId]
+                                    )
+                                }
                             } label: {
                                 familyRow(
                                     icon: "person.fill",
@@ -529,7 +538,16 @@ struct MemberDetailsView: View {
         return LazyVGrid(columns: columns, spacing: DS.Spacing.md) {
             ForEach(cachedChildren) { child in
                 Button {
-                    currentMemberId = child.id
+                    // إغلاق الشيت + توجيه الشجرة لمكان الابن + إعادة فتح الشيت تلقائياً
+                    let childId = child.id
+                    dismiss()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                        NotificationCenter.default.post(
+                            name: .openMemberInTree,
+                            object: nil,
+                            userInfo: ["memberId": childId]
+                        )
+                    }
                 } label: {
                     childTileFirstName(child)
                 }
