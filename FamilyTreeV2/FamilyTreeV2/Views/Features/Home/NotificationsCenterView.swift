@@ -275,19 +275,22 @@ struct NotificationsCenterView: View {
                         }
                     }
 
-                    // عداد غير المقروء
+                    // عداد غير المقروء — كبسولة محايدة + الرقم في badge منفصل
                     if unreadCount > 0 {
                         HStack(spacing: DS.Spacing.xs) {
-                            Circle()
-                                .fill(DS.Color.error)
-                                .frame(width: 7, height: 7)
-                            Text("\(unreadCount) " + L10n.t("غير مقروء", "unread"))
+                            Text("\(unreadCount)")
+                                .font(DS.Font.scaled(11, weight: .black))
+                                .foregroundColor(DS.Color.textOnPrimary)
+                                .frame(minWidth: 18, minHeight: 18)
+                                .padding(.horizontal, 4)
+                                .background(Capsule().fill(DS.Color.primary))
+                            Text(L10n.t("غير مقروء", "unread"))
                                 .font(DS.Font.scaled(11, weight: .semibold))
-                                .foregroundColor(DS.Color.error)
+                                .foregroundColor(DS.Color.textSecondary)
                         }
-                        .padding(.horizontal, DS.Spacing.md)
-                        .padding(.vertical, DS.Spacing.sm)
-                        .background(DS.Color.error.opacity(0.10))
+                        .padding(.horizontal, DS.Spacing.sm)
+                        .padding(.vertical, 6)
+                        .background(DS.Color.textTertiary.opacity(0.10))
                         .clipShape(Capsule())
                     }
                 }
