@@ -367,38 +367,30 @@ struct NotificationsCenterView: View {
             }
             UISelectionFeedbackGenerator().selectionChanged()
         } label: {
-            VStack(spacing: 6) {
-                HStack(spacing: 5) {
-                    Image(systemName: icon)
-                        .font(.system(size: 13, weight: .bold))
-                        .symbolRenderingMode(.hierarchical)
+            HStack(spacing: 5) {
+                Image(systemName: icon)
+                    .font(.system(size: 13, weight: .bold))
+                    .symbolRenderingMode(.hierarchical)
 
-                    Text(title)
-                        .font(.system(size: 14, weight: .bold, design: .rounded))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.85)
+                Text(title)
+                    .font(.system(size: 14, weight: .bold, design: .rounded))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
 
-                    if count > 0 {
-                        Text("\(count)")
-                            .font(.system(size: 10, weight: .black, design: .rounded))
-                            .foregroundColor(DS.Color.textOnPrimary)
-                            .frame(minWidth: 16, minHeight: 16)
-                            .padding(.horizontal, 3)
-                            .background(Capsule().fill(DS.Color.error))
-                            .transition(.scale.combined(with: .opacity))
-                    }
+                if count > 0 {
+                    Text("\(count)")
+                        .font(.system(size: 10, weight: .black, design: .rounded))
+                        .foregroundColor(DS.Color.textOnPrimary)
+                        .frame(minWidth: 16, minHeight: 16)
+                        .padding(.horizontal, 3)
+                        .background(Capsule().fill(DS.Color.error))
+                        .transition(.scale.combined(with: .opacity))
                 }
-                .foregroundColor(isSelected ? DS.Color.primary : DS.Color.textSecondary)
-                .padding(.horizontal, 14)
-                .padding(.top, 13)
-                .frame(maxWidth: .infinity)
-
-                // مؤشر التحديد — خط سفلي رفيع بدل الخلفية
-                Rectangle()
-                    .fill(isSelected ? DS.Color.primary : Color.clear)
-                    .frame(height: 2)
-                    .matchedGeometryEffect(id: "tabIndicator", in: tabIndicator, isSource: isSelected)
             }
+            .foregroundColor(isSelected ? DS.Color.primary : DS.Color.textSecondary)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 13)
+            .frame(maxWidth: .infinity)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
