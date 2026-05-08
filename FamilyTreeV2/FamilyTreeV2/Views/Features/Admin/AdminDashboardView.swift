@@ -84,7 +84,6 @@ struct AdminDashboardView: View {
             + adminRequestVM.deceasedRequests.count
             + adminRequestVM.childAddRequests.count
             + adminRequestVM.photoSuggestionRequests.count
-            + adminRequestVM.treeEditRequests.count
             + adminRequestVM.nameChangeRequests.count
             + memberVM.pendingGalleryPhotos.count
             + storyVM.pendingStories.count

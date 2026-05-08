@@ -14,9 +14,6 @@ struct AdminAllRequestsView: View {
     @State private var phoneEditRequest: PhoneChangeRequest? = nil
     @State private var editedPhone: String = ""
     @State private var selectedDetail: RequestDetail? = nil
-    @State private var treeEditToReject: AdminRequest? = nil
-    @State private var rejectReasonText: String = ""
-    @State private var showRejectReasonAlert = false
 
     /// نوع الطلب المحدد لعرض التفاصيل
     enum RequestDetail: Identifiable {
@@ -29,7 +26,6 @@ struct AdminAllRequestsView: View {
         case deceased(AdminRequest)
         case child(AdminRequest)
         case photo(AdminRequest)
-        case treeEdit(AdminRequest)
         case project(Project)
 
         var id: String {
@@ -43,14 +39,13 @@ struct AdminAllRequestsView: View {
             case .deceased(let r): return "dec-\(r.id)"
             case .child(let r): return "child-\(r.id)"
             case .photo(let r): return "photo-\(r.id)"
-            case .treeEdit(let r): return "edit-\(r.id)"
             case .project(let p): return "proj-\(p.id)"
             }
         }
     }
 
     enum RequestTab: String, CaseIterable, Identifiable {
-        case joinRequests, news, reports, phone, nameChange, diwaniya, deceased, children, photos, treeEdit, projects, gallery, stories
+        case joinRequests, news, reports, phone, nameChange, diwaniya, deceased, children, photos, projects, gallery, stories
 
         var id: String { rawValue }
 
@@ -65,7 +60,6 @@ struct AdminAllRequestsView: View {
             case .deceased: return L10n.t("وفاة", "Deceased")
             case .children: return L10n.t("أبناء", "Children")
             case .photos: return L10n.t("صور مقترحة", "Suggested Photos")
-            case .treeEdit: return L10n.t("تعديل", "Edit")
             case .projects: return L10n.t("مشاريع", "Projects")
             case .gallery: return L10n.t("معرض", "Gallery")
             case .stories: return L10n.t("قصص", "Stories")
@@ -83,7 +77,6 @@ struct AdminAllRequestsView: View {
             case .deceased: return "bolt.heart.fill"
             case .children: return "person.badge.plus"
             case .photos: return "camera.badge.ellipsis"
-            case .treeEdit: return "pencil.and.list.clipboard"
             case .projects: return "briefcase.fill"
             case .gallery: return "photo.on.rectangle.angled"
             case .stories: return "circle.dashed"
@@ -101,7 +94,6 @@ struct AdminAllRequestsView: View {
             case .deceased: return DS.Color.error
             case .children: return DS.Color.info
             case .photos: return DS.Color.neonBlue
-            case .treeEdit: return DS.Color.accent
             case .projects: return DS.Color.neonPurple
             case .gallery: return DS.Color.gridDiwaniya
             case .stories: return DS.Color.neonCyan
@@ -287,7 +279,6 @@ struct AdminAllRequestsView: View {
                 group.addTask { @MainActor in await adminRequestVM.fetchDeceasedRequests() }
                 group.addTask { @MainActor in await adminRequestVM.fetchChildAddRequests() }
                 group.addTask { @MainActor in await adminRequestVM.fetchPhotoSuggestionRequests() }
-                group.addTask { @MainActor in await adminRequestVM.fetchTreeEditRequests() }
                 group.addTask { @MainActor in await adminRequestVM.fetchNameChangeRequests() }
                 group.addTask { @MainActor in await projectsVM.fetchPendingProjects() }
                 group.addTask { @MainActor in await memberVM.fetchPendingGalleryPhotos() }
@@ -454,22 +445,6 @@ struct AdminAllRequestsView: View {
         } message: {
             Text(mergeSuccessMessage)
         }
-        .alert(L10n.t("سبب الرفض", "Rejection Reason"), isPresented: $showRejectReasonAlert) {
-            TextField(L10n.t("اختياري...", "Optional..."), text: $rejectReasonText)
-            Button(L10n.t("رفض", "Reject"), role: .destructive) {
-                if let req = treeEditToReject {
-                    Task { await adminRequestVM.rejectTreeEditRequest(request: req, reason: rejectReasonText.isEmpty ? nil : rejectReasonText) }
-                    treeEditToReject = nil
-                    rejectReasonText = ""
-                }
-            }
-            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {
-                treeEditToReject = nil
-                rejectReasonText = ""
-            }
-        } message: {
-            Text(L10n.t("أدخل سبب الرفض (اختياري)", "Enter rejection reason (optional)"))
-        }
     }
 
     // MARK: - Item Count
@@ -485,7 +460,6 @@ struct AdminAllRequestsView: View {
         case .deceased: return adminRequestVM.deceasedRequests.count
         case .children: return adminRequestVM.childAddRequests.count
         case .photos: return adminRequestVM.photoSuggestionRequests.count
-        case .treeEdit: return adminRequestVM.treeEditRequests.count
         case .projects: return projectsVM.pendingProjects.count
         case .gallery: return memberVM.pendingGalleryPhotos.count
         case .stories: return storyVM.pendingStories.count
@@ -834,54 +808,6 @@ struct AdminAllRequestsView: View {
                         }
                     }
                 }
-            case .treeEdit:
-                treeRequestsBanner
-                selectAllButton(ids: adminRequestVM.treeEditRequests.compactMap { req -> UUID? in
-                    let action = req.treeEditPayload?.resolvedAction
-                    if authVM.isAdmin { return req.id }
-                    if authVM.currentUser?.role == .monitor,
-                       action == .editName || action == .editPhone || action == .deceased || action == .delete {
-                        return req.id
-                    }
-                    if authVM.currentUser?.role == .supervisor && action == .add { return req.id }
-                    return nil
-                })
-                ForEach(adminRequestVM.treeEditRequests) { request in
-                    let action = request.treeEditPayload?.resolvedAction
-                    let canApproveThis: Bool = {
-                        if authVM.isAdmin { return true }
-                        if authVM.currentUser?.role == .monitor {
-                            return action == .editName || action == .editPhone || action == .deceased || action == .delete
-                        }
-                        if authVM.currentUser?.role == .supervisor { return action == .add }
-                        return false
-                    }()
-                    if canApproveThis {
-                        selectableRow(id: request.id) {
-                            selectedDetail = .treeEdit(request)
-                        } content: {
-                            treeEditRow(for: request)
-                        }
-                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                            if !isSelectMode {
-                                Button { Task { await adminRequestVM.approveTreeEditRequest(request: request) } } label: {
-                                    Label(L10n.t("موافقة", "Approve"), systemImage: "checkmark.circle.fill")
-                                }.tint(DS.Color.success)
-                            }
-                        }
-                        .swipeActions(edge: .leading, allowsFullSwipe: false) {
-                            if !isSelectMode && authVM.canRejectRequests {
-                                Button(role: .destructive) {
-                                    treeEditToReject = request
-                                    rejectReasonText = ""
-                                    showRejectReasonAlert = true
-                                } label: {
-                                    Label(L10n.t("رفض", "Reject"), systemImage: "xmark.circle.fill")
-                                }
-                            }
-                        }
-                    }
-                }
             case .projects:
                 selectAllButton(ids: projectsVM.pendingProjects.map { $0.id })
                 ForEach(projectsVM.pendingProjects) { project in
@@ -971,50 +897,6 @@ struct AdminAllRequestsView: View {
         .scrollContentBackground(.hidden)
         .id(selectedTab) // إعادة رسم سريعة عند تغيير التاب
         .animation(.snappy(duration: 0.2), value: selectedTab)
-    }
-
-    // MARK: - Tree Edit Banner — Link to dedicated screen
-
-    @ViewBuilder
-    private var treeRequestsBanner: some View {
-        if !isSelectMode {
-            NavigationLink(destination: AdminTreeEditRequestsView()) {
-                HStack(spacing: DS.Spacing.md) {
-                    Image(systemName: "pencil.and.list.clipboard")
-                        .font(DS.Font.scaled(18, weight: .semibold))
-                        .foregroundColor(DS.Color.textOnPrimary)
-                        .frame(width: 36, height: 36)
-                        .background(DS.Color.accent)
-                        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm))
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(L10n.t("شاشة طلبات الشجرة الكاملة", "Full Tree Requests Screen"))
-                            .font(DS.Font.calloutBold)
-                            .foregroundColor(DS.Color.textPrimary)
-                        Text(L10n.t("عرض موسّع مع تابات لكل نوع", "Expanded view with tabs per type"))
-                            .font(DS.Font.caption1)
-                            .foregroundColor(DS.Color.textSecondary)
-                    }
-
-                    Spacer()
-
-                    Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
-                        .font(DS.Font.scaled(12, weight: .semibold))
-                        .foregroundColor(DS.Color.textTertiary)
-                }
-                .padding(DS.Spacing.md)
-                .background(DS.Color.accent.opacity(0.08))
-                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
-                .overlay(
-                    RoundedRectangle(cornerRadius: DS.Radius.md)
-                        .stroke(DS.Color.accent.opacity(0.25), lineWidth: 1)
-                )
-            }
-            .buttonStyle(.plain)
-            .listRowSeparator(.hidden)
-            .listRowBackground(Color.clear)
-            .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 8, trailing: 16))
-        }
     }
 
     // MARK: - Select Mode Helpers
@@ -1147,13 +1029,6 @@ struct AdminAllRequestsView: View {
                     count += 1
                 }
             }
-        case .treeEdit:
-            for id in ids {
-                if let req = adminRequestVM.treeEditRequests.first(where: { $0.id == id }) {
-                    await adminRequestVM.approveTreeEditRequest(request: req)
-                    count += 1
-                }
-            }
         case .projects:
             if let adminId = authVM.currentUser?.id {
                 for id in ids {
@@ -1241,13 +1116,6 @@ struct AdminAllRequestsView: View {
             for id in ids {
                 if let req = adminRequestVM.photoSuggestionRequests.first(where: { $0.id == id }) {
                     await adminRequestVM.rejectPhotoSuggestion(request: req)
-                    count += 1
-                }
-            }
-        case .treeEdit:
-            for id in ids {
-                if let req = adminRequestVM.treeEditRequests.first(where: { $0.id == id }) {
-                    await adminRequestVM.rejectTreeEditRequest(request: req, reason: nil)
                     count += 1
                 }
             }
@@ -2248,88 +2116,6 @@ struct AdminAllRequestsView: View {
 
     // MARK: - Tree Edit Row
 
-    private func treeEditRow(for request: AdminRequest) -> some View {
-        let actionType = request.newValue ?? L10n.t("تعديل", "Edit")
-        let payload = request.treeEditPayload
-
-        // Action-specific icon & color
-        let rowIcon: String
-        let rowColor: Color
-        switch actionType {
-        case "إضافة":
-            rowIcon = "person.badge.plus"
-            rowColor = DS.Color.success
-        case "حذف":
-            rowIcon = "person.badge.minus"
-            rowColor = DS.Color.error
-        default:
-            rowIcon = "pencil.line"
-            rowColor = DS.Color.info
-        }
-
-        // Display name: target member or new member name
-        let displayName = payload?.targetMemberName ?? payload?.newMemberName ?? request.member?.fullName ?? L10n.t("عضو", "Member")
-
-        return VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            HStack(spacing: DS.Spacing.sm) {
-                iconCircle(icon: rowIcon, color: rowColor, size: 36)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(displayName)
-                        .font(DS.Font.calloutBold)
-                        .foregroundColor(DS.Color.textPrimary)
-
-                    // Show requester name
-                    if let requesterName = memberVM.allMembers.first(where: { $0.id == request.requesterId })?.fullName {
-                        Text(L10n.t("من: \(requesterName)", "By: \(requesterName)"))
-                            .font(DS.Font.caption2)
-                            .foregroundColor(DS.Color.textSecondary)
-                    }
-                }
-
-                Spacer()
-
-                typeBadge(text: actionType, color: rowColor)
-            }
-
-            // Action-specific summary
-            if let payload = payload {
-                Group {
-                    switch payload.action {
-                    case "تعديل اسم":
-                        if let newName = payload.newName, !newName.isEmpty {
-                            contentBlock(L10n.t("← \(newName)", "→ \(newName)"))
-                        }
-                    case "إضافة":
-                        if let parent = payload.parentMemberName, let child = payload.newMemberName {
-                            contentBlock(L10n.t("إضافة \(child) تحت \(parent)", "Add \(child) under \(parent)"))
-                        }
-                    case "حذف":
-                        if let reason = payload.reason, !reason.isEmpty {
-                            contentBlock(reason)
-                        }
-                    default:
-                        EmptyView()
-                    }
-                }
-            } else if let details = request.details, !details.isEmpty {
-                contentBlock(details)
-            }
-
-            // التاريخ تحت
-            if let createdAt = request.createdAt {
-                HStack(spacing: DS.Spacing.xs) {
-                    Image(systemName: "clock")
-                        .font(DS.Font.scaled(10, weight: .medium))
-                        .foregroundColor(DS.Color.textTertiary)
-                    Text(formatRegistrationDate(String(createdAt)))
-                        .font(DS.Font.caption2)
-                        .foregroundColor(DS.Color.textTertiary)
-                }
-            }
-        }
-    }
-
     // MARK: - Project Row
 
     // MARK: - Gallery Pending Row
@@ -2636,65 +2422,6 @@ struct AdminAllRequestsView: View {
                             }
                         }
 
-                    case .treeEdit(let request):
-                        detailHeader(icon: "pencil.and.list.clipboard", color: DS.Color.accent, title: L10n.t("طلب تعديل بالشجرة", "Tree Edit Request"))
-                        if let action = request.newValue {
-                            detailField(L10n.t("نوع التعديل", "Edit Type"), action)
-                        }
-                        // Requester info
-                        if let requester = memberVM.allMembers.first(where: { $0.id == request.requesterId }) {
-                            detailField(L10n.t("مقدم الطلب", "Requested By"), requester.fullName)
-                        }
-
-                        if let payload = request.treeEditPayload {
-                            // Structured v2 display
-                            switch payload.action {
-                            case "تعديل اسم":
-                                if let name = payload.targetMemberName {
-                                    detailField(L10n.t("العضو المعني", "Target Member"), name)
-                                }
-                                if let newName = payload.newName {
-                                    detailField(L10n.t("الاسم الجديد", "New Name"), newName)
-                                }
-                            case "حذف":
-                                if let name = payload.targetMemberName {
-                                    detailField(L10n.t("العضو المعني", "Target Member"), name)
-                                }
-                                if let reason = payload.reason {
-                                    detailFullText(L10n.t("سبب الحذف", "Removal Reason"), reason)
-                                }
-                            case "إضافة":
-                                if let parent = payload.parentMemberName {
-                                    detailField(L10n.t("الأب", "Parent"), parent)
-                                }
-                                if let child = payload.newMemberName {
-                                    detailField(L10n.t("اسم العضو الجديد", "New Member Name"), child)
-                                }
-                            default: EmptyView()
-                            }
-                            if let notes = payload.notes, !notes.isEmpty {
-                                detailFullText(L10n.t("ملاحظات", "Notes"), notes)
-                            }
-                        } else {
-                            // Fallback: old format string parsing (backward compatibility)
-                            if let details = request.details {
-                                let lines = details.components(separatedBy: "\n").map { $0.trimmingCharacters(in: .whitespaces) }
-                                if let nameLine = lines.first(where: { $0.hasPrefix("الاسم المعني:") }) {
-                                    let name = nameLine.replacingOccurrences(of: "الاسم المعني:", with: "").trimmingCharacters(in: .whitespaces)
-                                    if !name.isEmpty {
-                                        detailField(L10n.t("الاسم المعني", "Related Name"), name)
-                                    }
-                                }
-                                if let detailLine = lines.first(where: { $0.hasPrefix("التفاصيل:") }) {
-                                    let editDetails = detailLine.replacingOccurrences(of: "التفاصيل:", with: "").trimmingCharacters(in: .whitespaces)
-                                    if !editDetails.isEmpty && editDetails != "لا توجد تفاصيل إضافية" {
-                                        detailFullText(L10n.t("تفاصيل التعديل", "Edit Details"), editDetails)
-                                    }
-                                }
-                            }
-                        }
-                        detailField(L10n.t("التاريخ", "Date"), request.createdAt.map { formatRegistrationDate($0) } ?? "—")
-
                     case .project(let project):
                         detailHeader(icon: "briefcase.fill", color: DS.Color.neonPurple, title: L10n.t("طلب مشروع", "Project Request"))
                         detailField(L10n.t("اسم المشروع", "Project Name"), project.title)
@@ -2785,9 +2512,6 @@ struct AdminAllRequestsView: View {
                 case .photo(let request):
                     await adminRequestVM.approvePhotoSuggestion(request: request)
                     selectedDetail = nil
-                case .treeEdit(let request):
-                    await adminRequestVM.approveTreeEditRequest(request: request)
-                    selectedDetail = nil
                 case .project(let project):
                     if let adminId = authVM.currentUser?.id {
                         await projectsVM.approveProject(id: project.id, approvedBy: adminId)
@@ -2826,10 +2550,6 @@ struct AdminAllRequestsView: View {
                 case .photo(let request):
                     await adminRequestVM.rejectPhotoSuggestion(request: request)
                     selectedDetail = nil
-                case .treeEdit(let request):
-                    rejectReasonText = ""
-                    treeEditToReject = request
-                    showRejectReasonAlert = true
                 case .project(let project):
                     await projectsVM.rejectProject(id: project.id)
                     selectedDetail = nil
