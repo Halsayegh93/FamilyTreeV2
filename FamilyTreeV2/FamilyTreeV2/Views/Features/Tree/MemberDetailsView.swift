@@ -349,21 +349,67 @@ struct MemberDetailsView: View {
                         iconColor: DS.Color.primary
                     )
 
-                    VStack(spacing: 0) {
-                        ForEach(rows.indices, id: \.self) { index in
-                            let row = rows[index]
-                            infoRow(icon: row.icon, label: row.label, value: row.value, color: row.color)
-                            if index < rows.count - 1 {
-                                Divider()
-                                    .padding(.leading, 56)
+                    // للمتوفى مع ميلاد + وفاة فقط → تخطيط جنب بعض (يمين/يسار)
+                    let isDeceasedTwoCol = member.isDeceased == true
+                        && rows.count == 2
+                        && rows.contains(where: { $0.icon == "calendar" })
+                        && rows.contains(where: { $0.icon == "heart.slash.fill" })
+
+                    if isDeceasedTwoCol {
+                        HStack(spacing: 0) {
+                            if let birthRow = rows.first(where: { $0.icon == "calendar" }) {
+                                infoTile(row: birthRow)
+                            }
+                            Rectangle()
+                                .fill(DS.Color.textTertiary.opacity(0.2))
+                                .frame(width: 1, height: 64)
+                            if let deathRow = rows.first(where: { $0.icon == "heart.slash.fill" }) {
+                                infoTile(row: deathRow)
                             }
                         }
+                        .padding(.horizontal, DS.Spacing.md)
+                        .padding(.bottom, DS.Spacing.md)
+                    } else {
+                        VStack(spacing: 0) {
+                            ForEach(rows.indices, id: \.self) { index in
+                                let row = rows[index]
+                                infoRow(icon: row.icon, label: row.label, value: row.value, color: row.color)
+                                if index < rows.count - 1 {
+                                    Divider()
+                                        .padding(.leading, 56)
+                                }
+                            }
+                        }
+                        .padding(.horizontal, DS.Spacing.md)
+                        .padding(.bottom, DS.Spacing.md)
                     }
-                    .padding(.horizontal, DS.Spacing.md)
-                    .padding(.bottom, DS.Spacing.md)
                 }
             }
         }
+    }
+
+    /// خانة إيقونة + قيمة + label عمودياً — للتخطيط الأفقي ثنائي الأعمدة
+    private func infoTile(row: InfoRowData) -> some View {
+        VStack(spacing: DS.Spacing.xs) {
+            ZStack {
+                Circle()
+                    .fill(row.color.opacity(0.12))
+                    .frame(width: 38, height: 38)
+                Image(systemName: row.icon)
+                    .font(DS.Font.scaled(15, weight: .semibold))
+                    .foregroundColor(row.color)
+            }
+            Text(row.label)
+                .font(DS.Font.caption1)
+                .foregroundColor(DS.Color.textSecondary)
+            Text(row.value)
+                .font(DS.Font.calloutBold)
+                .foregroundColor(DS.Color.textPrimary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, DS.Spacing.md)
     }
 
     private struct InfoRowData {
