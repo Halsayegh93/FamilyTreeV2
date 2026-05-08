@@ -255,7 +255,7 @@ struct NotificationsCenterView: View {
                             icon: "checklist.unchecked",
                             label: L10n.t("تحديد", "Select"),
                             fg: DS.Color.accent,
-                            bg: DS.Color.accent.opacity(0.10)
+                            bg: .clear
                         ) {
                             withAnimation(DS.Anim.snappy) { isSelecting = true; selectedIds.removeAll() }
                             UISelectionFeedbackGenerator().selectionChanged()
@@ -268,7 +268,7 @@ struct NotificationsCenterView: View {
                             icon: "envelope.open.fill",
                             label: L10n.t("قراءة الكل", "Read All"),
                             fg: DS.Color.primary,
-                            bg: DS.Color.primary.opacity(0.10)
+                            bg: .clear
                         ) {
                             UINotificationFeedbackGenerator().notificationOccurred(.success)
                             Task { await notificationVM.markAllNotificationsAsRead() }
