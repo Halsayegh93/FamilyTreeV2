@@ -372,21 +372,12 @@ struct TreeView: View {
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: .openMemberInTree)) { note in
-                // فتح بطاقة عضو من الشيت الحالي + توجيه الشجرة لمكانه
+                // مزامنة الشجرة مع الشيت — التحريك فقط دون لمس selectedMember
+                // (الشيت يبقى مفتوح ومحتواه يتحدث داخلياً عبر currentMemberId)
                 guard let info = note.userInfo,
                       let memberId = info["memberId"] as? UUID,
                       let target = cachedMemberById[memberId] ?? memberVM.member(byId: memberId) else { return }
-                // 1. أغلق الشيت الحالي ليبدأ التحريك
-                selectedMember = nil
-                // 2. حرّك الشجرة لمكان العضو الجديد
                 selectMemberFromSearch(target)
-                // 3. أعد فتح الشيت للعضو الجديد بعد التحريك
-                Task { @MainActor in
-                    try? await Task.sleep(nanoseconds: 350_000_000)
-                    withAnimation(DS.Anim.snappy) {
-                        selectedMember = target
-                    }
-                }
             }
             .onReceive(NotificationCenter.default.publisher(for: .showKinshipPath)) { note in
                 guard let info = note.userInfo,

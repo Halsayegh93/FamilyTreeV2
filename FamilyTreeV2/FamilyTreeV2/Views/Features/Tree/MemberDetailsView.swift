@@ -479,16 +479,14 @@ struct MemberDetailsView: View {
                     VStack(spacing: 0) {
                         if let father = cachedFather {
                             Button {
-                                // إغلاق الشيت + توجيه الشجرة للأب + إعادة فتح الشيت
+                                // الشيت يبقى مفتوح — يتحدث محتواه + الشجرة تتزامن خلفه
                                 let fatherId = father.id
-                                dismiss()
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                                    NotificationCenter.default.post(
-                                        name: .openMemberInTree,
-                                        object: nil,
-                                        userInfo: ["memberId": fatherId]
-                                    )
-                                }
+                                currentMemberId = fatherId
+                                NotificationCenter.default.post(
+                                    name: .openMemberInTree,
+                                    object: nil,
+                                    userInfo: ["memberId": fatherId]
+                                )
                             } label: {
                                 familyRow(
                                     icon: "person.fill",
@@ -538,16 +536,14 @@ struct MemberDetailsView: View {
         return LazyVGrid(columns: columns, spacing: DS.Spacing.md) {
             ForEach(cachedChildren) { child in
                 Button {
-                    // إغلاق الشيت + توجيه الشجرة لمكان الابن + إعادة فتح الشيت تلقائياً
+                    // الشيت يبقى مفتوح — يتحدث محتواه + الشجرة تتزامن خلفه
                     let childId = child.id
-                    dismiss()
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                        NotificationCenter.default.post(
-                            name: .openMemberInTree,
-                            object: nil,
-                            userInfo: ["memberId": childId]
-                        )
-                    }
+                    currentMemberId = childId
+                    NotificationCenter.default.post(
+                        name: .openMemberInTree,
+                        object: nil,
+                        userInfo: ["memberId": childId]
+                    )
                 } label: {
                     childTileFirstName(child)
                 }
