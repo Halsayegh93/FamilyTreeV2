@@ -143,11 +143,13 @@ class AdminRequestViewModel: ObservableObject {
             }
 
             let memberName = payload.targetMemberName ?? payload.newMemberName ?? ""
+            let actionLabelAr = payload.resolvedAction?.arabicLabel ?? payload.action
+            let actionLabelEn = payload.resolvedAction?.englishLabel ?? payload.action
             await notificationVM?.notifyAdminsWithPush(
                 title: L10n.t("طلب تعديل شجرة العائلة", "Family Tree Edit Request"),
                 body: L10n.t(
-                    "طلب تعديل: \(payload.action) — \(memberName)",
-                    "Edit request: \(payload.action) — \(memberName)"
+                    "طلب \(actionLabelAr) — \(memberName)",
+                    "\(actionLabelEn) request — \(memberName)"
                 ),
                 kind: NotificationKind.treeEdit.rawValue,
                 requestId: requestId,
@@ -187,16 +189,20 @@ class AdminRequestViewModel: ObservableObject {
         let payload = request.treeEditPayload
 
         optimisticRemove(from: &treeEditRequests, id: request.id, apiWork: { [weak self] in
+            guard let self = self else { return }
             do {
-                // 1. Perform actual tree edit based on action type
-                if let payload = payload {
-                    switch payload.action {
-                    case "تعديل اسم":
+                let resolvedAction = payload?.resolvedAction
+                var notifBody = L10n.t("تم قبول طلب تعديل الشجرة", "Your tree edit request was approved")
+
+                if let payload = payload, let action = resolvedAction {
+                    switch action {
+                    case .editName:
                         if let targetId = payload.targetMemberId,
-                           let newName = payload.newName, !newName.isEmpty {
+                           let newName = payload.newName?.trimmingCharacters(in: .whitespacesAndNewlines),
+                           !newName.isEmpty {
                             let nameParts = newName.split(whereSeparator: \.isWhitespace).map(String.init)
                             let newFirstName = nameParts.first ?? newName
-                            try await self?.supabase
+                            try await self.supabase
                                 .from("profiles")
                                 .update([
                                     "full_name": AnyEncodable(newName),
@@ -204,67 +210,108 @@ class AdminRequestViewModel: ObservableObject {
                                 ])
                                 .eq("id", value: targetId)
                                 .execute()
+                            notifBody = L10n.t(
+                                "تم تغيير الاسم إلى: \(newName)",
+                                "Name changed to: \(newName)"
+                            )
                             Log.info("[TreeEdit] Name updated: \(newName)")
                         }
 
-                    case "حذف":
+                    case .editPhone:
+                        if let targetId = payload.targetMemberId,
+                           let newPhone = payload.newPhone, !newPhone.isEmpty {
+                            try await self.supabase
+                                .from("profiles")
+                                .update(["phone_number": AnyEncodable(newPhone)])
+                                .eq("id", value: targetId)
+                                .execute()
+                            notifBody = L10n.t(
+                                "تم تحديث رقم الهاتف",
+                                "Phone number updated"
+                            )
+                            Log.info("[TreeEdit] Phone updated for: \(targetId)")
+                        }
+
+                    case .deceased:
                         if let targetId = payload.targetMemberId {
-                            try await self?.supabase
+                            var update: [String: AnyEncodable] = ["is_deceased": AnyEncodable(true)]
+                            if let dateStr = payload.deathDate, !dateStr.isEmpty {
+                                update["death_date"] = AnyEncodable(dateStr)
+                            }
+                            try await self.supabase
+                                .from("profiles")
+                                .update(update)
+                                .eq("id", value: targetId)
+                                .execute()
+                            notifBody = L10n.t(
+                                "تم تأكيد حالة الوفاة",
+                                "Deceased status confirmed"
+                            )
+                            Log.info("[TreeEdit] Deceased marked: \(targetId)")
+                        }
+
+                    case .delete:
+                        if let targetId = payload.targetMemberId {
+                            try await self.supabase
                                 .from("profiles")
                                 .update(["is_hidden_from_tree": AnyEncodable(true)])
                                 .eq("id", value: targetId)
                                 .execute()
+                            notifBody = L10n.t(
+                                "تم قبول طلب الحذف من الشجرة",
+                                "Your removal request was approved"
+                            )
                             Log.info("[TreeEdit] Member hidden from tree: \(targetId)")
                         }
 
-                    case "إضافة":
-                        // Admin needs to add manually — context provided in notification
-                        Log.info("[TreeEdit] Add request approved — admin should add manually")
+                    case .add:
+                        if let parentId = payload.parentMemberId,
+                           let newMemberName = payload.newMemberName?.trimmingCharacters(in: .whitespacesAndNewlines),
+                           !newMemberName.isEmpty {
+                            let newId = UUID()
+                            let nameParts = newMemberName.split(whereSeparator: \.isWhitespace).map(String.init)
+                            let firstName = nameParts.first ?? newMemberName
 
-                    default:
-                        break
+                            let parentMember = self.memberVM?.member(byId: UUID(uuidString: parentId) ?? UUID())
+                            let combinedFullName = parentMember.map { "\(firstName) \($0.fullName)" } ?? newMemberName
+
+                            let sonData: [String: AnyEncodable] = [
+                                "id": AnyEncodable(newId.uuidString),
+                                "first_name": AnyEncodable(firstName),
+                                "full_name": AnyEncodable(combinedFullName),
+                                "father_id": AnyEncodable(parentId),
+                                "role": AnyEncodable("member"),
+                                "status": AnyEncodable("active"),
+                                "is_phone_hidden": AnyEncodable(true),
+                                "sort_order": AnyEncodable(0)
+                            ]
+                            try await self.supabase.from("profiles").insert(sonData).execute()
+
+                            let parentName = payload.parentMemberName ?? parentMember?.fullName ?? ""
+                            notifBody = L10n.t(
+                                "تم إضافة الابن: «\(firstName)» لـ: «\(parentName)»",
+                                "Son added: «\(firstName)» to: «\(parentName)»"
+                            )
+                            Log.info("[TreeEdit] Member added: \(combinedFullName)")
+                        }
                     }
+                } else if let legacyAction = payload?.action {
+                    // Backwards compat for v2 strings without resolved action
+                    Log.info("[TreeEdit] Legacy/unmapped action: \(legacyAction)")
                 }
 
-                // 2. Mark request as approved
-                try await self?.supabase
+                try await self.supabase
                     .from("admin_requests")
                     .update(["status": AnyEncodable(ApprovalStatus.approved.rawValue)])
                     .eq("id", value: request.id.uuidString)
                     .execute()
 
-                // 3. Notify requester with action-specific message
-                let actionDesc = payload?.action ?? request.newValue ?? ""
-                let notifBody: String
-                switch payload?.action {
-                case "تعديل اسم":
-                    let newName = payload?.newName ?? ""
-                    notifBody = L10n.t(
-                        "تم تغيير الاسم إلى: \(newName)",
-                        "Name changed to: \(newName)"
-                    )
-                case "حذف":
-                    notifBody = L10n.t(
-                        "تم قبول طلب الحذف من الشجرة",
-                        "Your removal request was approved"
-                    )
-                case "إضافة":
-                    let childName = payload?.newMemberName ?? ""
-                    let parentName = payload?.parentMemberName ?? ""
-                    notifBody = L10n.t(
-                        "تم إضافة الابن: «\(childName)» لـ: «\(parentName)»",
-                        "Son added: «\(childName)» to: «\(parentName)»"
-                    )
-                default:
-                    notifBody = L10n.t("تم قبول طلب تعديل الشجرة", "Your tree edit request was approved")
-                }
-
-                await self?.notificationVM?.sendNotification(
+                await self.notificationVM?.sendNotification(
                     title: L10n.t("تم قبول طلبك", "Your Request Was Approved"),
                     body: notifBody,
                     targetMemberIds: [request.requesterId]
                 )
-                Log.info("[TreeEdit] Approved: \(actionDesc)")
+                Log.info("[TreeEdit] Approved: \(payload?.action ?? request.newValue ?? "")")
             } catch {
                 Log.error("[TreeEdit] Approve failed: \(error)")
             }
@@ -272,6 +319,65 @@ class AdminRequestViewModel: ObservableObject {
             await self?.fetchTreeEditRequests(force: true)
             await self?.memberVM?.fetchAllMembers(force: true)
         })
+    }
+
+    /// تسجيل تعديل أدمن مباشر في admin_requests كسجل audit (status='approved' فوراً).
+    /// لا يطلق إشعارات للمستخدمين — فقط للسجل.
+    func logAdminDirectEdit(payload: TreeEditPayload) async {
+        guard let user = currentUser else { return }
+        do {
+            var directPayload = payload
+            if directPayload.isAdminDirectEdit != true {
+                directPayload = TreeEditPayload(
+                    v: payload.v,
+                    action: payload.action,
+                    targetMemberId: payload.targetMemberId,
+                    targetMemberName: payload.targetMemberName,
+                    newName: payload.newName,
+                    newPhone: payload.newPhone,
+                    deathDate: payload.deathDate,
+                    parentMemberId: payload.parentMemberId,
+                    parentMemberName: payload.parentMemberName,
+                    newMemberName: payload.newMemberName,
+                    reason: payload.reason,
+                    notes: payload.notes,
+                    isAdminDirectEdit: true
+                )
+            }
+
+            let jsonData = try JSONEncoder().encode(directPayload)
+            let jsonString = String(data: jsonData, encoding: .utf8) ?? ""
+
+            let targetId: String = directPayload.targetMemberId
+                ?? directPayload.parentMemberId
+                ?? user.id.uuidString
+
+            let logEntry: [String: AnyEncodable] = [
+                "id": AnyEncodable(UUID().uuidString),
+                "member_id": AnyEncodable(targetId),
+                "requester_id": AnyEncodable(user.id.uuidString),
+                "request_type": AnyEncodable(RequestType.treeEdit.rawValue),
+                "status": AnyEncodable(ApprovalStatus.approved.rawValue),
+                "new_value": AnyEncodable(directPayload.action),
+                "details": AnyEncodable(jsonString)
+            ]
+
+            do {
+                try await supabase.from("admin_requests").insert(logEntry).execute()
+            } catch {
+                if ErrorHelper.isMissingColumn(error, column: "new_value") {
+                    var fallback = logEntry
+                    fallback.removeValue(forKey: "new_value")
+                    try await supabase.from("admin_requests").insert(fallback).execute()
+                } else {
+                    throw error
+                }
+            }
+
+            Log.info("[AdminAudit] Direct edit logged: \(directPayload.action)")
+        } catch {
+            Log.error("[AdminAudit] Failed to log direct edit: \(error.localizedDescription)")
+        }
     }
 
     func rejectTreeEditRequest(request: AdminRequest, reason: String? = nil) async {

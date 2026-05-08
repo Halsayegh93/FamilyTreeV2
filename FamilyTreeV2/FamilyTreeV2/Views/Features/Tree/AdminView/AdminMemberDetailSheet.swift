@@ -1192,6 +1192,8 @@ struct AdminMemberDetailSheet: View {
             let newKey = capturedBioStations.map { "\($0.year ?? "")|\($0.title)|\($0.details)" }.joined(separator: ";")
             return oldKey != newKey
         }()
+        let deceasedJustMarked = capturedIsDeceased && !(member.isDeceased ?? false)
+        let auditMemberName = member.fullName
         let childrenOrderChanged: Bool = {
             let originalChildren = memberVM.allMembers
                 .filter { $0.fatherId == capturedMemberId }
@@ -1300,6 +1302,42 @@ struct AdminMemberDetailSheet: View {
                     updatedChildren[i].sortOrder = i
                 }
                 await memberVM.updateChildrenOrder(for: capturedMemberId, newOrder: updatedChildren)
+            }
+
+            // Audit log: تسجيل التعديلات المباشرة في admin_requests كسجل (status='approved')
+            if nameChanged {
+                await adminRequestVM.logAdminDirectEdit(payload: TreeEditPayload.make(
+                    action: .editName,
+                    targetMemberId: capturedMemberId.uuidString,
+                    targetMemberName: auditMemberName,
+                    newName: capturedFullName,
+                    isAdminDirectEdit: true
+                ))
+            }
+            if phoneChanged && !phoneRemoved && !capturedPhone.isEmpty {
+                let normalizedAudit = KuwaitPhone.normalizedForStorage(
+                    country: capturedPhoneCountry,
+                    rawLocalDigits: capturedPhone
+                ) ?? capturedPhone
+                await adminRequestVM.logAdminDirectEdit(payload: TreeEditPayload.make(
+                    action: .editPhone,
+                    targetMemberId: capturedMemberId.uuidString,
+                    targetMemberName: auditMemberName,
+                    newPhone: normalizedAudit,
+                    isAdminDirectEdit: true
+                ))
+            }
+            if deceasedJustMarked {
+                let auditFormatter = ISO8601DateFormatter()
+                auditFormatter.formatOptions = [.withFullDate]
+                let dateStr = capturedDeathDate.map { auditFormatter.string(from: $0) }
+                await adminRequestVM.logAdminDirectEdit(payload: TreeEditPayload.make(
+                    action: .deceased,
+                    targetMemberId: capturedMemberId.uuidString,
+                    targetMemberName: auditMemberName,
+                    deathDate: dateStr,
+                    isAdminDirectEdit: true
+                ))
             }
 
             // إشعار يوضح أي مدير عدّل + شنو عدّل

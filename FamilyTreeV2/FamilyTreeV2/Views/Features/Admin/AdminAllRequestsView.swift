@@ -835,19 +835,25 @@ struct AdminAllRequestsView: View {
                     }
                 }
             case .treeEdit:
+                treeRequestsBanner
                 selectAllButton(ids: adminRequestVM.treeEditRequests.compactMap { req -> UUID? in
-                    let action = req.treeEditPayload?.action ?? ""
+                    let action = req.treeEditPayload?.resolvedAction
                     if authVM.isAdmin { return req.id }
-                    if authVM.currentUser?.role == .monitor && (action == "تعديل اسم" || action == "حذف") { return req.id }
-                    if authVM.currentUser?.role == .supervisor && action == "إضافة" { return req.id }
+                    if authVM.currentUser?.role == .monitor,
+                       action == .editName || action == .editPhone || action == .deceased || action == .delete {
+                        return req.id
+                    }
+                    if authVM.currentUser?.role == .supervisor && action == .add { return req.id }
                     return nil
                 })
                 ForEach(adminRequestVM.treeEditRequests) { request in
-                    let action = request.treeEditPayload?.action ?? ""
+                    let action = request.treeEditPayload?.resolvedAction
                     let canApproveThis: Bool = {
                         if authVM.isAdmin { return true }
-                        if authVM.currentUser?.role == .monitor { return action == "تعديل اسم" || action == "حذف" }
-                        if authVM.currentUser?.role == .supervisor { return action == "إضافة" }
+                        if authVM.currentUser?.role == .monitor {
+                            return action == .editName || action == .editPhone || action == .deceased || action == .delete
+                        }
+                        if authVM.currentUser?.role == .supervisor { return action == .add }
                         return false
                     }()
                     if canApproveThis {
@@ -965,6 +971,50 @@ struct AdminAllRequestsView: View {
         .scrollContentBackground(.hidden)
         .id(selectedTab) // إعادة رسم سريعة عند تغيير التاب
         .animation(.snappy(duration: 0.2), value: selectedTab)
+    }
+
+    // MARK: - Tree Edit Banner — Link to dedicated screen
+
+    @ViewBuilder
+    private var treeRequestsBanner: some View {
+        if !isSelectMode {
+            NavigationLink(destination: AdminTreeEditRequestsView()) {
+                HStack(spacing: DS.Spacing.md) {
+                    Image(systemName: "pencil.and.list.clipboard")
+                        .font(DS.Font.scaled(18, weight: .semibold))
+                        .foregroundColor(DS.Color.textOnPrimary)
+                        .frame(width: 36, height: 36)
+                        .background(DS.Color.accent)
+                        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm))
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(L10n.t("شاشة طلبات الشجرة الكاملة", "Full Tree Requests Screen"))
+                            .font(DS.Font.calloutBold)
+                            .foregroundColor(DS.Color.textPrimary)
+                        Text(L10n.t("عرض موسّع مع تابات لكل نوع", "Expanded view with tabs per type"))
+                            .font(DS.Font.caption1)
+                            .foregroundColor(DS.Color.textSecondary)
+                    }
+
+                    Spacer()
+
+                    Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
+                        .font(DS.Font.scaled(12, weight: .semibold))
+                        .foregroundColor(DS.Color.textTertiary)
+                }
+                .padding(DS.Spacing.md)
+                .background(DS.Color.accent.opacity(0.08))
+                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
+                .overlay(
+                    RoundedRectangle(cornerRadius: DS.Radius.md)
+                        .stroke(DS.Color.accent.opacity(0.25), lineWidth: 1)
+                )
+            }
+            .buttonStyle(.plain)
+            .listRowSeparator(.hidden)
+            .listRowBackground(Color.clear)
+            .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 8, trailing: 16))
+        }
     }
 
     // MARK: - Select Mode Helpers

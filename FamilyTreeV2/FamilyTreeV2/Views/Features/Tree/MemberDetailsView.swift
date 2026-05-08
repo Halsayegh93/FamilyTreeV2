@@ -36,6 +36,9 @@ struct MemberDetailsView: View {
     @State private var appeared = false
     @State private var kinshipText: String? = nil
 
+    @State private var showActionSheet = false
+    @State private var pendingEditAction: TreeEditAction? = nil
+
     var isAdminOrSupervisor: Bool {
         authVM.canModerate
     }
@@ -69,6 +72,13 @@ struct MemberDetailsView: View {
                                 .opacity(appeared ? 1 : 0)
                                 .offset(y: appeared ? 0 : 20)
 
+                            // زر طلب تعديل
+                            requestEditButton
+                                .padding(.horizontal, DS.Spacing.lg)
+                                .padding(.top, DS.Spacing.xxl)
+                                .opacity(appeared ? 1 : 0)
+                                .offset(y: appeared ? 0 : 20)
+
                             Spacer(minLength: 60)
                         }
                         .onAppear {
@@ -88,6 +98,15 @@ struct MemberDetailsView: View {
                     AdminMemberDetailSheet(member: member)
                         .id(memberVM.membersVersion)
                 }
+            }
+            .sheet(isPresented: $showActionSheet) {
+                MemberActionSheet(member: member) { action in
+                    pendingEditAction = action
+                }
+                .presentationDetents([.medium, .large])
+            }
+            .fullScreenCover(item: $pendingEditAction) { action in
+                TreeEditRequestView(member: member, action: action)
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .memberDeleted)) { notification in
@@ -252,8 +271,9 @@ struct MemberDetailsView: View {
                     }
                     .buttonStyle(DSScaleButtonStyle())
 
-                    // طلب إضافة صورة
-                    if member.avatarUrl == nil || (member.avatarUrl ?? "").isEmpty {
+                    // طلب إضافة صورة — للمتوفين فقط
+                    if member.isDeceased == true,
+                       member.avatarUrl == nil || (member.avatarUrl ?? "").isEmpty {
                         if isSubmittingPhotoSuggestion {
                             ProgressView().tint(DS.Color.primary)
                         } else {
@@ -480,6 +500,31 @@ struct MemberDetailsView: View {
                     "Delete biography?"
                 ))
             }
+        }
+    }
+
+    // MARK: - زر طلب تعديل
+
+    @ViewBuilder
+    private var requestEditButton: some View {
+        if !member.isDeleted {
+            Button {
+                showActionSheet = true
+            } label: {
+                HStack(spacing: DS.Spacing.sm) {
+                    Image(systemName: "pencil.and.list.clipboard")
+                        .font(DS.Font.scaled(15, weight: .semibold))
+                    Text(L10n.t("طلب تعديل بيانات هذا العضو", "Request edit for this member"))
+                        .font(DS.Font.calloutBold)
+                }
+                .foregroundColor(DS.Color.textOnPrimary)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, DS.Spacing.md)
+                .background(DS.Color.gradientPrimary)
+                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+                .dsSubtleShadow()
+            }
+            .buttonStyle(DSScaleButtonStyle())
         }
     }
 

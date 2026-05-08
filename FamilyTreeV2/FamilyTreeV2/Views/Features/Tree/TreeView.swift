@@ -58,7 +58,6 @@ struct TreeView: View {
     @EnvironmentObject var adminRequestVM: AdminRequestViewModel
     @Binding var selectedTab: Int
     @State private var showingNotifications = false
-    @State private var showingTreeEditRequest = false
     @State private var selectedMember: FamilyMember? = nil
     @State private var scrollTarget: UUID? = nil
     @State private var scrollCounter: Int = 0
@@ -261,11 +260,6 @@ struct TreeView: View {
                             icon: "leaf.fill",
                             backgroundGradient: DS.Color.gradientPrimary
                         ) {
-                            DSIconButton(icon: "pencil.line", iconSize: 16, iconColor: DS.Color.textOnPrimary, borderWidth: 1) {
-                                showingTreeEditRequest = true
-                            }
-                            .accessibilityLabel(L10n.t("طلب تعديل الشجرة", "Request tree edit"))
-
                             DSIconButton(icon: "location.fill", iconColor: DS.Color.textOnPrimary, borderWidth: 1) {
                                 if let currentUserID = authVM.currentUser?.id,
                                    let userMember = cachedMemberById[currentUserID] ?? memberVM.member(byId: currentUserID) {
@@ -340,9 +334,6 @@ struct TreeView: View {
             .sheet(item: $selectedMember) { member in
                 MemberDetailsView(member: member)
                     .presentationDetents([.medium, .large])
-            }
-            .fullScreenCover(isPresented: $showingTreeEditRequest) {
-                TreeEditRequestView()
             }
             .task {
                 if cachedVisibleMembers.isEmpty {
