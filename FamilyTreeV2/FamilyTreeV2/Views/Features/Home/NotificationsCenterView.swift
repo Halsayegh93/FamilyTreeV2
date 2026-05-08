@@ -410,7 +410,7 @@ struct NotificationsCenterView: View {
                 }
                 .foregroundColor(isSelected ? DS.Color.textOnPrimary : DS.Color.textSecondary)
                 .padding(.horizontal, 14)
-                .padding(.vertical, 8)
+                .padding(.vertical, 13)
                 .frame(maxWidth: .infinity)
             }
             .contentShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
