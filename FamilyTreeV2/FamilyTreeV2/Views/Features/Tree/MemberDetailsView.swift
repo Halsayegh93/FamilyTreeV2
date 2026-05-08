@@ -10,9 +10,9 @@ struct MemberDetailsView: View {
     private let initialMember: FamilyMember
     @State private var currentMemberId: UUID
 
-    /// بيانات العضو الحية من memberVM — تتحدث تلقائياً عند أي تعديل
+    /// بيانات العضو الحية من memberVM — تتحدث تلقائياً عند أي تعديل (dictionary lookup سريع)
     private var member: FamilyMember {
-        memberVM.allMembers.first(where: { $0.id == currentMemberId }) ?? initialMember
+        memberVM.member(byId: currentMemberId) ?? initialMember
     }
 
     init(member: FamilyMember) {
@@ -32,36 +32,35 @@ struct MemberDetailsView: View {
     @State private var showPhotoSuggestionSuccess = false
 
     @State private var showDeleteBioAlert = false
-    @State private var appeared = false
 
     @State private var showActionSheet = false
     @State private var pendingEditAction: TreeEditAction? = nil
     @State private var showChildrenSheet = false
 
-    // MARK: - Computed properties
+    // MARK: - Cached State (تحسب مرة عند تغيير العضو لتفادي إعادة الحساب O(n) في كل rebuild)
+
+    @State private var cachedFather: FamilyMember? = nil
+    @State private var cachedChildren: [FamilyMember] = []
+    @State private var cachedPendingRequests: [AdminRequest] = []
+    @State private var cachedBasicInfoRows: [InfoRowData] = []
 
     private var isViewingSelf: Bool {
         member.id == authVM.currentUser?.id
     }
 
-    private var father: FamilyMember? {
-        guard let fatherId = member.fatherId else { return nil }
-        return memberVM.allMembers.first(where: { $0.id == fatherId })
-    }
-
-    private var children: [FamilyMember] {
-        memberVM.allMembers
-            .filter { $0.fatherId == member.id && $0.status != .frozen && !($0.isHiddenFromTree) }
-            .sorted(by: { $0.sortOrder < $1.sortOrder })
-    }
-
-    private var pendingRequestsForMember: [AdminRequest] {
-        adminRequestVM.treeEditRequests.filter { $0.memberId == member.id }
-    }
-
     private var canSeePendingRequests: Bool {
         authVM.canModerate ||
-        pendingRequestsForMember.contains { $0.requesterId == authVM.currentUser?.id }
+        cachedPendingRequests.contains { $0.requesterId == authVM.currentUser?.id }
+    }
+
+    private func recomputeCache() {
+        let m = member
+        cachedFather = m.fatherId.flatMap { memberVM.member(byId: $0) }
+        cachedChildren = memberVM.allMembers
+            .filter { $0.fatherId == m.id && $0.status != .frozen && !$0.isHiddenFromTree }
+            .sorted(by: { $0.sortOrder < $1.sortOrder })
+        cachedPendingRequests = adminRequestVM.treeEditRequests.filter { $0.memberId == m.id }
+        cachedBasicInfoRows = computeBasicInfoRows(for: m)
     }
 
     var body: some View {
@@ -76,50 +75,37 @@ struct MemberDetailsView: View {
                         VStack(spacing: DS.Spacing.lg) {
                             compactHeroSection
                                 .padding(.top, DS.Spacing.xxxl)
-                                .opacity(appeared ? 1 : 0)
-                                .scaleEffect(appeared ? 1 : 0.95)
 
                             quickActionsRow
                                 .padding(.horizontal, DS.Spacing.lg)
-                                .opacity(appeared ? 1 : 0)
 
                             basicInfoCard
                                 .padding(.horizontal, DS.Spacing.lg)
-                                .opacity(appeared ? 1 : 0)
-                                .offset(y: appeared ? 0 : 15)
 
                             familyCard
                                 .padding(.horizontal, DS.Spacing.lg)
-                                .opacity(appeared ? 1 : 0)
-                                .offset(y: appeared ? 0 : 20)
 
                             bioCard
                                 .padding(.horizontal, DS.Spacing.lg)
-                                .opacity(appeared ? 1 : 0)
-                                .offset(y: appeared ? 0 : 25)
 
                             pendingRequestsCard
                                 .padding(.horizontal, DS.Spacing.lg)
-                                .opacity(appeared ? 1 : 0)
-                                .offset(y: appeared ? 0 : 30)
 
                             actionButtonsSection
                                 .padding(.horizontal, DS.Spacing.lg)
                                 .padding(.top, DS.Spacing.md)
-                                .opacity(appeared ? 1 : 0)
-                                .offset(y: appeared ? 0 : 35)
 
                             Spacer(minLength: 60)
-                        }
-                        .onAppear {
-                            guard !appeared else { return }
-                            withAnimation(DS.Anim.smooth.delay(0.05)) { appeared = true }
                         }
                     }
                 }
 
                 floatingCloseButton
             }
+            .onAppear { recomputeCache() }
+            .onChange(of: currentMemberId) { _ in recomputeCache() }
+            .onChange(of: memberVM.membersVersion) { _ in recomputeCache() }
+            .onChange(of: adminRequestVM.treeEditRequests.count) { _ in recomputeCache() }
             .toolbar(.hidden, for: .navigationBar)
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
             .sheet(isPresented: $showAdminControl) {
@@ -385,7 +371,7 @@ struct MemberDetailsView: View {
 
     @ViewBuilder
     private var basicInfoCard: some View {
-        let rows = basicInfoRows
+        let rows = cachedBasicInfoRows
         if !rows.isEmpty {
             DSCard(padding: 0) {
                 VStack(spacing: 0) {
@@ -419,11 +405,13 @@ struct MemberDetailsView: View {
         let color: Color
     }
 
-    private var basicInfoRows: [InfoRowData] {
+    private func computeBasicInfoRows(for m: FamilyMember) -> [InfoRowData] {
         var rows: [InfoRowData] = []
+        let isSelf = m.id == authVM.currentUser?.id
+        let canMod = authVM.canModerate
 
-        if let birth = member.birthDate, !birth.isEmpty {
-            let shouldHide = (member.isBirthDateHidden == true) && !isViewingSelf && !authVM.canModerate
+        if let birth = m.birthDate, !birth.isEmpty {
+            let shouldHide = (m.isBirthDateHidden == true) && !isSelf && !canMod
             rows.append(.init(
                 icon: "calendar",
                 label: L10n.t("الميلاد", "Birth"),
@@ -432,9 +420,9 @@ struct MemberDetailsView: View {
             ))
         }
 
-        if member.isDeceased != true,
-           let phone = member.phoneNumber, !phone.isEmpty {
-            let shouldHide = (member.isPhoneHidden == true) && !isViewingSelf && !authVM.canModerate
+        if m.isDeceased != true,
+           let phone = m.phoneNumber, !phone.isEmpty {
+            let shouldHide = (m.isPhoneHidden == true) && !isSelf && !canMod
             rows.append(.init(
                 icon: "phone.fill",
                 label: L10n.t("الهاتف", "Phone"),
@@ -443,8 +431,8 @@ struct MemberDetailsView: View {
             ))
         }
 
-        if member.isDeceased == true,
-           let death = member.deathDate, !death.isEmpty {
+        if m.isDeceased == true,
+           let death = m.deathDate, !death.isEmpty {
             rows.append(.init(
                 icon: "heart.slash.fill",
                 label: L10n.t("الوفاة", "Death"),
@@ -483,7 +471,7 @@ struct MemberDetailsView: View {
 
     @ViewBuilder
     private var familyCard: some View {
-        if father != nil || !children.isEmpty {
+        if cachedFather != nil || !cachedChildren.isEmpty {
             DSCard(padding: 0) {
                 VStack(spacing: 0) {
                     DSSectionHeader(
@@ -493,15 +481,9 @@ struct MemberDetailsView: View {
                     )
 
                     VStack(spacing: 0) {
-                        if let father = father {
+                        if let father = cachedFather {
                             Button {
-                                withAnimation(DS.Anim.snappy) {
-                                    currentMemberId = father.id
-                                    appeared = false
-                                }
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                    withAnimation(DS.Anim.smooth) { appeared = true }
-                                }
+                                currentMemberId = father.id
                             } label: {
                                 familyRow(
                                     icon: "person.fill",
@@ -512,12 +494,12 @@ struct MemberDetailsView: View {
                             }
                             .buttonStyle(.plain)
 
-                            if !children.isEmpty {
+                            if !cachedChildren.isEmpty {
                                 Divider().padding(.leading, 56)
                             }
                         }
 
-                        if !children.isEmpty {
+                        if !cachedChildren.isEmpty {
                             Button {
                                 showChildrenSheet = true
                             } label: {
@@ -539,7 +521,7 @@ struct MemberDetailsView: View {
     }
 
     private var childrenCountText: String {
-        let n = children.count
+        let n = cachedChildren.count
         if L10n.isArabic {
             if n == 1 { return "ابن واحد" }
             if n == 2 { return "ابنان" }
@@ -673,20 +655,20 @@ struct MemberDetailsView: View {
 
     @ViewBuilder
     private var pendingRequestsCard: some View {
-        if canSeePendingRequests && !pendingRequestsForMember.isEmpty {
+        if canSeePendingRequests && !cachedPendingRequests.isEmpty {
             DSCard(padding: 0) {
                 VStack(spacing: 0) {
                     DSSectionHeader(
                         title: L10n.t("طلبات معلقة", "Pending Requests"),
                         icon: "clock.badge.exclamationmark.fill",
-                        trailing: "\(pendingRequestsForMember.count)",
+                        trailing: "\(cachedPendingRequests.count)",
                         iconColor: DS.Color.warning
                     )
 
                     VStack(spacing: 0) {
-                        ForEach(pendingRequestsForMember.indices, id: \.self) { index in
-                            pendingRequestRow(pendingRequestsForMember[index])
-                            if index < pendingRequestsForMember.count - 1 {
+                        ForEach(cachedPendingRequests.indices, id: \.self) { index in
+                            pendingRequestRow(cachedPendingRequests[index])
+                            if index < cachedPendingRequests.count - 1 {
                                 Divider().padding(.leading, 56)
                             }
                         }
@@ -829,17 +811,11 @@ struct MemberDetailsView: View {
 
                 ScrollView(showsIndicators: false) {
                     LazyVStack(spacing: DS.Spacing.sm) {
-                        ForEach(children) { child in
+                        ForEach(cachedChildren) { child in
                             Button {
                                 showChildrenSheet = false
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                                    withAnimation(DS.Anim.snappy) {
-                                        currentMemberId = child.id
-                                        appeared = false
-                                    }
-                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                        withAnimation(DS.Anim.smooth) { appeared = true }
-                                    }
+                                    currentMemberId = child.id
                                 }
                             } label: {
                                 childRow(child)
