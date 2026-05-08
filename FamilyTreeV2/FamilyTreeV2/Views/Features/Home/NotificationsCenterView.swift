@@ -1089,23 +1089,24 @@ private struct WrappingHStack: View {
     let color: Color
     let lineLimit: Int?
 
-    /// يحدد لون الكبسولة حسب محتواها — إذا كانت صلاحية يستخدم لونها، وإلا اللون الأساسي
-    private func capsuleColor(for text: String) -> Color {
+    /// يحدد لون الكبسولة حسب محتواها — للأدوار فقط (الأسماء ما لها كبسولة)
+    private func roleColor(for text: String) -> Color? {
         let trimmed = text.trimmingCharacters(in: .whitespaces)
         switch trimmed {
         case "مدير", "Admin":       return FamilyMember.UserRole.admin.color
         case "مشرف", "Supervisor":  return FamilyMember.UserRole.supervisor.color
+        case "مراقب", "Monitor":    return FamilyMember.UserRole.monitor.color
         case "عضو", "Member":       return FamilyMember.UserRole.member.color
-        default:                     return DS.Color.primary
+        default:                     return nil
         }
     }
 
     var body: some View {
-        // عرض النصوص مع كبسولات الأسماء
+        // الأدوار تبقى في كبسولات ملوّنة، الأسماء bold بدون كبسولة
         FlowLayout(spacing: 4) {
             ForEach(segments) { segment in
-                if segment.isCapsule {
-                    let capColor = capsuleColor(for: segment.text)
+                if segment.isCapsule, let capColor = roleColor(for: segment.text) {
+                    // كبسولة للأدوار فقط
                     Text(segment.text)
                         .font(font).bold()
                         .foregroundColor(capColor)
@@ -1114,6 +1115,12 @@ private struct WrappingHStack: View {
                         .background(capColor.opacity(0.12))
                         .clipShape(Capsule())
                         .overlay(Capsule().stroke(capColor.opacity(0.25), lineWidth: 0.5))
+                } else if segment.isCapsule {
+                    // اسم شخص — bold فقط بدون كبسولة
+                    Text(segment.text)
+                        .font(font).bold()
+                        .foregroundColor(color)
+                        .padding(.vertical, 3)
                 } else {
                     Text(segment.text)
                         .font(font)
