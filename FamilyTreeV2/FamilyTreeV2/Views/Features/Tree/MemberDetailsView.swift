@@ -230,54 +230,45 @@ struct MemberDetailsView: View {
                     .blur(radius: 28)
                     .opacity(0.35)
 
-                avatarContent
-                    .frame(width: 130, height: 130)
-                    .clipShape(Circle())
-                    .overlay(
-                        Circle().stroke(
-                            LinearGradient(
-                                colors: [DS.Color.primary, DS.Color.accent],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            lineWidth: 3
+                ZStack {
+                    avatarContent
+                        .frame(width: 130, height: 130)
+                        .clipShape(Circle())
+                        .overlay(
+                            Circle().stroke(
+                                LinearGradient(
+                                    colors: [DS.Color.primary, DS.Color.accent],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 3
+                            )
                         )
-                    )
-                    .dsGlowShadow()
-                    .onTapGesture { showAvatarPreview = true }
-            }
+                        .dsGlowShadow()
+                        .onTapGesture { showAvatarPreview = true }
 
-            VStack(spacing: DS.Spacing.xs) {
-                Text(member.fullName)
-                    .font(DS.Font.title2)
-                    .fontWeight(.bold)
-                    .foregroundColor(DS.Color.textPrimary)
-                    .multilineTextAlignment(.center)
-                    .lineLimit(2)
-                    .padding(.horizontal, DS.Spacing.lg)
-
-                HStack(spacing: DS.Spacing.xs) {
-                    DSRoleBadge(
-                        title: member.roleName,
-                        color: (member.isDeceased == true ? DS.Color.textTertiary : member.roleColor).opacity(0.7)
-                    )
-
+                    // علامة وفاة (نفس نمط الأبناء)
                     if member.isDeceased == true {
-                        HStack(spacing: 3) {
-                            Image(systemName: "heart.slash")
-                                .font(DS.Font.scaled(10, weight: .semibold))
-                            Text(L10n.t("متوفى", "Deceased"))
-                                .font(DS.Font.caption2)
-                                .fontWeight(.semibold)
-                        }
-                        .foregroundColor(DS.Color.textTertiary)
-                        .padding(.horizontal, DS.Spacing.sm)
-                        .padding(.vertical, 3)
-                        .background(DS.Color.textTertiary.opacity(0.12))
-                        .clipShape(Capsule())
+                        Circle()
+                            .fill(DS.Color.background)
+                            .frame(width: 36, height: 36)
+                            .overlay(
+                                Image(systemName: "heart.slash.fill")
+                                    .font(DS.Font.scaled(18, weight: .bold))
+                                    .foregroundColor(DS.Color.textTertiary)
+                            )
+                            .offset(x: 48, y: 48)
                     }
                 }
             }
+
+            Text(member.fullName)
+                .font(DS.Font.title2)
+                .fontWeight(.bold)
+                .foregroundColor(DS.Color.textPrimary)
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+                .padding(.horizontal, DS.Spacing.lg)
         }
     }
 
@@ -289,9 +280,8 @@ struct MemberDetailsView: View {
         let showPhotoAdd = member.isDeceased == true
             && (member.avatarUrl == nil || (member.avatarUrl ?? "").isEmpty)
             && !isViewingSelf
-        let showFavorite = !isViewingSelf && !member.isDeleted
 
-        if showKinship || showPhotoAdd || showFavorite {
+        if showKinship || showPhotoAdd {
             HStack(spacing: DS.Spacing.sm) {
                 if showKinship {
                     quickPill(
@@ -323,24 +313,6 @@ struct MemberDetailsView: View {
                         }
                         .buttonStyle(DSScaleButtonStyle())
                     }
-                }
-
-                if showFavorite {
-                    Button { FavoritesManager.shared.toggle(member.id) } label: {
-                        let isFav = FavoritesManager.shared.isFavorite(member.id)
-                        HStack(spacing: DS.Spacing.xs) {
-                            Image(systemName: isFav ? "heart.fill" : "heart")
-                                .font(DS.Font.scaled(11, weight: .semibold))
-                            Text(L10n.t(isFav ? "مفضل" : "مفضلة", isFav ? "Favorited" : "Favorite"))
-                                .font(DS.Font.scaled(12, weight: .bold))
-                        }
-                        .foregroundColor(isFav ? DS.Color.error : DS.Color.textSecondary)
-                        .padding(.horizontal, DS.Spacing.md)
-                        .padding(.vertical, DS.Spacing.xs + 2)
-                        .background((isFav ? DS.Color.error : DS.Color.textSecondary).opacity(0.10))
-                        .clipShape(Capsule())
-                    }
-                    .buttonStyle(DSScaleButtonStyle())
                 }
             }
         }
