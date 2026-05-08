@@ -435,17 +435,17 @@ class AdminRequestViewModel: ObservableObject {
                 if memberName.isEmpty {
                     bodyAr = reasonText.isEmpty
                         ? "تم رفض طلب \(actionAr)"
-                        : "تم رفض طلب \(actionAr): \(reasonText)"
+                        : "تم رفض طلب \(actionAr)\nالسبب: \(reasonText)"
                     bodyEn = reasonText.isEmpty
                         ? "Your \(actionEn) request was rejected"
-                        : "Your \(actionEn) request was rejected: \(reasonText)"
+                        : "Your \(actionEn) request was rejected\nReason: \(reasonText)"
                 } else {
                     bodyAr = reasonText.isEmpty
-                        ? "تم رفض طلب \(actionAr) لـ «\(memberName)»"
-                        : "تم رفض طلب \(actionAr) لـ «\(memberName)»: \(reasonText)"
+                        ? "تم رفض طلب \(actionAr)\n«\(memberName)»"
+                        : "تم رفض طلب \(actionAr)\n«\(memberName)»\nالسبب: \(reasonText)"
                     bodyEn = reasonText.isEmpty
-                        ? "Your \(actionEn) request for «\(memberName)» was rejected"
-                        : "Your \(actionEn) request for «\(memberName)» was rejected: \(reasonText)"
+                        ? "Your \(actionEn) request was rejected\n«\(memberName)»"
+                        : "Your \(actionEn) request was rejected\n«\(memberName)»\nReason: \(reasonText)"
                 }
 
                 await self?.notificationVM?.sendNotification(

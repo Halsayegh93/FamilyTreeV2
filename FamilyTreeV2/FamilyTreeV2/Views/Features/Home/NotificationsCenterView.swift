@@ -1036,19 +1036,39 @@ struct NotificationsCenterView: View {
     }
 
     /// Renders body text, wrapping «name» delimiters in styled capsules.
+    /// Supports \n for hard line breaks (each line becomes its own row).
     @ViewBuilder
     private func richBodyView(_ body: String, font: Font, color: Color, lineLimit: Int? = nil) -> some View {
         let cleaned = cleanBody(body)
-        let segments = BodySegment.parse(cleaned)
+        let lines = cleaned.components(separatedBy: "\n")
 
-        if segments.contains(where: \.isCapsule) {
-            WrappingHStack(segments: segments, font: font, color: color, lineLimit: lineLimit)
+        if lines.count > 1 {
+            VStack(alignment: .leading, spacing: 2) {
+                ForEach(lines.indices, id: \.self) { idx in
+                    let line = lines[idx]
+                    let segs = BodySegment.parse(line)
+                    if segs.contains(where: \.isCapsule) {
+                        WrappingHStack(segments: segs, font: font, color: color, lineLimit: lineLimit)
+                    } else {
+                        Text(line)
+                            .font(font)
+                            .foregroundColor(color)
+                            .lineLimit(lineLimit)
+                            .multilineTextAlignment(.leading)
+                    }
+                }
+            }
         } else {
-            Text(cleaned)
-                .font(font)
-                .foregroundColor(color)
-                .lineLimit(lineLimit)
-                .multilineTextAlignment(.leading)
+            let segments = BodySegment.parse(cleaned)
+            if segments.contains(where: \.isCapsule) {
+                WrappingHStack(segments: segments, font: font, color: color, lineLimit: lineLimit)
+            } else {
+                Text(cleaned)
+                    .font(font)
+                    .foregroundColor(color)
+                    .lineLimit(lineLimit)
+                    .multilineTextAlignment(.leading)
+            }
         }
     }
 
