@@ -347,20 +347,52 @@ struct LoginView: View {
 
             statusMessage
 
-            // إعادة طلب الرمز
-            Button(action: {
-                authVM.otpCode = ""; otpText = ""
-                authVM.otpErrorMessage = nil
-                authVM.otpStatusMessage = ""
-                otpTimeRemaining = 300
-                Task { await authVM.sendOTP() }
-            }) {
-                Text(L10n.t("إعادة طلب الرمز", "Resend Code"))
-                    .font(DS.Font.callout)
-                    .fontWeight(.semibold)
+            // إعادة طلب الرمز — SMS أو واتساب
+            HStack(spacing: DS.Spacing.md) {
+                Button(action: {
+                    authVM.otpCode = ""; otpText = ""
+                    authVM.otpErrorMessage = nil
+                    authVM.otpStatusMessage = ""
+                    otpTimeRemaining = 300
+                    Task { await authVM.sendOTP(channel: .sms) }
+                }) {
+                    HStack(spacing: DS.Spacing.xs) {
+                        Image(systemName: "message.fill")
+                            .font(DS.Font.scaled(13, weight: .semibold))
+                        Text(L10n.t("إعادة عبر SMS", "Resend via SMS"))
+                            .font(DS.Font.footnote)
+                            .fontWeight(.semibold)
+                    }
                     .foregroundStyle(DS.Color.primary)
+                    .padding(.horizontal, DS.Spacing.md)
+                    .padding(.vertical, DS.Spacing.xs + 2)
+                    .background(DS.Color.primary.opacity(0.10))
+                    .clipShape(Capsule())
+                }
+                .disabled(authVM.isLoading)
+
+                Button(action: {
+                    authVM.otpCode = ""; otpText = ""
+                    authVM.otpErrorMessage = nil
+                    authVM.otpStatusMessage = ""
+                    otpTimeRemaining = 300
+                    Task { await authVM.sendOTP(channel: .whatsapp) }
+                }) {
+                    HStack(spacing: DS.Spacing.xs) {
+                        Image(systemName: "bubble.left.and.bubble.right.fill")
+                            .font(DS.Font.scaled(13, weight: .semibold))
+                        Text(L10n.t("إرسال عبر واتساب", "Send via WhatsApp"))
+                            .font(DS.Font.footnote)
+                            .fontWeight(.semibold)
+                    }
+                    .foregroundStyle(DS.Color.success)
+                    .padding(.horizontal, DS.Spacing.md)
+                    .padding(.vertical, DS.Spacing.xs + 2)
+                    .background(DS.Color.success.opacity(0.10))
+                    .clipShape(Capsule())
+                }
+                .disabled(authVM.isLoading)
             }
-            .disabled(authVM.isLoading)
         }
         .padding(DS.Spacing.lg)
         .background(DS.Color.surface)

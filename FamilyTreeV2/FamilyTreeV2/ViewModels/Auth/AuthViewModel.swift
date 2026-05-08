@@ -671,7 +671,34 @@ class AuthViewModel: ObservableObject {
     
     // MARK: - OTP Send / Verify
 
-    func sendOTP() async {
+    /// قناة إرسال رمز التحقق — تُمرَّر إلى Twilio Verify عبر Supabase Auth.
+    enum OTPChannel {
+        case sms
+        case whatsapp
+
+        var supabaseChannel: MessagingChannel {
+            switch self {
+            case .sms: return .sms
+            case .whatsapp: return .whatsapp
+            }
+        }
+
+        var arabicLabel: String {
+            switch self {
+            case .sms: return "SMS"
+            case .whatsapp: return "واتساب"
+            }
+        }
+
+        var englishLabel: String {
+            switch self {
+            case .sms: return "SMS"
+            case .whatsapp: return "WhatsApp"
+            }
+        }
+    }
+
+    func sendOTP(channel: OTPChannel = .sms) async {
         let cleanPhone = normalizePhoneDigits(phoneNumber)
         let cleanDialingCode = normalizeDialingCode(dialingCode)
         guard cleanPhone.count >= 6 else {
@@ -690,7 +717,12 @@ class AuthViewModel: ObservableObject {
         self.dialingCode = cleanDialingCode
         self.isLoading = true
         self.otpErrorMessage = nil
-        self.otpStatusMessage = L10n.t("جاري إرسال رمز التحقق...", "Sending verification code...")
+        let channelAr = channel.arabicLabel
+        let channelEn = channel.englishLabel
+        self.otpStatusMessage = L10n.t(
+            "جاري إرسال رمز التحقق عبر \(channelAr)...",
+            "Sending verification code via \(channelEn)..."
+        )
 
         // فحص الحظر قبل إرسال OTP
         if await isPhoneBanned(finalPhone) {
@@ -707,20 +739,24 @@ class AuthViewModel: ObservableObject {
 
         for attempt in 1...maxAttempts {
             do {
-                Log.info("[OTP] محاولة \(attempt)/\(maxAttempts) — إرسال OTP لـ \(finalPhone)")
+                Log.info("[OTP] محاولة \(attempt)/\(maxAttempts) — إرسال OTP عبر \(channelEn) لـ \(finalPhone)")
                 try await supabase.auth.signInWithOTP(
                     phone: finalPhone,
+                    channel: channel.supabaseChannel,
                     shouldCreateUser: true
                 )
 
-                    Log.info("[OTP] ✅ تم إرسال OTP بنجاح")
-                    withAnimation(.spring()) {
-                        self.isOtpSent = true
-                    }
-                    self.otpErrorMessage = nil
-                    self.otpStatusMessage = L10n.t("تم إرسال الرمز عبر SMS", "Code sent via SMS")
-                    self.isLoading = false
-                    return
+                Log.info("[OTP] ✅ تم إرسال OTP بنجاح عبر \(channelEn)")
+                withAnimation(.spring()) {
+                    self.isOtpSent = true
+                }
+                self.otpErrorMessage = nil
+                self.otpStatusMessage = L10n.t(
+                    "تم إرسال الرمز عبر \(channelAr)",
+                    "Code sent via \(channelEn)"
+                )
+                self.isLoading = false
+                return
             } catch {
                 let raw = "\(error) \(error.localizedDescription)".lowercased()
                 let isRateLimited = raw.contains("429") || raw.contains("rate")
@@ -735,11 +771,11 @@ class AuthViewModel: ObservableObject {
             }
         }
 
-        // SMS فشل
+        // فشل الإرسال
         self.otpStatusMessage = ""
         self.otpErrorMessage = L10n.t(
-            "تعذر إرسال رمز التحقق. حاول مرة أخرى.",
-            "Unable to send verification code. Please try again."
+            "تعذر إرسال رمز التحقق عبر \(channelAr). جرّب قناة أخرى أو حاول لاحقاً.",
+            "Unable to send code via \(channelEn). Try another channel or later."
         )
 
         self.isLoading = false
