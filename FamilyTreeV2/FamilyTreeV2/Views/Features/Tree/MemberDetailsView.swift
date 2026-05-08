@@ -443,25 +443,6 @@ struct MemberDetailsView: View {
             ))
         }
 
-        if let gender = member.gender, !gender.isEmpty {
-            let isMale = gender == "male"
-            rows.append(.init(
-                icon: isMale ? "person.fill" : "person.fill.badge.plus",
-                label: L10n.t("الجنس", "Gender"),
-                value: isMale ? L10n.t("ذكر", "Male") : L10n.t("أنثى", "Female"),
-                color: DS.Color.info
-            ))
-        }
-
-        if member.isMarried == true && member.isDeceased != true {
-            rows.append(.init(
-                icon: "heart.circle.fill",
-                label: L10n.t("الحالة", "Status"),
-                value: L10n.t("متزوج", "Married"),
-                color: DS.Color.error
-            ))
-        }
-
         if member.isDeceased == true,
            let death = member.deathDate, !death.isEmpty {
             rows.append(.init(
