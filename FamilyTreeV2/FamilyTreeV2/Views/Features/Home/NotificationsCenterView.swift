@@ -291,7 +291,6 @@ struct NotificationsCenterView: View {
             .padding(.horizontal, DS.Spacing.lg)
         }
         .padding(.vertical, DS.Spacing.sm)
-        .background(DS.Color.surfaceElevated.opacity(0.5))
         .overlay(alignment: .bottom) {
             Rectangle().fill(DS.Color.textTertiary.opacity(0.1)).frame(height: 0.5)
         }
@@ -355,14 +354,6 @@ struct NotificationsCenterView: View {
             )
         }
         .padding(3)
-        .background(
-            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                .fill(DS.Color.surfaceElevated.opacity(0.7))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                .stroke(DS.Color.textTertiary.opacity(0.1), lineWidth: 0.5)
-        )
         .fixedSize(horizontal: false, vertical: true)
         .dynamicTypeSize(...DynamicTypeSize.large)
     }
