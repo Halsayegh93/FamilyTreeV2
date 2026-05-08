@@ -227,11 +227,12 @@ class MemberViewModel: ObservableObject {
             let response: [FamilyMember] = try await supabase.from("profiles")
                 .select()
                 .eq("father_id", value: fatherId)
+                .eq("is_hidden_from_tree", value: false)
                 .order("sort_order", ascending: true)
                 .execute()
                 .value
-            
-            self.currentMemberChildren = response
+
+            self.currentMemberChildren = response.sortedForDisplay()
         } catch {
             Log.error("خطأ في جلب الأبناء: \(error)")
         }

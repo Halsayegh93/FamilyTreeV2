@@ -139,18 +139,18 @@ struct TreeView: View {
         // مجموعة الأعضاء اللي عندهم أبناء (آباء حقيقيين)
         let fatherIds = Set(visible.compactMap(\.fatherId))
 
-        let roots = staticSorted(visible.filter { member in
+        let roots = visible.filter { member in
             guard let fatherId = member.fatherId else {
                 // عضو بدون أب: يظهر كجذر فقط إذا عنده أبناء (جد/أب أصلي)
                 return fatherIds.contains(member.id)
             }
             return byId[fatherId] == nil
-        })
+        }.sortedForDisplay()
 
         let childrenMap = Dictionary(
             grouping: visible.compactMap { m in m.fatherId.map { (m, $0) } },
             by: { $0.1 }
-        ).mapValues { pairs in staticSorted(pairs.map(\.0)) }
+        ).mapValues { pairs in pairs.map(\.0).sortedForDisplay() }
 
         return TreeCache(
             visible: visible,
@@ -159,14 +159,6 @@ struct TreeView: View {
             childrenMap: childrenMap,
             ids: Set(visible.map(\.id))
         )
-    }
-
-    private static func staticSorted(_ members: [FamilyMember]) -> [FamilyMember] {
-        members.sorted { m1, m2 in
-            if m1.sortOrder != m2.sortOrder { return m1.sortOrder < m2.sortOrder }
-            if let b1 = m1.birthDate, let b2 = m2.birthDate, !b1.isEmpty, !b2.isEmpty { return b1 < b2 }
-            return m1.firstName < m2.firstName
-        }
     }
 
     /// تطبيق الكاش على @State — يحب يكون على MainActor.

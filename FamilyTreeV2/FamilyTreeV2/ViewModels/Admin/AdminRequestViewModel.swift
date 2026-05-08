@@ -271,6 +271,14 @@ class AdminRequestViewModel: ObservableObject {
         }, refresh: { [weak self] in
             await self?.fetchTreeEditRequests(force: true)
             await self?.memberVM?.fetchAllMembers(force: true)
+            // إزالة الابن من currentMemberChildren فوراً عند الحذف لينعكس في «حسابي» و«تعديل المدير»
+            if payload?.action == "حذف",
+               let targetIdString = payload?.targetMemberId,
+               let targetUUID = UUID(uuidString: targetIdString) {
+                await MainActor.run {
+                    self?.memberVM?.currentMemberChildren.removeAll { $0.id == targetUUID }
+                }
+            }
         })
     }
 
