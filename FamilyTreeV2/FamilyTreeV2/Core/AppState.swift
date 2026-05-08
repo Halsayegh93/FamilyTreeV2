@@ -39,7 +39,7 @@ class AppState: ObservableObject {
         member.configure(authVM: auth, notificationVM: notification)
         news.configure(authVM: auth, memberVM: member, notificationVM: notification)
         admin.configure(authVM: auth, memberVM: member, notificationVM: notification, newsVM: news)
-        projects.authVM = auth
+        projects.configure(authVM: auth, notificationVM: notification)
         story.configure(authVM: auth, memberVM: member, notificationVM: notification)
 
         // 3. Store references

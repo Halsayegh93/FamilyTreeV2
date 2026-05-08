@@ -37,6 +37,16 @@ private struct NotificationKindStyle {
         "story_pending":     .init(icon: "circle.dashed",                            gradient: DS.Color.gradientNeon,    color: DS.Color.neonCyan,    labelAr: "قصة معلقة",        labelEn: "Pending Story"),
         "story_approved":    .init(icon: "circle.fill",                              gradient: DS.Color.gradientCool,    color: DS.Color.info,        labelAr: "قصة معتمدة",      labelEn: "Story Approved"),
         "story_rejected":    .init(icon: "circle.fill",                              gradient: DS.Color.gradientCool,    color: DS.Color.info,        labelAr: "قصة مرفوضة",      labelEn: "Story Rejected"),
+        "photo_suggestion":  .init(icon: "camera.badge.ellipsis",                    gradient: DS.Color.gradientNeon,    color: DS.Color.neonCyan,    labelAr: "اقتراح صورة",     labelEn: "Photo Suggestion"),
+        "gallery_pending":   .init(icon: "photo.fill",                               gradient: DS.Color.gradientNeon,    color: DS.Color.neonCyan,    labelAr: "صورة معرض",        labelEn: "Gallery Photo"),
+        "gallery_approved":  .init(icon: "photo.fill",                               gradient: DS.Color.gradientCool,    color: DS.Color.success,     labelAr: "صورة معتمدة",      labelEn: "Photo Approved"),
+        "gallery_rejected":  .init(icon: "photo.fill",                               gradient: DS.Color.gradientWarm,    color: DS.Color.error,       labelAr: "صورة مرفوضة",      labelEn: "Photo Rejected"),
+        "diwaniya_pending":  .init(icon: "tent.fill",                                gradient: DS.Color.gradientOcean,   color: DS.Color.gridDiwaniya, labelAr: "ديوانية جديدة",   labelEn: "New Diwaniya"),
+        "diwaniya_approved": .init(icon: "tent.fill",                                gradient: DS.Color.gradientCool,    color: DS.Color.success,     labelAr: "ديوانية معتمدة",   labelEn: "Diwaniya Approved"),
+        "diwaniya_rejected": .init(icon: "tent.fill",                                gradient: DS.Color.gradientWarm,    color: DS.Color.error,       labelAr: "ديوانية مرفوضة",   labelEn: "Diwaniya Rejected"),
+        "project_pending":   .init(icon: "briefcase.fill",                           gradient: DS.Color.gradientAccent,  color: DS.Color.neonPurple,  labelAr: "مشروع جديد",       labelEn: "New Project"),
+        "project_approved":  .init(icon: "briefcase.fill",                           gradient: DS.Color.gradientCool,    color: DS.Color.success,     labelAr: "مشروع معتمد",      labelEn: "Project Approved"),
+        "project_rejected":  .init(icon: "briefcase.fill",                           gradient: DS.Color.gradientWarm,    color: DS.Color.error,       labelAr: "مشروع مرفوض",      labelEn: "Project Rejected"),
     ]
 
     private static let fallback = NotificationKindStyle(
@@ -408,7 +418,7 @@ struct NotificationsCenterView: View {
         .buttonStyle(.plain)
     }
 
-    /// أنواع الإشعارات الإدارية — المدير والمالك فقط يشوفونها
+    /// أنواع الإشعارات الإدارية — المدير والمالك فقط يشوفونها (تظهر في تاب "المستجدات")
     private let adminOnlyKinds: Set<String> = [
         NotificationKind.adminEdit.rawValue,
         NotificationKind.adminRequest.rawValue,
@@ -422,6 +432,24 @@ struct NotificationsCenterView: View {
         NotificationKind.adminEditAvatar.rawValue,
         NotificationKind.adminEditChildAdd.rawValue,
         NotificationKind.adminEditChildRemove.rawValue,
+        // طلبات الأعضاء
+        NotificationKind.deceasedReport.rawValue,
+        NotificationKind.childAdd.rawValue,
+        NotificationKind.phoneChange.rawValue,
+        NotificationKind.nameChange.rawValue,
+        NotificationKind.photoSuggestion.rawValue,
+        // معرض/قصص
+        NotificationKind.galleryPending.rawValue,
+        NotificationKind.storyPending.rawValue,
+        // ديوانيات/مشاريع
+        NotificationKind.diwaniyaPending.rawValue,
+        NotificationKind.projectPending.rawValue,
+        // أخبار وبلاغات
+        NotificationKind.newsAdd.rawValue,
+        NotificationKind.newsReport.rawValue,
+        NotificationKind.contactMessage.rawValue,
+        // إدارة الصلاحيات
+        NotificationKind.roleChange.rawValue,
     ]
 
     /// كل الإشعارات بعد تطبيق فلتر الإعدادات (الأنواع المخفية)
@@ -431,14 +459,33 @@ struct NotificationsCenterView: View {
         return all.filter { !hiddenKinds.contains($0.kind) }
     }
 
-    /// إشعار شخصي/إجرائي: موجه لي أو يحتاج موافقتي كمسؤول
+    /// إشعار شخصي/إجرائي: موجه لي أو يحتاج موافقتي كمسؤول (تاب "إشعاراتي")
     private func belongsToNotificationsTab(_ n: AppNotification) -> Bool {
         let myId = authVM.currentUser?.id
-        return n.targetMemberId == myId ||
-            n.kind == NotificationKind.adminRequest.rawValue ||
-            n.kind == NotificationKind.linkRequest.rawValue ||
-            n.kind == NotificationKind.newsReport.rawValue
+        // إشعار موجّه لي شخصياً
+        if n.targetMemberId == myId { return true }
+        // طلبات تحتاج موافقة الأدمن
+        return Self.pendingApprovalKinds.contains(n.kind)
     }
+
+    /// أنواع الطلبات اللي تحتاج موافقة الأدمن — تظهر في "إشعاراتي" للأدمن
+    private static let pendingApprovalKinds: Set<String> = [
+        NotificationKind.adminRequest.rawValue,
+        NotificationKind.linkRequest.rawValue,
+        NotificationKind.newsReport.rawValue,
+        NotificationKind.treeEdit.rawValue,
+        NotificationKind.deceasedReport.rawValue,
+        NotificationKind.childAdd.rawValue,
+        NotificationKind.phoneChange.rawValue,
+        NotificationKind.nameChange.rawValue,
+        NotificationKind.photoSuggestion.rawValue,
+        NotificationKind.galleryPending.rawValue,
+        NotificationKind.storyPending.rawValue,
+        NotificationKind.diwaniyaPending.rawValue,
+        NotificationKind.projectPending.rawValue,
+        NotificationKind.newsAdd.rawValue,
+        NotificationKind.contactMessage.rawValue,
+    ]
 
     /// مستجد: نشاط إداري/عام لا يدخل في تاب الإشعارات (يمنع التكرار بين التابين)
     private func belongsToActivityTab(_ n: AppNotification) -> Bool {

@@ -64,6 +64,13 @@ enum NotificationKind: String {
     case linkRequest = "link_request"
     case joinApproved = "join_approved"
     case accountActivated = "account_activated"
+    case roleChange = "role_change"
+    // طلبات الأعضاء (تحتاج موافقة)
+    case deceasedReport = "deceased_report"
+    case childAdd = "child_add"
+    case phoneChange = "phone_change"
+    case nameChange = "name_change"
+    case photoSuggestion = "photo_suggestion"
     // أخبار وقصص
     case newsAdd = "news_add"
     case newsPublished = "news_published"
@@ -71,6 +78,22 @@ enum NotificationKind: String {
     case newsLike = "news_like"
     case newsReport = "news_report"
     case storyPending = "story_pending"
+    case storyApproved = "story_approved"
+    case storyRejected = "story_rejected"
+    // معرض الصور
+    case galleryPending = "gallery_pending"
+    case galleryApproved = "gallery_approved"
+    case galleryRejected = "gallery_rejected"
+    // ديوانيات
+    case diwaniyaPending = "diwaniya_pending"
+    case diwaniyaApproved = "diwaniya_approved"
+    case diwaniyaRejected = "diwaniya_rejected"
+    // مشاريع
+    case projectPending = "project_pending"
+    case projectApproved = "project_approved"
+    case projectRejected = "project_rejected"
+    // تواصل
+    case contactMessage = "contact_message"
     case test = "test"
 }
 

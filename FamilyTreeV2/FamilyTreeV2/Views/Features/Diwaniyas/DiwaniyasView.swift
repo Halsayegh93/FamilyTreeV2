@@ -3,6 +3,7 @@ import SwiftUI
 // MARK: - DiwaniyasView
 struct DiwaniyasView: View {
     @EnvironmentObject var authVM: AuthViewModel
+    @EnvironmentObject var notificationVM: NotificationViewModel
     @StateObject private var viewModel = DiwaniyasViewModel()
     @Binding var selectedTab: Int
     @State private var showingNotifications = false
@@ -109,6 +110,7 @@ struct DiwaniyasView: View {
             .onAppear {
                 viewModel.canModerate = authVM.canModerate
                 viewModel.authVM = authVM
+                viewModel.notificationVM = notificationVM
                 rebuildFilteredDiwaniyas()
             }
             .onChange(of: viewModel.diwaniyas.count) { _ in rebuildFilteredDiwaniyas() }
