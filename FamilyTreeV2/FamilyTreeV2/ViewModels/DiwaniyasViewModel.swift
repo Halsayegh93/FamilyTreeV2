@@ -210,8 +210,11 @@ class DiwaniyasViewModel: ObservableObject {
     }
     
     func approveDiwaniya(id: UUID, adminId: UUID) async {
-        // حفظ ownerId قبل الحذف المحلي
-        let ownerId = pendingDiwaniyas.first(where: { $0.id == id })?.ownerId
+        // حفظ بيانات الديوانية قبل الحذف المحلي (للإشعارات)
+        let info = pendingDiwaniyas.first(where: { $0.id == id })
+        let ownerId = info?.ownerId
+        let approvedTitle = info?.title ?? "—"
+        let ownerName = info?.ownerName ?? ""
 
         optimisticRemove(from: &pendingDiwaniyas, id: id, apiWork: { [weak self] in
             do {
@@ -233,6 +236,16 @@ class DiwaniyasViewModel: ObservableObject {
                         kind: NotificationKind.diwaniyaApproved.rawValue
                     )
                 }
+
+                // إشعار للإدارة في "المستجدات"
+                await self?.notificationVM?.notifyAdmins(
+                    title: L10n.t("تم اعتماد ديوانية", "Diwaniya Approved"),
+                    body: L10n.t(
+                        "تم اعتماد ديوانية «\(approvedTitle)» لـ «\(ownerName)»",
+                        "Diwaniya «\(approvedTitle)» for «\(ownerName)» was approved"
+                    ),
+                    kind: NotificationKind.diwaniyaApproved.rawValue
+                )
                 Log.info("تم اعتماد الديوانية بنجاح")
             } catch {
                 await MainActor.run {
@@ -332,6 +345,16 @@ class DiwaniyasViewModel: ObservableObject {
                             "«\(info.title)» was not approved. Contact admin for details."
                         ),
                         targetMemberIds: [info.ownerId],
+                        kind: NotificationKind.diwaniyaRejected.rawValue
+                    )
+
+                    // إشعار للإدارة في "المستجدات"
+                    await self?.notificationVM?.notifyAdmins(
+                        title: L10n.t("تم رفض ديوانية", "Diwaniya Rejected"),
+                        body: L10n.t(
+                            "تم رفض ديوانية «\(info.title)» لـ «\(info.ownerName)»",
+                            "Diwaniya «\(info.title)» for «\(info.ownerName)» was rejected"
+                        ),
                         kind: NotificationKind.diwaniyaRejected.rawValue
                     )
                 }

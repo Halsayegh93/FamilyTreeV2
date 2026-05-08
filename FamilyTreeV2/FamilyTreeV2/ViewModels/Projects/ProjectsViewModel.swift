@@ -184,6 +184,16 @@ class ProjectsViewModel: ObservableObject {
                         targetMemberIds: [info.ownerId],
                         kind: NotificationKind.projectApproved.rawValue
                     )
+
+                    // إشعار للإدارة في "المستجدات"
+                    await self?.notificationVM?.notifyAdmins(
+                        title: L10n.t("تم اعتماد مشروع", "Project Approved"),
+                        body: L10n.t(
+                            "تم اعتماد مشروع «\(info.title)» لـ «\(info.ownerName)»",
+                            "Project «\(info.title)» for «\(info.ownerName)» was approved"
+                        ),
+                        kind: NotificationKind.projectApproved.rawValue
+                    )
                 }
             } catch {
                 await MainActor.run { self?.errorMessage = L10n.t("تعذر اعتماد المشروع.", "Failed to approve project.") }
@@ -220,6 +230,16 @@ class ProjectsViewModel: ObservableObject {
                             "Project «\(info.title)» was not approved. Contact admin for details."
                         ),
                         targetMemberIds: [info.ownerId],
+                        kind: NotificationKind.projectRejected.rawValue
+                    )
+
+                    // إشعار للإدارة في "المستجدات"
+                    await self?.notificationVM?.notifyAdmins(
+                        title: L10n.t("تم رفض مشروع", "Project Rejected"),
+                        body: L10n.t(
+                            "تم رفض مشروع «\(info.title)» لـ «\(info.ownerName)»",
+                            "Project «\(info.title)» for «\(info.ownerName)» was rejected"
+                        ),
                         kind: NotificationKind.projectRejected.rawValue
                     )
                 }

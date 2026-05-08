@@ -95,6 +95,16 @@ class AdminRequestViewModel: ObservableObject {
         return memberById(memberId)?.fullName ?? memberId.uuidString
     }
 
+    /// إشعار للإدارة في "المستجدات" بإجراء تمّ (موافقة/رفض)
+    /// لا يستخدم target_member_id (broadcast) — يصل لكل canModerate
+    private func broadcastCompletedAction(titleAr: String, titleEn: String, bodyAr: String, bodyEn: String, kind: NotificationKind) async {
+        await notificationVM?.notifyAdmins(
+            title: L10n.t(titleAr, titleEn),
+            body: L10n.t(bodyAr, bodyEn),
+            kind: kind.rawValue
+        )
+    }
+
     /// Lookup a member by ID from authVM's member cache
     private func memberById(_ id: UUID) -> FamilyMember? {
         return memberVM?.member(byId: id)
@@ -322,6 +332,19 @@ class AdminRequestViewModel: ObservableObject {
                     body: notifBody,
                     targetMemberIds: [request.requesterId]
                 )
+
+                // إشعار للإدارة في "المستجدات"
+                let memberName = payload?.targetMemberName ?? request.member?.fullName ?? ""
+                let actionAr = payload?.resolvedAction?.arabicLabel ?? "تعديل"
+                let actionEn = payload?.resolvedAction?.englishLabel ?? "edit"
+                await self.broadcastCompletedAction(
+                    titleAr: "تم قبول \(actionAr)",
+                    titleEn: "\(actionEn) Approved",
+                    bodyAr: memberName.isEmpty ? "تم قبول طلب \(actionAr)" : "تم قبول طلب \(actionAr) لـ «\(memberName)»",
+                    bodyEn: memberName.isEmpty ? "\(actionEn) request approved" : "\(actionEn) request for «\(memberName)» approved",
+                    kind: .treeEdit
+                )
+
                 Log.info("[TreeEdit] Approved: \(payload?.action ?? request.newValue ?? "")")
             } catch {
                 Log.error("[TreeEdit] Approve failed: \(error)")
@@ -431,6 +454,16 @@ class AdminRequestViewModel: ObservableObject {
                     targetMemberIds: [request.requesterId],
                     kind: "request_rejected"
                 )
+
+                // إشعار للإدارة في "المستجدات"
+                await self?.broadcastCompletedAction(
+                    titleAr: "تم رفض \(actionAr)",
+                    titleEn: "\(actionEn) Rejected",
+                    bodyAr: memberName.isEmpty ? "تم رفض طلب \(actionAr)" : "تم رفض طلب \(actionAr) لـ «\(memberName)»",
+                    bodyEn: memberName.isEmpty ? "\(actionEn) request rejected" : "\(actionEn) request for «\(memberName)» rejected",
+                    kind: .treeEdit
+                )
+
                 Log.info("[TreeEdit] Rejected: \(actionAr) — \(memberName)")
             } catch {
                 Log.error("[TreeEdit] Reject failed: \(error)")
@@ -501,6 +534,7 @@ class AdminRequestViewModel: ObservableObject {
     }
 
     func approveDeceasedRequest(request: AdminRequest) async {
+        let memberName = request.member?.fullName ?? ""
         optimisticRemove(from: &deceasedRequests, id: request.id, apiWork: { [weak self] in
             do {
                 try await self?.supabase
@@ -520,6 +554,14 @@ class AdminRequestViewModel: ObservableObject {
                     body: L10n.t("تم تأكيد حالة الوفاة وتحديث الشجرة", "Deceased status confirmed and tree updated"),
                     targetMemberIds: [request.requesterId]
                 )
+
+                await self?.broadcastCompletedAction(
+                    titleAr: "تم قبول طلب وفاة",
+                    titleEn: "Deceased Status Approved",
+                    bodyAr: memberName.isEmpty ? "تم تأكيد حالة وفاة" : "تم تأكيد وفاة «\(memberName)»",
+                    bodyEn: memberName.isEmpty ? "Deceased status confirmed" : "Deceased status confirmed for «\(memberName)»",
+                    kind: .deceasedReport
+                )
                 Log.info("تم قبول الطلب وتحديث الشجرة بنجاح")
             } catch {
                 Log.error("فشل في تنفيذ عملية الموافقة: \(error)")
@@ -532,6 +574,7 @@ class AdminRequestViewModel: ObservableObject {
 
     func rejectDeceasedRequest(request: AdminRequest) async {
         guard isAdmin else { Log.warning("رفض الطلب مرفوض: الصلاحية للمدير فقط"); return }
+        let memberName = request.member?.fullName ?? ""
         optimisticRemove(from: &deceasedRequests, id: request.id, apiWork: { [weak self] in
             do {
                 try await self?.supabase
@@ -539,6 +582,14 @@ class AdminRequestViewModel: ObservableObject {
                     .update(["status": AnyEncodable(ApprovalStatus.rejected.rawValue)])
                     .eq("id", value: request.id.uuidString)
                     .execute()
+
+                await self?.broadcastCompletedAction(
+                    titleAr: "تم رفض طلب وفاة",
+                    titleEn: "Deceased Request Rejected",
+                    bodyAr: memberName.isEmpty ? "تم رفض طلب تأكيد وفاة" : "تم رفض طلب تأكيد وفاة «\(memberName)»",
+                    bodyEn: memberName.isEmpty ? "Deceased request rejected" : "Deceased request for «\(memberName)» rejected",
+                    kind: .deceasedReport
+                )
                 Log.info("تم رفض طلب تأكيد الوفاة")
             } catch {
                 Log.error("فشل في رفض طلب الوفاة: \(error)")
@@ -570,6 +621,7 @@ class AdminRequestViewModel: ObservableObject {
 
     func rejectChildAddRequest(request: AdminRequest) async {
         guard isAdmin else { Log.warning("رفض الطلب مرفوض: الصلاحية للمدير فقط"); return }
+        let childName = request.member?.firstName ?? ""
         optimisticRemove(from: &childAddRequests, id: request.id, apiWork: { [weak self] in
             do {
                 if let childId = request.newValue {
@@ -585,6 +637,14 @@ class AdminRequestViewModel: ObservableObject {
                     .update(["status": AnyEncodable(ApprovalStatus.rejected.rawValue)])
                     .eq("id", value: request.id.uuidString)
                     .execute()
+
+                await self?.broadcastCompletedAction(
+                    titleAr: "تم رفض طلب إضافة ابن",
+                    titleEn: "Child Add Rejected",
+                    bodyAr: childName.isEmpty ? "تم رفض طلب إضافة ابن" : "تم رفض طلب إضافة «\(childName)»",
+                    bodyEn: childName.isEmpty ? "Child add request rejected" : "Add request for «\(childName)» rejected",
+                    kind: .childAdd
+                )
                 Log.info("تم رفض طلب إضافة الابن وحذفه من الشجرة")
             } catch {
                 Log.error("فشل رفض طلب إضافة الابن: \(error)")
@@ -623,6 +683,14 @@ class AdminRequestViewModel: ObservableObject {
                     title: L10n.t("تم قبول طلبك", "Your Request Was Approved"),
                     body: childNotifBody,
                     targetMemberIds: [request.requesterId]
+                )
+
+                await self?.broadcastCompletedAction(
+                    titleAr: "تم قبول طلب إضافة ابن",
+                    titleEn: "Child Add Approved",
+                    bodyAr: "تم إضافة «\(childFirstName)» لـ «\(parentName)»",
+                    bodyEn: "«\(childFirstName)» added to «\(parentName)»",
+                    kind: .childAdd
                 )
                 Log.info("تم تأكيد طلب إضافة الابن بنجاح")
             } catch {
