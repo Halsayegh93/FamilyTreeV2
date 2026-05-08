@@ -491,7 +491,7 @@ struct MemberDetailsView: View {
                                 familyRow(
                                     icon: "person.fill",
                                     label: L10n.t("الأب", "Father"),
-                                    value: father.fullName,
+                                    value: father.firstName,
                                     color: DS.Color.success
                                 )
                             }
