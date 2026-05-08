@@ -1198,10 +1198,11 @@ private struct FlowLayout: Layout {
                 currentX = bounds.minX
                 lineHeight = 0
             }
-            // لو subview طويل، نمرر له width محدود ليلتف داخلياً
-            let placeProposal: ProposedViewSize = (size.width >= maxWidth)
+            // لو subview طويل بطبيعته، نمرر له width محدود ليلتف داخلياً
+            let natural = subview.sizeThatFits(.unspecified)
+            let placeProposal: ProposedViewSize = (natural.width > maxWidth && maxWidth.isFinite)
                 ? ProposedViewSize(width: maxWidth, height: nil)
-                : .unspecified
+                : ProposedViewSize(width: size.width, height: size.height)
             subview.place(at: CGPoint(x: currentX, y: currentY), proposal: placeProposal)
             currentX += size.width + spacing
             lineHeight = max(lineHeight, size.height)
