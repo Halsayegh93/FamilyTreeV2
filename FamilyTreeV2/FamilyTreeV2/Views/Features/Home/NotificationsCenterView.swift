@@ -354,6 +354,15 @@ struct NotificationsCenterView: View {
                 tab: .activity
             )
         }
+        .padding(3)
+        .background(
+            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                .fill(DS.Color.surfaceElevated.opacity(0.7))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                .stroke(DS.Color.textTertiary.opacity(0.1), lineWidth: 0.5)
+        )
         .fixedSize(horizontal: false, vertical: true)
         .dynamicTypeSize(...DynamicTypeSize.large)
     }
@@ -367,7 +376,15 @@ struct NotificationsCenterView: View {
             }
             UISelectionFeedbackGenerator().selectionChanged()
         } label: {
-            VStack(spacing: 6) {
+            ZStack {
+                // مؤشر الاختيار المتحرك (sliding indicator)
+                if isSelected {
+                    RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous)
+                        .fill(DS.Color.gradientPrimary)
+                        .shadow(color: DS.Color.primary.opacity(0.3), radius: 6, x: 0, y: 2)
+                        .matchedGeometryEffect(id: "tabIndicator", in: tabIndicator)
+                }
+
                 HStack(spacing: 5) {
                     Image(systemName: icon)
                         .font(.system(size: 13, weight: .bold))
@@ -381,25 +398,22 @@ struct NotificationsCenterView: View {
                     if count > 0 {
                         Text("\(count)")
                             .font(.system(size: 10, weight: .black, design: .rounded))
-                            .foregroundColor(DS.Color.textOnPrimary)
+                            .foregroundColor(isSelected ? DS.Color.primary : DS.Color.textOnPrimary)
                             .frame(minWidth: 16, minHeight: 16)
                             .padding(.horizontal, 3)
-                            .background(Capsule().fill(DS.Color.error))
+                            .background(
+                                Capsule()
+                                    .fill(isSelected ? Color.white : DS.Color.error)
+                            )
                             .transition(.scale.combined(with: .opacity))
                     }
                 }
-                .foregroundColor(isSelected ? DS.Color.primary : DS.Color.textSecondary)
+                .foregroundColor(isSelected ? DS.Color.textOnPrimary : DS.Color.textSecondary)
                 .padding(.horizontal, 14)
-                .padding(.top, 13)
+                .padding(.vertical, 13)
                 .frame(maxWidth: .infinity)
-
-                // مؤشر التحديد — خط سفلي رفيع بدل الخلفية
-                Rectangle()
-                    .fill(isSelected ? DS.Color.primary : Color.clear)
-                    .frame(height: 2)
-                    .matchedGeometryEffect(id: "tabIndicator", in: tabIndicator, isSource: isSelected)
             }
-            .contentShape(Rectangle())
+            .contentShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
         }
         .buttonStyle(.plain)
     }
