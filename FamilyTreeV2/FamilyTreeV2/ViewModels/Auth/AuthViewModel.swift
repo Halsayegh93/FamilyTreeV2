@@ -671,6 +671,10 @@ class AuthViewModel: ObservableObject {
     
     // MARK: - OTP Send / Verify
 
+    /// Feature flag — اقلب لـ true بعد إعداد WhatsApp Business Account في Twilio Verify.
+    /// إعداده يتطلب: Messaging Service + WhatsApp Sender معتمد من Meta.
+    static let whatsappOTPEnabled = false
+
     /// قناة إرسال رمز التحقق — تُمرَّر إلى Twilio Verify عبر Supabase Auth.
     enum OTPChannel {
         case sms
@@ -766,7 +770,7 @@ class AuthViewModel: ObservableObject {
     /// تحويل أخطاء Twilio/Supabase إلى رسالة عربية واضحة للمستخدم.
     private func friendlyOTPErrorMessage(error: Error, channel: OTPChannel) -> String {
         let raw = "\(error) \(error.localizedDescription)".lowercased()
-        let suggestWhatsApp = channel == .sms
+        let suggestWhatsApp = channel == .sms && AuthViewModel.whatsappOTPEnabled
 
         // Twilio error 60410: phone temporarily blocked due to fraud
         if raw.contains("60410") || raw.contains("temporarily blocked") || raw.contains("fraudulent") {
@@ -777,8 +781,8 @@ class AuthViewModel: ObservableObject {
                 )
             }
             return L10n.t(
-                "هذا الرقم محظور مؤقتاً. حاول بعد ساعة.",
-                "This number is temporarily blocked. Try again in an hour."
+                "هذا الرقم محظور مؤقتاً بسبب محاولات متكررة. حاول بعد ساعة.",
+                "This number is temporarily blocked due to repeated attempts. Try again in an hour."
             )
         }
 

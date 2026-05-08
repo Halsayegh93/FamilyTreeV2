@@ -347,7 +347,7 @@ struct LoginView: View {
 
             statusMessage
 
-            // إعادة طلب الرمز — SMS أو واتساب (cooldown مشترك لمنع spam)
+            // إعادة طلب الرمز — SMS (واتساب يظهر فقط إذا feature flag مفعّل)
             HStack(spacing: DS.Spacing.md) {
                 Button(action: {
                     authVM.otpCode = ""; otpText = ""
@@ -377,31 +377,33 @@ struct LoginView: View {
                 }
                 .disabled(authVM.isLoading || timeRemaining > 0)
 
-                Button(action: {
-                    authVM.otpCode = ""; otpText = ""
-                    authVM.otpErrorMessage = nil
-                    authVM.otpStatusMessage = ""
-                    otpTimeRemaining = 300
-                    timeRemaining = 60
-                    Task {
-                        await authVM.sendOTP(channel: .whatsapp)
-                        if authVM.otpErrorMessage != nil { timeRemaining = 30 }
+                if AuthViewModel.whatsappOTPEnabled {
+                    Button(action: {
+                        authVM.otpCode = ""; otpText = ""
+                        authVM.otpErrorMessage = nil
+                        authVM.otpStatusMessage = ""
+                        otpTimeRemaining = 300
+                        timeRemaining = 60
+                        Task {
+                            await authVM.sendOTP(channel: .whatsapp)
+                            if authVM.otpErrorMessage != nil { timeRemaining = 30 }
+                        }
+                    }) {
+                        HStack(spacing: DS.Spacing.xs) {
+                            Image(systemName: "bubble.left.and.bubble.right.fill")
+                                .font(DS.Font.scaled(13, weight: .semibold))
+                            Text(L10n.t("إرسال عبر واتساب", "Send via WhatsApp"))
+                                .font(DS.Font.footnote)
+                                .fontWeight(.semibold)
+                        }
+                        .foregroundStyle(authVM.isLoading ? DS.Color.textTertiary : DS.Color.success)
+                        .padding(.horizontal, DS.Spacing.md)
+                        .padding(.vertical, DS.Spacing.xs + 2)
+                        .background((authVM.isLoading ? DS.Color.textTertiary : DS.Color.success).opacity(0.10))
+                        .clipShape(Capsule())
                     }
-                }) {
-                    HStack(spacing: DS.Spacing.xs) {
-                        Image(systemName: "bubble.left.and.bubble.right.fill")
-                            .font(DS.Font.scaled(13, weight: .semibold))
-                        Text(L10n.t("إرسال عبر واتساب", "Send via WhatsApp"))
-                            .font(DS.Font.footnote)
-                            .fontWeight(.semibold)
-                    }
-                    .foregroundStyle(authVM.isLoading ? DS.Color.textTertiary : DS.Color.success)
-                    .padding(.horizontal, DS.Spacing.md)
-                    .padding(.vertical, DS.Spacing.xs + 2)
-                    .background((authVM.isLoading ? DS.Color.textTertiary : DS.Color.success).opacity(0.10))
-                    .clipShape(Capsule())
+                    .disabled(authVM.isLoading)
                 }
-                .disabled(authVM.isLoading)
             }
         }
         .padding(DS.Spacing.lg)
