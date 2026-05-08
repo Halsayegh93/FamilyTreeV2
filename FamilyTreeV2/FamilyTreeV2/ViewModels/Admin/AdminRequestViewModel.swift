@@ -1023,6 +1023,15 @@ class AdminRequestViewModel: ObservableObject {
                     body: L10n.t("تم اعتماد اسمك الجديد: \(newName)", "Your new name has been approved: \(newName)"),
                     targetMemberIds: [request.requesterId]
                 )
+
+                let oldName = request.member?.fullName ?? ""
+                await self?.broadcastCompletedAction(
+                    titleAr: "تم قبول تغيير اسم",
+                    titleEn: "Name Change Approved",
+                    bodyAr: oldName.isEmpty ? "تم قبول طلب تغيير الاسم" : "تم تغيير اسم «\(oldName)» إلى «\(newName)»",
+                    bodyEn: oldName.isEmpty ? "Name change approved" : "«\(oldName)» renamed to «\(newName)»",
+                    kind: .nameChange
+                )
                 Log.info("[NameChange] تم قبول طلب تغيير الاسم → \(newName)")
             } catch {
                 Log.error("[NameChange] فشل قبول طلب تغيير الاسم: \(error)")
@@ -1048,6 +1057,15 @@ class AdminRequestViewModel: ObservableObject {
                     body: L10n.t("طلب تغيير الاسم لم تتم الموافقة عليه", "Your name change request was not approved"),
                     targetMemberIds: [request.requesterId],
                     kind: "request_rejected"
+                )
+
+                let memberName = request.member?.fullName ?? ""
+                await self?.broadcastCompletedAction(
+                    titleAr: "تم رفض تغيير اسم",
+                    titleEn: "Name Change Rejected",
+                    bodyAr: memberName.isEmpty ? "تم رفض طلب تغيير الاسم" : "تم رفض طلب تغيير اسم «\(memberName)»",
+                    bodyEn: memberName.isEmpty ? "Name change rejected" : "Name change for «\(memberName)» rejected",
+                    kind: .nameChange
                 )
                 Log.info("[NameChange] تم رفض طلب تغيير الاسم")
             } catch {
@@ -1115,6 +1133,15 @@ class AdminRequestViewModel: ObservableObject {
                         targetMemberIds: [requesterId]
                     )
                 }
+
+                let memberName = request.member?.fullName ?? ""
+                await self?.broadcastCompletedAction(
+                    titleAr: "تم قبول تغيير رقم",
+                    titleEn: "Phone Change Approved",
+                    bodyAr: memberName.isEmpty ? "تم قبول طلب تغيير رقم" : "تم تغيير رقم «\(memberName)»",
+                    bodyEn: memberName.isEmpty ? "Phone change approved" : "Phone for «\(memberName)» updated",
+                    kind: .phoneChange
+                )
             } catch {
                 Log.error("خطأ اعتماد تغيير الرقم: \(error.localizedDescription)")
             }
@@ -1143,6 +1170,15 @@ class AdminRequestViewModel: ObservableObject {
                         kind: "request_rejected"
                     )
                 }
+
+                let memberName = request.member?.fullName ?? ""
+                await self?.broadcastCompletedAction(
+                    titleAr: "تم رفض تغيير رقم",
+                    titleEn: "Phone Change Rejected",
+                    bodyAr: memberName.isEmpty ? "تم رفض طلب تغيير رقم" : "تم رفض تغيير رقم «\(memberName)»",
+                    bodyEn: memberName.isEmpty ? "Phone change rejected" : "Phone change for «\(memberName)» rejected",
+                    kind: .phoneChange
+                )
                 Log.info("[PhoneChange] تم رفض طلب تغيير الرقم")
             } catch {
                 Log.error("خطأ رفض تغيير الرقم: \(error.localizedDescription)")
