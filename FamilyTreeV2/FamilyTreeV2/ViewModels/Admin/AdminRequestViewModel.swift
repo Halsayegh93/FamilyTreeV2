@@ -96,9 +96,9 @@ class AdminRequestViewModel: ObservableObject {
     }
 
     /// إشعار للإدارة في "المستجدات" بإجراء تمّ (موافقة/رفض)
-    /// لا يستخدم target_member_id (broadcast) — يصل لكل canModerate
+    /// in-app + push — يصل لكل canModerate (broadcast بدون target)
     private func broadcastCompletedAction(titleAr: String, titleEn: String, bodyAr: String, bodyEn: String, kind: NotificationKind) async {
-        await notificationVM?.notifyAdmins(
+        await notificationVM?.notifyAdminsWithPush(
             title: L10n.t(titleAr, titleEn),
             body: L10n.t(bodyAr, bodyEn),
             kind: kind.rawValue

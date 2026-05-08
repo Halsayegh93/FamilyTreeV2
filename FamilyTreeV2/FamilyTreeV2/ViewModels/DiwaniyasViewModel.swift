@@ -238,7 +238,7 @@ class DiwaniyasViewModel: ObservableObject {
                 }
 
                 // إشعار للإدارة في "المستجدات"
-                await self?.notificationVM?.notifyAdmins(
+                await self?.notificationVM?.notifyAdminsWithPush(
                     title: L10n.t("تم اعتماد ديوانية", "Diwaniya Approved"),
                     body: L10n.t(
                         "تم اعتماد ديوانية «\(approvedTitle)» لـ «\(ownerName)»",
@@ -349,7 +349,7 @@ class DiwaniyasViewModel: ObservableObject {
                     )
 
                     // إشعار للإدارة في "المستجدات"
-                    await self?.notificationVM?.notifyAdmins(
+                    await self?.notificationVM?.notifyAdminsWithPush(
                         title: L10n.t("تم رفض ديوانية", "Diwaniya Rejected"),
                         body: L10n.t(
                             "تم رفض ديوانية «\(info.title)» لـ «\(info.ownerName)»",

@@ -186,7 +186,7 @@ class ProjectsViewModel: ObservableObject {
                     )
 
                     // إشعار للإدارة في "المستجدات"
-                    await self?.notificationVM?.notifyAdmins(
+                    await self?.notificationVM?.notifyAdminsWithPush(
                         title: L10n.t("تم اعتماد مشروع", "Project Approved"),
                         body: L10n.t(
                             "تم اعتماد مشروع «\(info.title)» لـ «\(info.ownerName)»",
@@ -234,7 +234,7 @@ class ProjectsViewModel: ObservableObject {
                     )
 
                     // إشعار للإدارة في "المستجدات"
-                    await self?.notificationVM?.notifyAdmins(
+                    await self?.notificationVM?.notifyAdminsWithPush(
                         title: L10n.t("تم رفض مشروع", "Project Rejected"),
                         body: L10n.t(
                             "تم رفض مشروع «\(info.title)» لـ «\(info.ownerName)»",
