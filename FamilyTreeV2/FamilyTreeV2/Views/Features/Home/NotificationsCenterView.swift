@@ -255,7 +255,7 @@ struct NotificationsCenterView: View {
                             icon: "checklist.unchecked",
                             label: L10n.t("تحديد", "Select"),
                             fg: DS.Color.accent,
-                            bg: .clear
+                            bg: DS.Color.accent.opacity(0.10)
                         ) {
                             withAnimation(DS.Anim.snappy) { isSelecting = true; selectedIds.removeAll() }
                             UISelectionFeedbackGenerator().selectionChanged()
@@ -268,7 +268,7 @@ struct NotificationsCenterView: View {
                             icon: "envelope.open.fill",
                             label: L10n.t("قراءة الكل", "Read All"),
                             fg: DS.Color.primary,
-                            bg: .clear
+                            bg: DS.Color.primary.opacity(0.10)
                         ) {
                             UINotificationFeedbackGenerator().notificationOccurred(.success)
                             Task { await notificationVM.markAllNotificationsAsRead() }
@@ -283,8 +283,12 @@ struct NotificationsCenterView: View {
                                 .frame(width: 7, height: 7)
                             Text("\(unreadCount) " + L10n.t("غير مقروء", "unread"))
                                 .font(DS.Font.scaled(11, weight: .semibold))
-                                .foregroundColor(DS.Color.textSecondary)
+                                .foregroundColor(DS.Color.error)
                         }
+                        .padding(.horizontal, DS.Spacing.md)
+                        .padding(.vertical, DS.Spacing.sm)
+                        .background(DS.Color.error.opacity(0.10))
+                        .clipShape(Capsule())
                     }
                 }
             }
