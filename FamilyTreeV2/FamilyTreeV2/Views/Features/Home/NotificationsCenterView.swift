@@ -1139,15 +1139,21 @@ private struct WrappingHStack: View {
                         .clipShape(Capsule())
                         .overlay(Capsule().stroke(capColor.opacity(0.25), lineWidth: 0.5))
                 } else if segment.isCapsule {
-                    // اسم شخص — bold فقط بدون كبسولة
+                    // اسم شخص — bold يلتف على سطرين لو طويل
                     Text(segment.text)
                         .font(font).bold()
                         .foregroundColor(color)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
                         .padding(.vertical, 3)
                 } else {
                     Text(segment.text)
                         .font(font)
                         .foregroundColor(color)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
                         .padding(.vertical, 3)
                 }
             }
@@ -1159,6 +1165,15 @@ private struct WrappingHStack: View {
 private struct FlowLayout: Layout {
     var spacing: CGFloat = 4
 
+    /// يحسب حجم subview — لو طوله الطبيعي يتجاوز maxWidth، يجبره يلتف بـ proposal محدود
+    private func subviewSize(_ subview: LayoutSubview, maxWidth: CGFloat) -> CGSize {
+        let natural = subview.sizeThatFits(.unspecified)
+        if natural.width > maxWidth && maxWidth.isFinite {
+            return subview.sizeThatFits(ProposedViewSize(width: maxWidth, height: nil))
+        }
+        return natural
+    }
+
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let maxWidth = proposal.width ?? .infinity
         var currentX: CGFloat = 0
@@ -1166,7 +1181,7 @@ private struct FlowLayout: Layout {
         var lineHeight: CGFloat = 0
 
         for subview in subviews {
-            let size = subview.sizeThatFits(.unspecified)
+            let size = subviewSize(subview, maxWidth: maxWidth)
             if currentX + size.width > maxWidth && currentX > 0 {
                 currentY += lineHeight + spacing
                 currentX = 0
@@ -1180,18 +1195,23 @@ private struct FlowLayout: Layout {
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let maxWidth = bounds.width
         var currentX: CGFloat = bounds.minX
         var currentY: CGFloat = bounds.minY
         var lineHeight: CGFloat = 0
 
         for subview in subviews {
-            let size = subview.sizeThatFits(.unspecified)
+            let size = subviewSize(subview, maxWidth: maxWidth)
             if currentX + size.width > bounds.maxX && currentX > bounds.minX {
                 currentY += lineHeight + spacing
                 currentX = bounds.minX
                 lineHeight = 0
             }
-            subview.place(at: CGPoint(x: currentX, y: currentY), proposal: .unspecified)
+            // لو subview طويل، نمرر له width محدود ليلتف داخلياً
+            let placeProposal: ProposedViewSize = (size.width >= maxWidth)
+                ? ProposedViewSize(width: maxWidth, height: nil)
+                : .unspecified
+            subview.place(at: CGPoint(x: currentX, y: currentY), proposal: placeProposal)
             currentX += size.width + spacing
             lineHeight = max(lineHeight, size.height)
         }
