@@ -405,18 +405,23 @@ struct MemberDetailsView: View {
         var rows: [InfoRowData] = []
         let isSelf = m.id == authVM.currentUser?.id
         let canMod = authVM.canModerate
+        let isDeceased = m.isDeceased == true
 
         if let birth = m.birthDate, !birth.isEmpty {
             let shouldHide = (m.isBirthDateHidden == true) && !isSelf && !canMod
+            // للمتوفى: السنة فقط بدل التاريخ الكامل
+            let displayValue = shouldHide
+                ? L10n.t("مخفي", "Hidden")
+                : (isDeceased ? Self.yearOnly(birth) : birth)
             rows.append(.init(
                 icon: "calendar",
                 label: L10n.t("الميلاد", "Birth"),
-                value: shouldHide ? L10n.t("مخفي", "Hidden") : birth,
+                value: displayValue,
                 color: shouldHide ? DS.Color.textTertiary : DS.Color.primary
             ))
         }
 
-        if m.isDeceased != true,
+        if !isDeceased,
            let phone = m.phoneNumber, !phone.isEmpty {
             let shouldHide = (m.isPhoneHidden == true) && !isSelf && !canMod
             rows.append(.init(
@@ -427,17 +432,25 @@ struct MemberDetailsView: View {
             ))
         }
 
-        if m.isDeceased == true,
+        if isDeceased,
            let death = m.deathDate, !death.isEmpty {
             rows.append(.init(
                 icon: "heart.slash.fill",
                 label: L10n.t("الوفاة", "Death"),
-                value: death,
+                value: Self.yearOnly(death),
                 color: DS.Color.textTertiary
             ))
         }
 
         return rows
+    }
+
+    /// استخراج السنة فقط من تاريخ بصيغة "yyyy-MM-dd" أو "yyyy/MM/dd" — fallback للنص الأصلي.
+    private static func yearOnly(_ date: String) -> String {
+        let trimmed = date.trimmingCharacters(in: .whitespaces)
+        guard trimmed.count >= 4 else { return trimmed }
+        let prefix = String(trimmed.prefix(4))
+        return prefix.allSatisfy(\.isNumber) ? prefix : trimmed
     }
 
     private func infoRow(icon: String, label: String, value: String, color: Color) -> some View {
