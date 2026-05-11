@@ -1082,8 +1082,8 @@ struct AdminMemberDetailSheet: View {
 
     private func setupLocalChildren() {
         let newChildren = memberVM.allMembers
-            .filter { $0.fatherId == member.id }
-            .sorted(by: { $0.sortOrder < $1.sortOrder })
+            .filter { $0.fatherId == member.id && !$0.isHiddenFromTree }
+            .sortedForDisplay()
 
         let currentKeys = localChildren.map { "\($0.id.uuidString)-\($0.sortOrder)" }
         let newKeys = newChildren.map { "\($0.id.uuidString)-\($0.sortOrder)" }
@@ -1196,8 +1196,8 @@ struct AdminMemberDetailSheet: View {
         let auditMemberName = member.fullName
         let childrenOrderChanged: Bool = {
             let originalChildren = memberVM.allMembers
-                .filter { $0.fatherId == capturedMemberId }
-                .sorted(by: { $0.sortOrder < $1.sortOrder })
+                .filter { $0.fatherId == capturedMemberId && !$0.isHiddenFromTree }
+                .sortedForDisplay()
             if capturedChildren.count != originalChildren.count { return true }
             for (i, child) in capturedChildren.enumerated() {
                 if child.id != originalChildren[i].id { return true }

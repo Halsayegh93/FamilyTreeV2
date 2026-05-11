@@ -425,3 +425,16 @@ enum KuwaitPhone {
         return URL(string: "tel://\(e164)")
     }
 }
+
+// MARK: - Display sort
+// ترتيب موحّد للأبناء/الإخوة عبر التطبيق: sortOrder ثم birthDate ثم firstName.
+// يضمن تطابق الترتيب بين الشجرة و«حسابي» و«تعديل المدير» حتى مع تساوي sortOrder.
+extension Sequence where Element == FamilyMember {
+    func sortedForDisplay() -> [FamilyMember] {
+        sorted { a, b in
+            if a.sortOrder != b.sortOrder { return a.sortOrder < b.sortOrder }
+            if let ba = a.birthDate, let bb = b.birthDate, !ba.isEmpty, !bb.isEmpty { return ba < bb }
+            return a.firstName < b.firstName
+        }
+    }
+}
