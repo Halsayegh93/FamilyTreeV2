@@ -1036,8 +1036,12 @@ class AdminRequestViewModel: ObservableObject {
                 await self?.broadcastCompletedAction(
                     titleAr: "تم قبول تغيير اسم",
                     titleEn: "Name Change Approved",
-                    bodyAr: oldName.isEmpty ? "تم قبول طلب تغيير الاسم" : "تم تغيير اسم «\(oldName)» إلى «\(newName)»",
-                    bodyEn: oldName.isEmpty ? "Name change approved" : "«\(oldName)» renamed to «\(newName)»",
+                    bodyAr: oldName.isEmpty
+                        ? "وافقت الإدارة — تم اعتماد الاسم الجديد: «\(newName)»"
+                        : "وافقت الإدارة — تغيّر الاسم من «\(oldName)» إلى «\(newName)»",
+                    bodyEn: oldName.isEmpty
+                        ? "Approved by administration — New name: «\(newName)»"
+                        : "Approved by administration — Name changed from «\(oldName)» to «\(newName)»",
                     kind: .nameChange
                 )
                 Log.info("[NameChange] تم قبول طلب تغيير الاسم → \(newName)")

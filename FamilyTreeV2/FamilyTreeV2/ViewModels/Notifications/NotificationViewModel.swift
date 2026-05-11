@@ -1113,13 +1113,12 @@ class NotificationViewModel: ObservableObject {
                     .execute()
 
                 // إشعار للعضو بأنه تم قبوله
-                let adminName = currentUser?.firstName ?? "الإدارة"
                 let approvedPayload: [String: AnyEncodable] = [
                     "target_member_id": AnyEncodable(requestId.uuidString),
                     "title": AnyEncodable(L10n.t("تم قبول طلبك", "Your Request Was Approved")),
                     "body": AnyEncodable(L10n.t(
-                        "وافق \(adminName) على انضمامك — مرحباً في عائلة المحمدعلي 🌿",
-                        "\(adminName) approved your membership — Welcome to the Al-Mohammad Ali family 🌿"
+                        "وافقت الإدارة على انضمامك — مرحباً في عائلة المحمدعلي 🌿",
+                        "The administration approved your membership — Welcome to the Al-Mohammad Ali family 🌿"
                     )),
                     "kind": AnyEncodable("join_approved"),
                     "created_by": AnyEncodable(currentUser?.id.uuidString ?? "")
@@ -1173,17 +1172,37 @@ class NotificationViewModel: ObservableObject {
     private func lookupPendingRequest(for notification: AppNotification) async -> (UUID, String)? {
         // المسار السريع: إشعار حديث يحمل request_id + request_type
         if let rid = notification.requestId, let rt = notification.requestType {
-            // نتحقق من حالة الطلب — لازم يكون pending
+            // ملاحظة: لـ join_request/link_request، الـ requestId يحمل user.id
+            // لأن أول طلب انضمام يُنشأ بدون id محدد (auto-generated) لكن notify يُمرر user.id.
+            // فنبحث بـ requester_id بدل id في هذه الحالة.
+            let isJoinKind = rt == RequestType.joinRequest.rawValue
+                || rt == RequestType.linkRequest.rawValue
             do {
-                let rows: [AdminRequest] = try await supabase
-                    .from("admin_requests")
-                    .select()
-                    .eq("id", value: rid.uuidString)
-                    .eq("status", value: ApprovalStatus.pending.rawValue)
-                    .limit(1)
-                    .execute()
-                    .value
-                if rows.first != nil { return (rid, rt) }
+                if isJoinKind {
+                    // لـ join: نتحقق من وجود طلب pending بـ requester_id
+                    // ونرجع الـ user.id الأصلي (لأن approveRequest يحتاجه لتحديث profiles)
+                    let rows: [AdminRequest] = try await supabase
+                        .from("admin_requests")
+                        .select()
+                        .eq("requester_id", value: rid.uuidString)
+                        .eq("status", value: ApprovalStatus.pending.rawValue)
+                        .order("created_at", ascending: false)
+                        .limit(1)
+                        .execute()
+                        .value
+                    if rows.first != nil { return (rid, rt) }
+                } else {
+                    // لباقي الطلبات: requestId هو admin_requests.id فعلياً
+                    let rows: [AdminRequest] = try await supabase
+                        .from("admin_requests")
+                        .select()
+                        .eq("id", value: rid.uuidString)
+                        .eq("status", value: ApprovalStatus.pending.rawValue)
+                        .limit(1)
+                        .execute()
+                        .value
+                    if rows.first != nil { return (rid, rt) }
+                }
             } catch {
                 Log.warning("[LOOKUP] فشل التحقق من حالة الطلب: \(error.localizedDescription)")
             }

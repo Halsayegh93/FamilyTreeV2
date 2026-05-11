@@ -84,6 +84,7 @@ struct NotificationsCenterView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var notificationVM: NotificationViewModel
     @EnvironmentObject var memberVM: MemberViewModel
+    @EnvironmentObject var adminRequestVM: AdminRequestViewModel
     @Environment(\.dismiss) var dismiss
 
     @AppStorage("notif_comments") private var notifComments: Bool = true
@@ -104,6 +105,8 @@ struct NotificationsCenterView: View {
     @State private var joinMatchCandidates: [FamilyMember] = []
     /// هل كرت التطابقات موسّع — افتراضياً مغلق
     @State private var joinMatchesExpanded: Bool = false
+    /// confirmation dialog لخيارات الموافقة على طلب الانضمام (ربط أو إنشاء جديد)
+    @State private var joinApproveDialog: AppNotification? = nil
     @State private var selectedTab: NotifTab = .notifications
     @Namespace private var tabIndicator
 
@@ -481,8 +484,15 @@ struct NotificationsCenterView: View {
         let myId = authVM.currentUser?.id
         let isCompletedAction = Self.completedActionKinds.contains(n.kind)
 
+        // عناوين تبدأ بـ "تم قبول/تم رفض" أو "Approved/Rejected" تدل على إجراء منفّذ
+        // (يستخدم لتمييز broadcastCompletedAction عن الطلبات الأصلية بنفس الـ kind)
+        let titleIndicatesCompleted = n.title.hasPrefix("تم قبول")
+            || n.title.hasPrefix("تم رفض")
+            || n.title.contains("Approved")
+            || n.title.contains("Rejected")
+
         // للأدمن: الإجراءات اللي تمّت تذهب لـ "المستجدات" (مو "إشعاراتي")
-        if authVM.canModerate && isCompletedAction { return false }
+        if authVM.canModerate && (isCompletedAction || titleIndicatesCompleted) { return false }
 
         // طلبات تنتظر موافقة الأدمن
         if Self.pendingApprovalKinds.contains(n.kind) { return true }
@@ -513,7 +523,11 @@ struct NotificationsCenterView: View {
     /// تاب "المستجدات" (للأدمن فقط): الإجراءات اللي تمّت
     private func belongsToActivityTab(_ n: AppNotification) -> Bool {
         guard !belongsToNotificationsTab(n) else { return false }
-        return Self.completedActionKinds.contains(n.kind)
+        let titleIndicatesCompleted = n.title.hasPrefix("تم قبول")
+            || n.title.hasPrefix("تم رفض")
+            || n.title.contains("Approved")
+            || n.title.contains("Rejected")
+        return Self.completedActionKinds.contains(n.kind) || titleIndicatesCompleted
     }
 
     private var filteredNotifications: [AppNotification] {
@@ -840,25 +854,28 @@ struct NotificationsCenterView: View {
             ScrollView(showsIndicators: false) {
                 VStack(spacing: relatedMember == nil ? DS.Spacing.sm : DS.Spacing.md) {
                     detailHero(notification: notification, iconInfo: iconInfo, date: date)
-                        .padding(.top, relatedMember == nil ? DS.Spacing.lg : DS.Spacing.xxxl)
+                        .padding(.top, DS.Spacing.xxxl)
 
                     if let member = relatedMember {
                         detailMemberCard(member: member, iconInfo: iconInfo)
                     }
 
                     if !notification.body.isEmpty {
-                        detailBodyCard(notification: notification, iconInfo: iconInfo)
+                        let showMatches = isJoinRequest
+                            && authVM.canModerate
+                            && !joinMatchCandidates.isEmpty
+                        detailBodyCard(
+                            notification: notification,
+                            iconInfo: iconInfo,
+                            joinMatches: showMatches ? joinMatchCandidates : [],
+                            joinRequesterId: notification.requestId
+                        )
                     }
 
                     if authVM.isAdmin,
                        let details = notification.details,
                        !details.changes.isEmpty {
                         DSChangeDetailsCard(details: details)
-                    }
-
-                    // المرحلة ٣ — مطابقة طلب الانضمام
-                    if isJoinRequest, authVM.isAdmin, !joinMatchCandidates.isEmpty {
-                        joinMatchCard(candidates: joinMatchCandidates, iconInfo: iconInfo)
                     }
 
                     detailActions(notification: notification)
@@ -874,8 +891,8 @@ struct NotificationsCenterView: View {
             }
         }
         .onPreferenceChange(DetailSheetHeightKey.self) { newContentHeight in
-            // buffer: bottom safe area (~34pt) + grabber + margin
-            let target = newContentHeight + 40
+            // buffer: bottom safe area (~34pt) + grabber — تم تقليله لتقليل الفراغ تحت الأزرار
+            let target = newContentHeight + 16
             let screenH = UIScreen.main.bounds.height
             let cap = screenH - 60
             let clamped = max(280, min(target, cap))
@@ -889,6 +906,54 @@ struct NotificationsCenterView: View {
         .task(id: notification.id) {
             joinMatchesExpanded = false
             await loadJoinMatchCandidates(for: notification)
+        }
+        .confirmationDialog(
+            L10n.t("اختر طريقة الموافقة", "Choose approval method"),
+            isPresented: Binding(
+                get: { joinApproveDialog != nil },
+                set: { if !$0 { joinApproveDialog = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: joinApproveDialog
+        ) { activeNotification in
+            ForEach(joinMatchCandidates.prefix(8)) { candidate in
+                Button(L10n.t("ربط مع: ", "Link with: ") + fourPartName(candidate)) {
+                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                    let nid = activeNotification.id
+                    guard let rid = activeNotification.requestId else {
+                        joinApproveDialog = nil
+                        return
+                    }
+                    joinApproveDialog = nil
+                    selectedNotification = nil
+                    Task {
+                        await adminRequestVM.mergeMemberIntoTreeMember(
+                            newMemberId: rid,
+                            existingTreeMemberId: candidate.id
+                        )
+                        await notificationVM.markNotificationAsRead(id: nid)
+                    }
+                }
+            }
+            Button(L10n.t("الموافقة كعضو جديد", "Approve as new member")) {
+                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                let nid = activeNotification.id
+                let n = activeNotification
+                joinApproveDialog = nil
+                selectedNotification = nil
+                Task {
+                    _ = await notificationVM.approveRequestFromNotification(n)
+                    await notificationVM.markNotificationAsRead(id: nid)
+                }
+            }
+            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {
+                joinApproveDialog = nil
+            }
+        } message: { _ in
+            Text(L10n.t(
+                "وُجدت \(joinMatchCandidates.count) تطابقات بنفس الاسم في الشجرة. اربطه بأحدهم أو أنشئه كعضو جديد.",
+                "\(joinMatchCandidates.count) matches found in the tree. Link to one of them or approve as a new member."
+            ))
         }
         .presentationDetents([.height(measuredDetailHeight), .large], selection: $detailSheetDetent)
         .presentationDragIndicator(.visible)
@@ -1026,7 +1091,12 @@ struct NotificationsCenterView: View {
     }
 
     // MARK: - Detail: Body Card (نص الإشعار) — مُحسَّن
-    private func detailBodyCard(notification: AppNotification, iconInfo: NotificationKindStyle) -> some View {
+    private func detailBodyCard(
+        notification: AppNotification,
+        iconInfo: NotificationKindStyle,
+        joinMatches: [FamilyMember] = [],
+        joinRequesterId: UUID? = nil
+    ) -> some View {
         let date = notification.createdDate
         // اسم المدير المنفّذ — يظهر داخل تفاصيل الإشعار حتى للأنواع المُعمَّمة (admin_edit_*)
         let actualCreator: FamilyMember? = {
@@ -1105,6 +1175,15 @@ struct NotificationsCenterView: View {
             }
             .foregroundColor(DS.Color.textTertiary)
             .padding(.top, DS.Spacing.xs)
+
+            // قسم التطابقات المحتملة — مدمج داخل نفس الكرت (مغلق افتراضياً)
+            if !joinMatches.isEmpty, let requesterId = joinRequesterId {
+                joinMatchesSection(
+                    candidates: joinMatches,
+                    requesterId: requesterId,
+                    iconInfo: iconInfo
+                )
+            }
         }
         .padding(DS.Spacing.lg)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -1302,6 +1381,14 @@ struct NotificationsCenterView: View {
                         label: L10n.t("موافقة", "Approve")
                     ) {
                         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                        // طلب انضمام/ربط + يوجد تطابقات → اعرض حوار اختيار
+                        let isJoinKind = notification.kind == RequestType.joinRequest.rawValue
+                            || notification.kind == NotificationKind.linkRequest.rawValue
+                            || notification.kind == RequestType.linkRequest.rawValue
+                        if isJoinKind && !joinMatchCandidates.isEmpty {
+                            joinApproveDialog = notification
+                            return
+                        }
                         let id = notification.id
                         selectedNotification = nil
                         Task {
@@ -1377,35 +1464,70 @@ struct NotificationsCenterView: View {
     // MARK: - Phase 3: Join Request Match Card
 
     /// يحمّل قائمة الأعضاء المرشّحين كتطابقات لطلب الانضمام/الربط
-    /// يظهر الكرت فقط لو مقدّم الطلب لسا pending — لو دُمج أو رُفض، يختفي
+    /// يظهر الكرت لو فيه عضو بنفس الاسم الأول في الشجرة
     private func loadJoinMatchCandidates(for notification: AppNotification) async {
         joinMatchCandidates = []
 
         let isJoinKind = notification.kind == RequestType.joinRequest.rawValue
             || notification.kind == NotificationKind.linkRequest.rawValue
             || notification.kind == RequestType.linkRequest.rawValue
-        guard isJoinKind else { return }
+        guard isJoinKind else {
+            Log.info("[JoinMatch] skip — kind=\(notification.kind) ليس join/link")
+            return
+        }
 
-        guard let requesterId = notification.createdBy,
-              let requester = memberVM.member(byId: requesterId) else { return }
+        // 1) جرب المسار السريع: requester عبر requestId/createdBy
+        var requester: FamilyMember? = nil
+        if let rid = notification.requestId ?? notification.createdBy {
+            requester = memberVM.member(byId: rid)
+            if requester == nil {
+                Log.info("[JoinMatch] requester \(rid.uuidString.prefix(8)) غير موجود في allMembers — سنحاول fetch")
+                // ممكن المُسجِّل الجديد لسا ما لُقّم في الكاش — تحديث فوري
+                await memberVM.fetchAllMembers(force: true)
+                requester = memberVM.member(byId: rid)
+            }
+        }
 
-        // المؤشر الموثوق: لو الطالب لسا pending فالطلب لسا يحتاج مراجعة
-        // (بعد الموافقة يتحول role إلى .member أو غيره)
-        guard requester.role == .pending else { return }
+        // 2) استخرج firstName من requester أو من body كـ fallback
+        let rawFirstName: String
+        if let r = requester {
+            rawFirstName = r.firstName.trimmingCharacters(in: .whitespaces)
+        } else {
+            // "حسن يطلب الانضمام — 5 مطابقة." → أول كلمة
+            let first = notification.body
+                .components(separatedBy: .whitespacesAndNewlines)
+                .first?
+                .trimmingCharacters(in: CharacterSet.punctuationCharacters.union(.whitespaces)) ?? ""
+            rawFirstName = first
+            Log.info("[JoinMatch] requester غير موجود — استخدام firstName='\(first)' من body")
+        }
+        // قد يحتوي firstName أحياناً اسم رباعي كامل (مدخل خاطئ) — نأخذ أول كلمة فقط
+        let firstName = rawFirstName
+            .components(separatedBy: .whitespacesAndNewlines)
+            .first?
+            .trimmingCharacters(in: CharacterSet.punctuationCharacters) ?? ""
+        guard !firstName.isEmpty else {
+            Log.info("[JoinMatch] firstName فارغ — إلغاء")
+            return
+        }
 
-        let firstName = requester.firstName.trimmingCharacters(in: .whitespaces)
-        guard !firstName.isEmpty else { return }
-
-        // البحث: أعضاء بنفس الاسم الأول، باستثناء الطالب نفسه
+        // البحث: مقارنة بأول كلمة من كل candidate.firstName (يتعامل مع الأسماء متعددة الكلمات)
         let all = memberVM.allMembers
+        let requesterId2 = requester?.id
         let matches = all.filter { candidate in
-            candidate.id != requester.id && candidate.firstName == firstName
+            guard candidate.id != requesterId2 else { return false }
+            let candidateFirst = candidate.firstName
+                .components(separatedBy: .whitespacesAndNewlines)
+                .first?
+                .trimmingCharacters(in: CharacterSet.punctuationCharacters) ?? ""
+            return candidateFirst == firstName
         }
 
         // ترتيب: نفس الأب أولاً، ثم النشطين، ثم الباقي
         let sorted = matches.sorted { a, b in
-            let aMatchesFather = requester.fatherId != nil && a.fatherId == requester.fatherId
-            let bMatchesFather = requester.fatherId != nil && b.fatherId == requester.fatherId
+            let reqFatherId = requester?.fatherId
+            let aMatchesFather = reqFatherId != nil && a.fatherId == reqFatherId
+            let bMatchesFather = reqFatherId != nil && b.fatherId == reqFatherId
             if aMatchesFather != bMatchesFather { return aMatchesFather }
 
             let aActive = a.role != .pending
@@ -1415,18 +1537,22 @@ struct NotificationsCenterView: View {
         }
 
         joinMatchCandidates = Array(sorted.prefix(10))
+        Log.info("[JoinMatch] firstName='\(firstName)' — وجدنا \(joinMatchCandidates.count) تطابقات (من \(matches.count) إجمالي)")
     }
 
-    /// كرت نتائج مطابقة طلب الانضمام — قابل للتوسع، بنفس تصميم detailBodyCard
-    private func joinMatchCard(candidates: [FamilyMember], iconInfo: NotificationKindStyle) -> some View {
-        let collapsedCount = 2
-        let hasMore = candidates.count > collapsedCount
-        let visible: [FamilyMember] = joinMatchesExpanded
-            ? candidates
-            : Array(candidates.prefix(collapsedCount))
+    /// قسم التطابقات المحتملة — مدمج داخل detailBodyCard (بدون wrapper)
+    /// مغلق بالكامل افتراضياً (لا تظهر صفوف)، يفتح بضغطة على الترويسة
+    @ViewBuilder
+    private func joinMatchesSection(
+        candidates: [FamilyMember],
+        requesterId: UUID,
+        iconInfo: NotificationKindStyle
+    ) -> some View {
+        Divider()
+            .padding(.vertical, DS.Spacing.xs)
 
-        return VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            // ترويسة قابلة للنقر — تطوي/تفتح
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            // الترويسة القابلة للنقر — تطوي/تفتح
             Button {
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
                 withAnimation(DS.Anim.snappy) {
@@ -1434,7 +1560,6 @@ struct NotificationsCenterView: View {
                 }
             } label: {
                 HStack(spacing: DS.Spacing.sm) {
-                    // chip "تطابقات" بلون نوع الإشعار
                     HStack(spacing: 4) {
                         Image(systemName: "person.2.fill")
                             .font(DS.Font.scaled(10, weight: .bold))
@@ -1450,45 +1575,32 @@ struct NotificationsCenterView: View {
 
                     Spacer(minLength: 0)
 
-                    // عداد + سهم
                     HStack(spacing: 6) {
                         Text("\(candidates.count)")
                             .font(DS.Font.scaled(11, weight: .bold))
                             .foregroundColor(DS.Color.textSecondary)
 
-                        if hasMore {
-                            Image(systemName: joinMatchesExpanded ? "chevron.up" : "chevron.down")
-                                .font(DS.Font.scaled(11, weight: .bold))
-                                .foregroundColor(DS.Color.textTertiary)
-                        }
+                        Image(systemName: joinMatchesExpanded ? "chevron.up" : "chevron.down")
+                            .font(DS.Font.scaled(11, weight: .bold))
+                            .foregroundColor(DS.Color.textTertiary)
                     }
                 }
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .disabled(!hasMore)
 
-            // المرشحون
-            VStack(spacing: 6) {
-                ForEach(visible) { candidate in
-                    joinMatchRow(candidate: candidate)
+            // المرشحون يظهرون فقط بعد التوسيع — مغلق بالكامل افتراضياً
+            if joinMatchesExpanded {
+                VStack(spacing: 6) {
+                    ForEach(candidates) { candidate in
+                        joinMatchRow(candidate: candidate, requesterId: requesterId)
+                    }
                 }
             }
         }
-        .padding(DS.Spacing.lg)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
-                .fill(DS.Color.surface)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
-                .stroke(DS.Color.textTertiary.opacity(0.10), lineWidth: 0.5)
-        )
-        .dsSubtleShadow()
     }
 
-    private func joinMatchRow(candidate: FamilyMember) -> some View {
+    private func joinMatchRow(candidate: FamilyMember, requesterId: UUID) -> some View {
         HStack(spacing: 8) {
             ZStack {
                 Circle()
@@ -1518,13 +1630,35 @@ struct NotificationsCenterView: View {
 
             Spacer(minLength: 0)
 
-            Text(candidate.roleName)
-                .font(DS.Font.scaled(9, weight: .bold))
-                .foregroundColor(candidate.roleColor)
-                .padding(.horizontal, 5)
-                .padding(.vertical, 1)
-                .background(candidate.roleColor.opacity(0.12))
+            // زر ربط/دمج — يدمج المُسجِّل الجديد مع هذا العضو في الشجرة
+            Button {
+                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                let id = selectedNotification?.id
+                selectedNotification = nil
+                Task {
+                    await adminRequestVM.mergeMemberIntoTreeMember(
+                        newMemberId: requesterId,
+                        existingTreeMemberId: candidate.id
+                    )
+                    if let nid = id {
+                        await notificationVM.markNotificationAsRead(id: nid)
+                    }
+                }
+            } label: {
+                HStack(spacing: 3) {
+                    Image(systemName: "link")
+                        .font(DS.Font.scaled(9, weight: .bold))
+                    Text(L10n.t("ربط", "Link"))
+                        .font(DS.Font.scaled(10, weight: .bold))
+                }
+                .foregroundColor(DS.Color.secondary)
+                .padding(.horizontal, DS.Spacing.sm)
+                .padding(.vertical, 3)
+                .background(DS.Color.secondary.opacity(0.12))
                 .clipShape(Capsule())
+                .overlay(Capsule().stroke(DS.Color.secondary.opacity(0.25), lineWidth: 0.5))
+            }
+            .buttonStyle(.plain)
         }
         .padding(.vertical, 2)
     }

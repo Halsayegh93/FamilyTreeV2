@@ -1088,7 +1088,6 @@ struct TreeMemberNode: View {
                                 .foregroundColor(DS.Color.overlayTextMuted)
                         }
 
-                        if member.isDeceased ?? false { deathTag }
                     }
                 }
                 .overlay {
@@ -1107,7 +1106,7 @@ struct TreeMemberNode: View {
                     }
                 }
                 .overlay {
-                    // وميض الموقع
+                    // وميض الموقع (الدائرة الزرقاء — يجب أن يكون تحت شريط المتوفى)
                     if isCurrentLocationMember {
                         Circle()
                             .stroke(DS.Color.currentLocation, lineWidth: 4.2)
@@ -1118,6 +1117,10 @@ struct TreeMemberNode: View {
                             .animation(Animation.easeOut(duration: 1.25).repeatCount(4, autoreverses: false), value: isPulsing)
                             .onAppear { isPulsing = true }
                     }
+                }
+                .overlay {
+                    // شريط المتوفى — overlay أخير ليكون فوق الدائرة الزرقاء
+                    if member.isDeceased ?? false { deathTag }
                 }
                 .overlay(alignment: .top) {
                     // علامة "أنت هنا" — overlay لا يأثر على الـ layout
