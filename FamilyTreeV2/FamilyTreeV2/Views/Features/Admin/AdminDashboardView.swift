@@ -1,5 +1,11 @@
 import SwiftUI
 
+/// الشاشات التي يمكن دفعها عبر NavigationPath من إشعار خارجي
+enum AdminReviewDestination: Hashable {
+    case treeEditRequests
+    case allRequests
+}
+
 struct AdminDashboardView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var memberVM: MemberViewModel
@@ -8,6 +14,7 @@ struct AdminDashboardView: View {
     @EnvironmentObject var storyVM: StoryViewModel
     @StateObject private var diwaniyaVM = DiwaniyasViewModel()
     @Binding var selectedTab: Int
+    @State private var navigationPath = NavigationPath()
     @State private var showingNotifications = false
     @State private var appeared = false
     @State private var pendingCount: Int = 0
@@ -90,7 +97,7 @@ struct AdminDashboardView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $navigationPath) {
             ZStack {
                 DS.Color.background.ignoresSafeArea()
 
@@ -241,10 +248,26 @@ struct AdminDashboardView: View {
                     }
                 }
             }
+            .navigationDestination(for: AdminReviewDestination.self) { destination in
+                switch destination {
+                case .treeEditRequests: AdminTreeEditRequestsView()
+                case .allRequests:      AdminAllRequestsView()
+                }
+            }
         }
         .toolbar(.hidden, for: .navigationBar)
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+        .onReceive(NotificationCenter.default.publisher(for: .openAdminReviewForKind)) { note in
+            guard let kind = note.userInfo?["kind"] as? String else { return }
+            // عبد عند الفتح: انتقل لتاب الإدارة، ثم ادفع الشاشة المناسبة
+            let destination: AdminReviewDestination = (kind == NotificationKind.treeEdit.rawValue)
+                ? .treeEditRequests
+                : .allRequests
+            // قشّر الـ stack الحالي قبل الدفع لتجنب التراكم
+            navigationPath = NavigationPath()
+            navigationPath.append(destination)
+        }
         .task {
             diwaniyaVM.canModerate = authVM.canModerate
             diwaniyaVM.authVM = authVM

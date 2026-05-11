@@ -241,31 +241,95 @@ struct AdminActiveMembersView: View {
     }
 
     // MARK: - Stats card
+    /// عدد الأعضاء داخل المنظومة (نفس منطق الدائرة الخضراء في تفاصيل العضو)
+    /// — أحياء، ليسوا pending، ليسوا frozen
+    /// نستخدم Set على الـ id لضمان عدم تكرار العضو لو ظهر مرتين
+    private var inSystemCount: Int {
+        var seenIds = Set<UUID>()
+        for member in memberVM.allMembers where member.isInSystem {
+            seenIds.insert(member.id)
+        }
+        return seenIds.count
+    }
+
+    /// إجمالي الأعضاء الأحياء فقط (باستثناء المتوفين و pending)
+    private var totalMembersCount: Int {
+        var seenIds = Set<UUID>()
+        for member in memberVM.allMembers
+            where member.role != .pending && member.isDeceased != true {
+            seenIds.insert(member.id)
+        }
+        return seenIds.count
+    }
+
     private var statsCard: some View {
-        HStack(spacing: DS.Spacing.sm) {
-            statBox(
-                icon: "circle.fill",
-                title: L10n.t("الآن", "Now"),
-                value: "\(nowRows.count)",
-                color: DS.Color.success
-            )
-            statBox(
-                icon: "iphone.gen3",
-                title: L10n.t("التطبيق", "App"),
-                value: "\(nowRows.filter { $0.source == "app" }.count + recentRows.filter { $0.source == "app" }.count)",
-                color: DS.Color.primary
-            )
-            statBox(
-                icon: "globe",
-                title: L10n.t("الموقع", "Web"),
-                value: "\(nowRows.filter { $0.source == "web" }.count + recentRows.filter { $0.source == "web" }.count)",
-                color: DS.Color.accent
-            )
-            statBox(
-                icon: "clock.arrow.circlepath",
-                title: L10n.t("14 يوم", "14d"),
-                value: "\(recentRows.count)",
-                color: DS.Color.info
+        VStack(spacing: DS.Spacing.sm) {
+            // الصف الأول: نشاط لحظي
+            HStack(spacing: DS.Spacing.sm) {
+                statBox(
+                    icon: "circle.fill",
+                    title: L10n.t("الآن", "Now"),
+                    value: "\(nowRows.count)",
+                    color: DS.Color.success
+                )
+                statBox(
+                    icon: "iphone.gen3",
+                    title: L10n.t("التطبيق", "App"),
+                    value: "\(nowRows.filter { $0.source == "app" }.count + recentRows.filter { $0.source == "app" }.count)",
+                    color: DS.Color.primary
+                )
+                statBox(
+                    icon: "globe",
+                    title: L10n.t("الموقع", "Web"),
+                    value: "\(nowRows.filter { $0.source == "web" }.count + recentRows.filter { $0.source == "web" }.count)",
+                    color: DS.Color.accent
+                )
+                statBox(
+                    icon: "clock.arrow.circlepath",
+                    title: L10n.t("14 يوم", "14d"),
+                    value: "\(recentRows.count)",
+                    color: DS.Color.info
+                )
+            }
+
+            // الصف الثاني: إجمالي داخل المنظومة (مرتبط بالدائرة الخضراء في الشجرة)
+            HStack(spacing: DS.Spacing.sm) {
+                Image(systemName: "person.badge.shield.checkmark.fill")
+                    .font(DS.Font.scaled(13, weight: .bold))
+                    .foregroundColor(DS.Color.secondary)
+                    .frame(width: 28, height: 28)
+                    .background(DS.Color.secondary.opacity(0.12))
+                    .clipShape(Circle())
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(L10n.t("داخل المنظومة", "In the System"))
+                        .font(DS.Font.scaled(11, weight: .bold))
+                        .foregroundColor(DS.Color.textSecondary)
+                    Text(L10n.t(
+                        "أعضاء نشطون (هاتف أو تسجيل دخول)",
+                        "Active members (phone or login)"
+                    ))
+                    .font(DS.Font.scaled(10, weight: .medium))
+                    .foregroundColor(DS.Color.textTertiary)
+                }
+
+                Spacer()
+
+                HStack(spacing: 4) {
+                    Text("\(inSystemCount)")
+                        .font(DS.Font.scaled(20, weight: .heavy))
+                        .foregroundColor(DS.Color.secondary)
+                    Text("/ \(totalMembersCount)")
+                        .font(DS.Font.scaled(12, weight: .semibold))
+                        .foregroundColor(DS.Color.textTertiary)
+                }
+            }
+            .padding(DS.Spacing.md)
+            .background(DS.Color.secondary.opacity(0.06))
+            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                    .stroke(DS.Color.secondary.opacity(0.20), lineWidth: 0.5)
             )
         }
         .padding(.horizontal, DS.Spacing.lg)

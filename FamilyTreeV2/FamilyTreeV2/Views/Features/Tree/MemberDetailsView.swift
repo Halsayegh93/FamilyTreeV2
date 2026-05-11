@@ -48,6 +48,9 @@ struct MemberDetailsView: View {
         member.id == authVM.currentUser?.id
     }
 
+    /// العضو نشط داخل المنظومة — يستخدم helper مشترك في FamilyMember+UI
+    private var isMemberActive: Bool { member.isInSystem }
+
     private var canSeePendingRequests: Bool {
         authVM.canModerate ||
         cachedPendingRequests.contains { $0.requesterId == authVM.currentUser?.id }
@@ -256,6 +259,18 @@ struct MemberDetailsView: View {
                                 Image(systemName: "heart.slash.fill")
                                     .font(DS.Font.scaled(18, weight: .bold))
                                     .foregroundColor(DS.Color.textTertiary)
+                            )
+                            .offset(x: 48, y: 48)
+                    } else if isMemberActive {
+                        // دائرة خضراء للأعضاء النشطين (داخل المنظومة)
+                        Circle()
+                            .fill(DS.Color.background)
+                            .frame(width: 26, height: 26)
+                            .overlay(
+                                Circle()
+                                    .fill(DS.Color.secondary)
+                                    .frame(width: 16, height: 16)
+                                    .shadow(color: DS.Color.secondary.opacity(0.5), radius: 4, x: 0, y: 1)
                             )
                             .offset(x: 48, y: 48)
                     }

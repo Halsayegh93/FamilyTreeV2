@@ -793,10 +793,11 @@ class NewsViewModel: ObservableObject {
                 await fetchPendingNewsRequests(force: true)
             }
 
+            // إجراء مُنفَّذ — يذهب لتاب المستجدات بلا أزرار موافقة/رفض
             await notificationVM?.notifyAdminsWithPush(
                 title: L10n.t("حذف منشور", "Post Deleted"),
                 body: L10n.t("تم حذف منشور من الأخبار", "A news post has been deleted"),
-                kind: NotificationKind.newsReport.rawValue
+                kind: "news_deleted"
             )
         } catch {
             Log.error("خطأ حذف الخبر: \(error.localizedDescription)")
@@ -822,10 +823,14 @@ class NewsViewModel: ObservableObject {
                 "details": AnyEncodable(reason)
             ]
 
-            try await supabase
+            // إدراج + جلب id الصف لإرفاقه بإشعار الـ push (يفعّل أزرار قبول/رفض)
+            let inserted: AdminRequest = try await supabase
                 .from("admin_requests")
                 .insert(payload)
+                .select()
+                .single()
                 .execute()
+                .value
 
             let reporterName = currentUser?.fullName ?? ""
             await notificationVM?.notifyAdminsWithPush(
@@ -834,7 +839,9 @@ class NewsViewModel: ObservableObject {
                     "\(reporterName) أبلغ عن منشور يحتاج مراجعتكم",
                     "\(reporterName) reported a post that needs your review"
                 ),
-                kind: NotificationKind.newsReport.rawValue
+                kind: NotificationKind.newsReport.rawValue,
+                requestId: inserted.id,
+                requestType: RequestType.newsReport.rawValue
             )
 
             await notificationVM?.sendNotification(

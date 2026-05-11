@@ -382,7 +382,6 @@ struct AdminModeratorsView: View {
             (L10n.t("قبول الطلبات", "Approve requests"), [true, true, true]),
             // مدير + مراقب ✅✅❌
             (L10n.t("رفض الطلبات", "Reject requests"), [true, true, false]),
-            (L10n.t("تعديل بيانات محدودة", "Edit basic info"), [true, true, false]),
             (L10n.t("حذف أخبار", "Delete news"), [true, true, false]),
             (L10n.t("حذف تعليقات", "Delete comments"), [true, true, false]),
             (L10n.t("حذف قصص", "Delete stories"), [true, true, false]),

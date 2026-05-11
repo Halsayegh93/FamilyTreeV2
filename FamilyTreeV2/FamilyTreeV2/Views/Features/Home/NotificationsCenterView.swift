@@ -12,41 +12,43 @@ private struct NotificationKindStyle {
     var label: String { L10n.t(labelAr, labelEn) }
 
     private static let styles: [String: NotificationKindStyle] = [
-        "approval":          .init(icon: "checkmark.circle.fill",                    gradient: DS.Color.gradientCool,    color: DS.Color.success,     labelAr: "عضوية",           labelEn: "Membership"),
-        "join_approved":     .init(icon: "checkmark.circle.fill",                    gradient: DS.Color.gradientCool,    color: DS.Color.success,     labelAr: "عضوية",           labelEn: "Membership"),
-        "join_request":      .init(icon: "link.circle.fill",                         gradient: DS.Color.gradientCool,    color: DS.Color.info,        labelAr: "طلب انضمام",      labelEn: "Join Request"),
+        // — كل الأيقونات تستخدم ألوان Vivid Spectrum (الأزرق/الأخضر/البنفسجي) —
+        "approval":          .init(icon: "checkmark.circle.fill",                    gradient: DS.Color.gradientPrimary, color: DS.Color.secondary,   labelAr: "عضوية",           labelEn: "Membership"),
+        "join_approved":     .init(icon: "checkmark.circle.fill",                    gradient: DS.Color.gradientPrimary, color: DS.Color.secondary,   labelAr: "عضوية",           labelEn: "Membership"),
+        "join_request":      .init(icon: "link.circle.fill",                         gradient: DS.Color.gradientPrimary, color: DS.Color.primary,     labelAr: "طلب انضمام",      labelEn: "Join Request"),
         "news":              .init(icon: "newspaper.fill",                           gradient: DS.Color.gradientPrimary, color: DS.Color.primary,     labelAr: "أخبار",           labelEn: "News"),
         "news_add":          .init(icon: "newspaper.fill",                           gradient: DS.Color.gradientPrimary, color: DS.Color.primary,     labelAr: "أخبار",           labelEn: "News"),
         "admin":             .init(icon: "shield.fill",                              gradient: DS.Color.gradientAccent,  color: DS.Color.accent,      labelAr: "إدارة",           labelEn: "Admin"),
         "admin_request":     .init(icon: "shield.fill",                              gradient: DS.Color.gradientAccent,  color: DS.Color.accent,      labelAr: "إدارة",           labelEn: "Admin"),
-        "deceased_report":   .init(icon: "heart.fill",                               gradient: DS.Color.gradientWarm,    color: DS.Color.neonPink,    labelAr: "وفاة",            labelEn: "Deceased"),
-        "child_add":         .init(icon: "person.badge.plus",                        gradient: DS.Color.gradientCool,    color: DS.Color.info,        labelAr: "إضافة ابن",       labelEn: "Child Add"),
-        "phone_change":      .init(icon: "phone.arrow.right",                        gradient: DS.Color.gradientNeon,    color: DS.Color.neonBlue,    labelAr: "تغيير رقم",       labelEn: "Phone Change"),
-        "news_report":       .init(icon: "exclamationmark.triangle.fill",            gradient: DS.Color.gradientFire,    color: DS.Color.warning,     labelAr: "بلاغ خبر",        labelEn: "News Report"),
-        "contact_message":   .init(icon: "envelope.fill",                            gradient: DS.Color.gradientOcean,   color: DS.Color.primary,     labelAr: "تواصل",           labelEn: "Contact"),
-        "link_request":      .init(icon: "link.circle.fill",                         gradient: DS.Color.gradientCool,    color: DS.Color.info,        labelAr: "طلب ربط",         labelEn: "Link Request"),
-        "gallery_add":       .init(icon: "photo.fill",                               gradient: DS.Color.gradientNeon,    color: DS.Color.neonCyan,    labelAr: "معرض صور",        labelEn: "Gallery"),
-        "news_comment":      .init(icon: "bubble.left.fill",                         gradient: DS.Color.gradientCool,    color: DS.Color.info,        labelAr: "تعليق",           labelEn: "Comment"),
-        "news_like":         .init(icon: "heart.fill",                               gradient: DS.Color.gradientFire,    color: DS.Color.error,       labelAr: "إعجاب",           labelEn: "Like"),
+        "deceased_report":   .init(icon: "heart.fill",                               gradient: DS.Color.gradientAccent,  color: DS.Color.accent,      labelAr: "وفاة",            labelEn: "Deceased"),
+        "child_add":         .init(icon: "person.badge.plus",                        gradient: DS.Color.gradientPrimary, color: DS.Color.secondary,   labelAr: "إضافة ابن",       labelEn: "Child Add"),
+        "phone_change":      .init(icon: "phone.arrow.right",                        gradient: DS.Color.gradientPrimary, color: DS.Color.secondary,   labelAr: "تغيير رقم",       labelEn: "Phone Change"),
+        "news_report":       .init(icon: "exclamationmark.triangle.fill",            gradient: DS.Color.gradientPrimary, color: DS.Color.error,       labelAr: "بلاغ خبر",        labelEn: "News Report"),
+        "news_deleted":      .init(icon: "trash.fill",                               gradient: DS.Color.gradientPrimary, color: DS.Color.error,       labelAr: "حذف منشور",       labelEn: "Post Deleted"),
+        "contact_message":   .init(icon: "envelope.fill",                            gradient: DS.Color.gradientPrimary, color: DS.Color.primary,     labelAr: "تواصل",           labelEn: "Contact"),
+        "link_request":      .init(icon: "link.circle.fill",                         gradient: DS.Color.gradientPrimary, color: DS.Color.primary,     labelAr: "طلب ربط",         labelEn: "Link Request"),
+        "gallery_add":       .init(icon: "photo.fill",                               gradient: DS.Color.gradientPrimary, color: DS.Color.secondary,   labelAr: "معرض صور",        labelEn: "Gallery"),
+        "news_comment":      .init(icon: "bubble.left.fill",                         gradient: DS.Color.gradientPrimary, color: DS.Color.primary,     labelAr: "تعليق",           labelEn: "Comment"),
+        "news_like":         .init(icon: "heart.fill",                               gradient: DS.Color.gradientPrimary, color: DS.Color.secondary,   labelAr: "إعجاب",           labelEn: "Like"),
         "news_published":    .init(icon: "megaphone.fill",                           gradient: DS.Color.gradientPrimary, color: DS.Color.primary,     labelAr: "خبر جديد",        labelEn: "New Post"),
-        "profile_update":    .init(icon: "person.crop.circle.badge.checkmark",       gradient: DS.Color.gradientAccent,  color: DS.Color.accent,      labelAr: "تحديث بيانات",    labelEn: "Profile Update"),
-        "account_activated": .init(icon: "checkmark.seal.fill",                      gradient: DS.Color.gradientCool,    color: DS.Color.success,     labelAr: "تفعيل حساب",      labelEn: "Activated"),
-        "role_change":       .init(icon: "shield.lefthalf.filled",                   gradient: DS.Color.gradientAccent,  color: DS.Color.warning,     labelAr: "تغيير الصلاحية",  labelEn: "Role Change"),
-        "weekly_digest":     .init(icon: "list.clipboard.fill",                      gradient: DS.Color.gradientOcean,   color: DS.Color.primaryDark, labelAr: "ملخص أسبوعي",     labelEn: "Weekly Digest"),
+        "profile_update":    .init(icon: "person.crop.circle.badge.checkmark",       gradient: DS.Color.gradientPrimary, color: DS.Color.secondary,   labelAr: "تحديث بيانات",    labelEn: "Profile Update"),
+        "account_activated": .init(icon: "checkmark.seal.fill",                      gradient: DS.Color.gradientPrimary, color: DS.Color.secondary,   labelAr: "تفعيل حساب",      labelEn: "Activated"),
+        "role_change":       .init(icon: "shield.lefthalf.filled",                   gradient: DS.Color.gradientAccent,  color: DS.Color.accent,      labelAr: "تغيير الصلاحية",  labelEn: "Role Change"),
+        "weekly_digest":     .init(icon: "list.clipboard.fill",                      gradient: DS.Color.gradientPrimary, color: DS.Color.primary,     labelAr: "ملخص أسبوعي",     labelEn: "Weekly Digest"),
         "tree_edit":         .init(icon: "pencil.circle.fill",                       gradient: DS.Color.gradientAccent,  color: DS.Color.accent,      labelAr: "تعديل شجرة",      labelEn: "Tree Edit"),
-        "story_pending":     .init(icon: "circle.dashed",                            gradient: DS.Color.gradientNeon,    color: DS.Color.neonCyan,    labelAr: "قصة معلقة",        labelEn: "Pending Story"),
-        "story_approved":    .init(icon: "circle.fill",                              gradient: DS.Color.gradientCool,    color: DS.Color.info,        labelAr: "قصة معتمدة",      labelEn: "Story Approved"),
-        "story_rejected":    .init(icon: "circle.fill",                              gradient: DS.Color.gradientCool,    color: DS.Color.info,        labelAr: "قصة مرفوضة",      labelEn: "Story Rejected"),
-        "photo_suggestion":  .init(icon: "camera.badge.ellipsis",                    gradient: DS.Color.gradientNeon,    color: DS.Color.neonCyan,    labelAr: "اقتراح صورة",     labelEn: "Photo Suggestion"),
-        "gallery_pending":   .init(icon: "photo.fill",                               gradient: DS.Color.gradientNeon,    color: DS.Color.neonCyan,    labelAr: "صورة معرض",        labelEn: "Gallery Photo"),
-        "gallery_approved":  .init(icon: "photo.fill",                               gradient: DS.Color.gradientCool,    color: DS.Color.success,     labelAr: "صورة معتمدة",      labelEn: "Photo Approved"),
-        "gallery_rejected":  .init(icon: "photo.fill",                               gradient: DS.Color.gradientWarm,    color: DS.Color.error,       labelAr: "صورة مرفوضة",      labelEn: "Photo Rejected"),
-        "diwaniya_pending":  .init(icon: "tent.fill",                                gradient: DS.Color.gradientOcean,   color: DS.Color.gridDiwaniya, labelAr: "ديوانية جديدة",   labelEn: "New Diwaniya"),
-        "diwaniya_approved": .init(icon: "tent.fill",                                gradient: DS.Color.gradientCool,    color: DS.Color.success,     labelAr: "ديوانية معتمدة",   labelEn: "Diwaniya Approved"),
-        "diwaniya_rejected": .init(icon: "tent.fill",                                gradient: DS.Color.gradientWarm,    color: DS.Color.error,       labelAr: "ديوانية مرفوضة",   labelEn: "Diwaniya Rejected"),
-        "project_pending":   .init(icon: "briefcase.fill",                           gradient: DS.Color.gradientAccent,  color: DS.Color.neonPurple,  labelAr: "مشروع جديد",       labelEn: "New Project"),
-        "project_approved":  .init(icon: "briefcase.fill",                           gradient: DS.Color.gradientCool,    color: DS.Color.success,     labelAr: "مشروع معتمد",      labelEn: "Project Approved"),
-        "project_rejected":  .init(icon: "briefcase.fill",                           gradient: DS.Color.gradientWarm,    color: DS.Color.error,       labelAr: "مشروع مرفوض",      labelEn: "Project Rejected"),
+        "story_pending":     .init(icon: "circle.dashed",                            gradient: DS.Color.gradientPrimary, color: DS.Color.primary,     labelAr: "قصة معلقة",        labelEn: "Pending Story"),
+        "story_approved":    .init(icon: "checkmark.circle.fill",                    gradient: DS.Color.gradientPrimary, color: DS.Color.secondary,   labelAr: "قصة معتمدة",      labelEn: "Story Approved"),
+        "story_rejected":    .init(icon: "xmark.circle.fill",                        gradient: DS.Color.gradientPrimary, color: DS.Color.error,       labelAr: "قصة مرفوضة",      labelEn: "Story Rejected"),
+        "photo_suggestion":  .init(icon: "camera.badge.ellipsis",                    gradient: DS.Color.gradientPrimary, color: DS.Color.secondary,   labelAr: "اقتراح صورة",     labelEn: "Photo Suggestion"),
+        "gallery_pending":   .init(icon: "photo.fill",                               gradient: DS.Color.gradientPrimary, color: DS.Color.primary,     labelAr: "صورة معرض",        labelEn: "Gallery Photo"),
+        "gallery_approved":  .init(icon: "photo.fill",                               gradient: DS.Color.gradientPrimary, color: DS.Color.secondary,   labelAr: "صورة معتمدة",      labelEn: "Photo Approved"),
+        "gallery_rejected":  .init(icon: "photo.fill",                               gradient: DS.Color.gradientPrimary, color: DS.Color.error,       labelAr: "صورة مرفوضة",      labelEn: "Photo Rejected"),
+        "diwaniya_pending":  .init(icon: "tent.fill",                                gradient: DS.Color.gradientPrimary, color: DS.Color.primary,     labelAr: "ديوانية جديدة",   labelEn: "New Diwaniya"),
+        "diwaniya_approved": .init(icon: "tent.fill",                                gradient: DS.Color.gradientPrimary, color: DS.Color.secondary,   labelAr: "ديوانية معتمدة",   labelEn: "Diwaniya Approved"),
+        "diwaniya_rejected": .init(icon: "tent.fill",                                gradient: DS.Color.gradientPrimary, color: DS.Color.error,       labelAr: "ديوانية مرفوضة",   labelEn: "Diwaniya Rejected"),
+        "project_pending":   .init(icon: "briefcase.fill",                           gradient: DS.Color.gradientAccent,  color: DS.Color.accent,      labelAr: "مشروع جديد",       labelEn: "New Project"),
+        "project_approved":  .init(icon: "briefcase.fill",                           gradient: DS.Color.gradientPrimary, color: DS.Color.secondary,   labelAr: "مشروع معتمد",      labelEn: "Project Approved"),
+        "project_rejected":  .init(icon: "briefcase.fill",                           gradient: DS.Color.gradientPrimary, color: DS.Color.error,       labelAr: "مشروع مرفوض",      labelEn: "Project Rejected"),
     ]
 
     private static let fallback = NotificationKindStyle(
@@ -61,6 +63,14 @@ private struct NotificationKindStyle {
 
 // MARK: - Layout Constants
 
+/// Preference key لقياس ارتفاع محتوى شيت تفاصيل الإشعار
+private struct DetailSheetHeightKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
 private enum NotifLayout {
     /// Detail info row icon column width (also used by detailDivider leading inset)
     static let infoIconWidth: CGFloat = 28
@@ -74,6 +84,7 @@ struct NotificationsCenterView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var notificationVM: NotificationViewModel
     @EnvironmentObject var memberVM: MemberViewModel
+    @EnvironmentObject var adminRequestVM: AdminRequestViewModel
     @Environment(\.dismiss) var dismiss
 
     @AppStorage("notif_comments") private var notifComments: Bool = true
@@ -84,6 +95,18 @@ struct NotificationsCenterView: View {
     @State private var isSelecting = false
     @State private var selectedIds: Set<UUID> = []
     @State private var selectedNotification: AppNotification? = nil
+    /// detent المختار حالياً — يُحدَّث ديناميكياً ليتطابق مع ارتفاع المحتوى
+    @State private var detailSheetDetent: PresentationDetent = .height(450)
+    /// آخر ارتفاع تم قياسه للمحتوى
+    @State private var measuredDetailHeight: CGFloat = 450
+    /// طلب admin_requests المرتبط بالإشعار الحالي — يُحمَّل عند فتح الشيت (للمرحلة ٣)
+    @State private var loadedAdminRequest: AdminRequest? = nil
+    /// نتائج مطابقة اسم/أب لطلبات الانضمام
+    @State private var joinMatchCandidates: [FamilyMember] = []
+    /// هل كرت التطابقات موسّع — افتراضياً مغلق
+    @State private var joinMatchesExpanded: Bool = false
+    /// confirmation dialog لخيارات الموافقة على طلب الانضمام (ربط أو إنشاء جديد)
+    @State private var joinApproveDialog: AppNotification? = nil
     @State private var selectedTab: NotifTab = .notifications
     @Namespace private var tabIndicator
 
@@ -443,6 +466,8 @@ struct NotificationsCenterView: View {
         NotificationKind.galleryRejected.rawValue,
         // نشر محتوى
         NotificationKind.newsPublished.rawValue,
+        // حذف محتوى (إجراء منفّذ — مو طلب معلّق)
+        "news_deleted",
     ]
 
     /// كل الإشعارات بعد تطبيق فلتر الإعدادات (الأنواع المخفية)
@@ -459,8 +484,15 @@ struct NotificationsCenterView: View {
         let myId = authVM.currentUser?.id
         let isCompletedAction = Self.completedActionKinds.contains(n.kind)
 
+        // عناوين تبدأ بـ "تم قبول/تم رفض" أو "Approved/Rejected" تدل على إجراء منفّذ
+        // (يستخدم لتمييز broadcastCompletedAction عن الطلبات الأصلية بنفس الـ kind)
+        let titleIndicatesCompleted = n.title.hasPrefix("تم قبول")
+            || n.title.hasPrefix("تم رفض")
+            || n.title.contains("Approved")
+            || n.title.contains("Rejected")
+
         // للأدمن: الإجراءات اللي تمّت تذهب لـ "المستجدات" (مو "إشعاراتي")
-        if authVM.canModerate && isCompletedAction { return false }
+        if authVM.canModerate && (isCompletedAction || titleIndicatesCompleted) { return false }
 
         // طلبات تنتظر موافقة الأدمن
         if Self.pendingApprovalKinds.contains(n.kind) { return true }
@@ -491,7 +523,11 @@ struct NotificationsCenterView: View {
     /// تاب "المستجدات" (للأدمن فقط): الإجراءات اللي تمّت
     private func belongsToActivityTab(_ n: AppNotification) -> Bool {
         guard !belongsToNotificationsTab(n) else { return false }
-        return Self.completedActionKinds.contains(n.kind)
+        let titleIndicatesCompleted = n.title.hasPrefix("تم قبول")
+            || n.title.hasPrefix("تم رفض")
+            || n.title.contains("Approved")
+            || n.title.contains("Rejected")
+        return Self.completedActionKinds.contains(n.kind) || titleIndicatesCompleted
     }
 
     private var filteredNotifications: [AppNotification] {
@@ -547,7 +583,7 @@ struct NotificationsCenterView: View {
                             .opacity(appeared ? 1 : 0)
                             .offset(y: appeared ? 0 : 20)
                             .animation(DS.Anim.smooth.delay(Double(min(index, 5)) * 0.04), value: appeared)
-                            .listRowInsets(EdgeInsets(top: DS.Spacing.xs, leading: DS.Spacing.lg, bottom: DS.Spacing.xs, trailing: DS.Spacing.lg))
+                            .listRowInsets(EdgeInsets(top: 3, leading: DS.Spacing.lg, bottom: 3, trailing: DS.Spacing.lg))
                             .listRowBackground(Color.clear)
                             .listRowSeparator(.hidden)
                             .swipeActions(edge: .trailing, allowsFullSwipe: authVM.isAdmin) {
@@ -575,14 +611,14 @@ struct NotificationsCenterView: View {
                 } header: {
                     HStack(spacing: DS.Spacing.sm) {
                         Text(section)
-                            .font(DS.Font.scaled(13, weight: .bold))
+                            .font(DS.Font.scaled(12, weight: .bold))
                             .foregroundColor(DS.Color.textSecondary)
                         Rectangle()
                             .fill(DS.Color.textTertiary.opacity(0.2))
                             .frame(height: 1)
                     }
-                    .padding(.vertical, DS.Spacing.xs)
-                    .listRowInsets(EdgeInsets(top: 0, leading: DS.Spacing.lg, bottom: 0, trailing: DS.Spacing.lg))
+                    .padding(.vertical, 3)
+                    .listRowInsets(EdgeInsets(top: 4, leading: DS.Spacing.lg, bottom: 2, trailing: DS.Spacing.lg))
                 }
             }
         }
@@ -692,6 +728,13 @@ struct NotificationsCenterView: View {
                         }
 
                         Spacer(minLength: 0)
+
+                        // ⚡ موافقة/رفض سريع — للأدمن على الطلبات المعلقة فقط
+                        if !isSelecting,
+                           authVM.isAdmin,
+                           item.isActionableRequest || Self.pendingApprovalKinds.contains(item.kind) {
+                            rowQuickActions(notification: item)
+                        }
                     }
                 }
 
@@ -736,6 +779,50 @@ struct NotificationsCenterView: View {
         }
     }
 
+    /// زرّان دائريّان صغيران لموافقة/رفض سريع داخل صف الإشعار
+    @ViewBuilder
+    private func rowQuickActions(notification: AppNotification) -> some View {
+        HStack(spacing: 6) {
+            // موافقة
+            Button {
+                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                Task {
+                    _ = await notificationVM.approveRequestFromNotification(notification)
+                    await notificationVM.markNotificationAsRead(id: notification.id)
+                }
+            } label: {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(DS.Color.secondary)
+                    .frame(width: 26, height: 26)
+                    .background(DS.Color.secondary.opacity(0.12))
+                    .clipShape(Circle())
+                    .overlay(Circle().stroke(DS.Color.secondary.opacity(0.25), lineWidth: 1))
+            }
+            .buttonStyle(DSScaleButtonStyle())
+            .accessibilityLabel(L10n.t("موافقة", "Approve"))
+
+            // رفض
+            Button {
+                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                Task {
+                    _ = await notificationVM.rejectRequestFromNotification(notification)
+                    await notificationVM.markNotificationAsRead(id: notification.id)
+                }
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(DS.Color.error)
+                    .frame(width: 26, height: 26)
+                    .background(DS.Color.error.opacity(0.12))
+                    .clipShape(Circle())
+                    .overlay(Circle().stroke(DS.Color.error.opacity(0.25), lineWidth: 1))
+            }
+            .buttonStyle(DSScaleButtonStyle())
+            .accessibilityLabel(L10n.t("رفض", "Reject"))
+        }
+    }
+
     // MARK: - Empty State
 
     private var emptyState: some View {
@@ -757,76 +844,412 @@ struct NotificationsCenterView: View {
     private func notificationDetailSheet(_ notification: AppNotification) -> some View {
         let iconInfo = NotificationKindStyle.style(for: notification.kind)
         let date = notification.createdDate
+        let relatedMember = relatedMemberForNotification(notification)
+        let isJoinRequest = notification.kind == RequestType.joinRequest.rawValue
+            || notification.kind == NotificationKind.linkRequest.rawValue
 
-        return NavigationStack {
-            ZStack {
-                DS.Color.background.ignoresSafeArea()
+        return ZStack {
+            DS.Color.background.ignoresSafeArea()
 
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: DS.Spacing.xl) {
-                        detailHero(notification: notification, iconInfo: iconInfo, date: date)
-                        detailContentCard(notification: notification)
-                        detailMetaCard(notification: notification, iconInfo: iconInfo, date: date)
-                        detailActions(notification: notification)
-                        Spacer(minLength: DS.Spacing.xxxl)
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: relatedMember == nil ? DS.Spacing.sm : DS.Spacing.md) {
+                    detailHero(notification: notification, iconInfo: iconInfo, date: date)
+                        .padding(.top, DS.Spacing.xxxl)
+
+                    if let member = relatedMember {
+                        detailMemberCard(member: member, iconInfo: iconInfo)
                     }
-                    .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.top, DS.Spacing.lg)
+
+                    if !notification.body.isEmpty {
+                        let showMatches = isJoinRequest
+                            && authVM.canModerate
+                            && !joinMatchCandidates.isEmpty
+                        detailBodyCard(
+                            notification: notification,
+                            iconInfo: iconInfo,
+                            joinMatches: showMatches ? joinMatchCandidates : [],
+                            joinRequesterId: notification.requestId
+                        )
+                    }
+
+                    if authVM.isAdmin,
+                       let details = notification.details,
+                       !details.changes.isEmpty {
+                        DSChangeDetailsCard(details: details)
+                    }
+
+                    detailActions(notification: notification)
                 }
-            }
-            .navigationTitle(L10n.t("تفاصيل الإشعار", "Notification Details"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        selectedNotification = nil
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(DS.Font.scaled(22, weight: .medium))
-                            .foregroundStyle(DS.Color.textTertiary)
-                            .symbolRenderingMode(.hierarchical)
+                .padding(.horizontal, DS.Spacing.lg)
+                .padding(.bottom, DS.Spacing.xs)
+                .background(
+                    GeometryReader { geo in
+                        Color.clear
+                            .preference(key: DetailSheetHeightKey.self, value: geo.size.height)
                     }
-                    .accessibilityLabel(L10n.t("إغلاق", "Close"))
+                )
+            }
+        }
+        .onPreferenceChange(DetailSheetHeightKey.self) { newContentHeight in
+            // buffer: bottom safe area (~34pt) + grabber — تم تقليله لتقليل الفراغ تحت الأزرار
+            let target = newContentHeight + 16
+            let screenH = UIScreen.main.bounds.height
+            let cap = screenH - 60
+            let clamped = max(280, min(target, cap))
+            if abs(clamped - measuredDetailHeight) > 2 {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    measuredDetailHeight = clamped
+                    detailSheetDetent = .height(clamped)
                 }
             }
         }
+        .task(id: notification.id) {
+            joinMatchesExpanded = false
+            await loadJoinMatchCandidates(for: notification)
+        }
+        .confirmationDialog(
+            L10n.t("اختر طريقة الموافقة", "Choose approval method"),
+            isPresented: Binding(
+                get: { joinApproveDialog != nil },
+                set: { if !$0 { joinApproveDialog = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: joinApproveDialog
+        ) { activeNotification in
+            ForEach(joinMatchCandidates.prefix(8)) { candidate in
+                Button(L10n.t("ربط مع: ", "Link with: ") + fourPartName(candidate)) {
+                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                    let nid = activeNotification.id
+                    guard let rid = activeNotification.requestId else {
+                        joinApproveDialog = nil
+                        return
+                    }
+                    joinApproveDialog = nil
+                    selectedNotification = nil
+                    Task {
+                        await adminRequestVM.mergeMemberIntoTreeMember(
+                            newMemberId: rid,
+                            existingTreeMemberId: candidate.id
+                        )
+                        await notificationVM.markNotificationAsRead(id: nid)
+                    }
+                }
+            }
+            Button(L10n.t("الموافقة كعضو جديد", "Approve as new member")) {
+                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                let nid = activeNotification.id
+                let n = activeNotification
+                joinApproveDialog = nil
+                selectedNotification = nil
+                Task {
+                    _ = await notificationVM.approveRequestFromNotification(n)
+                    await notificationVM.markNotificationAsRead(id: nid)
+                }
+            }
+            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {
+                joinApproveDialog = nil
+            }
+        } message: { _ in
+            Text(L10n.t(
+                "وُجدت \(joinMatchCandidates.count) تطابقات بنفس الاسم في الشجرة. اربطه بأحدهم أو أنشئه كعضو جديد.",
+                "\(joinMatchCandidates.count) matches found in the tree. Link to one of them or approve as a new member."
+            ))
+        }
+        .presentationDetents([.height(measuredDetailHeight), .large], selection: $detailSheetDetent)
+        .presentationDragIndicator(.visible)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
 
-    // MARK: - Detail: Hero
+    /// اسم رباعي: أول ٤ أجزاء من اسم العضو (هو + أب + جد + جد الأب)
+    private func fourPartName(_ member: FamilyMember) -> String {
+        let parts = member.fullName.split(separator: " ").map(String.init)
+        guard parts.count > 4 else { return member.fullName }
+        return parts.prefix(4).joined(separator: " ")
+    }
+
+    /// يحدّد العضو الأكثر صلة بالإشعار (الأهم بصرياً) — لعرض بطاقة العضو في تفاصيل الإشعار
+    /// - للطلبات: مقدّم الطلب (createdBy) لو معروف وموجود
+    /// - للإشعارات الشخصية: المرسل (createdBy) لو معروف وليس مدير
+    private func relatedMemberForNotification(_ n: AppNotification) -> FamilyMember? {
+        // استبعاد إشعارات الإدارة المُعمَّمة — اسم الشخص لا يهم
+        if adminOnlyKinds.contains(n.kind) { return nil }
+        guard let creatorId = n.createdBy,
+              creatorId != authVM.currentUser?.id else { return nil }
+        return memberVM.member(byId: creatorId)
+    }
+
+    /// قائمة kinds التي تُعرض كـ "الإدارة" بدل اسم الشخص — متطابقة مع منطق row/hero
+    private var adminOnlyKinds: Set<String> {
+        Self.completedActionKinds.union([
+            NotificationKind.adminEdit.rawValue,
+            NotificationKind.adminEditName.rawValue,
+            NotificationKind.adminEditDates.rawValue,
+            NotificationKind.adminEditPhone.rawValue,
+            NotificationKind.adminEditRole.rawValue,
+            NotificationKind.adminEditFather.rawValue,
+            NotificationKind.adminEditAvatar.rawValue,
+            NotificationKind.adminEditChildAdd.rawValue,
+            NotificationKind.adminEditChildRemove.rawValue,
+        ])
+    }
+
+    // MARK: - Detail: Hero (compact horizontal)
     private func detailHero(notification: AppNotification, iconInfo: NotificationKindStyle, date: Date) -> some View {
-        VStack(spacing: DS.Spacing.md) {
+        HStack(alignment: .center, spacing: DS.Spacing.md) {
             ZStack {
                 Circle()
                     .fill(iconInfo.gradient)
-                    .frame(width: 84, height: 84)
-                    .shadow(color: iconInfo.color.opacity(0.35), radius: 14, x: 0, y: 6)
+                    .frame(width: 56, height: 56)
+                    .shadow(color: iconInfo.color.opacity(0.30), radius: 10, x: 0, y: 4)
                 Image(systemName: iconInfo.icon)
-                    .font(.system(size: 36, weight: .bold))
+                    .font(.system(size: 24, weight: .bold))
                     .foregroundColor(.white)
                     .symbolRenderingMode(.hierarchical)
             }
 
-            Text(notification.title)
-                .font(DS.Font.scaled(20, weight: .bold))
-                .foregroundColor(DS.Color.textPrimary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, DS.Spacing.md)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(notification.title)
+                    .font(DS.Font.scaled(18, weight: .bold))
+                    .foregroundColor(DS.Color.textPrimary)
+                    .lineLimit(3)
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
-            HStack(spacing: DS.Spacing.sm) {
-                detailChip(text: iconInfo.label, color: iconInfo.color)
-                detailChip(
-                    text: notification.read ? L10n.t("مقروء", "Read") : L10n.t("غير مقروء", "Unread"),
-                    color: notification.read ? DS.Color.success : DS.Color.error,
-                    icon: notification.read ? "envelope.open.fill" : "envelope.badge.fill"
-                )
+                Text(relativeTime(date))
+                    .font(DS.Font.scaled(12, weight: .medium))
+                    .foregroundColor(DS.Color.textTertiary)
             }
 
-            Text(relativeTime(date))
-                .font(DS.Font.scaled(12, weight: .medium))
-                .foregroundColor(DS.Color.textTertiary)
+            Spacer(minLength: 0)
         }
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    // MARK: - Detail: Member Card (صورة + اسم + دور)
+    private func detailMemberCard(member: FamilyMember, iconInfo: NotificationKindStyle) -> some View {
+        HStack(spacing: DS.Spacing.md) {
+            // صورة العضو (دائرية)
+            ZStack {
+                Circle()
+                    .fill(DS.Color.textTertiary.opacity(0.08))
+                    .frame(width: 48, height: 48)
+
+                if let url = member.avatarUrl, !url.isEmpty {
+                    CachedAsyncImage(url: URL(string: url)) { image in
+                        image.resizable().scaledToFill()
+                    } placeholder: {
+                        Image(systemName: "person.fill")
+                            .foregroundColor(DS.Color.textTertiary)
+                    }
+                    .frame(width: 48, height: 48)
+                    .clipShape(Circle())
+                } else {
+                    Image(systemName: "person.fill")
+                        .font(DS.Font.scaled(18, weight: .semibold))
+                        .foregroundColor(DS.Color.textTertiary)
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(fourPartName(member))
+                    .font(DS.Font.scaled(14, weight: .bold))
+                    .foregroundColor(DS.Color.textPrimary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+
+                // رقاقة الدور
+                Text(member.roleName)
+                    .font(DS.Font.scaled(10, weight: .bold))
+                    .foregroundColor(member.roleColor)
+                    .padding(.horizontal, DS.Spacing.sm)
+                    .padding(.vertical, 2)
+                    .background(member.roleColor.opacity(0.12))
+                    .clipShape(Capsule())
+            }
+
+            Spacer(minLength: 0)
+
+            // أيقونة صغيرة تشير لنوع الإشعار
+            Image(systemName: iconInfo.icon)
+                .font(DS.Font.scaled(14, weight: .semibold))
+                .foregroundColor(iconInfo.color)
+                .padding(8)
+                .background(iconInfo.color.opacity(0.10))
+                .clipShape(Circle())
+        }
+        .padding(DS.Spacing.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
+                .fill(DS.Color.surface)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
+                .stroke(member.roleColor.opacity(0.20), lineWidth: 0.5)
+        )
+        .dsSubtleShadow()
+    }
+
+    // MARK: - Detail: Body Card (نص الإشعار) — مُحسَّن
+    private func detailBodyCard(
+        notification: AppNotification,
+        iconInfo: NotificationKindStyle,
+        joinMatches: [FamilyMember] = [],
+        joinRequesterId: UUID? = nil
+    ) -> some View {
+        let date = notification.createdDate
+        // اسم المدير المنفّذ — يظهر داخل تفاصيل الإشعار حتى للأنواع المُعمَّمة (admin_edit_*)
+        let actualCreator: FamilyMember? = {
+            guard authVM.isAdmin, let creatorId = notification.createdBy else { return nil }
+            return memberVM.member(byId: creatorId)
+        }()
+
+        return VStack(alignment: .leading, spacing: DS.Spacing.md) {
+            // ترويسة: chip التصنيف + chip المدير المنفّذ + الحالة
+            HStack(spacing: DS.Spacing.xs) {
+                // chip التصنيف
+                HStack(spacing: 4) {
+                    Image(systemName: iconInfo.icon)
+                        .font(DS.Font.scaled(10, weight: .bold))
+                    Text(iconInfo.label)
+                        .font(DS.Font.scaled(10, weight: .bold))
+                }
+                .foregroundColor(iconInfo.color)
+                .padding(.horizontal, DS.Spacing.sm)
+                .padding(.vertical, 3)
+                .background(iconInfo.color.opacity(0.12))
+                .clipShape(Capsule())
+                .overlay(Capsule().stroke(iconInfo.color.opacity(0.20), lineWidth: 0.5))
+
+                // chip المدير المنفّذ — للأدمن فقط، اسم حقيقي مو "الإدارة"
+                if let creator = actualCreator {
+                    HStack(spacing: 3) {
+                        Image(systemName: "person.fill")
+                            .font(DS.Font.scaled(9, weight: .bold))
+                        Text(creator.shortFullName)
+                            .font(DS.Font.scaled(10, weight: .bold))
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                    }
+                    .foregroundColor(creator.roleColor)
+                    .padding(.horizontal, DS.Spacing.sm)
+                    .padding(.vertical, 3)
+                    .background(creator.roleColor.opacity(0.10))
+                    .clipShape(Capsule())
+                    .overlay(Capsule().stroke(creator.roleColor.opacity(0.20), lineWidth: 0.5))
+                    .layoutPriority(-1)
+                }
+
+                Spacer(minLength: 0)
+
+                // حالة القراءة كنقطة ملونة + نص صغير
+                HStack(spacing: 4) {
+                    Circle()
+                        .fill(notification.read ? DS.Color.textTertiary : DS.Color.primary)
+                        .frame(width: 6, height: 6)
+                    Text(notification.read ? L10n.t("مقروء", "Read") : L10n.t("جديد", "New"))
+                        .font(DS.Font.scaled(10, weight: .bold))
+                        .foregroundColor(notification.read ? DS.Color.textTertiary : DS.Color.primary)
+                }
+            }
+
+            // معاينة "قبل → بعد" — تظهر فقط للإشعارات اللي تحمل تفاصيل تغيير
+            if let firstChange = notification.details?.changes.first {
+                detailFromToInline(change: firstChange, color: iconInfo.color)
+            }
+
+            // المحتوى الأساسي — بدون اسم المدير من البداية لو موجود ككبسولة فوق
+            richBodyView(
+                bodyWithoutCreatorPrefix(notification.body, creator: actualCreator),
+                font: DS.Font.scaled(15, weight: .regular),
+                color: DS.Color.textPrimary
+            )
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            // التاريخ والوقت الكامل (تذييل خفيف)
+            HStack(spacing: 4) {
+                Image(systemName: "calendar")
+                    .font(DS.Font.scaled(10, weight: .semibold))
+                Text(fullDateTime(date))
+                    .font(DS.Font.scaled(11, weight: .medium))
+            }
+            .foregroundColor(DS.Color.textTertiary)
+            .padding(.top, DS.Spacing.xs)
+
+            // قسم التطابقات المحتملة — مدمج داخل نفس الكرت (مغلق افتراضياً)
+            if !joinMatches.isEmpty, let requesterId = joinRequesterId {
+                joinMatchesSection(
+                    candidates: joinMatches,
+                    requesterId: requesterId,
+                    iconInfo: iconInfo
+                )
+            }
+        }
+        .padding(DS.Spacing.lg)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
+                .fill(DS.Color.surface)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
+                .stroke(DS.Color.textTertiary.opacity(0.10), lineWidth: 0.5)
+        )
+        .dsSubtleShadow()
+    }
+
+
+    /// معاينة "قبل → بعد" مدمجة — تظهر داخل كرت التفاصيل لإشعارات admin_edit_*
+    @ViewBuilder
+    private func detailFromToInline(change: AppNotification.NotificationDetails.ChangeEntry, color: Color) -> some View {
+        let isOpaque = AppNotification.NotificationDetails.isOpaqueField(change.field)
+        let fieldLabel = AppNotification.NotificationDetails.localizedFieldName(change.field)
+
+        HStack(spacing: 6) {
+            // اسم الحقل
+            Text(fieldLabel)
+                .font(DS.Font.scaled(11, weight: .bold))
+                .foregroundColor(DS.Color.textSecondary)
+
+            Text("·")
+                .font(DS.Font.scaled(11, weight: .bold))
+                .foregroundColor(DS.Color.textTertiary)
+
+            if isOpaque {
+                // للحقول التي لا تُعرض قيمتها (مثل الصورة): "تم التحديث"
+                Text(L10n.t("تم التحديث", "Updated"))
+                    .font(DS.Font.scaled(11, weight: .medium))
+                    .foregroundColor(DS.Color.textSecondary)
+            } else {
+                // قيمة قبل
+                Text(change.before ?? "—")
+                    .font(DS.Font.scaled(11, weight: .medium))
+                    .foregroundColor(DS.Color.error.opacity(0.85))
+                    .strikethrough()
+                    .lineLimit(1)
+
+                // سهم
+                Image(systemName: L10n.isArabic ? "arrow.left" : "arrow.right")
+                    .font(DS.Font.scaled(9, weight: .bold))
+                    .foregroundColor(DS.Color.textTertiary)
+
+                // قيمة بعد
+                Text(change.after ?? "—")
+                    .font(DS.Font.scaled(11, weight: .bold))
+                    .foregroundColor(DS.Color.secondary)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, DS.Spacing.sm)
+        .padding(.vertical, 6)
+        .background(color.opacity(0.06))
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                .stroke(color.opacity(0.15), lineWidth: 0.5)
+        )
     }
 
     private func detailChip(text: String, color: Color, icon: String? = nil) -> some View {
@@ -942,33 +1365,326 @@ struct NotificationsCenterView: View {
         .dsSubtleShadow()
     }
 
-    // MARK: - Detail: Actions
+    // MARK: - Detail: Actions (circular icon buttons)
     @ViewBuilder
     private func detailActions(notification: AppNotification) -> some View {
-        VStack(spacing: DS.Spacing.sm) {
-            if !notification.read {
-                detailActionButton(
-                    icon: "envelope.open.fill",
-                    label: L10n.t("تعليم كمقروء", "Mark as Read"),
-                    color: DS.Color.primary
+        let isRequest = authVM.isAdmin
+            && (notification.isActionableRequest || Self.pendingApprovalKinds.contains(notification.kind))
+
+        VStack(spacing: DS.Spacing.md) {
+            // الأزرار الدائرية: موافقة / رفض / مراجعة / حذف
+            HStack(spacing: DS.Spacing.xl) {
+                if isRequest {
+                    detailCircleAction(
+                        icon: "checkmark",
+                        color: DS.Color.secondary,
+                        label: L10n.t("موافقة", "Approve")
+                    ) {
+                        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                        // طلب انضمام/ربط + يوجد تطابقات → اعرض حوار اختيار
+                        let isJoinKind = notification.kind == RequestType.joinRequest.rawValue
+                            || notification.kind == NotificationKind.linkRequest.rawValue
+                            || notification.kind == RequestType.linkRequest.rawValue
+                        if isJoinKind && !joinMatchCandidates.isEmpty {
+                            joinApproveDialog = notification
+                            return
+                        }
+                        let id = notification.id
+                        selectedNotification = nil
+                        Task {
+                            _ = await notificationVM.approveRequestFromNotification(notification)
+                            await notificationVM.markNotificationAsRead(id: id)
+                        }
+                    }
+                    detailCircleAction(
+                        icon: "xmark",
+                        color: DS.Color.error,
+                        label: L10n.t("رفض", "Reject")
+                    ) {
+                        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                        let id = notification.id
+                        selectedNotification = nil
+                        Task {
+                            _ = await notificationVM.rejectRequestFromNotification(notification)
+                            await notificationVM.markNotificationAsRead(id: id)
+                        }
+                    }
+                    detailCircleAction(
+                        icon: "shield.checkered",
+                        color: DS.Color.accent,
+                        label: L10n.t("المراجعة", "Review")
+                    ) {
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        let kind = notification.kind
+                        selectedNotification = nil
+                        NotificationCenter.default.post(
+                            name: .openAdminReviewForKind,
+                            object: nil,
+                            userInfo: ["kind": kind]
+                        )
+                    }
+                }
+
+                // زر الحذف — متاح دائماً، مدمج مع باقي الأزرار
+                detailCircleAction(
+                    icon: "trash",
+                    color: DS.Color.textTertiary,
+                    label: L10n.t("حذف", "Delete")
                 ) {
+                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                    let id = notification.id
+                    selectedNotification = nil
+                    Task { await notificationVM.deleteNotification(id: id) }
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.top, DS.Spacing.sm)
+
+            // تعليم كمقروء — كرابط نصي خفيف
+            if !notification.read {
+                Button {
                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
                     let id = notification.id
                     selectedNotification = nil
                     Task { await notificationVM.markNotificationAsRead(id: id) }
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "envelope.open")
+                            .font(DS.Font.scaled(11, weight: .semibold))
+                        Text(L10n.t("تعليم كمقروء", "Mark as Read"))
+                            .font(DS.Font.scaled(12, weight: .semibold))
+                    }
+                    .foregroundColor(DS.Color.primary)
+                }
+                .buttonStyle(DSScaleButtonStyle())
+            }
+        }
+    }
+
+    // MARK: - Phase 3: Join Request Match Card
+
+    /// يحمّل قائمة الأعضاء المرشّحين كتطابقات لطلب الانضمام/الربط
+    /// يظهر الكرت لو فيه عضو بنفس الاسم الأول في الشجرة
+    private func loadJoinMatchCandidates(for notification: AppNotification) async {
+        joinMatchCandidates = []
+
+        let isJoinKind = notification.kind == RequestType.joinRequest.rawValue
+            || notification.kind == NotificationKind.linkRequest.rawValue
+            || notification.kind == RequestType.linkRequest.rawValue
+        guard isJoinKind else {
+            Log.info("[JoinMatch] skip — kind=\(notification.kind) ليس join/link")
+            return
+        }
+
+        // 1) جرب المسار السريع: requester عبر requestId/createdBy
+        var requester: FamilyMember? = nil
+        if let rid = notification.requestId ?? notification.createdBy {
+            requester = memberVM.member(byId: rid)
+            if requester == nil {
+                Log.info("[JoinMatch] requester \(rid.uuidString.prefix(8)) غير موجود في allMembers — سنحاول fetch")
+                // ممكن المُسجِّل الجديد لسا ما لُقّم في الكاش — تحديث فوري
+                await memberVM.fetchAllMembers(force: true)
+                requester = memberVM.member(byId: rid)
+            }
+        }
+
+        // 2) استخرج firstName من requester أو من body كـ fallback
+        let rawFirstName: String
+        if let r = requester {
+            rawFirstName = r.firstName.trimmingCharacters(in: .whitespaces)
+        } else {
+            // "حسن يطلب الانضمام — 5 مطابقة." → أول كلمة
+            let first = notification.body
+                .components(separatedBy: .whitespacesAndNewlines)
+                .first?
+                .trimmingCharacters(in: CharacterSet.punctuationCharacters.union(.whitespaces)) ?? ""
+            rawFirstName = first
+            Log.info("[JoinMatch] requester غير موجود — استخدام firstName='\(first)' من body")
+        }
+        // قد يحتوي firstName أحياناً اسم رباعي كامل (مدخل خاطئ) — نأخذ أول كلمة فقط
+        let firstName = rawFirstName
+            .components(separatedBy: .whitespacesAndNewlines)
+            .first?
+            .trimmingCharacters(in: CharacterSet.punctuationCharacters) ?? ""
+        guard !firstName.isEmpty else {
+            Log.info("[JoinMatch] firstName فارغ — إلغاء")
+            return
+        }
+
+        // البحث: مقارنة بأول كلمة من كل candidate.firstName (يتعامل مع الأسماء متعددة الكلمات)
+        let all = memberVM.allMembers
+        let requesterId2 = requester?.id
+        let matches = all.filter { candidate in
+            guard candidate.id != requesterId2 else { return false }
+            let candidateFirst = candidate.firstName
+                .components(separatedBy: .whitespacesAndNewlines)
+                .first?
+                .trimmingCharacters(in: CharacterSet.punctuationCharacters) ?? ""
+            return candidateFirst == firstName
+        }
+
+        // ترتيب: نفس الأب أولاً، ثم النشطين، ثم الباقي
+        let sorted = matches.sorted { a, b in
+            let reqFatherId = requester?.fatherId
+            let aMatchesFather = reqFatherId != nil && a.fatherId == reqFatherId
+            let bMatchesFather = reqFatherId != nil && b.fatherId == reqFatherId
+            if aMatchesFather != bMatchesFather { return aMatchesFather }
+
+            let aActive = a.role != .pending
+            let bActive = b.role != .pending
+            if aActive != bActive { return aActive }
+            return false
+        }
+
+        joinMatchCandidates = Array(sorted.prefix(10))
+        Log.info("[JoinMatch] firstName='\(firstName)' — وجدنا \(joinMatchCandidates.count) تطابقات (من \(matches.count) إجمالي)")
+    }
+
+    /// قسم التطابقات المحتملة — مدمج داخل detailBodyCard (بدون wrapper)
+    /// مغلق بالكامل افتراضياً (لا تظهر صفوف)، يفتح بضغطة على الترويسة
+    @ViewBuilder
+    private func joinMatchesSection(
+        candidates: [FamilyMember],
+        requesterId: UUID,
+        iconInfo: NotificationKindStyle
+    ) -> some View {
+        Divider()
+            .padding(.vertical, DS.Spacing.xs)
+
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            // الترويسة القابلة للنقر — تطوي/تفتح
+            Button {
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                withAnimation(DS.Anim.snappy) {
+                    joinMatchesExpanded.toggle()
+                }
+            } label: {
+                HStack(spacing: DS.Spacing.sm) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "person.2.fill")
+                            .font(DS.Font.scaled(10, weight: .bold))
+                        Text(L10n.t("تطابقات محتملة", "Possible Matches"))
+                            .font(DS.Font.scaled(10, weight: .bold))
+                    }
+                    .foregroundColor(iconInfo.color)
+                    .padding(.horizontal, DS.Spacing.sm)
+                    .padding(.vertical, 3)
+                    .background(iconInfo.color.opacity(0.12))
+                    .clipShape(Capsule())
+                    .overlay(Capsule().stroke(iconInfo.color.opacity(0.20), lineWidth: 0.5))
+
+                    Spacer(minLength: 0)
+
+                    HStack(spacing: 6) {
+                        Text("\(candidates.count)")
+                            .font(DS.Font.scaled(11, weight: .bold))
+                            .foregroundColor(DS.Color.textSecondary)
+
+                        Image(systemName: joinMatchesExpanded ? "chevron.up" : "chevron.down")
+                            .font(DS.Font.scaled(11, weight: .bold))
+                            .foregroundColor(DS.Color.textTertiary)
+                    }
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            // المرشحون يظهرون فقط بعد التوسيع — مغلق بالكامل افتراضياً
+            if joinMatchesExpanded {
+                VStack(spacing: 6) {
+                    ForEach(candidates) { candidate in
+                        joinMatchRow(candidate: candidate, requesterId: requesterId)
+                    }
+                }
+            }
+        }
+    }
+
+    private func joinMatchRow(candidate: FamilyMember, requesterId: UUID) -> some View {
+        HStack(spacing: 8) {
+            ZStack {
+                Circle()
+                    .fill(DS.Color.textTertiary.opacity(0.08))
+                    .frame(width: 28, height: 28)
+                if let url = candidate.avatarUrl, !url.isEmpty {
+                    CachedAsyncImage(url: URL(string: url)) { image in
+                        image.resizable().scaledToFill()
+                    } placeholder: {
+                        Image(systemName: "person.fill")
+                            .foregroundColor(DS.Color.textTertiary)
+                    }
+                    .frame(width: 28, height: 28)
+                    .clipShape(Circle())
+                } else {
+                    Image(systemName: "person.fill")
+                        .font(DS.Font.scaled(11, weight: .semibold))
+                        .foregroundColor(DS.Color.textTertiary)
                 }
             }
 
-            detailActionButton(
-                icon: "trash.fill",
-                label: L10n.t("حذف الإشعار", "Delete Notification"),
-                color: DS.Color.error
-            ) {
+            Text(fourPartName(candidate))
+                .font(DS.Font.scaled(12, weight: .semibold))
+                .foregroundColor(DS.Color.textPrimary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+
+            Spacer(minLength: 0)
+
+            // زر ربط/دمج — يدمج المُسجِّل الجديد مع هذا العضو في الشجرة
+            Button {
                 UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                let id = notification.id
+                let id = selectedNotification?.id
                 selectedNotification = nil
-                Task { await notificationVM.deleteNotification(id: id) }
+                Task {
+                    await adminRequestVM.mergeMemberIntoTreeMember(
+                        newMemberId: requesterId,
+                        existingTreeMemberId: candidate.id
+                    )
+                    if let nid = id {
+                        await notificationVM.markNotificationAsRead(id: nid)
+                    }
+                }
+            } label: {
+                HStack(spacing: 3) {
+                    Image(systemName: "link")
+                        .font(DS.Font.scaled(9, weight: .bold))
+                    Text(L10n.t("ربط", "Link"))
+                        .font(DS.Font.scaled(10, weight: .bold))
+                }
+                .foregroundColor(DS.Color.secondary)
+                .padding(.horizontal, DS.Spacing.sm)
+                .padding(.vertical, 3)
+                .background(DS.Color.secondary.opacity(0.12))
+                .clipShape(Capsule())
+                .overlay(Capsule().stroke(DS.Color.secondary.opacity(0.25), lineWidth: 0.5))
             }
+            .buttonStyle(.plain)
+        }
+        .padding(.vertical, 2)
+    }
+
+    /// زر دائري مع اسم سفلي — يتبع تصميم DS (مزيج surface + لون + stroke خفيف)
+    private func detailCircleAction(icon: String, color: Color, label: String, action: @escaping () -> Void) -> some View {
+        VStack(spacing: 6) {
+            Button(action: action) {
+                Image(systemName: icon)
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundColor(color)
+                    .frame(width: 48, height: 48)
+                    .background(
+                        Circle()
+                            .fill(color.opacity(0.12))
+                    )
+                    .overlay(
+                        Circle()
+                            .stroke(color.opacity(0.25), lineWidth: 1)
+                    )
+            }
+            .buttonStyle(DSScaleButtonStyle())
+
+            Text(label)
+                .font(DS.Font.scaled(11, weight: .semibold))
+                .foregroundColor(DS.Color.textSecondary)
         }
     }
 
@@ -1031,6 +1747,32 @@ struct NotificationsCenterView: View {
         body.components(separatedBy: "\n")
             .filter { !$0.hasPrefix("بواسطة:") }
             .joined(separator: "\n")
+    }
+
+    /// يحذف اسم المدير المنفّذ من بداية نص الإشعار في التفاصيل
+    /// (لأنه ظاهر ككبسولة فوق — لا حاجة لتكراره في النص)
+    private func bodyWithoutCreatorPrefix(_ body: String, creator: FamilyMember?) -> String {
+        let cleaned = cleanBody(body)
+        guard let creator else { return cleaned }
+
+        let trimmed = cleaned.trimmingCharacters(in: .whitespaces)
+        let candidates = [
+            creator.firstName,
+            creator.shortFullName,
+            fourPartName(creator),
+            creator.fullName
+        ]
+
+        for name in candidates {
+            let n = name.trimmingCharacters(in: .whitespaces)
+            guard !n.isEmpty else { continue }
+            if trimmed.hasPrefix(n) {
+                // احذف الاسم + المسافة اللي بعده
+                let after = trimmed.dropFirst(n.count).trimmingCharacters(in: .whitespaces)
+                if !after.isEmpty { return after }
+            }
+        }
+        return cleaned
     }
 
     /// Renders body text, wrapping «name» delimiters in styled capsules.

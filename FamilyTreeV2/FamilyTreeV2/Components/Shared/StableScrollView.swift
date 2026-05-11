@@ -46,7 +46,12 @@ struct StableScrollView<Content: View>: UIViewRepresentable {
         }
     }
 
-    class Coordinator {
+    @MainActor
+    final class Coordinator {
         var hostingController: UIHostingController<AnyView>?
+        deinit {
+            // explicit deinit يجبر المترجم على عدم محاولة inline تلقائية
+            // (workaround لكراش EarlyPerfInliner في Release builds)
+        }
     }
 }
