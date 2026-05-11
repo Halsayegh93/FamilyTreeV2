@@ -90,6 +90,7 @@ struct ProfileView: View {
             .toolbar(.hidden, for: .navigationBar)
             .sheet(isPresented: $showSettings) {
                 NavigationStack { SettingsView() }
+                    .environment(\.layoutDirection, langManager.layoutDirection)
             }
             .sheet(isPresented: $showEditProfile) { if let c = user { EditProfileView(member: c) } }
             .sheet(isPresented: $showQRCode) {

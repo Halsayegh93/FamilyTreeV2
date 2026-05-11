@@ -76,6 +76,10 @@ struct MainTabView: View {
             guard authVM.canModerate else { return }
             withAnimation { selectedTab = 4 }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .openAdminReviewForKind)) { _ in
+            guard authVM.canModerate else { return }
+            withAnimation { selectedTab = 4 }
+        }
         }
         .task {
             // تتبع أول شاشة عند الفتح
@@ -116,4 +120,6 @@ struct MainTabView: View {
 extension Notification.Name {
     static let didReselectTab       = Notification.Name("didReselectTab")
     static let openAdminRequests    = Notification.Name("openAdminRequests")
+    /// userInfo: ["kind": String] — يفتح تاب الإدارة + يدفع شاشة المراجعة المناسبة
+    static let openAdminReviewForKind = Notification.Name("openAdminReviewForKind")
 }

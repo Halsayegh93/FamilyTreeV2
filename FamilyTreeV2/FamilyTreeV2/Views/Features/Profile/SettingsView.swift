@@ -1,136 +1,19 @@
 import SwiftUI
 import UserNotifications
 
-// MARK: - Main Settings View (iOS-style hierarchy)
+// MARK: - Main Settings View (iOS-style with semantic groups)
 struct SettingsView: View {
     @Environment(\.dismiss) var dismiss
-    @EnvironmentObject var notificationVM: NotificationViewModel
-    @ObservedObject var langManager = LanguageManager.shared
-
-    private func t(_ ar: String, _ en: String) -> String { L10n.t(ar, en) }
-
-    var body: some View {
-        ZStack {
-            DS.Color.background.ignoresSafeArea()
-
-            ScrollView {
-                VStack(spacing: DS.Spacing.md) {
-                    // Account / Notifications & Privacy
-                    DSCard(padding: 0) {
-                        navRow(
-                            destination: AccountSettingsView(),
-                            icon: "person.crop.circle.fill",
-                            color: DS.Color.primary,
-                            title: t("الحساب", "Account"),
-                            subtitle: t("الملف الشخصي والأجهزة", "Profile & devices")
-                        )
-                        DSDivider()
-                        navRow(
-                            destination: NotificationsAndPrivacyView(),
-                            icon: "bell.badge.fill",
-                            color: DS.Color.warning,
-                            title: t("الإشعارات والخصوصية", "Notifications & Privacy"),
-                            subtitle: t("الإشعارات وإخفاء بياناتك", "Notifications and data visibility")
-                        )
-                    }
-
-                    // Appearance & Language
-                    DSCard(padding: 0) {
-                        navRow(
-                            destination: AppearanceSettingsView(),
-                            icon: "paintbrush.fill",
-                            color: DS.Color.accent,
-                            title: t("المظهر واللغة", "Appearance & Language"),
-                            subtitle: t("الوضع الفاتح/الداكن واللغة", "Light/dark mode & language")
-                        )
-                    }
-
-                    // Information
-                    DSCard(padding: 0) {
-                        navRow(
-                            destination: InformationSettingsView(),
-                            icon: "info.circle.fill",
-                            color: DS.Color.info,
-                            title: t("معلومات", "Information"),
-                            subtitle: t("عن التطبيق والشروط", "About app & terms")
-                        )
-                    }
-
-                    versionLabel
-                }
-                .padding(.horizontal, DS.Spacing.lg)
-                .padding(.top, DS.Spacing.xl)
-                .padding(.bottom, DS.Spacing.xxxl)
-            }
-        }
-        .navigationTitle(t("الإعدادات", "Settings"))
-        .navigationBarTitleDisplayMode(.inline)
-        .environment(\.layoutDirection, langManager.layoutDirection)
-        .toolbar {
-            ToolbarItem(placement: .navigationBarLeading) {
-                Button(t("إغلاق", "Close")) { dismiss() }
-                    .font(DS.Font.calloutBold)
-                    .foregroundColor(DS.Color.primary)
-            }
-        }
-        .task { await notificationVM.fetchLinkedDevices() }
-    }
-
-    @ViewBuilder
-    private func navRow<Destination: View>(
-        destination: Destination,
-        icon: String,
-        color: Color,
-        title: String,
-        subtitle: String
-    ) -> some View {
-        NavigationLink(destination: destination) {
-            HStack(spacing: DS.Spacing.md) {
-                DSIcon(icon, color: color)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                        .font(DS.Font.calloutBold)
-                        .foregroundColor(DS.Color.textPrimary)
-                    Text(subtitle)
-                        .font(DS.Font.caption1)
-                        .foregroundColor(DS.Color.textSecondary)
-                        .lineLimit(1)
-                }
-
-                Spacer()
-
-                Image(systemName: "chevron.forward")
-                    .font(DS.Font.scaled(13, weight: .bold))
-                    .foregroundColor(DS.Color.textTertiary)
-            }
-            .padding(.horizontal, DS.Spacing.lg)
-            .padding(.vertical, DS.Spacing.md)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(DSBoldButtonStyle())
-    }
-
-    private var versionLabel: some View {
-        Text(t("إصدار التطبيق \(AppVersion.string)", "App Version \(AppVersion.string)"))
-            .font(DS.Font.caption2)
-            .foregroundColor(DS.Color.textTertiary)
-            .frame(maxWidth: .infinity)
-            .padding(.top, DS.Spacing.md)
-    }
-}
-
-// MARK: - Settings Sub-Views
-
-// MARK: 1) Account
-struct AccountSettingsView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var notificationVM: NotificationViewModel
     @EnvironmentObject var appSettingsVM: AppSettingsViewModel
+
     @ObservedObject var langManager = LanguageManager.shared
 
     @State private var showEditProfile = false
     @State private var showLinkedDevices = false
+    @State private var showAbout = false
+    @State private var showTerms = false
     @State private var showDeleteConfirmation = false
 
     private func t(_ ar: String, _ en: String) -> String { L10n.t(ar, en) }
@@ -141,8 +24,14 @@ struct AccountSettingsView: View {
 
             ScrollView {
                 VStack(spacing: DS.Spacing.md) {
-                    // Profile + Devices
+                    // ── الحساب ──
                     DSCard(padding: 0) {
+                        DSSectionHeader(
+                            title: t("الحساب", "Account"),
+                            icon: "person.crop.circle.fill",
+                            iconColor: DS.Color.primary
+                        )
+
                         Button { showEditProfile = true } label: {
                             settingsActionRow(
                                 icon: "person.fill.viewfinder",
@@ -152,9 +41,32 @@ struct AccountSettingsView: View {
                             )
                         }
                         .buttonStyle(DSBoldButtonStyle())
+                    }
 
+                    // ── التفضيلات ──
+                    DSCard(padding: 0) {
+                        DSSectionHeader(
+                            title: t("التفضيلات", "Preferences"),
+                            icon: "slider.horizontal.3",
+                            iconColor: DS.Color.accent
+                        )
+
+                        navRow(
+                            destination: NotificationsAndPrivacyView(),
+                            icon: "bell.badge.fill",
+                            color: DS.Color.warning,
+                            title: t("الإشعارات والخصوصية", "Notifications & Privacy"),
+                            subtitle: t("التحكم بالإشعارات وإخفاء بياناتك", "Manage notifications and data visibility")
+                        )
                         DSDivider()
-
+                        navRow(
+                            destination: AppearanceSettingsView(),
+                            icon: "paintbrush.fill",
+                            color: DS.Color.accent,
+                            title: t("المظهر واللغة", "Appearance & Language"),
+                            subtitle: t("الوضع الفاتح/الداكن واللغة", "Light/dark mode & language")
+                        )
+                        DSDivider()
                         Button { showLinkedDevices = true } label: {
                             settingsActionRow(
                                 icon: "iphone.gen3",
@@ -169,7 +81,38 @@ struct AccountSettingsView: View {
                         .buttonStyle(DSBoldButtonStyle())
                     }
 
-                    // Danger zone
+                    // ── معلومات ──
+                    DSCard(padding: 0) {
+                        DSSectionHeader(
+                            title: t("معلومات", "Information"),
+                            icon: "info.circle.fill",
+                            iconColor: DS.Color.info
+                        )
+
+                        Button { showAbout = true } label: {
+                            settingsActionRow(
+                                icon: "app.badge.fill",
+                                color: DS.Color.secondary,
+                                title: t("عن التطبيق", "About FamilyTree"),
+                                subtitle: t("تعرّف على التطبيق ومميزاته", "Learn about the app and its features")
+                            )
+                        }
+                        .buttonStyle(DSBoldButtonStyle())
+
+                        DSDivider()
+
+                        Button { showTerms = true } label: {
+                            settingsActionRow(
+                                icon: "doc.text.fill",
+                                color: DS.Color.info,
+                                title: t("سياسة الخصوصية والشروط", "Privacy Policy & Terms"),
+                                subtitle: t("كيف نحمي بياناتك وشروط الاستخدام", "How we protect your data & usage terms")
+                            )
+                        }
+                        .buttonStyle(DSBoldButtonStyle())
+                    }
+
+                    // ── منطقة الخطر ──
                     DSCard(padding: 0) {
                         DSSectionHeader(
                             title: t("منطقة الخطر", "Danger Zone"),
@@ -198,21 +141,32 @@ struct AccountSettingsView: View {
                         }
                         .buttonStyle(DSBoldButtonStyle())
                     }
+
+                    versionLabel
                 }
                 .padding(.horizontal, DS.Spacing.lg)
                 .padding(.top, DS.Spacing.xl)
                 .padding(.bottom, DS.Spacing.xxxl)
             }
         }
-        .navigationTitle(t("الحساب", "Account"))
+        .navigationTitle(t("الإعدادات", "Settings"))
         .navigationBarTitleDisplayMode(.inline)
         .environment(\.layoutDirection, langManager.layoutDirection)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                Button(t("إغلاق", "Close")) { dismiss() }
+                    .font(DS.Font.calloutBold)
+                    .foregroundColor(DS.Color.primary)
+            }
+        }
         .sheet(isPresented: $showEditProfile) {
             if let c = authVM.currentUser { EditProfileView(member: c) }
         }
         .sheet(isPresented: $showLinkedDevices) {
             LinkedDevicesSettingsSheet().environmentObject(appSettingsVM)
         }
+        .sheet(isPresented: $showAbout) { AboutView() }
+        .sheet(isPresented: $showTerms) { PrivacyPolicyView() }
         .alert(t("حذف الحساب", "Delete Account"), isPresented: $showDeleteConfirmation) {
             Button(t("إلغاء", "Cancel"), role: .cancel) {}
             Button(t("حذف نهائي", "Delete Permanently"), role: .destructive) {
@@ -232,10 +186,35 @@ struct AccountSettingsView: View {
         } message: {
             Text(authVM.deleteAccountError ?? "")
         }
+        .task { await notificationVM.fetchLinkedDevices() }
+    }
+
+    @ViewBuilder
+    private func navRow<Destination: View>(
+        destination: Destination,
+        icon: String,
+        color: Color,
+        title: String,
+        subtitle: String
+    ) -> some View {
+        NavigationLink(destination: destination) {
+            settingsActionRow(icon: icon, color: color, title: title, subtitle: subtitle)
+        }
+        .buttonStyle(DSBoldButtonStyle())
+    }
+
+    private var versionLabel: some View {
+        Text(t("إصدار التطبيق \(AppVersion.string)", "App Version \(AppVersion.string)"))
+            .font(DS.Font.caption2)
+            .foregroundColor(DS.Color.textTertiary)
+            .frame(maxWidth: .infinity)
+            .padding(.top, DS.Spacing.md)
     }
 }
 
-// MARK: 2) Notifications & Privacy (combined)
+// MARK: - Settings Sub-Views
+
+// MARK: 1) Notifications & Privacy (combined)
 struct NotificationsAndPrivacyView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var memberVM: MemberViewModel
@@ -530,64 +509,6 @@ struct AppearanceSettingsView: View {
         case "dark": return t("الوضع الداكن يبقى مفعّل دائماً.", "Dark mode is always active.")
         default: return t("يتغيّر تلقائياً حسب إعدادات جهازك.", "Changes automatically with your device settings.")
         }
-    }
-}
-
-// MARK: 5) Information
-struct InformationSettingsView: View {
-    @ObservedObject var langManager = LanguageManager.shared
-    @State private var showAbout = false
-    @State private var showTerms = false
-
-    private func t(_ ar: String, _ en: String) -> String { L10n.t(ar, en) }
-
-    var body: some View {
-        ZStack {
-            DS.Color.background.ignoresSafeArea()
-
-            ScrollView {
-                VStack(spacing: DS.Spacing.md) {
-                    DSCard(padding: 0) {
-                        Button { showAbout = true } label: {
-                            settingsActionRow(
-                                icon: "app.badge.fill",
-                                color: DS.Color.secondary,
-                                title: t("عن التطبيق", "About FamilyTree"),
-                                subtitle: t("تعرّف على التطبيق ومميزاته", "Learn about the app and its features")
-                            )
-                        }
-                        .buttonStyle(DSBoldButtonStyle())
-
-                        DSDivider()
-
-                        Button { showTerms = true } label: {
-                            settingsActionRow(
-                                icon: "doc.text.fill",
-                                color: DS.Color.info,
-                                title: t("سياسة الخصوصية والشروط", "Privacy Policy & Terms"),
-                                subtitle: t("كيف نحمي بياناتك وشروط الاستخدام", "How we protect your data & usage terms")
-                            )
-                        }
-                        .buttonStyle(DSBoldButtonStyle())
-                    }
-
-                    // Version
-                    Text(t("إصدار التطبيق \(AppVersion.string)", "App Version \(AppVersion.string)"))
-                        .font(DS.Font.caption2)
-                        .foregroundColor(DS.Color.textTertiary)
-                        .frame(maxWidth: .infinity)
-                        .padding(.top, DS.Spacing.md)
-                }
-                .padding(.horizontal, DS.Spacing.lg)
-                .padding(.top, DS.Spacing.xl)
-                .padding(.bottom, DS.Spacing.xxxl)
-            }
-        }
-        .navigationTitle(t("معلومات", "Information"))
-        .navigationBarTitleDisplayMode(.inline)
-        .environment(\.layoutDirection, langManager.layoutDirection)
-        .sheet(isPresented: $showAbout) { AboutView() }
-        .sheet(isPresented: $showTerms) { PrivacyPolicyView() }
     }
 }
 

@@ -1162,11 +1162,34 @@ class NotificationViewModel: ObservableObject {
         }
     }
 
+    /// Public wrapper — يستخدمه الـ View لمعرفة هل الطلب لسا معلّق
+    func hasPendingRequestForNotification(_ notification: AppNotification) async -> Bool {
+        return await lookupPendingRequest(for: notification) != nil
+    }
+
     /// Looks up the most recent pending request matching the notification.
+    /// إذا الإشعار يحمل request_id، نتحقق إن الطلب لسا pending قبل الإرجاع.
+    /// لو الطلب اتعمل approve/reject، نرجع nil — يضمن إخفاء الأكشن للطلبات المكتملة.
     private func lookupPendingRequest(for notification: AppNotification) async -> (UUID, String)? {
+        // المسار السريع: إشعار حديث يحمل request_id + request_type
         if let rid = notification.requestId, let rt = notification.requestType {
-            return (rid, rt)
+            // نتحقق من حالة الطلب — لازم يكون pending
+            do {
+                let rows: [AdminRequest] = try await supabase
+                    .from("admin_requests")
+                    .select()
+                    .eq("id", value: rid.uuidString)
+                    .eq("status", value: ApprovalStatus.pending.rawValue)
+                    .limit(1)
+                    .execute()
+                    .value
+                if rows.first != nil { return (rid, rt) }
+            } catch {
+                Log.warning("[LOOKUP] فشل التحقق من حالة الطلب: \(error.localizedDescription)")
+            }
+            return nil
         }
+        // fallback للإشعارات القديمة: بحث بـ requester + request_type + status=pending
         guard let requesterId = notification.createdBy,
               let requestType = requestTypeForKind(notification.kind) else { return nil }
         do {

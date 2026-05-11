@@ -92,7 +92,8 @@ class MemberViewModel: ObservableObject {
         guard memberId != currentUser?.id else { return }
         let real = changes.filter { ($0.before ?? "") != ($0.after ?? "") }
         guard !real.isEmpty else { return }
-        await notificationVM?.notifyAdminsWithChanges(
+        // نستخدم push + in-app: المدراء يحصلون على إشعار خارجي + داخلي بالتعديل
+        await notificationVM?.notifyAdminsWithChangesAndPush(
             title: title,
             body: body,
             kind: kind,
