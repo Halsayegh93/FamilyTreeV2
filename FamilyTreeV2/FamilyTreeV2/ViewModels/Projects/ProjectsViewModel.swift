@@ -5,15 +5,21 @@ import Combine
 
 @MainActor
 class ProjectsViewModel: ObservableObject {
-    
+
     let supabase = SupabaseConfig.client
     weak var authVM: AuthViewModel?
+    weak var notificationVM: NotificationViewModel?
 
     @Published var projects: [Project] = []
     @Published var pendingProjects: [Project] = []
     @Published var myPendingProjects: [Project] = []
     @Published var isLoading = false
     @Published var errorMessage: String?
+
+    func configure(authVM: AuthViewModel, notificationVM: NotificationViewModel) {
+        self.authVM = authVM
+        self.notificationVM = notificationVM
+    }
     
     // MARK: - Fetch
     
@@ -84,6 +90,18 @@ class ProjectsViewModel: ObservableObject {
                 .execute()
 
             await fetchProjects()
+
+            // إشعار للأدمن بطلب جديد
+            await notificationVM?.notifyAdminsWithPush(
+                title: L10n.t("مشروع جديد يحتاج موافقة", "New Project Needs Approval"),
+                body: L10n.t(
+                    "«\(ownerName)» قدّم مشروع: «\(title)»",
+                    "«\(ownerName)» submitted a project: «\(title)»"
+                ),
+                kind: NotificationKind.projectPending.rawValue,
+                requestType: "project_pending"
+            )
+
             isLoading = false
             Log.info("[Projects] ✅ تم إضافة المشروع: \(title)")
             return true
@@ -136,6 +154,9 @@ class ProjectsViewModel: ObservableObject {
     // MARK: - Approve
     
     func approveProject(id: UUID, approvedBy: UUID) async {
+        // حفظ معلومات المشروع قبل الحذف المحلي للإشعار
+        let projectInfo = pendingProjects.first(where: { $0.id == id })
+
         // حذف فوري محلياً
         withAnimation(.snappy(duration: 0.25)) {
             pendingProjects.removeAll { $0.id == id }
@@ -151,6 +172,29 @@ class ProjectsViewModel: ObservableObject {
                     .eq("id", value: id.uuidString)
                     .execute()
                 await self?.fetchProjects()
+
+                // إشعار للمالك
+                if let info = projectInfo {
+                    await self?.notificationVM?.sendNotification(
+                        title: L10n.t("تم اعتماد مشروعك", "Your Project Was Approved"),
+                        body: L10n.t(
+                            "مشروع «\(info.title)» أصبح مرئياً للجميع",
+                            "Project «\(info.title)» is now visible to everyone"
+                        ),
+                        targetMemberIds: [info.ownerId],
+                        kind: NotificationKind.projectApproved.rawValue
+                    )
+
+                    // إشعار للإدارة في "المستجدات"
+                    await self?.notificationVM?.notifyAdminsWithPush(
+                        title: L10n.t("تم اعتماد مشروع", "Project Approved"),
+                        body: L10n.t(
+                            "تم اعتماد مشروع «\(info.title)» لـ «\(info.ownerName)»",
+                            "Project «\(info.title)» for «\(info.ownerName)» was approved"
+                        ),
+                        kind: NotificationKind.projectApproved.rawValue
+                    )
+                }
             } catch {
                 await MainActor.run { self?.errorMessage = L10n.t("تعذر اعتماد المشروع.", "Failed to approve project.") }
                 Log.error("خطأ اعتماد المشروع: \(error.localizedDescription)")
@@ -162,6 +206,9 @@ class ProjectsViewModel: ObservableObject {
 
     func rejectProject(id: UUID) async {
         guard authVM?.isAdmin == true else { Log.warning("رفض المشروع مرفوض: الصلاحية للمدير فقط"); return }
+        // حفظ معلومات المشروع قبل الحذف المحلي للإشعار
+        let projectInfo = pendingProjects.first(where: { $0.id == id })
+
         // حذف فوري محلياً
         withAnimation(.snappy(duration: 0.25)) {
             pendingProjects.removeAll { $0.id == id }
@@ -173,6 +220,29 @@ class ProjectsViewModel: ObservableObject {
                     .update(["approval_status": ApprovalStatus.rejected.rawValue])
                     .eq("id", value: id.uuidString)
                     .execute()
+
+                // إشعار للمالك
+                if let info = projectInfo {
+                    await self?.notificationVM?.sendNotification(
+                        title: L10n.t("لم يتم اعتماد مشروعك", "Your Project Was Not Approved"),
+                        body: L10n.t(
+                            "مشروع «\(info.title)» لم يتم اعتماده. تواصل مع الإدارة لمعرفة السبب.",
+                            "Project «\(info.title)» was not approved. Contact admin for details."
+                        ),
+                        targetMemberIds: [info.ownerId],
+                        kind: NotificationKind.projectRejected.rawValue
+                    )
+
+                    // إشعار للإدارة في "المستجدات"
+                    await self?.notificationVM?.notifyAdminsWithPush(
+                        title: L10n.t("تم رفض مشروع", "Project Rejected"),
+                        body: L10n.t(
+                            "تم رفض مشروع «\(info.title)» لـ «\(info.ownerName)»",
+                            "Project «\(info.title)» for «\(info.ownerName)» was rejected"
+                        ),
+                        kind: NotificationKind.projectRejected.rawValue
+                    )
+                }
             } catch {
                 await MainActor.run { self?.errorMessage = L10n.t("تعذر رفض المشروع.", "Failed to reject project.") }
                 Log.error("خطأ رفض المشروع: \(error.localizedDescription)")

@@ -164,6 +164,20 @@ class DiwaniyasViewModel: ObservableObject {
                 await fetchDiwaniyas()
             }
 
+            // إشعار المدراء فقط لو تحتاج موافقة
+            if !autoApprove {
+                await notificationVM?.notifyAdminsWithPush(
+                    title: L10n.t("ديوانية جديدة تحتاج موافقة", "New Diwaniya Needs Approval"),
+                    body: L10n.t(
+                        "«\(trimmedOwner)» قدّم ديوانية: «\(trimmedTitle)»",
+                        "«\(trimmedOwner)» submitted a diwaniya: «\(trimmedTitle)»"
+                    ),
+                    kind: NotificationKind.diwaniyaPending.rawValue,
+                    requestId: newId,
+                    requestType: "diwaniya_pending"
+                )
+            }
+
             isLoading = false
             return true
         } catch {
@@ -196,8 +210,11 @@ class DiwaniyasViewModel: ObservableObject {
     }
     
     func approveDiwaniya(id: UUID, adminId: UUID) async {
-        // حفظ ownerId قبل الحذف المحلي
-        let ownerId = pendingDiwaniyas.first(where: { $0.id == id })?.ownerId
+        // حفظ بيانات الديوانية قبل الحذف المحلي (للإشعارات)
+        let info = pendingDiwaniyas.first(where: { $0.id == id })
+        let ownerId = info?.ownerId
+        let approvedTitle = info?.title ?? "—"
+        let ownerName = info?.ownerName ?? ""
 
         optimisticRemove(from: &pendingDiwaniyas, id: id, apiWork: { [weak self] in
             do {
@@ -215,9 +232,20 @@ class DiwaniyasViewModel: ObservableObject {
                     await self?.notificationVM?.sendNotification(
                         title: L10n.t("تم اعتماد ديوانيتك", "Your Diwaniya Was Approved"),
                         body: L10n.t("ديوانيتك أصبحت مرئية للجميع", "Your diwaniya is now visible to everyone"),
-                        targetMemberIds: [ownerId]
+                        targetMemberIds: [ownerId],
+                        kind: NotificationKind.diwaniyaApproved.rawValue
                     )
                 }
+
+                // إشعار للإدارة في "المستجدات"
+                await self?.notificationVM?.notifyAdminsWithPush(
+                    title: L10n.t("تم اعتماد ديوانية", "Diwaniya Approved"),
+                    body: L10n.t(
+                        "تم اعتماد ديوانية «\(approvedTitle)» لـ «\(ownerName)»",
+                        "Diwaniya «\(approvedTitle)» for «\(ownerName)» was approved"
+                    ),
+                    kind: NotificationKind.diwaniyaApproved.rawValue
+                )
                 Log.info("تم اعتماد الديوانية بنجاح")
             } catch {
                 await MainActor.run {
@@ -297,6 +325,9 @@ class DiwaniyasViewModel: ObservableObject {
             Log.warning("[AUTH] Unauthorized rejectDiwaniya attempt")
             return
         }
+        // حفظ بيانات الديوانية قبل الحذف لإرسال إشعار للمالك
+        let diwaniyaInfo = pendingDiwaniyas.first(where: { $0.id == id })
+
         optimisticRemove(from: &pendingDiwaniyas, id: id, apiWork: { [weak self] in
             do {
                 try await self?.supabase
@@ -304,6 +335,29 @@ class DiwaniyasViewModel: ObservableObject {
                     .delete()
                     .eq("id", value: id.uuidString)
                     .execute()
+
+                // إشعار للمالك بالرفض
+                if let info = diwaniyaInfo {
+                    await self?.notificationVM?.sendNotification(
+                        title: L10n.t("لم يتم اعتماد ديوانيتك", "Your Diwaniya Was Not Approved"),
+                        body: L10n.t(
+                            "ديوانية «\(info.title)» لم يتم اعتمادها. تواصل مع الإدارة لمعرفة السبب.",
+                            "«\(info.title)» was not approved. Contact admin for details."
+                        ),
+                        targetMemberIds: [info.ownerId],
+                        kind: NotificationKind.diwaniyaRejected.rawValue
+                    )
+
+                    // إشعار للإدارة في "المستجدات"
+                    await self?.notificationVM?.notifyAdminsWithPush(
+                        title: L10n.t("تم رفض ديوانية", "Diwaniya Rejected"),
+                        body: L10n.t(
+                            "تم رفض ديوانية «\(info.title)» لـ «\(info.ownerName)»",
+                            "Diwaniya «\(info.title)» for «\(info.ownerName)» was rejected"
+                        ),
+                        kind: NotificationKind.diwaniyaRejected.rawValue
+                    )
+                }
                 Log.info("تم رفض الديوانية بنجاح")
             } catch {
                 await MainActor.run {

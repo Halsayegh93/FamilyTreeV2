@@ -1,76 +1,57 @@
 import SwiftUI
 
-/// شاشة طلب تعديل الشجرة — إضافة / تعديل اسم / حذف
+/// شاشة طلب تعديل الشجرة — تستقبل عضو + إجراء محددين مسبقاً.
+/// تدعم: إضافة ابن / تعديل اسم / تعديل رقم / تسجيل وفاة / حذف.
 struct TreeEditRequestView: View {
     @EnvironmentObject var adminRequestVM: AdminRequestViewModel
-    @EnvironmentObject var memberVM: MemberViewModel
     @Environment(\.dismiss) private var dismiss
     @FocusState private var isDetailsFocused: Bool
-    @FocusState private var isNameFieldFocused: Bool
-    @FocusState private var isNewNameFocused: Bool
-    @FocusState private var isNewMemberNameFocused: Bool
+    @FocusState private var isPrimaryFieldFocused: Bool
 
-    @State private var selectedAction = "تعديل اسم"
-    @State private var memberName = ""
-    @State private var details = ""
-    @State private var newNameText = ""
-    @State private var newMemberNameText = ""
+    let member: FamilyMember
+    let action: TreeEditAction
+
+    @State private var primaryText: String = ""
+    @State private var notes: String = ""
+    @State private var deathDate: Date = Date()
+    @State private var phoneCountry: KuwaitPhone.Country = KuwaitPhone.defaultCountry
+    @State private var localPhoneDigits: String = ""
     @State private var showSuccessAlert = false
     @State private var showErrorAlert = false
-    @State private var nameSearchText = ""
-    @State private var selectedMember: FamilyMember?
-    @State private var showMemberPicker = false
+    @State private var errorMessage: String? = nil
+    @State private var showCountrySheet = false
 
-    private let actionItems: [(key: String, icon: String, labelAr: String, labelEn: String, color: Color)] = [
-        ("إضافة", "person.badge.plus", "إضافة", "Add", DS.Color.success),
-        ("تعديل اسم", "pencil.line", "تعديل اسم", "Edit Name", DS.Color.info),
-        ("حذف", "person.badge.minus", "حذف", "Remove", DS.Color.error)
-    ]
+    private var actionColor: Color {
+        switch action {
+        case .add: return DS.Color.success
+        case .editName: return DS.Color.info
+        case .editPhone: return DS.Color.primary
+        case .deceased: return DS.Color.textTertiary
+        case .delete: return DS.Color.error
+        }
+    }
+
+    private var screenTitle: String {
+        switch action {
+        case .add: return L10n.t("طلب إضافة ابن", "Add Son Request")
+        case .editName: return L10n.t("طلب تعديل اسم", "Edit Name Request")
+        case .editPhone: return L10n.t("طلب تعديل رقم", "Edit Phone Request")
+        case .deceased: return L10n.t("طلب تسجيل وفاة", "Mark Deceased Request")
+        case .delete: return L10n.t("طلب حذف", "Delete Request")
+        }
+    }
 
     private var canSubmit: Bool {
-        guard selectedMember != nil, !adminRequestVM.isLoading else { return false }
-        switch selectedAction {
-        case "تعديل اسم":
-            return !newNameText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        case "حذف":
-            return !details.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        case "إضافة":
-            return !newMemberNameText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        default:
-            return false
-        }
-    }
-
-    /// Dynamic label for member picker based on action
-    private var memberPickerLabel: String {
-        L10n.t("العضو المعني", "Target Member")
-    }
-
-    /// Dynamic placeholder for member picker
-    private var memberPickerPlaceholder: String {
-        L10n.t("اختر العضو من القائمة...", "Select member from list...")
-    }
-
-    /// Dynamic label & placeholder for details section
-    private var detailsLabel: String {
-        switch selectedAction {
-        case "حذف":
-            return L10n.t("سبب الحذف", "Removal Reason")
-        default:
-            return L10n.t("ملاحظات إضافية (اختياري)", "Additional Notes (optional)")
-        }
-    }
-
-    private var detailsPlaceholder: String {
-        switch selectedAction {
-        case "تعديل اسم":
-            return L10n.t("أي ملاحظات إضافية...", "Any additional notes...")
-        case "حذف":
-            return L10n.t("اكتب سبب الحذف...", "Write the removal reason...")
-        case "إضافة":
-            return L10n.t("أي ملاحظات إضافية...", "Any additional notes...")
-        default:
-            return ""
+        guard !adminRequestVM.isLoading else { return false }
+        switch action {
+        case .add, .editName:
+            return !primaryText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        case .editPhone:
+            return KuwaitPhone.normalizedForStorage(country: phoneCountry, rawLocalDigits: localPhoneDigits) != nil
+        case .deceased:
+            return true
+        case .delete:
+            return !notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         }
     }
 
@@ -81,17 +62,9 @@ struct TreeEditRequestView: View {
 
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: DS.Spacing.xxl) {
-                        actionSection
-                        memberNameSection
-
-                        // Action-specific fields
-                        if selectedAction == "تعديل اسم" {
-                            newNameSection
-                        } else if selectedAction == "إضافة" {
-                            newMemberNameSection
-                        }
-
-                        detailsSection
+                        memberCard
+                        primaryFieldSection
+                        notesSection
                         submitButton
                     }
                     .padding(.horizontal, DS.Spacing.lg)
@@ -99,7 +72,7 @@ struct TreeEditRequestView: View {
                     .padding(.bottom, DS.Spacing.xxxxl)
                 }
             }
-            .navigationTitle(L10n.t("طلب تعديل الشجرة", "Tree Edit Request"))
+            .navigationTitle(screenTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -119,348 +92,247 @@ struct TreeEditRequestView: View {
             .alert(L10n.t("تعذر الإرسال", "Failed to Send"), isPresented: $showErrorAlert) {
                 Button(L10n.t("حسناً", "OK"), role: .cancel) {}
             } message: {
-                Text(L10n.t(
+                Text(errorMessage ?? L10n.t(
                     "تعذر إرسال الطلب. حاول مرة أخرى.",
                     "Failed to send request. Please try again."
                 ))
             }
+            .sheet(isPresented: $showCountrySheet) {
+                countryPickerSheet
+            }
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+            .onAppear { prefillFromMember() }
         }
     }
 
-    // MARK: - Action Type Section
-    private var actionSection: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            Text(L10n.t("نوع التعديل", "Edit Type"))
-                .font(DS.Font.calloutBold)
-                .foregroundColor(DS.Color.textPrimary)
+    // MARK: - Member Card
 
-            HStack(spacing: DS.Spacing.sm) {
-                ForEach(actionItems, id: \.key) { item in
-                    let isSelected = selectedAction == item.key
-                    Button {
-                        withAnimation(DS.Anim.snappy) {
-                            selectedAction = item.key
-                        }
-                    } label: {
-                        HStack(spacing: DS.Spacing.sm) {
-                            Image(systemName: item.icon)
-                                .font(DS.Font.scaled(14, weight: .semibold))
-                            Text(L10n.t(item.labelAr, item.labelEn))
-                                .font(DS.Font.caption1)
-                                .fontWeight(.semibold)
-                        }
-                        .foregroundColor(isSelected ? DS.Color.textOnPrimary : item.color)
-                        .padding(.horizontal, DS.Spacing.md)
-                        .padding(.vertical, DS.Spacing.sm)
-                        .frame(maxWidth: .infinity)
-                        .background(isSelected ? item.color : item.color.opacity(0.08))
-                        .clipShape(Capsule())
-                        .overlay(
-                            Capsule()
-                                .stroke(isSelected ? Color.clear : item.color.opacity(0.25), lineWidth: 1)
-                        )
-                    }
-                    .buttonStyle(DSScaleButtonStyle())
-                }
-            }
-        }
-    }
-
-    // MARK: - Member Name Section (dynamic label)
-    private var memberNameSection: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            Text(memberPickerLabel)
-                .font(DS.Font.calloutBold)
-                .foregroundColor(DS.Color.textPrimary)
-
-            // Tappable field to open member picker
-            Button {
-                showMemberPicker = true
-            } label: {
-                HStack(spacing: DS.Spacing.sm) {
-                    Image(systemName: selectedAction == "إضافة" ? "person.2.fill" : "person.fill")
-                        .font(DS.Font.scaled(14, weight: .medium))
-                        .foregroundColor(DS.Color.textTertiary)
-                        .frame(width: 24)
-
-                    if let selected = selectedMember {
-                        Text(selected.fullName)
-                            .font(DS.Font.body)
-                            .foregroundColor(DS.Color.textPrimary)
-                    } else {
-                        Text(memberPickerPlaceholder)
-                            .font(DS.Font.body)
-                            .foregroundColor(DS.Color.textTertiary)
-                    }
-
-                    Spacer()
-
-                    Image(systemName: "chevron.forward")
-                        .font(DS.Font.scaled(12, weight: .medium))
-                        .foregroundColor(DS.Color.textTertiary)
-                }
-                .padding(.horizontal, DS.Spacing.md)
-                .padding(.vertical, DS.Spacing.md)
-                .background(DS.Color.surface)
-                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
-                .overlay(
-                    RoundedRectangle(cornerRadius: DS.Radius.lg)
-                        .stroke(
-                            selectedMember != nil ? DS.Color.primary.opacity(0.3) : DS.Color.textTertiary.opacity(0.15),
-                            lineWidth: selectedMember != nil ? 1.5 : 1
-                        )
-                )
-            }
-            .buttonStyle(DSScaleButtonStyle())
-        }
-        .sheet(isPresented: $showMemberPicker) {
-            memberPickerSheet
-        }
-        .onChange(of: selectedAction) { _ in
-            // Reset all fields when action type changes
-            selectedMember = nil
-            memberName = ""
-            newNameText = ""
-            newMemberNameText = ""
-            details = ""
-        }
-    }
-
-    // MARK: - New Name Section (for تعديل اسم)
-    private var newNameSection: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            Text(L10n.t("الاسم الجديد", "New Name"))
-                .font(DS.Font.calloutBold)
-                .foregroundColor(DS.Color.textPrimary)
-
-            HStack(spacing: DS.Spacing.sm) {
-                Image(systemName: "pencil")
-                    .font(DS.Font.scaled(14, weight: .medium))
-                    .foregroundColor(DS.Color.textTertiary)
-                    .frame(width: 24)
-
-                TextField(
-                    L10n.t("اكتب الاسم الجديد...", "Enter the new name..."),
-                    text: $newNameText
-                )
-                .font(DS.Font.body)
-                .foregroundColor(DS.Color.textPrimary)
-                .focused($isNewNameFocused)
-
-                if !newNameText.isEmpty {
-                    Button {
-                        newNameText = ""
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(DS.Font.scaled(14, weight: .medium))
-                            .foregroundColor(DS.Color.textTertiary)
-                    }
-                    .accessibilityLabel(L10n.t("مسح", "Clear"))
-                }
-            }
-            .padding(.horizontal, DS.Spacing.md)
-            .padding(.vertical, DS.Spacing.md)
-            .background(DS.Color.surface)
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.lg)
-                    .stroke(
-                        isNewNameFocused ? DS.Color.primary.opacity(0.4) : DS.Color.textTertiary.opacity(0.15),
-                        lineWidth: isNewNameFocused ? 1.5 : 1
-                    )
-            )
-        }
-        .transition(.opacity.combined(with: .move(edge: .top)))
-    }
-
-    // MARK: - New Member Name Section (for إضافة)
-    private var newMemberNameSection: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            Text(L10n.t("اسم العضو الجديد", "New Member Name"))
-                .font(DS.Font.calloutBold)
-                .foregroundColor(DS.Color.textPrimary)
-
-            HStack(spacing: DS.Spacing.sm) {
-                Image(systemName: "person.badge.plus")
-                    .font(DS.Font.scaled(14, weight: .medium))
-                    .foregroundColor(DS.Color.textTertiary)
-                    .frame(width: 24)
-
-                TextField(
-                    L10n.t("اكتب اسم العضو الجديد...", "Enter the new member's name..."),
-                    text: $newMemberNameText
-                )
-                .font(DS.Font.body)
-                .foregroundColor(DS.Color.textPrimary)
-                .focused($isNewMemberNameFocused)
-
-                if !newMemberNameText.isEmpty {
-                    Button {
-                        newMemberNameText = ""
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(DS.Font.scaled(14, weight: .medium))
-                            .foregroundColor(DS.Color.textTertiary)
-                    }
-                    .accessibilityLabel(L10n.t("مسح", "Clear"))
-                }
-            }
-            .padding(.horizontal, DS.Spacing.md)
-            .padding(.vertical, DS.Spacing.md)
-            .background(DS.Color.surface)
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.lg)
-                    .stroke(
-                        isNewMemberNameFocused ? DS.Color.primary.opacity(0.4) : DS.Color.textTertiary.opacity(0.15),
-                        lineWidth: isNewMemberNameFocused ? 1.5 : 1
-                    )
-            )
-        }
-        .transition(.opacity.combined(with: .move(edge: .top)))
-    }
-
-    // MARK: - Member Picker Sheet
-    private var memberPickerSheet: some View {
-        NavigationStack {
+    private var memberCard: some View {
+        HStack(spacing: DS.Spacing.md) {
             ZStack {
-                DS.Color.background.ignoresSafeArea()
+                Circle()
+                    .fill(actionColor.opacity(0.12))
+                    .frame(width: 56, height: 56)
+                Image(systemName: action.iconName)
+                    .font(DS.Font.scaled(20, weight: .semibold))
+                    .foregroundColor(actionColor)
+            }
 
-                VStack(spacing: 0) {
-                    // Search bar
-                    HStack(spacing: DS.Spacing.sm) {
-                        Image(systemName: "magnifyingglass")
+            VStack(alignment: .leading, spacing: 2) {
+                Text(L10n.t(action.arabicLabel, action.englishLabel))
+                    .font(DS.Font.caption1)
+                    .fontWeight(.semibold)
+                    .foregroundColor(actionColor)
+                Text(member.fullName)
+                    .font(DS.Font.calloutBold)
+                    .foregroundColor(DS.Color.textPrimary)
+                    .lineLimit(2)
+            }
+            Spacer()
+        }
+        .padding(DS.Spacing.md)
+        .background(DS.Color.surface)
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Radius.lg)
+                .stroke(actionColor.opacity(0.18), lineWidth: 1)
+        )
+    }
+
+    // MARK: - Primary Field
+
+    @ViewBuilder
+    private var primaryFieldSection: some View {
+        switch action {
+        case .add:
+            textInputSection(
+                label: L10n.t("اسم الابن الجديد", "New Son Name"),
+                placeholder: L10n.t("اكتب اسم الابن...", "Enter son's name..."),
+                icon: "person.badge.plus",
+                text: $primaryText
+            )
+        case .editName:
+            textInputSection(
+                label: L10n.t("الاسم الجديد", "New Name"),
+                placeholder: L10n.t("اكتب الاسم الجديد...", "Enter new name..."),
+                icon: "pencil",
+                text: $primaryText
+            )
+        case .editPhone:
+            phoneInputSection
+        case .deceased:
+            deceasedDateSection
+        case .delete:
+            EmptyView()
+        }
+    }
+
+    private func textInputSection(label: String, placeholder: String, icon: String, text: Binding<String>) -> some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.md) {
+            Text(label)
+                .font(DS.Font.calloutBold)
+                .foregroundColor(DS.Color.textPrimary)
+
+            HStack(spacing: DS.Spacing.sm) {
+                Image(systemName: icon)
+                    .font(DS.Font.scaled(14, weight: .medium))
+                    .foregroundColor(DS.Color.textTertiary)
+                    .frame(width: 24)
+
+                TextField(placeholder, text: text)
+                    .font(DS.Font.body)
+                    .foregroundColor(DS.Color.textPrimary)
+                    .focused($isPrimaryFieldFocused)
+
+                if !text.wrappedValue.isEmpty {
+                    Button { text.wrappedValue = "" } label: {
+                        Image(systemName: "xmark.circle.fill")
                             .font(DS.Font.scaled(14, weight: .medium))
                             .foregroundColor(DS.Color.textTertiary)
-
-                        TextField(
-                            L10n.t("ابحث عن عضو...", "Search for a member..."),
-                            text: $nameSearchText
-                        )
-                        .font(DS.Font.body)
-                        .foregroundColor(DS.Color.textPrimary)
-                        .focused($isNameFieldFocused)
-
-                        if !nameSearchText.isEmpty {
-                            Button {
-                                nameSearchText = ""
-                            } label: {
-                                Image(systemName: "xmark.circle.fill")
-                                    .font(DS.Font.scaled(14, weight: .medium))
-                                    .foregroundColor(DS.Color.textTertiary)
-                            }
-                            .accessibilityLabel(L10n.t("مسح البحث", "Clear search"))
-                        }
                     }
+                }
+            }
+            .padding(.horizontal, DS.Spacing.md)
+            .padding(.vertical, DS.Spacing.md)
+            .background(DS.Color.surface)
+            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Radius.lg)
+                    .stroke(
+                        isPrimaryFieldFocused ? DS.Color.primary.opacity(0.4) : DS.Color.textTertiary.opacity(0.15),
+                        lineWidth: isPrimaryFieldFocused ? 1.5 : 1
+                    )
+            )
+        }
+    }
+
+    private var phoneInputSection: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.md) {
+            Text(L10n.t("الرقم الجديد", "New Phone Number"))
+                .font(DS.Font.calloutBold)
+                .foregroundColor(DS.Color.textPrimary)
+
+            HStack(spacing: DS.Spacing.sm) {
+                Button { showCountrySheet = true } label: {
+                    HStack(spacing: DS.Spacing.xs) {
+                        Text(phoneCountry.flag)
+                            .font(DS.Font.scaled(16))
+                        Text(phoneCountry.dialingCode)
+                            .font(DS.Font.calloutBold)
+                            .foregroundColor(DS.Color.textPrimary)
+                        Image(systemName: "chevron.down")
+                            .font(DS.Font.scaled(10, weight: .semibold))
+                            .foregroundColor(DS.Color.textTertiary)
+                    }
+                    .padding(.horizontal, DS.Spacing.sm)
+                    .padding(.vertical, DS.Spacing.sm)
+                    .background(DS.Color.surface)
+                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: DS.Radius.md)
+                            .stroke(DS.Color.textTertiary.opacity(0.15), lineWidth: 1)
+                    )
+                }
+                .buttonStyle(DSScaleButtonStyle())
+
+                TextField(L10n.t("رقم الهاتف", "Phone number"), text: $localPhoneDigits)
+                    .keyboardType(.numberPad)
+                    .font(DS.Font.body)
+                    .foregroundColor(DS.Color.textPrimary)
+                    .focused($isPrimaryFieldFocused)
                     .padding(.horizontal, DS.Spacing.md)
                     .padding(.vertical, DS.Spacing.md)
                     .background(DS.Color.surface)
                     .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
-                    .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.top, DS.Spacing.sm)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: DS.Radius.lg)
+                            .stroke(
+                                isPrimaryFieldFocused ? DS.Color.primary.opacity(0.4) : DS.Color.textTertiary.opacity(0.15),
+                                lineWidth: isPrimaryFieldFocused ? 1.5 : 1
+                            )
+                    )
+            }
+        }
+    }
 
-                    // Members list
-                    ScrollView(showsIndicators: false) {
-                        LazyVStack(spacing: DS.Spacing.xs) {
-                            ForEach(filteredMembers) { member in
-                                Button {
-                                    selectedMember = member
-                                    memberName = member.fullName
-                                    showMemberPicker = false
-                                    nameSearchText = ""
-                                } label: {
-                                    HStack(spacing: DS.Spacing.sm) {
-                                        // Avatar circle
-                                        ZStack {
-                                            Circle()
-                                                .fill(DS.Color.primary.opacity(0.1))
-                                                .frame(width: 32, height: 32)
-
-                                            Text(String(member.firstName.prefix(1)))
-                                                .font(DS.Font.caption1)
-                                                .fontWeight(.semibold)
-                                                .foregroundColor(DS.Color.primary)
-                                        }
-
-                                        Text(member.fullName)
-                                            .font(DS.Font.callout)
-                                            .foregroundColor(DS.Color.textPrimary)
-                                            .lineLimit(1)
-
-                                        Spacer()
-
-                                        if selectedMember?.id == member.id {
-                                            Image(systemName: "checkmark.circle.fill")
-                                                .font(DS.Font.scaled(16, weight: .medium))
-                                                .foregroundColor(DS.Color.primary)
-                                        }
-                                    }
-                                    .padding(.horizontal, DS.Spacing.md)
-                                    .padding(.vertical, DS.Spacing.sm)
-                                }
-                                .buttonStyle(DSScaleButtonStyle())
-
-                                if member.id != filteredMembers.last?.id {
-                                    Divider()
-                                        .padding(.leading, 52)
-                                }
-                            }
+    private var countryPickerSheet: some View {
+        NavigationStack {
+            List(KuwaitPhone.supportedCountries) { country in
+                Button {
+                    phoneCountry = country
+                    showCountrySheet = false
+                } label: {
+                    HStack(spacing: DS.Spacing.md) {
+                        Text(country.flag).font(DS.Font.scaled(20))
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(L10n.t(country.nameArabic, country.isoCode))
+                                .font(DS.Font.calloutBold)
+                                .foregroundColor(DS.Color.textPrimary)
+                            Text(country.dialingCode)
+                                .font(DS.Font.caption1)
+                                .foregroundColor(DS.Color.textTertiary)
                         }
-                        .padding(.top, DS.Spacing.sm)
-                        .padding(.bottom, DS.Spacing.xxxxl)
+                        Spacer()
+                        if phoneCountry == country {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundColor(DS.Color.primary)
+                        }
                     }
                 }
             }
-            .navigationTitle(L10n.t("اختر العضو", "Select Member"))
+            .navigationTitle(L10n.t("اختر الدولة", "Select Country"))
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button(L10n.t("إلغاء", "Cancel")) {
-                        showMemberPicker = false
-                        nameSearchText = ""
-                    }
-                    .font(DS.Font.calloutBold)
-                    .foregroundColor(DS.Color.error)
-                }
-            }
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-            .onAppear { isNameFieldFocused = true }
         }
     }
 
-    /// Filtered members based on search text — show first 15 by default, all when searching
-    private var filteredMembers: [FamilyMember] {
-        let members = memberVM.allMembers.filter { $0.status != .frozen }
-        let sorted = members.sorted { $0.fullName < $1.fullName }
-        if nameSearchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return Array(sorted.prefix(15))
-        }
-        let query = nameSearchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        return sorted
-            .filter { $0.fullName.lowercased().contains(query) || $0.firstName.lowercased().contains(query) }
-    }
-
-    // MARK: - Details Section (dynamic label based on action)
-    private var detailsSection: some View {
+    private var deceasedDateSection: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            Text(detailsLabel)
+            Text(L10n.t("تاريخ الوفاة", "Date of Death"))
                 .font(DS.Font.calloutBold)
                 .foregroundColor(DS.Color.textPrimary)
 
-            ZStack(alignment: .topTrailing) {
-                TextEditor(text: $details)
-                    .frame(minHeight: selectedAction == "حذف" ? 100 : 80)
+            DatePicker(
+                L10n.t("تاريخ الوفاة", "Date of Death"),
+                selection: $deathDate,
+                in: ...Date(),
+                displayedComponents: .date
+            )
+            .labelsHidden()
+            .datePickerStyle(.compact)
+            .padding(.horizontal, DS.Spacing.md)
+            .padding(.vertical, DS.Spacing.md)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(DS.Color.surface)
+            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Radius.lg)
+                    .stroke(DS.Color.textTertiary.opacity(0.15), lineWidth: 1)
+            )
+        }
+    }
+
+    // MARK: - Notes / Reason Section
+
+    private var notesSection: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.md) {
+            Text(notesLabel)
+                .font(DS.Font.calloutBold)
+                .foregroundColor(DS.Color.textPrimary)
+
+            ZStack(alignment: .topLeading) {
+                TextEditor(text: $notes)
+                    .frame(minHeight: action == .delete ? 100 : 80)
                     .focused($isDetailsFocused)
                     .scrollContentBackground(.hidden)
                     .font(DS.Font.body)
 
-                if details.isEmpty {
-                    Text(detailsPlaceholder)
+                if notes.isEmpty {
+                    Text(notesPlaceholder)
                         .font(DS.Font.body)
                         .foregroundColor(DS.Color.textTertiary)
                         .padding(.top, DS.Spacing.sm)
-                        .padding(.trailing, DS.Spacing.xs)
+                        .padding(.leading, DS.Spacing.xs)
                         .allowsHitTesting(false)
                 }
             }
@@ -477,14 +349,27 @@ struct TreeEditRequestView: View {
         }
     }
 
-    // MARK: - Submit Button
+    private var notesLabel: String {
+        action == .delete
+            ? L10n.t("سبب الحذف (مطلوب)", "Removal Reason (required)")
+            : L10n.t("ملاحظات إضافية (اختياري)", "Additional Notes (optional)")
+    }
+
+    private var notesPlaceholder: String {
+        action == .delete
+            ? L10n.t("اكتب سبب طلب الحذف...", "Write the removal reason...")
+            : L10n.t("أي ملاحظات إضافية...", "Any additional notes...")
+    }
+
+    // MARK: - Submit
+
     private var submitButton: some View {
         DSPrimaryButton(
             L10n.t("إرسال الطلب", "Submit Request"),
             icon: "paperplane.fill",
             isLoading: adminRequestVM.isLoading,
             useGradient: canSubmit,
-            color: canSubmit ? DS.Color.primary : .gray
+            color: canSubmit ? actionColor : .gray
         ) {
             submit()
         }
@@ -492,54 +377,80 @@ struct TreeEditRequestView: View {
         .opacity(canSubmit ? 1.0 : DS.Opacity.disabled)
     }
 
-    // MARK: - Submit Logic
-    private func submit() {
-        guard let member = selectedMember else { return }
-        let cleanNotes = details.trimmingCharacters(in: .whitespacesAndNewlines)
+    // MARK: - Helpers
 
+    private func prefillFromMember() {
+        switch action {
+        case .editName:
+            primaryText = member.fullName
+        case .editPhone:
+            if let phone = member.phoneNumber, !phone.isEmpty {
+                let detected = KuwaitPhone.detectCountryAndLocal(phone)
+                phoneCountry = detected.country
+                localPhoneDigits = detected.localDigits
+            }
+        default:
+            break
+        }
+    }
+
+    private func submit() {
+        let cleanNotes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
         let payload: TreeEditPayload
-        switch selectedAction {
-        case "تعديل اسم":
-            payload = TreeEditPayload(
-                v: 2,
-                action: selectedAction,
+
+        switch action {
+        case .add:
+            payload = TreeEditPayload.make(
+                action: .add,
                 targetMemberId: member.id.uuidString,
                 targetMemberName: member.fullName,
-                newName: newNameText.trimmingCharacters(in: .whitespacesAndNewlines),
-                parentMemberId: nil,
-                parentMemberName: nil,
-                newMemberName: nil,
-                reason: nil,
-                notes: cleanNotes.isEmpty ? nil : cleanNotes
-            )
-        case "حذف":
-            payload = TreeEditPayload(
-                v: 2,
-                action: selectedAction,
-                targetMemberId: member.id.uuidString,
-                targetMemberName: member.fullName,
-                newName: nil,
-                parentMemberId: nil,
-                parentMemberName: nil,
-                newMemberName: nil,
-                reason: cleanNotes.isEmpty ? nil : cleanNotes,
-                notes: nil
-            )
-        case "إضافة":
-            payload = TreeEditPayload(
-                v: 2,
-                action: selectedAction,
-                targetMemberId: member.id.uuidString,
-                targetMemberName: member.fullName,
-                newName: nil,
                 parentMemberId: member.id.uuidString,
                 parentMemberName: member.fullName,
-                newMemberName: newMemberNameText.trimmingCharacters(in: .whitespacesAndNewlines),
-                reason: nil,
+                newMemberName: primaryText.trimmingCharacters(in: .whitespacesAndNewlines),
                 notes: cleanNotes.isEmpty ? nil : cleanNotes
             )
-        default:
-            return
+
+        case .editName:
+            payload = TreeEditPayload.make(
+                action: .editName,
+                targetMemberId: member.id.uuidString,
+                targetMemberName: member.fullName,
+                newName: primaryText.trimmingCharacters(in: .whitespacesAndNewlines),
+                notes: cleanNotes.isEmpty ? nil : cleanNotes
+            )
+
+        case .editPhone:
+            guard let normalized = KuwaitPhone.normalizedForStorage(country: phoneCountry, rawLocalDigits: localPhoneDigits) else {
+                errorMessage = L10n.t("رقم الهاتف غير صالح", "Invalid phone number")
+                showErrorAlert = true
+                return
+            }
+            payload = TreeEditPayload.make(
+                action: .editPhone,
+                targetMemberId: member.id.uuidString,
+                targetMemberName: member.fullName,
+                newPhone: normalized,
+                notes: cleanNotes.isEmpty ? nil : cleanNotes
+            )
+
+        case .deceased:
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withFullDate]
+            payload = TreeEditPayload.make(
+                action: .deceased,
+                targetMemberId: member.id.uuidString,
+                targetMemberName: member.fullName,
+                deathDate: formatter.string(from: deathDate),
+                notes: cleanNotes.isEmpty ? nil : cleanNotes
+            )
+
+        case .delete:
+            payload = TreeEditPayload.make(
+                action: .delete,
+                targetMemberId: member.id.uuidString,
+                targetMemberName: member.fullName,
+                reason: cleanNotes
+            )
         }
 
         Task {

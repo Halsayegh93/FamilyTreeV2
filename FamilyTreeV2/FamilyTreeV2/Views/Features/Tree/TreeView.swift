@@ -5,6 +5,9 @@ import Foundation
 extension Notification.Name {
     static let memberDeleted = Notification.Name("memberDeleted")
     static let showKinshipPath = Notification.Name("showKinshipPath")
+    /// Posted to navigate the tree to a specific member and open their details sheet.
+    /// userInfo: ["memberId": UUID]
+    static let openMemberInTree = Notification.Name("openMemberInTree")
 }
 
 // MARK: - أنماط العرض
@@ -58,7 +61,6 @@ struct TreeView: View {
     @EnvironmentObject var adminRequestVM: AdminRequestViewModel
     @Binding var selectedTab: Int
     @State private var showingNotifications = false
-    @State private var showingTreeEditRequest = false
     @State private var selectedMember: FamilyMember? = nil
     @State private var scrollTarget: UUID? = nil
     @State private var scrollCounter: Int = 0
@@ -261,11 +263,6 @@ struct TreeView: View {
                             icon: "leaf.fill",
                             backgroundGradient: DS.Color.gradientPrimary
                         ) {
-                            DSIconButton(icon: "pencil.line", iconSize: 16, iconColor: DS.Color.textOnPrimary, borderWidth: 1) {
-                                showingTreeEditRequest = true
-                            }
-                            .accessibilityLabel(L10n.t("طلب تعديل الشجرة", "Request tree edit"))
-
                             DSIconButton(icon: "location.fill", iconColor: DS.Color.textOnPrimary, borderWidth: 1) {
                                 if let currentUserID = authVM.currentUser?.id,
                                    let userMember = cachedMemberById[currentUserID] ?? memberVM.member(byId: currentUserID) {
@@ -341,9 +338,6 @@ struct TreeView: View {
                 MemberDetailsView(member: member)
                     .presentationDetents([.medium, .large])
             }
-            .fullScreenCover(isPresented: $showingTreeEditRequest) {
-                TreeEditRequestView()
-            }
             .task {
                 if cachedVisibleMembers.isEmpty {
                     rebuildCache()
@@ -376,6 +370,14 @@ struct TreeView: View {
                 withAnimation(DS.Anim.snappy) {
                     selectedMember = nil
                 }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .openMemberInTree)) { note in
+                // مزامنة الشجرة مع الشيت — التحريك فقط دون لمس selectedMember
+                // (الشيت يبقى مفتوح ومحتواه يتحدث داخلياً عبر currentMemberId)
+                guard let info = note.userInfo,
+                      let memberId = info["memberId"] as? UUID,
+                      let target = cachedMemberById[memberId] ?? memberVM.member(byId: memberId) else { return }
+                selectMemberFromSearch(target)
             }
             .onReceive(NotificationCenter.default.publisher(for: .showKinshipPath)) { note in
                 guard let info = note.userInfo,

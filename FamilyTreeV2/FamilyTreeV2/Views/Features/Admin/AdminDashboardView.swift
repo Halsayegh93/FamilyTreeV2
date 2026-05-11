@@ -84,7 +84,6 @@ struct AdminDashboardView: View {
             + adminRequestVM.deceasedRequests.count
             + adminRequestVM.childAddRequests.count
             + adminRequestVM.photoSuggestionRequests.count
-            + adminRequestVM.treeEditRequests.count
             + adminRequestVM.nameChangeRequests.count
             + memberVM.pendingGalleryPhotos.count
             + storyVM.pendingStories.count
@@ -141,6 +140,16 @@ struct AdminDashboardView: View {
                                             icon: "tray.full.fill",
                                             color: DS.Color.warning,
                                             badge: totalReviewRequestsCount
+                                        )
+                                    }
+                                    DSDivider()
+                                    NavigationLink(destination: AdminTreeEditRequestsView()) {
+                                        DSActionRow(
+                                            title: L10n.t("طلبات الشجرة", "Tree Requests"),
+                                            subtitle: L10n.t("إضافة وتعديل وحذف الأعضاء", "Add, edit & delete members"),
+                                            icon: "pencil.and.list.clipboard",
+                                            color: DS.Color.accent,
+                                            badge: adminRequestVM.treeEditRequests.count > 0 ? adminRequestVM.treeEditRequests.count : nil
                                         )
                                     }
                                     // إدارة الأعضاء — مدير + مراقب + مالك (المشرف لا)

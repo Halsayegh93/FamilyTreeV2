@@ -95,6 +95,16 @@ class AdminRequestViewModel: ObservableObject {
         return memberById(memberId)?.fullName ?? memberId.uuidString
     }
 
+    /// إشعار للإدارة في "المستجدات" بإجراء تمّ (موافقة/رفض)
+    /// in-app + push — يصل لكل canModerate (broadcast بدون target)
+    private func broadcastCompletedAction(titleAr: String, titleEn: String, bodyAr: String, bodyEn: String, kind: NotificationKind) async {
+        await notificationVM?.notifyAdminsWithPush(
+            title: L10n.t(titleAr, titleEn),
+            body: L10n.t(bodyAr, bodyEn),
+            kind: kind.rawValue
+        )
+    }
+
     /// Lookup a member by ID from authVM's member cache
     private func memberById(_ id: UUID) -> FamilyMember? {
         return memberVM?.member(byId: id)
@@ -143,12 +153,18 @@ class AdminRequestViewModel: ObservableObject {
             }
 
             let memberName = payload.targetMemberName ?? payload.newMemberName ?? ""
+            let actionLabelAr = payload.resolvedAction?.arabicLabel ?? payload.action
+            let actionLabelEn = payload.resolvedAction?.englishLabel ?? payload.action
+            let requesterFirstName = user.firstName
+            let bodyAr: String = memberName.isEmpty
+                ? "\(requesterFirstName) قدّم طلب \(actionLabelAr)"
+                : "\(requesterFirstName) قدّم طلب \(actionLabelAr) لـ «\(memberName)»"
+            let bodyEn: String = memberName.isEmpty
+                ? "\(requesterFirstName) submitted a \(actionLabelEn) request"
+                : "\(requesterFirstName) submitted a \(actionLabelEn) request for «\(memberName)»"
             await notificationVM?.notifyAdminsWithPush(
                 title: L10n.t("طلب تعديل شجرة العائلة", "Family Tree Edit Request"),
-                body: L10n.t(
-                    "طلب تعديل: \(payload.action) — \(memberName)",
-                    "Edit request: \(payload.action) — \(memberName)"
-                ),
+                body: L10n.t(bodyAr, bodyEn),
                 kind: NotificationKind.treeEdit.rawValue,
                 requestId: requestId,
                 requestType: RequestType.treeEdit.rawValue
@@ -187,16 +203,21 @@ class AdminRequestViewModel: ObservableObject {
         let payload = request.treeEditPayload
 
         optimisticRemove(from: &treeEditRequests, id: request.id, apiWork: { [weak self] in
+            guard let self = self else { return }
             do {
-                // 1. Perform actual tree edit based on action type
-                if let payload = payload {
-                    switch payload.action {
-                    case "تعديل اسم":
+                let resolvedAction = payload?.resolvedAction
+                var notifBody = L10n.t("تم قبول طلب تعديل الشجرة", "Your tree edit request was approved")
+
+                if let payload = payload, let action = resolvedAction {
+                    let memberName = payload.targetMemberName ?? request.member?.fullName ?? ""
+                    switch action {
+                    case .editName:
                         if let targetId = payload.targetMemberId,
-                           let newName = payload.newName, !newName.isEmpty {
+                           let newName = payload.newName?.trimmingCharacters(in: .whitespacesAndNewlines),
+                           !newName.isEmpty {
                             let nameParts = newName.split(whereSeparator: \.isWhitespace).map(String.init)
                             let newFirstName = nameParts.first ?? newName
-                            try await self?.supabase
+                            try await self.supabase
                                 .from("profiles")
                                 .update([
                                     "full_name": AnyEncodable(newName),
@@ -204,67 +225,127 @@ class AdminRequestViewModel: ObservableObject {
                                 ])
                                 .eq("id", value: targetId)
                                 .execute()
+                            notifBody = L10n.t(
+                                "تم تغيير الاسم إلى: «\(newName)»",
+                                "Name changed to: «\(newName)»"
+                            )
                             Log.info("[TreeEdit] Name updated: \(newName)")
                         }
 
-                    case "حذف":
+                    case .editPhone:
+                        if let targetId = payload.targetMemberId,
+                           let newPhone = payload.newPhone, !newPhone.isEmpty {
+                            try await self.supabase
+                                .from("profiles")
+                                .update(["phone_number": AnyEncodable(newPhone)])
+                                .eq("id", value: targetId)
+                                .execute()
+                            let target = memberName.isEmpty ? "" : " لـ «\(memberName)»"
+                            let targetEn = memberName.isEmpty ? "" : " for «\(memberName)»"
+                            notifBody = L10n.t(
+                                "تم تحديث رقم الهاتف\(target)",
+                                "Phone number updated\(targetEn)"
+                            )
+                            Log.info("[TreeEdit] Phone updated for: \(memberName)")
+                        }
+
+                    case .deceased:
                         if let targetId = payload.targetMemberId {
-                            try await self?.supabase
+                            var update: [String: AnyEncodable] = ["is_deceased": AnyEncodable(true)]
+                            if let dateStr = payload.deathDate, !dateStr.isEmpty {
+                                update["death_date"] = AnyEncodable(dateStr)
+                            }
+                            try await self.supabase
+                                .from("profiles")
+                                .update(update)
+                                .eq("id", value: targetId)
+                                .execute()
+                            let target = memberName.isEmpty ? "" : " لـ «\(memberName)»"
+                            let targetEn = memberName.isEmpty ? "" : " for «\(memberName)»"
+                            notifBody = L10n.t(
+                                "تم تأكيد حالة الوفاة\(target)",
+                                "Deceased status confirmed\(targetEn)"
+                            )
+                            Log.info("[TreeEdit] Deceased marked: \(memberName)")
+                        }
+
+                    case .delete:
+                        if let targetId = payload.targetMemberId {
+                            try await self.supabase
                                 .from("profiles")
                                 .update(["is_hidden_from_tree": AnyEncodable(true)])
                                 .eq("id", value: targetId)
                                 .execute()
-                            Log.info("[TreeEdit] Member hidden from tree: \(targetId)")
+                            let target = memberName.isEmpty ? "" : " «\(memberName)»"
+                            let targetEn = memberName.isEmpty ? "" : " «\(memberName)»"
+                            notifBody = L10n.t(
+                                "تم قبول طلب حذف\(target) من الشجرة",
+                                "Removal request approved\(targetEn)"
+                            )
+                            Log.info("[TreeEdit] Member hidden from tree: \(memberName)")
                         }
 
-                    case "إضافة":
-                        // Admin needs to add manually — context provided in notification
-                        Log.info("[TreeEdit] Add request approved — admin should add manually")
+                    case .add:
+                        if let parentId = payload.parentMemberId,
+                           let newMemberName = payload.newMemberName?.trimmingCharacters(in: .whitespacesAndNewlines),
+                           !newMemberName.isEmpty {
+                            let newId = UUID()
+                            let nameParts = newMemberName.split(whereSeparator: \.isWhitespace).map(String.init)
+                            let firstName = nameParts.first ?? newMemberName
 
-                    default:
-                        break
+                            let parentMember = self.memberVM?.member(byId: UUID(uuidString: parentId) ?? UUID())
+                            let combinedFullName = parentMember.map { "\(firstName) \($0.fullName)" } ?? newMemberName
+
+                            let sonData: [String: AnyEncodable] = [
+                                "id": AnyEncodable(newId.uuidString),
+                                "first_name": AnyEncodable(firstName),
+                                "full_name": AnyEncodable(combinedFullName),
+                                "father_id": AnyEncodable(parentId),
+                                "role": AnyEncodable("member"),
+                                "status": AnyEncodable("active"),
+                                "is_phone_hidden": AnyEncodable(true),
+                                "sort_order": AnyEncodable(0)
+                            ]
+                            try await self.supabase.from("profiles").insert(sonData).execute()
+
+                            let parentName = payload.parentMemberName ?? parentMember?.fullName ?? ""
+                            notifBody = L10n.t(
+                                "تم إضافة «\(firstName)» تحت «\(parentName)»",
+                                "«\(firstName)» added under «\(parentName)»"
+                            )
+                            Log.info("[TreeEdit] Member added: \(combinedFullName)")
+                        }
                     }
+                } else if let legacyAction = payload?.action {
+                    // Backwards compat for v2 strings without resolved action
+                    Log.info("[TreeEdit] Legacy/unmapped action: \(legacyAction)")
                 }
 
-                // 2. Mark request as approved
-                try await self?.supabase
+                try await self.supabase
                     .from("admin_requests")
                     .update(["status": AnyEncodable(ApprovalStatus.approved.rawValue)])
                     .eq("id", value: request.id.uuidString)
                     .execute()
 
-                // 3. Notify requester with action-specific message
-                let actionDesc = payload?.action ?? request.newValue ?? ""
-                let notifBody: String
-                switch payload?.action {
-                case "تعديل اسم":
-                    let newName = payload?.newName ?? ""
-                    notifBody = L10n.t(
-                        "تم تغيير الاسم إلى: \(newName)",
-                        "Name changed to: \(newName)"
-                    )
-                case "حذف":
-                    notifBody = L10n.t(
-                        "تم قبول طلب الحذف من الشجرة",
-                        "Your removal request was approved"
-                    )
-                case "إضافة":
-                    let childName = payload?.newMemberName ?? ""
-                    let parentName = payload?.parentMemberName ?? ""
-                    notifBody = L10n.t(
-                        "تم إضافة الابن: «\(childName)» لـ: «\(parentName)»",
-                        "Son added: «\(childName)» to: «\(parentName)»"
-                    )
-                default:
-                    notifBody = L10n.t("تم قبول طلب تعديل الشجرة", "Your tree edit request was approved")
-                }
-
-                await self?.notificationVM?.sendNotification(
+                await self.notificationVM?.sendNotification(
                     title: L10n.t("تم قبول طلبك", "Your Request Was Approved"),
                     body: notifBody,
                     targetMemberIds: [request.requesterId]
                 )
-                Log.info("[TreeEdit] Approved: \(actionDesc)")
+
+                // إشعار للإدارة في "المستجدات"
+                let memberName = payload?.targetMemberName ?? request.member?.fullName ?? ""
+                let actionAr = payload?.resolvedAction?.arabicLabel ?? "تعديل"
+                let actionEn = payload?.resolvedAction?.englishLabel ?? "edit"
+                await self.broadcastCompletedAction(
+                    titleAr: "تم قبول \(actionAr)",
+                    titleEn: "\(actionEn) Approved",
+                    bodyAr: memberName.isEmpty ? "تم قبول طلب \(actionAr)" : "تم قبول طلب \(actionAr) لـ «\(memberName)»",
+                    bodyEn: memberName.isEmpty ? "\(actionEn) request approved" : "\(actionEn) request for «\(memberName)» approved",
+                    kind: .treeEdit
+                )
+
+                Log.info("[TreeEdit] Approved: \(payload?.action ?? request.newValue ?? "")")
             } catch {
                 Log.error("[TreeEdit] Approve failed: \(error)")
             }
@@ -274,8 +355,72 @@ class AdminRequestViewModel: ObservableObject {
         })
     }
 
+    /// تسجيل تعديل أدمن مباشر في admin_requests كسجل audit (status='approved' فوراً).
+    /// لا يطلق إشعارات للمستخدمين — فقط للسجل.
+    func logAdminDirectEdit(payload: TreeEditPayload) async {
+        guard let user = currentUser else { return }
+        do {
+            var directPayload = payload
+            if directPayload.isAdminDirectEdit != true {
+                directPayload = TreeEditPayload(
+                    v: payload.v,
+                    action: payload.action,
+                    targetMemberId: payload.targetMemberId,
+                    targetMemberName: payload.targetMemberName,
+                    newName: payload.newName,
+                    newPhone: payload.newPhone,
+                    deathDate: payload.deathDate,
+                    parentMemberId: payload.parentMemberId,
+                    parentMemberName: payload.parentMemberName,
+                    newMemberName: payload.newMemberName,
+                    reason: payload.reason,
+                    notes: payload.notes,
+                    isAdminDirectEdit: true
+                )
+            }
+
+            let jsonData = try JSONEncoder().encode(directPayload)
+            let jsonString = String(data: jsonData, encoding: .utf8) ?? ""
+
+            let targetId: String = directPayload.targetMemberId
+                ?? directPayload.parentMemberId
+                ?? user.id.uuidString
+
+            let logEntry: [String: AnyEncodable] = [
+                "id": AnyEncodable(UUID().uuidString),
+                "member_id": AnyEncodable(targetId),
+                "requester_id": AnyEncodable(user.id.uuidString),
+                "request_type": AnyEncodable(RequestType.treeEdit.rawValue),
+                "status": AnyEncodable(ApprovalStatus.approved.rawValue),
+                "new_value": AnyEncodable(directPayload.action),
+                "details": AnyEncodable(jsonString)
+            ]
+
+            do {
+                try await supabase.from("admin_requests").insert(logEntry).execute()
+            } catch {
+                if ErrorHelper.isMissingColumn(error, column: "new_value") {
+                    var fallback = logEntry
+                    fallback.removeValue(forKey: "new_value")
+                    try await supabase.from("admin_requests").insert(fallback).execute()
+                } else {
+                    throw error
+                }
+            }
+
+            Log.info("[AdminAudit] Direct edit logged: \(directPayload.action)")
+        } catch {
+            Log.error("[AdminAudit] Failed to log direct edit: \(error.localizedDescription)")
+        }
+    }
+
     func rejectTreeEditRequest(request: AdminRequest, reason: String? = nil) async {
-        guard isAdmin else { Log.warning("رفض الطلب مرفوض: الصلاحية للمدير فقط"); return }
+        guard authVM?.canRejectRequests == true else { Log.warning("رفض الطلب مرفوض: الصلاحية للإدارة فقط"); return }
+        let payload = request.treeEditPayload
+        let actionAr = payload?.resolvedAction?.arabicLabel ?? L10n.t("التعديل", "edit")
+        let actionEn = payload?.resolvedAction?.englishLabel ?? "edit"
+        let memberName = payload?.targetMemberName ?? request.member?.fullName ?? ""
+
         optimisticRemove(from: &treeEditRequests, id: request.id, apiWork: { [weak self] in
             do {
                 try await self?.supabase
@@ -284,15 +429,24 @@ class AdminRequestViewModel: ObservableObject {
                     .eq("id", value: request.id.uuidString)
                     .execute()
 
-                // Notify requester about rejection
-                let actionDesc = request.newValue ?? ""
                 let reasonText = reason?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                let bodyAr = reasonText.isEmpty
-                    ? "تم رفض طلب \(actionDesc) في الشجرة"
-                    : "تم رفض طلب \(actionDesc) في الشجرة: \(reasonText)"
-                let bodyEn = reasonText.isEmpty
-                    ? "Your \(actionDesc) tree edit request was rejected"
-                    : "Your \(actionDesc) tree edit request was rejected: \(reasonText)"
+                let bodyAr: String
+                let bodyEn: String
+                if memberName.isEmpty {
+                    bodyAr = reasonText.isEmpty
+                        ? "تم رفض طلب \(actionAr)"
+                        : "تم رفض طلب \(actionAr)\nالسبب: \(reasonText)"
+                    bodyEn = reasonText.isEmpty
+                        ? "Your \(actionEn) request was rejected"
+                        : "Your \(actionEn) request was rejected\nReason: \(reasonText)"
+                } else {
+                    bodyAr = reasonText.isEmpty
+                        ? "تم رفض طلب \(actionAr)\n«\(memberName)»"
+                        : "تم رفض طلب \(actionAr)\n«\(memberName)»\nالسبب: \(reasonText)"
+                    bodyEn = reasonText.isEmpty
+                        ? "Your \(actionEn) request was rejected\n«\(memberName)»"
+                        : "Your \(actionEn) request was rejected\n«\(memberName)»\nReason: \(reasonText)"
+                }
 
                 await self?.notificationVM?.sendNotification(
                     title: L10n.t("لم يتم قبول طلبك", "Your Request Was Declined"),
@@ -300,7 +454,17 @@ class AdminRequestViewModel: ObservableObject {
                     targetMemberIds: [request.requesterId],
                     kind: "request_rejected"
                 )
-                Log.info("[TreeEdit] Rejected: \(actionDesc)")
+
+                // إشعار للإدارة في "المستجدات"
+                await self?.broadcastCompletedAction(
+                    titleAr: "تم رفض \(actionAr)",
+                    titleEn: "\(actionEn) Rejected",
+                    bodyAr: memberName.isEmpty ? "تم رفض طلب \(actionAr)" : "تم رفض طلب \(actionAr) لـ «\(memberName)»",
+                    bodyEn: memberName.isEmpty ? "\(actionEn) request rejected" : "\(actionEn) request for «\(memberName)» rejected",
+                    kind: .treeEdit
+                )
+
+                Log.info("[TreeEdit] Rejected: \(actionAr) — \(memberName)")
             } catch {
                 Log.error("[TreeEdit] Reject failed: \(error)")
             }
@@ -370,6 +534,7 @@ class AdminRequestViewModel: ObservableObject {
     }
 
     func approveDeceasedRequest(request: AdminRequest) async {
+        let memberName = request.member?.fullName ?? ""
         optimisticRemove(from: &deceasedRequests, id: request.id, apiWork: { [weak self] in
             do {
                 try await self?.supabase
@@ -389,6 +554,14 @@ class AdminRequestViewModel: ObservableObject {
                     body: L10n.t("تم تأكيد حالة الوفاة وتحديث الشجرة", "Deceased status confirmed and tree updated"),
                     targetMemberIds: [request.requesterId]
                 )
+
+                await self?.broadcastCompletedAction(
+                    titleAr: "تم قبول طلب وفاة",
+                    titleEn: "Deceased Status Approved",
+                    bodyAr: memberName.isEmpty ? "تم تأكيد حالة وفاة" : "تم تأكيد وفاة «\(memberName)»",
+                    bodyEn: memberName.isEmpty ? "Deceased status confirmed" : "Deceased status confirmed for «\(memberName)»",
+                    kind: .deceasedReport
+                )
                 Log.info("تم قبول الطلب وتحديث الشجرة بنجاح")
             } catch {
                 Log.error("فشل في تنفيذ عملية الموافقة: \(error)")
@@ -401,6 +574,7 @@ class AdminRequestViewModel: ObservableObject {
 
     func rejectDeceasedRequest(request: AdminRequest) async {
         guard isAdmin else { Log.warning("رفض الطلب مرفوض: الصلاحية للمدير فقط"); return }
+        let memberName = request.member?.fullName ?? ""
         optimisticRemove(from: &deceasedRequests, id: request.id, apiWork: { [weak self] in
             do {
                 try await self?.supabase
@@ -408,6 +582,14 @@ class AdminRequestViewModel: ObservableObject {
                     .update(["status": AnyEncodable(ApprovalStatus.rejected.rawValue)])
                     .eq("id", value: request.id.uuidString)
                     .execute()
+
+                await self?.broadcastCompletedAction(
+                    titleAr: "تم رفض طلب وفاة",
+                    titleEn: "Deceased Request Rejected",
+                    bodyAr: memberName.isEmpty ? "تم رفض طلب تأكيد وفاة" : "تم رفض طلب تأكيد وفاة «\(memberName)»",
+                    bodyEn: memberName.isEmpty ? "Deceased request rejected" : "Deceased request for «\(memberName)» rejected",
+                    kind: .deceasedReport
+                )
                 Log.info("تم رفض طلب تأكيد الوفاة")
             } catch {
                 Log.error("فشل في رفض طلب الوفاة: \(error)")
@@ -439,6 +621,7 @@ class AdminRequestViewModel: ObservableObject {
 
     func rejectChildAddRequest(request: AdminRequest) async {
         guard isAdmin else { Log.warning("رفض الطلب مرفوض: الصلاحية للمدير فقط"); return }
+        let childName = request.member?.firstName ?? ""
         optimisticRemove(from: &childAddRequests, id: request.id, apiWork: { [weak self] in
             do {
                 if let childId = request.newValue {
@@ -454,6 +637,14 @@ class AdminRequestViewModel: ObservableObject {
                     .update(["status": AnyEncodable(ApprovalStatus.rejected.rawValue)])
                     .eq("id", value: request.id.uuidString)
                     .execute()
+
+                await self?.broadcastCompletedAction(
+                    titleAr: "تم رفض طلب إضافة ابن",
+                    titleEn: "Child Add Rejected",
+                    bodyAr: childName.isEmpty ? "تم رفض طلب إضافة ابن" : "تم رفض طلب إضافة «\(childName)»",
+                    bodyEn: childName.isEmpty ? "Child add request rejected" : "Add request for «\(childName)» rejected",
+                    kind: .childAdd
+                )
                 Log.info("تم رفض طلب إضافة الابن وحذفه من الشجرة")
             } catch {
                 Log.error("فشل رفض طلب إضافة الابن: \(error)")
@@ -492,6 +683,14 @@ class AdminRequestViewModel: ObservableObject {
                     title: L10n.t("تم قبول طلبك", "Your Request Was Approved"),
                     body: childNotifBody,
                     targetMemberIds: [request.requesterId]
+                )
+
+                await self?.broadcastCompletedAction(
+                    titleAr: "تم قبول طلب إضافة ابن",
+                    titleEn: "Child Add Approved",
+                    bodyAr: "تم إضافة «\(childFirstName)» لـ «\(parentName)»",
+                    bodyEn: "«\(childFirstName)» added to «\(parentName)»",
+                    kind: .childAdd
                 )
                 Log.info("تم تأكيد طلب إضافة الابن بنجاح")
             } catch {
@@ -824,6 +1023,15 @@ class AdminRequestViewModel: ObservableObject {
                     body: L10n.t("تم اعتماد اسمك الجديد: \(newName)", "Your new name has been approved: \(newName)"),
                     targetMemberIds: [request.requesterId]
                 )
+
+                let oldName = request.member?.fullName ?? ""
+                await self?.broadcastCompletedAction(
+                    titleAr: "تم قبول تغيير اسم",
+                    titleEn: "Name Change Approved",
+                    bodyAr: oldName.isEmpty ? "تم قبول طلب تغيير الاسم" : "تم تغيير اسم «\(oldName)» إلى «\(newName)»",
+                    bodyEn: oldName.isEmpty ? "Name change approved" : "«\(oldName)» renamed to «\(newName)»",
+                    kind: .nameChange
+                )
                 Log.info("[NameChange] تم قبول طلب تغيير الاسم → \(newName)")
             } catch {
                 Log.error("[NameChange] فشل قبول طلب تغيير الاسم: \(error)")
@@ -849,6 +1057,15 @@ class AdminRequestViewModel: ObservableObject {
                     body: L10n.t("طلب تغيير الاسم لم تتم الموافقة عليه", "Your name change request was not approved"),
                     targetMemberIds: [request.requesterId],
                     kind: "request_rejected"
+                )
+
+                let memberName = request.member?.fullName ?? ""
+                await self?.broadcastCompletedAction(
+                    titleAr: "تم رفض تغيير اسم",
+                    titleEn: "Name Change Rejected",
+                    bodyAr: memberName.isEmpty ? "تم رفض طلب تغيير الاسم" : "تم رفض طلب تغيير اسم «\(memberName)»",
+                    bodyEn: memberName.isEmpty ? "Name change rejected" : "Name change for «\(memberName)» rejected",
+                    kind: .nameChange
                 )
                 Log.info("[NameChange] تم رفض طلب تغيير الاسم")
             } catch {
@@ -916,6 +1133,15 @@ class AdminRequestViewModel: ObservableObject {
                         targetMemberIds: [requesterId]
                     )
                 }
+
+                let memberName = request.member?.fullName ?? ""
+                await self?.broadcastCompletedAction(
+                    titleAr: "تم قبول تغيير رقم",
+                    titleEn: "Phone Change Approved",
+                    bodyAr: memberName.isEmpty ? "تم قبول طلب تغيير رقم" : "تم تغيير رقم «\(memberName)»",
+                    bodyEn: memberName.isEmpty ? "Phone change approved" : "Phone for «\(memberName)» updated",
+                    kind: .phoneChange
+                )
             } catch {
                 Log.error("خطأ اعتماد تغيير الرقم: \(error.localizedDescription)")
             }
@@ -944,6 +1170,15 @@ class AdminRequestViewModel: ObservableObject {
                         kind: "request_rejected"
                     )
                 }
+
+                let memberName = request.member?.fullName ?? ""
+                await self?.broadcastCompletedAction(
+                    titleAr: "تم رفض تغيير رقم",
+                    titleEn: "Phone Change Rejected",
+                    bodyAr: memberName.isEmpty ? "تم رفض طلب تغيير رقم" : "تم رفض تغيير رقم «\(memberName)»",
+                    bodyEn: memberName.isEmpty ? "Phone change rejected" : "Phone change for «\(memberName)» rejected",
+                    kind: .phoneChange
+                )
                 Log.info("[PhoneChange] تم رفض طلب تغيير الرقم")
             } catch {
                 Log.error("خطأ رفض تغيير الرقم: \(error.localizedDescription)")

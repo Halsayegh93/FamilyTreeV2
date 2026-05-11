@@ -37,6 +37,16 @@ private struct NotificationKindStyle {
         "story_pending":     .init(icon: "circle.dashed",                            gradient: DS.Color.gradientNeon,    color: DS.Color.neonCyan,    labelAr: "قصة معلقة",        labelEn: "Pending Story"),
         "story_approved":    .init(icon: "circle.fill",                              gradient: DS.Color.gradientCool,    color: DS.Color.info,        labelAr: "قصة معتمدة",      labelEn: "Story Approved"),
         "story_rejected":    .init(icon: "circle.fill",                              gradient: DS.Color.gradientCool,    color: DS.Color.info,        labelAr: "قصة مرفوضة",      labelEn: "Story Rejected"),
+        "photo_suggestion":  .init(icon: "camera.badge.ellipsis",                    gradient: DS.Color.gradientNeon,    color: DS.Color.neonCyan,    labelAr: "اقتراح صورة",     labelEn: "Photo Suggestion"),
+        "gallery_pending":   .init(icon: "photo.fill",                               gradient: DS.Color.gradientNeon,    color: DS.Color.neonCyan,    labelAr: "صورة معرض",        labelEn: "Gallery Photo"),
+        "gallery_approved":  .init(icon: "photo.fill",                               gradient: DS.Color.gradientCool,    color: DS.Color.success,     labelAr: "صورة معتمدة",      labelEn: "Photo Approved"),
+        "gallery_rejected":  .init(icon: "photo.fill",                               gradient: DS.Color.gradientWarm,    color: DS.Color.error,       labelAr: "صورة مرفوضة",      labelEn: "Photo Rejected"),
+        "diwaniya_pending":  .init(icon: "tent.fill",                                gradient: DS.Color.gradientOcean,   color: DS.Color.gridDiwaniya, labelAr: "ديوانية جديدة",   labelEn: "New Diwaniya"),
+        "diwaniya_approved": .init(icon: "tent.fill",                                gradient: DS.Color.gradientCool,    color: DS.Color.success,     labelAr: "ديوانية معتمدة",   labelEn: "Diwaniya Approved"),
+        "diwaniya_rejected": .init(icon: "tent.fill",                                gradient: DS.Color.gradientWarm,    color: DS.Color.error,       labelAr: "ديوانية مرفوضة",   labelEn: "Diwaniya Rejected"),
+        "project_pending":   .init(icon: "briefcase.fill",                           gradient: DS.Color.gradientAccent,  color: DS.Color.neonPurple,  labelAr: "مشروع جديد",       labelEn: "New Project"),
+        "project_approved":  .init(icon: "briefcase.fill",                           gradient: DS.Color.gradientCool,    color: DS.Color.success,     labelAr: "مشروع معتمد",      labelEn: "Project Approved"),
+        "project_rejected":  .init(icon: "briefcase.fill",                           gradient: DS.Color.gradientWarm,    color: DS.Color.error,       labelAr: "مشروع مرفوض",      labelEn: "Project Rejected"),
     ]
 
     private static let fallback = NotificationKindStyle(
@@ -265,23 +275,29 @@ struct NotificationsCenterView: View {
                         }
                     }
 
-                    // عداد غير المقروء
+                    // عداد غير المقروء — كبسولة محايدة + الرقم في badge منفصل
                     if unreadCount > 0 {
                         HStack(spacing: DS.Spacing.xs) {
-                            Circle()
-                                .fill(DS.Color.error)
-                                .frame(width: 7, height: 7)
-                            Text("\(unreadCount) " + L10n.t("غير مقروء", "unread"))
+                            Text("\(unreadCount)")
+                                .font(DS.Font.scaled(11, weight: .black))
+                                .foregroundColor(DS.Color.textOnPrimary)
+                                .frame(minWidth: 18, minHeight: 18)
+                                .padding(.horizontal, 4)
+                                .background(Capsule().fill(DS.Color.primary))
+                            Text(L10n.t("غير مقروء", "unread"))
                                 .font(DS.Font.scaled(11, weight: .semibold))
                                 .foregroundColor(DS.Color.textSecondary)
                         }
+                        .padding(.horizontal, DS.Spacing.sm)
+                        .padding(.vertical, 6)
+                        .background(DS.Color.textTertiary.opacity(0.10))
+                        .clipShape(Capsule())
                     }
                 }
             }
             .padding(.horizontal, DS.Spacing.lg)
         }
         .padding(.vertical, DS.Spacing.sm)
-        .background(DS.Color.surfaceElevated.opacity(0.5))
         .overlay(alignment: .bottom) {
             Rectangle().fill(DS.Color.textTertiary.opacity(0.1)).frame(height: 0.5)
         }
@@ -345,14 +361,6 @@ struct NotificationsCenterView: View {
             )
         }
         .padding(3)
-        .background(
-            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                .fill(DS.Color.surfaceElevated.opacity(0.7))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                .stroke(DS.Color.textTertiary.opacity(0.1), lineWidth: 0.5)
-        )
         .fixedSize(horizontal: false, vertical: true)
         .dynamicTypeSize(...DynamicTypeSize.large)
     }
@@ -400,7 +408,7 @@ struct NotificationsCenterView: View {
                 }
                 .foregroundColor(isSelected ? DS.Color.textOnPrimary : DS.Color.textSecondary)
                 .padding(.horizontal, 14)
-                .padding(.vertical, 8)
+                .padding(.vertical, 13)
                 .frame(maxWidth: .infinity)
             }
             .contentShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
@@ -408,12 +416,10 @@ struct NotificationsCenterView: View {
         .buttonStyle(.plain)
     }
 
-    /// أنواع الإشعارات الإدارية — المدير والمالك فقط يشوفونها
-    private let adminOnlyKinds: Set<String> = [
+    /// إجراءات تمّت — تظهر في تاب "المستجدات" للأدمن فقط (موافقة/رفض/تعديل/تفعيل/نشر)
+    private static let completedActionKinds: Set<String> = [
+        // تعديلات أدمن مباشرة
         NotificationKind.adminEdit.rawValue,
-        NotificationKind.adminRequest.rawValue,
-        NotificationKind.treeEdit.rawValue,
-        NotificationKind.linkRequest.rawValue,
         NotificationKind.adminEditName.rawValue,
         NotificationKind.adminEditDates.rawValue,
         NotificationKind.adminEditPhone.rawValue,
@@ -422,6 +428,21 @@ struct NotificationsCenterView: View {
         NotificationKind.adminEditAvatar.rawValue,
         NotificationKind.adminEditChildAdd.rawValue,
         NotificationKind.adminEditChildRemove.rawValue,
+        // عضوية (تم تفعيل)
+        NotificationKind.joinApproved.rawValue,
+        NotificationKind.accountActivated.rawValue,
+        NotificationKind.roleChange.rawValue,
+        // موافقات/رفض على إجراءات
+        NotificationKind.diwaniyaApproved.rawValue,
+        NotificationKind.diwaniyaRejected.rawValue,
+        NotificationKind.projectApproved.rawValue,
+        NotificationKind.projectRejected.rawValue,
+        NotificationKind.storyApproved.rawValue,
+        NotificationKind.storyRejected.rawValue,
+        NotificationKind.galleryApproved.rawValue,
+        NotificationKind.galleryRejected.rawValue,
+        // نشر محتوى
+        NotificationKind.newsPublished.rawValue,
     ]
 
     /// كل الإشعارات بعد تطبيق فلتر الإعدادات (الأنواع المخفية)
@@ -431,19 +452,46 @@ struct NotificationsCenterView: View {
         return all.filter { !hiddenKinds.contains($0.kind) }
     }
 
-    /// إشعار شخصي/إجرائي: موجه لي أو يحتاج موافقتي كمسؤول
+    /// تاب "إشعاراتي":
+    /// - الطلبات اللي تنتظر موافقتي (للأدمن)
+    /// - الإشعارات الموجّهة لي شخصياً (ليست إجراءً تمّ على آخرين)
     private func belongsToNotificationsTab(_ n: AppNotification) -> Bool {
         let myId = authVM.currentUser?.id
-        return n.targetMemberId == myId ||
-            n.kind == NotificationKind.adminRequest.rawValue ||
-            n.kind == NotificationKind.linkRequest.rawValue ||
-            n.kind == NotificationKind.newsReport.rawValue
+        let isCompletedAction = Self.completedActionKinds.contains(n.kind)
+
+        // للأدمن: الإجراءات اللي تمّت تذهب لـ "المستجدات" (مو "إشعاراتي")
+        if authVM.canModerate && isCompletedAction { return false }
+
+        // طلبات تنتظر موافقة الأدمن
+        if Self.pendingApprovalKinds.contains(n.kind) { return true }
+
+        // إشعار موجّه لي شخصياً (نتيجة موافقة/رفض/تعليق على شيء يخصني)
+        return n.targetMemberId == myId
     }
 
-    /// مستجد: نشاط إداري/عام لا يدخل في تاب الإشعارات (يمنع التكرار بين التابين)
+    /// أنواع الطلبات الجديدة اللي تنتظر موافقة الأدمن — تظهر في "إشعاراتي" فقط
+    private static let pendingApprovalKinds: Set<String> = [
+        NotificationKind.adminRequest.rawValue,
+        NotificationKind.linkRequest.rawValue,
+        NotificationKind.newsReport.rawValue,
+        NotificationKind.treeEdit.rawValue,
+        NotificationKind.deceasedReport.rawValue,
+        NotificationKind.childAdd.rawValue,
+        NotificationKind.phoneChange.rawValue,
+        NotificationKind.nameChange.rawValue,
+        NotificationKind.photoSuggestion.rawValue,
+        NotificationKind.galleryPending.rawValue,
+        NotificationKind.storyPending.rawValue,
+        NotificationKind.diwaniyaPending.rawValue,
+        NotificationKind.projectPending.rawValue,
+        NotificationKind.newsAdd.rawValue,
+        NotificationKind.contactMessage.rawValue,
+    ]
+
+    /// تاب "المستجدات" (للأدمن فقط): الإجراءات اللي تمّت
     private func belongsToActivityTab(_ n: AppNotification) -> Bool {
         guard !belongsToNotificationsTab(n) else { return false }
-        return adminOnlyKinds.contains(n.kind) || n.targetMemberId == nil
+        return Self.completedActionKinds.contains(n.kind)
     }
 
     private var filteredNotifications: [AppNotification] {
@@ -623,7 +671,7 @@ struct NotificationsCenterView: View {
 
                         // اسم المرسل — إداري يعرض "الإدارة"
                         if authVM.isAdmin, let creatorId = item.createdBy {
-                            let isAdminNotif = adminOnlyKinds.contains(item.kind)
+                            let isAdminNotif = Self.completedActionKinds.contains(item.kind)
                             let creator = memberVM.member(byId: creatorId)
                             let creatorName = isAdminNotif ? L10n.t("الإدارة", "Admin") : (creator?.shortFullName ?? L10n.t("الإدارة", "Admin"))
                             let roleColor: Color = isAdminNotif ? DS.Color.primary : (creator?.roleColor ?? DS.Color.accent)
@@ -844,7 +892,7 @@ struct NotificationsCenterView: View {
                 )
 
                 if authVM.isAdmin, let creatorId = notification.createdBy {
-                    let isAdminNotif = adminOnlyKinds.contains(notification.kind)
+                    let isAdminNotif = Self.completedActionKinds.contains(notification.kind)
                     let creator = memberVM.member(byId: creatorId)
                     let creatorName = isAdminNotif ? L10n.t("الإدارة", "Admin") : (creator?.shortFullName ?? L10n.t("الإدارة", "Admin"))
                     let roleColor: Color = isAdminNotif ? DS.Color.primary : (creator?.roleColor ?? DS.Color.accent)
@@ -986,19 +1034,39 @@ struct NotificationsCenterView: View {
     }
 
     /// Renders body text, wrapping «name» delimiters in styled capsules.
+    /// Supports \n for hard line breaks (each line becomes its own row).
     @ViewBuilder
     private func richBodyView(_ body: String, font: Font, color: Color, lineLimit: Int? = nil) -> some View {
         let cleaned = cleanBody(body)
-        let segments = BodySegment.parse(cleaned)
+        let lines = cleaned.components(separatedBy: "\n")
 
-        if segments.contains(where: \.isCapsule) {
-            WrappingHStack(segments: segments, font: font, color: color, lineLimit: lineLimit)
+        if lines.count > 1 {
+            VStack(alignment: .leading, spacing: 2) {
+                ForEach(lines.indices, id: \.self) { idx in
+                    let line = lines[idx]
+                    let segs = BodySegment.parse(line)
+                    if segs.contains(where: \.isCapsule) {
+                        WrappingHStack(segments: segs, font: font, color: color, lineLimit: lineLimit)
+                    } else {
+                        Text(line)
+                            .font(font)
+                            .foregroundColor(color)
+                            .lineLimit(lineLimit)
+                            .multilineTextAlignment(.leading)
+                    }
+                }
+            }
         } else {
-            Text(cleaned)
-                .font(font)
-                .foregroundColor(color)
-                .lineLimit(lineLimit)
-                .multilineTextAlignment(.leading)
+            let segments = BodySegment.parse(cleaned)
+            if segments.contains(where: \.isCapsule) {
+                WrappingHStack(segments: segments, font: font, color: color, lineLimit: lineLimit)
+            } else {
+                Text(cleaned)
+                    .font(font)
+                    .foregroundColor(color)
+                    .lineLimit(lineLimit)
+                    .multilineTextAlignment(.leading)
+            }
         }
     }
 
@@ -1042,23 +1110,24 @@ private struct WrappingHStack: View {
     let color: Color
     let lineLimit: Int?
 
-    /// يحدد لون الكبسولة حسب محتواها — إذا كانت صلاحية يستخدم لونها، وإلا اللون الأساسي
-    private func capsuleColor(for text: String) -> Color {
+    /// يحدد لون الكبسولة حسب محتواها — للأدوار فقط (الأسماء ما لها كبسولة)
+    private func roleColor(for text: String) -> Color? {
         let trimmed = text.trimmingCharacters(in: .whitespaces)
         switch trimmed {
         case "مدير", "Admin":       return FamilyMember.UserRole.admin.color
         case "مشرف", "Supervisor":  return FamilyMember.UserRole.supervisor.color
+        case "مراقب", "Monitor":    return FamilyMember.UserRole.monitor.color
         case "عضو", "Member":       return FamilyMember.UserRole.member.color
-        default:                     return DS.Color.primary
+        default:                     return nil
         }
     }
 
     var body: some View {
-        // عرض النصوص مع كبسولات الأسماء
+        // الأدوار تبقى في كبسولات ملوّنة، الأسماء bold بدون كبسولة
         FlowLayout(spacing: 4) {
             ForEach(segments) { segment in
-                if segment.isCapsule {
-                    let capColor = capsuleColor(for: segment.text)
+                if segment.isCapsule, let capColor = roleColor(for: segment.text) {
+                    // كبسولة للأدوار فقط
                     Text(segment.text)
                         .font(font).bold()
                         .foregroundColor(capColor)
@@ -1067,10 +1136,22 @@ private struct WrappingHStack: View {
                         .background(capColor.opacity(0.12))
                         .clipShape(Capsule())
                         .overlay(Capsule().stroke(capColor.opacity(0.25), lineWidth: 0.5))
+                } else if segment.isCapsule {
+                    // اسم شخص — bold يلتف على سطرين لو طويل
+                    Text(segment.text)
+                        .font(font).bold()
+                        .foregroundColor(color)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.vertical, 3)
                 } else {
                     Text(segment.text)
                         .font(font)
                         .foregroundColor(color)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
                         .padding(.vertical, 3)
                 }
             }
@@ -1082,6 +1163,15 @@ private struct WrappingHStack: View {
 private struct FlowLayout: Layout {
     var spacing: CGFloat = 4
 
+    /// يحسب حجم subview — لو طوله الطبيعي يتجاوز maxWidth، يجبره يلتف بـ proposal محدود
+    private func subviewSize(_ subview: LayoutSubview, maxWidth: CGFloat) -> CGSize {
+        let natural = subview.sizeThatFits(.unspecified)
+        if natural.width > maxWidth && maxWidth.isFinite {
+            return subview.sizeThatFits(ProposedViewSize(width: maxWidth, height: nil))
+        }
+        return natural
+    }
+
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let maxWidth = proposal.width ?? .infinity
         var currentX: CGFloat = 0
@@ -1089,7 +1179,7 @@ private struct FlowLayout: Layout {
         var lineHeight: CGFloat = 0
 
         for subview in subviews {
-            let size = subview.sizeThatFits(.unspecified)
+            let size = subviewSize(subview, maxWidth: maxWidth)
             if currentX + size.width > maxWidth && currentX > 0 {
                 currentY += lineHeight + spacing
                 currentX = 0
@@ -1103,18 +1193,24 @@ private struct FlowLayout: Layout {
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let maxWidth = bounds.width
         var currentX: CGFloat = bounds.minX
         var currentY: CGFloat = bounds.minY
         var lineHeight: CGFloat = 0
 
         for subview in subviews {
-            let size = subview.sizeThatFits(.unspecified)
+            let size = subviewSize(subview, maxWidth: maxWidth)
             if currentX + size.width > bounds.maxX && currentX > bounds.minX {
                 currentY += lineHeight + spacing
                 currentX = bounds.minX
                 lineHeight = 0
             }
-            subview.place(at: CGPoint(x: currentX, y: currentY), proposal: .unspecified)
+            // لو subview طويل بطبيعته، نمرر له width محدود ليلتف داخلياً
+            let natural = subview.sizeThatFits(.unspecified)
+            let placeProposal: ProposedViewSize = (natural.width > maxWidth && maxWidth.isFinite)
+                ? ProposedViewSize(width: maxWidth, height: nil)
+                : ProposedViewSize(width: size.width, height: size.height)
+            subview.place(at: CGPoint(x: currentX, y: currentY), proposal: placeProposal)
             currentX += size.width + spacing
             lineHeight = max(lineHeight, size.height)
         }

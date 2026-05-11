@@ -671,7 +671,38 @@ class AuthViewModel: ObservableObject {
     
     // MARK: - OTP Send / Verify
 
-    func sendOTP() async {
+    /// Feature flag — اقلب لـ true بعد إعداد WhatsApp Business Account في Twilio Verify.
+    /// إعداده يتطلب: Messaging Service + WhatsApp Sender معتمد من Meta.
+    static let whatsappOTPEnabled = false
+
+    /// قناة إرسال رمز التحقق — تُمرَّر إلى Twilio Verify عبر Supabase Auth.
+    enum OTPChannel {
+        case sms
+        case whatsapp
+
+        var supabaseChannel: MessagingChannel {
+            switch self {
+            case .sms: return .sms
+            case .whatsapp: return .whatsapp
+            }
+        }
+
+        var arabicLabel: String {
+            switch self {
+            case .sms: return "SMS"
+            case .whatsapp: return "واتساب"
+            }
+        }
+
+        var englishLabel: String {
+            switch self {
+            case .sms: return "SMS"
+            case .whatsapp: return "WhatsApp"
+            }
+        }
+    }
+
+    func sendOTP(channel: OTPChannel = .sms) async {
         let cleanPhone = normalizePhoneDigits(phoneNumber)
         let cleanDialingCode = normalizeDialingCode(dialingCode)
         guard cleanPhone.count >= 6 else {
@@ -690,7 +721,12 @@ class AuthViewModel: ObservableObject {
         self.dialingCode = cleanDialingCode
         self.isLoading = true
         self.otpErrorMessage = nil
-        self.otpStatusMessage = L10n.t("جاري إرسال رمز التحقق...", "Sending verification code...")
+        let channelAr = channel.arabicLabel
+        let channelEn = channel.englishLabel
+        self.otpStatusMessage = L10n.t(
+            "جاري إرسال رمز التحقق عبر \(channelAr)...",
+            "Sending verification code via \(channelEn)..."
+        )
 
         // فحص الحظر قبل إرسال OTP
         if await isPhoneBanned(finalPhone) {
@@ -703,46 +739,104 @@ class AuthViewModel: ObservableObject {
             return
         }
 
-        let maxAttempts = 2
+        // محاولة واحدة فقط — تجنب استهلاك attempts من Twilio Verify
+        do {
+            Log.info("[OTP] إرسال OTP عبر \(channelEn) لـ \(finalPhone)")
+            try await supabase.auth.signInWithOTP(
+                phone: finalPhone,
+                channel: channel.supabaseChannel,
+                shouldCreateUser: true
+            )
 
-        for attempt in 1...maxAttempts {
-            do {
-                Log.info("[OTP] محاولة \(attempt)/\(maxAttempts) — إرسال OTP لـ \(finalPhone)")
-                try await supabase.auth.signInWithOTP(
-                    phone: finalPhone,
-                    shouldCreateUser: true
-                )
-
-                    Log.info("[OTP] ✅ تم إرسال OTP بنجاح")
-                    withAnimation(.spring()) {
-                        self.isOtpSent = true
-                    }
-                    self.otpErrorMessage = nil
-                    self.otpStatusMessage = L10n.t("تم إرسال الرمز عبر SMS", "Code sent via SMS")
-                    self.isLoading = false
-                    return
-            } catch {
-                let raw = "\(error) \(error.localizedDescription)".lowercased()
-                let isRateLimited = raw.contains("429") || raw.contains("rate")
-                Log.error("[OTP] ❌ محاولة \(attempt) فشلت: \(error)")
-
-                if isRateLimited || attempt == maxAttempts {
-                    Log.error("[OTP] ❌ توقف — rateLimited=\(isRateLimited), attempt=\(attempt)")
-                    break
-                }
-
-                try? await Task.sleep(nanoseconds: 200_000_000)
+            Log.info("[OTP] ✅ تم إرسال OTP بنجاح عبر \(channelEn)")
+            withAnimation(.spring()) {
+                self.isOtpSent = true
             }
+            self.otpErrorMessage = nil
+            self.otpStatusMessage = L10n.t(
+                "تم إرسال الرمز عبر \(channelAr)",
+                "Code sent via \(channelEn)"
+            )
+            self.isLoading = false
+            return
+        } catch {
+            Log.error("[OTP] ❌ فشل: \(error)")
+            self.otpStatusMessage = ""
+            self.otpErrorMessage = friendlyOTPErrorMessage(error: error, channel: channel)
+            self.isLoading = false
+        }
+    }
+
+    /// تحويل أخطاء Twilio/Supabase إلى رسالة عربية واضحة للمستخدم.
+    private func friendlyOTPErrorMessage(error: Error, channel: OTPChannel) -> String {
+        let raw = "\(error) \(error.localizedDescription)".lowercased()
+        let suggestWhatsApp = channel == .sms && AuthViewModel.whatsappOTPEnabled
+
+        // Twilio error 60410: phone temporarily blocked due to fraud
+        if raw.contains("60410") || raw.contains("temporarily blocked") || raw.contains("fraudulent") {
+            if suggestWhatsApp {
+                return L10n.t(
+                    "هذا الرقم محظور مؤقتاً من SMS بسبب محاولات متكررة. جرّب الإرسال عبر واتساب.",
+                    "This number is temporarily blocked from SMS due to repeated attempts. Try WhatsApp instead."
+                )
+            }
+            return L10n.t(
+                "هذا الرقم محظور مؤقتاً بسبب محاولات متكررة. حاول بعد ساعة.",
+                "This number is temporarily blocked due to repeated attempts. Try again in an hour."
+            )
         }
 
-        // SMS فشل
-        self.otpStatusMessage = ""
-        self.otpErrorMessage = L10n.t(
-            "تعذر إرسال رمز التحقق. حاول مرة أخرى.",
-            "Unable to send verification code. Please try again."
-        )
+        // Twilio error 60203: max send attempts (5 in 10 minutes)
+        if raw.contains("60203") || raw.contains("max send attempts") {
+            if suggestWhatsApp {
+                return L10n.t(
+                    "تجاوزت عدد محاولات SMS. انتظر 10 دقائق أو جرّب الإرسال عبر واتساب.",
+                    "SMS attempts exceeded. Wait 10 min or try WhatsApp."
+                )
+            }
+            return L10n.t(
+                "تجاوزت عدد المحاولات. انتظر 10 دقائق ثم حاول.",
+                "Attempts exceeded. Wait 10 minutes and try again."
+            )
+        }
 
-        self.isLoading = false
+        // Rate limited (Supabase or Twilio)
+        if raw.contains("429") || raw.contains("rate") || raw.contains("too many") {
+            return L10n.t(
+                "كثرة الطلبات. انتظر دقيقة وأعد المحاولة.",
+                "Too many requests. Wait a minute and try again."
+            )
+        }
+
+        // Invalid phone number
+        if raw.contains("60200") || raw.contains("invalid parameter") || raw.contains("invalid phone") {
+            return L10n.t(
+                "رقم الهاتف غير صحيح. تحقق من الرقم ورمز الدولة.",
+                "Invalid phone number. Check the number and country code."
+            )
+        }
+
+        // WhatsApp not enrolled in Verify Service
+        if raw.contains("whatsapp") && (raw.contains("not enabled") || raw.contains("not configured")) {
+            return L10n.t(
+                "خدمة واتساب غير متاحة حالياً. استخدم SMS.",
+                "WhatsApp is not available now. Use SMS instead."
+            )
+        }
+
+        // Generic fallback
+        let channelAr = channel.arabicLabel
+        let channelEn = channel.englishLabel
+        if suggestWhatsApp {
+            return L10n.t(
+                "تعذر إرسال الرمز عبر \(channelAr). جرّب الإرسال عبر واتساب أو حاول لاحقاً.",
+                "Unable to send via \(channelEn). Try WhatsApp or try later."
+            )
+        }
+        return L10n.t(
+            "تعذر إرسال الرمز عبر \(channelAr). حاول لاحقاً.",
+            "Unable to send via \(channelEn). Try again later."
+        )
     }
     
     func verifyOTP() async {

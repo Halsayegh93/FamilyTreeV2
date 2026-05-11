@@ -6,7 +6,19 @@ type PushRequest = {
   title: string;
   body: string;
   kind?: string;
+  request_id?: string;
+  request_type?: string;
 };
+
+/// تحديد APNs category بناءً على نوع الطلب — يفعّل أزرار قبول/رفض/فتح في الإشعار
+function categoryFor(requestType: string | undefined): string {
+  if (!requestType) return "ADMIN_REQUEST";
+  // طلبات الانضمام لها category خاص (تشمل زر "فتح الطلب")
+  if (requestType === "join_request" || requestType === "link_request") {
+    return "JOIN_REQUEST";
+  }
+  return "ADMIN_REQUEST";
+}
 
 Deno.serve(async (req) => {
   const cors = handleCors(req);
@@ -15,14 +27,11 @@ Deno.serve(async (req) => {
   const methodErr = validatePost(req);
   if (methodErr) return methodErr;
 
-  // التحقق من هوية المرسل — فقط فريق الإدارة
-  const auth = await authenticateRequest(req, [
-    "owner",
-    "admin",
-    "monitor",
-    "supervisor",
-  ]);
+  // التحقق من هوية المرسل — أي مستخدم مسجّل يقدر يصدر إشعار للإدارة
+  // (طلبات الأعضاء العاديين تحتاج إشعارات للأدمن، فلا نقيّد بالأدوار)
+  const auth = await authenticateRequest(req);
   if (auth instanceof Response) return auth;
+  const callerId = auth.user.id;
 
   // Parse body
   const parsed = await parseBody<PushRequest>(req);
@@ -46,7 +55,7 @@ Deno.serve(async (req) => {
 
   const supabase = createServiceClient();
 
-  // جلب أعضاء فريق الإدارة
+  // جلب أعضاء فريق الإدارة (مع استثناء المُرسِل لو هو نفسه أدمن — لتجنب إشعار الذات)
   const { data: admins, error: adminsErr } = await supabase
     .from("profiles")
     .select("id")
@@ -59,9 +68,11 @@ Deno.serve(async (req) => {
     });
   }
 
-  const adminIds = (admins ?? []).map((a) => a.id as string);
+  const adminIds = (admins ?? [])
+    .map((a) => a.id as string)
+    .filter((id) => id !== callerId);
   if (!adminIds.length) {
-    return json(200, { ok: true, sent: 0, message: "No admins found" });
+    return json(200, { ok: true, sent: 0, message: "No admins found (or caller is the only admin)" });
   }
 
   // جلب tokens الأجهزة (مع environment)
@@ -90,6 +101,21 @@ Deno.serve(async (req) => {
 
   const jwt = await createApnsJwt(teamId, keyId, privateKey);
 
+  // بناء APNs payload — يحتوي على category لتفعيل أزرار قبول/رفض/فتح في الإشعار
+  const apnsCategory = categoryFor(payload.request_type);
+  const apnsBody: Record<string, unknown> = {
+    aps: {
+      alert: { title, body },
+      sound: "default",
+      category: apnsCategory,
+      "mutable-content": 1,
+    },
+    kind: payload.kind ?? "admin_request",
+  };
+  if (payload.request_id)   apnsBody.request_id   = payload.request_id;
+  if (payload.request_type) apnsBody.request_type = payload.request_type;
+  const apnsBodyJson = JSON.stringify(apnsBody);
+
   let sent = 0;
   const failures: Array<{ token: string; status: number; reason: string; env: string | null }> = [];
 
@@ -104,13 +130,7 @@ Deno.serve(async (req) => {
         "apns-push-type": "alert",
         "apns-priority": "10",
       },
-      body: JSON.stringify({
-        aps: {
-          alert: { title, body },
-          sound: "default",
-        },
-        kind: payload.kind ?? "admin_request",
-      }),
+      body: apnsBodyJson,
     });
 
     if (apnsResponse.ok) {
