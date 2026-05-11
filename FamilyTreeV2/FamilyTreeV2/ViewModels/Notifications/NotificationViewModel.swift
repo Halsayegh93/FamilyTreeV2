@@ -1042,6 +1042,57 @@ class NotificationViewModel: ObservableObject {
         _ = await (push, inApp)
     }
 
+    /// Broadcast admin notification (push + in-app) with structured change details.
+    /// Use this for admin-edit events on member data.
+    func notifyAdminsWithChangesAndPush(
+        title: String,
+        body: String,
+        kind: String,
+        changes: [AppNotification.NotificationDetails.ChangeEntry]
+    ) async {
+        async let push: Void = sendExternalAdminPush(title: title, body: body, kind: kind, requestId: nil, requestType: nil)
+        async let inApp: Void = notifyAdminsWithChanges(title: title, body: body, kind: kind, changes: changes)
+        _ = await (push, inApp)
+    }
+
+    /// Broadcast admin notification with a structured "what changed" payload.
+    /// Stored as JSON in `notifications.details` and surfaced inside the
+    /// notification detail sheet via `DSChangeDetailsCard` (admin-only).
+    /// Gracefully falls back to a no-details insert if the `details` column
+    /// hasn't been migrated yet.
+    func notifyAdminsWithChanges(
+        title: String,
+        body: String,
+        kind: String,
+        changes: [AppNotification.NotificationDetails.ChangeEntry]
+    ) async {
+        let creatorId = currentUser?.id
+        guard notificationsFeatureAvailable, !changes.isEmpty else { return }
+
+        let details = AppNotification.NotificationDetails(changes: changes)
+
+        do {
+            let payload: [String: AnyEncodable] = [
+                "target_member_id": AnyEncodable(Optional<String>.none),
+                "title": AnyEncodable(title),
+                "body": AnyEncodable(body),
+                "kind": AnyEncodable(kind),
+                "created_by": AnyEncodable(creatorId?.uuidString),
+                "details": AnyEncodable(details)
+            ]
+            try await supabase.from("notifications").insert(payload).execute()
+        } catch {
+            if ErrorHelper.isMissingTable(error, table: "notifications") {
+                notificationsFeatureAvailable = false
+            } else if ErrorHelper.isMissingColumn(error, column: "details") {
+                // migration not applied — drop details, keep notification
+                await notifyAdmins(title: title, body: body, kind: kind)
+            } else {
+                Log.warning("تعذر إرسال إشعار التغييرات للمدراء: \(error.localizedDescription)")
+            }
+        }
+    }
+
     // MARK: - Approve Request from Notification
 
     /// موافقة سريعة على طلب من الإشعار — تحديث DB مباشرة بدون side-effects كاملة
@@ -1093,6 +1144,59 @@ class NotificationViewModel: ObservableObject {
             Log.error("[APPROVE] ❌ فشل: \(error.localizedDescription)")
             return false
         }
+    }
+
+    /// Maps a notification's kind (string) to a request_type for admin_requests lookup.
+    private func requestTypeForKind(_ kind: String) -> String? {
+        switch kind {
+        case NotificationKind.treeEdit.rawValue:     return RequestType.treeEdit.rawValue
+        case NotificationKind.linkRequest.rawValue:  return RequestType.linkRequest.rawValue
+        case NotificationKind.newsReport.rawValue:   return RequestType.newsReport.rawValue
+        case RequestType.joinRequest.rawValue:       return RequestType.joinRequest.rawValue
+        case RequestType.phoneChange.rawValue:       return RequestType.phoneChange.rawValue
+        case RequestType.nameChange.rawValue:        return RequestType.nameChange.rawValue
+        case RequestType.deceasedReport.rawValue:    return RequestType.deceasedReport.rawValue
+        case RequestType.photoSuggestion.rawValue:   return RequestType.photoSuggestion.rawValue
+        case RequestType.childAdd.rawValue:          return RequestType.childAdd.rawValue
+        default: return nil
+        }
+    }
+
+    /// Looks up the most recent pending request matching the notification.
+    private func lookupPendingRequest(for notification: AppNotification) async -> (UUID, String)? {
+        if let rid = notification.requestId, let rt = notification.requestType {
+            return (rid, rt)
+        }
+        guard let requesterId = notification.createdBy,
+              let requestType = requestTypeForKind(notification.kind) else { return nil }
+        do {
+            let rows: [AdminRequest] = try await supabase
+                .from("admin_requests")
+                .select()
+                .eq("requester_id", value: requesterId.uuidString)
+                .eq("request_type", value: requestType)
+                .eq("status", value: ApprovalStatus.pending.rawValue)
+                .order("created_at", ascending: false)
+                .limit(1)
+                .execute()
+                .value
+            if let row = rows.first { return (row.id, requestType) }
+        } catch {
+            Log.warning("[LOOKUP] فشل البحث عن طلب مطابق: \(error.localizedDescription)")
+        }
+        return nil
+    }
+
+    /// Approves a request linked to a notification. Looks up the request_id if needed.
+    func approveRequestFromNotification(_ notification: AppNotification) async -> Bool {
+        guard let (rid, rt) = await lookupPendingRequest(for: notification) else { return false }
+        return await approveRequest(requestId: rid, requestType: rt)
+    }
+
+    /// Rejects a request linked to a notification. Looks up the request_id if needed.
+    func rejectRequestFromNotification(_ notification: AppNotification) async -> Bool {
+        guard let (rid, rt) = await lookupPendingRequest(for: notification) else { return false }
+        return await rejectRequest(requestId: rid, requestType: rt)
     }
 
     func rejectRequest(requestId: UUID, requestType: String) async -> Bool {

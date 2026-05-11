@@ -766,6 +766,11 @@ struct NotificationsCenterView: View {
                     VStack(spacing: DS.Spacing.xl) {
                         detailHero(notification: notification, iconInfo: iconInfo, date: date)
                         detailContentCard(notification: notification)
+                        if authVM.isAdmin,
+                           let details = notification.details,
+                           !details.changes.isEmpty {
+                            DSChangeDetailsCard(details: details)
+                        }
                         detailMetaCard(notification: notification, iconInfo: iconInfo, date: date)
                         detailActions(notification: notification)
                         Spacer(minLength: DS.Spacing.xxxl)

@@ -77,6 +77,34 @@ class MemberViewModel: ObservableObject {
             "updated_at": AnyEncodable(isoFormatter.string(from: Date()))
         ]
     }
+
+    /// Broadcasts an admin-edit notification with structured `details` payload.
+    /// - Skips when the editor is editing their own profile (not an admin action).
+    /// - Filters out fields where `before == after` (no real change).
+    /// - Returns silently if no real changes remain.
+    private func notifyAdminsOfMemberEdit(
+        memberId: UUID,
+        kind: String,
+        title: String,
+        body: String,
+        changes: [AppNotification.NotificationDetails.ChangeEntry]
+    ) async {
+        guard memberId != currentUser?.id else { return }
+        let real = changes.filter { ($0.before ?? "") != ($0.after ?? "") }
+        guard !real.isEmpty else { return }
+        await notificationVM?.notifyAdminsWithChanges(
+            title: title,
+            body: body,
+            kind: kind,
+            changes: real
+        )
+    }
+
+    /// Builds a short "<title> for «<member>»" body string for admin-edit notifications.
+    private func adminEditBody(verb: String, memberId: UUID) -> String {
+        let name = _memberById[memberId]?.firstName ?? L10n.t("عضو", "member")
+        return L10n.t("\(verb) للعضو «\(name)»", "\(verb) for «\(name)»")
+    }
     
     func getSafeMemberName(for memberId: UUID) -> String {
         return memberId.uuidString
@@ -490,12 +518,15 @@ class MemberViewModel: ObservableObject {
     // رفع صورة العضو
     func uploadAvatar(image: UIImage, for memberId: UUID) async {
         self.isLoading = true
-        
+
         // 1. ضغط الصورة وتحويلها لبيانات
         guard let imageData = ImageProcessor.process(image, for: .avatar) else {
             self.isLoading = false
             return
         }
+
+        // التقط رابط الصورة القديم قبل التعديل
+        let oldAvatarUrl = _memberById[memberId]?.avatarUrl
 
         let safeName = getSafeMemberName(for: memberId)
         let fileName = "\(safeName).jpg"
@@ -509,15 +540,15 @@ class MemberViewModel: ObservableObject {
                     data: imageData,
                     options: FileOptions(contentType: "image/jpeg", upsert: true)
                 )
-            
+
             // 3. الحصول على الرابط العام مع cache-busting
             let publicUrl = try supabase.storage
                 .from("avatars")
                 .getPublicURL(path: fileName)
-            
+
             let timestamp = Int(Date().timeIntervalSince1970)
             let urlString = "\(publicUrl.absoluteString)?v=\(timestamp)"
-            
+
             // 4. تحديث رابط الصورة في جدول profiles + تتبع المدير
             var avatarUpdate: [String: AnyEncodable] = [
                 "avatar_url": AnyEncodable(urlString)
@@ -529,7 +560,7 @@ class MemberViewModel: ObservableObject {
                 .update(avatarUpdate)
                 .eq("id", value: memberId.uuidString)
                 .execute()
-            
+
             // 5. تحديث البيانات محلياً فوراً
             await fetchSingleMember(id: memberId)
             if memberId == currentUser?.id {
@@ -559,6 +590,17 @@ class MemberViewModel: ObservableObject {
                     ]
                     _ = try? await supabase.from("notifications").insert(payload).execute()
                 }
+
+                // إشعار بقية المدراء في تاب المستجدات بتفاصيل التغيير
+                await notifyAdminsOfMemberEdit(
+                    memberId: memberId,
+                    kind: NotificationKind.adminEditAvatar.rawValue,
+                    title: L10n.t("تحديث صورة", "Photo Update"),
+                    body: adminEditBody(verb: L10n.t("تم تحديث الصورة الشخصية", "Profile photo updated"), memberId: memberId),
+                    changes: [
+                        .init(field: "avatar_url", before: oldAvatarUrl, after: urlString)
+                    ]
+                )
             }
 
         } catch {
@@ -1069,6 +1111,9 @@ class MemberViewModel: ObservableObject {
         // تتبع المدير إذا كان يعدل بيانات عضو آخر
         updateData.merge(adminAuditFields(for: memberId)) { _, new in new }
 
+        // التقط الحالة قبل التحديث للمقارنة لاحقاً
+        let oldMember = _memberById[memberId]
+
         do {
             // 3. تنفيذ التحديث في Supabase
             try await supabase
@@ -1078,7 +1123,6 @@ class MemberViewModel: ObservableObject {
                 .execute()
 
             // 4. تحديث أسماء الذرية تلقائياً (إذا تغير الاسم)
-            let oldMember = _memberById[memberId]
             if oldMember?.fullName != fullName || oldMember?.firstName != firstName {
                 await propagateNameToDescendants(of: memberId)
                 // تحديث كل الأعضاء لأن الذرية تغيرت
@@ -1091,6 +1135,57 @@ class MemberViewModel: ObservableObject {
             if memberId == currentUser?.id {
                 await authVM?.checkUserProfile()
             }
+
+            // إشعار المدراء بتفاصيل التغيير (إذا المدير عدّل عضو آخر)
+            var changes: [AppNotification.NotificationDetails.ChangeEntry] = []
+            if let old = oldMember {
+                let newBirth = DateHelper.format(birthDate)
+                let newDeath: String? = (isDeceased && deathDate != nil) ? DateHelper.format(deathDate!) : nil
+                let oldDeceased = old.isDeceased ?? false
+                let oldMarried = old.isMarried ?? false
+                let oldPhoneHidden = old.isPhoneHidden ?? false
+
+                if old.fullName != fullName {
+                    changes.append(.init(field: "full_name", before: old.fullName, after: fullName))
+                }
+                if (old.phoneNumber ?? "") != normalizedPhone {
+                    changes.append(.init(field: "phone_number", before: old.phoneNumber, after: normalizedPhone))
+                }
+                if (old.birthDate ?? "") != newBirth {
+                    changes.append(.init(field: "birth_date", before: old.birthDate, after: newBirth))
+                }
+                if oldMarried != isMarried {
+                    changes.append(.init(
+                        field: "is_married",
+                        before: oldMarried ? L10n.t("متزوج", "Married") : L10n.t("غير متزوج", "Single"),
+                        after: isMarried ? L10n.t("متزوج", "Married") : L10n.t("غير متزوج", "Single")
+                    ))
+                }
+                if oldDeceased != isDeceased {
+                    changes.append(.init(
+                        field: "is_deceased",
+                        before: oldDeceased ? L10n.t("متوفى", "Deceased") : L10n.t("على قيد الحياة", "Alive"),
+                        after: isDeceased ? L10n.t("متوفى", "Deceased") : L10n.t("على قيد الحياة", "Alive")
+                    ))
+                }
+                if isDeceased, (old.deathDate ?? "") != (newDeath ?? "") {
+                    changes.append(.init(field: "death_date", before: old.deathDate, after: newDeath))
+                }
+                if oldPhoneHidden != isPhoneHidden {
+                    changes.append(.init(
+                        field: "is_phone_hidden",
+                        before: oldPhoneHidden ? L10n.t("مخفي", "Hidden") : L10n.t("ظاهر", "Visible"),
+                        after: isPhoneHidden ? L10n.t("مخفي", "Hidden") : L10n.t("ظاهر", "Visible")
+                    ))
+                }
+            }
+            await notifyAdminsOfMemberEdit(
+                memberId: memberId,
+                kind: NotificationKind.adminEdit.rawValue,
+                title: L10n.t("تعديل بيانات عضو", "Member Edit"),
+                body: adminEditBody(verb: L10n.t("تم تعديل البيانات", "Profile data updated"), memberId: memberId),
+                changes: changes
+            )
 
             Log.info("تم تحديث بيانات: \(fullName) بنجاح")
             self.isLoading = false
@@ -1206,6 +1301,9 @@ class MemberViewModel: ObservableObject {
         self.isLoading = true
         let firstName = fullName.components(separatedBy: " ").first ?? fullName
 
+        // التقط الاسم القديم قبل التعديل
+        let oldFullName = _memberById[memberId]?.fullName
+
         var nameUpdate: [String: AnyEncodable] = [
             "full_name": AnyEncodable(fullName),
             "first_name": AnyEncodable(firstName)
@@ -1245,6 +1343,17 @@ class MemberViewModel: ObservableObject {
                     ]
                     _ = try? await supabase.from("notifications").insert(payload).execute()
                 }
+
+                // إشعار المدراء بتفاصيل التغيير
+                await notifyAdminsOfMemberEdit(
+                    memberId: memberId,
+                    kind: NotificationKind.adminEditName.rawValue,
+                    title: L10n.t("تعديل الاسم", "Name Edit"),
+                    body: adminEditBody(verb: L10n.t("تم تعديل الاسم", "Name was updated"), memberId: memberId),
+                    changes: [
+                        .init(field: "full_name", before: oldFullName, after: fullName)
+                    ]
+                )
             }
 
             Log.info("تم تحديث اسم العضو بنجاح")
@@ -1417,15 +1526,39 @@ class MemberViewModel: ObservableObject {
                 }
             }()
 
-            // 3. إشعار المدراء بتغيير الرتبة (push + داخلي)
-            await notificationVM?.notifyAdminsWithPush(
-                title: L10n.t("تغيير الصلاحية", "Role Change"),
-                body: L10n.t(
-                    "تم تغيير صلاحية «\(memberName)» إلى: «\(roleName)»",
-                    "«\(memberName)»'s role changed to: «\(roleName)»"
-                ),
-                kind: "role_change"
-            )
+            // 3. إشعار المدراء بتغيير الرتبة (push + داخلي مع تفاصيل قبل/بعد)
+            let oldRoleLabel: String = {
+                guard let current = currentRole else { return L10n.t("غير محدد", "Unknown") }
+                switch current {
+                case .admin, .owner: return L10n.t("مدير", "Admin")
+                case .monitor: return L10n.t("مراقب", "Monitor")
+                case .supervisor: return L10n.t("مشرف", "Supervisor")
+                case .pending: return L10n.t("قيد المراجعة", "Pending")
+                default: return L10n.t("عضو", "Member")
+                }
+            }()
+
+            if memberId != currentUser?.id {
+                await notificationVM?.notifyAdminsWithChangesAndPush(
+                    title: L10n.t("تغيير الصلاحية", "Role Change"),
+                    body: L10n.t(
+                        "تم تغيير صلاحية «\(memberName)» إلى: «\(roleName)»",
+                        "«\(memberName)»'s role changed to: «\(roleName)»"
+                    ),
+                    kind: NotificationKind.adminEditRole.rawValue,
+                    changes: [.init(field: "role", before: oldRoleLabel, after: roleName)]
+                )
+            } else {
+                // المالك يحدّث رتبته الخاصة (نادر) — أبقِ خلف الكواليس بدون details
+                await notificationVM?.notifyAdminsWithPush(
+                    title: L10n.t("تغيير الصلاحية", "Role Change"),
+                    body: L10n.t(
+                        "تم تغيير صلاحية «\(memberName)» إلى: «\(roleName)»",
+                        "«\(memberName)»'s role changed to: «\(roleName)»"
+                    ),
+                    kind: "role_change"
+                )
+            }
 
             // 4. إشعار العضو نفسه بتغيير رتبته
             if authVM?.notificationsFeatureAvailable == true {
@@ -1543,6 +1676,9 @@ class MemberViewModel: ObservableObject {
             self.isLoading = false
             return
         }
+        // التقط الرقم القديم قبل التحديث
+        let oldPhone = _memberById[memberId]?.phoneNumber
+
         do {
             // 1) تحديث الهاتف + تتبع المدير
             var phoneUpdate: [String: AnyEncodable] = [
@@ -1591,13 +1727,25 @@ class MemberViewModel: ObservableObject {
             }
 
             await fetchSingleMember(id: memberId)
+
+            // إشعار المدراء بتغيير رقم الهاتف مع التفاصيل
+            await notifyAdminsOfMemberEdit(
+                memberId: memberId,
+                kind: NotificationKind.adminEditPhone.rawValue,
+                title: L10n.t("تعديل رقم الهاتف", "Phone Update"),
+                body: adminEditBody(verb: L10n.t("تم تعديل رقم الهاتف", "Phone number updated"), memberId: memberId),
+                changes: [
+                    .init(field: "phone_number", before: oldPhone, after: normalizedPhone)
+                ]
+            )
+
             Log.info("تم تحديث الهاتف وتفعيل العضو للدخول المباشر")
         } catch {
             Log.error("خطأ تحديث الهاتف: \(error.localizedDescription)")
         }
         self.isLoading = false
     }
-    
+
     // MARK: - Clear Member Phone
 
     func clearMemberPhone(memberId: UUID) async {
@@ -1647,6 +1795,8 @@ class MemberViewModel: ObservableObject {
 
     func updateMemberGender(memberId: UUID, gender: String) async {
         self.isLoading = true
+        let oldGender = _memberById[memberId]?.gender
+
         var genderUpdate: [String: AnyEncodable] = [
             "gender": AnyEncodable(gender)
         ]
@@ -1660,6 +1810,17 @@ class MemberViewModel: ObservableObject {
                 .execute()
 
             await fetchSingleMember(id: memberId)
+
+            await notifyAdminsOfMemberEdit(
+                memberId: memberId,
+                kind: NotificationKind.adminEdit.rawValue,
+                title: L10n.t("تعديل الجنس", "Gender Update"),
+                body: adminEditBody(verb: L10n.t("تم تعديل الجنس", "Gender updated"), memberId: memberId),
+                changes: [
+                    .init(field: "gender", before: oldGender, after: gender)
+                ]
+            )
+
             Log.info("تم تحديث الجنس")
         } catch {
             Log.error("خطأ تحديث الجنس: \(error.localizedDescription)")
@@ -1671,6 +1832,9 @@ class MemberViewModel: ObservableObject {
 
     func updateMemberBirthDate(memberId: UUID, birthDate: String) async {
         self.isLoading = true
+        // التقط القيمة القديمة قبل التحديث
+        let oldBirth = _memberById[memberId]?.birthDate
+
         var birthUpdate: [String: AnyEncodable] = [
             "birth_date": AnyEncodable(birthDate)
         ]
@@ -1684,6 +1848,17 @@ class MemberViewModel: ObservableObject {
                 .execute()
 
             await fetchSingleMember(id: memberId)
+
+            await notifyAdminsOfMemberEdit(
+                memberId: memberId,
+                kind: NotificationKind.adminEditDates.rawValue,
+                title: L10n.t("تعديل تاريخ الميلاد", "Birth Date Update"),
+                body: adminEditBody(verb: L10n.t("تم تعديل تاريخ الميلاد", "Birth date updated"), memberId: memberId),
+                changes: [
+                    .init(field: "birth_date", before: oldBirth, after: birthDate)
+                ]
+            )
+
             Log.info("تم تحديث تاريخ الميلاد")
         } catch {
             Log.error("خطأ تحديث تاريخ الميلاد: \(error.localizedDescription)")
@@ -1695,6 +1870,10 @@ class MemberViewModel: ObservableObject {
     
     func updateMemberFather(memberId: UUID, fatherId: UUID?) async {
         self.isLoading = true
+        // التقط الأب القديم قبل التحديث (نستخدم اسمه لا UUID للعرض)
+        let oldFatherName = _memberById[memberId]?.fatherId.flatMap { _memberById[$0]?.firstName }
+        let newFatherName = fatherId.flatMap { _memberById[$0]?.firstName }
+
         do {
             // نرسل الـ UUID كـ String، وإذا كان nil نرسل NULL للسيرفر
             var updateData: [String: AnyEncodable] = [
@@ -1707,8 +1886,19 @@ class MemberViewModel: ObservableObject {
                 .update(updateData)
                 .eq("id", value: memberId.uuidString)
                 .execute()
-            
+
             await fetchSingleMember(id: memberId)
+
+            await notifyAdminsOfMemberEdit(
+                memberId: memberId,
+                kind: NotificationKind.adminEditFather.rawValue,
+                title: L10n.t("تعديل ولي الأمر", "Father Update"),
+                body: adminEditBody(verb: L10n.t("تم تعديل ولي الأمر", "Father reference updated"), memberId: memberId),
+                changes: [
+                    .init(field: "father_id", before: oldFatherName, after: newFatherName)
+                ]
+            )
+
             Log.info("تم تحديث ربط الأب بنجاح")
         } catch {
             Log.error("خطأ في ربط الأب: \(error.localizedDescription)")
