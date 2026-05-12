@@ -215,7 +215,8 @@ struct AdminMemberDetailSheet: View {
                                 kind: "admin_edit_avatar_remove"
                             )
                         }
-                    }
+                    },
+                    useOverlayActionsOnly: true
                 )
                 .onChange(of: localAvatarPreview) { newImage in
                     guard let newImage else { return }
@@ -1408,10 +1409,54 @@ struct FatherPickerSheet: View {
     @State private var pendingSelection: FamilyMember? = nil
     @State private var showUnlinkConfirm = false
 
+    /// تطبيع نص عربي للبحث: يوحّد الألفات/الياءات/التاء المربوطة + يزيل التشكيل
+    /// عشان "احمد" تطابق "أحمد" و "علي" تطابق "علىٰ".
+    private func normalizeArabic(_ s: String) -> String {
+        var t = s.lowercased()
+        // إزالة التشكيل والمدّة
+        t = t.folding(options: .diacriticInsensitive, locale: nil)
+        // توحيد الألف
+        t = t.replacingOccurrences(of: "أ", with: "ا")
+             .replacingOccurrences(of: "إ", with: "ا")
+             .replacingOccurrences(of: "آ", with: "ا")
+             .replacingOccurrences(of: "ٱ", with: "ا")
+        // توحيد الياء + التاء المربوطة
+        t = t.replacingOccurrences(of: "ى", with: "ي")
+             .replacingOccurrences(of: "ة", with: "ه")
+        return t.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// رتبة المطابقة: أصغر = أعلى أولوية
+    /// 0 = الاسم يبدأ بالكلمة الكاملة بحرفياً (الترتيب الأفضل)
+    /// 1 = إحدى الكلمات في الاسم تبدأ بالنص
+    /// 2 = النص يظهر في أي مكان في الاسم
+    private func matchRank(name: String, query: String) -> Int? {
+        let n = normalizeArabic(name)
+        let q = normalizeArabic(query)
+        if q.isEmpty { return 0 }
+        if n.hasPrefix(q) { return 0 }
+        for word in n.split(separator: " ") {
+            if word.hasPrefix(q) { return 1 }
+        }
+        if n.contains(q) { return 2 }
+        return nil
+    }
+
     var filteredMembers: [FamilyMember] {
-        let sorted = memberVM.allMembers.sorted { $0.fullName < $1.fullName }
-        if searchText.isEmpty { return sorted }
-        return sorted.filter { $0.fullName.localizedCaseInsensitiveContains(searchText) }
+        if searchText.trimmingCharacters(in: .whitespaces).isEmpty {
+            return memberVM.allMembers.sorted { $0.fullName < $1.fullName }
+        }
+        // مع وجود بحث: نُرجّع المطابقات فقط، مرتّبة بحسب جودة المطابقة
+        return memberVM.allMembers
+            .compactMap { m -> (FamilyMember, Int)? in
+                guard let r = matchRank(name: m.fullName, query: searchText) else { return nil }
+                return (m, r)
+            }
+            .sorted { lhs, rhs in
+                if lhs.1 != rhs.1 { return lhs.1 < rhs.1 }
+                return lhs.0.fullName < rhs.0.fullName
+            }
+            .map(\.0)
     }
 
     var body: some View {
@@ -1419,8 +1464,12 @@ struct FatherPickerSheet: View {
             ZStack {
                 DS.Color.background.ignoresSafeArea()
 
+                ScrollViewReader { proxy in
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: DS.Spacing.sm) {
+                        // anchor للتمرير لأعلى عند تغيير البحث
+                        Color.clear.frame(height: 0).id("top")
+
                         // خيار إزالة الربط (رأس شجرة)
                         DSCard(padding: 0) {
                             Button {
@@ -1521,6 +1570,13 @@ struct FatherPickerSheet: View {
                     .padding(.top, DS.Spacing.sm)
                     .padding(.bottom, DS.Spacing.xxxl)
                 }
+                .onChange(of: searchText) { _ in
+                    // التمرير لأعلى عند تغيير البحث عشان أول مطابقة تكون ظاهرة
+                    withAnimation(DS.Anim.snappy) {
+                        proxy.scrollTo("top", anchor: .top)
+                    }
+                }
+                } // إغلاق ScrollViewReader
             }
             .navigationTitle(L10n.t("اختر الأب", "Choose Father"))
             .navigationBarTitleDisplayMode(.inline)

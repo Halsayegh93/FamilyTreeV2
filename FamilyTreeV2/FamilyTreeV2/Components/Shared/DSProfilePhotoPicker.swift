@@ -23,6 +23,9 @@ struct DSProfilePhotoPicker: View {
     var onDeleteExisting: (() -> Void)? = nil
     /// When true, empty state shows only a tappable circle with camera overlay (no button below)
     var compactEmptyState: Bool = false
+    /// When true, hides the pill buttons row under the photo. الإجراءات تظهر فقط
+    /// عبر زر الكاميرا الصغير على زاوية الصورة (يفتح نفس قائمة الخيارات).
+    var useOverlayActionsOnly: Bool = false
 
     @State private var pickerItem: PhotosPickerItem? = nil
     @State private var isLoading = false
@@ -166,7 +169,7 @@ struct DSProfilePhotoPicker: View {
                         .dsGlowShadow()
                 }
 
-                // أيقونة الكاميرا
+                // أيقونة الكاميرا — تفتح قائمة الخيارات (تعديل/تغيير/حذف)
                 Button {
                     showChangeOptions = true
                 } label: {
@@ -180,7 +183,8 @@ struct DSProfilePhotoPicker: View {
                 }
             }
 
-            // أزرار تعديل وتغيير وحذف
+            // أزرار تعديل وتغيير وحذف (مخفيّة في useOverlayActionsOnly)
+            if !useOverlayActionsOnly {
             HStack(spacing: DS.Spacing.md) {
                 // تعديل الصورة (إعادة القص)
                 if enableCrop, lastRawImage != nil {
@@ -242,6 +246,7 @@ struct DSProfilePhotoPicker: View {
                     .clipShape(Capsule())
                 }
             }
+            } // إغلاق if !useOverlayActionsOnly
         }
         .frame(maxWidth: .infinity)
         .confirmationDialog(
@@ -260,7 +265,17 @@ struct DSProfilePhotoPicker: View {
             Button(L10n.t("تغيير الصورة", "Change Photo")) {
                 checkPermissionAndProceed { showPicker = true }
             }
-            
+
+            Button(L10n.t("حذف الصورة", "Delete Photo"), role: .destructive) {
+                let generator = UIImpactFeedbackGenerator(style: .light)
+                generator.impactOccurred()
+                withAnimation(DS.Anim.bouncy) {
+                    selectedImage = nil
+                    pickerItem = nil
+                    lastRawImage = nil
+                }
+            }
+
             Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
         }
     }
@@ -298,7 +313,7 @@ struct DSProfilePhotoPicker: View {
                     }
                 }
 
-                // أيقونة الكاميرا
+                // أيقونة الكاميرا — تفتح قائمة الخيارات (تعديل/تغيير/حذف)
                 Button {
                     showChangeOptions = true
                 } label: {
@@ -312,7 +327,8 @@ struct DSProfilePhotoPicker: View {
                 }
             }
 
-            // أزرار تعديل وتغيير وحذف
+            // أزرار تعديل وتغيير وحذف (مخفيّة في useOverlayActionsOnly)
+            if !useOverlayActionsOnly {
             HStack(spacing: DS.Spacing.md) {
                 // تعديل الصورة (تحميل من URL ثم قص)
                 if enableCrop {
@@ -377,6 +393,7 @@ struct DSProfilePhotoPicker: View {
                     }
                 }
             }
+            } // إغلاق if !useOverlayActionsOnly
         }
         .frame(maxWidth: .infinity)
         .confirmationDialog(
