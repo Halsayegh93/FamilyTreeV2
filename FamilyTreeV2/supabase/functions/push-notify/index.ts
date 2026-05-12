@@ -84,10 +84,17 @@ Deno.serve(async (req) => {
     if (data) allTokenRows = data;
   }
 
+  // dedupe by token — نفس الجهاز قد يكون مرتبط بأكثر من حساب → token مكرر
+  const seenTokens = new Set<string>();
   const tokenEntries = allTokenRows
     .filter((r) => r.token != null)
     .map((r) => ({ token: (r.token as string).trim(), env: r.environment }))
-    .filter((e) => e.token.length > 20);
+    .filter((e) => e.token.length > 20)
+    .filter((e) => {
+      if (seenTokens.has(e.token)) return false;
+      seenTokens.add(e.token);
+      return true;
+    });
 
   if (!tokenEntries.length) {
     return json(200, { ok: true, sent: 0, message: "No push tokens found" });
@@ -101,12 +108,13 @@ Deno.serve(async (req) => {
     );
   } catch (e) {
     const err = e as Error;
+    // لا تطبع أي جزء من المفتاح الخاص — حتى الـ prefix يكشف بنية ASN.1
     console.error(
-      `APNs JWT creation failed: ${err.message}, keyLength=${privateKey.length}, keyStart=${privateKey.substring(0, 30)}`
+      `APNs JWT creation failed: ${err.message}, keyLength=${privateKey.length}`
     );
     return json(500, {
       ok: false,
-      message: `JWT error: ${err.message}, keyLen=${privateKey.length}`,
+      message: `JWT error: ${err.message}`,
     });
   }
 

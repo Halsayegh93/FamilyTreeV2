@@ -68,7 +68,11 @@ struct AdminMembersManagementView: View {
         .navigationTitle(L10n.t("إدارة الأعضاء", "Members Management"))
         .navigationBarTitleDisplayMode(.inline)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-        .task { await memberVM.fetchAllMembers() }
+        .task {
+            if memberVM.allMembers.isEmpty {
+                await memberVM.fetchAllMembers()
+            }
+        }
     }
 
     // MARK: - Tab Bar

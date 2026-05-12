@@ -1516,6 +1516,8 @@ struct NotificationsCenterView: View {
         let requesterId2 = requester?.id
         let matches = all.filter { candidate in
             guard candidate.id != requesterId2 else { return false }
+            // التطابقات للأحياء فقط — نستثني المتوفّين
+            guard candidate.isDeceased != true else { return false }
             let candidateFirst = candidate.firstName
                 .components(separatedBy: .whitespacesAndNewlines)
                 .first?
@@ -1523,8 +1525,51 @@ struct NotificationsCenterView: View {
             return candidateFirst == firstName
         }
 
-        // ترتيب: نفس الأب أولاً، ثم النشطين، ثم الباقي
+        // استخراج سلسلة اسم المُسجِّل (عبدالله، محمد، مصطفى، الصايغ)
+        // من بروفايله لو موجود، أو من body كـ fallback
+        let requesterChain: [String] = {
+            if let r = requester {
+                return r.fullName
+                    .components(separatedBy: .whitespacesAndNewlines)
+                    .filter { !$0.isEmpty }
+            }
+            // fallback: من body — "حسن صلاح ... يطلب الانضمام"
+            // نأخذ كل الكلمات قبل "يطلب"
+            let words = notification.body.components(separatedBy: .whitespacesAndNewlines)
+            var chain: [String] = []
+            for w in words {
+                if w.contains("يطلب") || w.contains("requests") { break }
+                let cleaned = w.trimmingCharacters(in: CharacterSet.punctuationCharacters)
+                if !cleaned.isEmpty { chain.append(cleaned) }
+            }
+            return chain
+        }()
+
+        // حساب درجة التطابق بعدد الكلمات المتتالية المتطابقة من بداية السلسلة
+        func chainMatchScore(_ candidate: FamilyMember) -> Int {
+            let cChain = candidate.fullName
+                .components(separatedBy: .whitespacesAndNewlines)
+                .filter { !$0.isEmpty }
+            var score = 0
+            for i in 0..<min(requesterChain.count, cChain.count) {
+                if cChain[i] == requesterChain[i] {
+                    score += 1
+                } else {
+                    break
+                }
+            }
+            return score
+        }
+
+        // ترتيب:
+        //   1) درجة تطابق السلسلة الأعلى أولاً (الاسم + الأب + الجد + ...)
+        //   2) نفس fatherId (لو ربط فعلي موجود)
+        //   3) الأعضاء النشطين قبل pending
         let sorted = matches.sorted { a, b in
+            let aScore = chainMatchScore(a)
+            let bScore = chainMatchScore(b)
+            if aScore != bScore { return aScore > bScore }
+
             let reqFatherId = requester?.fatherId
             let aMatchesFather = reqFatherId != nil && a.fatherId == reqFatherId
             let bMatchesFather = reqFatherId != nil && b.fatherId == reqFatherId
@@ -1537,7 +1582,7 @@ struct NotificationsCenterView: View {
         }
 
         joinMatchCandidates = Array(sorted.prefix(10))
-        Log.info("[JoinMatch] firstName='\(firstName)' — وجدنا \(joinMatchCandidates.count) تطابقات (من \(matches.count) إجمالي)")
+        Log.info("[JoinMatch] chain=\(requesterChain.prefix(4).joined(separator: " ")) — \(joinMatchCandidates.count) تطابقات (من \(matches.count))")
     }
 
     /// قسم التطابقات المحتملة — مدمج داخل detailBodyCard (بدون wrapper)
