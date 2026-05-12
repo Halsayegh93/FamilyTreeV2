@@ -1,4 +1,5 @@
 import SwiftUI
+import Supabase
 
 // MARK: - Notification Kind Style (data-driven icon/color/label mapping)
 
