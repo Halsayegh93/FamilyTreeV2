@@ -105,6 +105,8 @@ struct NotificationsCenterView: View {
     @State private var joinMatchCandidates: [FamilyMember] = []
     /// هل كرت التطابقات موسّع — افتراضياً مغلق
     @State private var joinMatchesExpanded: Bool = false
+    /// true بعد انتهاء loadJoinMatchCandidates — يميّز بين "جاري التحميل" و"لا توجد مطابقات"
+    @State private var joinMatchesLoaded: Bool = false
     /// confirmation dialog لخيارات الموافقة على طلب الانضمام (ربط أو إنشاء جديد)
     @State private var joinApproveDialog: AppNotification? = nil
     @State private var selectedTab: NotifTab = .notifications
@@ -861,14 +863,16 @@ struct NotificationsCenterView: View {
                     }
 
                     if !notification.body.isEmpty {
-                        let showMatches = isJoinRequest
-                            && authVM.canModerate
-                            && !joinMatchCandidates.isEmpty
+                        // السكشن يظهر دائماً للأدمن على طلبات الانضمام — حتى لو 0 مطابقات
+                        // (empty state يوضّح "لا توجد مطابقات" بدل ما السكشن يختفي)
+                        let showMatchesSection = isJoinRequest && authVM.canModerate
                         detailBodyCard(
                             notification: notification,
                             iconInfo: iconInfo,
-                            joinMatches: showMatches ? joinMatchCandidates : [],
-                            joinRequesterId: notification.requestId
+                            joinMatches: showMatchesSection ? joinMatchCandidates : [],
+                            joinRequesterId: showMatchesSection ? notification.requestId : nil,
+                            showMatchesSection: showMatchesSection,
+                            joinMatchesLoaded: joinMatchesLoaded
                         )
                     }
 
@@ -905,7 +909,9 @@ struct NotificationsCenterView: View {
         }
         .task(id: notification.id) {
             joinMatchesExpanded = false
+            joinMatchesLoaded = false
             await loadJoinMatchCandidates(for: notification)
+            joinMatchesLoaded = true
         }
         .confirmationDialog(
             L10n.t("اختر طريقة الموافقة", "Choose approval method"),
@@ -1095,7 +1101,9 @@ struct NotificationsCenterView: View {
         notification: AppNotification,
         iconInfo: NotificationKindStyle,
         joinMatches: [FamilyMember] = [],
-        joinRequesterId: UUID? = nil
+        joinRequesterId: UUID? = nil,
+        showMatchesSection: Bool = false,
+        joinMatchesLoaded: Bool = true
     ) -> some View {
         let date = notification.createdDate
         // اسم المدير المنفّذ — يظهر داخل تفاصيل الإشعار حتى للأنواع المُعمَّمة (admin_edit_*)
@@ -1200,12 +1208,14 @@ struct NotificationsCenterView: View {
                 .accessibilityLabel(L10n.t("انسخ رقم الإشعار", "Copy notification ID"))
             }
 
-            // قسم التطابقات المحتملة — مدمج داخل نفس الكرت (مغلق افتراضياً)
-            if !joinMatches.isEmpty, let requesterId = joinRequesterId {
+            // قسم التطابقات المحتملة — يظهر دائماً للأدمن على طلبات الانضمام
+            // (مع loading أو empty state إذا لا توجد مطابقات)
+            if showMatchesSection, let requesterId = joinRequesterId {
                 joinMatchesSection(
                     candidates: joinMatches,
                     requesterId: requesterId,
-                    iconInfo: iconInfo
+                    iconInfo: iconInfo,
+                    isLoading: !joinMatchesLoaded
                 )
             }
         }
@@ -1612,19 +1622,21 @@ struct NotificationsCenterView: View {
     }
 
     /// قسم التطابقات المحتملة — مدمج داخل detailBodyCard (بدون wrapper)
-    /// مغلق بالكامل افتراضياً (لا تظهر صفوف)، يفتح بضغطة على الترويسة
+    /// يظهر دائماً للأدمن على طلبات الانضمام مع loading / empty / list states
     @ViewBuilder
     private func joinMatchesSection(
         candidates: [FamilyMember],
         requesterId: UUID,
-        iconInfo: NotificationKindStyle
+        iconInfo: NotificationKindStyle,
+        isLoading: Bool = false
     ) -> some View {
         Divider()
             .padding(.vertical, DS.Spacing.xs)
 
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            // الترويسة القابلة للنقر — تطوي/تفتح
+            // الترويسة القابلة للنقر — تطوي/تفتح (معطلة عند 0 + loaded عشان empty state يظهر مباشرة)
             Button {
+                guard !candidates.isEmpty else { return } // لا توسيع لو فاضي
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
                 withAnimation(DS.Anim.snappy) {
                     joinMatchesExpanded.toggle()
@@ -1647,21 +1659,62 @@ struct NotificationsCenterView: View {
                     Spacer(minLength: 0)
 
                     HStack(spacing: 6) {
-                        Text("\(candidates.count)")
-                            .font(DS.Font.scaled(11, weight: .bold))
-                            .foregroundColor(DS.Color.textSecondary)
+                        if isLoading {
+                            ProgressView()
+                                .scaleEffect(0.7)
+                                .tint(DS.Color.textTertiary)
+                        } else {
+                            Text("\(candidates.count)")
+                                .font(DS.Font.scaled(11, weight: .bold))
+                                .foregroundColor(DS.Color.textSecondary)
 
-                        Image(systemName: joinMatchesExpanded ? "chevron.up" : "chevron.down")
-                            .font(DS.Font.scaled(11, weight: .bold))
-                            .foregroundColor(DS.Color.textTertiary)
+                            if !candidates.isEmpty {
+                                Image(systemName: joinMatchesExpanded ? "chevron.up" : "chevron.down")
+                                    .font(DS.Font.scaled(11, weight: .bold))
+                                    .foregroundColor(DS.Color.textTertiary)
+                            }
+                        }
                     }
                 }
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .disabled(candidates.isEmpty || isLoading)
 
-            // المرشحون يظهرون فقط بعد التوسيع — مغلق بالكامل افتراضياً
-            if joinMatchesExpanded {
+            // States: loading | empty | list
+            if isLoading {
+                HStack {
+                    Spacer()
+                    ProgressView()
+                        .scaleEffect(0.85)
+                        .tint(iconInfo.color)
+                    Text(L10n.t("جاري البحث عن مطابقات...", "Searching for matches..."))
+                        .font(DS.Font.scaled(11, weight: .medium))
+                        .foregroundColor(DS.Color.textTertiary)
+                    Spacer()
+                }
+                .padding(.vertical, DS.Spacing.xs)
+            } else if candidates.isEmpty {
+                // Empty state — يظهر دائماً (بدون توسيع) لأن المعلومة مهمة
+                HStack(spacing: 6) {
+                    Image(systemName: "person.fill.questionmark")
+                        .font(DS.Font.scaled(12, weight: .semibold))
+                        .foregroundColor(DS.Color.textTertiary)
+                    Text(L10n.t(
+                        "لا توجد مطابقات في الشجرة — قد يكون عضو جديد",
+                        "No matches found in the tree — may be a new member"
+                    ))
+                    .font(DS.Font.scaled(11, weight: .medium))
+                    .foregroundColor(DS.Color.textTertiary)
+                    Spacer(minLength: 0)
+                }
+                .padding(.vertical, DS.Spacing.xs)
+                .padding(.horizontal, DS.Spacing.sm)
+                .background(
+                    RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                        .fill(DS.Color.textTertiary.opacity(0.05))
+                )
+            } else if joinMatchesExpanded {
                 VStack(spacing: 6) {
                     ForEach(candidates) { candidate in
                         joinMatchRow(candidate: candidate, requesterId: requesterId)
