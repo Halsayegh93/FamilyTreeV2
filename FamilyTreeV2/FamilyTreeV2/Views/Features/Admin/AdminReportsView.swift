@@ -892,10 +892,24 @@ struct AdminReportsView: View {
     }
 
     private func ageForMember(_ member: FamilyMember) -> Int? {
-        // ما نحسب عمر للمتوفى
-        if member.isDeceased == true { return nil }
         guard let birthDate = parsedBirthDate(member.birthDate) else { return nil }
-        return Calendar.current.dateComponents([.year], from: birthDate, to: Date()).year
+        // للمتوفّى مع تاريخ وفاة → عمر الوفاة (من الميلاد إلى الوفاة)
+        // للحيّ أو متوفى بدون تاريخ وفاة → للحين
+        let endDate: Date
+        if member.isDeceased == true,
+           let deathStr = member.deathDate,
+           let parsedDeath = parsedBirthDate(deathStr) {
+            endDate = parsedDeath
+        } else if member.isDeceased == true {
+            // متوفى بدون تاريخ وفاة → ما نقدر نحسب
+            return nil
+        } else {
+            endDate = Date()
+        }
+        guard let years = Calendar.current.dateComponents([.year], from: birthDate, to: endDate).year else {
+            return nil
+        }
+        return years >= 0 ? years : nil
     }
 
     /// استخراج قيمة حقل لعضو — يستخدم في الـ PDF
