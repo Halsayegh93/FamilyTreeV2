@@ -1469,24 +1469,41 @@ class MemberViewModel: ObservableObject {
         let lookup = Dictionary(uniqueKeysWithValues: freshMembers.map { ($0.id, $0) })
         let descendants = collectAllDescendants(of: memberId, from: freshMembers)
 
-        guard !descendants.isEmpty else { return }
+        guard !descendants.isEmpty else {
+            Log.info("[Cascade] لا ذرّية للعضو \(memberId) — لا حاجة للتحديث")
+            return
+        }
+
+        var updatedCount = 0
+        var skippedCount = 0
+        var failedCount = 0
 
         for descendant in descendants {
             let newFullName = buildFullName(for: descendant, lookup: lookup)
             // لا نحدّث إذا الاسم ما تغير
-            guard newFullName != descendant.fullName else { continue }
+            guard newFullName != descendant.fullName else {
+                skippedCount += 1
+                continue
+            }
 
             let update: [String: AnyEncodable] = [
                 "full_name": AnyEncodable(newFullName)
             ]
-            _ = try? await supabase
-                .from("profiles")
-                .update(update)
-                .eq("id", value: descendant.id.uuidString)
-                .execute()
+            do {
+                try await supabase
+                    .from("profiles")
+                    .update(update)
+                    .eq("id", value: descendant.id.uuidString)
+                    .execute()
+                updatedCount += 1
+            } catch {
+                // ما نوقف باقي الذرّية — نسجّل بوضوح ونكمل
+                failedCount += 1
+                Log.error("[Cascade] فشل تحديث اسم \(descendant.firstName) (\(descendant.id)): \(error.localizedDescription)")
+            }
         }
 
-        Log.info("تم تحديث أسماء \(descendants.count) من الذرية")
+        Log.info("[Cascade] الذرّية: محدّث \(updatedCount) • متطابق \(skippedCount) • فاشل \(failedCount)")
     }
     
     // MARK: - Delete Member (Admin only)
