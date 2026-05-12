@@ -1,8 +1,9 @@
 import SwiftUI
 import PhotosUI
-import Photos
 
 /// Reusable profile photo picker component with crop integration.
+/// لا يحتاج إذن `Photos` — `PhotosPicker` (iOS 16+) يفتح اختياراً مستقلاً
+/// ما يطلب وصول لمكتبة الصور بالكامل.
 /// Handles empty state, loading, preview, existing URL, and optional cropping.
 struct DSProfilePhotoPicker: View {
     /// The selected/cropped UIImage (binding to parent)
@@ -31,7 +32,6 @@ struct DSProfilePhotoPicker: View {
     @State private var isLoading = false
     @State private var rawPickedImage: UIImage? = nil
     @State private var showCropper = false
-    @State private var showPermissionDenied = false
     @State private var showPicker = false
     @State private var showChangeOptions = false
     /// Stores the last raw (uncropped) image so user can re-edit crop
@@ -91,54 +91,6 @@ struct DSProfilePhotoPicker: View {
                     }
                 )
             }
-        }
-        .alert(
-            L10n.t("الوصول للصور مطلوب", "Photo Access Required"),
-            isPresented: $showPermissionDenied
-        ) {
-            Button(L10n.t("فتح الإعدادات", "Open Settings")) {
-                if let url = URL(string: UIApplication.openSettingsURLString) {
-                    UIApplication.shared.open(url)
-                }
-            }
-            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
-        } message: {
-            Text(L10n.t(
-                "يحتاج التطبيق إذن الوصول لمكتبة الصور لاختيار صورة. يرجى السماح من الإعدادات.",
-                "The app needs access to your photo library to select a photo. Please allow access in Settings."
-            ))
-        }
-        .onAppear {
-            requestPhotoPermission()
-        }
-    }
-
-    // MARK: - Photo Permission
-
-    private func requestPhotoPermission() {
-        let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
-        if status == .notDetermined {
-            PHPhotoLibrary.requestAuthorization(for: .readWrite) { _ in }
-        }
-    }
-
-    private func checkPermissionAndProceed(action: @escaping () -> Void) {
-        let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
-        switch status {
-        case .authorized, .limited:
-            action()
-        case .notDetermined:
-            PHPhotoLibrary.requestAuthorization(for: .readWrite) { newStatus in
-                Task { @MainActor in
-                    if newStatus == .authorized || newStatus == .limited {
-                        action()
-                    } else {
-                        showPermissionDenied = true
-                    }
-                }
-            }
-        default:
-            showPermissionDenied = true
         }
     }
 
@@ -208,7 +160,7 @@ struct DSProfilePhotoPicker: View {
 
                 // تغيير الصورة (اختيار جديدة)
                 Button {
-                    checkPermissionAndProceed { showPicker = true }
+                    showPicker = true
                 } label: {
                     HStack(spacing: DS.Spacing.xs) {
                         Image(systemName: "arrow.triangle.2.circlepath.camera")
@@ -263,7 +215,7 @@ struct DSProfilePhotoPicker: View {
             .disabled(lastRawImage == nil)
             
             Button(L10n.t("تغيير الصورة", "Change Photo")) {
-                checkPermissionAndProceed { showPicker = true }
+                showPicker = true
             }
 
             Button(L10n.t("حذف الصورة", "Delete Photo"), role: .destructive) {
@@ -358,7 +310,7 @@ struct DSProfilePhotoPicker: View {
 
                 // تغيير الصورة (اختيار جديدة)
                 Button {
-                    checkPermissionAndProceed { showPicker = true }
+                    showPicker = true
                 } label: {
                     HStack(spacing: DS.Spacing.xs) {
                         Image(systemName: "arrow.triangle.2.circlepath.camera")
@@ -408,7 +360,7 @@ struct DSProfilePhotoPicker: View {
             }
             
             Button(L10n.t("تغيير الصورة", "Change Photo")) {
-                checkPermissionAndProceed { showPicker = true }
+                showPicker = true
             }
             
             if onDeleteExisting != nil {
@@ -464,10 +416,10 @@ struct DSProfilePhotoPicker: View {
 
     private var emptyState: some View {
         VStack(spacing: DS.Spacing.sm) {
-            if compactEmptyState {
-                // وضع مختصر: الدائرة مع كاميرا — بدون زر تحتها
+            // وضع overlay: زر كاميرا على الدائرة (يستخدم في الإدارة + compact)
+            if compactEmptyState || useOverlayActionsOnly {
                 Button {
-                    checkPermissionAndProceed { showPicker = true }
+                    showPicker = true
                 } label: {
                     ZStack(alignment: .bottomTrailing) {
                         emptyCirclePlaceholder
@@ -490,11 +442,11 @@ struct DSProfilePhotoPicker: View {
                         .foregroundColor(DS.Color.textTertiary)
                 }
             } else {
-                // الوضع العادي: دائرة + زر اختيار
+                // الوضع العادي: دائرة + زر اختيار تحتها
                 emptyCirclePlaceholder
 
                 Button {
-                    checkPermissionAndProceed { showPicker = true }
+                    showPicker = true
                 } label: {
                     HStack(spacing: DS.Spacing.xs) {
                         Image(systemName: "arrow.triangle.2.circlepath.camera")
@@ -593,7 +545,6 @@ struct DSMultiPhotoPicker: View {
     @State private var showCropper = false
     @State private var currentCropImage: UIImage? = nil
     @State private var showPicker = false
-    @State private var showPermissionDenied = false
 
     var body: some View {
         DSCard(padding: 0) {
@@ -618,25 +569,6 @@ struct DSMultiPhotoPicker: View {
             loadImages(from: items)
         }
         .photosPicker(isPresented: $showPicker, selection: $pickerItems, maxSelectionCount: maxCount, matching: .images)
-        .alert(
-            L10n.t("الوصول للصور مطلوب", "Photo Access Required"),
-            isPresented: $showPermissionDenied
-        ) {
-            Button(L10n.t("فتح الإعدادات", "Open Settings")) {
-                if let url = URL(string: UIApplication.openSettingsURLString) {
-                    UIApplication.shared.open(url)
-                }
-            }
-            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
-        } message: {
-            Text(L10n.t(
-                "يحتاج التطبيق إذن الوصول لمكتبة الصور لاختيار صور. يرجى السماح من الإعدادات.",
-                "The app needs access to your photo library to select photos. Please allow access in Settings."
-            ))
-        }
-        .onAppear {
-            requestPhotoPermission()
-        }
         .fullScreenCover(isPresented: $showCropper) {
             if let cropImage = currentCropImage {
                 ImageCropperView(
@@ -663,7 +595,7 @@ struct DSMultiPhotoPicker: View {
 
     private var emptyState: some View {
         Button {
-            checkPermissionAndProceed { showPicker = true }
+            showPicker = true
         } label: {
             VStack(spacing: DS.Spacing.md) {
                 Image(systemName: "photo.on.rectangle.angled")
@@ -799,7 +731,7 @@ struct DSMultiPhotoPicker: View {
 
                 if selectedImages.count < maxCount {
                     Button {
-                        checkPermissionAndProceed { showPicker = true }
+                        showPicker = true
                     } label: {
                         VStack(spacing: 2) {
                             Image(systemName: "plus")
@@ -870,32 +802,4 @@ struct DSMultiPhotoPicker: View {
         }
     }
 
-    // MARK: - Photo Permission
-
-    private func requestPhotoPermission() {
-        let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
-        if status == .notDetermined {
-            PHPhotoLibrary.requestAuthorization(for: .readWrite) { _ in }
-        }
-    }
-
-    private func checkPermissionAndProceed(action: @escaping () -> Void) {
-        let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
-        switch status {
-        case .authorized, .limited:
-            action()
-        case .notDetermined:
-            PHPhotoLibrary.requestAuthorization(for: .readWrite) { newStatus in
-                Task { @MainActor in
-                    if newStatus == .authorized || newStatus == .limited {
-                        action()
-                    } else {
-                        showPermissionDenied = true
-                    }
-                }
-            }
-        default:
-            showPermissionDenied = true
-        }
-    }
 }

@@ -158,7 +158,7 @@ struct AdminMemberDetailSheet: View {
                 BioStationsEditorSheet(stations: $bioStations)
             }
             .sheet(isPresented: $showFatherPicker) {
-                FatherPickerSheet(selectedId: $selectedFatherId)
+                FatherPickerSheet(selectedId: $selectedFatherId, editingMemberId: member.id)
             }
             .sheet(isPresented: $showAddSonSheet) {
                 AddSonByAdminSheet(parent: member)
@@ -1404,10 +1404,27 @@ struct FatherPickerSheet: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var memberVM: MemberViewModel
     @Binding var selectedId: UUID?
+    /// معرّف العضو الذي يُحرَّر — يُستثنى هو وكل ذرّيته من قائمة المرشّحين
+    /// (عشان ما يصير حلقة: ابن يصير أب لأبيه)
+    var editingMemberId: UUID? = nil
     @Environment(\.dismiss) var dismiss
     @State private var searchText = ""
-    @State private var pendingSelection: FamilyMember? = nil
     @State private var showUnlinkConfirm = false
+
+    /// كل ذرّية العضو الذي يُحرَّر (تُحسب مرة واحدة)
+    private var excludedIds: Set<UUID> {
+        guard let rootId = editingMemberId else { return [] }
+        var result: Set<UUID> = [rootId]
+        var queue: [UUID] = [rootId]
+        while let cur = queue.popLast() {
+            for m in memberVM.allMembers where m.fatherId == cur {
+                if result.insert(m.id).inserted {
+                    queue.append(m.id)
+                }
+            }
+        }
+        return result
+    }
 
     /// تطبيع نص عربي للبحث: يوحّد الألفات/الياءات/التاء المربوطة + يزيل التشكيل
     /// عشان "احمد" تطابق "أحمد" و "علي" تطابق "علىٰ".
@@ -1442,12 +1459,18 @@ struct FatherPickerSheet: View {
         return nil
     }
 
+    /// المرشّحون: الأعضاء القابلين للعدّ، باستثناء العضو نفسه وذرّيته
+    private var candidateMembers: [FamilyMember] {
+        let exclude = excludedIds
+        return memberVM.allMembers.filter { $0.isCountable && !exclude.contains($0.id) }
+    }
+
     var filteredMembers: [FamilyMember] {
         if searchText.trimmingCharacters(in: .whitespaces).isEmpty {
-            return memberVM.allMembers.sorted { $0.fullName < $1.fullName }
+            return candidateMembers.sorted { $0.fullName < $1.fullName }
         }
         // مع وجود بحث: نُرجّع المطابقات فقط، مرتّبة بحسب جودة المطابقة
-        return memberVM.allMembers
+        return candidateMembers
             .compactMap { m -> (FamilyMember, Int)? in
                 guard let r = matchRank(name: m.fullName, query: searchText) else { return nil }
                 return (m, r)
@@ -1514,7 +1537,11 @@ struct FatherPickerSheet: View {
                             LazyVStack(spacing: 0) {
                                 ForEach(filteredMembers) { m in
                                     Button {
-                                        pendingSelection = m
+                                        // اختيار مباشر بدون تأكيد — تجربة موبايل قياسية
+                                        let generator = UIImpactFeedbackGenerator(style: .light)
+                                        generator.impactOccurred()
+                                        selectedId = m.id
+                                        dismiss()
                                     } label: {
                                         HStack(spacing: DS.Spacing.sm) {
                                             // Avatar
@@ -1589,28 +1616,6 @@ struct FatherPickerSheet: View {
                 }
             }
             .tint(DS.Color.primary)
-            .alert(
-                L10n.t("تأكيد اختيار الأب", "Confirm Father Selection"),
-                isPresented: Binding(
-                    get: { pendingSelection != nil },
-                    set: { if !$0 { pendingSelection = nil } }
-                ),
-                presenting: pendingSelection
-            ) { member in
-                Button(L10n.t("تأكيد", "Confirm")) {
-                    selectedId = member.id
-                    pendingSelection = nil
-                    dismiss()
-                }
-                Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {
-                    pendingSelection = nil
-                }
-            } message: { member in
-                Text(L10n.t(
-                    "هل تريد ربط هذا العضو بـ \(member.fullName) كأب؟",
-                    "Link this member to \(member.fullName) as father?"
-                ))
-            }
             .alert(
                 L10n.t("إزالة ربط الأب", "Remove Father Link"),
                 isPresented: $showUnlinkConfirm
