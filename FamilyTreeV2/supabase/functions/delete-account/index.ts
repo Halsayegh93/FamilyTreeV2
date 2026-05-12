@@ -20,9 +20,14 @@ serve(async (req) => {
     // 3. Delete user's personal activity data
     await adminClient.from("news_poll_votes").delete().eq("member_id", userId);
     await adminClient.from("news_posts").delete().eq("author_id", userId);
-    await adminClient.from("notifications").delete().eq("member_id", userId);
-    await adminClient.from("push_tokens").delete().eq("member_id", userId);
+    // notifications يستخدم target_member_id (مو member_id) + created_by للمُرسِل
+    await adminClient.from("notifications").delete().eq("target_member_id", userId);
+    await adminClient.from("notifications").delete().eq("created_by", userId);
+    // device_tokens هو الاسم الصحيح للجدول (push_tokens غير موجود)
+    await adminClient.from("device_tokens").delete().eq("member_id", userId);
+    // admin_requests فيه عمودين: member_id و requester_id — نحذف للاثنين
     await adminClient.from("admin_requests").delete().eq("member_id", userId);
+    await adminClient.from("admin_requests").delete().eq("requester_id", userId);
     await adminClient.from("diwaniyas").delete().eq("owner_id", userId);
     await adminClient
       .from("member_gallery_photos")

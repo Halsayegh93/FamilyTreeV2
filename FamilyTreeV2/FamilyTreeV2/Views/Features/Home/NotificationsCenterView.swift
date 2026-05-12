@@ -1540,42 +1540,89 @@ struct NotificationsCenterView: View {
             return
         }
 
-        // 3) محاولة المطابقة المتقدمة عبر RPC على السيرفر (≥ جزأين من الاسم)
-        let serverMatchIds: [UUID] = await fetchServerMatches(fullName: fullName, excluding: requester?.id)
+        let requesterId2 = requester?.id
 
-        // 4) ابن قائمة FamilyMember من allMembers — الترتيب يحفظه السيرفر (match_score DESC)
-        var members: [FamilyMember] = []
+        // 3) المسار الأول: RPC السيرفر search_members_by_name (v2: exact word + 75% + top-4 parts)
+        let serverMatchIds: [UUID] = await fetchServerMatches(fullName: fullName, excluding: requesterId2)
+
+        // 4) حول IDs إلى FamilyMember — مع استثناء المتوفّين (نُظهر للأحياء فقط)
+        var matches: [FamilyMember] = []
         for id in serverMatchIds {
-            if let m = memberVM.member(byId: id), m.id != requester?.id {
-                members.append(m)
+            if let m = memberVM.member(byId: id),
+               m.id != requesterId2,
+               m.isDeceased != true {
+                matches.append(m)
             }
         }
 
-        // 5) Fallback: لو السيرفر ما رجع شيء (مثلاً اسم من جزء واحد)، نستخدم المطابقة المحلية على أول كلمة
-        if members.isEmpty {
+        // 5) Fallback محلي: لو السيرفر ما رجع شيء (مثلاً اسم من جزء واحد)،
+        //    نستخدم المطابقة المحلية على أول كلمة، مع استثناء المتوفّين
+        if matches.isEmpty {
             let firstName = fullName
                 .components(separatedBy: .whitespacesAndNewlines)
                 .first?
                 .trimmingCharacters(in: CharacterSet.punctuationCharacters) ?? ""
 
             if !firstName.isEmpty {
-                let requesterId2 = requester?.id
                 let localMatches = memberVM.allMembers.filter { candidate in
                     guard candidate.id != requesterId2 else { return false }
+                    guard candidate.isDeceased != true else { return false }
                     let candidateFirst = candidate.firstName
                         .components(separatedBy: .whitespacesAndNewlines)
                         .first?
                         .trimmingCharacters(in: CharacterSet.punctuationCharacters) ?? ""
                     return candidateFirst == firstName
                 }
-                members = localMatches
-                Log.info("[JoinMatch] السيرفر فاضي — fallback محلي على firstName='\(firstName)' أعطى \(members.count)")
+                matches = localMatches
+                Log.info("[JoinMatch] السيرفر فاضي — fallback محلي على firstName='\(firstName)' أعطى \(matches.count)")
             }
         }
 
-        // 6) ترتيب إضافي: نفس الأب أولاً، ثم النشطين (يحافظ على ترتيب السيرفر داخل نفس المجموعة)
-        let reqFatherId = requester?.fatherId
-        let sorted = members.enumerated().sorted { a, b in
+        // 6) استخراج سلسلة اسم المُسجِّل (عبدالله، محمد، مصطفى، الصايغ)
+        //    من بروفايله لو موجود، أو من body كـ fallback
+        let requesterChain: [String] = {
+            if let r = requester {
+                return r.fullName
+                    .components(separatedBy: .whitespacesAndNewlines)
+                    .filter { !$0.isEmpty }
+            }
+            let words = notification.body.components(separatedBy: .whitespacesAndNewlines)
+            var chain: [String] = []
+            for w in words {
+                if w.contains("يطلب") || w.contains("requests") { break }
+                let cleaned = w.trimmingCharacters(in: CharacterSet.punctuationCharacters)
+                if !cleaned.isEmpty { chain.append(cleaned) }
+            }
+            return chain
+        }()
+
+        // حساب درجة التطابق بعدد الكلمات المتتالية المتطابقة من بداية السلسلة
+        func chainMatchScore(_ candidate: FamilyMember) -> Int {
+            let cChain = candidate.fullName
+                .components(separatedBy: .whitespacesAndNewlines)
+                .filter { !$0.isEmpty }
+            var score = 0
+            for i in 0..<min(requesterChain.count, cChain.count) {
+                if cChain[i] == requesterChain[i] {
+                    score += 1
+                } else {
+                    break
+                }
+            }
+            return score
+        }
+
+        // 7) ترتيب:
+        //    1) درجة تطابق السلسلة الأعلى أولاً (الاسم + الأب + الجد + ...)
+        //    2) نفس fatherId (لو ربط فعلي موجود)
+        //    3) الأعضاء النشطين قبل pending
+        //    4) ترتيب السيرفر (match_score) كـ tiebreaker
+        let sorted = matches.enumerated().sorted { a, b in
+            let aScore = chainMatchScore(a.element)
+            let bScore = chainMatchScore(b.element)
+            if aScore != bScore { return aScore > bScore }
+
+            let reqFatherId = requester?.fatherId
             let aMatchesFather = reqFatherId != nil && a.element.fatherId == reqFatherId
             let bMatchesFather = reqFatherId != nil && b.element.fatherId == reqFatherId
             if aMatchesFather != bMatchesFather { return aMatchesFather }
@@ -1584,15 +1631,14 @@ struct NotificationsCenterView: View {
             let bActive = b.element.role != .pending
             if aActive != bActive { return aActive }
 
-            // حافظ على ترتيب السيرفر (match_score)
             return a.offset < b.offset
         }.map(\.element)
 
         joinMatchCandidates = Array(sorted.prefix(10))
-        Log.info("[JoinMatch] fullName='\(fullName)' — \(joinMatchCandidates.count) مطابقة نهائية")
+        Log.info("[JoinMatch] fullName='\(fullName)', chain=\(requesterChain.prefix(4).joined(separator: " ")) — \(joinMatchCandidates.count) مطابقة نهائية")
     }
 
-    /// استدعاء RPC السيرفر search_members_by_name — مطابقة جزأين على الأقل
+    /// استدعاء RPC السيرفر search_members_by_name v2 — exact word + 75% threshold + top-4 parts
     private func fetchServerMatches(fullName: String, excluding excludeId: UUID?) async -> [UUID] {
         struct MatchRow: Decodable {
             let memberId: UUID

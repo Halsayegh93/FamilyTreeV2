@@ -237,7 +237,11 @@ struct AdminNotificationsView: View {
         .navigationTitle(L10n.t("إرسال إشعار", "Send Notification"))
         .navigationBarTitleDisplayMode(.inline)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-        .task { await memberVM.fetchAllMembers() }
+        .task {
+            if memberVM.allMembers.isEmpty {
+                await memberVM.fetchAllMembers()
+            }
+        }
     }
 
     // MARK: - Member Row

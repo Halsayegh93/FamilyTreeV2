@@ -212,7 +212,11 @@ struct AdminPendingRequestsView: View {
         } message: {
             Text(mergeSuccessMessage)
         }
-        .task { await memberVM.fetchAllMembers() }
+        .task {
+            if memberVM.allMembers.isEmpty {
+                await memberVM.fetchAllMembers()
+            }
+        }
         .alert(
             L10n.t("خطأ", "Error"),
             isPresented: Binding(

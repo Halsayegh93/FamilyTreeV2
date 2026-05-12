@@ -89,11 +89,18 @@ Deno.serve(async (req) => {
     });
   }
 
-  // Filter out null/empty tokens (token can be null after device_id migration)
+  // Filter out null/empty tokens + dedupe by token
+  // (نفس الجهاز قد يكون مرتبط بأكثر من حساب مدير → token مكرر → 2 بانرات)
+  const seenTokens = new Set<string>();
   const tokenEntries = (tokenRows ?? [])
     .filter((r) => r.token != null)
     .map((r) => ({ token: (r.token as string).trim(), env: r.environment as string | null }))
-    .filter((e) => e.token.length > 20);
+    .filter((e) => e.token.length > 20)
+    .filter((e) => {
+      if (seenTokens.has(e.token)) return false;
+      seenTokens.add(e.token);
+      return true;
+    });
 
   if (!tokenEntries.length) {
     return json(200, { ok: true, sent: 0, message: "No admin push tokens" });

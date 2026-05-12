@@ -51,6 +51,19 @@ class MemberViewModel: ObservableObject {
     
     // Fetch throttle
     private let throttler = FetchThrottler()
+
+    /// Debounce لحفظ الكاش — يجمّع التعديلات المتتالية في حفظ واحد
+    /// يحل مشكلة 14+ حفظ متلاحق للأعضاء (1.4MB كل مرة) خلال جلسة قصيرة
+    private var cacheMembersSaveTask: Task<Void, Never>?
+
+    private func scheduleMembersCacheSave() {
+        cacheMembersSaveTask?.cancel()
+        cacheMembersSaveTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 2_000_000_000) // 2 ثانية
+            guard !Task.isCancelled, let self else { return }
+            CacheManager.shared.save(self.allMembers, for: .members)
+        }
+    }
     
     // MARK: - Dependencies
     
@@ -177,7 +190,7 @@ class MemberViewModel: ObservableObject {
             allMembers.append(member)
         }
         membersVersion += 1
-        CacheManager.shared.save(allMembers, for: .members)
+        scheduleMembersCacheSave()
 
         // تحديث currentUser إذا هو نفسه
         if member.id == currentUser?.id {
@@ -235,8 +248,8 @@ class MemberViewModel: ObservableObject {
             self.throttler.didFetch(key: "members")
             self.membersVersion += 1
 
-            // حفظ في الكاش
-            CacheManager.shared.save(members, for: .members)
+            // حفظ في الكاش (debounced — يلغي أي حفظ قيد الانتظار)
+            scheduleMembersCacheSave()
 
             // تحديث currentUser إذا تغيرت بياناته (مثلاً: تغيير الاسم من الإدارة)
             if let userId = currentUser?.id,
@@ -245,12 +258,17 @@ class MemberViewModel: ObservableObject {
                 authVM?.currentUser = updatedUser
                 Log.info("[Members] تم تحديث بيانات المستخدم الحالي من الشجرة")
             }
+        } catch is CancellationError {
+            // طبيعي عند خروج العضو من الشاشة أو الإصدار في الخلفية — ليس crash
+            return
         } catch {
+            // فلتر URLError "cancelled" من URLSession
+            if (error as NSError).code == NSURLErrorCancelled { return }
             Log.error("خطأ برمجياً في الشجرة: \(error)")
             CrashReporter.log(error, context: "fetchAllMembers")
         }
     }
-    
+
     func fetchChildren(for fatherId: UUID) async {
         do {
             let response: [FamilyMember] = try await supabase.from("profiles")
@@ -520,8 +538,11 @@ class MemberViewModel: ObservableObject {
     func uploadAvatar(image: UIImage, for memberId: UUID) async {
         self.isLoading = true
 
-        // 1. ضغط الصورة وتحويلها لبيانات
-        guard let imageData = ImageProcessor.process(image, for: .avatar) else {
+        // 1. ضغط الصورة وتحويلها لبيانات (في خلفية لتجنب تجميد UI)
+        let processed = await Task.detached(priority: .userInitiated) {
+            ImageProcessor.process(image, for: .avatar)
+        }.value
+        guard let imageData = processed else {
             self.isLoading = false
             return
         }
@@ -665,8 +686,11 @@ class MemberViewModel: ObservableObject {
     
     func uploadCover(image: UIImage, for memberId: UUID) async {
         self.isLoading = true
-        
-        guard let imageData = ImageProcessor.process(image, for: .cover) else {
+
+        let processed = await Task.detached(priority: .userInitiated) {
+            ImageProcessor.process(image, for: .cover)
+        }.value
+        guard let imageData = processed else {
             self.isLoading = false
             return
         }
@@ -760,8 +784,11 @@ class MemberViewModel: ObservableObject {
     
     func uploadMemberGalleryPhoto(image: UIImage, for memberId: UUID) async -> String? {
         self.isLoading = true
-        
-        guard let imageData = ImageProcessor.process(image, for: .gallery) else {
+
+        let processed = await Task.detached(priority: .userInitiated) {
+            ImageProcessor.process(image, for: .gallery)
+        }.value
+        guard let imageData = processed else {
             self.isLoading = false
             return nil
         }
@@ -875,6 +902,9 @@ class MemberViewModel: ObservableObject {
     
     /// جلب آخر الصور المعتمدة (للرئيسية)
     func fetchApprovedGalleryPhotos(limit: Int = 10) async {
+        // تجنب إعادة الجلب خلال 15 ثانية — يمنع الفيض عند إعادة تركيب الـ View
+        guard throttler.canFetch(key: "approvedGallery", interval: 15, force: false)
+            || approvedGalleryPhotos.isEmpty else { return }
         do {
             let photos: [MemberGalleryPhoto] = try await supabase
                 .from("member_gallery_photos")
@@ -884,8 +914,15 @@ class MemberViewModel: ObservableObject {
                 .limit(limit)
                 .execute()
                 .value
+            try Task.checkCancellation()
             self.approvedGalleryPhotos = photos
+            throttler.didFetch(key: "approvedGallery")
+        } catch is CancellationError {
+            // الـ task اتلغى (طبيعي عند خروج الـ View) — ما نسجلها كخطأ
+            return
         } catch {
+            // فلتر الـ URLError اللي تصير من إلغاء URLSession
+            if (error as NSError).code == NSURLErrorCancelled { return }
             Log.error("خطأ جلب الصور المعتمدة: \(error.localizedDescription)")
         }
     }
@@ -945,8 +982,11 @@ class MemberViewModel: ObservableObject {
 
     func uploadMemberGalleryPhotoMulti(image: UIImage, for memberId: UUID, caption: String? = nil) async -> MemberGalleryPhoto? {
         self.isLoading = true
-        
-        guard let imageData = ImageProcessor.process(image, for: .gallery) else {
+
+        let processed = await Task.detached(priority: .userInitiated) {
+            ImageProcessor.process(image, for: .gallery)
+        }.value
+        guard let imageData = processed else {
             self.isLoading = false
             return nil
         }
@@ -1445,23 +1485,29 @@ class MemberViewModel: ObservableObject {
 
         isLoading = true
         do {
-            // حذف الإشعارات المرتبطة
-            _ = try? await supabase.from("notifications")
-                .delete()
-                .eq("target_member_id", value: memberId.uuidString)
-                .execute()
+            // حذف الإشعارات المرتبطة — نسجّل الفشل لكن لا نوقف الحذف
+            do {
+                try await supabase.from("notifications")
+                    .delete()
+                    .eq("target_member_id", value: memberId.uuidString)
+                    .execute()
+            } catch { Log.warning("[Delete] فشل حذف notifications للعضو \(memberId): \(error.localizedDescription)") }
 
             // حذف device tokens
-            _ = try? await supabase.from("device_tokens")
-                .delete()
-                .eq("member_id", value: memberId.uuidString)
-                .execute()
+            do {
+                try await supabase.from("device_tokens")
+                    .delete()
+                    .eq("member_id", value: memberId.uuidString)
+                    .execute()
+            } catch { Log.warning("[Delete] فشل حذف device_tokens للعضو \(memberId): \(error.localizedDescription)") }
 
             // حذف صور المعرض
-            _ = try? await supabase.from("member_gallery_photos")
-                .delete()
-                .eq("member_id", value: memberId.uuidString)
-                .execute()
+            do {
+                try await supabase.from("member_gallery_photos")
+                    .delete()
+                    .eq("member_id", value: memberId.uuidString)
+                    .execute()
+            } catch { Log.warning("[Delete] فشل حذف member_gallery_photos للعضو \(memberId): \(error.localizedDescription)") }
 
             // حذف العضو من profiles
             try await supabase.from("profiles")
@@ -1472,7 +1518,7 @@ class MemberViewModel: ObservableObject {
             // إزالة العضو محلياً
             allMembers.removeAll { $0.id == memberId }
             membersVersion += 1
-            CacheManager.shared.save(allMembers, for: .members)
+            scheduleMembersCacheSave()
             Log.info("تم حذف العضو بنجاح: \(memberId)")
             isLoading = false
             return true
