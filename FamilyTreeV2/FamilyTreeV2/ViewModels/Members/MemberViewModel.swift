@@ -623,6 +623,21 @@ class MemberViewModel: ObservableObject {
                         .init(field: "avatar_url", before: oldAvatarUrl, after: urlString)
                     ]
                 )
+            } else {
+                // العضو غيّر صورته بنفسه → إشعار للمدراء في تاب "المستجدات"
+                // (نتجاوز guard الـ notifyAdminsOfMemberEdit بالاستدعاء المباشر لأن العضو هنا = العامل)
+                let memberName = _memberById[memberId]?.firstName ?? L10n.t("عضو", "member")
+                await notificationVM?.notifyAdminsWithChangesAndPush(
+                    title: L10n.t("تحديث صورة", "Photo Update"),
+                    body: L10n.t(
+                        "حدّث «\(memberName)» صورته الشخصية",
+                        "«\(memberName)» updated their profile photo"
+                    ),
+                    kind: NotificationKind.adminEditAvatar.rawValue,
+                    changes: [
+                        .init(field: "avatar_url", before: oldAvatarUrl, after: urlString)
+                    ]
+                )
             }
 
         } catch {
