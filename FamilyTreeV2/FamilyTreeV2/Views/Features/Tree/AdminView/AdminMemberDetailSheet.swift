@@ -1409,6 +1409,7 @@ struct FatherPickerSheet: View {
     var editingMemberId: UUID? = nil
     @Environment(\.dismiss) var dismiss
     @State private var searchText = ""
+    @State private var pendingSelection: FamilyMember? = nil
     @State private var showUnlinkConfirm = false
 
     /// كل ذرّية العضو الذي يُحرَّر (تُحسب مرة واحدة)
@@ -1537,11 +1538,7 @@ struct FatherPickerSheet: View {
                             LazyVStack(spacing: 0) {
                                 ForEach(filteredMembers) { m in
                                     Button {
-                                        // اختيار مباشر بدون تأكيد — تجربة موبايل قياسية
-                                        let generator = UIImpactFeedbackGenerator(style: .light)
-                                        generator.impactOccurred()
-                                        selectedId = m.id
-                                        dismiss()
+                                        pendingSelection = m
                                     } label: {
                                         HStack(spacing: DS.Spacing.sm) {
                                             // Avatar
@@ -1616,6 +1613,28 @@ struct FatherPickerSheet: View {
                 }
             }
             .tint(DS.Color.primary)
+            .alert(
+                L10n.t("تأكيد اختيار الأب", "Confirm Father Selection"),
+                isPresented: Binding(
+                    get: { pendingSelection != nil },
+                    set: { if !$0 { pendingSelection = nil } }
+                ),
+                presenting: pendingSelection
+            ) { member in
+                Button(L10n.t("تأكيد", "Confirm")) {
+                    selectedId = member.id
+                    pendingSelection = nil
+                    dismiss()
+                }
+                Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {
+                    pendingSelection = nil
+                }
+            } message: { member in
+                Text(L10n.t(
+                    "هل تريد ربط هذا العضو بـ \(member.fullName) كأب؟",
+                    "Link this member to \(member.fullName) as father?"
+                ))
+            }
             .alert(
                 L10n.t("إزالة ربط الأب", "Remove Father Link"),
                 isPresented: $showUnlinkConfirm
