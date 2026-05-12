@@ -61,15 +61,16 @@ struct CachedAsyncImage<Content: View, Placeholder: View>: View {
     }
 }
 
-/// Shared image cache — 100 MB memory, 300 MB disk
+/// Shared image cache — 50 MB memory, 200 MB disk
+/// قللناها لتجنب ضغط الذاكرة على الأجهزة القديمة (iPhone 13 mini وأقدم)
 final class ImageCache {
     static let shared = ImageCache()
     let cache: URLCache
 
     private init() {
         cache = URLCache(
-            memoryCapacity: 100 * 1024 * 1024,   // 100 MB
-            diskCapacity: 300 * 1024 * 1024,      // 300 MB
+            memoryCapacity: 50 * 1024 * 1024,    // 50 MB (كان 100)
+            diskCapacity: 200 * 1024 * 1024,     // 200 MB (كان 300)
             diskPath: "family_tree_images"
         )
     }

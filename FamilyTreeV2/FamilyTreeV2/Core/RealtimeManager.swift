@@ -21,7 +21,8 @@ final class RealtimeManager {
 
     private var subscriptionTasks: [String: Task<Void, Never>] = [:]
     private var debounceTasks: [String: Task<Void, Never>] = [:]
-    private var channels: [RealtimeChannelV2] = []
+    /// قناة واحدة لكل جدول — نتجنّب تكدّس القنوات اللي يصير لما الاشتراك يفشل ويعيد المحاولة
+    private var channelsByTable: [String: RealtimeChannelV2] = [:]
     private var isSubscribed = false
 
     /// عدد محاولات إعادة الاتصال لكل قناة
@@ -77,8 +78,8 @@ final class RealtimeManager {
         retryCounts.removeAll()
 
         // إزالة القنوات
-        let channelsToRemove = channels
-        channels.removeAll()
+        let channelsToRemove = Array(channelsByTable.values)
+        channelsByTable.removeAll()
 
         Task {
             for channel in channelsToRemove {
@@ -97,13 +98,20 @@ final class RealtimeManager {
         debounceDelay: TimeInterval = 2.0,
         action: @escaping @MainActor () async -> Void
     ) {
+        // إلغاء أي task سابق لنفس الجدول (يحدث عند إعادة المحاولة بعد فشل)
+        subscriptionTasks[table]?.cancel()
+        // فصل القناة القديمة لو موجودة
+        if let oldChannel = channelsByTable.removeValue(forKey: table) {
+            Task { await oldChannel.unsubscribe() }
+        }
+
         let task = Task { @MainActor [weak self] in
             guard let self else { return }
 
             // الوصول للـ client على الـ MainActor عشان نتجنب unsafeForcedSync
             let client = SupabaseConfig.client
             let channel = client.realtimeV2.channel("public:\(table)")
-            self.channels.append(channel)
+            self.channelsByTable[table] = channel
 
             let changes = channel.postgresChange(
                 AnyAction.self,

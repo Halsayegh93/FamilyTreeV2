@@ -284,7 +284,11 @@ struct AdminReportsView: View {
         .navigationTitle("مركز التقارير")
         .navigationBarTitleDisplayMode(.inline)
         .environment(\.layoutDirection, .rightToLeft)
-        .task { await memberVM.fetchAllMembers() }
+        .task {
+            if memberVM.allMembers.isEmpty {
+                await memberVM.fetchAllMembers()
+            }
+        }
         .sheet(isPresented: $showShareSheet, onDismiss: { cleanupShareState() }) {
             ActivityView(items: shareItems) {
                 cleanupShareState()
