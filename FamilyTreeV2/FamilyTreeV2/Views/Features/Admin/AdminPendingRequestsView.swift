@@ -330,9 +330,30 @@ struct AdminPendingRequestsView: View {
                         // تأخير بسيط لإظهار اللودنج
                         Task {
                             try? await Task.sleep(nanoseconds: 300_000_000)
-                            let results = findNameMatches(for: member)
+
+                            // 1) RPC الذكي: مطابقة جزأين+ مع exact word + top-4 parts (v2)
+                            let serverIds = await adminRequestVM.searchMembersByNameRPC(
+                                member.fullName,
+                                excluding: member.id
+                            )
+                            let serverMembers: [FamilyMember] = serverIds.compactMap { id in
+                                memberVM.allMembers.first(where: { $0.id == id })
+                            }
+
+                            // 2) Fallback/تكميل: المطابقة المحلية (Arabic normalization + compound names)
+                            let localMatches = findNameMatches(for: member)
+                            let serverIdSet = Set(serverIds)
+                            let extraLocalMatches = localMatches.filter { !serverIdSet.contains($0.member.id) }
+
+                            // 3) دمج: السيرفر أولاً (أدق)، ثم باقي المحلي
+                            var merged: [(member: FamilyMember, matchCount: Int, matchedParts: [String])] = []
+                            for m in serverMembers {
+                                merged.append((member: m, matchCount: 0, matchedParts: []))
+                            }
+                            merged.append(contentsOf: extraLocalMatches)
+
                             withAnimation(DS.Anim.smooth) {
-                                nameMatchResults[member.id] = results
+                                nameMatchResults[member.id] = merged
                                 loadingMatchFor = nil
                             }
                         }

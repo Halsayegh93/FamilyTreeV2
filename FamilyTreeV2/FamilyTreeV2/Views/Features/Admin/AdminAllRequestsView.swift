@@ -1419,12 +1419,28 @@ struct AdminAllRequestsView: View {
     // MARK: - Registration Matches
 
     /// جلب مطابقات التسجيل من السيرفر لكل الأعضاء المعلقين
+    /// - snapshot من admin_requests.details (وقت التسجيل، قد يكون قديم)
+    /// - + RPC search_members_by_name الحي (v2: exact word + 75% + top-4 parts)
+    /// ثم نُدمج النتائج (set) عشان نضمن أحدث وأدق match.
     private func fetchAllRegistrationMatches() async {
         for member in pendingMembers {
-            let ids = await adminRequestVM.fetchMatchedMemberIds(for: member.id)
-            if !ids.isEmpty {
+            async let stored = adminRequestVM.fetchMatchedMemberIds(for: member.id)
+            async let live = adminRequestVM.searchMembersByNameRPC(member.fullName, excluding: member.id)
+            let (storedIds, liveIds) = await (stored, live)
+
+            // دمج بدون تكرار، السيرفر الحي أولاً (أدق)، ثم باقي snapshot
+            var seen = Set<UUID>()
+            var combined: [UUID] = []
+            for id in liveIds where seen.insert(id).inserted {
+                combined.append(id)
+            }
+            for id in storedIds where seen.insert(id).inserted {
+                combined.append(id)
+            }
+
+            if !combined.isEmpty {
                 await MainActor.run {
-                    registrationMatches[member.id] = ids
+                    registrationMatches[member.id] = combined
                 }
             }
         }

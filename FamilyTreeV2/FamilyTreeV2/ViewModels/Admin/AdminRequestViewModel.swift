@@ -1415,6 +1415,45 @@ class AdminRequestViewModel: ObservableObject {
         }
     }
 
+    /// Real-time match via server RPC `search_members_by_name` (v2: exact word + 75% threshold + top-4 parts).
+    /// أذكى من `fetchMatchedMemberIds` لأن الأخير يقرأ snapshot وقت التسجيل،
+    /// بينما هذا يستدعي السيرفر مباشرة بأحدث logic. يُستخدم في شاشات الإدارة لإحضار
+    /// مطابقات حقيقية ودقيقة عند فتح طلب الانضمام/الربط.
+    /// - Parameters:
+    ///   - fullName: الاسم الكامل لمتقدم الطلب
+    ///   - excludeId: معرّف العضو نفسه (اختياري) — يُستبعد من النتائج
+    /// - Returns: قائمة UUIDs للأعضاء المتطابقين، مرتّبة حسب match_score من السيرفر
+    func searchMembersByNameRPC(_ fullName: String, excluding excludeId: UUID? = nil) async -> [UUID] {
+        let trimmed = fullName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return [] }
+
+        struct MatchRow: Decodable {
+            let memberId: UUID
+            let fullName: String
+            let matchScore: Int64
+            enum CodingKeys: String, CodingKey {
+                case memberId = "member_id"
+                case fullName = "full_name"
+                case matchScore = "match_score"
+            }
+        }
+
+        do {
+            let results: [MatchRow] = try await supabase
+                .rpc("search_members_by_name", params: ["p_query": AnyEncodable(trimmed)])
+                .execute()
+                .value
+            let ids = results.compactMap { row -> UUID? in
+                row.memberId == excludeId ? nil : row.memberId
+            }
+            Log.info("[AdminMatch] RPC رجّع \(ids.count) مطابقة لـ '\(trimmed)'")
+            return ids
+        } catch {
+            Log.warning("[AdminMatch] فشل استدعاء search_members_by_name: \(error.localizedDescription)")
+            return []
+        }
+    }
+
     /// Fetch matched member IDs from a link request
     func fetchMatchedMemberIds(for memberId: UUID) async -> [UUID] {
         do {

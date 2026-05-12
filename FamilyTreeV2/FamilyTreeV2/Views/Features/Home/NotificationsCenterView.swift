@@ -1176,6 +1176,30 @@ struct NotificationsCenterView: View {
             .foregroundColor(DS.Color.textTertiary)
             .padding(.top, DS.Spacing.xs)
 
+            // رقم الإشعار (للإدارة فقط) — انقر للنسخ
+            if authVM.canModerate {
+                Button {
+                    UIPasteboard.general.string = notification.id.uuidString
+                    let generator = UINotificationFeedbackGenerator()
+                    generator.notificationOccurred(.success)
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "number")
+                            .font(DS.Font.scaled(10, weight: .semibold))
+                        Text(notification.id.uuidString)
+                            .font(DS.Font.scaled(11, weight: .medium))
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                        Image(systemName: "doc.on.doc")
+                            .font(DS.Font.scaled(9, weight: .semibold))
+                            .opacity(0.7)
+                    }
+                    .foregroundColor(DS.Color.textTertiary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(L10n.t("انسخ رقم الإشعار", "Copy notification ID"))
+            }
+
             // قسم التطابقات المحتملة — مدمج داخل نفس الكرت (مغلق افتراضياً)
             if !joinMatches.isEmpty, let requesterId = joinRequesterId {
                 joinMatchesSection(
@@ -1482,62 +1506,109 @@ struct NotificationsCenterView: View {
             requester = memberVM.member(byId: rid)
             if requester == nil {
                 Log.info("[JoinMatch] requester \(rid.uuidString.prefix(8)) غير موجود في allMembers — سنحاول fetch")
-                // ممكن المُسجِّل الجديد لسا ما لُقّم في الكاش — تحديث فوري
                 await memberVM.fetchAllMembers(force: true)
                 requester = memberVM.member(byId: rid)
             }
         }
 
-        // 2) استخرج firstName من requester أو من body كـ fallback
-        let rawFirstName: String
-        if let r = requester {
-            rawFirstName = r.firstName.trimmingCharacters(in: .whitespaces)
-        } else {
-            // "حسن يطلب الانضمام — 5 مطابقة." → أول كلمة
-            let first = notification.body
-                .components(separatedBy: .whitespacesAndNewlines)
-                .first?
-                .trimmingCharacters(in: CharacterSet.punctuationCharacters.union(.whitespaces)) ?? ""
-            rawFirstName = first
-            Log.info("[JoinMatch] requester غير موجود — استخدام firstName='\(first)' من body")
-        }
-        // قد يحتوي firstName أحياناً اسم رباعي كامل (مدخل خاطئ) — نأخذ أول كلمة فقط
-        let firstName = rawFirstName
-            .components(separatedBy: .whitespacesAndNewlines)
-            .first?
-            .trimmingCharacters(in: CharacterSet.punctuationCharacters) ?? ""
-        guard !firstName.isEmpty else {
-            Log.info("[JoinMatch] firstName فارغ — إلغاء")
+        // 2) استخرج الاسم الكامل للمتقدم من requester أو من body كـ fallback
+        let fullName: String = {
+            if let r = requester, !r.fullName.trimmingCharacters(in: .whitespaces).isEmpty {
+                return r.fullName.trimmingCharacters(in: .whitespaces)
+            }
+            // Body example: "عبدالله محمد مصطفى يطلب الانضمام للشجرة"
+            // نأخذ كل النص قبل "يطلب"
+            let body = notification.body
+            if let range = body.range(of: "يطلب") {
+                return String(body[..<range.lowerBound]).trimmingCharacters(in: .whitespaces)
+            }
+            return body.components(separatedBy: .whitespacesAndNewlines).first ?? ""
+        }()
+
+        guard !fullName.isEmpty else {
+            Log.info("[JoinMatch] fullName فارغ — إلغاء")
             return
         }
 
-        // البحث: مقارنة بأول كلمة من كل candidate.firstName (يتعامل مع الأسماء متعددة الكلمات)
-        let all = memberVM.allMembers
-        let requesterId2 = requester?.id
-        let matches = all.filter { candidate in
-            guard candidate.id != requesterId2 else { return false }
-            let candidateFirst = candidate.firstName
+        // 3) محاولة المطابقة المتقدمة عبر RPC على السيرفر (≥ جزأين من الاسم)
+        let serverMatchIds: [UUID] = await fetchServerMatches(fullName: fullName, excluding: requester?.id)
+
+        // 4) ابن قائمة FamilyMember من allMembers — الترتيب يحفظه السيرفر (match_score DESC)
+        var members: [FamilyMember] = []
+        for id in serverMatchIds {
+            if let m = memberVM.member(byId: id), m.id != requester?.id {
+                members.append(m)
+            }
+        }
+
+        // 5) Fallback: لو السيرفر ما رجع شيء (مثلاً اسم من جزء واحد)، نستخدم المطابقة المحلية على أول كلمة
+        if members.isEmpty {
+            let firstName = fullName
                 .components(separatedBy: .whitespacesAndNewlines)
                 .first?
                 .trimmingCharacters(in: CharacterSet.punctuationCharacters) ?? ""
-            return candidateFirst == firstName
+
+            if !firstName.isEmpty {
+                let requesterId2 = requester?.id
+                let localMatches = memberVM.allMembers.filter { candidate in
+                    guard candidate.id != requesterId2 else { return false }
+                    let candidateFirst = candidate.firstName
+                        .components(separatedBy: .whitespacesAndNewlines)
+                        .first?
+                        .trimmingCharacters(in: CharacterSet.punctuationCharacters) ?? ""
+                    return candidateFirst == firstName
+                }
+                members = localMatches
+                Log.info("[JoinMatch] السيرفر فاضي — fallback محلي على firstName='\(firstName)' أعطى \(members.count)")
+            }
         }
 
-        // ترتيب: نفس الأب أولاً، ثم النشطين، ثم الباقي
-        let sorted = matches.sorted { a, b in
-            let reqFatherId = requester?.fatherId
-            let aMatchesFather = reqFatherId != nil && a.fatherId == reqFatherId
-            let bMatchesFather = reqFatherId != nil && b.fatherId == reqFatherId
+        // 6) ترتيب إضافي: نفس الأب أولاً، ثم النشطين (يحافظ على ترتيب السيرفر داخل نفس المجموعة)
+        let reqFatherId = requester?.fatherId
+        let sorted = members.enumerated().sorted { a, b in
+            let aMatchesFather = reqFatherId != nil && a.element.fatherId == reqFatherId
+            let bMatchesFather = reqFatherId != nil && b.element.fatherId == reqFatherId
             if aMatchesFather != bMatchesFather { return aMatchesFather }
 
-            let aActive = a.role != .pending
-            let bActive = b.role != .pending
+            let aActive = a.element.role != .pending
+            let bActive = b.element.role != .pending
             if aActive != bActive { return aActive }
-            return false
-        }
+
+            // حافظ على ترتيب السيرفر (match_score)
+            return a.offset < b.offset
+        }.map(\.element)
 
         joinMatchCandidates = Array(sorted.prefix(10))
-        Log.info("[JoinMatch] firstName='\(firstName)' — وجدنا \(joinMatchCandidates.count) تطابقات (من \(matches.count) إجمالي)")
+        Log.info("[JoinMatch] fullName='\(fullName)' — \(joinMatchCandidates.count) مطابقة نهائية")
+    }
+
+    /// استدعاء RPC السيرفر search_members_by_name — مطابقة جزأين على الأقل
+    private func fetchServerMatches(fullName: String, excluding excludeId: UUID?) async -> [UUID] {
+        struct MatchRow: Decodable {
+            let memberId: UUID
+            let fullName: String
+            let matchScore: Int64
+            enum CodingKeys: String, CodingKey {
+                case memberId = "member_id"
+                case fullName = "full_name"
+                case matchScore = "match_score"
+            }
+        }
+
+        do {
+            let results: [MatchRow] = try await SupabaseConfig.client
+                .rpc("search_members_by_name", params: ["p_query": AnyEncodable(fullName)])
+                .execute()
+                .value
+            let ids = results.compactMap { row -> UUID? in
+                row.memberId == excludeId ? nil : row.memberId
+            }
+            Log.info("[JoinMatch] السيرفر رجّع \(ids.count) مطابقة لـ '\(fullName)'")
+            return ids
+        } catch {
+            Log.warning("[JoinMatch] فشل استدعاء search_members_by_name: \(error.localizedDescription)")
+            return []
+        }
     }
 
     /// قسم التطابقات المحتملة — مدمج داخل detailBodyCard (بدون wrapper)
