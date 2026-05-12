@@ -11,6 +11,9 @@ struct AdminAppSettingsView: View {
     @State private var showResetCooldownAlert = false
     @State private var cooldownDisabled = ProfileEditCooldown.shared.isDisabled
 
+    /// المالك يعدّل، باقي المدراء يتصفّحون فقط.
+    private var canEdit: Bool { authVM.canManageSettings }
+
     var body: some View {
         ZStack {
             DS.Color.background.ignoresSafeArea()
@@ -18,9 +21,15 @@ struct AdminAppSettingsView: View {
             ScrollView(showsIndicators: false) {
                 VStack(spacing: DS.Spacing.xxl) {
 
+                    // إشعار وضع القراءة فقط (لغير المالك)
+                    if !canEdit {
+                        readOnlyBanner
+                            .padding(.top, DS.Spacing.md)
+                    }
+
                     // معلومات النظام
                     systemInfoSection
-                        .padding(.top, DS.Spacing.md)
+                        .padding(.top, canEdit ? DS.Spacing.md : 0)
 
                     // التسجيل والعضوية
                     registrationSection
@@ -37,11 +46,12 @@ struct AdminAppSettingsView: View {
                     // الأمان
                     securitySection
 
-                    // إعادة تعيين
+                    // إعادة تعيين — يبقى مرئيّ بس مُعطّل لغير المالك
                     resetSection
 
                     Spacer(minLength: DS.Spacing.xxxl)
                 }
+                .disabled(!canEdit)
             }
         }
         .navigationTitle(L10n.t("إعدادات التطبيق", "App Settings"))
@@ -319,6 +329,36 @@ struct AdminAppSettingsView: View {
             }
             .buttonStyle(DSBoldButtonStyle())
         }
+        .padding(.horizontal, DS.Spacing.lg)
+    }
+
+    // MARK: - Read-Only Banner
+    /// شارة "وضع القراءة فقط" — تظهر للمدير غير المالك
+    private var readOnlyBanner: some View {
+        HStack(spacing: DS.Spacing.sm) {
+            Image(systemName: "eye.fill")
+                .font(DS.Font.scaled(14, weight: .bold))
+                .foregroundColor(DS.Color.info)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(L10n.t("وضع القراءة فقط", "Read-only mode"))
+                    .font(DS.Font.calloutBold)
+                    .foregroundColor(DS.Color.textPrimary)
+                Text(L10n.t(
+                    "تقدر تتصفّح الإعدادات. التعديل متاح للمالك فقط.",
+                    "You can browse settings. Editing is owner-only."
+                ))
+                    .font(DS.Font.caption1)
+                    .foregroundColor(DS.Color.textSecondary)
+            }
+            Spacer()
+        }
+        .padding(DS.Spacing.md)
+        .background(DS.Color.info.opacity(0.10))
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                .stroke(DS.Color.info.opacity(0.25), lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
         .padding(.horizontal, DS.Spacing.lg)
     }
 

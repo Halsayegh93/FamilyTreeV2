@@ -138,6 +138,10 @@ class AuthViewModel: ObservableObject {
     /// إعدادات التطبيق — المالك فقط
     var canManageSettings: Bool { isOwner }
 
+    /// رؤية شاشة "إعدادات النظام" (قراءة فقط للمدير، تعديل للمالك)
+    /// المدير يدخل ويتصفّح بدون تعديل.
+    var canViewSystemSettings: Bool { isAdmin }
+
     /// أرقام محظورة — المالك فقط
     var canManageBannedPhones: Bool { isOwner }
 

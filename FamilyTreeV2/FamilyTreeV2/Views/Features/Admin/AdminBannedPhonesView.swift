@@ -46,11 +46,14 @@ struct AdminBannedPhonesView: View {
         .navigationBarTitleDisplayMode(.inline)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button(action: { showAddSheet = true }) {
-                    Image(systemName: "plus.circle.fill")
-                        .font(DS.Font.title3)
-                        .foregroundStyle(DS.Color.primary)
+            // زر الإضافة للمالك فقط — المدير يتصفّح بدون تعديل
+            if authVM.canManageBannedPhones {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(action: { showAddSheet = true }) {
+                        Image(systemName: "plus.circle.fill")
+                            .font(DS.Font.title3)
+                            .foregroundStyle(DS.Color.primary)
+                    }
                 }
             }
         }
@@ -165,17 +168,20 @@ struct AdminBannedPhonesView: View {
 
                     Spacer()
 
-                    Button(action: {
-                        phoneToUnban = banned
-                    }) {
-                        Text(t("إلغاء", "Unban"))
-                            .font(DS.Font.caption1)
-                            .fontWeight(.semibold)
-                            .foregroundStyle(DS.Color.textOnPrimary)
-                            .padding(.horizontal, DS.Spacing.md)
-                            .padding(.vertical, DS.Spacing.xs)
-                            .background(DS.Color.error)
-                            .clipShape(Capsule())
+                    // زر إلغاء الحظر — للمالك فقط (المدير يتصفّح بدون تعديل)
+                    if authVM.canManageBannedPhones {
+                        Button(action: {
+                            phoneToUnban = banned
+                        }) {
+                            Text(t("إلغاء", "Unban"))
+                                .font(DS.Font.caption1)
+                                .fontWeight(.semibold)
+                                .foregroundStyle(DS.Color.textOnPrimary)
+                                .padding(.horizontal, DS.Spacing.md)
+                                .padding(.vertical, DS.Spacing.xs)
+                                .background(DS.Color.error)
+                                .clipShape(Capsule())
+                        }
                     }
                 }
 

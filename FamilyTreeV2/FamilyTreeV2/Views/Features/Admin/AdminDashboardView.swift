@@ -200,8 +200,8 @@ struct AdminDashboardView: View {
                                             }
                                         }
 
-                                        // الأمان والإعدادات — المالك فقط
-                                        if authVM.isOwner {
+                                        // الأمان والإعدادات — المدير يتصفّح، المالك يعدّل
+                                        if authVM.canViewSystemSettings {
                                             DSDivider()
                                             NavigationLink(destination: AdminSecuritySettingsView()) {
                                                 DSActionRow(
