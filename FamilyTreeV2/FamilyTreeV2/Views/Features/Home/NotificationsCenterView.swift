@@ -110,6 +110,16 @@ struct NotificationsCenterView: View {
     @State private var joinMatchesLoaded: Bool = false
     /// confirmation dialog لخيارات الموافقة على طلب الانضمام (ربط أو إنشاء جديد)
     @State private var joinApproveDialog: AppNotification? = nil
+    /// alert تأكيد قبل ربط طلب انضمام بعضو موجود (من قائمة المطابقات المحتملة)
+    @State private var linkConfirmTarget: LinkConfirmation? = nil
+
+    /// بيانات ربط مؤقتة — تُحمل في alert التأكيد
+    private struct LinkConfirmation: Identifiable {
+        let id = UUID()
+        let notificationId: UUID
+        let requesterId: UUID
+        let candidate: FamilyMember
+    }
     @State private var selectedTab: NotifTab = .notifications
     @Namespace private var tabIndicator
 
@@ -965,6 +975,38 @@ struct NotificationsCenterView: View {
                 "\(joinMatchCandidates.count) matches found in the tree. Link to one of them or approve as a new member."
             ))
         }
+        .alert(
+            L10n.t("تأكيد الربط", "Confirm Link"),
+            isPresented: Binding(
+                get: { linkConfirmTarget != nil },
+                set: { if !$0 { linkConfirmTarget = nil } }
+            ),
+            presenting: linkConfirmTarget
+        ) { target in
+            Button(L10n.t("تأكيد الربط", "Link"), role: .destructive) {
+                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                let nid = target.notificationId
+                let requesterId = target.requesterId
+                let candidateId = target.candidate.id
+                linkConfirmTarget = nil
+                selectedNotification = nil
+                Task {
+                    await adminRequestVM.mergeMemberIntoTreeMember(
+                        newMemberId: requesterId,
+                        existingTreeMemberId: candidateId
+                    )
+                    await notificationVM.markNotificationAsRead(id: nid)
+                }
+            }
+            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {
+                linkConfirmTarget = nil
+            }
+        } message: { target in
+            Text(L10n.t(
+                "هل تريد ربط طلب الانضمام بـ \(fourPartName(target.candidate))؟\n\nسيتم دمج البيانات في حساب موجود ولا يمكن التراجع.",
+                "Link this join request to \(fourPartName(target.candidate))?\n\nData will be merged into an existing account and cannot be undone."
+            ))
+        }
         .presentationDetents([.height(measuredDetailHeight), .large], selection: $detailSheetDetent)
         .presentationDragIndicator(.visible)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
@@ -1804,20 +1846,15 @@ struct NotificationsCenterView: View {
 
             Spacer(minLength: 0)
 
-            // زر ربط/دمج — يدمج المُسجِّل الجديد مع هذا العضو في الشجرة
+            // زر ربط/دمج — يفتح alert تأكيد قبل الدمج (لا يربط مباشرة)
             Button {
-                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                let id = selectedNotification?.id
-                selectedNotification = nil
-                Task {
-                    await adminRequestVM.mergeMemberIntoTreeMember(
-                        newMemberId: requesterId,
-                        existingTreeMemberId: candidate.id
-                    )
-                    if let nid = id {
-                        await notificationVM.markNotificationAsRead(id: nid)
-                    }
-                }
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                guard let nid = selectedNotification?.id else { return }
+                linkConfirmTarget = LinkConfirmation(
+                    notificationId: nid,
+                    requesterId: requesterId,
+                    candidate: candidate
+                )
             } label: {
                 HStack(spacing: 3) {
                     Image(systemName: "link")
