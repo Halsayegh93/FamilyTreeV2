@@ -343,13 +343,13 @@ struct AdminAppSettingsView: View {
                 )
                 DSDivider()
                 infoRow(
-                    label: L10n.t("أفراد الشجرة", "Tree Members"),
-                    value: "\(memberVM.allMembers.count)"
+                    label: L10n.t("أعضاء العائلة", "Family Members"),
+                    value: "\(memberVM.allMembers.filter(\.isCountable).count)"
                 )
                 DSDivider()
                 infoRow(
                     label: L10n.t("مستخدمين مسجلين", "Registered Users"),
-                    value: "\(memberVM.allMembers.filter { $0.phoneNumber != nil && !($0.phoneNumber ?? "").isEmpty }.count)"
+                    value: "\(memberVM.allMembers.filter { $0.isCountable && $0.phoneNumber != nil && !($0.phoneNumber ?? "").isEmpty }.count)"
                 )
                 DSDivider()
                 infoRow(

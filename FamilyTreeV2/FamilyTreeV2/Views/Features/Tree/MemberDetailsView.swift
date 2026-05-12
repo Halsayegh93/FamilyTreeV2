@@ -60,7 +60,7 @@ struct MemberDetailsView: View {
         let m = member
         cachedFather = m.fatherId.flatMap { memberVM.member(byId: $0) }
         cachedChildren = memberVM.allMembers
-            .filter { $0.fatherId == m.id && $0.status != .frozen && !$0.isHiddenFromTree }
+            .filter { $0.fatherId == m.id && $0.isCountable }
             .sorted(by: { $0.sortOrder < $1.sortOrder })
         cachedPendingRequests = adminRequestVM.treeEditRequests.filter { $0.memberId == m.id }
         cachedBasicInfoRows = computeBasicInfoRows(for: m)

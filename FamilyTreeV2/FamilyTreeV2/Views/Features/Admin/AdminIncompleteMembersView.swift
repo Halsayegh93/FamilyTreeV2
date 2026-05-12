@@ -51,10 +51,10 @@ struct AdminIncompleteMembersView: View {
 
     // MARK: - Incomplete Members Logic
 
-    /// Returns members (non-pending, non-deceased) with at least one missing field
+    /// Returns countable family members (non-deceased) with at least one missing field
     private var allIncompleteMembers: [FamilyMember] {
         memberVM.allMembers
-            .filter { $0.role != .pending && $0.isDeceased != true }
+            .filter { $0.isCountable && $0.isDeceased != true }
             .filter { memberHasIncompleteData($0) }
             .sorted { $0.fullName < $1.fullName }
     }

@@ -47,8 +47,9 @@ struct AdminMembersDirectoryView: View {
     // MARK: - Data
 
     private var baseMembers: [FamilyMember] {
+        // المعيار القانوني: يطابق الشجرة + الويب + كل العدّادات
         memberVM.allMembers
-            .filter { $0.role != .pending }
+            .filter(\.isCountable)
             .sorted { $0.fullName < $1.fullName }
     }
 

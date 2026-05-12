@@ -130,12 +130,8 @@ struct TreeView: View {
 
     /// حساب الكاش — pure function، تشتغل على أي thread.
     private static func computeCache(from members: [FamilyMember]) -> TreeCache {
-        let visible = members.filter {
-            !$0.isHiddenFromTree
-            && $0.role != .pending
-            && $0.status != .frozen
-            && !$0.fullName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        }
+        // المعيار القانوني الموحّد لـ"عضو في العائلة" — نفسه في الويب وكل العدّادات
+        let visible = members.filter(\.isCountable)
         let byId = Dictionary(uniqueKeysWithValues: visible.map { ($0.id, $0) })
 
         // مجموعة الأعضاء اللي عندهم أبناء (آباء حقيقيين)

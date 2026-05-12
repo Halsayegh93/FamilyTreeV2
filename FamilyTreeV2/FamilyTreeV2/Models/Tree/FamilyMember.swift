@@ -193,6 +193,23 @@ nonisolated struct FamilyMember: Identifiable, Codable, Equatable, Sendable {
         return "\(first) \(second) \(last)"
     }
 
+    /// المعيار القانوني لـ"عضو في العائلة" — يطابق نفس الفلتر في الويب
+    /// واستعلام `applyCountableFilters` في familytree-web.
+    /// يستخدم في كل عدّ يُعرض كـ"أعضاء العائلة" / "أفراد الشجرة" / "X عضو".
+    ///
+    /// يستثني:
+    ///   - role == .pending (طلبات تحت الموافقة)
+    ///   - status == .frozen (مجمّد)
+    ///   - isHiddenFromTree (مخفيّ يدوياً)
+    ///   - أسماء فارغة (سجلّات معطوبة)
+    var isCountable: Bool {
+        if role == .pending { return false }
+        if status == .frozen { return false }
+        if isHiddenFromTree { return false }
+        if fullName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return false }
+        return true
+    }
+
     enum CodingKeys: String, CodingKey {
         case id, role, status
         case firstName = "first_name"

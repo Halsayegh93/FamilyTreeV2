@@ -5,14 +5,18 @@ struct AdminAnalyticsView: View {
     @EnvironmentObject var memberVM: MemberViewModel
     @EnvironmentObject var newsVM: NewsViewModel
 
-    // البيانات المحسوبة
+    // البيانات المحسوبة — مبنية على المعيار القانوني (FamilyMember.isCountable)
+    // عشان تطابق "أعضاء العائلة" في الشجرة + الويب + التقارير
+    private var countableMembers: [FamilyMember] {
+        memberVM.allMembers.filter(\.isCountable)
+    }
     private var activeMembers: [FamilyMember] {
-        memberVM.allMembers.filter { $0.role != .pending && $0.isDeceased != true }
+        countableMembers.filter { $0.isDeceased != true }
     }
     private var deceasedMembers: [FamilyMember] {
-        memberVM.allMembers.filter { $0.isDeceased == true }
+        countableMembers.filter { $0.isDeceased == true }
     }
-    private var totalMembers: Int { memberVM.allMembers.filter { $0.role != .pending }.count }
+    private var totalMembers: Int { countableMembers.count }
 
     var body: some View {
         ZStack {
@@ -124,10 +128,11 @@ struct AdminAnalyticsView: View {
 
     // MARK: - Roles Distribution
     private var rolesSection: some View {
-        let admins = memberVM.allMembers.filter { $0.role == .owner || $0.role == .admin }.count
-        let monitors = memberVM.allMembers.filter { $0.role == .monitor }.count
-        let supervisors = memberVM.allMembers.filter { $0.role == .supervisor }.count
-        let members = memberVM.allMembers.filter { $0.role == .member }.count
+        let pool = countableMembers
+        let admins = pool.filter { $0.role == .owner || $0.role == .admin }.count
+        let monitors = pool.filter { $0.role == .monitor }.count
+        let supervisors = pool.filter { $0.role == .supervisor }.count
+        let members = pool.filter { $0.role == .member }.count
         let total = max(admins + monitors + supervisors + members, 1)
 
         return DSCard(padding: 0) {

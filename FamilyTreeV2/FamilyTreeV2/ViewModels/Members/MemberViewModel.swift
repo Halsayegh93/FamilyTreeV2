@@ -271,15 +271,19 @@ class MemberViewModel: ObservableObject {
 
     func fetchChildren(for fatherId: UUID) async {
         do {
+            // فلاتر السيرفر تطابق المعيار القانوني (FamilyMember.isCountable)
             let response: [FamilyMember] = try await supabase.from("profiles")
                 .select()
                 .eq("father_id", value: fatherId)
                 .eq("is_hidden_from_tree", value: false)
+                .neq("status", value: "frozen")
+                .neq("role", value: "pending")
                 .order("sort_order", ascending: true)
                 .execute()
                 .value
 
-            self.currentMemberChildren = response.sortedForDisplay()
+            // فلتر إضافي بالعميل لاستبعاد الأسماء الفارغة (يدخل ضمن isCountable)
+            self.currentMemberChildren = response.filter(\.isCountable).sortedForDisplay()
         } catch {
             Log.error("خطأ في جلب الأبناء: \(error)")
         }
