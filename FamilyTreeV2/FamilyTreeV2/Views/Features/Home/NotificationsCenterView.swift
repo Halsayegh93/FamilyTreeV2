@@ -866,12 +866,15 @@ struct NotificationsCenterView: View {
                     if !notification.body.isEmpty {
                         // السكشن يظهر دائماً للأدمن على طلبات الانضمام — حتى لو 0 مطابقات
                         // (empty state يوضّح "لا توجد مطابقات" بدل ما السكشن يختفي)
+                        // ملاحظة: الإشعارات اللي من trigger تحفظ pending ID في created_by،
+                        // والإشعارات من admin_requests تحفظه في request_id — نستخدم fallback
                         let showMatchesSection = isJoinRequest && authVM.canModerate
+                        let resolvedRequesterId = notification.requestId ?? notification.createdBy
                         detailBodyCard(
                             notification: notification,
                             iconInfo: iconInfo,
                             joinMatches: showMatchesSection ? joinMatchCandidates : [],
-                            joinRequesterId: showMatchesSection ? notification.requestId : nil,
+                            joinRequesterId: showMatchesSection ? resolvedRequesterId : nil,
                             showMatchesSection: showMatchesSection,
                             joinMatchesLoaded: joinMatchesLoaded
                         )
