@@ -1458,21 +1458,29 @@ class MemberViewModel: ObservableObject {
     func propagateNameToDescendantsLocally(of memberId: UUID) {
         // lookup من الكاش الحالي بعد التحديث المحلي للأب
         let lookup = _memberById
+        guard let parent = lookup[memberId] else {
+            Log.warning("[Cascade-Local] الأب غير موجود في الكاش — memberId=\(memberId)")
+            return
+        }
         let descendants = collectAllDescendants(of: memberId, from: Array(lookup.values))
+        Log.info("[Cascade-Local] انتشار اسم \(parent.firstName) → \(descendants.count) ذرّية")
+
         guard !descendants.isEmpty else { return }
 
         var updatedCount = 0
+        var skippedCount = 0
         for descendant in descendants {
             let newFullName = buildFullName(for: descendant, lookup: lookup)
-            guard newFullName != descendant.fullName else { continue }
+            guard newFullName != descendant.fullName else {
+                skippedCount += 1
+                continue
+            }
             var updated = descendant
             updated.fullName = newFullName
             upsertMemberLocally(updated)
             updatedCount += 1
         }
-        if updatedCount > 0 {
-            Log.info("[Cascade-Local] تم تحديث \(updatedCount) اسم ذرّية في الكاش فوراً")
-        }
+        Log.info("[Cascade-Local] محدّث \(updatedCount) • متطابق \(skippedCount) (من أصل \(descendants.count))")
     }
 
     /// (احتياطي/قديم) — السيرفر بعد ما عنده trigger يتولّى cascade على الذرّية
