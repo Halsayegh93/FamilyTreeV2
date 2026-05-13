@@ -948,21 +948,19 @@ struct NotificationsCenterView: View {
         ) { activeNotification in
             ForEach(joinMatchCandidates.prefix(8)) { candidate in
                 Button(L10n.t("ربط مع: ", "Link with: ") + fourPartName(candidate)) {
-                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
                     let nid = activeNotification.id
                     guard let rid = activeNotification.requestId else {
                         joinApproveDialog = nil
                         return
                     }
+                    // ⚠️ لا تربط مباشرة — أظهر alert تأكيد (الإجراء غير قابل للتراجع)
                     joinApproveDialog = nil
-                    selectedNotification = nil
-                    Task {
-                        await adminRequestVM.mergeMemberIntoTreeMember(
-                            newMemberId: rid,
-                            existingTreeMemberId: candidate.id
-                        )
-                        await notificationVM.markNotificationAsRead(id: nid)
-                    }
+                    linkConfirmTarget = LinkConfirmation(
+                        notificationId: nid,
+                        requesterId: rid,
+                        candidate: candidate
+                    )
                 }
             }
             Button(L10n.t("الموافقة كعضو جديد", "Approve as new member")) {
