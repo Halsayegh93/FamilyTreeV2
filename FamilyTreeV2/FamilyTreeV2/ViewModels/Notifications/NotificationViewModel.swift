@@ -151,9 +151,56 @@ class NotificationViewModel: ObservableObject {
     
     // MARK: - Computed Properties
     
+    /// عدد الإشعارات غير المقروءة **التي تظهر فعلاً للمستخدم** في مركز الإشعارات.
+    /// يطابق المنطق في NotificationsCenterView: belongsToNotificationsTab أو
+    /// belongsToActivityTab. يُستثنى الإشعارات اليتيمة (kind غير معروف وغير
+    /// موجّه للمستخدم الحالي) عشان ما تظهر بـ"٥ غير مقروءة" والمستخدم ما يلقاهم.
     var unreadNotificationsCount: Int {
-        notifications.filter { !$0.read }.count
+        let myId = currentUser?.id
+        let admin = canModerate
+        return notifications.filter { n in
+            guard !n.read else { return false }
+            return Self.isVisibleToUser(n, myId: myId, isAdmin: admin)
+        }.count
     }
+
+    /// نفس فلتر العرض في NotificationsCenterView (notifications tab + activity tab)
+    /// — يتأكّد إن الإشعار موجّه للمستخدم الحالي أو يندرج تحت طلبات/إجراءات.
+    private static func isVisibleToUser(_ n: AppNotification, myId: UUID?, isAdmin: Bool) -> Bool {
+        // طلبات تنتظر موافقة (للأدمن)
+        if Self.pendingApprovalKindsRaw.contains(n.kind), isAdmin { return true }
+        // إجراءات منفّذة (تظهر في تاب "المستجدات" للأدمن)
+        if Self.completedActionKindsRaw.contains(n.kind), isAdmin { return true }
+        // إشعار شخصي موجّه لي
+        if let myId, n.targetMemberId == myId { return true }
+        // عناوين تبدأ بـ"تم قبول/تم رفض" تدل على إجراء منفّذ (للأدمن)
+        if isAdmin {
+            let title = n.title
+            if title.hasPrefix("تم قبول") || title.hasPrefix("تم رفض")
+                || title.contains("Approved") || title.contains("Rejected") { return true }
+        }
+        return false
+    }
+
+    /// قائمة kinds اللي تنتظر موافقة الأدمن (مرآة لـNotificationsCenterView.pendingApprovalKinds)
+    private static let pendingApprovalKindsRaw: Set<String> = [
+        "admin_request", "link_request", "news_report", "tree_edit",
+        "deceased_report", "child_add", "phone_change", "name_change",
+        "photo_suggestion", "gallery_pending", "story_pending",
+        "diwaniya_pending", "project_pending", "news_add", "contact_message",
+    ]
+
+    /// قائمة kinds للإجراءات المنفّذة (مرآة لـNotificationsCenterView.completedActionKinds)
+    private static let completedActionKindsRaw: Set<String> = [
+        "admin_edit", "admin_edit_name", "admin_edit_dates", "admin_edit_phone",
+        "admin_edit_phone_remove", "admin_edit_role", "admin_edit_father",
+        "admin_edit_avatar", "admin_edit_avatar_remove", "admin_edit_child_add",
+        "admin_edit_child_remove", "join_approved", "account_activated",
+        "role_change", "diwaniya_approved", "diwaniya_rejected",
+        "project_approved", "project_rejected", "story_approved",
+        "story_rejected", "gallery_approved", "gallery_rejected",
+        "news_published", "news_deleted",
+    ]
     
     private var currentUser: FamilyMember? {
         authVM?.currentUser
