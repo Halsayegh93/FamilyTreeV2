@@ -183,14 +183,17 @@ nonisolated struct FamilyMember: Identifiable, Codable, Equatable, Sendable {
         return fullName
     }
 
-    /// الاسم الرباعي: أول ٤ أجزاء من الاسم الكامل (هو + أب + جد + جد الأب)
-    /// مثال: "حسن صلاح عبدالحميد حسن موسى محمدعلي الصايغ" → "حسن صلاح عبدالحميد حسن"
+    /// الاسم الرباعي: الأول + الثاني + الثالث + العائلة (الأخير)
+    /// مثال: "حسن صلاح عبدالحميد حسن موسى محمدعلي الصايغ" → "حسن صلاح عبدالحميد الصايغ"
+    /// أوضح من الاسم الأول، أقصر من الكامل، يحتوي اسم العائلة للتمييز.
     var fourPartName: String {
         let parts = fullName.trimmingCharacters(in: .whitespaces)
             .split(whereSeparator: \.isWhitespace)
             .map(String.init)
         guard parts.count > 4 else { return fullName }
-        return parts.prefix(4).joined(separator: " ")
+        let firstThree = parts.prefix(3).joined(separator: " ")
+        let family = parts.last ?? ""
+        return "\(firstThree) \(family)"
     }
 
     /// الاسم الثلاثي: الأول + الثاني + الأخير (العائلة)
