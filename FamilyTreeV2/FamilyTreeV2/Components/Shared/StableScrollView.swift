@@ -44,6 +44,19 @@ struct StableScrollView<Content: View>: UIViewRepresentable {
         if clampedY > 0 {
             scrollView.contentOffset = CGPoint(x: 0, y: clampedY)
         }
+
+        // إعادة تطبيق الـoffset في الـrunloop التالي عشان نتعامل مع
+        // sheet dismiss و keyboard hide حيث iOS يُعيد layout بعد updateUIView.
+        // بدون هذا، قفل sheet إضافة الابن يرجّع الشاشة للأعلى.
+        if savedOffset.y > 0 {
+            DispatchQueue.main.async {
+                let lateMaxY = max(0, scrollView.contentSize.height - scrollView.bounds.height + scrollView.contentInset.bottom)
+                let lateClamped = min(savedOffset.y, lateMaxY)
+                if abs(scrollView.contentOffset.y - lateClamped) > 1, lateClamped > 0 {
+                    scrollView.setContentOffset(CGPoint(x: 0, y: lateClamped), animated: false)
+                }
+            }
+        }
     }
 
     @MainActor
