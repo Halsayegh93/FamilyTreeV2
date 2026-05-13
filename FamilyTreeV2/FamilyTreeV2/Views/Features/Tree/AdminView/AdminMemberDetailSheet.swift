@@ -11,7 +11,6 @@ struct AdminMemberDetailSheet: View {
     let member: FamilyMember
 
     // MARK: - States
-    @State private var selectedRole: FamilyMember.UserRole
     @State private var selectedPhoneCountry: KuwaitPhone.Country
     @State private var phoneNumber: String
     @State private var selectedFatherId: UUID?
@@ -60,7 +59,6 @@ struct AdminMemberDetailSheet: View {
     init(member: FamilyMember) {
         self.member = member
         self._currentAvatarURL = State(initialValue: member.avatarUrl)
-        self._selectedRole = State(initialValue: member.role)
         let detectedPhone = KuwaitPhone.detectCountryAndLocal(member.phoneNumber)
         self._selectedPhoneCountry = State(initialValue: detectedPhone.country)
         self._phoneNumber = State(initialValue: detectedPhone.localDigits)
@@ -173,6 +171,17 @@ struct AdminMemberDetailSheet: View {
             }
             .onChange(of: childToEdit) { child in
                 if child == nil { setupLocalChildren() }
+            }
+            .alert(
+                L10n.t("اسم فارغ", "Empty Name"),
+                isPresented: $showEmptyNameAlert
+            ) {
+                Button(L10n.t("حسناً", "OK"), role: .cancel) {}
+            } message: {
+                Text(L10n.t(
+                    "لا يمكن حفظ عضو بدون اسم. اكتب الاسم أولاً.",
+                    "Cannot save a member with an empty name. Please enter a name first."
+                ))
             }
             .alert(L10n.t("حذف نهائي", "Permanent Delete"), isPresented: $showDeleteConfirmation) {
                 Button(L10n.t("حذف", "Delete"), role: .destructive) {
@@ -1047,19 +1056,8 @@ struct AdminMemberDetailSheet: View {
         }
     }
 
-    private func updateLocalMemberState() {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        memberVM.updateMemberLocally(
-            memberId: member.id,
-            isDeceased: isDeceased,
-            birthDate: hasBirthDate ? formatter.string(from: birthDate) : nil,
-            deathDate: (isDeceased && hasDeathDate) ? formatter.string(from: deathDate) : nil
-        )
-    }
-
     @State private var isSaving = false
+    @State private var showEmptyNameAlert = false
 
     private func checkPhoneDuplicate() {
         let digits = phoneNumber.filter(\.isNumber)
@@ -1087,10 +1085,10 @@ struct AdminMemberDetailSheet: View {
 
     private func saveAction() {
         guard !isSaving else { return }
+        // فلاج دفاعي ضد double-tap قبل dismiss (sheet ينمسح بسرعة)
+        isSaving = true
 
         let capturedMemberId = member.id
-        let capturedIsAdmin = canManageAccessPermissions
-        let capturedRole = selectedRole
         let capturedPhoneCountry = selectedPhoneCountry
         let capturedPhone = phoneNumber
         let capturedFatherId = selectedFatherId
@@ -1114,9 +1112,15 @@ struct AdminMemberDetailSheet: View {
         }
         let capturedFullName = finalFullName
 
+        // التحقّق من اسم فارغ — لا تسمح بمسح اسم العضو
+        guard !capturedFullName.isEmpty else {
+            isSaving = false
+            showEmptyNameAlert = true
+            return
+        }
+
         // Detect what actually changed
         let nameChanged = capturedFullName != member.fullName
-        let roleChanged = capturedRole != member.role
         let phoneChanged: Bool = {
             let original = KuwaitPhone.detectCountryAndLocal(member.phoneNumber)
             return capturedPhoneCountry.id != original.country.id || capturedPhone != original.localDigits
@@ -1161,7 +1165,8 @@ struct AdminMemberDetailSheet: View {
         }()
 
         // If nothing changed, just dismiss
-        guard nameChanged || roleChanged || phoneChanged || fatherChanged || datesChanged || genderChanged || childrenOrderChanged || bioChanged else {
+        guard nameChanged || phoneChanged || fatherChanged || datesChanged || genderChanged || childrenOrderChanged || bioChanged else {
+            isSaving = false
             dismiss()
             return
         }
@@ -1183,7 +1188,6 @@ struct AdminMemberDetailSheet: View {
                     .components(separatedBy: " ")
                     .first ?? capturedFullName
             }
-            if roleChanged { updatedMember.role = capturedRole }
             if phoneChanged {
                 if capturedPhone.isEmpty {
                     updatedMember.phoneNumber = nil
@@ -1221,9 +1225,6 @@ struct AdminMemberDetailSheet: View {
         Task {
             if nameChanged {
                 await memberVM.updateMemberName(memberId: capturedMemberId, fullName: capturedFullName)
-            }
-            if capturedIsAdmin && roleChanged {
-                await memberVM.updateMemberRole(memberId: capturedMemberId, newRole: capturedRole)
             }
             if phoneChanged {
                 if capturedPhone.isEmpty {
@@ -1313,7 +1314,6 @@ struct AdminMemberDetailSheet: View {
             let memberName = member.fullName
             var changedFields: [String] = []
             if nameChanged { changedFields.append(L10n.t("الاسم", "Name")) }
-            if roleChanged { changedFields.append(L10n.t("مستوى الحساب", "Account Level")) }
             if phoneChanged { changedFields.append(phoneRemoved ? L10n.t("حذف الهاتف", "Phone removed") : L10n.t("الهاتف", "Phone")) }
             if fatherChanged { changedFields.append(L10n.t("الأب", "Father")) }
             if genderChanged { changedFields.append(L10n.t("الجنس", "Gender")) }
@@ -1326,18 +1326,17 @@ struct AdminMemberDetailSheet: View {
                 // نختار kind محدد إذا تعديل واحد فقط، وإلا admin_edit عام
                 let editKind: String = {
                     let changed = (
-                        name: nameChanged, role: roleChanged, phone: phoneChanged,
+                        name: nameChanged, phone: phoneChanged,
                         father: fatherChanged, gender: genderChanged,
                         dates: datesChanged, order: childrenOrderChanged, bio: bioChanged
                     )
-                    let count = [changed.name, changed.role, changed.phone,
+                    let count = [changed.name, changed.phone,
                                  changed.father, changed.gender, changed.dates,
                                  changed.order, changed.bio].filter { $0 }.count
                     guard count == 1 else { return "admin_edit" }
                     if changed.name   { return "admin_edit_name" }
                     if changed.dates  { return "admin_edit_dates" }
                     if changed.phone  { return phoneRemoved ? "admin_edit_phone_remove" : "admin_edit_phone" }
-                    if changed.role   { return "admin_edit_role" }
                     if changed.father { return "admin_edit_father" }
                     return "admin_edit"
                 }()
