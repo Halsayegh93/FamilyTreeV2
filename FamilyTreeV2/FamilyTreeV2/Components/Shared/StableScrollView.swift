@@ -1,7 +1,13 @@
 import SwiftUI
 
 /// UIScrollView wrapper يحفظ موضع السكرول عند تغيّر المحتوى.
-/// يحل مشكلة iOS 16 حيث SwiftUI ScrollView يرجع للأعلى عند تغيّر @State.
+/// يحل مشكلة iOS 16 حيث SwiftUI ScrollView يرجع للأعلى عند تغيّر @State،
+/// وكذلك عندما يُغلق sheet داخلي ويُعيد iOS layout للـscrollView.
+///
+/// الحلّ: نتتبّع آخر موقع scroll من المستخدم (عبر UIScrollViewDelegate)،
+/// نحفظه في الـCoordinator، ثم نُعيد تطبيقه في كل layout pass — لأن iOS
+/// قد يُعيد contentOffset إلى 0 بعد أحداث معيّنة (sheet dismiss، keyboard)
+/// مما يجعل قراءة scrollView.contentOffset في updateUIView غير موثوقة.
 struct StableScrollView<Content: View>: UIViewRepresentable {
     let content: Content
 
@@ -17,6 +23,7 @@ struct StableScrollView<Content: View>: UIViewRepresentable {
         scrollView.showsVerticalScrollIndicator = false
         scrollView.alwaysBounceVertical = true
         scrollView.contentInsetAdjustmentBehavior = .scrollableAxes
+        scrollView.delegate = context.coordinator
 
         let hosting = UIHostingController(rootView: AnyView(content))
         hosting.view.backgroundColor = .clear
@@ -32,36 +39,58 @@ struct StableScrollView<Content: View>: UIViewRepresentable {
         ])
 
         context.coordinator.hostingController = hosting
+        context.coordinator.scrollView = scrollView
         return scrollView
     }
 
     func updateUIView(_ scrollView: UIScrollView, context: Context) {
-        let savedOffset = scrollView.contentOffset
         context.coordinator.hostingController?.rootView = AnyView(content)
-        scrollView.layoutIfNeeded()
-        let maxY = max(0, scrollView.contentSize.height - scrollView.bounds.height + scrollView.contentInset.bottom)
-        let clampedY = min(savedOffset.y, maxY)
-        if clampedY > 0 {
-            scrollView.contentOffset = CGPoint(x: 0, y: clampedY)
-        }
-
-        // إعادة تطبيق الـoffset في الـrunloop التالي عشان نتعامل مع
-        // sheet dismiss و keyboard hide حيث iOS يُعيد layout بعد updateUIView.
-        // بدون هذا، قفل sheet إضافة الابن يرجّع الشاشة للأعلى.
-        if savedOffset.y > 0 {
-            DispatchQueue.main.async {
-                let lateMaxY = max(0, scrollView.contentSize.height - scrollView.bounds.height + scrollView.contentInset.bottom)
-                let lateClamped = min(savedOffset.y, lateMaxY)
-                if abs(scrollView.contentOffset.y - lateClamped) > 1, lateClamped > 0 {
-                    scrollView.setContentOffset(CGPoint(x: 0, y: lateClamped), animated: false)
-                }
-            }
+        // أعد تطبيق الـoffset المحفوظ من الـCoordinator (مصدر الحقيقة)
+        // مرتين: الأولى فوراً، والثانية في الـrunloop التالي عشان نتغلّب
+        // على layout passes اللي يفعلها iOS بعد sheet dismiss / keyboard hide.
+        context.coordinator.restoreOffset()
+        DispatchQueue.main.async {
+            context.coordinator.restoreOffset()
         }
     }
 
     @MainActor
-    final class Coordinator {
+    final class Coordinator: NSObject, UIScrollViewDelegate {
         var hostingController: UIHostingController<AnyView>?
+        weak var scrollView: UIScrollView?
+
+        /// آخر موقع scroll من المستخدم — هذا مصدر الحقيقة، مو scrollView.contentOffset
+        /// (لأن iOS قد يُعيده إلى 0 بدون علمنا).
+        private var lastUserOffset: CGFloat = 0
+        /// نتجاهل scrollViewDidScroll إذا كنا نُعيد ضبط الـoffset برمجياً (عشان لا
+        /// نسجّله كأنه scroll من المستخدم).
+        private var isRestoring = false
+
+        /// يُعيد تطبيق lastUserOffset على scrollView مع clamping لحدود المحتوى.
+        func restoreOffset() {
+            guard let sv = scrollView, lastUserOffset > 0 else { return }
+            sv.layoutIfNeeded()
+            let maxY = max(0, sv.contentSize.height - sv.bounds.height + sv.contentInset.bottom)
+            let target = min(lastUserOffset, maxY)
+            // فقط لو الفرق ملحوظ (>1 نقطة) عشان لا ندخل في حلقة
+            if target > 0, abs(sv.contentOffset.y - target) > 1 {
+                isRestoring = true
+                sv.setContentOffset(CGPoint(x: 0, y: target), animated: false)
+                isRestoring = false
+            }
+        }
+
+        // MARK: UIScrollViewDelegate
+
+        nonisolated func scrollViewDidScroll(_ scrollView: UIScrollView) {
+            // تُستدعى من UIKit بدون إشارة @MainActor — نقفز للـMainActor
+            let offset = scrollView.contentOffset.y
+            Task { @MainActor in
+                guard !self.isRestoring else { return }
+                self.lastUserOffset = offset
+            }
+        }
+
         deinit {
             // explicit deinit يجبر المترجم على عدم محاولة inline تلقائية
             // (workaround لكراش EarlyPerfInliner في Release builds)
