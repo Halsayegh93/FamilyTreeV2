@@ -1357,7 +1357,10 @@ class MemberViewModel: ObservableObject {
     
     // MARK: - Update Member Name
     
-    func updateMemberName(memberId: UUID, fullName: String) async {
+    /// - Parameter silent: لو true، تتخطّى إشعار الـadmin-edit لكل المدراء.
+    ///   تُستخدم من saveAction (admin sheet) عشان نرسل إشعار موحَّد بكل التغييرات
+    ///   بدل إشعار لكل حقل.
+    func updateMemberName(memberId: UUID, fullName: String, silent: Bool = false) async {
         self.isLoading = true
         let firstName = fullName.components(separatedBy: " ").first ?? fullName
 
@@ -1404,16 +1407,18 @@ class MemberViewModel: ObservableObject {
                     _ = try? await supabase.from("notifications").insert(payload).execute()
                 }
 
-                // إشعار المدراء بتفاصيل التغيير
-                await notifyAdminsOfMemberEdit(
-                    memberId: memberId,
-                    kind: NotificationKind.adminEditName.rawValue,
-                    title: L10n.t("تعديل الاسم", "Name Edit"),
-                    body: adminEditBody(verb: L10n.t("تم تعديل الاسم", "Name was updated"), memberId: memberId),
-                    changes: [
-                        .init(field: "full_name", before: oldFullName, after: fullName)
-                    ]
-                )
+                // إشعار المدراء بتفاصيل التغيير (يُتخطّى لو silent=true)
+                if !silent {
+                    await notifyAdminsOfMemberEdit(
+                        memberId: memberId,
+                        kind: NotificationKind.adminEditName.rawValue,
+                        title: L10n.t("تعديل الاسم", "Name Edit"),
+                        body: adminEditBody(verb: L10n.t("تم تعديل الاسم", "Name was updated"), memberId: memberId),
+                        changes: [
+                            .init(field: "full_name", before: oldFullName, after: fullName)
+                        ]
+                    )
+                }
             }
 
             Log.info("تم تحديث اسم العضو بنجاح")
@@ -1734,7 +1739,7 @@ class MemberViewModel: ObservableObject {
         await updateMemberPhone(memberId: memberId, country: KuwaitPhone.defaultCountry, localPhone: newPhone)
     }
 
-    func updateMemberPhone(memberId: UUID, country: KuwaitPhone.Country, localPhone: String) async {
+    func updateMemberPhone(memberId: UUID, country: KuwaitPhone.Country, localPhone: String, silent: Bool = false) async {
         self.isLoading = true
         guard let normalizedPhone = KuwaitPhone.normalizedForStorage(country: country, rawLocalDigits: localPhone) else {
             Log.error("رقم الهاتف غير صالح للدولة المختارة.")
@@ -1793,16 +1798,18 @@ class MemberViewModel: ObservableObject {
 
             await fetchSingleMember(id: memberId)
 
-            // إشعار المدراء بتغيير رقم الهاتف مع التفاصيل
-            await notifyAdminsOfMemberEdit(
-                memberId: memberId,
-                kind: NotificationKind.adminEditPhone.rawValue,
-                title: L10n.t("تعديل رقم الهاتف", "Phone Update"),
-                body: adminEditBody(verb: L10n.t("تم تعديل رقم الهاتف", "Phone number updated"), memberId: memberId),
-                changes: [
-                    .init(field: "phone_number", before: oldPhone, after: normalizedPhone)
-                ]
-            )
+            // إشعار المدراء بتغيير رقم الهاتف مع التفاصيل (يُتخطّى لو silent=true)
+            if !silent {
+                await notifyAdminsOfMemberEdit(
+                    memberId: memberId,
+                    kind: NotificationKind.adminEditPhone.rawValue,
+                    title: L10n.t("تعديل رقم الهاتف", "Phone Update"),
+                    body: adminEditBody(verb: L10n.t("تم تعديل رقم الهاتف", "Phone number updated"), memberId: memberId),
+                    changes: [
+                        .init(field: "phone_number", before: oldPhone, after: normalizedPhone)
+                    ]
+                )
+            }
 
             Log.info("تم تحديث الهاتف وتفعيل العضو للدخول المباشر")
         } catch {
@@ -1858,7 +1865,7 @@ class MemberViewModel: ObservableObject {
 
     // MARK: - Update Member Gender
 
-    func updateMemberGender(memberId: UUID, gender: String) async {
+    func updateMemberGender(memberId: UUID, gender: String, silent: Bool = false) async {
         self.isLoading = true
         let oldGender = _memberById[memberId]?.gender
 
@@ -1876,15 +1883,17 @@ class MemberViewModel: ObservableObject {
 
             await fetchSingleMember(id: memberId)
 
-            await notifyAdminsOfMemberEdit(
-                memberId: memberId,
-                kind: NotificationKind.adminEdit.rawValue,
-                title: L10n.t("تعديل الجنس", "Gender Update"),
-                body: adminEditBody(verb: L10n.t("تم تعديل الجنس", "Gender updated"), memberId: memberId),
-                changes: [
-                    .init(field: "gender", before: oldGender, after: gender)
-                ]
-            )
+            if !silent {
+                await notifyAdminsOfMemberEdit(
+                    memberId: memberId,
+                    kind: NotificationKind.adminEdit.rawValue,
+                    title: L10n.t("تعديل الجنس", "Gender Update"),
+                    body: adminEditBody(verb: L10n.t("تم تعديل الجنس", "Gender updated"), memberId: memberId),
+                    changes: [
+                        .init(field: "gender", before: oldGender, after: gender)
+                    ]
+                )
+            }
 
             Log.info("تم تحديث الجنس")
         } catch {
@@ -1933,7 +1942,7 @@ class MemberViewModel: ObservableObject {
 
     // MARK: - Update Member Father
     
-    func updateMemberFather(memberId: UUID, fatherId: UUID?) async {
+    func updateMemberFather(memberId: UUID, fatherId: UUID?, silent: Bool = false) async {
         self.isLoading = true
         // التقط الأب القديم قبل التحديث (نستخدم اسمه لا UUID للعرض)
         let oldFatherName = _memberById[memberId]?.fatherId.flatMap { _memberById[$0]?.firstName }
@@ -1968,15 +1977,17 @@ class MemberViewModel: ObservableObject {
             // الـtrigger السيرفري cascadeّت الذرّية. نجلب البيانات الكاملة المحدّثة.
             await fetchAllMembers(force: true)
 
-            await notifyAdminsOfMemberEdit(
-                memberId: memberId,
-                kind: NotificationKind.adminEditFather.rawValue,
-                title: L10n.t("تعديل ولي الأمر", "Father Update"),
-                body: adminEditBody(verb: L10n.t("تم تعديل ولي الأمر", "Father reference updated"), memberId: memberId),
-                changes: [
-                    .init(field: "father_id", before: oldFatherName, after: newFatherName)
-                ]
-            )
+            if !silent {
+                await notifyAdminsOfMemberEdit(
+                    memberId: memberId,
+                    kind: NotificationKind.adminEditFather.rawValue,
+                    title: L10n.t("تعديل ولي الأمر", "Father Update"),
+                    body: adminEditBody(verb: L10n.t("تم تعديل ولي الأمر", "Father reference updated"), memberId: memberId),
+                    changes: [
+                        .init(field: "father_id", before: oldFatherName, after: newFatherName)
+                    ]
+                )
+            }
 
             Log.info("تم تحديث ربط الأب + إعادة بناء full_name → cascade للذرّية")
         } catch {

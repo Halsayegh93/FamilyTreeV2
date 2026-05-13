@@ -1282,8 +1282,9 @@ struct AdminMemberDetailSheet: View {
         // 3. حفظ السيرفر في الخلفية (المستخدم ما ينتظر)
         // ═══════════════════════════════════════════════════════════════
         Task {
+            // Pass silent: true لكل دالة عشان نرسل إشعار موحَّد واحد بدل واحد لكل حقل
             if nameChanged {
-                await memberVM.updateMemberName(memberId: capturedMemberId, fullName: capturedFullName)
+                await memberVM.updateMemberName(memberId: capturedMemberId, fullName: capturedFullName, silent: true)
             }
             if phoneChanged {
                 if capturedPhone.isEmpty {
@@ -1303,15 +1304,16 @@ struct AdminMemberDetailSheet: View {
                     await memberVM.updateMemberPhone(
                         memberId: capturedMemberId,
                         country: capturedPhoneCountry,
-                        localPhone: capturedPhone
+                        localPhone: capturedPhone,
+                        silent: true
                     )
                 }
             }
             if fatherChanged {
-                await memberVM.updateMemberFather(memberId: capturedMemberId, fatherId: capturedFatherId)
+                await memberVM.updateMemberFather(memberId: capturedMemberId, fatherId: capturedFatherId, silent: true)
             }
             if genderChanged {
-                await memberVM.updateMemberGender(memberId: capturedMemberId, gender: capturedGender)
+                await memberVM.updateMemberGender(memberId: capturedMemberId, gender: capturedGender, silent: true)
             }
             if datesChanged {
                 await memberVM.updateMemberHealthAndBirth(
@@ -1368,21 +1370,63 @@ struct AdminMemberDetailSheet: View {
                 ))
             }
 
-            // إشعار يوضح أي مدير عدّل + شنو عدّل
+            // إشعار **موحَّد** يوضح المدير + كل التعديلات بالتفصيل (قبل ← بعد)
+            // الإشعارات الفردية لكل حقل اتخمدت بـsilent: true.
             let adminName = authVM.currentUser?.firstName ?? "مدير"
             let memberName = member.fullName
             var changedFields: [String] = []
-            if nameChanged { changedFields.append(L10n.t("الاسم", "Name")) }
-            if phoneChanged { changedFields.append(phoneRemoved ? L10n.t("حذف الهاتف", "Phone removed") : L10n.t("الهاتف", "Phone")) }
-            if fatherChanged { changedFields.append(L10n.t("الأب", "Father")) }
-            if genderChanged { changedFields.append(L10n.t("الجنس", "Gender")) }
-            if datesChanged { changedFields.append(L10n.t("التواريخ", "Dates")) }
+            var changeEntries: [AppNotification.NotificationDetails.ChangeEntry] = []
+
+            if nameChanged {
+                changedFields.append(L10n.t("الاسم", "Name"))
+                changeEntries.append(.init(field: "full_name", before: member.fullName, after: capturedFullName))
+            }
+            if phoneChanged {
+                changedFields.append(phoneRemoved ? L10n.t("حذف الهاتف", "Phone removed") : L10n.t("الهاتف", "Phone"))
+                let normalized = KuwaitPhone.normalizedForStorage(country: capturedPhoneCountry, rawLocalDigits: capturedPhone) ?? capturedPhone
+                changeEntries.append(.init(field: "phone_number", before: member.phoneNumber, after: capturedPhone.isEmpty ? nil : normalized))
+            }
+            if fatherChanged {
+                changedFields.append(L10n.t("الأب", "Father"))
+                let oldFatherName = member.fatherId.flatMap { memberVM.member(byId: $0)?.firstName }
+                let newFatherName = capturedFatherId.flatMap { memberVM.member(byId: $0)?.firstName }
+                changeEntries.append(.init(field: "father_id", before: oldFatherName, after: newFatherName))
+            }
+            if genderChanged {
+                changedFields.append(L10n.t("الجنس", "Gender"))
+                changeEntries.append(.init(field: "gender", before: member.gender, after: capturedGender))
+            }
+            if datesChanged {
+                changedFields.append(L10n.t("التواريخ", "Dates"))
+                let dateFormatter = DateFormatter()
+                dateFormatter.dateFormat = "yyyy-MM-dd"
+                if (member.birthDate ?? "") != (capturedBirthDate.map { dateFormatter.string(from: $0) } ?? "") {
+                    changeEntries.append(.init(
+                        field: "birth_date",
+                        before: member.birthDate,
+                        after: capturedBirthDate.map { dateFormatter.string(from: $0) }
+                    ))
+                }
+                if (member.isDeceased ?? false) != capturedIsDeceased {
+                    changeEntries.append(.init(
+                        field: "is_deceased",
+                        before: (member.isDeceased ?? false) ? "متوفّى" : "حيّ",
+                        after: capturedIsDeceased ? "متوفّى" : "حيّ"
+                    ))
+                }
+                if (member.deathDate ?? "") != (capturedDeathDate.map { dateFormatter.string(from: $0) } ?? "") {
+                    changeEntries.append(.init(
+                        field: "death_date",
+                        before: member.deathDate,
+                        after: capturedDeathDate.map { dateFormatter.string(from: $0) }
+                    ))
+                }
+            }
             if childrenOrderChanged { changedFields.append(L10n.t("ترتيب الأبناء", "Children order")) }
             if bioChanged { changedFields.append(L10n.t("المحطات الحياتية", "Life Stations")) }
 
             if !changedFields.isEmpty {
                 let fieldsList = changedFields.joined(separator: "، ")
-                // نختار kind محدد إذا تعديل واحد فقط، وإلا admin_edit عام
                 let editKind: String = {
                     let changed = (
                         name: nameChanged, phone: phoneChanged,
@@ -1399,15 +1443,27 @@ struct AdminMemberDetailSheet: View {
                     if changed.father { return "admin_edit_father" }
                     return "admin_edit"
                 }()
-                await memberVM.notificationVM?.notifyAdminsWithPush(
-                    title: L10n.t("تعديل بيانات عضو", "Member Data Updated"),
-                    body: L10n.t(
-                        "\(adminName) عدّل (\(fieldsList)) لـ \(memberName)",
-                        "\(adminName) updated (\(fieldsList)) for \(memberName)"
-                    ),
-                    kind: editKind
+                let body = L10n.t(
+                    "\(adminName) عدّل (\(fieldsList)) لـ \(memberName)",
+                    "\(adminName) updated (\(fieldsList)) for \(memberName)"
                 )
-                Log.info("[Admin] \(adminName) عدّل بيانات \(memberName): \(fieldsList)")
+                if !changeEntries.isEmpty {
+                    // إشعار غني بتفاصيل قبل/بعد لكل حقل
+                    await memberVM.notificationVM?.notifyAdminsWithChangesAndPush(
+                        title: L10n.t("تعديل بيانات عضو", "Member Data Updated"),
+                        body: body,
+                        kind: editKind,
+                        changes: changeEntries
+                    )
+                } else {
+                    // ترتيب الأبناء أو bio فقط — لا تفاصيل قبل/بعد، إشعار عادي
+                    await memberVM.notificationVM?.notifyAdminsWithPush(
+                        title: L10n.t("تعديل بيانات عضو", "Member Data Updated"),
+                        body: body,
+                        kind: editKind
+                    )
+                }
+                Log.info("[Admin] \(adminName) عدّل بيانات \(memberName): \(fieldsList) (\(changeEntries.count) تفاصيل)")
             }
 
             // مزامنة العضو الواحد فقط من السيرفر (بدل جلب 1723 عضو)
