@@ -121,7 +121,8 @@ struct AdminMemberDetailSheet: View {
                         if !isMonitorOnly {
                             fatherSection
                             childrenSection
-                            if authVM.isOwner { roleSection }
+                            // (شُيل قسم "صلاحيات الوصول" — تغيير الأدوار يتم الآن
+                            // فقط من شاشة "المدراء والمشرفون" المخصّصة للمالك)
                             if canManageAccessPermissions { deleteSection }
                         }
                     }
@@ -976,30 +977,6 @@ struct AdminMemberDetailSheet: View {
                         }
                     }
                 }
-            }
-        }
-        .padding(.horizontal, DS.Spacing.lg)
-    }
-
-    // MARK: - Role Section
-    private var roleSection: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            DSCard(padding: 0) {
-                DSSectionHeader(
-                    title: L10n.t("صلاحيات الوصول", "Access Permissions"),
-                    icon: "shield.fill",
-                    iconColor: DS.Color.neonPurple
-                )
-
-                Picker("", selection: $selectedRole) {
-                    Text(L10n.t("الإدارة", "Admin")).tag(FamilyMember.UserRole.admin)
-                    Text(L10n.t("مشرف", "Supervisor")).tag(FamilyMember.UserRole.supervisor)
-                    Text(L10n.t("عضو", "Member")).tag(FamilyMember.UserRole.member)
-                }
-                .pickerStyle(.segmented)
-                .tint(DS.Color.primary)
-                .padding(.horizontal, DS.Spacing.md)
-                .padding(.vertical, DS.Spacing.xs)
             }
         }
         .padding(.horizontal, DS.Spacing.lg)
