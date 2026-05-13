@@ -1072,12 +1072,16 @@ struct NotificationsCenterView: View {
             NotificationKind.adminEditAvatar.rawValue,
             NotificationKind.adminEditChildAdd.rawValue,
             NotificationKind.adminEditChildRemove.rawValue,
+            // الإعلانات العامة — اسم المرسِل ليس "موضوع" الإشعار
+            "admin",
+            "admin_broadcast",
         ])
     }
 
     // MARK: - Detail: Hero (compact horizontal)
     private func detailHero(notification: AppNotification, iconInfo: NotificationKindStyle, date: Date) -> some View {
-        HStack(alignment: .center, spacing: DS.Spacing.md) {
+        let isBroadcast = (notification.kind == "admin" || notification.kind == "admin_broadcast")
+        return HStack(alignment: .center, spacing: DS.Spacing.md) {
             ZStack {
                 Circle()
                     .fill(iconInfo.gradient)
@@ -1090,6 +1094,14 @@ struct NotificationsCenterView: View {
             }
 
             VStack(alignment: .leading, spacing: 4) {
+                if isBroadcast {
+                    Text(L10n.t("إعلان رسمي للعائلة", "Family Announcement"))
+                        .font(DS.Font.scaled(10, weight: .bold))
+                        .foregroundColor(iconInfo.color)
+                        .tracking(0.5)
+                        .textCase(.uppercase)
+                }
+
                 Text(notification.title)
                     .font(DS.Font.scaled(18, weight: .bold))
                     .foregroundColor(DS.Color.textPrimary)
