@@ -1606,8 +1606,8 @@ class MemberViewModel: ObservableObject {
             // 2. تحديث البيانات محلياً
             await fetchSingleMember(id: memberId)
 
-            // الاسم الكامل في الإشعار — أوضح من الاسم الأول وحده
-            let memberName = _memberById[memberId]?.fullName ?? L10n.t("عضو", "member")
+            // الاسم الرباعي في الإشعار — أوضح من الاسم الأول، أقصر من الكامل
+            let memberName = _memberById[memberId]?.fourPartName ?? L10n.t("عضو", "member")
             let roleName: String = {
                 switch newRole {
                 case .admin, .owner: return L10n.t("مدير", "Admin")

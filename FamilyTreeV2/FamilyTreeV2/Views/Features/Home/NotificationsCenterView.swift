@@ -1028,11 +1028,10 @@ struct NotificationsCenterView: View {
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
 
-    /// اسم رباعي: أول ٤ أجزاء من اسم العضو (هو + أب + جد + جد الأب)
+    /// اسم رباعي — wrapper للـcomputed property على FamilyMember
+    /// (يبقى local helper عشان call sites الموجودة ما تحتاج تغيير)
     private func fourPartName(_ member: FamilyMember) -> String {
-        let parts = member.fullName.split(separator: " ").map(String.init)
-        guard parts.count > 4 else { return member.fullName }
-        return parts.prefix(4).joined(separator: " ")
+        member.fourPartName
     }
 
     /// يحدّد العضو الأكثر صلة بالإشعار (الأهم بصرياً) — لعرض بطاقة العضو في تفاصيل الإشعار
