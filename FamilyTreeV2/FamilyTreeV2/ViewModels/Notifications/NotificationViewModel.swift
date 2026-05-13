@@ -205,6 +205,7 @@ class NotificationViewModel: ObservableObject {
         "project_approved", "project_rejected", "story_approved",
         "story_rejected", "gallery_approved", "gallery_rejected",
         "news_published", "news_deleted",
+        "member_delete",
     ]
     
     private var currentUser: FamilyMember? {

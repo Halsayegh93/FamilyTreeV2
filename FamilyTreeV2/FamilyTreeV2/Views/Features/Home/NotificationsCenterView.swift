@@ -466,6 +466,7 @@ struct NotificationsCenterView: View {
         NotificationKind.adminEditAvatarRemove.rawValue,
         NotificationKind.adminEditChildAdd.rawValue,
         NotificationKind.adminEditChildRemove.rawValue,
+        NotificationKind.memberDelete.rawValue,
         // عضوية (تم تفعيل)
         NotificationKind.joinApproved.rawValue,
         NotificationKind.accountActivated.rawValue,

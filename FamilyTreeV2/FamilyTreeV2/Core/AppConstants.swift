@@ -61,6 +61,7 @@ enum NotificationKind: String {
     case adminEditAvatarRemove = "admin_edit_avatar_remove"
     case adminEditChildAdd = "admin_edit_child_add"
     case adminEditChildRemove = "admin_edit_child_remove"
+    case memberDelete = "member_delete"
     // شجرة وعضوية
     case treeEdit = "tree_edit"
     case linkRequest = "link_request"
