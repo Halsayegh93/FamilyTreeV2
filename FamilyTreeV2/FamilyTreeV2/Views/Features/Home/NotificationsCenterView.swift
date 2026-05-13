@@ -1094,14 +1094,6 @@ struct NotificationsCenterView: View {
             }
 
             VStack(alignment: .leading, spacing: 4) {
-                if isBroadcast {
-                    Text(L10n.t("إعلان رسمي للعائلة", "Family Announcement"))
-                        .font(DS.Font.scaled(10, weight: .bold))
-                        .foregroundColor(iconInfo.color)
-                        .tracking(0.5)
-                        .textCase(.uppercase)
-                }
-
                 Text(notification.title)
                     .font(DS.Font.scaled(18, weight: .bold))
                     .foregroundColor(DS.Color.textPrimary)
@@ -1259,50 +1251,13 @@ struct NotificationsCenterView: View {
             let isBroadcast = (notification.kind == "admin" || notification.kind == "admin_broadcast")
             let bodyText = bodyWithoutCreatorPrefix(notification.body, creator: actualCreator)
 
-            if isBroadcast {
-                VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                    // مؤشر "وصل لجميع الأعضاء"
-                    HStack(spacing: 6) {
-                        Image(systemName: "person.3.fill")
-                            .font(DS.Font.scaled(11, weight: .bold))
-                        Text(L10n.t("وصل لجميع الأعضاء", "Sent to all members"))
-                            .font(DS.Font.scaled(11, weight: .bold))
-                    }
-                    .foregroundColor(iconInfo.color)
-                    .padding(.horizontal, DS.Spacing.sm)
-                    .padding(.vertical, 4)
-                    .background(iconInfo.color.opacity(0.10))
-                    .clipShape(Capsule())
-                    .overlay(Capsule().stroke(iconInfo.color.opacity(0.20), lineWidth: 0.5))
-
-                    HStack(alignment: .top, spacing: DS.Spacing.md) {
-                        // شريط جانبي ملوّن (يلمّح لاقتباس)
-                        RoundedRectangle(cornerRadius: 2, style: .continuous)
-                            .fill(iconInfo.color.opacity(0.55))
-                            .frame(width: 3)
-
-                        richBodyView(
-                            bodyText,
-                            font: DS.Font.scaled(17, weight: .semibold),
-                            color: DS.Color.textPrimary
-                        )
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                }
-                .padding(DS.Spacing.md)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(
-                    RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                        .fill(iconInfo.color.opacity(0.06))
-                )
-            } else {
-                richBodyView(
-                    bodyText,
-                    font: DS.Font.scaled(15, weight: .regular),
-                    color: DS.Color.textPrimary
-                )
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
+            // للإعلانات: نص أكبر قليلاً عشان الرسالة هي محتوى الإشعار.
+            richBodyView(
+                bodyText,
+                font: DS.Font.scaled(isBroadcast ? 17 : 15, weight: isBroadcast ? .semibold : .regular),
+                color: DS.Color.textPrimary
+            )
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             // التاريخ والوقت الكامل (تذييل خفيف)
             HStack(spacing: 4) {
