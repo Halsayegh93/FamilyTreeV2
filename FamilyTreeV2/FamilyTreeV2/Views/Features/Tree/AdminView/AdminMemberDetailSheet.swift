@@ -1218,6 +1218,11 @@ struct AdminMemberDetailSheet: View {
                 updatedMember.deathDate = capturedDeathDate.map { formatter.string(from: $0) }
             }
             memberVM.upsertMemberLocally(updatedMember)
+
+            // ⚡️ تحديث محلّي فوري لأسماء الذرّية لو الاسم تغيّر — ما ينتظر السيرفر
+            if nameChanged {
+                memberVM.propagateNameToDescendantsLocally(of: capturedMemberId)
+            }
         }
 
         // ═══════════════════════════════════════════════════════════════
@@ -1386,72 +1391,90 @@ struct FatherPickerSheet: View {
     var editingMemberId: UUID? = nil
     @Environment(\.dismiss) var dismiss
     @State private var searchText = ""
+    @State private var debouncedSearch = ""
+    @State private var debounceTask: Task<Void, Never>? = nil
     @State private var pendingSelection: FamilyMember? = nil
     @State private var showUnlinkConfirm = false
 
-    /// كل ذرّية العضو الذي يُحرَّر (تُحسب مرة واحدة)
-    private var excludedIds: Set<UUID> {
-        guard let rootId = editingMemberId else { return [] }
-        var result: Set<UUID> = [rootId]
-        var queue: [UUID] = [rootId]
-        while let cur = queue.popLast() {
-            for m in memberVM.allMembers where m.fatherId == cur {
-                if result.insert(m.id).inserted {
-                    queue.append(m.id)
+    /// قائمة جاهزة: كل عضو مع اسمه المُطبَّع (يُحسب مرة واحدة عند الفتح/التغيير)
+    /// مرتّبة أبجدياً لـzero-cost عرض حالة "بدون بحث".
+    @State private var prepared: [(member: FamilyMember, normalized: String)] = []
+
+    /// تطبيع نص عربي سريع — تمريرة واحدة على الأحرف بدل ٦ تمريرات
+    /// `.lowercased()` و `.replacingOccurrences()`.
+    private static func normalizeArabicFast(_ s: String) -> String {
+        var out = String()
+        out.reserveCapacity(s.count)
+        for ch in s {
+            switch ch {
+            // توحيد الألف
+            case "أ", "إ", "آ", "ٱ": out.append("ا")
+            // توحيد الياء
+            case "ى": out.append("ي")
+            // توحيد التاء المربوطة
+            case "ة": out.append("ه")
+            // إزالة التشكيل
+            case "\u{064B}", "\u{064C}", "\u{064D}",
+                 "\u{064E}", "\u{064F}", "\u{0650}",
+                 "\u{0651}", "\u{0652}", "\u{0670}":
+                continue
+            default:
+                // .lowercased() على حرف واحد أرخص بكثير من .lowercased() على string كامل
+                if ch.isLetter {
+                    out.append(contentsOf: String(ch).lowercased())
+                } else {
+                    out.append(ch)
                 }
             }
         }
-        return result
+        return out.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    /// تطبيع نص عربي للبحث: يوحّد الألفات/الياءات/التاء المربوطة + يزيل التشكيل
-    /// عشان "احمد" تطابق "أحمد" و "علي" تطابق "علىٰ".
-    private func normalizeArabic(_ s: String) -> String {
-        var t = s.lowercased()
-        // إزالة التشكيل والمدّة
-        t = t.folding(options: .diacriticInsensitive, locale: nil)
-        // توحيد الألف
-        t = t.replacingOccurrences(of: "أ", with: "ا")
-             .replacingOccurrences(of: "إ", with: "ا")
-             .replacingOccurrences(of: "آ", with: "ا")
-             .replacingOccurrences(of: "ٱ", with: "ا")
-        // توحيد الياء + التاء المربوطة
-        t = t.replacingOccurrences(of: "ى", with: "ي")
-             .replacingOccurrences(of: "ة", with: "ه")
-        return t.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    /// رتبة المطابقة: أصغر = أعلى أولوية
-    /// 0 = الاسم يبدأ بالكلمة الكاملة بحرفياً (الترتيب الأفضل)
-    /// 1 = إحدى الكلمات في الاسم تبدأ بالنص
-    /// 2 = النص يظهر في أي مكان في الاسم
-    private func matchRank(name: String, query: String) -> Int? {
-        let n = normalizeArabic(name)
-        let q = normalizeArabic(query)
-        if q.isEmpty { return 0 }
-        if n.hasPrefix(q) { return 0 }
-        for word in n.split(separator: " ") {
-            if word.hasPrefix(q) { return 1 }
+    /// رتبة المطابقة: أصغر = أعلى أولوية. يأخذ اسماً مُطبَّعاً مسبقاً.
+    private static func matchRank(normalized: String, query: String) -> Int? {
+        if query.isEmpty { return 0 }
+        if normalized.hasPrefix(query) { return 0 }
+        for word in normalized.split(separator: " ") {
+            if word.hasPrefix(query) { return 1 }
         }
-        if n.contains(q) { return 2 }
+        if normalized.contains(query) { return 2 }
         return nil
     }
 
-    /// المرشّحون: الأعضاء القابلين للعدّ، باستثناء العضو نفسه وذرّيته
-    private var candidateMembers: [FamilyMember] {
-        let exclude = excludedIds
-        return memberVM.allMembers.filter { $0.isCountable && !exclude.contains($0.id) }
+    /// إعادة بناء `prepared`: فلترة + تطبيع + ترتيب أبجدي (مرّة واحدة)
+    private func rebuildPrepared() {
+        // ١) احسب الذرّية المُستثناة
+        let exclude: Set<UUID>
+        if let rootId = editingMemberId {
+            var result: Set<UUID> = [rootId]
+            var queue: [UUID] = [rootId]
+            while let cur = queue.popLast() {
+                for m in memberVM.allMembers where m.fatherId == cur {
+                    if result.insert(m.id).inserted { queue.append(m.id) }
+                }
+            }
+            exclude = result
+        } else {
+            exclude = []
+        }
+
+        // ٢) فلترة + تطبيع + ترتيب
+        prepared = memberVM.allMembers
+            .filter { $0.isCountable && !exclude.contains($0.id) }
+            .map { (member: $0, normalized: Self.normalizeArabicFast($0.fullName)) }
+            .sorted { $0.member.fullName < $1.member.fullName }
     }
 
+    /// نتائج البحث — تستخدم `debouncedSearch` (مع تأخير ٢٠٠ms) و `prepared` المُجهّز
     var filteredMembers: [FamilyMember] {
-        if searchText.trimmingCharacters(in: .whitespaces).isEmpty {
-            return candidateMembers.sorted { $0.fullName < $1.fullName }
+        let q = Self.normalizeArabicFast(debouncedSearch)
+        if q.isEmpty {
+            return prepared.map(\.member)
         }
-        // مع وجود بحث: نُرجّع المطابقات فقط، مرتّبة بحسب جودة المطابقة
-        return candidateMembers
-            .compactMap { m -> (FamilyMember, Int)? in
-                guard let r = matchRank(name: m.fullName, query: searchText) else { return nil }
-                return (m, r)
+        return prepared
+            .compactMap { item -> (FamilyMember, Int)? in
+                guard let r = Self.matchRank(normalized: item.normalized, query: q) else { return nil }
+                return (item.member, r)
             }
             .sorted { lhs, rhs in
                 if lhs.1 != rhs.1 { return lhs.1 < rhs.1 }
@@ -1503,17 +1526,19 @@ struct FatherPickerSheet: View {
                         }
                         .padding(.horizontal, DS.Spacing.lg)
 
-                        // قائمة الأعضاء
+                        // قائمة الأعضاء — حُسبت مرة واحدة هنا (كانت تعاد لكل صف ⇒ O(n²))
+                        let list = filteredMembers
+                        let lastId = list.last?.id
                         DSCard(padding: 0) {
                             DSSectionHeader(
                                 title: L10n.t("اختر الأب", "Choose Father"),
                                 icon: "person.2.fill",
-                                trailing: "\(filteredMembers.count)",
+                                trailing: "\(list.count)",
                                 iconColor: DS.Color.accent
                             )
 
                             LazyVStack(spacing: 0) {
-                                ForEach(filteredMembers) { m in
+                                ForEach(list) { m in
                                     Button {
                                         pendingSelection = m
                                     } label: {
@@ -1560,7 +1585,7 @@ struct FatherPickerSheet: View {
                                     }
                                     .buttonStyle(DSBoldButtonStyle())
 
-                                    if m.id != filteredMembers.last?.id {
+                                    if m.id != lastId {
                                         DSDivider()
                                     }
                                 }
@@ -1571,13 +1596,28 @@ struct FatherPickerSheet: View {
                     .padding(.top, DS.Spacing.sm)
                     .padding(.bottom, DS.Spacing.xxxl)
                 }
-                .onChange(of: searchText) { _ in
-                    // التمرير لأعلى عند تغيير البحث عشان أول مطابقة تكون ظاهرة
-                    withAnimation(DS.Anim.snappy) {
-                        proxy.scrollTo("top", anchor: .top)
+                .onChange(of: searchText) { newValue in
+                    // Debounce ٢٠٠ms — لا نُعيد ترتيب القائمة كاملة على كل ضغطة حرف
+                    debounceTask?.cancel()
+                    debounceTask = Task {
+                        try? await Task.sleep(nanoseconds: 200_000_000)
+                        if Task.isCancelled { return }
+                        await MainActor.run {
+                            debouncedSearch = newValue
+                            // التمرير لأعلى عشان أول مطابقة تكون ظاهرة
+                            withAnimation(DS.Anim.snappy) {
+                                proxy.scrollTo("top", anchor: .top)
+                            }
+                        }
                     }
                 }
                 } // إغلاق ScrollViewReader
+            }
+            .task {
+                rebuildPrepared()
+            }
+            .onChange(of: memberVM.allMembers) { _ in
+                rebuildPrepared()
             }
             .navigationTitle(L10n.t("اختر الأب", "Choose Father"))
             .navigationBarTitleDisplayMode(.inline)

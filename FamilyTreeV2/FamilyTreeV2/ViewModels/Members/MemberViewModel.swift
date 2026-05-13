@@ -1451,7 +1451,33 @@ class MemberViewModel: ObservableObject {
         return all
     }
 
-    /// بعد تعديل اسم عضو، يعيد بناء fullName لكل ذريته
+    /// تحديث **محلّي فوري** لأسماء الذرّية في الكاش — للاستجابة الفورية في الـUI
+    /// قبل ما يرجع السيرفر. يجب استدعاؤه **بعد** تحديث الأب محلياً.
+    /// السيرفر (trigger) يتولّى الحفظ النهائي بشكل موثوق.
+    @MainActor
+    func propagateNameToDescendantsLocally(of memberId: UUID) {
+        // lookup من الكاش الحالي بعد التحديث المحلي للأب
+        let lookup = _memberById
+        let descendants = collectAllDescendants(of: memberId, from: Array(lookup.values))
+        guard !descendants.isEmpty else { return }
+
+        var updatedCount = 0
+        for descendant in descendants {
+            let newFullName = buildFullName(for: descendant, lookup: lookup)
+            guard newFullName != descendant.fullName else { continue }
+            var updated = descendant
+            updated.fullName = newFullName
+            upsertMemberLocally(updated)
+            updatedCount += 1
+        }
+        if updatedCount > 0 {
+            Log.info("[Cascade-Local] تم تحديث \(updatedCount) اسم ذرّية في الكاش فوراً")
+        }
+    }
+
+    /// (احتياطي/قديم) — السيرفر بعد ما عنده trigger يتولّى cascade على الذرّية
+    /// تلقائياً (`trg_cascade_full_name_to_children`). نُبقي هذه الدالة خفيفة
+    /// عشان لو الـtrigger مو موجود بسبب dev DB قديم، يبقى الـcascade يشتغل.
     private func propagateNameToDescendants(of memberId: UUID) async {
         // نجيب آخر نسخة من البيانات (بعد التحديث)
         let freshMembers: [FamilyMember]
@@ -1480,7 +1506,8 @@ class MemberViewModel: ObservableObject {
 
         for descendant in descendants {
             let newFullName = buildFullName(for: descendant, lookup: lookup)
-            // لا نحدّث إذا الاسم ما تغير
+            // لو الـtrigger السيرفري شغّال بالفعل، الاسم بيكون صحيح من السيرفر
+            // فهذه الحلقة هتسكّ ٩٩٪ من الذرّية تلقائياً (skipped).
             guard newFullName != descendant.fullName else {
                 skippedCount += 1
                 continue
