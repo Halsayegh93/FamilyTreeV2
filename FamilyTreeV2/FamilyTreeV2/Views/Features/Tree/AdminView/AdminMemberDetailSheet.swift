@@ -192,72 +192,49 @@ struct AdminMemberDetailSheet: View {
     // MARK: - Member Header (Avatar + Name + Role)
     private var memberHeader: some View {
         VStack(spacing: DS.Spacing.xs) {
-            // الصورة قابلة للتعديل فقط للمتوفى — العضو الحي يرفع صورته بنفسه
-            if isDeceased {
-                DSProfilePhotoPicker(
-                    selectedImage: $localAvatarPreview,
-                    existingURL: currentAvatarURL,
-                    enableCrop: true,
-                    cropShape: .circle,
-                    trailing: nil,
-                    showDeleteForExisting: currentAvatarURL != nil,
-                    onDeleteExisting: {
-                        Task {
-                            await memberVM.deleteAvatar(for: member.id)
-                            await MainActor.run { currentAvatarURL = nil }
-                            _ = authVM.currentUser?.firstName ?? "مدير"
-                            await memberVM.notificationVM?.notifyAdminsWithPush(
-                                title: L10n.t("حذف صورة عضو", "Member Photo Removed"),
-                                body: L10n.t(
-                                    "تم حذف صورة: «\(member.fullName)»",
-                                    "Photo removed for: «\(member.fullName)»"
-                                ),
-                                kind: "admin_edit_avatar_remove"
-                            )
-                        }
-                    },
-                    useOverlayActionsOnly: true
-                )
-                .onChange(of: localAvatarPreview) { newImage in
-                    guard let newImage else { return }
+            // المدير يقدر يعدّل صورة أي عضو — حيّ كان أو متوفّى، عنده صورة أو ما عنده.
+            // زر الكاميرا يطلع على الزاوية في كل الحالات.
+            DSProfilePhotoPicker(
+                selectedImage: $localAvatarPreview,
+                existingURL: currentAvatarURL,
+                enableCrop: true,
+                cropShape: .circle,
+                trailing: nil,
+                showDeleteForExisting: currentAvatarURL != nil,
+                onDeleteExisting: {
                     Task {
-                        await memberVM.uploadAvatar(image: newImage, for: member.id)
-                        if let updated = memberVM.member(byId: member.id) {
-                            await MainActor.run { currentAvatarURL = updated.avatarUrl }
-                        }
-                        let adminName = authVM.currentUser?.firstName ?? "مدير"
+                        await memberVM.deleteAvatar(for: member.id)
+                        await MainActor.run { currentAvatarURL = nil }
+                        _ = authVM.currentUser?.firstName ?? "مدير"
                         await memberVM.notificationVM?.notifyAdminsWithPush(
-                            title: L10n.t("تحديث صورة عضو", "Member Photo Updated"),
+                            title: L10n.t("حذف صورة عضو", "Member Photo Removed"),
                             body: L10n.t(
-                                "تم تحديث صورة: «\(member.fullName)»",
-                                "Photo updated: «\(member.fullName)»"
+                                "تم حذف صورة: «\(member.fullName)»",
+                                "Photo removed for: «\(member.fullName)»"
                             ),
-                            kind: "admin_edit_avatar"
+                            kind: "admin_edit_avatar_remove"
                         )
-                        Log.info("[Admin] \(adminName) عدّل صورة \(member.firstName)")
                     }
-                }
-            } else {
-                // عضو حي: عرض الصورة فقط بدون إمكانية التعديل
-                ZStack {
-                    Circle()
-                        .fill(DS.Color.primary.opacity(0.12))
-                        .frame(width: 110, height: 110)
-                    if let urlString = currentAvatarURL, let url = URL(string: urlString) {
-                        AsyncImage(url: url) { image in
-                            image.resizable().aspectRatio(contentMode: .fill)
-                        } placeholder: {
-                            Image(systemName: "person.fill")
-                                .font(.system(size: 44))
-                                .foregroundColor(DS.Color.primary)
-                        }
-                        .frame(width: 110, height: 110)
-                        .clipShape(Circle())
-                    } else {
-                        Image(systemName: "person.fill")
-                            .font(.system(size: 44))
-                            .foregroundColor(DS.Color.primary)
+                },
+                useOverlayActionsOnly: true
+            )
+            .onChange(of: localAvatarPreview) { newImage in
+                guard let newImage else { return }
+                Task {
+                    await memberVM.uploadAvatar(image: newImage, for: member.id)
+                    if let updated = memberVM.member(byId: member.id) {
+                        await MainActor.run { currentAvatarURL = updated.avatarUrl }
                     }
+                    let adminName = authVM.currentUser?.firstName ?? "مدير"
+                    await memberVM.notificationVM?.notifyAdminsWithPush(
+                        title: L10n.t("تحديث صورة عضو", "Member Photo Updated"),
+                        body: L10n.t(
+                            "تم تحديث صورة: «\(member.fullName)»",
+                            "Photo updated: «\(member.fullName)»"
+                        ),
+                        kind: "admin_edit_avatar"
+                    )
+                    Log.info("[Admin] \(adminName) عدّل صورة \(member.firstName)")
                 }
             }
 
