@@ -1452,44 +1452,56 @@ class MemberViewModel: ObservableObject {
     /// السيرفر (trigger) يتولّى نفس العملية للحفظ النهائي.
     @MainActor
     func propagateNameToDescendantsLocally(of memberId: UUID) {
-        guard _memberById[memberId] != nil else {
+        guard let edited = _memberById[memberId] else {
             Log.warning("[Cascade-Local] الأب غير موجود في الكاش — memberId=\(memberId)")
             return
         }
+        Log.info("[Cascade-Local] 🌳 بدء انتشار اسم: \(edited.firstName) → fullName=«\(edited.fullName)»")
 
         // BFS من الأب نحو الأسفل — كل مستوى يستخدم fullName المحدّث للأب
         var queue: [UUID] = [memberId]
         var updatedCount = 0
         var visited: Set<UUID> = [memberId]
+        var levelByMember: [UUID: Int] = [memberId: 0]
 
         while let parentId = queue.first {
             queue.removeFirst()
             guard let parentNow = _memberById[parentId] else { continue }
             let parentFullName = parentNow.fullName
+            let parentLevel = levelByMember[parentId] ?? 0
 
-            // أبناء مباشرين لهذا الأب
+            // أبناء مباشرين لهذا الأب — نقرأ من allMembers (مُحدَّث بعد upsertMemberLocally)
             let directChildren = allMembers.filter { $0.fatherId == parentId }
+            if !directChildren.isEmpty {
+                Log.info("[Cascade-Local] L\(parentLevel + 1): \(parentNow.firstName) عنده \(directChildren.count) ذرّية مباشرة")
+            }
+
             for child in directChildren {
                 guard !visited.contains(child.id) else { continue }
                 visited.insert(child.id)
                 queue.append(child.id)
+                levelByMember[child.id] = parentLevel + 1
 
-                // الصيغة المعتمدة: child.firstName + ' ' + parent.fullName (الجديد)
                 let firstName = child.firstName.trimmingCharacters(in: .whitespacesAndNewlines)
                 let newFullName = (firstName.isEmpty
                     ? parentFullName
                     : "\(firstName) \(parentFullName)")
                     .trimmingCharacters(in: .whitespacesAndNewlines)
 
-                guard newFullName != child.fullName else { continue }
+                guard newFullName != child.fullName else {
+                    Log.info("[Cascade-Local]   • \(child.firstName) (L\(parentLevel + 1)) متطابق مسبقاً")
+                    continue
+                }
                 var updated = child
                 updated.fullName = newFullName
                 upsertMemberLocally(updated)
                 updatedCount += 1
+                Log.info("[Cascade-Local]   ✓ \(child.firstName) (L\(parentLevel + 1)): «\(child.fullName)» → «\(newFullName)»")
             }
         }
 
-        Log.info("[Cascade-Local] انتشر الاسم → محدّث \(updatedCount) من \(visited.count - 1) ذرّية")
+        let maxLevel = levelByMember.values.max() ?? 0
+        Log.info("[Cascade-Local] 🌳 انتهى — محدّث \(updatedCount) من \(visited.count - 1) ذرّية، \(maxLevel) أجيال")
     }
 
     /// (طبقة احتياط) — السيرفر trigger يتولّى الـcascade على البيانات.
