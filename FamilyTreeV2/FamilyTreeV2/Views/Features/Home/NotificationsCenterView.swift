@@ -724,15 +724,11 @@ struct NotificationsCenterView: View {
                         if authVM.isAdmin, let creatorId = item.createdBy {
                             let isAdminNotif = Self.completedActionKinds.contains(item.kind)
                             let creator = memberVM.member(byId: creatorId)
-                            // اعرض الاسم الفعلي للمدير/المراقب الذي عدّل (مع المنصب)
-                            let creatorName: String = {
-                                if let creator = creator {
-                                    let roleLabel = creator.roleName  // "مدير"/"مراقب"/"مشرف"/"عضو"
-                                    let nameShort = creator.shortFullName
-                                    return isAdminNotif ? "\(roleLabel) \(nameShort)" : nameShort
-                                }
-                                return L10n.t("الإدارة", "Admin")
-                            }()
+                            // في القائمة: نُبقي "الإدارة" كاسم مُعمَّم لإشعارات تعديل المدير
+                            // (الاسم الفعلي يظهر فقط داخل sheet التفاصيل، للمدراء فقط)
+                            let creatorName = isAdminNotif
+                                ? L10n.t("الإدارة", "Admin")
+                                : (creator?.shortFullName ?? L10n.t("الإدارة", "Admin"))
                             let roleColor: Color = isAdminNotif ? DS.Color.primary : (creator?.roleColor ?? DS.Color.accent)
 
                             HStack(spacing: 3) {
@@ -1405,8 +1401,16 @@ struct NotificationsCenterView: View {
                 if authVM.isAdmin, let creatorId = notification.createdBy {
                     let isAdminNotif = Self.completedActionKinds.contains(notification.kind)
                     let creator = memberVM.member(byId: creatorId)
-                    let creatorName = isAdminNotif ? L10n.t("الإدارة", "Admin") : (creator?.shortFullName ?? L10n.t("الإدارة", "Admin"))
-                    let roleColor: Color = isAdminNotif ? DS.Color.primary : (creator?.roleColor ?? DS.Color.accent)
+                    // داخل sheet التفاصيل (للمدراء فقط — gate isAdmin أعلاه): اعرض
+                    // الاسم الفعلي للشخص اللي عدّل + المنصب، عشان يتميّز بين المدراء.
+                    // الأعضاء العاديون أصلاً ما يدخلون هنا (محجوب بـauthVM.isAdmin).
+                    let creatorName: String = {
+                        guard let creator = creator else { return L10n.t("الإدارة", "Admin") }
+                        return isAdminNotif
+                            ? "\(creator.roleName) \(creator.shortFullName)"
+                            : creator.shortFullName
+                    }()
+                    let roleColor: Color = (creator?.roleColor ?? DS.Color.primary)
 
                     detailDivider
                     HStack(spacing: DS.Spacing.md) {
