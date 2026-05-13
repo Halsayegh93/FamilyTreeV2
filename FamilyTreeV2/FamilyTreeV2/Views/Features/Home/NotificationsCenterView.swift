@@ -724,7 +724,15 @@ struct NotificationsCenterView: View {
                         if authVM.isAdmin, let creatorId = item.createdBy {
                             let isAdminNotif = Self.completedActionKinds.contains(item.kind)
                             let creator = memberVM.member(byId: creatorId)
-                            let creatorName = isAdminNotif ? L10n.t("الإدارة", "Admin") : (creator?.shortFullName ?? L10n.t("الإدارة", "Admin"))
+                            // اعرض الاسم الفعلي للمدير/المراقب الذي عدّل (مع المنصب)
+                            let creatorName: String = {
+                                if let creator = creator {
+                                    let roleLabel = creator.roleName  // "مدير"/"مراقب"/"مشرف"/"عضو"
+                                    let nameShort = creator.shortFullName
+                                    return isAdminNotif ? "\(roleLabel) \(nameShort)" : nameShort
+                                }
+                                return L10n.t("الإدارة", "Admin")
+                            }()
                             let roleColor: Color = isAdminNotif ? DS.Color.primary : (creator?.roleColor ?? DS.Color.accent)
 
                             HStack(spacing: 3) {
