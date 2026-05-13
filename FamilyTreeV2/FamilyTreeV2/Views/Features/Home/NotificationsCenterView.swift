@@ -19,7 +19,8 @@ private struct NotificationKindStyle {
         "join_request":      .init(icon: "link.circle.fill",                         gradient: DS.Color.gradientPrimary, color: DS.Color.primary,     labelAr: "طلب انضمام",      labelEn: "Join Request"),
         "news":              .init(icon: "newspaper.fill",                           gradient: DS.Color.gradientPrimary, color: DS.Color.primary,     labelAr: "أخبار",           labelEn: "News"),
         "news_add":          .init(icon: "newspaper.fill",                           gradient: DS.Color.gradientPrimary, color: DS.Color.primary,     labelAr: "أخبار",           labelEn: "News"),
-        "admin":             .init(icon: "shield.fill",                              gradient: DS.Color.gradientAccent,  color: DS.Color.accent,      labelAr: "إدارة",           labelEn: "Admin"),
+        "admin":             .init(icon: "megaphone.fill",                           gradient: DS.Color.gradientAccent,  color: DS.Color.accent,      labelAr: "إعلان من الإدارة", labelEn: "Admin Announcement"),
+        "admin_broadcast":   .init(icon: "megaphone.fill",                           gradient: DS.Color.gradientAccent,  color: DS.Color.accent,      labelAr: "إعلان من الإدارة", labelEn: "Admin Announcement"),
         "admin_request":     .init(icon: "shield.fill",                              gradient: DS.Color.gradientAccent,  color: DS.Color.accent,      labelAr: "إدارة",           labelEn: "Admin"),
         "deceased_report":   .init(icon: "heart.fill",                               gradient: DS.Color.gradientAccent,  color: DS.Color.accent,      labelAr: "وفاة",            labelEn: "Deceased"),
         "child_add":         .init(icon: "person.badge.plus",                        gradient: DS.Color.gradientPrimary, color: DS.Color.secondary,   labelAr: "إضافة ابن",       labelEn: "Child Add"),
@@ -1241,13 +1242,38 @@ struct NotificationsCenterView: View {
                 detailFromToInline(change: firstChange, color: iconInfo.color)
             }
 
-            // المحتوى الأساسي — بدون اسم المدير من البداية لو موجود ككبسولة فوق
-            richBodyView(
-                bodyWithoutCreatorPrefix(notification.body, creator: actualCreator),
-                font: DS.Font.scaled(15, weight: .regular),
-                color: DS.Color.textPrimary
-            )
-            .frame(maxWidth: .infinity, alignment: .leading)
+            // المحتوى الأساسي — للإعلانات الإدارية يُعرض بشكل بارز (نص أكبر +
+            // علامة اقتباس على الحافة) لأن الرسالة نفسها هي محتوى الإشعار.
+            let isBroadcast = (notification.kind == "admin" || notification.kind == "admin_broadcast")
+            let bodyText = bodyWithoutCreatorPrefix(notification.body, creator: actualCreator)
+
+            if isBroadcast {
+                HStack(alignment: .top, spacing: DS.Spacing.md) {
+                    // شريط جانبي ملوّن (يلمّح لاقتباس)
+                    RoundedRectangle(cornerRadius: 2, style: .continuous)
+                        .fill(iconInfo.color.opacity(0.55))
+                        .frame(width: 3)
+
+                    richBodyView(
+                        bodyText,
+                        font: DS.Font.scaled(17, weight: .semibold),
+                        color: DS.Color.textPrimary
+                    )
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .padding(DS.Spacing.md)
+                .background(
+                    RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                        .fill(iconInfo.color.opacity(0.06))
+                )
+            } else {
+                richBodyView(
+                    bodyText,
+                    font: DS.Font.scaled(15, weight: .regular),
+                    color: DS.Color.textPrimary
+                )
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
 
             // التاريخ والوقت الكامل (تذييل خفيف)
             HStack(spacing: 4) {
