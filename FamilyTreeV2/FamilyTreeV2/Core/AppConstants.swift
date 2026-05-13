@@ -54,9 +54,11 @@ enum NotificationKind: String {
     case adminEditName = "admin_edit_name"
     case adminEditDates = "admin_edit_dates"
     case adminEditPhone = "admin_edit_phone"
+    case adminEditPhoneRemove = "admin_edit_phone_remove"
     case adminEditRole = "admin_edit_role"
     case adminEditFather = "admin_edit_father"
     case adminEditAvatar = "admin_edit_avatar"
+    case adminEditAvatarRemove = "admin_edit_avatar_remove"
     case adminEditChildAdd = "admin_edit_child_add"
     case adminEditChildRemove = "admin_edit_child_remove"
     // شجرة وعضوية

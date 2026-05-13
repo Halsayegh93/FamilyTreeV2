@@ -459,9 +459,11 @@ struct NotificationsCenterView: View {
         NotificationKind.adminEditName.rawValue,
         NotificationKind.adminEditDates.rawValue,
         NotificationKind.adminEditPhone.rawValue,
+        NotificationKind.adminEditPhoneRemove.rawValue,
         NotificationKind.adminEditRole.rawValue,
         NotificationKind.adminEditFather.rawValue,
         NotificationKind.adminEditAvatar.rawValue,
+        NotificationKind.adminEditAvatarRemove.rawValue,
         NotificationKind.adminEditChildAdd.rawValue,
         NotificationKind.adminEditChildRemove.rawValue,
         // عضوية (تم تفعيل)
