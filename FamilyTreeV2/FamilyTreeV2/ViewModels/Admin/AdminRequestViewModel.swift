@@ -1503,7 +1503,7 @@ class AdminRequestViewModel: ObservableObject {
         }
 
         // حذف فوري محلياً — ثم API بالخلفية
-        let deletedName = memberById(memberId)?.firstName ?? "عضو"
+        let deletedName = memberById(memberId)?.fourPartName ?? "عضو"
         withAnimation(.snappy(duration: 0.25)) {
             memberVM?.allMembers.removeAll(where: { $0.id == memberId })
             memberVM?.currentMemberChildren.removeAll(where: { $0.id == memberId })
@@ -1540,8 +1540,8 @@ class AdminRequestViewModel: ObservableObject {
                 await self?.notificationVM?.notifyAdminsWithPush(
                     title: L10n.t("حذف عضو", "Member Removed"),
                     body: L10n.t(
-                        "تم حذف «\(deletedName)» من شجرة العائلة",
-                        "«\(deletedName)» was removed from the family tree"
+                        "تم حذف عضو من شجرة العائلة\n\(deletedName)",
+                        "Removed from the family tree\n\(deletedName)"
                     ),
                     kind: "member_delete"
                 )
