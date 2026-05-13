@@ -1199,7 +1199,22 @@ struct AdminMemberDetailSheet: View {
                     updatedMember.phoneNumber = normalized ?? capturedPhone
                 }
             }
-            if fatherChanged { updatedMember.fatherId = capturedFatherId }
+            if fatherChanged {
+                updatedMember.fatherId = capturedFatherId
+                // ⚡️ تغيير الأب يغيّر full_name للعضو نفسه (chain جديد):
+                //   member.full_name = member.first_name + ' ' + new_father.full_name
+                if let newFatherId = capturedFatherId,
+                   let newFather = memberVM.member(byId: newFatherId) {
+                    let firstName = updatedMember.firstName.trimmingCharacters(in: .whitespacesAndNewlines)
+                    updatedMember.fullName = (firstName.isEmpty
+                        ? newFather.fullName
+                        : "\(firstName) \(newFather.fullName)")
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                } else {
+                    // أصبح رأس شجرة (بدون أب)
+                    updatedMember.fullName = updatedMember.firstName
+                }
+            }
             if genderChanged { updatedMember.gender = capturedGender }
             if datesChanged {
                 updatedMember.isDeceased = capturedIsDeceased
@@ -1208,8 +1223,10 @@ struct AdminMemberDetailSheet: View {
             }
             memberVM.upsertMemberLocally(updatedMember)
 
-            // ⚡️ تحديث محلّي فوري لأسماء الذرّية لو الاسم تغيّر — ما ينتظر السيرفر
-            if nameChanged {
+            // ⚡️ تحديث محلّي فوري لأسماء الذرّية:
+            //   - لو الاسم تغيّر → cascade من الأب
+            //   - لو الأب تغيّر → نفس الشي (full_name اتبنى من جديد، الذرّية ترث)
+            if nameChanged || fatherChanged {
                 memberVM.propagateNameToDescendantsLocally(of: capturedMemberId)
             }
         }

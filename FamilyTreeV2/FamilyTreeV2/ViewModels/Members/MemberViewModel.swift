@@ -1939,10 +1939,23 @@ class MemberViewModel: ObservableObject {
         let oldFatherName = _memberById[memberId]?.fatherId.flatMap { _memberById[$0]?.firstName }
         let newFatherName = fatherId.flatMap { _memberById[$0]?.firstName }
 
+        // أعد بناء full_name للعضو نفسه — تغيير الأب يغيّر السلسلة:
+        //   member.full_name = member.first_name + ' ' + new_father.full_name
+        // (لو null/جذر شجرة → full_name = first_name فقط)
+        let memberFirstName = _memberById[memberId]?.firstName ?? ""
+        let newFatherFullName: String? = fatherId.flatMap { _memberById[$0]?.fullName }
+        let rebuiltFullName: String = {
+            let f = memberFirstName.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let parentName = newFatherFullName else { return f }
+            return f.isEmpty ? parentName : "\(f) \(parentName)"
+        }()
+
         do {
             // نرسل الـ UUID كـ String، وإذا كان nil نرسل NULL للسيرفر
+            // + نرسل full_name الجديد لتُفعّل trigger الـcascade على الذرّية
             var updateData: [String: AnyEncodable] = [
-                "father_id": AnyEncodable(fatherId?.uuidString)
+                "father_id": AnyEncodable(fatherId?.uuidString),
+                "full_name": AnyEncodable(rebuiltFullName)
             ]
             updateData.merge(adminAuditFields(for: memberId)) { _, new in new }
 
@@ -1952,7 +1965,8 @@ class MemberViewModel: ObservableObject {
                 .eq("id", value: memberId.uuidString)
                 .execute()
 
-            await fetchSingleMember(id: memberId)
+            // الـtrigger السيرفري cascadeّت الذرّية. نجلب البيانات الكاملة المحدّثة.
+            await fetchAllMembers(force: true)
 
             await notifyAdminsOfMemberEdit(
                 memberId: memberId,
@@ -1964,7 +1978,7 @@ class MemberViewModel: ObservableObject {
                 ]
             )
 
-            Log.info("تم تحديث ربط الأب بنجاح")
+            Log.info("تم تحديث ربط الأب + إعادة بناء full_name → cascade للذرّية")
         } catch {
             Log.error("خطأ في ربط الأب: \(error.localizedDescription)")
         }
