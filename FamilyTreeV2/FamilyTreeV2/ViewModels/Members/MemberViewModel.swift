@@ -1425,120 +1425,67 @@ class MemberViewModel: ObservableObject {
     }
 
     // MARK: - تحديث أسماء الذرية تلقائياً عند تغيير اسم الأب/الجد
+    //
+    // المنطق المعتمد (يطابق Supabase trigger trg_cascade_full_name_to_children):
+    //
+    //   child.full_name = child.first_name + " " + parent.full_name
+    //
+    // ✅ يلتقط أي تغيير في full_name للأب — حتى لو الجزء الأوسط بس
+    //    (مثلاً: "حسن صلاح ال محمد" → "حسن صلاح آل محمد").
+    // ❌ المنطق القديم كان يبني من سلسلة firstName للآباء — فيتجاهل
+    //    تغييرات في أي جزء غير الاسم الأول.
 
-    /// يبني الاسم الكامل من firstName + سلسلة أسماء الآباء
-    private func buildFullName(for member: FamilyMember, lookup: [UUID: FamilyMember]) -> String {
-        var parts = [member.firstName]
-        var current = member
-        var visited: Set<UUID> = [member.id]
-        while let fatherId = current.fatherId,
-              let father = lookup[fatherId],
-              !visited.contains(father.id) {
-            visited.insert(father.id)
-            parts.append(father.firstName)
-            current = father
-        }
-        return parts.joined(separator: " ")
-    }
-
-    /// يجمع كل الذرية (أبناء، أحفاد، ...) بشكل تعاودي
-    private func collectAllDescendants(of parentId: UUID, from members: [FamilyMember]) -> [FamilyMember] {
-        let children = members.filter { $0.fatherId == parentId }
-        var all = children
-        for child in children {
-            all.append(contentsOf: collectAllDescendants(of: child.id, from: members))
-        }
-        return all
-    }
-
-    /// تحديث **محلّي فوري** لأسماء الذرّية في الكاش — للاستجابة الفورية في الـUI
-    /// قبل ما يرجع السيرفر. يجب استدعاؤه **بعد** تحديث الأب محلياً.
-    /// السيرفر (trigger) يتولّى الحفظ النهائي بشكل موثوق.
+    /// تحديث **محلّي فوري** لأسماء الذرّية في الكاش — استجابة فورية في الـUI.
+    /// يجب استدعاؤه **بعد** تحديث الأب محلياً (full_name + first_name).
+    /// السيرفر (trigger) يتولّى نفس العملية للحفظ النهائي.
     @MainActor
     func propagateNameToDescendantsLocally(of memberId: UUID) {
-        // lookup من الكاش الحالي بعد التحديث المحلي للأب
-        let lookup = _memberById
-        guard let parent = lookup[memberId] else {
+        guard _memberById[memberId] != nil else {
             Log.warning("[Cascade-Local] الأب غير موجود في الكاش — memberId=\(memberId)")
             return
         }
-        let descendants = collectAllDescendants(of: memberId, from: Array(lookup.values))
-        Log.info("[Cascade-Local] انتشار اسم \(parent.firstName) → \(descendants.count) ذرّية")
 
-        guard !descendants.isEmpty else { return }
-
+        // BFS من الأب نحو الأسفل — كل مستوى يستخدم fullName المحدّث للأب
+        var queue: [UUID] = [memberId]
         var updatedCount = 0
-        var skippedCount = 0
-        for descendant in descendants {
-            let newFullName = buildFullName(for: descendant, lookup: lookup)
-            guard newFullName != descendant.fullName else {
-                skippedCount += 1
-                continue
+        var visited: Set<UUID> = [memberId]
+
+        while let parentId = queue.first {
+            queue.removeFirst()
+            guard let parentNow = _memberById[parentId] else { continue }
+            let parentFullName = parentNow.fullName
+
+            // أبناء مباشرين لهذا الأب
+            let directChildren = allMembers.filter { $0.fatherId == parentId }
+            for child in directChildren {
+                guard !visited.contains(child.id) else { continue }
+                visited.insert(child.id)
+                queue.append(child.id)
+
+                // الصيغة المعتمدة: child.firstName + ' ' + parent.fullName (الجديد)
+                let firstName = child.firstName.trimmingCharacters(in: .whitespacesAndNewlines)
+                let newFullName = (firstName.isEmpty
+                    ? parentFullName
+                    : "\(firstName) \(parentFullName)")
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+
+                guard newFullName != child.fullName else { continue }
+                var updated = child
+                updated.fullName = newFullName
+                upsertMemberLocally(updated)
+                updatedCount += 1
             }
-            var updated = descendant
-            updated.fullName = newFullName
-            upsertMemberLocally(updated)
-            updatedCount += 1
         }
-        Log.info("[Cascade-Local] محدّث \(updatedCount) • متطابق \(skippedCount) (من أصل \(descendants.count))")
+
+        Log.info("[Cascade-Local] انتشر الاسم → محدّث \(updatedCount) من \(visited.count - 1) ذرّية")
     }
 
-    /// (احتياطي/قديم) — السيرفر بعد ما عنده trigger يتولّى cascade على الذرّية
-    /// تلقائياً (`trg_cascade_full_name_to_children`). نُبقي هذه الدالة خفيفة
-    /// عشان لو الـtrigger مو موجود بسبب dev DB قديم، يبقى الـcascade يشتغل.
+    /// (طبقة احتياط) — السيرفر trigger يتولّى الـcascade على البيانات.
+    /// نكتفي هنا بـfetch بسيط للتحقق من تطابق الكاش مع السيرفر.
     private func propagateNameToDescendants(of memberId: UUID) async {
-        // نجيب آخر نسخة من البيانات (بعد التحديث)
-        let freshMembers: [FamilyMember]
-        do {
-            freshMembers = try await supabase
-                .from("profiles")
-                .select()
-                .execute()
-                .value
-        } catch {
-            Log.error("فشل جلب الأعضاء لتحديث الأسماء: \(error.localizedDescription)")
-            return
-        }
-
-        let lookup = Dictionary(uniqueKeysWithValues: freshMembers.map { ($0.id, $0) })
-        let descendants = collectAllDescendants(of: memberId, from: freshMembers)
-
-        guard !descendants.isEmpty else {
-            Log.info("[Cascade] لا ذرّية للعضو \(memberId) — لا حاجة للتحديث")
-            return
-        }
-
-        var updatedCount = 0
-        var skippedCount = 0
-        var failedCount = 0
-
-        for descendant in descendants {
-            let newFullName = buildFullName(for: descendant, lookup: lookup)
-            // لو الـtrigger السيرفري شغّال بالفعل، الاسم بيكون صحيح من السيرفر
-            // فهذه الحلقة هتسكّ ٩٩٪ من الذرّية تلقائياً (skipped).
-            guard newFullName != descendant.fullName else {
-                skippedCount += 1
-                continue
-            }
-
-            let update: [String: AnyEncodable] = [
-                "full_name": AnyEncodable(newFullName)
-            ]
-            do {
-                try await supabase
-                    .from("profiles")
-                    .update(update)
-                    .eq("id", value: descendant.id.uuidString)
-                    .execute()
-                updatedCount += 1
-            } catch {
-                // ما نوقف باقي الذرّية — نسجّل بوضوح ونكمل
-                failedCount += 1
-                Log.error("[Cascade] فشل تحديث اسم \(descendant.firstName) (\(descendant.id)): \(error.localizedDescription)")
-            }
-        }
-
-        Log.info("[Cascade] الذرّية: محدّث \(updatedCount) • متطابق \(skippedCount) • فاشل \(failedCount)")
+        // الـtrigger السيرفري حدّث الذرّية فعلاً. fetchAllMembers (المُستدعى
+        // بعد هذه الدالة) يجلب التحديثات. لا داعي لـHTTP per descendant.
+        Log.info("[Cascade] السيرفر trigger يتولّى cascade — في انتظار fetchAllMembers")
     }
     
     // MARK: - Delete Member (Admin only)
