@@ -21,6 +21,7 @@ struct AddSonByAdminSheet: View {
     @State private var hasDeathDate: Bool = false
     @State private var deathDate: Date = Date()
     @State private var isSaving = false
+    @State private var showOfflineAlert = false
 
     init(parent: FamilyMember, editingChild: FamilyMember? = nil) {
         self.parent = parent
@@ -113,6 +114,17 @@ struct AddSonByAdminSheet: View {
             }
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+        .alert(
+            L10n.t("لا يوجد اتصال بالإنترنت", "No Internet Connection"),
+            isPresented: $showOfflineAlert
+        ) {
+            Button(L10n.t("حسناً", "OK"), role: .cancel) {}
+        } message: {
+            Text(L10n.t(
+                "لا يمكن \(isEditMode ? "تعديل" : "إضافة") الابن بدون اتصال بالإنترنت. تأكّد من الاتصال ثم حاول مجدّداً.",
+                "Cannot \(isEditMode ? "update" : "add") the child without an internet connection. Check your connection and try again."
+            ))
+        }
         .onAppear {
             // في وضع الإضافة: استخدم رمز الدولة من تسجيل الدخول
             if editingChild == nil, !lastAuthDialingCode.isEmpty {
@@ -318,6 +330,11 @@ struct AddSonByAdminSheet: View {
     // MARK: - Save Action
     private func saveAction() {
         guard !isSaving else { return }
+        // تحقّق من الإنترنت قبل الإرسال — لا حفظ بدون اتصال (لا offline queue حالياً)
+        guard NetworkMonitor.shared.isConnected else {
+            showOfflineAlert = true
+            return
+        }
         isSaving = true
         // Capture values before dismiss
         let capturedFirstName = firstName
