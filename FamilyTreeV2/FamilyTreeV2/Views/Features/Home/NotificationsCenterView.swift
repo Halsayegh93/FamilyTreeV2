@@ -1081,7 +1081,50 @@ struct NotificationsCenterView: View {
     // MARK: - Detail: Hero (compact horizontal)
     private func detailHero(notification: AppNotification, iconInfo: NotificationKindStyle, date: Date) -> some View {
         let isBroadcast = (notification.kind == "admin" || notification.kind == "admin_broadcast")
-        return HStack(alignment: .center, spacing: DS.Spacing.md) {
+
+        if isBroadcast {
+            // Hero فخم للإعلانات: مركّز عمودياً + هالة متوهّجة + عنوان كبير
+            return AnyView(
+                VStack(spacing: DS.Spacing.md) {
+                    ZStack {
+                        // هالة متدرّجة خلف الأيقونة
+                        Circle()
+                            .fill(iconInfo.color.opacity(0.18))
+                            .frame(width: 96, height: 96)
+                            .blur(radius: 6)
+                        Circle()
+                            .fill(iconInfo.gradient)
+                            .frame(width: 72, height: 72)
+                            .shadow(color: iconInfo.color.opacity(0.40), radius: 14, x: 0, y: 6)
+                        Image(systemName: iconInfo.icon)
+                            .font(.system(size: 30, weight: .bold))
+                            .foregroundColor(.white)
+                            .symbolRenderingMode(.hierarchical)
+                    }
+
+                    VStack(spacing: 6) {
+                        Text(L10n.t("إعلان رسمي", "Official Announcement"))
+                            .font(DS.Font.scaled(10, weight: .heavy))
+                            .foregroundColor(iconInfo.color)
+                            .tracking(2)
+                            .textCase(.uppercase)
+
+                        Text(notification.title)
+                            .font(DS.Font.scaled(22, weight: .bold))
+                            .foregroundColor(DS.Color.textPrimary)
+                            .lineLimit(3)
+                            .multilineTextAlignment(.center)
+
+                        Text(relativeTime(date))
+                            .font(DS.Font.scaled(12, weight: .medium))
+                            .foregroundColor(DS.Color.textTertiary)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+            )
+        }
+
+        return AnyView(HStack(alignment: .center, spacing: DS.Spacing.md) {
             ZStack {
                 Circle()
                     .fill(iconInfo.gradient)
@@ -1107,7 +1150,7 @@ struct NotificationsCenterView: View {
             }
 
             Spacer(minLength: 0)
-        }
+        })
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
@@ -1196,11 +1239,9 @@ struct NotificationsCenterView: View {
         let bodyText = bodyWithoutCreatorPrefix(notification.body, creator: actualCreator)
 
         return VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            // ترويسة: chip التصنيف + chip المدير المنفّذ + الحالة
-            // (للإعلانات: نخفي chip التصنيف والحالة — الـHero بـmegaphone كافٍ،
-            //  ونبقي chip المرسِل فقط لتعريف من أرسل)
-            HStack(spacing: DS.Spacing.xs) {
-                if !isBroadcast {
+            // ترويسة chips — تُخفى للإعلانات (الـHero الفخم يُغني عنها)
+            if !isBroadcast {
+                HStack(spacing: DS.Spacing.xs) {
                     HStack(spacing: 4) {
                         Image(systemName: iconInfo.icon)
                             .font(DS.Font.scaled(10, weight: .bold))
@@ -1213,31 +1254,27 @@ struct NotificationsCenterView: View {
                     .background(iconInfo.color.opacity(0.12))
                     .clipShape(Capsule())
                     .overlay(Capsule().stroke(iconInfo.color.opacity(0.20), lineWidth: 0.5))
-                }
 
-                // chip المدير المنفّذ
-                if let creator = actualCreator {
-                    HStack(spacing: 3) {
-                        Image(systemName: "person.fill")
-                            .font(DS.Font.scaled(9, weight: .bold))
-                        Text(creator.shortFullName)
-                            .font(DS.Font.scaled(10, weight: .bold))
-                            .lineLimit(1)
-                            .truncationMode(.tail)
+                    if let creator = actualCreator {
+                        HStack(spacing: 3) {
+                            Image(systemName: "person.fill")
+                                .font(DS.Font.scaled(9, weight: .bold))
+                            Text(creator.shortFullName)
+                                .font(DS.Font.scaled(10, weight: .bold))
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                        }
+                        .foregroundColor(creator.roleColor)
+                        .padding(.horizontal, DS.Spacing.sm)
+                        .padding(.vertical, 3)
+                        .background(creator.roleColor.opacity(0.10))
+                        .clipShape(Capsule())
+                        .overlay(Capsule().stroke(creator.roleColor.opacity(0.20), lineWidth: 0.5))
+                        .layoutPriority(-1)
                     }
-                    .foregroundColor(creator.roleColor)
-                    .padding(.horizontal, DS.Spacing.sm)
-                    .padding(.vertical, 3)
-                    .background(creator.roleColor.opacity(0.10))
-                    .clipShape(Capsule())
-                    .overlay(Capsule().stroke(creator.roleColor.opacity(0.20), lineWidth: 0.5))
-                    .layoutPriority(-1)
-                }
 
-                Spacer(minLength: 0)
+                    Spacer(minLength: 0)
 
-                if !isBroadcast {
-                    // حالة القراءة كنقطة ملونة + نص صغير
                     HStack(spacing: 4) {
                         Circle()
                             .fill(notification.read ? DS.Color.textTertiary : DS.Color.primary)
@@ -1254,13 +1291,51 @@ struct NotificationsCenterView: View {
                 detailFromToInline(change: firstChange, color: iconInfo.color)
             }
 
-            // المحتوى الأساسي — للإعلانات نص أكبر لأن الرسالة هي محتوى الإشعار
-            richBodyView(
-                bodyText,
-                font: DS.Font.scaled(isBroadcast ? 17 : 15, weight: isBroadcast ? .semibold : .regular),
-                color: DS.Color.textPrimary
-            )
-            .frame(maxWidth: .infinity, alignment: .leading)
+            // المحتوى الأساسي
+            if isBroadcast {
+                // عرض فخم: علامة اقتباس كبيرة + نص بارز مركز + توقيع em-dash
+                VStack(spacing: DS.Spacing.md) {
+                    Text("”")
+                        .font(.system(size: 56, weight: .black))
+                        .foregroundColor(iconInfo.color.opacity(0.30))
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding(.bottom, -DS.Spacing.xl)
+
+                    richBodyView(
+                        bodyText,
+                        font: DS.Font.scaled(19, weight: .semibold),
+                        color: DS.Color.textPrimary
+                    )
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.horizontal, DS.Spacing.md)
+
+                    if let creator = actualCreator {
+                        HStack(spacing: 6) {
+                            Rectangle()
+                                .fill(iconInfo.color.opacity(0.40))
+                                .frame(width: 24, height: 1)
+                            Text(creator.shortFullName)
+                                .font(DS.Font.scaled(12, weight: .bold))
+                                .foregroundColor(iconInfo.color)
+                            Rectangle()
+                                .fill(iconInfo.color.opacity(0.40))
+                                .frame(width: 24, height: 1)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding(.top, DS.Spacing.xs)
+                    }
+                }
+                .padding(.vertical, DS.Spacing.md)
+                .frame(maxWidth: .infinity)
+            } else {
+                richBodyView(
+                    bodyText,
+                    font: DS.Font.scaled(15, weight: .regular),
+                    color: DS.Color.textPrimary
+                )
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
 
             // التاريخ والوقت الكامل (تذييل خفيف)
             HStack(spacing: 4) {
@@ -1270,6 +1345,7 @@ struct NotificationsCenterView: View {
                     .font(DS.Font.scaled(11, weight: .medium))
             }
             .foregroundColor(DS.Color.textTertiary)
+            .frame(maxWidth: .infinity, alignment: isBroadcast ? .center : .leading)
             .padding(.top, DS.Spacing.xs)
 
             // رقم الإشعار (للإدارة فقط) — انقر للنسخ
@@ -1307,15 +1383,23 @@ struct NotificationsCenterView: View {
                 )
             }
         }
-        .padding(DS.Spacing.lg)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(isBroadcast ? DS.Spacing.xl : DS.Spacing.lg)
+        .frame(maxWidth: .infinity, alignment: isBroadcast ? .center : .leading)
         .background(
             RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
                 .fill(DS.Color.surface)
         )
         .overlay(
             RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
-                .stroke(DS.Color.textTertiary.opacity(0.10), lineWidth: 0.5)
+                .strokeBorder(
+                    isBroadcast
+                        ? AnyShapeStyle(LinearGradient(
+                            colors: [iconInfo.color.opacity(0.45), iconInfo.color.opacity(0.10)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing))
+                        : AnyShapeStyle(DS.Color.textTertiary.opacity(0.10)),
+                    lineWidth: isBroadcast ? 1.0 : 0.5
+                )
         )
         .dsSubtleShadow()
     }
