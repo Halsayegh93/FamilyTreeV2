@@ -110,6 +110,7 @@ class DiwaniyasViewModel: ObservableObject {
     }
     
     func addDiwaniya(ownerId: UUID, ownerName: String, title: String, scheduleText: String?, contactPhone: String?, mapsUrl: String?, address: String? = nil, autoApprove: Bool = false) async -> Bool {
+        guard NetworkMonitor.shared.requireOnline() else { return false }
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedOwner = ownerName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedTitle.isEmpty else {
@@ -189,6 +190,7 @@ class DiwaniyasViewModel: ObservableObject {
     }
     
     func deleteDiwaniya(id: UUID) async {
+        guard NetworkMonitor.shared.requireOnline() else { return }
         guard authVM?.canDeleteDiwaniyas == true else {
             self.errorMessage = L10n.t("ليس لديك صلاحية لحذف الديوانية.", "You don't have permission to delete diwaniyas.")
             Log.warning("[AUTH] Unauthorized deleteDiwaniya attempt")
@@ -210,6 +212,7 @@ class DiwaniyasViewModel: ObservableObject {
     }
     
     func approveDiwaniya(id: UUID, adminId: UUID) async {
+        guard NetworkMonitor.shared.requireOnline() else { return }
         // حفظ بيانات الديوانية قبل الحذف المحلي (للإشعارات)
         let info = pendingDiwaniyas.first(where: { $0.id == id })
         let ownerId = info?.ownerId
@@ -260,6 +263,7 @@ class DiwaniyasViewModel: ObservableObject {
     }
     
     func updateDiwaniya(id: UUID, title: String, ownerName: String, scheduleText: String?, contactPhone: String?, mapsUrl: String?, address: String?, isClosed: Bool) async -> Bool {
+        guard NetworkMonitor.shared.requireOnline() else { return false }
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedOwner = ownerName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedTitle.isEmpty else {

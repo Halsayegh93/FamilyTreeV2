@@ -4,6 +4,7 @@ struct RootView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var appSettingsVM: AppSettingsViewModel
     @EnvironmentObject var notificationVM: NotificationViewModel
+    @ObservedObject private var network = NetworkMonitor.shared
 
     var body: some View {
         Group {
@@ -46,6 +47,19 @@ struct RootView: View {
             }
         }
         .animation(.default, value: authVM.status)
+        // Alert مركزي لأي عملية كتابة بدون اتصال — ViewModels تستدعي
+        // NetworkMonitor.shared.requireOnline() اللي يضبط هذا الفلاج.
+        .alert(
+            L10n.t("لا يوجد اتصال بالإنترنت", "No Internet Connection"),
+            isPresented: $network.showOfflineAlert
+        ) {
+            Button(L10n.t("حسناً", "OK"), role: .cancel) {}
+        } message: {
+            Text(L10n.t(
+                "لا يمكن تنفيذ هذا الإجراء بدون اتصال بالإنترنت. تأكّد من الاتصال ثم حاول مجدّداً.",
+                "This action requires an internet connection. Please check your connection and try again."
+            ))
+        }
     }
 }
 

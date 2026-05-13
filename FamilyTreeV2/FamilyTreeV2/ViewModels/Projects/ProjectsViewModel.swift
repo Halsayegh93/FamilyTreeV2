@@ -64,6 +64,7 @@ class ProjectsViewModel: ObservableObject {
                     twitterUrl: String?,
                     snapchatUrl: String?, whatsappNumber: String?,
                     phoneNumber: String?) async -> Bool {
+        guard NetworkMonitor.shared.requireOnline() else { return false }
         isLoading = true
         errorMessage = nil
         do {
@@ -154,6 +155,7 @@ class ProjectsViewModel: ObservableObject {
     // MARK: - Approve
     
     func approveProject(id: UUID, approvedBy: UUID) async {
+        guard NetworkMonitor.shared.requireOnline() else { return }
         // حفظ معلومات المشروع قبل الحذف المحلي للإشعار
         let projectInfo = pendingProjects.first(where: { $0.id == id })
 
@@ -257,6 +259,7 @@ class ProjectsViewModel: ObservableObject {
                        instagramUrl: String?, twitterUrl: String?,
                        snapchatUrl: String?,
                        whatsappNumber: String?, phoneNumber: String?) async -> Bool {
+        guard NetworkMonitor.shared.requireOnline() else { return false }
         isLoading = true
         errorMessage = nil
         do {
@@ -291,6 +294,7 @@ class ProjectsViewModel: ObservableObject {
     // MARK: - Delete
     
     func deleteProject(id: UUID) async {
+        guard NetworkMonitor.shared.requireOnline() else { return }
         guard authVM?.isAdmin == true else { Log.warning("حذف المشروع مرفوض: الصلاحية للمدير فقط"); return }
         do {
             try await supabase

@@ -114,6 +114,7 @@ class AdminRequestViewModel: ObservableObject {
 
     /// إرسال طلب تعديل الشجرة (إضافة / تعديل اسم / حذف) — v2 structured payload
     func submitTreeEditRequest(payload: TreeEditPayload) async -> Bool {
+        guard NetworkMonitor.shared.requireOnline() else { return false }
         guard let user = currentUser else { return false }
         self.isLoading = true
         defer { self.isLoading = false }
@@ -200,6 +201,7 @@ class AdminRequestViewModel: ObservableObject {
     }
 
     func approveTreeEditRequest(request: AdminRequest) async {
+        guard NetworkMonitor.shared.requireOnline() else { return }
         let payload = request.treeEditPayload
 
         optimisticRemove(from: &treeEditRequests, id: request.id, apiWork: { [weak self] in
@@ -423,6 +425,7 @@ class AdminRequestViewModel: ObservableObject {
     }
 
     func rejectTreeEditRequest(request: AdminRequest, reason: String? = nil) async {
+        guard NetworkMonitor.shared.requireOnline() else { return }
         guard authVM?.canRejectRequests == true else { Log.warning("رفض الطلب مرفوض: الصلاحية للإدارة فقط"); return }
         let payload = request.treeEditPayload
         let actionAr = payload?.resolvedAction?.arabicLabel ?? L10n.t("التعديل", "edit")
@@ -484,6 +487,7 @@ class AdminRequestViewModel: ObservableObject {
     // MARK: - Deceased Status Requests
 
     func requestDeceasedStatus(memberId: UUID, deathDate: Date?) async {
+        guard NetworkMonitor.shared.requireOnline() else { return }
         self.isLoading = true
         do {
             let dateString = deathDate.map { DateHelper.format($0) } ?? "غير محدد"
@@ -542,6 +546,7 @@ class AdminRequestViewModel: ObservableObject {
     }
 
     func approveDeceasedRequest(request: AdminRequest) async {
+        guard NetworkMonitor.shared.requireOnline() else { return }
         let memberName = request.member?.fullName ?? ""
         optimisticRemove(from: &deceasedRequests, id: request.id, apiWork: { [weak self] in
             do {
@@ -581,6 +586,7 @@ class AdminRequestViewModel: ObservableObject {
     }
 
     func rejectDeceasedRequest(request: AdminRequest) async {
+        guard NetworkMonitor.shared.requireOnline() else { return }
         guard isAdmin else { Log.warning("رفض الطلب مرفوض: الصلاحية للمدير فقط"); return }
         let memberName = request.member?.fullName ?? ""
         optimisticRemove(from: &deceasedRequests, id: request.id, apiWork: { [weak self] in
@@ -772,6 +778,7 @@ class AdminRequestViewModel: ObservableObject {
     // MARK: - Admin Add Son
 
     func adminAddSon(firstName: String, parent: FamilyMember?) async {
+        guard NetworkMonitor.shared.requireOnline() else { return }
         self.isLoading = true
 
         do {
@@ -1304,6 +1311,7 @@ class AdminRequestViewModel: ObservableObject {
     /// Copies the tree position data (father, children, bio, photos) from the old tree record
     /// to the new registration record (which has the correct auth UUID), then deletes the old record.
     func mergeMemberIntoTreeMember(newMemberId: UUID, existingTreeMemberId: UUID) async {
+        guard NetworkMonitor.shared.requireOnline() else { return }
         guard canModerate else {
             Log.error("[MERGE] مرفوض: الصلاحية للمدير فقط")
             self.mergeResult = .failure(L10n.t("ليس لديك صلاحية لإجراء الدمج.", "You don't have permission to merge."))
@@ -1487,6 +1495,7 @@ class AdminRequestViewModel: ObservableObject {
 
     /// Reject a join request or permanently delete a member
     func rejectOrDeleteMember(memberId: UUID) async {
+        guard NetworkMonitor.shared.requireOnline() else { return }
         guard authVM?.canDeleteMembers == true else {
             Log.error("تم رفض حذف السجل: الصلاحية للمالك فقط")
             self.errorMessage = L10n.t("ليس لديك صلاحية لرفض الطلبات.", "You don't have permission to reject requests.")

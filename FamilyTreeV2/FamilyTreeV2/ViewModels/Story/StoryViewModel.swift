@@ -147,6 +147,7 @@ class StoryViewModel: ObservableObject {
     // MARK: - Upload Story
 
     func uploadStory(image: UIImage, caption: String?) async -> Bool {
+        guard NetworkMonitor.shared.requireOnline() else { return false }
         guard let userId = currentUser?.id else { return false }
         // إزالة الـ alpha channel لتقليل حجم الذاكرة
         guard let imageData = ImageProcessor.process(image, for: .story) else { return false }
@@ -217,6 +218,7 @@ class StoryViewModel: ObservableObject {
     // MARK: - Approve Story
 
     func approveStory(_ story: FamilyStory) async {
+        guard NetworkMonitor.shared.requireOnline() else { return }
         guard canModerate, let approverId = currentUser?.id else { return }
 
         // Optimistic remove from pending
@@ -258,6 +260,7 @@ class StoryViewModel: ObservableObject {
     // MARK: - Reject Story
 
     func rejectStory(_ story: FamilyStory) async {
+        guard NetworkMonitor.shared.requireOnline() else { return }
         guard canModerate else { return }
 
         pendingStories.removeAll { $0.id == story.id }
@@ -297,6 +300,7 @@ class StoryViewModel: ObservableObject {
     // MARK: - Delete Story
 
     func deleteStory(_ story: FamilyStory) async {
+        guard NetworkMonitor.shared.requireOnline() else { return }
         do {
             let urlComponents = story.imageUrl.components(separatedBy: "/stories/")
             if let path = urlComponents.last?.components(separatedBy: "?").first {

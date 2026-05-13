@@ -13,6 +13,24 @@ final class NetworkMonitor: ObservableObject {
     @Published private(set) var isConnected: Bool = true
     @Published private(set) var connectionType: NWInterface.InterfaceType?
 
+    /// فلاج عام لإظهار alert "لا يوجد اتصال" — أي ViewModel يستدعي
+    /// `requireOnline()` يضبط هذا الفلاج، وRootView يعرض الـalert.
+    @Published var showOfflineAlert: Bool = false
+
+    /// تحقّق سريع قبل أي عملية كتابة. لو offline: يضبط alert + يرجع false.
+    /// مثال:
+    /// ```swift
+    /// guard NetworkMonitor.shared.requireOnline() else { return }
+    /// ```
+    @discardableResult
+    func requireOnline() -> Bool {
+        guard isConnected else {
+            showOfflineAlert = true
+            return false
+        }
+        return true
+    }
+
     private let monitor = NWPathMonitor()
     private let queue = DispatchQueue(label: "com.familytree.networkmonitor")
 

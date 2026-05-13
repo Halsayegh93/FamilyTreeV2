@@ -343,6 +343,7 @@ class NewsViewModel: ObservableObject {
     // MARK: - Add Comment
 
     func addNewsComment(to postId: UUID, text: String) async -> Bool {
+        guard NetworkMonitor.shared.requireOnline() else { return false }
         guard let memberId = await authenticatedUserId(),
               let authorName = currentUser?.fullName else { return false }
 
@@ -400,6 +401,7 @@ class NewsViewModel: ObservableObject {
     // MARK: - Delete Comment (Admin/Moderator)
 
     func deleteComment(commentId: UUID, postId: UUID) async -> Bool {
+        guard NetworkMonitor.shared.requireOnline() else { return false }
         do {
             try await supabase
                 .from("news_comments")
@@ -530,6 +532,7 @@ class NewsViewModel: ObservableObject {
         pollQuestion: String? = nil,
         pollOptions: [String] = []
     ) async -> Bool {
+        guard NetworkMonitor.shared.requireOnline() else { return false }
         guard let user = currentUser else {
             Log.error("لا يوجد مستخدم مسجل دخول")
             newsPostErrorMessage = "لا يوجد مستخدم مسجل دخول."
@@ -633,6 +636,7 @@ class NewsViewModel: ObservableObject {
         pollQuestion: String? = nil,
         pollOptions: [String] = []
     ) async -> Bool {
+        guard NetworkMonitor.shared.requireOnline() else { return false }
         guard let userId = currentUser?.id, currentUser?.role != .pending else {
             newsPostErrorMessage = "غير مصرح لك بتعديل الخبر."
             return false
@@ -712,6 +716,7 @@ class NewsViewModel: ObservableObject {
     // MARK: - Approve News Post
 
     func approveNewsPost(postId: UUID) async {
+        guard NetworkMonitor.shared.requireOnline() else { return }
         guard canModerate, let approverId = currentUser?.id else { return }
         guard newsApprovalFeatureAvailable else { return }
 
@@ -756,6 +761,7 @@ class NewsViewModel: ObservableObject {
     // MARK: - Reject News Post
 
     func rejectNewsPost(postId: UUID) async {
+        guard NetworkMonitor.shared.requireOnline() else { return }
         guard authVM?.isAdmin == true else { Log.warning("رفض الخبر مرفوض: الصلاحية للمدير فقط"); return }
 
         optimisticRemove(from: &pendingNewsRequests, id: postId, apiWork: { [weak self] in
@@ -778,6 +784,7 @@ class NewsViewModel: ObservableObject {
     // MARK: - Delete News Post
 
     func deleteNewsPost(postId: UUID) async {
+        guard NetworkMonitor.shared.requireOnline() else { return }
         guard authVM?.canDeleteNews == true else { return }
         self.isLoading = true
 

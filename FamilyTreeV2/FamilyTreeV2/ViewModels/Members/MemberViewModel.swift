@@ -316,6 +316,7 @@ class MemberViewModel: ObservableObject {
         gender: String?,
         phoneNumber: String?
     ) async -> Bool {
+        guard NetworkMonitor.shared.requireOnline() else { return false }
         guard canModerate else {
             Log.warning("[AUTH] Unauthorized adminAddMember attempt")
             return false
@@ -385,6 +386,7 @@ class MemberViewModel: ObservableObject {
         gender: String?,
         silent: Bool = false
     ) async -> UUID? {
+        guard NetworkMonitor.shared.requireOnline() else { return nil }
         self.isLoading = true
         
         // 1. دالة داخلية تضمن تحويل أي رقم عربي إلى إنجليزي يدوياً لقطع الشك باليقين ✅
@@ -540,6 +542,7 @@ class MemberViewModel: ObservableObject {
     
     // رفع صورة العضو
     func uploadAvatar(image: UIImage, for memberId: UUID) async {
+        guard NetworkMonitor.shared.requireOnline() else { return }
         self.isLoading = true
 
         // 1. ضغط الصورة وتحويلها لبيانات (في خلفية لتجنب تجميد UI)
@@ -651,6 +654,7 @@ class MemberViewModel: ObservableObject {
     }
     
     func deleteAvatar(for memberId: UUID) async {
+        guard NetworkMonitor.shared.requireOnline() else { return }
         guard memberId == currentUser?.id || canModerate else {
             Log.warning("[AUTH] Unauthorized deleteAvatar attempt for \(memberId)")
             return
@@ -1135,6 +1139,7 @@ class MemberViewModel: ObservableObject {
         deathDate: Date?,
         isPhoneHidden: Bool
     ) async -> Bool {
+        guard NetworkMonitor.shared.requireOnline() else { return false }
         // التحقق من تكرار الرقم
         if !phoneNumber.isEmpty {
             let check = isPhoneDuplicate(phoneNumber, excludingMemberId: memberId)
@@ -1260,6 +1265,7 @@ class MemberViewModel: ObservableObject {
 
     /// تحديث السيرة الذاتية (bio_json)
     func updateMemberBio(memberId: UUID, bio: [FamilyMember.BioStation]) async {
+        guard NetworkMonitor.shared.requireOnline() else { return }
         do {
             try await supabase
                 .from("profiles")
@@ -1361,6 +1367,7 @@ class MemberViewModel: ObservableObject {
     ///   تُستخدم من saveAction (admin sheet) عشان نرسل إشعار موحَّد بكل التغييرات
     ///   بدل إشعار لكل حقل.
     func updateMemberName(memberId: UUID, fullName: String, silent: Bool = false) async {
+        guard NetworkMonitor.shared.requireOnline() else { return }
         self.isLoading = true
         let firstName = fullName.components(separatedBy: " ").first ?? fullName
 
@@ -1497,6 +1504,7 @@ class MemberViewModel: ObservableObject {
 
     /// حذف عضو نهائياً من قاعدة البيانات (للمالك فقط)
     func deleteMember(memberId: UUID) async -> Bool {
+        guard NetworkMonitor.shared.requireOnline() else { return false }
         guard authVM?.canDeleteMembers == true else {
             Log.error("حذف العضو مرفوض: الصلاحية للمالك فقط")
             return false
@@ -1740,6 +1748,7 @@ class MemberViewModel: ObservableObject {
     }
 
     func updateMemberPhone(memberId: UUID, country: KuwaitPhone.Country, localPhone: String, silent: Bool = false) async {
+        guard NetworkMonitor.shared.requireOnline() else { return }
         self.isLoading = true
         guard let normalizedPhone = KuwaitPhone.normalizedForStorage(country: country, rawLocalDigits: localPhone) else {
             Log.error("رقم الهاتف غير صالح للدولة المختارة.")
@@ -1866,6 +1875,7 @@ class MemberViewModel: ObservableObject {
     // MARK: - Update Member Gender
 
     func updateMemberGender(memberId: UUID, gender: String, silent: Bool = false) async {
+        guard NetworkMonitor.shared.requireOnline() else { return }
         self.isLoading = true
         let oldGender = _memberById[memberId]?.gender
 
@@ -1943,6 +1953,7 @@ class MemberViewModel: ObservableObject {
     // MARK: - Update Member Father
     
     func updateMemberFather(memberId: UUID, fatherId: UUID?, silent: Bool = false) async {
+        guard NetworkMonitor.shared.requireOnline() else { return }
         self.isLoading = true
         // التقط الأب القديم قبل التحديث (نستخدم اسمه لا UUID للعرض)
         let oldFatherName = _memberById[memberId]?.fatherId.flatMap { _memberById[$0]?.firstName }
@@ -2004,6 +2015,7 @@ class MemberViewModel: ObservableObject {
         isDeceased: Bool,
         deathDate: Date?     // أصبح اختيارياً ليدعم "Not Available"
     ) async {
+        guard NetworkMonitor.shared.requireOnline() else { return }
         self.isLoading = true
 
         // 1. تنسيق التواريخ
