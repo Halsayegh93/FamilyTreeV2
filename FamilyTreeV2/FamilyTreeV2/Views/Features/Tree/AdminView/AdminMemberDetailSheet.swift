@@ -1174,7 +1174,15 @@ struct AdminMemberDetailSheet: View {
         formatter.locale = Locale(identifier: "en_US_POSIX")
 
         if var updatedMember = memberVM.member(byId: capturedMemberId) {
-            if nameChanged { updatedMember.fullName = capturedFullName }
+            if nameChanged {
+                updatedMember.fullName = capturedFullName
+                // مهم: نحدّث firstName أيضاً عشان buildFullName للذرّية
+                // يستخدم firstName في chain. بدون هذا cascade المحلّي يبني
+                // أسماء الأبناء من firstName القديم!
+                updatedMember.firstName = capturedFullName
+                    .components(separatedBy: " ")
+                    .first ?? capturedFullName
+            }
             if roleChanged { updatedMember.role = capturedRole }
             if phoneChanged {
                 if capturedPhone.isEmpty {
