@@ -154,7 +154,22 @@ struct AddSonByAdminSheet: View {
 
                 DSDivider()
 
-                // TODO: gender — re-enable when needed
+                // اختيار الجنس — segmented picker
+                HStack(spacing: DS.Spacing.sm) {
+                    DSIcon("person.fill", color: DS.Color.primary, size: iconSm, iconSize: iconFontSm)
+                    Text(L10n.t("الجنس", "Gender"))
+                        .font(DS.Font.callout)
+                        .foregroundColor(DS.Color.textPrimary)
+                    Spacer()
+                    Picker("", selection: $selectedGender) {
+                        Text(L10n.t("ذكر", "Male")).tag("male")
+                        Text(L10n.t("أنثى", "Female")).tag("female")
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: 160)
+                }
+                .padding(.horizontal, DS.Spacing.md)
+                .padding(.vertical, DS.Spacing.xs)
             }
         }
         .padding(.horizontal, DS.Spacing.lg)

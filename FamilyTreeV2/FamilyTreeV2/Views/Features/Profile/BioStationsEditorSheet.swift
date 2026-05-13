@@ -4,11 +4,16 @@ import SwiftUI
 // محرر المحطات الحياتية مع سحب وإفلات وحذف
 
 struct BioStationsEditorSheet: View {
+    @EnvironmentObject var authVM: AuthViewModel
     @Binding var stations: [FamilyMember.BioStation]
     @Environment(\.dismiss) private var dismiss
 
     @State private var localStations: [FamilyMember.BioStation] = []
-    @State private var editMode: EditMode = .active
+
+    /// المراقب يقدر يشوف لكن ما يعدّل (طبقة دفاعية لو فُتح من سياق آخر)
+    private var canEdit: Bool {
+        authVM.currentUser?.role != .monitor
+    }
 
     private func t(_ ar: String, _ en: String) -> String { L10n.t(ar, en) }
 
@@ -48,8 +53,9 @@ struct BioStationsEditorSheet: View {
                     }
                     .listRowBackground(DS.Color.primary.opacity(0.06))
                 }
-                .environment(\.editMode, $editMode)
+                .environment(\.editMode, .constant(.active))
                 .scrollContentBackground(.hidden)
+                .disabled(!canEdit)
             }
             .navigationTitle(t("المحطات الحياتية", "Life Stations"))
             .navigationBarTitleDisplayMode(.inline)
@@ -61,12 +67,14 @@ struct BioStationsEditorSheet: View {
                     .foregroundColor(DS.Color.error)
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(t("حفظ", "Done")) {
-                        stations = localStations.filter { !$0.title.isEmpty || !$0.details.isEmpty }
-                        dismiss()
+                    if canEdit {
+                        Button(t("حفظ", "Done")) {
+                            stations = localStations.filter { !$0.title.isEmpty || !$0.details.isEmpty }
+                            dismiss()
+                        }
+                        .font(DS.Font.calloutBold)
+                        .foregroundColor(DS.Color.primary)
                     }
-                    .font(DS.Font.calloutBold)
-                    .foregroundColor(DS.Color.primary)
                 }
             }
         }

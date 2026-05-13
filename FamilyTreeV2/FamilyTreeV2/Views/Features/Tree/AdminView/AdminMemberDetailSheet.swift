@@ -488,9 +488,51 @@ struct AdminMemberDetailSheet: View {
                     .padding(.vertical, DS.Spacing.xs)
                 }
                 .buttonStyle(DSBoldButtonStyle())
+
+                // تحذير عند تغيير الأب لو فيه ذرّية ستتأثّر
+                if selectedFatherId != member.fatherId, descendantCount > 0 {
+                    HStack(spacing: DS.Spacing.sm) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(DS.Font.scaled(14, weight: .bold))
+                            .foregroundColor(DS.Color.warning)
+                        Text(L10n.t(
+                            "سيُعاد بناء أسماء \(descendantCount) من الذرّية بناءً على الأب الجديد.",
+                            "\(descendantCount) descendant names will be rebuilt based on the new father."
+                        ))
+                            .font(DS.Font.caption1)
+                            .foregroundColor(DS.Color.textSecondary)
+                        Spacer()
+                    }
+                    .padding(.horizontal, DS.Spacing.md)
+                    .padding(.vertical, DS.Spacing.sm)
+                    .background(DS.Color.warning.opacity(0.08))
+                    .overlay(
+                        Rectangle()
+                            .fill(DS.Color.warning)
+                            .frame(width: 3)
+                            .frame(maxHeight: .infinity),
+                        alignment: .leading
+                    )
+                }
             }
         }
         .padding(.horizontal, DS.Spacing.lg)
+    }
+
+    /// عدد ذرّية العضو الحالي (لتحذير تغيير الأب)
+    private var descendantCount: Int {
+        var count = 0
+        var stack: [UUID] = [member.id]
+        var visited: Set<UUID> = [member.id]
+        while let cur = stack.popLast() {
+            for m in memberVM.allMembers where m.fatherId == cur {
+                if visited.insert(m.id).inserted {
+                    stack.append(m.id)
+                    count += 1
+                }
+            }
+        }
+        return count
     }
 
     // MARK: - Phone Section
