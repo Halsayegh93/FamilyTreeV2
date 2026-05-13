@@ -1,13 +1,12 @@
 import SwiftUI
 
 /// UIScrollView wrapper يحفظ موضع السكرول عند تغيّر المحتوى.
-/// يحل مشكلة iOS 16 حيث SwiftUI ScrollView يرجع للأعلى عند تغيّر @State،
-/// وكذلك عندما يُغلق sheet داخلي ويُعيد iOS layout للـscrollView.
+/// يحل مشكلة iOS 16+ حيث SwiftUI ScrollView يرجع للأعلى عند تغيّر @State،
+/// وحالة sheet dismiss حيث iOS يُعيد contentOffset إلى 0.
 ///
-/// الحلّ: نتتبّع آخر موقع scroll من المستخدم (عبر UIScrollViewDelegate)،
-/// نحفظه في الـCoordinator، ثم نُعيد تطبيقه في كل layout pass — لأن iOS
-/// قد يُعيد contentOffset إلى 0 بعد أحداث معيّنة (sheet dismiss، keyboard)
-/// مما يجعل قراءة scrollView.contentOffset في updateUIView غير موثوقة.
+/// الحلّ: نتتبّع آخر موقع scroll **من المستخدم** فقط (drag/decelerate) — مو
+/// أي تحديث برمجي لـcontentOffset يفعله iOS. بعد كل تحديث محتوى أو
+/// layout pass، نُعيد تطبيق آخر موقع مستخدم.
 struct StableScrollView<Content: View>: UIViewRepresentable {
     let content: Content
 
@@ -45,9 +44,8 @@ struct StableScrollView<Content: View>: UIViewRepresentable {
 
     func updateUIView(_ scrollView: UIScrollView, context: Context) {
         context.coordinator.hostingController?.rootView = AnyView(content)
-        // أعد تطبيق الـoffset المحفوظ من الـCoordinator (مصدر الحقيقة)
-        // مرتين: الأولى فوراً، والثانية في الـrunloop التالي عشان نتغلّب
-        // على layout passes اللي يفعلها iOS بعد sheet dismiss / keyboard hide.
+        // أعد تطبيق آخر موقع مستخدم — مرتين للتعامل مع layout passes اللي
+        // يفعلها iOS بعد sheet dismiss / keyboard hide.
         context.coordinator.restoreOffset()
         DispatchQueue.main.async {
             context.coordinator.restoreOffset()
@@ -59,34 +57,57 @@ struct StableScrollView<Content: View>: UIViewRepresentable {
         var hostingController: UIHostingController<AnyView>?
         weak var scrollView: UIScrollView?
 
-        /// آخر موقع scroll من المستخدم — هذا مصدر الحقيقة، مو scrollView.contentOffset
-        /// (لأن iOS قد يُعيده إلى 0 بدون علمنا).
+        /// آخر موقع scroll من المستخدم — مصدر الحقيقة. لا يتأثّر بإعادة
+        /// ضبط contentOffset التي يفعلها iOS (sheet dismiss، keyboard، إلخ).
         private var lastUserOffset: CGFloat = 0
-        /// نتجاهل scrollViewDidScroll إذا كنا نُعيد ضبط الـoffset برمجياً (عشان لا
-        /// نسجّله كأنه scroll من المستخدم).
-        private var isRestoring = false
 
-        /// يُعيد تطبيق lastUserOffset على scrollView مع clamping لحدود المحتوى.
+        /// يتحوّل true أثناء drag/decelerate من المستخدم. نُحدِّث lastUserOffset
+        /// فقط في هذه الحالة، فلا نلتقط تحديثات contentOffset البرمجية.
+        private var isUserScrolling = false
+
         func restoreOffset() {
             guard let sv = scrollView, lastUserOffset > 0 else { return }
             sv.layoutIfNeeded()
             let maxY = max(0, sv.contentSize.height - sv.bounds.height + sv.contentInset.bottom)
             let target = min(lastUserOffset, maxY)
-            // فقط لو الفرق ملحوظ (>1 نقطة) عشان لا ندخل في حلقة
             if target > 0, abs(sv.contentOffset.y - target) > 1 {
-                isRestoring = true
                 sv.setContentOffset(CGPoint(x: 0, y: target), animated: false)
-                isRestoring = false
             }
         }
 
         // MARK: UIScrollViewDelegate
 
-        nonisolated func scrollViewDidScroll(_ scrollView: UIScrollView) {
-            // تُستدعى من UIKit بدون إشارة @MainActor — نقفز للـMainActor
+        nonisolated func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+            Task { @MainActor in self.isUserScrolling = true }
+        }
+
+        nonisolated func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
+            // لو ما فيه تباطؤ، خلّص user scrolling فوراً وحدّث الـoffset
+            let offset = scrollView.contentOffset.y
+            if !decelerate {
+                Task { @MainActor in
+                    self.lastUserOffset = offset
+                    self.isUserScrolling = false
+                }
+            }
+        }
+
+        nonisolated func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
             let offset = scrollView.contentOffset.y
             Task { @MainActor in
-                guard !self.isRestoring else { return }
+                self.lastUserOffset = offset
+                self.isUserScrolling = false
+            }
+        }
+
+        nonisolated func scrollViewDidScroll(_ scrollView: UIScrollView) {
+            // نحدِّث lastUserOffset فقط إذا المستخدم فعلاً يسحب أو يتباطأ —
+            // نتجاهل أي تحديث برمجي من iOS (مثلاً بعد sheet dismiss).
+            let offset = scrollView.contentOffset.y
+            let dragging = scrollView.isDragging
+            let decelerating = scrollView.isDecelerating
+            Task { @MainActor in
+                guard self.isUserScrolling || dragging || decelerating else { return }
                 self.lastUserOffset = offset
             }
         }
