@@ -1192,24 +1192,30 @@ struct NotificationsCenterView: View {
             return memberVM.member(byId: creatorId)
         }()
 
+        let isBroadcast = (notification.kind == "admin" || notification.kind == "admin_broadcast")
+        let bodyText = bodyWithoutCreatorPrefix(notification.body, creator: actualCreator)
+
         return VStack(alignment: .leading, spacing: DS.Spacing.md) {
             // ترويسة: chip التصنيف + chip المدير المنفّذ + الحالة
+            // (للإعلانات: نخفي chip التصنيف والحالة — الـHero بـmegaphone كافٍ،
+            //  ونبقي chip المرسِل فقط لتعريف من أرسل)
             HStack(spacing: DS.Spacing.xs) {
-                // chip التصنيف
-                HStack(spacing: 4) {
-                    Image(systemName: iconInfo.icon)
-                        .font(DS.Font.scaled(10, weight: .bold))
-                    Text(iconInfo.label)
-                        .font(DS.Font.scaled(10, weight: .bold))
+                if !isBroadcast {
+                    HStack(spacing: 4) {
+                        Image(systemName: iconInfo.icon)
+                            .font(DS.Font.scaled(10, weight: .bold))
+                        Text(iconInfo.label)
+                            .font(DS.Font.scaled(10, weight: .bold))
+                    }
+                    .foregroundColor(iconInfo.color)
+                    .padding(.horizontal, DS.Spacing.sm)
+                    .padding(.vertical, 3)
+                    .background(iconInfo.color.opacity(0.12))
+                    .clipShape(Capsule())
+                    .overlay(Capsule().stroke(iconInfo.color.opacity(0.20), lineWidth: 0.5))
                 }
-                .foregroundColor(iconInfo.color)
-                .padding(.horizontal, DS.Spacing.sm)
-                .padding(.vertical, 3)
-                .background(iconInfo.color.opacity(0.12))
-                .clipShape(Capsule())
-                .overlay(Capsule().stroke(iconInfo.color.opacity(0.20), lineWidth: 0.5))
 
-                // chip المدير المنفّذ — للأدمن فقط، اسم حقيقي مو "الإدارة"
+                // chip المدير المنفّذ
                 if let creator = actualCreator {
                     HStack(spacing: 3) {
                         Image(systemName: "person.fill")
@@ -1230,14 +1236,16 @@ struct NotificationsCenterView: View {
 
                 Spacer(minLength: 0)
 
-                // حالة القراءة كنقطة ملونة + نص صغير
-                HStack(spacing: 4) {
-                    Circle()
-                        .fill(notification.read ? DS.Color.textTertiary : DS.Color.primary)
-                        .frame(width: 6, height: 6)
-                    Text(notification.read ? L10n.t("مقروء", "Read") : L10n.t("جديد", "New"))
-                        .font(DS.Font.scaled(10, weight: .bold))
-                        .foregroundColor(notification.read ? DS.Color.textTertiary : DS.Color.primary)
+                if !isBroadcast {
+                    // حالة القراءة كنقطة ملونة + نص صغير
+                    HStack(spacing: 4) {
+                        Circle()
+                            .fill(notification.read ? DS.Color.textTertiary : DS.Color.primary)
+                            .frame(width: 6, height: 6)
+                        Text(notification.read ? L10n.t("مقروء", "Read") : L10n.t("جديد", "New"))
+                            .font(DS.Font.scaled(10, weight: .bold))
+                            .foregroundColor(notification.read ? DS.Color.textTertiary : DS.Color.primary)
+                    }
                 }
             }
 
@@ -1246,12 +1254,7 @@ struct NotificationsCenterView: View {
                 detailFromToInline(change: firstChange, color: iconInfo.color)
             }
 
-            // المحتوى الأساسي — للإعلانات الإدارية يُعرض بشكل بارز (نص أكبر +
-            // علامة اقتباس على الحافة) لأن الرسالة نفسها هي محتوى الإشعار.
-            let isBroadcast = (notification.kind == "admin" || notification.kind == "admin_broadcast")
-            let bodyText = bodyWithoutCreatorPrefix(notification.body, creator: actualCreator)
-
-            // للإعلانات: نص أكبر قليلاً عشان الرسالة هي محتوى الإشعار.
+            // المحتوى الأساسي — للإعلانات نص أكبر لأن الرسالة هي محتوى الإشعار
             richBodyView(
                 bodyText,
                 font: DS.Font.scaled(isBroadcast ? 17 : 15, weight: isBroadcast ? .semibold : .regular),
