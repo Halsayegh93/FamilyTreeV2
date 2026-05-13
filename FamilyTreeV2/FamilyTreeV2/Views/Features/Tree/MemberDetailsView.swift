@@ -113,8 +113,11 @@ struct MemberDetailsView: View {
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
             .sheet(isPresented: $showAdminControl) {
                 if authVM.canEditMembers {
+                    // ملاحظة: لا نضع .id(membersVersion) هنا — كان يُعيد بناء
+                    // الـsheet بالكامل عند كل upsertMemberLocally (مثلاً
+                    // عند إضافة ابن)، فيُفقد scroll position ويرجع للأعلى.
+                    // الـsheet يتحدث طبيعياً عبر @EnvironmentObject memberVM.
                     AdminMemberDetailSheet(member: member)
-                        .id(memberVM.membersVersion)
                 }
             }
             .sheet(isPresented: $showActionSheet) {
