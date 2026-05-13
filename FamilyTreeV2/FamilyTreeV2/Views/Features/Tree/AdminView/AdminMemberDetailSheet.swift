@@ -1461,134 +1461,85 @@ struct FatherPickerSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                DS.Color.background.ignoresSafeArea()
+        let list = filteredMembers
+        return NavigationStack {
+            ScrollViewReader { proxy in
+                List {
+                    // خيار "رأس شجرة (بدون أب)"
+                    Section {
+                        Button {
+                            showUnlinkConfirm = true
+                        } label: {
+                            HStack(spacing: DS.Spacing.sm) {
+                                Image(systemName: "person.crop.circle.badge.minus")
+                                    .font(DS.Font.scaled(15, weight: .bold))
+                                    .foregroundColor(DS.Color.warning)
+                                    .frame(width: 28, height: 28)
+                                    .background(DS.Color.warning.opacity(0.12))
+                                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
 
-                ScrollViewReader { proxy in
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: DS.Spacing.sm) {
-                        // anchor للتمرير لأعلى عند تغيير البحث
-                        Color.clear.frame(height: 0).id("top")
+                                Text(L10n.t("رأس شجرة (بدون أب)", "Tree root (no father)"))
+                                    .font(DS.Font.calloutBold)
+                                    .foregroundColor(DS.Color.textPrimary)
 
-                        // خيار إزالة الربط (رأس شجرة)
-                        DSCard(padding: 0) {
-                            Button {
-                                showUnlinkConfirm = true
-                            } label: {
-                                HStack(spacing: DS.Spacing.sm) {
-                                    Image(systemName: "person.crop.circle.badge.minus")
-                                        .font(DS.Font.scaled(15, weight: .bold))
-                                        .foregroundColor(DS.Color.warning)
-                                        .frame(width: 30, height: 30)
-                                        .background(DS.Color.warning.opacity(0.12))
-                                        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
+                                Spacer()
 
-                                    Text(L10n.t("رأس شجرة (بدون أب)", "Tree root (no father)"))
-                                        .font(DS.Font.calloutBold)
-                                        .foregroundColor(DS.Color.textPrimary)
-
-                                    Spacer()
-
-                                    if selectedId == nil {
-                                        Image(systemName: "checkmark.circle.fill")
-                                            .font(DS.Font.scaled(18))
-                                            .foregroundStyle(DS.Color.gradientPrimary)
-                                    }
-                                }
-                                .padding(.horizontal, DS.Spacing.md)
-                                .padding(.vertical, DS.Spacing.xs)
-                            }
-                            .buttonStyle(DSBoldButtonStyle())
-                        }
-                        .padding(.horizontal, DS.Spacing.lg)
-
-                        // قائمة الأعضاء — حُسبت مرة واحدة هنا (كانت تعاد لكل صف ⇒ O(n²))
-                        let list = filteredMembers
-                        let lastId = list.last?.id
-                        DSCard(padding: 0) {
-                            DSSectionHeader(
-                                title: L10n.t("اختر الأب", "Choose Father"),
-                                icon: "person.2.fill",
-                                trailing: "\(list.count)",
-                                iconColor: DS.Color.accent
-                            )
-
-                            LazyVStack(spacing: 0) {
-                                ForEach(list) { m in
-                                    Button {
-                                        pendingSelection = m
-                                    } label: {
-                                        HStack(spacing: DS.Spacing.sm) {
-                                            // Avatar
-                                            ZStack {
-                                                Circle()
-                                                    .fill(DS.Color.surface)
-                                                    .frame(width: 34, height: 34)
-
-                                                if let urlStr = m.avatarUrl, let url = URL(string: urlStr) {
-                                                    CachedAsyncImage(url: url) { img in img.resizable().scaledToFill() }
-                                                    placeholder: { ProgressView() }
-                                                    .frame(width: 30, height: 30).clipShape(Circle())
-                                                } else {
-                                                    Text(String(m.fullName.prefix(1)))
-                                                        .font(DS.Font.scaled(13, weight: .bold))
-                                                        .foregroundColor(DS.Color.primary)
-                                                }
-                                            }
-
-                                            VStack(alignment: .leading, spacing: 1) {
-                                                Text(m.fullName)
-                                                    .font(DS.Font.callout)
-                                                    .fontWeight(.medium)
-                                                    .foregroundColor(DS.Color.textPrimary)
-                                                    .lineLimit(1)
-
-                                                Text(m.roleName)
-                                                    .font(DS.Font.caption1)
-                                                    .foregroundColor(DS.Color.textSecondary)
-                                            }
-
-                                            Spacer()
-
-                                            if selectedId == m.id {
-                                                Image(systemName: "checkmark.circle.fill")
-                                                    .font(DS.Font.scaled(18))
-                                                    .foregroundStyle(DS.Color.gradientPrimary)
-                                            }
-                                        }
-                                        .padding(.horizontal, DS.Spacing.md)
-                                        .padding(.vertical, DS.Spacing.xs)
-                                    }
-                                    .buttonStyle(DSBoldButtonStyle())
-
-                                    if m.id != lastId {
-                                        DSDivider()
-                                    }
+                                if selectedId == nil {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .font(DS.Font.scaled(18))
+                                        .foregroundStyle(DS.Color.gradientPrimary)
                                 }
                             }
+                            .contentShape(Rectangle())
                         }
-                        .padding(.horizontal, DS.Spacing.lg)
+                        .buttonStyle(.plain)
+                        .id("top")
                     }
-                    .padding(.top, DS.Spacing.sm)
-                    .padding(.bottom, DS.Spacing.xxxl)
+
+                    // قائمة المرشّحين
+                    Section {
+                        ForEach(list) { m in
+                            FatherPickerRow(
+                                member: m,
+                                isSelected: selectedId == m.id,
+                                onTap: { pendingSelection = m }
+                            )
+                        }
+                    } header: {
+                        HStack {
+                            Image(systemName: "person.2.fill")
+                                .font(DS.Font.caption1)
+                                .foregroundColor(DS.Color.accent)
+                            Text(L10n.t("اختر الأب", "Choose Father"))
+                                .font(DS.Font.caption1)
+                                .fontWeight(.bold)
+                                .foregroundColor(DS.Color.textSecondary)
+                            Spacer()
+                            Text("\(list.count)")
+                                .font(DS.Font.caption1)
+                                .fontWeight(.bold)
+                                .foregroundColor(DS.Color.textTertiary)
+                        }
+                        .textCase(nil)
+                    }
                 }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
+                .background(DS.Color.background)
                 .onChange(of: searchText) { newValue in
-                    // Debounce ٢٠٠ms — لا نُعيد ترتيب القائمة كاملة على كل ضغطة حرف
+                    // Debounce ١٥٠ms — لا نُعيد ترتيب القائمة على كل ضغطة حرف
                     debounceTask?.cancel()
                     debounceTask = Task {
-                        try? await Task.sleep(nanoseconds: 200_000_000)
+                        try? await Task.sleep(nanoseconds: 150_000_000)
                         if Task.isCancelled { return }
                         await MainActor.run {
                             debouncedSearch = newValue
-                            // التمرير لأعلى عشان أول مطابقة تكون ظاهرة
                             withAnimation(DS.Anim.snappy) {
                                 proxy.scrollTo("top", anchor: .top)
                             }
                         }
                     }
                 }
-                } // إغلاق ScrollViewReader
             }
             .task {
                 rebuildPrepared()
@@ -1672,5 +1623,52 @@ struct ChildDropDelegate: DropDelegate {
 
     func dropUpdated(info: DropInfo) -> DropProposal? {
         DropProposal(operation: .move)
+    }
+}
+
+// MARK: - Father Picker Row (مُحسَّن للأداء)
+/// صف خفيف لكل عضو في قائمة اختيار الأب. `Equatable` يمنع SwiftUI من
+/// إعادة رسم الصف إلا إذا تغيّر العضو نفسه أو حالة التحديد.
+private struct FatherPickerRow: View, Equatable {
+    let member: FamilyMember
+    let isSelected: Bool
+    let onTap: () -> Void
+
+    static func == (lhs: FatherPickerRow, rhs: FatherPickerRow) -> Bool {
+        lhs.member.id == rhs.member.id
+            && lhs.member.fullName == rhs.member.fullName
+            && lhs.isSelected == rhs.isSelected
+    }
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: DS.Spacing.sm) {
+                // Avatar — حرف أول فقط (لا تحميل صور لكل صف ⇒ تمرير سلس)
+                ZStack {
+                    Circle()
+                        .fill(DS.Color.primary.opacity(0.10))
+                        .frame(width: 30, height: 30)
+                    Text(String(member.fullName.prefix(1)))
+                        .font(DS.Font.scaled(13, weight: .bold))
+                        .foregroundColor(DS.Color.primary)
+                }
+
+                Text(member.fullName)
+                    .font(DS.Font.callout)
+                    .foregroundColor(DS.Color.textPrimary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+
+                Spacer(minLength: DS.Spacing.xs)
+
+                if isSelected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(DS.Font.scaled(18))
+                        .foregroundStyle(DS.Color.gradientPrimary)
+                }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 }
