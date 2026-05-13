@@ -164,20 +164,25 @@ class NotificationViewModel: ObservableObject {
         }.count
     }
 
-    /// نفس فلتر العرض في NotificationsCenterView (notifications tab + activity tab)
-    /// — يتأكّد إن الإشعار موجّه للمستخدم الحالي أو يندرج تحت طلبات/إجراءات.
+    /// نفس فلتر العرض في NotificationsCenterView (notifications tab + activity tab
+    /// + إشعارات يتيمة).
     private static func isVisibleToUser(_ n: AppNotification, myId: UUID?, isAdmin: Bool) -> Bool {
+        let isPending = Self.pendingApprovalKindsRaw.contains(n.kind)
+        let isCompleted = Self.completedActionKindsRaw.contains(n.kind)
+        let titleIndicatesCompleted = n.title.hasPrefix("تم قبول")
+            || n.title.hasPrefix("تم رفض")
+            || n.title.contains("Approved")
+            || n.title.contains("Rejected")
+
         // طلبات تنتظر موافقة (للأدمن)
-        if Self.pendingApprovalKindsRaw.contains(n.kind), isAdmin { return true }
+        if isPending, isAdmin { return true }
         // إجراءات منفّذة (تظهر في تاب "المستجدات" للأدمن)
-        if Self.completedActionKindsRaw.contains(n.kind), isAdmin { return true }
+        if (isCompleted || titleIndicatesCompleted), isAdmin { return true }
         // إشعار شخصي موجّه لي
         if let myId, n.targetMemberId == myId { return true }
-        // عناوين تبدأ بـ"تم قبول/تم رفض" تدل على إجراء منفّذ (للأدمن)
-        if isAdmin {
-            let title = n.title
-            if title.hasPrefix("تم قبول") || title.hasPrefix("تم رفض")
-                || title.contains("Approved") || title.contains("Rejected") { return true }
+        // إشعار يتيم: kind غير معروف ولا موجّه لشخص — يظهر للجميع في تاب "إشعاراتي"
+        if !isPending && !isCompleted && !titleIndicatesCompleted, n.targetMemberId == nil {
+            return true
         }
         return false
     }

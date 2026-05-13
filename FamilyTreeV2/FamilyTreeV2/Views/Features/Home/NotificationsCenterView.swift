@@ -495,9 +495,12 @@ struct NotificationsCenterView: View {
     /// تاب "إشعاراتي":
     /// - الطلبات اللي تنتظر موافقتي (للأدمن)
     /// - الإشعارات الموجّهة لي شخصياً (ليست إجراءً تمّ على آخرين)
+    /// - الإشعارات اليتيمة (kind غير معروف وغير موجّهة لشخص محدد) — كانت
+    ///   تختفي قبل، الآن تظهر هنا عشان المستخدم يقدر يقرأها/يحذفها
     private func belongsToNotificationsTab(_ n: AppNotification) -> Bool {
         let myId = authVM.currentUser?.id
         let isCompletedAction = Self.completedActionKinds.contains(n.kind)
+        let isPendingApproval = Self.pendingApprovalKinds.contains(n.kind)
 
         // عناوين تبدأ بـ "تم قبول/تم رفض" أو "Approved/Rejected" تدل على إجراء منفّذ
         // (يستخدم لتمييز broadcastCompletedAction عن الطلبات الأصلية بنفس الـ kind)
@@ -510,10 +513,18 @@ struct NotificationsCenterView: View {
         if authVM.canModerate && (isCompletedAction || titleIndicatesCompleted) { return false }
 
         // طلبات تنتظر موافقة الأدمن
-        if Self.pendingApprovalKinds.contains(n.kind) { return true }
+        if isPendingApproval { return true }
 
         // إشعار موجّه لي شخصياً (نتيجة موافقة/رفض/تعليق على شيء يخصني)
-        return n.targetMemberId == myId
+        if n.targetMemberId == myId { return true }
+
+        // إشعار يتيم: kind غير معروف ولا موجّه لشخص محدد
+        // (للأدمن: لازم يكون مو completed action عشان لا يتداخل مع تاب المستجدات)
+        let isOrphan = !isPendingApproval && !isCompletedAction && !titleIndicatesCompleted
+        if isOrphan, n.targetMemberId == nil {
+            return true
+        }
+        return false
     }
 
     /// أنواع الطلبات الجديدة اللي تنتظر موافقة الأدمن — تظهر في "إشعاراتي" فقط
