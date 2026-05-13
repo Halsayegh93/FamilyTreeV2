@@ -172,6 +172,11 @@ struct AdminMemberDetailSheet: View {
             .onChange(of: childToEdit) { child in
                 if child == nil { setupLocalChildren() }
             }
+            // الأهم: أي تغيير في allMembers (مثل إضافة ابن من task async)
+            // يُعيد بناء قائمة الأبناء حتى لو الـsheet اتغلق قبل ما الـtask يكمل.
+            .onChange(of: memberVM.membersVersion) { _ in
+                setupLocalChildren()
+            }
             .alert(
                 L10n.t("اسم فارغ", "Empty Name"),
                 isPresented: $showEmptyNameAlert
