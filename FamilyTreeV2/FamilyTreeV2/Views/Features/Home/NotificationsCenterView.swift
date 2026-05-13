@@ -1248,20 +1248,37 @@ struct NotificationsCenterView: View {
             let bodyText = bodyWithoutCreatorPrefix(notification.body, creator: actualCreator)
 
             if isBroadcast {
-                HStack(alignment: .top, spacing: DS.Spacing.md) {
-                    // شريط جانبي ملوّن (يلمّح لاقتباس)
-                    RoundedRectangle(cornerRadius: 2, style: .continuous)
-                        .fill(iconInfo.color.opacity(0.55))
-                        .frame(width: 3)
+                VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                    // مؤشر "وصل لجميع الأعضاء"
+                    HStack(spacing: 6) {
+                        Image(systemName: "person.3.fill")
+                            .font(DS.Font.scaled(11, weight: .bold))
+                        Text(L10n.t("وصل لجميع الأعضاء", "Sent to all members"))
+                            .font(DS.Font.scaled(11, weight: .bold))
+                    }
+                    .foregroundColor(iconInfo.color)
+                    .padding(.horizontal, DS.Spacing.sm)
+                    .padding(.vertical, 4)
+                    .background(iconInfo.color.opacity(0.10))
+                    .clipShape(Capsule())
+                    .overlay(Capsule().stroke(iconInfo.color.opacity(0.20), lineWidth: 0.5))
 
-                    richBodyView(
-                        bodyText,
-                        font: DS.Font.scaled(17, weight: .semibold),
-                        color: DS.Color.textPrimary
-                    )
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    HStack(alignment: .top, spacing: DS.Spacing.md) {
+                        // شريط جانبي ملوّن (يلمّح لاقتباس)
+                        RoundedRectangle(cornerRadius: 2, style: .continuous)
+                            .fill(iconInfo.color.opacity(0.55))
+                            .frame(width: 3)
+
+                        richBodyView(
+                            bodyText,
+                            font: DS.Font.scaled(17, weight: .semibold),
+                            color: DS.Color.textPrimary
+                        )
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
                 }
                 .padding(DS.Spacing.md)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .background(
                     RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
                         .fill(iconInfo.color.opacity(0.06))
