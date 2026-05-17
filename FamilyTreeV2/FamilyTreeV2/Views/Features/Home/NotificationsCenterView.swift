@@ -216,6 +216,28 @@ struct NotificationsCenterView: View {
         .sheet(item: $selectedNotification) { notification in
             notificationDetailSheet(notification)
         }
+        .alert(
+            {
+                if case .failure = adminRequestVM.mergeResult {
+                    return L10n.t("لم يتم الربط", "Link Failed")
+                }
+                return L10n.t("تم الربط بنجاح", "Linked Successfully")
+            }(),
+            isPresented: Binding(
+                get: { adminRequestVM.mergeResult != nil },
+                set: { if !$0 { adminRequestVM.mergeResult = nil } }
+            ),
+            presenting: adminRequestVM.mergeResult
+        ) { _ in
+            Button(L10n.t("حسناً", "OK"), role: .cancel) {
+                adminRequestVM.mergeResult = nil
+            }
+        } message: { result in
+            switch result {
+            case .success(let msg), .failure(let msg):
+                Text(msg)
+            }
+        }
     }
 
     // MARK: - Action Bar (Unified)
@@ -970,7 +992,7 @@ struct NotificationsCenterView: View {
             presenting: joinApproveDialog
         ) { activeNotification in
             ForEach(joinMatchCandidates.prefix(8)) { candidate in
-                Button(L10n.t("ربط مع: ", "Link with: ") + fourPartName(candidate)) {
+                Button(L10n.t("ربط مع: ", "Link with: ") + chainFourNames(candidate)) {
                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
                     let nid = activeNotification.id
                     guard let rid = activeNotification.requestId else {
@@ -1021,6 +1043,8 @@ struct NotificationsCenterView: View {
                 let candidateId = target.candidate.id
                 linkConfirmTarget = nil
                 selectedNotification = nil
+                // نظّف نتيجة الدمج السابقة قبل الاستدعاء عشان التنبيه يطلق بس على النتيجة الجديدة
+                adminRequestVM.mergeResult = nil
                 Task {
                     await adminRequestVM.mergeMemberIntoTreeMember(
                         newMemberId: requesterId,
@@ -1034,8 +1058,8 @@ struct NotificationsCenterView: View {
             }
         } message: { target in
             Text(L10n.t(
-                "هل تريد ربط طلب الانضمام بـ \(fourPartName(target.candidate))؟\n\nسيتم دمج البيانات في حساب موجود ولا يمكن التراجع.",
-                "Link this join request to \(fourPartName(target.candidate))?\n\nData will be merged into an existing account and cannot be undone."
+                "هل تريد ربط طلب الانضمام بـ \(chainFourNames(target.candidate))؟\n\nسيتم دمج البيانات في حساب موجود ولا يمكن التراجع.",
+                "Link this join request to \(chainFourNames(target.candidate))?\n\nData will be merged into an existing account and cannot be undone."
             ))
         }
         .presentationDetents([.height(measuredDetailHeight), .large], selection: $detailSheetDetent)
@@ -1047,6 +1071,12 @@ struct NotificationsCenterView: View {
     /// (يبقى local helper عشان call sites الموجودة ما تحتاج تغيير)
     private func fourPartName(_ member: FamilyMember) -> String {
         member.fourPartName
+    }
+
+    /// أربع كلمات من السلسلة (الأول + الثاني + الثالث + الرابع)
+    /// يُستخدم في عرض التطابقات وحوار الربط ليُعطي سلسلة نسب فعلية بدون اسم العائلة.
+    private func chainFourNames(_ member: FamilyMember) -> String {
+        member.chainFourNames
     }
 
     /// يحدّد العضو الأكثر صلة بالإشعار (الأهم بصرياً) — لعرض بطاقة العضو في تفاصيل الإشعار
@@ -1705,16 +1735,33 @@ struct NotificationsCenterView: View {
             return score
         }
 
-        // 7) ترتيب:
-        //    1) درجة تطابق السلسلة الأعلى أولاً (الاسم + الأب + الجد + ...)
-        //    2) نفس fatherId (لو ربط فعلي موجود)
-        //    3) الأعضاء النشطين قبل pending
-        //    4) ترتيب السيرفر (match_score) كـ tiebreaker
-        let sorted = matches.enumerated().sorted { a, b in
-            let aScore = chainMatchScore(a.element)
-            let bScore = chainMatchScore(b.element)
-            if aScore != bScore { return aScore > bScore }
+        // 7) الحد الأدنى للتطابق — كل ما السلسلة أوضح، كل ما نشدّ الفلتر:
+        //    سلسلة بكلمة وحدة → نقبل تطابق الاسم الأول فقط
+        //    سلسلتين     → نطلب الاسم + الأب
+        //    ثلاث       → نطلب الاسم + الأب + الجد
+        //    أربع+      → نطلب 3 على الأقل من السلسلة (مع تساهل بسيط للأسماء الطويلة)
+        let chainCount = requesterChain.count
+        let minChainScore: Int = {
+            if chainCount >= 4 { return 3 }
+            if chainCount == 3 { return 3 }
+            if chainCount == 2 { return 2 }
+            return 1
+        }()
 
+        // 8) فلترة أولى: استبعد التطابقات الضعيفة (نفس الاسم الأول فقط مع سلسلة واضحة)
+        let strong = matches.filter { chainMatchScore($0) >= minChainScore }
+
+        // 9) فلترة ثانية — أقرب تطابق فقط:
+        //    احسب أعلى درجة سلسلة موجودة، واحتفظ بمن وصلوا لها فقط.
+        //    يعني لو واحد يطابق 4 أسماء وعشرة يطابقون 3 → نعرض الواحد فقط.
+        let topScore = strong.map(chainMatchScore).max() ?? 0
+        let closest = strong.filter { chainMatchScore($0) == topScore }
+
+        // 10) ترتيب الباقي بمعايير مساعدة لو في تعادل (نفس درجة السلسلة):
+        //    1) نفس fatherId (لو ربط فعلي موجود)
+        //    2) الأعضاء النشطين قبل pending
+        //    3) ترتيب السيرفر (match_score) كـ tiebreaker
+        let sorted = closest.enumerated().sorted { a, b in
             let reqFatherId = requester?.fatherId
             let aMatchesFather = reqFatherId != nil && a.element.fatherId == reqFatherId
             let bMatchesFather = reqFatherId != nil && b.element.fatherId == reqFatherId
@@ -1727,8 +1774,9 @@ struct NotificationsCenterView: View {
             return a.offset < b.offset
         }.map(\.element)
 
-        joinMatchCandidates = Array(sorted.prefix(10))
-        Log.info("[JoinMatch] fullName='\(fullName)', chain=\(requesterChain.prefix(4).joined(separator: " ")) — \(joinMatchCandidates.count) مطابقة نهائية")
+        // سقف نهائي 3 — لو تعادلوا بنفس أعلى درجة السلسلة نعرض حد أقصى 3
+        joinMatchCandidates = Array(sorted.prefix(3))
+        Log.info("[JoinMatch] fullName='\(fullName)', chain=\(requesterChain.prefix(5).joined(separator: " ")) — قبل الفلتر=\(matches.count), strong=\(strong.count), topScore=\(topScore), closest=\(closest.count), نهائي=\(joinMatchCandidates.count)")
     }
 
     /// استدعاء RPC السيرفر search_members_by_name v2 — exact word + 75% threshold + top-4 parts
@@ -1885,7 +1933,7 @@ struct NotificationsCenterView: View {
                 }
             }
 
-            Text(fourPartName(candidate))
+            Text(chainFourNames(candidate))
                 .font(DS.Font.scaled(12, weight: .semibold))
                 .foregroundColor(DS.Color.textPrimary)
                 .lineLimit(1)

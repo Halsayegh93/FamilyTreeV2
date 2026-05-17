@@ -200,6 +200,17 @@ nonisolated struct FamilyMember: Identifiable, Codable, Equatable, Sendable {
         return "\(firstThree) \(family)"
     }
 
+    /// أربع كلمات متتالية من السلسلة: الأول + الثاني + الثالث + الرابع
+    /// مثال: "حسن صلاح عبدالحميد حسن موسى محمدعلي الصايغ" → "حسن صلاح عبدالحميد حسن"
+    /// يُستخدم في شاشات التطابق ليُعرَض سلسلة النسب الفعلية بدون قفز لاسم العائلة.
+    var chainFourNames: String {
+        let parts = fullName.trimmingCharacters(in: .whitespaces)
+            .split(whereSeparator: \.isWhitespace)
+            .map(String.init)
+        guard parts.count > 4 else { return fullName }
+        return parts.prefix(4).joined(separator: " ")
+    }
+
     /// الاسم الثلاثي: الأول + الثاني + الأخير (العائلة)
     /// مثال: "حسن صلاح عبدالحميد حسن موسى محمدعلي الصايغ" → "حسن صلاح الصايغ"
     var shortFullName: String {
