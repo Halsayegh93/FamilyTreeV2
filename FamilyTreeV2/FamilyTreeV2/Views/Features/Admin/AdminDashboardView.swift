@@ -159,6 +159,16 @@ struct AdminDashboardView: View {
                                             badge: adminRequestVM.treeEditRequests.count > 0 ? adminRequestVM.treeEditRequests.count : nil
                                         )
                                     }
+                                    DSDivider()
+                                    NavigationLink(destination: AdminContactMessagesView()) {
+                                        DSActionRow(
+                                            title: L10n.t("رسائل التواصل", "Contact Messages"),
+                                            subtitle: L10n.t("رسائل الأعضاء من شاشة التواصل", "Member messages from contact screen"),
+                                            icon: "envelope.fill",
+                                            color: DS.Color.info,
+                                            badge: adminRequestVM.unreadContactMessagesCount > 0 ? adminRequestVM.unreadContactMessagesCount : nil
+                                        )
+                                    }
                                     // إدارة الأعضاء — مدير + مراقب + مالك (المشرف لا)
                                     if authVM.canEditMembers {
                                         DSDivider()
@@ -285,6 +295,7 @@ struct AdminDashboardView: View {
                 group.addTask { @MainActor in await adminRequestVM.fetchTreeEditRequests() }
                 group.addTask { @MainActor in await memberVM.fetchPendingGalleryPhotos() }
                 group.addTask { @MainActor in await adminRequestVM.fetchNameChangeRequests() }
+                group.addTask { @MainActor in await adminRequestVM.fetchContactMessages() }
                 group.addTask { @MainActor in await authVM.fetchBannedPhones() }
             }
             recalculateBadges()

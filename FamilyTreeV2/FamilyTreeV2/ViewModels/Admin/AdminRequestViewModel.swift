@@ -21,9 +21,15 @@ class AdminRequestViewModel: ObservableObject {
     @Published var newsReportRequests: [AdminRequest] = []
     @Published var treeEditRequests: [AdminRequest] = []
     @Published var nameChangeRequests: [AdminRequest] = []
+    @Published var contactMessages: [AdminRequest] = []
     @Published var isLoading: Bool = false
     @Published var mergeResult: MergeResult? = nil
     @Published var errorMessage: String? = nil
+
+    /// عدد رسائل التواصل غير المُعالَجة (status == pending)
+    var unreadContactMessagesCount: Int {
+        contactMessages.filter { $0.status == ApprovalStatus.pending.rawValue }.count
+    }
     
     enum MergeResult {
         case success(String)
@@ -176,6 +182,63 @@ class AdminRequestViewModel: ObservableObject {
         } catch {
             Log.error("[TreeEdit] Submit failed: \(error.localizedDescription)")
             return false
+        }
+    }
+
+    // MARK: - Fetch / Mark Contact Messages
+
+    /// رسائل التواصل من شاشة "التواصل" — للإدارة فقط.
+    /// تجلب كل الـ admin_requests بنوع contact_message — سواء pending أو approved (مُعالَجة).
+    func fetchContactMessages(force: Bool = false) async {
+        guard throttler.canFetch(key: "contactMessages", interval: 20, force: force) || contactMessages.isEmpty else { return }
+        throttler.didFetch(key: "contactMessages")
+        do {
+            let requests: [AdminRequest] = try await supabase
+                .from("admin_requests")
+                .select("*, member:profiles!member_id(*)")
+                .eq("request_type", value: "contact_message")
+                .order("created_at", ascending: false)
+                .limit(200)
+                .execute()
+                .value
+            self.contactMessages = requests
+        } catch {
+            Log.error("فشل جلب رسائل التواصل: \(error.localizedDescription)")
+        }
+    }
+
+    /// تعليم رسالة كمُعالَجة — يحول status من pending إلى approved.
+    func markContactMessageHandled(_ request: AdminRequest) async {
+        guard NetworkMonitor.shared.requireOnline() else { return }
+        do {
+            try await supabase
+                .from("admin_requests")
+                .update(["status": AnyEncodable(ApprovalStatus.approved.rawValue)])
+                .eq("id", value: request.id.uuidString)
+                .execute()
+            if let idx = contactMessages.firstIndex(where: { $0.id == request.id }) {
+                contactMessages[idx].status = ApprovalStatus.approved.rawValue
+            }
+            Log.info("[Contact] تم تعليم الرسالة كمُعالَجة: \(request.id)")
+        } catch {
+            Log.error("فشل تعليم الرسالة: \(error.localizedDescription)")
+        }
+    }
+
+    /// إعادة الرسالة لحالة "غير معالَجة".
+    func markContactMessageUnhandled(_ request: AdminRequest) async {
+        guard NetworkMonitor.shared.requireOnline() else { return }
+        do {
+            try await supabase
+                .from("admin_requests")
+                .update(["status": AnyEncodable(ApprovalStatus.pending.rawValue)])
+                .eq("id", value: request.id.uuidString)
+                .execute()
+            if let idx = contactMessages.firstIndex(where: { $0.id == request.id }) {
+                contactMessages[idx].status = ApprovalStatus.pending.rawValue
+            }
+        } catch {
+            Log.error("فشل إعادة الرسالة لقيد المعالجة: \(error.localizedDescription)")
         }
     }
 

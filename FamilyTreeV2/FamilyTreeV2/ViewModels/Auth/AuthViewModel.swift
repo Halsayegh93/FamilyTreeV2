@@ -371,6 +371,20 @@ class AuthViewModel: ObservableObject {
         async let inApp: Void = notifyAdmins(title: title, body: body, kind: kind, requestId: requestId, requestType: requestType)
         _ = await (push, inApp)
     }
+
+    /// إرسال إشعار إيميل عبر event-notify edge function — للأحداث الإدارية وتغيير الحالة
+    /// لا يرمي خطأ — مجرد warning في اللوق إذا فشل (لا نُفشل العملية الأصلية بسبب إيميل)
+    func sendEventEmail(payload: [String: AnyEncodable]) async {
+        do {
+            try await supabase.functions.invoke(
+                "event-notify",
+                options: FunctionInvokeOptions(body: payload)
+            )
+            Log.info("[EventEmail] ✅ event-notify اكتمل")
+        } catch {
+            Log.warning("[EventEmail] ⚠️ فشل event-notify: \(error.localizedDescription)")
+        }
+    }
     
     // MARK: - Profile Lookup Helpers
     
@@ -1368,7 +1382,14 @@ class AuthViewModel: ObservableObject {
                 requestId: user.id,
                 requestType: RequestType.joinRequest.rawValue
             )
-            
+
+            // إيميل للإدارة بطلب الانضمام الجديد
+            await sendEventEmail(payload: [
+                "type": AnyEncodable("join_request"),
+                "member_name": AnyEncodable(fullName),
+                "member_phone": AnyEncodable(user.phone ?? toE164(dialingCode: dialingCode, localDigits: phoneNumber))
+            ])
+
             Log.info("تم تسجيل العضو وإرسال طلب الربط بنجاح")
             AppAnalytics.trackRegister()
 
