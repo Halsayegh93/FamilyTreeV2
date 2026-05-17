@@ -302,7 +302,8 @@ struct AdminNotificationsView: View {
         await notificationVM.sendNotification(
             title: title,
             body: trimmedBody.isEmpty ? title : trimmedBody,
-            targetMemberIds: targetIds
+            targetMemberIds: targetIds,
+            kind: "admin_broadcast"
         )
         dismiss()
     }

@@ -37,6 +37,9 @@ struct EditProfileView: View {
     @State private var isDeceased: Bool = false
     @State private var deathDate: Date = Date()
     @State private var isPhoneHidden: Bool = false
+    @State private var email: String = ""
+    @State private var emailFieldFocused: Bool = false
+    @FocusState private var isEmailFocused: Bool
     // متغيرات الصورة
     @State private var localPreviewImage: UIImage? = nil
     // Bio
@@ -96,6 +99,9 @@ struct EditProfileView: View {
                                     modernDatePicker(label: L10n.t("تاريخ الميلاد", "Birth Date"), selection: $birthDate, icon: "calendar")
                                         .cooldownGuarded(.birthDate, cooldown: cooldown)
                                     cooldownLabel(.birthDate)
+
+                                    DSDivider()
+                                    emailField
                                 }
                         }
                         .padding(.horizontal, DS.Spacing.lg)
@@ -377,6 +383,58 @@ struct EditProfileView: View {
         .padding(.vertical, DS.Spacing.xs)
     }
 
+    private var emailField: some View {
+        let trimmed = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        let isInvalid = !trimmed.isEmpty && !isValidEmail(trimmed)
+        return VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+            HStack(spacing: DS.Spacing.md) {
+                DSIcon("envelope.fill", color: DS.Color.info)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(L10n.t("البريد الإلكتروني (اختياري)", "Email (optional)"))
+                        .font(DS.Font.caption1)
+                        .foregroundColor(DS.Color.textSecondary)
+                    TextField("name@example.com", text: $email)
+                        .font(DS.Font.callout)
+                        .foregroundColor(DS.Color.textPrimary)
+                        .textInputAutocapitalization(.never)
+                        .keyboardType(.emailAddress)
+                        .textContentType(.emailAddress)
+                        .autocorrectionDisabled()
+                        .focused($isEmailFocused)
+                        .environment(\.layoutDirection, .leftToRight)
+                }
+                Spacer()
+            }
+            .padding(.horizontal, DS.Spacing.lg)
+            .padding(.vertical, DS.Spacing.xs)
+
+            if isInvalid {
+                HStack(spacing: DS.Spacing.xs) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(DS.Font.caption2)
+                    Text(L10n.t("صيغة الإيميل غير صحيحة", "Invalid email format"))
+                        .font(DS.Font.caption2)
+                }
+                .foregroundColor(DS.Color.error)
+                .padding(.horizontal, DS.Spacing.xl + DS.Spacing.lg)
+                .padding(.bottom, DS.Spacing.xs)
+            } else if !trimmed.isEmpty {
+                Text(L10n.t("يُستخدم لإشعارات الإدارة فقط — لا يظهر للآخرين", "Used for admin notifications only — not visible to others"))
+                    .font(DS.Font.caption2)
+                    .foregroundColor(DS.Color.textTertiary)
+                    .padding(.horizontal, DS.Spacing.xl + DS.Spacing.lg)
+                    .padding(.bottom, DS.Spacing.xs)
+            }
+        }
+    }
+
+    private func isValidEmail(_ s: String) -> Bool {
+        // فحص بسيط: name@host.tld
+        let pattern = #"^[A-Z0-9a-z._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$"#
+        return s.range(of: pattern, options: .regularExpression) != nil
+    }
+
     private var modernPhoneField: some View {
         HStack(spacing: DS.Spacing.sm) {
             DSIcon("phone.fill", color: DS.Color.success)
@@ -556,13 +614,15 @@ struct EditProfileView: View {
     private var saveButton: some View {
         let newStoredPhone = KuwaitPhone.normalizedForStorage(country: selectedPhoneCountry, rawLocalDigits: phoneNumber)
         let isPhoneValid = phoneNumber.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || newStoredPhone != nil
+        let trimmedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        let isEmailValid = trimmedEmail.isEmpty || isValidEmail(trimmedEmail)
 
         return DSPrimaryButton(
             L10n.t("حفظ التغييرات", "Save Changes"),
             isLoading: memberVM.isLoading,
             action: saveChangesAction
         )
-        .disabled(fullName.isEmpty || memberVM.isLoading || !isPhoneValid)
+        .disabled(fullName.isEmpty || memberVM.isLoading || !isPhoneValid || !isEmailValid)
         .padding(.horizontal, DS.Spacing.lg)
     }
 
@@ -616,6 +676,7 @@ struct EditProfileView: View {
         if let b = member.birthDate, let date = f.date(from: b) { self.birthDate = date }
         if let d = member.deathDate, let date = f.date(from: d) { self.deathDate = date }
         self.isPhoneHidden = member.isPhoneHidden ?? false
+        self.email = member.email ?? ""
     }
 
     // MARK: - Save Changes (broken into helpers)
@@ -628,6 +689,7 @@ struct EditProfileView: View {
             let changes = detectChangedFields(normalizedPhone: normalizedPhone)
             await submitAdminRequests(changes: changes, normalizedPhone: normalizedPhone)
             await saveBioIfChanged(changes: changes)
+            await saveEmailIfChanged()
 
             let success = await submitMemberData()
             if success {
@@ -637,6 +699,17 @@ struct EditProfileView: View {
                 showSaveError = true
             }
         }
+    }
+
+    private func saveEmailIfChanged() async {
+        let trimmed = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalized = trimmed.lowercased()
+        let oldEmail = (member.email ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard normalized != oldEmail else { return }
+        // فحص الصيغة قبل الإرسال — فاضي مسموح (للحذف)
+        guard normalized.isEmpty || isValidEmail(normalized) else { return }
+        await memberVM.updateMemberEmail(memberId: member.id, email: normalized.isEmpty ? nil : normalized)
+        member.email = normalized.isEmpty ? nil : normalized
     }
 
     /// Holds which fields changed so cooldowns can be recorded after a successful save
@@ -656,6 +729,9 @@ struct EditProfileView: View {
         if isDeceased && !(member.isDeceased ?? false) { return true }
         let oldBirthStr = member.birthDate ?? ""
         if f.string(from: birthDate) != oldBirthStr { return true }
+        let trimmedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let oldEmail = (member.email ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if trimmedEmail != oldEmail { return true }
         let oldBioKey = (member.bio ?? []).map { "\($0.year ?? "")|\($0.title)|\($0.details)" }.joined(separator: ";")
         let newBioKey = bioStations.map { "\($0.year ?? "")|\($0.title)|\($0.details)" }.joined(separator: ";")
         if oldBioKey != newBioKey { return true }
