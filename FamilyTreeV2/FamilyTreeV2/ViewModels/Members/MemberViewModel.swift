@@ -1679,15 +1679,28 @@ class MemberViewModel: ObservableObject {
                 }
             }
             
+            // 5. إيميل للعضو (إذا عنده إيميل) + للإدارة (سجل)
+            let memberEmail = _memberById[memberId]?.email
+            var emailPayload: [String: AnyEncodable] = [
+                "type": AnyEncodable("role_changed"),
+                "member_name": AnyEncodable(memberName),
+                "old_role": AnyEncodable(currentRole?.rawValue ?? "member"),
+                "new_role": AnyEncodable(newRole.rawValue)
+            ]
+            if let email = memberEmail, !email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                emailPayload["member_email"] = AnyEncodable(email)
+            }
+            await authVM?.sendEventEmail(payload: emailPayload)
+
             Log.info("تم تحديث رتبة العضو بنجاح إلى: \(newRole.rawValue)")
-            
+
         } catch {
             Log.error("فشل تحديث الرتبة: \(error.localizedDescription)")
         }
-        
+
         self.isLoading = false
     }
-    
+
     // MARK: - Set Member Status (freeze / activate)
 
     /// تجميد حساب عضو أو إعادة تفعيله — يمنع/يسمح بالدخول للتطبيق
@@ -1696,6 +1709,10 @@ class MemberViewModel: ObservableObject {
             Log.error("[MEMBER] تم رفض تغيير الحالة: لا توجد صلاحية")
             return
         }
+        let oldStatus = _memberById[memberId]?.status
+        let memberName = _memberById[memberId]?.fourPartName ?? L10n.t("عضو", "member")
+        let memberEmail = _memberById[memberId]?.email
+
         do {
             try await supabase
                 .from("profiles")
@@ -1707,6 +1724,20 @@ class MemberViewModel: ObservableObject {
                 allMembers[index].status = status
             }
             Log.info("[MEMBER] تم تغيير حالة \(memberId) إلى \(status.rawValue)")
+
+            // إيميل للعضو (إذا عنده إيميل) + للإدارة
+            if oldStatus != status {
+                var emailPayload: [String: AnyEncodable] = [
+                    "type": AnyEncodable("status_changed"),
+                    "member_name": AnyEncodable(memberName),
+                    "old_status": AnyEncodable(oldStatus?.rawValue ?? "active"),
+                    "new_status": AnyEncodable(status.rawValue)
+                ]
+                if let email = memberEmail, !email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    emailPayload["member_email"] = AnyEncodable(email)
+                }
+                await authVM?.sendEventEmail(payload: emailPayload)
+            }
         } catch {
             Log.error("[MEMBER] فشل تغيير الحالة: \(error.localizedDescription)")
         }
@@ -1886,6 +1917,34 @@ class MemberViewModel: ObservableObject {
     }
 
     // MARK: - Update Member Gender
+
+    // MARK: - Update Member Email
+
+    /// تحديث إيميل العضو — يستخدمه المستخدم نفسه من EditProfileView
+    /// nil يعني حذف الإيميل
+    func updateMemberEmail(memberId: UUID, email: String?) async {
+        guard NetworkMonitor.shared.requireOnline() else { return }
+        self.isLoading = true
+
+        var emailUpdate: [String: AnyEncodable] = [
+            "email": AnyEncodable(email)
+        ]
+        emailUpdate.merge(adminAuditFields(for: memberId)) { _, new in new }
+
+        do {
+            try await supabase
+                .from("profiles")
+                .update(emailUpdate)
+                .eq("id", value: memberId.uuidString)
+                .execute()
+
+            await fetchSingleMember(id: memberId)
+            Log.info("تم تحديث الإيميل")
+        } catch {
+            Log.error("خطأ تحديث الإيميل: \(error.localizedDescription)")
+        }
+        self.isLoading = false
+    }
 
     func updateMemberGender(memberId: UUID, gender: String, silent: Bool = false) async {
         guard NetworkMonitor.shared.requireOnline() else { return }
