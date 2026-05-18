@@ -1686,18 +1686,25 @@ struct NotificationsCenterView: View {
         // 3) المسار الأول: RPC السيرفر search_members_by_name (v2: exact word + 75% + top-4 parts)
         let serverMatchIds: [UUID] = await fetchServerMatches(fullName: fullName, excluding: requesterId2)
 
-        // 4) حول IDs إلى FamilyMember — مع استثناء المتوفّين (نُظهر للأحياء فقط)
+        // عضو "مرتبط بحساب" = عنده رقم هاتف غير فاضي (مؤشّر إنه سجّل ودخل التطبيق).
+        // نستثنيه من المرشّحين لأنه أصلاً ربط حسابه — ما يصير ربط آخر معه.
+        func isAlreadyLinked(_ m: FamilyMember) -> Bool {
+            !(m.phoneNumber ?? "").trimmingCharacters(in: .whitespaces).isEmpty
+        }
+
+        // 4) حول IDs إلى FamilyMember — مع استثناء المتوفّين والمُلحقين بحسابات
         var matches: [FamilyMember] = []
         for id in serverMatchIds {
             if let m = memberVM.member(byId: id),
                m.id != requesterId2,
-               m.isDeceased != true {
+               m.isDeceased != true,
+               !isAlreadyLinked(m) {
                 matches.append(m)
             }
         }
 
         // 5) Fallback محلي: لو السيرفر ما رجع شيء (مثلاً اسم من جزء واحد)،
-        //    نستخدم المطابقة المحلية على أول كلمة، مع استثناء المتوفّين
+        //    نستخدم المطابقة المحلية على أول كلمة، مع نفس الاستثناءات
         if matches.isEmpty {
             let firstName = fullName
                 .components(separatedBy: .whitespacesAndNewlines)
@@ -1708,6 +1715,7 @@ struct NotificationsCenterView: View {
                 let localMatches = memberVM.allMembers.filter { candidate in
                     guard candidate.id != requesterId2 else { return false }
                     guard candidate.isDeceased != true else { return false }
+                    guard !isAlreadyLinked(candidate) else { return false }
                     let candidateFirst = candidate.firstName
                         .components(separatedBy: .whitespacesAndNewlines)
                         .first?
