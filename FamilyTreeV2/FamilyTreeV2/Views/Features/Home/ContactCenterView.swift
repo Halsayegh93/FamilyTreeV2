@@ -48,6 +48,10 @@ struct ContactCenterView: View {
                             .opacity(appeared ? 1 : 0)
                             .scaleEffect(appeared ? 1 : 0.9)
 
+                        repliesEntryRow
+                            .opacity(appeared ? 1 : 0)
+                            .offset(y: appeared ? 0 : 15)
+
                         categorySection
                             .opacity(appeared ? 1 : 0)
                             .offset(y: appeared ? 0 : 20)
@@ -95,6 +99,64 @@ struct ContactCenterView: View {
             }
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+    }
+
+    // MARK: - Replies Entry Row
+
+    private var repliesEntryRow: some View {
+        NavigationLink {
+            MyContactRepliesView()
+        } label: {
+            HStack(spacing: DS.Spacing.md) {
+                ZStack {
+                    Circle()
+                        .fill(DS.Color.success.opacity(0.15))
+                        .frame(width: 44, height: 44)
+                    Image(systemName: "envelope.open.fill")
+                        .font(DS.Font.callout)
+                        .foregroundColor(DS.Color.success)
+                }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(L10n.t("ردود الإدارة", "Admin Replies"))
+                        .font(DS.Font.calloutBold)
+                        .foregroundColor(DS.Color.textPrimary)
+                    Text(L10n.t("شوف رسائلك السابقة وردود الإدارة عليها", "See past messages and admin replies"))
+                        .font(DS.Font.caption2)
+                        .foregroundColor(DS.Color.textSecondary)
+                        .lineLimit(1)
+                }
+
+                Spacer()
+
+                if authVM.unreadAdminRepliesCount > 0 {
+                    Text("\(authVM.unreadAdminRepliesCount)")
+                        .font(DS.Font.caption2)
+                        .fontWeight(.bold)
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(Capsule().fill(DS.Color.error))
+                }
+
+                Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
+                    .font(DS.Font.caption1)
+                    .foregroundColor(DS.Color.textTertiary)
+            }
+            .padding(DS.Spacing.md)
+            .background(
+                RoundedRectangle(cornerRadius: DS.Radius.lg)
+                    .fill(DS.Color.surfaceElevated)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Radius.lg)
+                    .stroke(DS.Color.surface, lineWidth: 0.5)
+            )
+        }
+        .buttonStyle(DSScaleButtonStyle())
+        .task {
+            await authVM.fetchMyContactMessages()
+        }
     }
 
     // MARK: - Header
