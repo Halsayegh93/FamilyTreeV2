@@ -27,12 +27,16 @@ struct ContactCenterView: View {
         ("أخرى", "ellipsis.circle.fill", "أخرى", "Other", DS.Color.accent)
     ]
 
-    private var selectedCategoryColor: Color {
-        categoryItems.first { $0.key == selectedCategory }?.color ?? DS.Color.primary
+    private var selectedCategoryItem: (key: String, icon: String, labelAr: String, labelEn: String, color: Color)? {
+        categoryItems.first { $0.key == selectedCategory }
     }
 
     private var canSubmit: Bool {
         !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !authVM.isLoading
+    }
+
+    private var latestReply: AdminRequest? {
+        authVM.myContactMessages.first { !($0.adminReply?.isEmpty ?? true) }
     }
 
     var body: some View {
@@ -43,37 +47,39 @@ struct ContactCenterView: View {
                 successView
             } else {
                 ScrollView(showsIndicators: false) {
-                    VStack(spacing: DS.Spacing.lg) {
-                        repliesTopButton
+                    VStack(spacing: DS.Spacing.xl) {
+                        inboxCard
                             .opacity(appeared ? 1 : 0)
-                            .scaleEffect(appeared ? 1 : 0.95)
+                            .offset(y: appeared ? 0 : 12)
 
-                        headerSection
+                        greetingSection
                             .opacity(appeared ? 1 : 0)
-                            .offset(y: appeared ? 0 : 10)
+                            .offset(y: appeared ? 0 : 16)
 
-                        categorySection
-                            .opacity(appeared ? 1 : 0)
-                            .offset(y: appeared ? 0 : 20)
+                        VStack(alignment: .leading, spacing: DS.Spacing.md) {
+                            sectionTitle(L10n.t("نوع الرسالة", "Message Type"), icon: "tag.fill")
+                            categoryGrid
+                        }
+                        .opacity(appeared ? 1 : 0)
+                        .offset(y: appeared ? 0 : 20)
 
-                        combinedMessageCard
+                        composeCard
                             .opacity(appeared ? 1 : 0)
-                            .offset(y: appeared ? 0 : 25)
+                            .offset(y: appeared ? 0 : 24)
 
-                        senderInfoCard
+                        senderFooter
                             .opacity(appeared ? 1 : 0)
-                            .offset(y: appeared ? 0 : 32)
 
                         submitButton
                             .opacity(appeared ? 1 : 0)
-                            .offset(y: appeared ? 0 : 35)
+                            .offset(y: appeared ? 0 : 28)
                     }
                     .padding(.horizontal, DS.Spacing.lg)
                     .padding(.top, DS.Spacing.md)
                     .padding(.bottom, DS.Spacing.xxxxl)
                     .onAppear {
                         guard !appeared else { return }
-                        withAnimation(DS.Anim.smooth.delay(0.1)) { appeared = true }
+                        withAnimation(DS.Anim.smooth.delay(0.05)) { appeared = true }
                     }
                 }
             }
@@ -92,74 +98,105 @@ struct ContactCenterView: View {
             Task {
                 if let data = try? await newItem?.loadTransferable(type: Data.self),
                    let image = UIImage(data: data) {
-                    withAnimation(DS.Anim.snappy) {
-                        attachedImage = image
-                    }
+                    withAnimation(DS.Anim.snappy) { attachedImage = image }
                 }
             }
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
 
-    // MARK: - Replies Top Button (Prominent)
+    // MARK: - Inbox Card (Top — replies preview)
 
-    private var repliesTopButton: some View {
+    private var inboxCard: some View {
         let count = authVM.unreadAdminRepliesCount
         let hasUnread = count > 0
-        let totalCount = authVM.myContactMessages.count
+        let reply = latestReply
+        let parsed = reply.map { ContactMessageParser.parse($0) }
 
         return NavigationLink {
             MyContactRepliesView()
         } label: {
-            HStack(spacing: DS.Spacing.md) {
-                // Icon — circular with white background on gradient
-                ZStack {
-                    Circle()
-                        .fill(.white.opacity(0.22))
-                        .frame(width: 40, height: 40)
-                    Image(systemName: hasUnread ? "envelope.badge.fill" : "envelope.open.fill")
-                        .font(DS.Font.callout)
-                        .foregroundColor(.white)
-                        .symbolRenderingMode(.hierarchical)
+            VStack(alignment: .leading, spacing: DS.Spacing.md) {
+                // Top row: icon + title + badge + chevron
+                HStack(spacing: DS.Spacing.md) {
+                    ZStack {
+                        Circle()
+                            .fill(.white.opacity(0.22))
+                            .frame(width: 44, height: 44)
+                        Image(systemName: hasUnread ? "envelope.badge.fill" : "envelope.open.fill")
+                            .font(DS.Font.scaled(18, weight: .semibold))
+                            .foregroundColor(.white)
+                            .symbolRenderingMode(.hierarchical)
+                    }
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(L10n.t("ردود الإدارة", "Admin Replies"))
+                            .font(DS.Font.title3)
+                            .fontWeight(.bold)
+                            .foregroundColor(.white)
+                        Text(inboxSubtitle(count: count, total: authVM.myContactMessages.count))
+                            .font(DS.Font.caption1)
+                            .foregroundColor(.white.opacity(0.85))
+                            .lineLimit(1)
+                    }
+
+                    Spacer()
+
+                    if hasUnread {
+                        Text("\(count)")
+                            .font(DS.Font.bodyBold)
+                            .foregroundColor(DS.Color.primary)
+                            .frame(minWidth: 32)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(
+                                Capsule()
+                                    .fill(.white)
+                                    .shadow(color: .black.opacity(0.18), radius: 4, y: 1)
+                            )
+                    } else {
+                        Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
+                            .font(DS.Font.scaled(13, weight: .bold))
+                            .foregroundColor(.white.opacity(0.7))
+                    }
                 }
 
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(L10n.t("ردود الإدارة", "Admin Replies"))
-                        .font(DS.Font.calloutBold)
-                        .foregroundColor(.white)
-                    Text(hasUnread
-                         ? L10n.t("\(count) جديد بانتظارك", "\(count) new waiting")
-                         : (totalCount > 0
-                            ? L10n.t("شوف محادثاتك السابقة", "View past conversations")
-                            : L10n.t("ستظهر هنا ردود الإدارة على رسائلك", "Admin replies will appear here")))
-                        .font(DS.Font.caption2)
-                        .foregroundColor(.white.opacity(0.85))
-                        .lineLimit(1)
+                // Latest reply preview
+                if let reply, let replyText = reply.adminReply?.trimmingCharacters(in: .whitespacesAndNewlines), !replyText.isEmpty {
+                    Divider()
+                        .background(.white.opacity(0.2))
+
+                    HStack(alignment: .top, spacing: DS.Spacing.sm) {
+                        Image(systemName: "quote.opening")
+                            .font(DS.Font.caption1)
+                            .foregroundColor(.white.opacity(0.6))
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(replyText)
+                                .font(DS.Font.subheadline)
+                                .foregroundColor(.white)
+                                .lineLimit(2)
+                                .multilineTextAlignment(.leading)
+                            HStack(spacing: 4) {
+                                if let cat = parsed?.category, !cat.isEmpty {
+                                    Text(cat)
+                                        .font(DS.Font.caption2)
+                                        .fontWeight(.semibold)
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 1)
+                                        .background(Capsule().fill(.white.opacity(0.22)))
+                                }
+                                Text("·")
+                                Text(timeAgo(reply.repliedAt))
+                            }
+                            .font(DS.Font.caption2)
+                            .foregroundColor(.white.opacity(0.7))
+                        }
+                        Spacer()
+                    }
                 }
-
-                Spacer()
-
-                if hasUnread {
-                    // Big count badge with subtle pulse
-                    Text("\(count)")
-                        .font(DS.Font.calloutBold)
-                        .foregroundColor(DS.Color.primary)
-                        .frame(minWidth: 28)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 4)
-                        .background(
-                            Capsule()
-                                .fill(.white)
-                                .shadow(color: .black.opacity(0.15), radius: 4, y: 1)
-                        )
-                }
-
-                Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
-                    .font(DS.Font.scaled(13, weight: .bold))
-                    .foregroundColor(.white.opacity(0.7))
             }
-            .padding(.horizontal, DS.Spacing.lg)
-            .padding(.vertical, DS.Spacing.md)
+            .padding(DS.Spacing.lg)
             .background(
                 RoundedRectangle(cornerRadius: DS.Radius.xl)
                     .fill(DS.Color.gradientPrimary)
@@ -168,7 +205,7 @@ struct ContactCenterView: View {
                 RoundedRectangle(cornerRadius: DS.Radius.xl)
                     .stroke(.white.opacity(0.15), lineWidth: 1)
             )
-            .shadow(color: DS.Color.primary.opacity(0.3), radius: 12, y: 5)
+            .shadow(color: DS.Color.primary.opacity(0.35), radius: 14, y: 6)
         }
         .buttonStyle(DSScaleButtonStyle())
         .task {
@@ -176,144 +213,116 @@ struct ContactCenterView: View {
         }
     }
 
-    // MARK: - Header (Compact)
-    private var headerSection: some View {
-        HStack(alignment: .center, spacing: DS.Spacing.md) {
-            ZStack {
-                Circle()
-                    .fill(DS.Color.primary.opacity(0.12))
-                    .frame(width: 48, height: 48)
-                Image(systemName: "paperplane.fill")
-                    .font(DS.Font.scaled(20, weight: .bold))
-                    .foregroundColor(DS.Color.primary)
-            }
+    private func inboxSubtitle(count: Int, total: Int) -> String {
+        if count > 0 {
+            return L10n.t("\(count) رد جديد بانتظارك", "\(count) new reply\(count == 1 ? "" : "ies") waiting")
+        }
+        if total > 0 {
+            return L10n.t("\(total) محادثة سابقة", "\(total) past conversation\(total == 1 ? "" : "s")")
+        }
+        return L10n.t("ردود الإدارة على رسائلك تظهر هنا", "Admin replies will appear here")
+    }
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(L10n.t("رسالة جديدة للإدارة", "New Message to Admin"))
-                    .font(DS.Font.title3)
-                    .fontWeight(.bold)
-                    .foregroundColor(DS.Color.textPrimary)
-                Text(L10n.t("نحرص على الرد بأسرع وقت", "We respond as soon as possible"))
-                    .font(DS.Font.caption1)
-                    .foregroundColor(DS.Color.textSecondary)
-            }
+    // MARK: - Greeting
 
+    private var greetingSection: some View {
+        let firstName = authVM.currentUser?.firstName.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let greeting: String = {
+            if firstName.isEmpty {
+                return L10n.t("مرحباً 👋", "Hi 👋")
+            }
+            return L10n.t("مرحباً، \(firstName) 👋", "Hi, \(firstName) 👋")
+        }()
+
+        return VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+            Text(greeting)
+                .font(DS.Font.title2)
+                .fontWeight(.bold)
+                .foregroundColor(DS.Color.textPrimary)
+            Text(L10n.t("كيف نقدر نخدمك اليوم؟", "How can we help you today?"))
+                .font(DS.Font.callout)
+                .foregroundColor(DS.Color.textSecondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    // MARK: - Section Title Helper
+
+    private func sectionTitle(_ text: String, icon: String) -> some View {
+        HStack(spacing: DS.Spacing.xs) {
+            Image(systemName: icon)
+                .font(DS.Font.caption1)
+                .foregroundColor(DS.Color.textTertiary)
+            Text(text)
+                .font(DS.Font.calloutBold)
+                .foregroundColor(DS.Color.textPrimary)
             Spacer()
         }
-        .padding(.top, DS.Spacing.xs)
     }
 
-    // MARK: - Sender Info Card (Auto-filled)
-    private var senderInfoCard: some View {
-        DSCard(padding: 0) {
-            DSSectionHeader(
-                title: L10n.t("بيانات المرسل", "Sender Info"),
-                icon: "person.text.rectangle.fill",
-                iconColor: DS.Color.primary
-            )
+    // MARK: - Category Grid (3 columns)
 
-            // الاسم
-            HStack(spacing: DS.Spacing.md) {
-                DSIcon("person.fill", color: DS.Color.primary)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(L10n.t("الاسم", "Name"))
-                        .font(DS.Font.caption1)
-                        .foregroundColor(DS.Color.textTertiary)
-                    Text(authVM.currentUser?.fullName ?? "—")
-                        .font(DS.Font.calloutBold)
-                        .foregroundColor(DS.Color.textPrimary)
-                }
-                Spacer()
-                Image(systemName: "lock.fill")
-                    .font(DS.Font.scaled(12, weight: .medium))
-                    .foregroundColor(DS.Color.textTertiary)
-            }
-            .padding(.horizontal, DS.Spacing.lg)
-            .padding(.vertical, DS.Spacing.sm)
-
-            DSDivider()
-
-            // رقم الهاتف
-            HStack(spacing: DS.Spacing.md) {
-                DSIcon("phone.fill", color: DS.Color.success)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(L10n.t("رقم الهاتف", "Phone"))
-                        .font(DS.Font.caption1)
-                        .foregroundColor(DS.Color.textTertiary)
-                    Text(authVM.currentUser?.phoneNumber.flatMap { $0.isEmpty ? nil : KuwaitPhone.display($0) } ?? "—")
-                        .font(DS.Font.calloutBold)
-                        .foregroundColor(DS.Color.textPrimary)
-                }
-                Spacer()
-                Image(systemName: "lock.fill")
-                    .font(DS.Font.scaled(12, weight: .medium))
-                    .foregroundColor(DS.Color.textTertiary)
-            }
-            .padding(.horizontal, DS.Spacing.lg)
-            .padding(.vertical, DS.Spacing.sm)
-        }
-    }
-
-    // MARK: - Category Section
-    private var categorySection: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            Text(L10n.t("نوع الرسالة", "Message Type"))
-                .font(DS.Font.calloutBold)
-                .foregroundColor(DS.Color.textPrimary)
-                .padding(.leading, DS.Spacing.xs)
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: DS.Spacing.sm) {
-                    ForEach(categoryItems, id: \.key) { item in
-                        let isSelected = selectedCategory == item.key
-                        Button {
-                            withAnimation(DS.Anim.snappy) {
-                                selectedCategory = item.key
-                            }
-                        } label: {
-                            HStack(spacing: 6) {
-                                Image(systemName: item.icon)
-                                    .font(DS.Font.scaled(13, weight: .semibold))
-                                Text(L10n.t(item.labelAr, item.labelEn))
-                                    .font(DS.Font.caption1)
-                                    .fontWeight(.semibold)
-                            }
-                            .foregroundColor(isSelected ? DS.Color.textOnPrimary : item.color)
-                            .padding(.horizontal, DS.Spacing.md)
-                            .padding(.vertical, DS.Spacing.sm)
-                            .background(isSelected ? item.color : item.color.opacity(0.08))
-                            .clipShape(Capsule())
-                            .overlay(
-                                Capsule()
-                                    .stroke(isSelected ? Color.clear : item.color.opacity(0.25), lineWidth: 1)
-                            )
+    private var categoryGrid: some View {
+        let columns = [
+            GridItem(.flexible(), spacing: DS.Spacing.sm),
+            GridItem(.flexible(), spacing: DS.Spacing.sm),
+            GridItem(.flexible(), spacing: DS.Spacing.sm),
+        ]
+        return LazyVGrid(columns: columns, spacing: DS.Spacing.sm) {
+            ForEach(categoryItems, id: \.key) { item in
+                let isSelected = selectedCategory == item.key
+                Button {
+                    withAnimation(DS.Anim.snappy) { selectedCategory = item.key }
+                    UISelectionFeedbackGenerator().selectionChanged()
+                } label: {
+                    VStack(spacing: DS.Spacing.xs) {
+                        ZStack {
+                            Circle()
+                                .fill(isSelected ? item.color : item.color.opacity(0.12))
+                                .frame(width: 38, height: 38)
+                            Image(systemName: item.icon)
+                                .font(DS.Font.scaled(16, weight: .semibold))
+                                .foregroundColor(isSelected ? .white : item.color)
                         }
-                        .buttonStyle(DSScaleButtonStyle())
+                        Text(L10n.t(item.labelAr, item.labelEn))
+                            .font(DS.Font.caption1)
+                            .fontWeight(isSelected ? .bold : .semibold)
+                            .foregroundColor(isSelected ? DS.Color.textPrimary : DS.Color.textSecondary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
                     }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, DS.Spacing.md)
+                    .background(
+                        RoundedRectangle(cornerRadius: DS.Radius.lg)
+                            .fill(isSelected ? item.color.opacity(0.08) : DS.Color.surfaceElevated)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: DS.Radius.lg)
+                            .stroke(isSelected ? item.color : DS.Color.surface, lineWidth: isSelected ? 1.5 : 0.5)
+                    )
                 }
+                .buttonStyle(DSScaleButtonStyle())
             }
         }
     }
 
-    // MARK: - Combined Message Card (موضوع + رسالة + مرفق)
-    private var combinedMessageCard: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text(L10n.t("رسالتك", "Your Message"))
-                .font(DS.Font.calloutBold)
-                .foregroundColor(DS.Color.textPrimary)
-                .padding(.leading, DS.Spacing.xs)
-                .padding(.bottom, DS.Spacing.sm)
+    // MARK: - Compose Card
+
+    private var composeCard: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.md) {
+            sectionTitle(L10n.t("رسالتك", "Your Message"), icon: "square.and.pencil")
 
             VStack(spacing: 0) {
-                // الموضوع
+                // Subject
                 HStack(spacing: DS.Spacing.sm) {
                     Image(systemName: "text.alignleft")
                         .font(DS.Font.scaled(14, weight: .medium))
                         .foregroundColor(DS.Color.textTertiary)
-                        .frame(width: 24)
+                        .frame(width: 22)
 
                     TextField(
-                        L10n.t("الموضوع (اختياري)...", "Subject (optional)..."),
+                        L10n.t("الموضوع (اختياري)", "Subject (optional)"),
                         text: $subject
                     )
                     .font(DS.Font.body)
@@ -329,7 +338,6 @@ struct ContactCenterView: View {
                                 .font(DS.Font.scaled(14))
                                 .foregroundColor(DS.Color.textTertiary)
                         }
-                        .accessibilityLabel(L10n.t("مسح", "Clear"))
                     }
                 }
                 .padding(.horizontal, DS.Spacing.md)
@@ -337,13 +345,15 @@ struct ContactCenterView: View {
 
                 Divider().padding(.horizontal, DS.Spacing.md)
 
-                // الرسالة
-                ZStack(alignment: .topTrailing) {
+                // Message body
+                ZStack(alignment: .topLeading) {
                     TextEditor(text: $message)
-                        .frame(minHeight: 140)
+                        .frame(minHeight: 150)
                         .focused($focusedField, equals: .message)
                         .scrollContentBackground(.hidden)
                         .font(DS.Font.body)
+                        .padding(.horizontal, DS.Spacing.sm)
+                        .padding(.top, DS.Spacing.xs)
                         .onChange(of: message) { newValue in
                             if newValue.count > 1000 {
                                 message = String(newValue.prefix(1000))
@@ -352,17 +362,17 @@ struct ContactCenterView: View {
                         }
 
                     if message.isEmpty {
-                        Text(L10n.t("اكتب رسالتك هنا...", "Write your message here..."))
+                        Text(L10n.t("اكتب رسالتك هنا…", "Write your message here…"))
                             .font(DS.Font.body)
                             .foregroundColor(DS.Color.textTertiary)
-                            .padding(.top, DS.Spacing.sm)
-                            .padding(.trailing, DS.Spacing.xs)
+                            .padding(.horizontal, DS.Spacing.md)
+                            .padding(.top, DS.Spacing.md - 2)
                             .allowsHitTesting(false)
                     }
                 }
-                .padding(.horizontal, DS.Spacing.md)
-                .padding(.top, DS.Spacing.sm)
+                .padding(.horizontal, DS.Spacing.sm)
 
+                // Counter
                 HStack {
                     Spacer()
                     Text("\(message.count)/1000")
@@ -370,61 +380,113 @@ struct ContactCenterView: View {
                         .foregroundColor(message.count >= 900 ? DS.Color.error : DS.Color.textTertiary)
                 }
                 .padding(.horizontal, DS.Spacing.md)
+                .padding(.top, DS.Spacing.xs)
+                .padding(.bottom, DS.Spacing.sm)
 
                 Divider().padding(.horizontal, DS.Spacing.md)
 
-                // المرفق
-                if let image = attachedImage {
-                    ZStack(alignment: .topTrailing) {
-                        Image(uiImage: image)
-                            .resizable()
-                            .scaledToFill()
-                            .frame(height: 120)
-                            .frame(maxWidth: .infinity)
-                            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
-                            .padding(.horizontal, DS.Spacing.md)
-                            .padding(.vertical, DS.Spacing.sm)
-
-                        Button {
-                            withAnimation(DS.Anim.snappy) {
-                                attachedImage = nil
-                                selectedPhoto = nil
-                            }
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .font(DS.Font.scaled(20, weight: .bold))
-                                .foregroundColor(.white)
-                                .dsCardShadow()
-                        }
-                        .padding(DS.Spacing.lg)
-                        .accessibilityLabel(L10n.t("إزالة الصورة", "Remove image"))
-                    }
-                } else {
-                    PhotosPicker(selection: $selectedPhoto, matching: .images) {
-                        HStack(spacing: DS.Spacing.sm) {
-                            Image(systemName: "photo.badge.plus")
-                                .font(DS.Font.scaled(15, weight: .semibold))
-                            Text(L10n.t("إرفاق صورة", "Attach Image"))
-                                .font(DS.Font.caption1)
-                                .fontWeight(.semibold)
-                        }
-                        .foregroundColor(DS.Color.primary)
-                        .padding(.vertical, DS.Spacing.md)
-                        .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.plain)
-                }
+                // Attachment row
+                attachmentRow
             }
-            .background(DS.Color.surface)
+            .background(DS.Color.surfaceElevated)
             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
             .overlay(
                 RoundedRectangle(cornerRadius: DS.Radius.lg)
-                    .stroke(DS.Color.textTertiary.opacity(0.15), lineWidth: 1)
+                    .stroke(DS.Color.surface, lineWidth: 1)
             )
         }
     }
 
+    @ViewBuilder
+    private var attachmentRow: some View {
+        if let image = attachedImage {
+            HStack(spacing: DS.Spacing.md) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 56, height: 56)
+                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(L10n.t("صورة مرفقة", "Image attached"))
+                        .font(DS.Font.calloutBold)
+                        .foregroundColor(DS.Color.textPrimary)
+                    Text(L10n.t("سيتم إرسالها مع الرسالة", "Will be sent with your message"))
+                        .font(DS.Font.caption2)
+                        .foregroundColor(DS.Color.textSecondary)
+                }
+
+                Spacer()
+
+                Button {
+                    withAnimation(DS.Anim.snappy) {
+                        attachedImage = nil
+                        selectedPhoto = nil
+                    }
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(DS.Font.scaled(22))
+                        .foregroundColor(DS.Color.textTertiary)
+                }
+            }
+            .padding(.horizontal, DS.Spacing.md)
+            .padding(.vertical, DS.Spacing.sm)
+        } else {
+            PhotosPicker(selection: $selectedPhoto, matching: .images) {
+                HStack(spacing: DS.Spacing.sm) {
+                    Image(systemName: "paperclip")
+                        .font(DS.Font.scaled(14, weight: .semibold))
+                    Text(L10n.t("إرفاق صورة (اختياري)", "Attach image (optional)"))
+                        .font(DS.Font.callout)
+                        .fontWeight(.semibold)
+                    Spacer()
+                }
+                .foregroundColor(DS.Color.primary)
+                .padding(.horizontal, DS.Spacing.md)
+                .padding(.vertical, DS.Spacing.md)
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    // MARK: - Sender Footer (compact)
+
+    private var senderFooter: some View {
+        HStack(spacing: DS.Spacing.sm) {
+            Image(systemName: "person.fill")
+                .font(DS.Font.caption1)
+                .foregroundColor(DS.Color.textTertiary)
+            Text(L10n.t("ترسل باسم:", "Sending as:"))
+                .font(DS.Font.caption1)
+                .foregroundColor(DS.Color.textTertiary)
+            Text(authVM.currentUser?.fullName ?? "—")
+                .font(DS.Font.subheadline)
+                .fontWeight(.semibold)
+                .foregroundColor(DS.Color.textSecondary)
+                .lineLimit(1)
+            if let phone = authVM.currentUser?.phoneNumber, !phone.isEmpty {
+                Text("·")
+                    .foregroundColor(DS.Color.textTertiary)
+                Text(KuwaitPhone.display(phone))
+                    .font(DS.Font.caption1)
+                    .foregroundColor(DS.Color.textTertiary)
+                    .lineLimit(1)
+            }
+            Spacer()
+            Image(systemName: "lock.fill")
+                .font(DS.Font.caption2)
+                .foregroundColor(DS.Color.textTertiary)
+        }
+        .padding(.horizontal, DS.Spacing.md)
+        .padding(.vertical, DS.Spacing.sm)
+        .background(
+            RoundedRectangle(cornerRadius: DS.Radius.md)
+                .fill(DS.Color.surface.opacity(0.5))
+        )
+    }
+
     // MARK: - Submit Button
+
     private var submitButton: some View {
         DSPrimaryButton(
             L10n.t("إرسال الرسالة", "Send Message"),
@@ -440,6 +502,7 @@ struct ContactCenterView: View {
     }
 
     // MARK: - Success View
+
     private var successView: some View {
         VStack(spacing: DS.Spacing.xl) {
             Spacer()
@@ -447,21 +510,22 @@ struct ContactCenterView: View {
             ZStack {
                 Circle()
                     .fill(DS.Color.success.opacity(0.1))
-                    .frame(width: 120, height: 120)
+                    .frame(width: 130, height: 130)
                 Circle()
                     .fill(DS.Color.success.opacity(0.18))
-                    .frame(width: 88, height: 88)
+                    .frame(width: 96, height: 96)
                 Image(systemName: "checkmark.circle.fill")
-                    .font(DS.Font.scaled(44, weight: .bold))
+                    .font(DS.Font.scaled(48, weight: .bold))
                     .foregroundColor(DS.Color.success)
             }
 
             VStack(spacing: DS.Spacing.sm) {
                 Text(L10n.t("تم الإرسال بنجاح", "Sent Successfully"))
-                    .font(DS.Font.title3)
-                    .fontWeight(.black)
+                    .font(DS.Font.title2)
+                    .fontWeight(.bold)
                     .foregroundColor(DS.Color.textPrimary)
-                Text(L10n.t("تم إرسال رسالتك وسيتم التواصل معك قريباً.", "Message sent. We'll reply soon."))
+                Text(L10n.t("تم إرسال رسالتك. الإدارة بترد عليك من شاشة \"ردود الإدارة\" أو على إيميلك.",
+                            "Your message was sent. The admin will reply via \"Admin Replies\" or email."))
                     .font(DS.Font.callout)
                     .foregroundColor(DS.Color.textSecondary)
                     .multilineTextAlignment(.center)
@@ -473,7 +537,27 @@ struct ContactCenterView: View {
         .transition(.opacity.combined(with: .scale(scale: 0.95)))
     }
 
+    // MARK: - Helpers
+
+    private func timeAgo(_ iso: String?) -> String {
+        guard let iso = iso else { return "" }
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        var date = f.date(from: iso)
+        if date == nil {
+            f.formatOptions = [.withInternetDateTime]
+            date = f.date(from: iso)
+        }
+        guard let d = date else { return "" }
+        let secs = Int(Date().timeIntervalSince(d))
+        if secs < 60 { return L10n.t("الآن", "Now") }
+        if secs < 3600 { return L10n.t("منذ \(secs/60) د", "\(secs/60)m") }
+        if secs < 86400 { return L10n.t("منذ \(secs/3600) س", "\(secs/3600)h") }
+        return L10n.t("منذ \(secs/86400) يوم", "\(secs/86400)d")
+    }
+
     // MARK: - Submit Logic
+
     private func submit() {
         let cleanSubject = subject.trimmingCharacters(in: .whitespacesAndNewlines)
         let cleanMessage = message.trimmingCharacters(in: .whitespacesAndNewlines)
