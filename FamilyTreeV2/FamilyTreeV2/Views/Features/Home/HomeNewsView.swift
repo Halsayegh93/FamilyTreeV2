@@ -185,6 +185,23 @@ struct HomeNewsView: View {
                 withAnimation(DS.Anim.snappy) { activeSubPage = nil }
             }
         }
+        // Deep-link من push خارجي لطلب انضمام — يفتح مركز الإشعارات تلقائياً
+        .onReceive(NotificationCenter.default.publisher(for: .openHomeNotificationsCenter)) { _ in
+            if activeSubPage != nil { activeSubPage = nil }
+            showingNotifications = true
+        }
+        // Safety net — لو الـ event وصل قبل ما الـ view يكون mounted
+        .onChange(of: notificationVM.pendingJoinDeepLinkRequestId) { newValue in
+            guard newValue != nil else { return }
+            if activeSubPage != nil { activeSubPage = nil }
+            showingNotifications = true
+        }
+        .sheet(isPresented: $showingNotifications) {
+            NavigationStack {
+                NotificationsCenterView()
+            }
+            .presentationDragIndicator(.visible)
+        }
         .toolbar(showStoryViewer ? .hidden : .visible, for: .tabBar)
         .animation(.easeInOut(duration: 0.3), value: showStoryViewer)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)

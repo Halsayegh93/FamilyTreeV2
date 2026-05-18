@@ -80,6 +80,9 @@ struct MainTabView: View {
             guard authVM.canModerate else { return }
             withAnimation { selectedTab = 4 }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .openHomeNotificationsCenter)) { _ in
+            withAnimation { selectedTab = 0 }
+        }
         }
         .task {
             // تتبع أول شاشة عند الفتح
@@ -122,4 +125,6 @@ extension Notification.Name {
     static let openAdminRequests    = Notification.Name("openAdminRequests")
     /// userInfo: ["kind": String] — يفتح تاب الإدارة + يدفع شاشة المراجعة المناسبة
     static let openAdminReviewForKind = Notification.Name("openAdminReviewForKind")
+    /// يفتح تاب الرئيسية ويدفع مركز الإشعارات + يفتح شيت تفاصيل الطلب لو فيه deep-link
+    static let openHomeNotificationsCenter = Notification.Name("openHomeNotificationsCenter")
 }

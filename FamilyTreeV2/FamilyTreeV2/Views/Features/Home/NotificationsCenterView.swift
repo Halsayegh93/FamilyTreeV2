@@ -207,7 +207,24 @@ struct NotificationsCenterView: View {
         .navigationTitle(L10n.t("الإشعارات", "Notifications"))
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(isSelecting)
-        .task { await notificationVM.fetchNotifications() }
+        .task {
+            await notificationVM.fetchNotifications()
+            // Deep-link من push خارجي لطلب انضمام: افتح شيت التفاصيل مباشرة
+            if let rid = notificationVM.pendingJoinDeepLinkRequestId {
+                if let target = notificationVM.notifications.first(where: { $0.requestId == rid }) {
+                    selectedNotification = target
+                }
+                notificationVM.pendingJoinDeepLinkRequestId = nil
+            }
+        }
+        .onChange(of: notificationVM.pendingJoinDeepLinkRequestId) { newValue in
+            // إذا وصل deep-link بينما الشاشة مفتوحة، استهلكه فوراً
+            guard let rid = newValue else { return }
+            if let target = notificationVM.notifications.first(where: { $0.requestId == rid }) {
+                selectedNotification = target
+            }
+            notificationVM.pendingJoinDeepLinkRequestId = nil
+        }
         .onAppear {
             withAnimation(DS.Anim.smooth.delay(0.15)) {
                 appeared = true

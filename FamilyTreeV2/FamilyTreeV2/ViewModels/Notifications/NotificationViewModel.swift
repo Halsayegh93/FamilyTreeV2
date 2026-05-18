@@ -14,6 +14,11 @@ class NotificationViewModel: ObservableObject {
     @Published var pushToken: String?
     @Published var isLoading: Bool = false
     @Published var linkedDevices: [LinkedDevice] = []
+
+    /// طلب انضمام/ربط جاءت إشعاره من خارج التطبيق — يُستخدم لفتح شيت التفاصيل
+    /// (مع شاشة التطابقات) تلقائياً بعد فتح مركز الإشعارات.
+    /// يُمسح بعد الاستهلاك.
+    @Published var pendingJoinDeepLinkRequestId: UUID? = nil
     
     /// نموذج الجهاز المرتبط
     struct LinkedDevice: Identifiable, Codable {

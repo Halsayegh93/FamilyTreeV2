@@ -96,9 +96,22 @@ struct FamilyTreeV2App: App {
                         }
                     }
                 }
-                .onReceive(NotificationCenter.default.publisher(for: .didTapOpenRequestAction)) { _ in
-                    // يفتح تاب الإدارة — MainTabView يتولى التبديل
-                    NotificationCenter.default.post(name: .openAdminRequests, object: nil)
+                .onReceive(NotificationCenter.default.publisher(for: .didTapOpenRequestAction)) { note in
+                    // طلبات الانضمام/الربط: نفتح مركز الإشعارات + شيت التفاصيل (لرؤية التطابقات)
+                    // باقي الطلبات: نفتح تاب الإدارة كالسابق
+                    let userInfo = note.userInfo ?? [:]
+                    let requestType = userInfo["request_type"] as? String
+                    let requestIdString = userInfo["request_id"] as? String
+                    let isJoinOrLink = requestType == "join_request" || requestType == "link_request"
+
+                    if isJoinOrLink, let rid = requestIdString.flatMap(UUID.init(uuidString:)) {
+                        // خزّن الـ requestId عشان NotificationsCenterView يفتح الشيت تلقائياً
+                        self.appState.notificationVM.pendingJoinDeepLinkRequestId = rid
+                        NotificationCenter.default.post(name: .openHomeNotificationsCenter, object: nil)
+                    } else {
+                        NotificationCenter.default.post(name: .openAdminRequests, object: nil)
+                    }
+
                     Task {
                         async let n: () = self.appState.notificationVM.fetchNotifications(force: true)
                         async let m: () = self.appState.memberVM.fetchAllMembers(force: true)
