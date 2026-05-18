@@ -946,20 +946,24 @@ struct NotificationsCenterView: View {
                         detailMemberCard(member: member, iconInfo: iconInfo)
                     }
 
+                    // قسم التطابقات المحتملة — كارد مستقل قبل جسم الإشعار للأهمية
+                    // ملاحظة: الإشعارات اللي من trigger تحفظ pending ID في created_by،
+                    // والإشعارات من admin_requests تحفظه في request_id — نستخدم fallback
+                    let showMatchesSection = isJoinRequest && authVM.canModerate
+                    let resolvedRequesterId = notification.requestId ?? notification.createdBy
+                    if showMatchesSection, let requesterId = resolvedRequesterId {
+                        joinMatchesCard(
+                            candidates: joinMatchCandidates,
+                            requesterId: requesterId,
+                            iconInfo: iconInfo,
+                            isLoading: !joinMatchesLoaded
+                        )
+                    }
+
                     if !notification.body.isEmpty {
-                        // السكشن يظهر دائماً للأدمن على طلبات الانضمام — حتى لو 0 مطابقات
-                        // (empty state يوضّح "لا توجد مطابقات" بدل ما السكشن يختفي)
-                        // ملاحظة: الإشعارات اللي من trigger تحفظ pending ID في created_by،
-                        // والإشعارات من admin_requests تحفظه في request_id — نستخدم fallback
-                        let showMatchesSection = isJoinRequest && authVM.canModerate
-                        let resolvedRequesterId = notification.requestId ?? notification.createdBy
                         detailBodyCard(
                             notification: notification,
-                            iconInfo: iconInfo,
-                            joinMatches: showMatchesSection ? joinMatchCandidates : [],
-                            joinRequesterId: showMatchesSection ? resolvedRequesterId : nil,
-                            showMatchesSection: showMatchesSection,
-                            joinMatchesLoaded: joinMatchesLoaded
+                            iconInfo: iconInfo
                         )
                     }
 
@@ -1227,11 +1231,7 @@ struct NotificationsCenterView: View {
     // MARK: - Detail: Body Card (نص الإشعار) — مُحسَّن
     private func detailBodyCard(
         notification: AppNotification,
-        iconInfo: NotificationKindStyle,
-        joinMatches: [FamilyMember] = [],
-        joinRequesterId: UUID? = nil,
-        showMatchesSection: Bool = false,
-        joinMatchesLoaded: Bool = true
+        iconInfo: NotificationKindStyle
     ) -> some View {
         let date = notification.createdDate
         // اسم المدير المنفّذ — يظهر داخل تفاصيل الإشعار حتى للأنواع المُعمَّمة (admin_edit_*)
@@ -1341,16 +1341,6 @@ struct NotificationsCenterView: View {
                 .accessibilityLabel(L10n.t("انسخ رقم الإشعار", "Copy notification ID"))
             }
 
-            // قسم التطابقات المحتملة — يظهر دائماً للأدمن على طلبات الانضمام
-            // (مع loading أو empty state إذا لا توجد مطابقات)
-            if showMatchesSection, let requesterId = joinRequesterId {
-                joinMatchesSection(
-                    candidates: joinMatches,
-                    requesterId: requesterId,
-                    iconInfo: iconInfo,
-                    isLoading: !joinMatchesLoaded
-                )
-            }
         }
         .padding(DS.Spacing.lg)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -1361,6 +1351,32 @@ struct NotificationsCenterView: View {
         .overlay(
             RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
                 .stroke(DS.Color.textTertiary.opacity(0.10), lineWidth: 0.5)
+        )
+        .dsSubtleShadow()
+    }
+
+    // MARK: - Detail: Matches Card (كارد التطابقات المحتملة)
+    private func joinMatchesCard(
+        candidates: [FamilyMember],
+        requesterId: UUID,
+        iconInfo: NotificationKindStyle,
+        isLoading: Bool
+    ) -> some View {
+        joinMatchesSection(
+            candidates: candidates,
+            requesterId: requesterId,
+            iconInfo: iconInfo,
+            isLoading: isLoading
+        )
+        .padding(DS.Spacing.lg)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
+                .fill(DS.Color.surface)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
+                .stroke(iconInfo.color.opacity(0.20), lineWidth: 0.5)
         )
         .dsSubtleShadow()
     }
@@ -1858,7 +1874,7 @@ struct NotificationsCenterView: View {
         }
     }
 
-    /// قسم التطابقات المحتملة — مدمج داخل detailBodyCard (بدون wrapper)
+    /// قسم التطابقات المحتملة — يُلف داخل joinMatchesCard كي يصير كارد مستقل
     /// يظهر دائماً للأدمن على طلبات الانضمام مع loading / empty / list states
     @ViewBuilder
     private func joinMatchesSection(
@@ -1867,9 +1883,6 @@ struct NotificationsCenterView: View {
         iconInfo: NotificationKindStyle,
         isLoading: Bool = false
     ) -> some View {
-        Divider()
-            .padding(.vertical, DS.Spacing.xs)
-
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             // الترويسة القابلة للنقر — تطوي/تفتح (معطلة عند 0 + loaded عشان empty state يظهر مباشرة)
             Button {
