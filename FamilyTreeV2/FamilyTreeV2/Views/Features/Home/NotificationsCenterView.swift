@@ -42,6 +42,7 @@ private struct NotificationKindStyle {
         "news_report":       .init(icon: "exclamationmark.triangle.fill",            gradient: DS.Color.gradientPrimary, color: DS.Color.error,       labelAr: "بلاغ خبر",        labelEn: "News Report"),
         "news_deleted":      .init(icon: "trash.fill",                               gradient: DS.Color.gradientPrimary, color: DS.Color.error,       labelAr: "حذف منشور",       labelEn: "Post Deleted"),
         "contact_message":   .init(icon: "envelope.fill",                            gradient: DS.Color.gradientPrimary, color: DS.Color.primary,     labelAr: "تواصل",           labelEn: "Contact"),
+        "contact_reply":     .init(icon: "envelope.open.fill",                       gradient: DS.Color.gradientPrimary, color: DS.Color.success,     labelAr: "رد من الإدارة",   labelEn: "Admin Reply"),
         "link_request":      .init(icon: "link.circle.fill",                         gradient: DS.Color.gradientPrimary, color: DS.Color.primary,     labelAr: "طلب ربط",         labelEn: "Link Request"),
         "gallery_add":       .init(icon: "photo.fill",                               gradient: DS.Color.gradientPrimary, color: DS.Color.secondary,   labelAr: "معرض صور",        labelEn: "Gallery"),
         "news_comment":      .init(icon: "bubble.left.fill",                         gradient: DS.Color.gradientPrimary, color: DS.Color.primary,     labelAr: "تعليق",           labelEn: "Comment"),

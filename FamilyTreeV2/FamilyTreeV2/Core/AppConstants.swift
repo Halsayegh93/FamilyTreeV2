@@ -97,6 +97,7 @@ enum NotificationKind: String {
     case projectRejected = "project_rejected"
     // تواصل
     case contactMessage = "contact_message"
+    case contactReply = "contact_reply"
     case test = "test"
 }
 

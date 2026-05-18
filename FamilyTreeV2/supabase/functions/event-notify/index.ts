@@ -2,7 +2,7 @@ import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { handleCors, validatePost, json } from "../_shared/cors.ts";
 import { authenticateRequest, parseBody } from "../_shared/auth.ts";
 
-type EventType = "join_request" | "role_changed" | "status_changed";
+type EventType = "join_request" | "role_changed" | "status_changed" | "contact_reply";
 
 interface BasePayload {
   type: EventType;
@@ -30,7 +30,15 @@ interface StatusChangedPayload extends BasePayload {
   new_status: string;
 }
 
-type EventPayload = JoinRequestPayload | RoleChangedPayload | StatusChangedPayload;
+interface ContactReplyPayload extends BasePayload {
+  type: "contact_reply";
+  member_name: string;
+  member_email: string;
+  reply_text: string;
+  original_message?: string;
+}
+
+type EventPayload = JoinRequestPayload | RoleChangedPayload | StatusChangedPayload | ContactReplyPayload;
 
 const ROLE_AR: Record<string, string> = {
   owner: "مدير",
@@ -177,6 +185,48 @@ function buildStatusChangedEmailForMember(p: StatusChangedPayload): EmailContent
     `الحالة السابقة: ${statusArabic(p.old_status)}`,
     `الحالة الجديدة: ${newStatus}`,
   ].join("\n");
+  return { subject, html, text };
+}
+
+function buildContactReplyEmail(p: ContactReplyPayload): EmailContent {
+  const subject = "رد من الإدارة على رسالتك";
+  const originalSection = p.original_message
+    ? `
+      <div style="margin-top:16px;padding:12px 16px;background:#F0F2F5;border-radius:10px;border-right:3px solid #8A9EA9">
+        <p style="margin:0 0 6px;color:#888;font-size:12px">رسالتك الأصلية:</p>
+        <p style="margin:0;color:#516F80;font-size:13px;line-height:1.6;white-space:pre-wrap">${escapeHtml(p.original_message)}</p>
+      </div>
+    `
+    : "";
+  const html = renderEmail({
+    title: "رد من الإدارة",
+    accentColor: "#2B7A9F",
+    body: `
+      <p style="margin:0 0 16px;color:#516F80;line-height:1.7">مرحباً ${escapeHtml(p.member_name)}،</p>
+      <p style="margin:0 0 16px;color:#516F80;line-height:1.7">
+        تلقّينا رسالتك في تطبيق شجرة عائلة آل محمد علي وهذا ردّنا:
+      </p>
+      <div style="margin:16px 0;padding:16px;background:#E8F1F6;border-radius:10px;border-right:3px solid #2B7A9F">
+        <p style="margin:0;color:#1a1a1a;font-size:15px;line-height:1.7;white-space:pre-wrap">${escapeHtml(p.reply_text)}</p>
+      </div>
+      ${originalSection}
+      <p style="margin:16px 0 0;color:#888;font-size:13px;line-height:1.6">
+        لو احتجت متابعة، تقدر ترسل رسالة جديدة من شاشة "التواصل" في التطبيق.
+      </p>
+    `,
+  });
+  const text = [
+    `مرحباً ${p.member_name}،`,
+    "",
+    "تلقّينا رسالتك في تطبيق شجرة عائلة آل محمد علي وهذا ردّنا:",
+    "",
+    "─────────────",
+    p.reply_text,
+    "─────────────",
+    p.original_message ? `\nرسالتك الأصلية:\n${p.original_message}` : "",
+    "",
+    "لو احتجت متابعة، تقدر ترسل رسالة جديدة من شاشة \"التواصل\" في التطبيق.",
+  ].filter(Boolean).join("\n");
   return { subject, html, text };
 }
 
@@ -334,6 +384,21 @@ serve(async (req) => {
       });
       results.push({ target: "admin", ok: r.ok, status: r.status });
       if (!r.ok) console.error(`Resend (admin) failed: ${r.status} — ${r.body}`);
+    } else if (payload.type === "contact_reply") {
+      const p = payload as ContactReplyPayload;
+      if (!p.member_email || !p.member_email.trim()) {
+        return json(400, { ok: false, message: "member_email is required for contact_reply" });
+      }
+      if (!p.reply_text || !p.reply_text.trim()) {
+        return json(400, { ok: false, message: "reply_text is required" });
+      }
+      const content = buildContactReplyEmail(p);
+      const r = await sendEmail({
+        resendApiKey, from: emailFrom, to: [p.member_email.trim()],
+        subject: content.subject, html: content.html, text: content.text,
+      });
+      results.push({ target: "member", ok: r.ok, status: r.status });
+      if (!r.ok) console.error(`Resend (member) failed: ${r.status} — ${r.body}`);
     } else {
       return json(400, { ok: false, message: `Unknown type: ${(payload as { type: string }).type}` });
     }

@@ -225,6 +225,104 @@ class AdminRequestViewModel: ObservableObject {
         }
     }
 
+    /// إرسال رد إداري على رسالة تواصل.
+    /// يحفظ الرد في DB + إشعار داخلي + push + إيميل (إذا للعضو إيميل).
+    /// يُعلَّم الرسالة تلقائياً كمُعالَجة.
+    /// يرجع true في حال النجاح.
+    @discardableResult
+    func replyToContactMessage(_ request: AdminRequest, replyText: String) async -> Bool {
+        guard NetworkMonitor.shared.requireOnline() else { return false }
+        let cleanReply = replyText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanReply.isEmpty else { return false }
+        guard let admin = currentUser else { return false }
+
+        // 1. حفظ الرد في DB
+        let nowISO = ISO8601DateFormatter().string(from: Date())
+        let dbPayload: [String: AnyEncodable] = [
+            "admin_reply": AnyEncodable(cleanReply),
+            "replied_at": AnyEncodable(nowISO),
+            "replied_by": AnyEncodable(admin.id.uuidString),
+            "status": AnyEncodable(ApprovalStatus.approved.rawValue)
+        ]
+
+        do {
+            try await supabase
+                .from("admin_requests")
+                .update(dbPayload)
+                .eq("id", value: request.id.uuidString)
+                .execute()
+        } catch {
+            // Backwards-compat: لو العمود غير موجود (migration ما تطبّق بعد)
+            if ErrorHelper.isMissingColumn(error, column: "admin_reply") {
+                Log.warning("[Reply] عمود admin_reply غير موجود — حفظ كـ note فقط")
+                try? await supabase
+                    .from("admin_requests")
+                    .update(["status": AnyEncodable(ApprovalStatus.approved.rawValue)])
+                    .eq("id", value: request.id.uuidString)
+                    .execute()
+            } else {
+                Log.error("[Reply] فشل حفظ الرد: \(error.localizedDescription)")
+                return false
+            }
+        }
+
+        // تحديث محلي
+        if let idx = contactMessages.firstIndex(where: { $0.id == request.id }) {
+            contactMessages[idx].adminReply = cleanReply
+            contactMessages[idx].repliedAt = nowISO
+            contactMessages[idx].repliedBy = admin.id
+            contactMessages[idx].status = ApprovalStatus.approved.rawValue
+        }
+
+        // 2. إشعار داخلي + push للعضو
+        let senderId = request.memberId
+        let body = cleanReply.count > 140
+            ? String(cleanReply.prefix(140)) + "…"
+            : cleanReply
+
+        if authVM?.notificationsFeatureAvailable == true {
+            let notifPayload: [String: AnyEncodable] = [
+                "target_member_id": AnyEncodable(senderId.uuidString),
+                "title": AnyEncodable(L10n.t("رد من الإدارة", "Admin Reply")),
+                "body": AnyEncodable(body),
+                "kind": AnyEncodable(NotificationKind.contactReply.rawValue),
+                "created_by": AnyEncodable(admin.id.uuidString),
+                "request_id": AnyEncodable(request.id.uuidString)
+            ]
+            do {
+                try await supabase.from("notifications").insert(notifPayload).execute()
+                await notificationVM?.sendPushToMembers(
+                    title: L10n.t("رد من الإدارة", "Admin Reply"),
+                    body: body,
+                    kind: NotificationKind.contactReply.rawValue,
+                    targetMemberIds: [senderId]
+                )
+            } catch {
+                Log.warning("[Reply] فشل إنشاء الإشعار: \(error.localizedDescription)")
+            }
+        }
+
+        // 3. إيميل للعضو (إذا عنده إيميل)
+        let senderEmail = request.member?.email?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let senderName = request.member?.fullName ?? L10n.t("عضو", "Member")
+        if let email = senderEmail, !email.isEmpty {
+            var emailPayload: [String: AnyEncodable] = [
+                "type": AnyEncodable("contact_reply"),
+                "member_name": AnyEncodable(senderName),
+                "member_email": AnyEncodable(email),
+                "reply_text": AnyEncodable(cleanReply)
+            ]
+            // المحتوى الأصلي للسياق (لو احتاجت templates تعرفه)
+            if let details = request.details {
+                emailPayload["original_message"] = AnyEncodable(details)
+            }
+            await authVM?.sendEventEmail(payload: emailPayload)
+        }
+
+        Log.info("[Reply] ✅ تم إرسال الرد على الرسالة \(request.id)")
+        return true
+    }
+
     /// إعادة الرسالة لحالة "غير معالَجة".
     func markContactMessageUnhandled(_ request: AdminRequest) async {
         guard NetworkMonitor.shared.requireOnline() else { return }
