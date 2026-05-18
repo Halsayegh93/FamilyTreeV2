@@ -43,14 +43,14 @@ struct ContactCenterView: View {
                 successView
             } else {
                 ScrollView(showsIndicators: false) {
-                    VStack(spacing: DS.Spacing.xl) {
+                    VStack(spacing: DS.Spacing.lg) {
+                        repliesTopButton
+                            .opacity(appeared ? 1 : 0)
+                            .scaleEffect(appeared ? 1 : 0.95)
+
                         headerSection
                             .opacity(appeared ? 1 : 0)
-                            .scaleEffect(appeared ? 1 : 0.9)
-
-                        repliesEntryRow
-                            .opacity(appeared ? 1 : 0)
-                            .offset(y: appeared ? 0 : 15)
+                            .offset(y: appeared ? 0 : 10)
 
                         categorySection
                             .opacity(appeared ? 1 : 0)
@@ -101,57 +101,74 @@ struct ContactCenterView: View {
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
 
-    // MARK: - Replies Entry Row
+    // MARK: - Replies Top Button (Prominent)
 
-    private var repliesEntryRow: some View {
-        NavigationLink {
+    private var repliesTopButton: some View {
+        let count = authVM.unreadAdminRepliesCount
+        let hasUnread = count > 0
+        let totalCount = authVM.myContactMessages.count
+
+        return NavigationLink {
             MyContactRepliesView()
         } label: {
             HStack(spacing: DS.Spacing.md) {
+                // Icon — circular with white background on gradient
                 ZStack {
                     Circle()
-                        .fill(DS.Color.success.opacity(0.15))
-                        .frame(width: 44, height: 44)
-                    Image(systemName: "envelope.open.fill")
+                        .fill(.white.opacity(0.22))
+                        .frame(width: 40, height: 40)
+                    Image(systemName: hasUnread ? "envelope.badge.fill" : "envelope.open.fill")
                         .font(DS.Font.callout)
-                        .foregroundColor(DS.Color.success)
+                        .foregroundColor(.white)
+                        .symbolRenderingMode(.hierarchical)
                 }
 
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 1) {
                     Text(L10n.t("ردود الإدارة", "Admin Replies"))
                         .font(DS.Font.calloutBold)
-                        .foregroundColor(DS.Color.textPrimary)
-                    Text(L10n.t("شوف رسائلك السابقة وردود الإدارة عليها", "See past messages and admin replies"))
+                        .foregroundColor(.white)
+                    Text(hasUnread
+                         ? L10n.t("\(count) جديد بانتظارك", "\(count) new waiting")
+                         : (totalCount > 0
+                            ? L10n.t("شوف محادثاتك السابقة", "View past conversations")
+                            : L10n.t("ستظهر هنا ردود الإدارة على رسائلك", "Admin replies will appear here")))
                         .font(DS.Font.caption2)
-                        .foregroundColor(DS.Color.textSecondary)
+                        .foregroundColor(.white.opacity(0.85))
                         .lineLimit(1)
                 }
 
                 Spacer()
 
-                if authVM.unreadAdminRepliesCount > 0 {
-                    Text("\(authVM.unreadAdminRepliesCount)")
-                        .font(DS.Font.caption2)
-                        .fontWeight(.bold)
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(Capsule().fill(DS.Color.error))
+                if hasUnread {
+                    // Big count badge with subtle pulse
+                    Text("\(count)")
+                        .font(DS.Font.calloutBold)
+                        .foregroundColor(DS.Color.primary)
+                        .frame(minWidth: 28)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(
+                            Capsule()
+                                .fill(.white)
+                                .shadow(color: .black.opacity(0.15), radius: 4, y: 1)
+                        )
                 }
 
                 Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
-                    .font(DS.Font.caption1)
-                    .foregroundColor(DS.Color.textTertiary)
+                    .font(DS.Font.scaled(13, weight: .bold))
+                    .foregroundColor(.white.opacity(0.7))
             }
-            .padding(DS.Spacing.md)
+            .padding(.horizontal, DS.Spacing.lg)
+            .padding(.vertical, DS.Spacing.md)
             .background(
-                RoundedRectangle(cornerRadius: DS.Radius.lg)
-                    .fill(DS.Color.surfaceElevated)
+                RoundedRectangle(cornerRadius: DS.Radius.xl)
+                    .fill(DS.Color.gradientPrimary)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.lg)
-                    .stroke(DS.Color.surface, lineWidth: 0.5)
+                RoundedRectangle(cornerRadius: DS.Radius.xl)
+                    .stroke(.white.opacity(0.15), lineWidth: 1)
             )
+            .shadow(color: DS.Color.primary.opacity(0.3), radius: 12, y: 5)
         }
         .buttonStyle(DSScaleButtonStyle())
         .task {
@@ -159,30 +176,31 @@ struct ContactCenterView: View {
         }
     }
 
-    // MARK: - Header
+    // MARK: - Header (Compact)
     private var headerSection: some View {
-        VStack(spacing: DS.Spacing.sm) {
+        HStack(alignment: .center, spacing: DS.Spacing.md) {
             ZStack {
                 Circle()
-                    .fill(DS.Color.primary.opacity(0.1))
-                    .frame(width: 72, height: 72)
-                Image(systemName: "envelope.open.fill")
-                    .font(DS.Font.scaled(30, weight: .bold))
+                    .fill(DS.Color.primary.opacity(0.12))
+                    .frame(width: 48, height: 48)
+                Image(systemName: "paperplane.fill")
+                    .font(DS.Font.scaled(20, weight: .bold))
                     .foregroundColor(DS.Color.primary)
             }
 
-            Text(L10n.t("تواصل معنا", "Contact Us"))
-                .font(DS.Font.title3)
-                .fontWeight(.black)
-                .foregroundColor(DS.Color.textPrimary)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(L10n.t("رسالة جديدة للإدارة", "New Message to Admin"))
+                    .font(DS.Font.title3)
+                    .fontWeight(.bold)
+                    .foregroundColor(DS.Color.textPrimary)
+                Text(L10n.t("نحرص على الرد بأسرع وقت", "We respond as soon as possible"))
+                    .font(DS.Font.caption1)
+                    .foregroundColor(DS.Color.textSecondary)
+            }
 
-            Text(L10n.t("نسعد بتواصلك ونحرص على الرد بأسرع وقت", "We'll respond as soon as possible"))
-                .font(DS.Font.caption1)
-                .foregroundColor(DS.Color.textSecondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, DS.Spacing.xl)
+            Spacer()
         }
-        .padding(.vertical, DS.Spacing.sm)
+        .padding(.top, DS.Spacing.xs)
     }
 
     // MARK: - Sender Info Card (Auto-filled)
