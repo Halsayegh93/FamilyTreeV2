@@ -160,11 +160,11 @@ struct AdminDashboardView: View {
                                         )
                                     }
                                     DSDivider()
-                                    NavigationLink(destination: AdminContactMessagesView()) {
+                                    NavigationLink(destination: AdminInboxView()) {
                                         DSActionRow(
-                                            title: L10n.t("رسائل التواصل", "Contact Messages"),
-                                            subtitle: L10n.t("رسائل الأعضاء من شاشة التواصل", "Member messages from contact screen"),
-                                            icon: "envelope.fill",
+                                            title: L10n.t("صندوق التواصل", "Contact Inbox"),
+                                            subtitle: L10n.t("رسائل الأعضاء — رد، أرشف، تابع", "Member messages — reply & manage"),
+                                            icon: "tray.full.fill",
                                             color: DS.Color.info,
                                             badge: adminRequestVM.unreadContactMessagesCount > 0 ? adminRequestVM.unreadContactMessagesCount : nil
                                         )
