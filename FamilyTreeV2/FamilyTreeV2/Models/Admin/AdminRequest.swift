@@ -116,6 +116,9 @@ nonisolated struct AdminRequest: Identifiable, Codable, Sendable {
     let details: String?
     let createdAt: String?
     let member: FamilyMember?
+    var adminReply: String?
+    var repliedAt: String?
+    var repliedBy: UUID?
 
     enum CodingKeys: String, CodingKey {
         case id, status, details, member
@@ -124,6 +127,9 @@ nonisolated struct AdminRequest: Identifiable, Codable, Sendable {
         case requestType = "request_type"
         case createdAt = "created_at"
         case newValue = "new_value"
+        case adminReply = "admin_reply"
+        case repliedAt = "replied_at"
+        case repliedBy = "replied_by"
     }
 
     /// Parses structured JSON payload (v2 or v3) from details column for tree_edit requests.

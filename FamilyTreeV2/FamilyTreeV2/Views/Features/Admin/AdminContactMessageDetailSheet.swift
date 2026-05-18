@@ -6,6 +6,10 @@ struct AdminContactMessageDetailSheet: View {
 
     let message: AdminRequest
     @State private var isProcessing = false
+    @State private var replyText: String = ""
+    @State private var isSendingReply = false
+    @State private var showReplySuccess = false
+    @FocusState private var isReplyFocused: Bool
 
     var parsed: ContactMessageParser.Parsed {
         ContactMessageParser.parse(message)
@@ -28,6 +32,11 @@ struct AdminContactMessageDetailSheet: View {
         message.status != ApprovalStatus.pending.rawValue
     }
 
+    var existingReply: String? {
+        let r = message.adminReply?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return (r?.isEmpty ?? true) ? nil : r
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -40,6 +49,10 @@ struct AdminContactMessageDetailSheet: View {
                     if let pref = parsed.preferredContact, !pref.isEmpty {
                         preferredContactRow(pref)
                     }
+                    if let reply = existingReply {
+                        existingReplyCard(reply)
+                    }
+                    replyComposer
                     quickActions
                     Spacer(minLength: DS.Spacing.lg)
                     handledToggleButton
@@ -55,6 +68,14 @@ struct AdminContactMessageDetailSheet: View {
                         .font(DS.Font.calloutBold)
                         .foregroundColor(DS.Color.primary)
                 }
+            }
+            .alert(L10n.t("تم إرسال الرد", "Reply Sent"), isPresented: $showReplySuccess) {
+                Button(L10n.t("حسناً", "OK"), role: .cancel) { dismiss() }
+            } message: {
+                Text(L10n.t(
+                    "وصل ردك للعضو عبر الإشعار\(senderEmail != nil ? " والإيميل" : "").",
+                    "Your reply was delivered via notification\(senderEmail != nil ? " and email" : "")."
+                ))
             }
         }
     }
@@ -147,6 +168,136 @@ struct AdminContactMessageDetailSheet: View {
             Spacer()
         }
         .padding(.horizontal, DS.Spacing.md)
+    }
+
+    private func existingReplyCard(_ reply: String) -> some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            HStack(spacing: DS.Spacing.xs) {
+                Image(systemName: "envelope.open.fill")
+                    .font(DS.Font.caption1)
+                Text(L10n.t("الرد المُرسَل", "Sent Reply"))
+                    .font(DS.Font.calloutBold)
+                Spacer()
+                if let dt = message.repliedAt {
+                    Text(dateFormatted(dt))
+                        .font(DS.Font.caption2)
+                        .foregroundColor(DS.Color.textTertiary)
+                }
+            }
+            .foregroundColor(DS.Color.success)
+
+            Text(reply)
+                .font(DS.Font.body)
+                .foregroundColor(DS.Color.textPrimary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .multilineTextAlignment(.leading)
+                .textSelection(.enabled)
+        }
+        .padding(DS.Spacing.md)
+        .background(
+            RoundedRectangle(cornerRadius: DS.Radius.lg)
+                .fill(DS.Color.success.opacity(0.08))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Radius.lg)
+                .stroke(DS.Color.success.opacity(0.3), lineWidth: 1)
+        )
+    }
+
+    private var replyComposer: some View {
+        let trimmed = replyText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let canSend = !trimmed.isEmpty && !isSendingReply
+        let title = existingReply == nil
+            ? L10n.t("اكتب رد", "Compose Reply")
+            : L10n.t("رد جديد", "New Reply")
+
+        return VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            HStack(spacing: DS.Spacing.xs) {
+                Image(systemName: "arrowshape.turn.up.left.fill")
+                    .font(DS.Font.caption1)
+                Text(title)
+                    .font(DS.Font.calloutBold)
+                Spacer()
+                Text("\(trimmed.count)/2000")
+                    .font(DS.Font.caption2)
+                    .foregroundColor(trimmed.count > 2000 ? DS.Color.error : DS.Color.textTertiary)
+            }
+            .foregroundColor(DS.Color.textSecondary)
+
+            TextEditor(text: $replyText)
+                .focused($isReplyFocused)
+                .frame(minHeight: 110, maxHeight: 220)
+                .padding(DS.Spacing.sm)
+                .background(
+                    RoundedRectangle(cornerRadius: DS.Radius.md)
+                        .fill(DS.Color.surface)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: DS.Radius.md)
+                        .stroke(isReplyFocused ? DS.Color.primary.opacity(0.6) : DS.Color.surface, lineWidth: 1)
+                )
+                .font(DS.Font.body)
+                .scrollContentBackground(.hidden)
+
+            if senderEmail != nil {
+                Text(L10n.t(
+                    "سيوصل الرد للعضو عبر الإشعار + الإيميل",
+                    "Reply delivered via notification + email"
+                ))
+                .font(DS.Font.caption2)
+                .foregroundColor(DS.Color.info)
+            } else {
+                Text(L10n.t(
+                    "سيوصل الرد للعضو عبر الإشعار فقط (لا يوجد إيميل)",
+                    "Reply delivered via notification only (no email)"
+                ))
+                .font(DS.Font.caption2)
+                .foregroundColor(DS.Color.textTertiary)
+            }
+
+            Button {
+                Task { await sendReplyAction() }
+            } label: {
+                HStack(spacing: DS.Spacing.sm) {
+                    if isSendingReply {
+                        ProgressView().progressViewStyle(.circular).tint(.white)
+                    } else {
+                        Image(systemName: "paperplane.fill").font(DS.Font.callout)
+                    }
+                    Text(isSendingReply
+                         ? L10n.t("جاري الإرسال…", "Sending…")
+                         : L10n.t("إرسال الرد", "Send Reply"))
+                        .font(DS.Font.calloutBold)
+                }
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(DS.Spacing.md)
+                .background(
+                    RoundedRectangle(cornerRadius: DS.Radius.lg)
+                        .fill(canSend ? DS.Color.primary : DS.Color.textTertiary.opacity(0.4))
+                )
+            }
+            .buttonStyle(DSScaleButtonStyle())
+            .disabled(!canSend || trimmed.count > 2000)
+        }
+        .padding(DS.Spacing.md)
+        .background(
+            RoundedRectangle(cornerRadius: DS.Radius.lg)
+                .fill(DS.Color.surfaceElevated)
+        )
+    }
+
+    private func sendReplyAction() async {
+        let trimmed = replyText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed.count <= 2000 else { return }
+        isSendingReply = true
+        defer { isSendingReply = false }
+        let ok = await adminRequestVM.replyToContactMessage(message, replyText: trimmed)
+        if ok {
+            replyText = ""
+            isReplyFocused = false
+            showReplySuccess = true
+        }
     }
 
     private var quickActions: some View {
