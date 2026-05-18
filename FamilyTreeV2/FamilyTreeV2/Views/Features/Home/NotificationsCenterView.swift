@@ -1737,14 +1737,30 @@ struct NotificationsCenterView: View {
             return chain
         }()
 
+        // تطبيع الاسم — يلغي الفروق الإملائية البسيطة:
+        //   * يشيل المسافات داخل الاسم: "عبد الله" → "عبدالله"
+        //   * يطبّع الألف والياء والتاء المربوطة
+        func normalize(_ s: String) -> String {
+            var n = s.replacingOccurrences(of: " ", with: "")
+            n = n.replacingOccurrences(of: "أ", with: "ا")
+            n = n.replacingOccurrences(of: "إ", with: "ا")
+            n = n.replacingOccurrences(of: "آ", with: "ا")
+            n = n.replacingOccurrences(of: "ى", with: "ي")
+            n = n.replacingOccurrences(of: "ة", with: "ه")
+            return n
+        }
+
         // حساب درجة التطابق بعدد الكلمات المتتالية المتطابقة من بداية السلسلة
+        // (يستخدم التطبيع لتسامح مع الفروق الإملائية البسيطة)
+        let normalizedRequesterChain = requesterChain.map(normalize)
         func chainMatchScore(_ candidate: FamilyMember) -> Int {
             let cChain = candidate.fullName
                 .components(separatedBy: .whitespacesAndNewlines)
                 .filter { !$0.isEmpty }
+                .map(normalize)
             var score = 0
-            for i in 0..<min(requesterChain.count, cChain.count) {
-                if cChain[i] == requesterChain[i] {
+            for i in 0..<min(normalizedRequesterChain.count, cChain.count) {
+                if cChain[i] == normalizedRequesterChain[i] {
                     score += 1
                 } else {
                     break
@@ -1753,13 +1769,18 @@ struct NotificationsCenterView: View {
             return score
         }
 
-        // 7) المعيار: تطابق أول 3 أسماء من سلسلة المنضم بالضبط
-        //    لو سلسلة المنضم أقصر من 3 (مثلاً اسمين فقط) ناخذ المتاح.
-        //    لو واحد فقط، نقبل تطابق الاسم الأول كحد أدنى.
+        // 7) فلتر متدرّج: نطلب 3 من السلسلة لو متاحة، وإلا نخفّض حسب أفضل ما متوفر
+        //    عشان ما تطلع القائمة فاضية بسبب فروق إملاء أو ترتيب أسامي.
         let prefixLen = max(1, min(3, requesterChain.count))
+        let topScore = matches.map(chainMatchScore).max() ?? 0
+        let effectiveMin: Int = {
+            if topScore >= prefixLen { return prefixLen }  // وضع صارم
+            if topScore >= 1 { return topScore }            // وضع متساهل (أفضل ما متاح)
+            return 0
+        }()
 
-        // 8) فلترة: لازم أول prefixLen اسم بالضبط يتطابقون
-        let candidates = matches.filter { chainMatchScore($0) >= prefixLen }
+        // 8) فلترة بالحد الفعّال
+        let candidates = matches.filter { chainMatchScore($0) >= max(1, effectiveMin) }
 
         // 9) ترتيب الأنسب أول:
         //    1) درجة تطابق السلسلة الأعلى (يطابق 4-5 أسماء أنسب من 3 فقط)
@@ -1785,7 +1806,7 @@ struct NotificationsCenterView: View {
 
         // اعرض كل الاحتمالات المطابقة (سقف 8 احتراز للأسماء الشائعة)
         joinMatchCandidates = Array(sorted.prefix(8))
-        Log.info("[JoinMatch] fullName='\(fullName)', chain=\(requesterChain.prefix(5).joined(separator: " ")) — قبل الفلتر=\(matches.count), prefixLen=\(prefixLen), بعد=\(candidates.count), نهائي=\(joinMatchCandidates.count)")
+        Log.info("[JoinMatch] fullName='\(fullName)', chain=\(requesterChain.prefix(5).joined(separator: " ")) — قبل الفلتر=\(matches.count), prefixLen=\(prefixLen), topScore=\(topScore), effectiveMin=\(effectiveMin), بعد=\(candidates.count), نهائي=\(joinMatchCandidates.count)")
     }
 
     /// استدعاء RPC السيرفر search_members_by_name v2 — exact word + 75% threshold + top-4 parts
