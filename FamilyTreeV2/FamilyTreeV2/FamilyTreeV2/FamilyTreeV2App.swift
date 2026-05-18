@@ -73,6 +73,22 @@ struct FamilyTreeV2App: App {
                           let idString    = userInfo["request_id"]   as? String,
                           let requestId   = UUID(uuidString: idString),
                           let requestType = userInfo["request_type"] as? String else { return }
+
+                    // طلبات الانضمام/الربط: ما نوافق مباشرة — نفتح شيت التطابقات
+                    // عشان المدير يقرر: ربط بعضو موجود أو موافقة كعضو جديد.
+                    let isJoinOrLink = requestType == "join_request" || requestType == "link_request"
+                    if isJoinOrLink {
+                        self.appState.notificationVM.pendingJoinDeepLinkRequestId = requestId
+                        NotificationCenter.default.post(name: .openHomeNotificationsCenter, object: nil)
+                        Task {
+                            async let n: () = self.appState.notificationVM.fetchNotifications(force: true)
+                            async let m: () = self.appState.memberVM.fetchAllMembers(force: true)
+                            _ = await (n, m)
+                        }
+                        return
+                    }
+
+                    // باقي أنواع الطلبات: موافقة مباشرة كالسابق
                     Task {
                         let ok = await self.appState.notificationVM.approveRequest(requestId: requestId, requestType: requestType)
                         if ok {
