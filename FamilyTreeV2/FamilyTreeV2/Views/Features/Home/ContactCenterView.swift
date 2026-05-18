@@ -48,11 +48,7 @@ struct ContactCenterView: View {
             } else {
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: DS.Spacing.xl) {
-                        inboxCard
-                            .opacity(appeared ? 1 : 0)
-                            .offset(y: appeared ? 0 : 12)
-
-                        greetingSection
+                        greetingRow
                             .opacity(appeared ? 1 : 0)
                             .offset(y: appeared ? 0 : 16)
 
@@ -105,127 +101,9 @@ struct ContactCenterView: View {
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
 
-    // MARK: - Inbox Card (Top — replies preview)
+    // MARK: - Greeting Row (with corner Admin Replies button)
 
-    private var inboxCard: some View {
-        let count = authVM.unreadAdminRepliesCount
-        let hasUnread = count > 0
-        let reply = latestReply
-        let parsed = reply.map { ContactMessageParser.parse($0) }
-
-        return NavigationLink {
-            MyContactRepliesView()
-        } label: {
-            VStack(alignment: .leading, spacing: DS.Spacing.md) {
-                // Top row: icon + title + badge + chevron
-                HStack(spacing: DS.Spacing.md) {
-                    ZStack {
-                        Circle()
-                            .fill(.white.opacity(0.22))
-                            .frame(width: 44, height: 44)
-                        Image(systemName: hasUnread ? "envelope.badge.fill" : "envelope.open.fill")
-                            .font(DS.Font.scaled(18, weight: .semibold))
-                            .foregroundColor(.white)
-                            .symbolRenderingMode(.hierarchical)
-                    }
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(L10n.t("ردود الإدارة", "Admin Replies"))
-                            .font(DS.Font.title3)
-                            .fontWeight(.bold)
-                            .foregroundColor(.white)
-                        Text(inboxSubtitle(count: count, total: authVM.myContactMessages.count))
-                            .font(DS.Font.caption1)
-                            .foregroundColor(.white.opacity(0.85))
-                            .lineLimit(1)
-                    }
-
-                    Spacer()
-
-                    if hasUnread {
-                        Text("\(count)")
-                            .font(DS.Font.bodyBold)
-                            .foregroundColor(DS.Color.primary)
-                            .frame(minWidth: 32)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 5)
-                            .background(
-                                Capsule()
-                                    .fill(.white)
-                                    .shadow(color: .black.opacity(0.18), radius: 4, y: 1)
-                            )
-                    } else {
-                        Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
-                            .font(DS.Font.scaled(13, weight: .bold))
-                            .foregroundColor(.white.opacity(0.7))
-                    }
-                }
-
-                // Latest reply preview
-                if let reply, let replyText = reply.adminReply?.trimmingCharacters(in: .whitespacesAndNewlines), !replyText.isEmpty {
-                    Divider()
-                        .background(.white.opacity(0.2))
-
-                    HStack(alignment: .top, spacing: DS.Spacing.sm) {
-                        Image(systemName: "quote.opening")
-                            .font(DS.Font.caption1)
-                            .foregroundColor(.white.opacity(0.6))
-
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(replyText)
-                                .font(DS.Font.subheadline)
-                                .foregroundColor(.white)
-                                .lineLimit(2)
-                                .multilineTextAlignment(.leading)
-                            HStack(spacing: 4) {
-                                if let cat = parsed?.category, !cat.isEmpty {
-                                    Text(cat)
-                                        .font(DS.Font.caption2)
-                                        .fontWeight(.semibold)
-                                        .padding(.horizontal, 6)
-                                        .padding(.vertical, 1)
-                                        .background(Capsule().fill(.white.opacity(0.22)))
-                                }
-                                Text("·")
-                                Text(timeAgo(reply.repliedAt))
-                            }
-                            .font(DS.Font.caption2)
-                            .foregroundColor(.white.opacity(0.7))
-                        }
-                        Spacer()
-                    }
-                }
-            }
-            .padding(DS.Spacing.lg)
-            .background(
-                RoundedRectangle(cornerRadius: DS.Radius.xl)
-                    .fill(DS.Color.gradientPrimary)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.xl)
-                    .stroke(.white.opacity(0.15), lineWidth: 1)
-            )
-            .shadow(color: DS.Color.primary.opacity(0.35), radius: 14, y: 6)
-        }
-        .buttonStyle(DSScaleButtonStyle())
-        .task {
-            await authVM.fetchMyContactMessages()
-        }
-    }
-
-    private func inboxSubtitle(count: Int, total: Int) -> String {
-        if count > 0 {
-            return L10n.t("\(count) رد جديد بانتظارك", "\(count) new reply\(count == 1 ? "" : "ies") waiting")
-        }
-        if total > 0 {
-            return L10n.t("\(total) محادثة سابقة", "\(total) past conversation\(total == 1 ? "" : "s")")
-        }
-        return L10n.t("ردود الإدارة على رسائلك تظهر هنا", "Admin replies will appear here")
-    }
-
-    // MARK: - Greeting
-
-    private var greetingSection: some View {
+    private var greetingRow: some View {
         let firstName = authVM.currentUser?.firstName.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let greeting: String = {
             if firstName.isEmpty {
@@ -234,16 +112,67 @@ struct ContactCenterView: View {
             return L10n.t("مرحباً، \(firstName) 👋", "Hi, \(firstName) 👋")
         }()
 
-        return VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-            Text(greeting)
-                .font(DS.Font.title2)
-                .fontWeight(.bold)
-                .foregroundColor(DS.Color.textPrimary)
-            Text(L10n.t("كيف نقدر نخدمك اليوم؟", "How can we help you today?"))
-                .font(DS.Font.callout)
-                .foregroundColor(DS.Color.textSecondary)
+        return HStack(alignment: .center, spacing: DS.Spacing.md) {
+            VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                Text(greeting)
+                    .font(DS.Font.title2)
+                    .fontWeight(.bold)
+                    .foregroundColor(DS.Color.textPrimary)
+                Text(L10n.t("كيف نقدر نخدمك اليوم؟", "How can we help you today?"))
+                    .font(DS.Font.callout)
+                    .foregroundColor(DS.Color.textSecondary)
+            }
+            Spacer(minLength: DS.Spacing.sm)
+            inboxCornerButton
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .task {
+            await authVM.fetchMyContactMessages()
+        }
+    }
+
+    // MARK: - Corner Inbox Button (small with badge)
+
+    private var inboxCornerButton: some View {
+        let count = authVM.unreadAdminRepliesCount
+        let hasUnread = count > 0
+
+        return NavigationLink {
+            MyContactRepliesView()
+        } label: {
+            ZStack(alignment: .topTrailing) {
+                ZStack {
+                    Circle()
+                        .fill(DS.Color.gradientPrimary)
+                        .frame(width: 44, height: 44)
+                        .shadow(color: DS.Color.primary.opacity(0.3), radius: 6, y: 3)
+                    Image(systemName: hasUnread ? "envelope.badge.fill" : "envelope.open.fill")
+                        .font(DS.Font.scaled(17, weight: .semibold))
+                        .foregroundColor(.white)
+                        .symbolRenderingMode(.hierarchical)
+                }
+                // Badge — top-right corner, overlapping
+                if hasUnread {
+                    Text("\(count)")
+                        .font(DS.Font.scaled(11, weight: .bold))
+                        .foregroundColor(.white)
+                        .frame(minWidth: 18, minHeight: 18)
+                        .padding(.horizontal, 4)
+                        .background(
+                            Capsule()
+                                .fill(DS.Color.error)
+                                .overlay(Capsule().stroke(DS.Color.background, lineWidth: 2))
+                        )
+                        .offset(x: 4, y: -4)
+                }
+            }
+            .frame(width: 48, height: 48)
+        }
+        .buttonStyle(DSScaleButtonStyle())
+        .accessibilityLabel(
+            hasUnread
+            ? L10n.t("ردود الإدارة، \(count) جديد", "Admin replies, \(count) new")
+            : L10n.t("ردود الإدارة", "Admin replies")
+        )
     }
 
     // MARK: - Section Title Helper
@@ -260,45 +189,46 @@ struct ContactCenterView: View {
         }
     }
 
-    // MARK: - Category Grid (3 columns)
+    // MARK: - Category Grid (compact 3 columns)
 
     private var categoryGrid: some View {
         let columns = [
-            GridItem(.flexible(), spacing: DS.Spacing.sm),
-            GridItem(.flexible(), spacing: DS.Spacing.sm),
-            GridItem(.flexible(), spacing: DS.Spacing.sm),
+            GridItem(.flexible(), spacing: DS.Spacing.xs),
+            GridItem(.flexible(), spacing: DS.Spacing.xs),
+            GridItem(.flexible(), spacing: DS.Spacing.xs),
         ]
-        return LazyVGrid(columns: columns, spacing: DS.Spacing.sm) {
+        return LazyVGrid(columns: columns, spacing: DS.Spacing.xs) {
             ForEach(categoryItems, id: \.key) { item in
                 let isSelected = selectedCategory == item.key
                 Button {
                     withAnimation(DS.Anim.snappy) { selectedCategory = item.key }
                     UISelectionFeedbackGenerator().selectionChanged()
                 } label: {
-                    VStack(spacing: DS.Spacing.xs) {
+                    VStack(spacing: 6) {
                         ZStack {
                             Circle()
                                 .fill(isSelected ? item.color : item.color.opacity(0.12))
-                                .frame(width: 38, height: 38)
+                                .frame(width: 28, height: 28)
                             Image(systemName: item.icon)
-                                .font(DS.Font.scaled(16, weight: .semibold))
+                                .font(DS.Font.scaled(13, weight: .semibold))
                                 .foregroundColor(isSelected ? .white : item.color)
                         }
                         Text(L10n.t(item.labelAr, item.labelEn))
-                            .font(DS.Font.caption1)
+                            .font(DS.Font.caption2)
                             .fontWeight(isSelected ? .bold : .semibold)
                             .foregroundColor(isSelected ? DS.Color.textPrimary : DS.Color.textSecondary)
                             .lineLimit(1)
-                            .minimumScaleFactor(0.8)
+                            .minimumScaleFactor(0.75)
                     }
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, DS.Spacing.md)
+                    .padding(.vertical, DS.Spacing.sm)
+                    .padding(.horizontal, 4)
                     .background(
-                        RoundedRectangle(cornerRadius: DS.Radius.lg)
+                        RoundedRectangle(cornerRadius: DS.Radius.md)
                             .fill(isSelected ? item.color.opacity(0.08) : DS.Color.surfaceElevated)
                     )
                     .overlay(
-                        RoundedRectangle(cornerRadius: DS.Radius.lg)
+                        RoundedRectangle(cornerRadius: DS.Radius.md)
                             .stroke(isSelected ? item.color : DS.Color.surface, lineWidth: isSelected ? 1.5 : 0.5)
                     )
                 }
