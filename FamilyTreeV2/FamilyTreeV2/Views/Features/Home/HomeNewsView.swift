@@ -21,16 +21,14 @@ struct HomeNewsView: View {
     @State private var lastRefreshDate: Date? = nil
     @State private var activeSubPage: HomeSubPage? = nil
     @State private var appeared = false
-    @State private var showAddStory = false
-    @State private var storyViewerGroup: Int? = nil
-    @State private var showStoryViewer = false
     @State private var showNewsSearch = false
+    @State private var shuffledTreeMembers: [FamilyMember] = []
     @State private var newsSearchText = ""
     @State private var debouncedNewsSearch = ""
     @State private var newsSearchTask: Task<Void, Never>?
 
     private enum HomeSubPage {
-        case photos, projects, contact
+        case photos, projects, contact, news
     }
 
     var body: some View {
@@ -42,65 +40,39 @@ struct HomeNewsView: View {
                     subPageContent(for: subPage)
                         .transition(.move(edge: L10n.isArabic ? .leading : .trailing))
                 } else {
-                    // Main home content
+                    // Main home content — Bento Grid
                     VStack(spacing: 0) {
-                        MainHeaderView(selectedTab: $selectedTab, showingNotifications: $showingNotifications)
+                        MainHeaderView(
+                            selectedTab: $selectedTab,
+                            showingNotifications: $showingNotifications,
+                            title: L10n.t("عائلة المحمدعلي", "Al-Mohammad Ali Family"),
+                            subtitle: L10n.t("تطبيق", "App"),
+                            showNotificationBell: true,
+                            subtitleAbove: true
+                        )
 
                         ScrollView(showsIndicators: false) {
-                            VStack(spacing: DS.Spacing.lg) {
-                                // الوصول السريع
-                                quickActionsSection
-                                    .opacity(appeared ? 1 : 0)
-                                    .offset(y: appeared ? 0 : 15)
-
-                                // ستوري العائلة
-                                if appSettingsVM.settings.storiesEnabled ?? true {
-                                    realStoriesSection
-                                        .opacity(appeared ? 1 : 0)
-                                        .offset(y: appeared ? 0 : 18)
+                            bentoSection
+                                .opacity(appeared ? 1 : 0)
+                                .offset(y: appeared ? 0 : 20)
+                                .padding(.top, DS.Spacing.md)
+                                .padding(.bottom, DS.Spacing.xxxxl)
+                                .onAppear {
+                                    shuffledTreeMembers = memberVM.allMembers.shuffled()
+                                    guard !appeared else { return }
+                                    withAnimation(DS.Anim.smooth.delay(0.1)) { appeared = true }
                                 }
-
-                                // أخبار العائلة
-                                newsFeedSection
-                                    .opacity(appeared ? 1 : 0)
-                                    .offset(y: appeared ? 0 : 20)
-                            }
-                            .padding(.top, DS.Spacing.md)
-                            .padding(.bottom, DS.Spacing.xxxxl)
-                            .onAppear {
-                                guard !appeared else { return }
-                                withAnimation(DS.Anim.smooth.delay(0.1)) { appeared = true }
-                            }
                         }
                         .refreshable { await refreshNews(notifyIfNew: true, force: true) }
-                    }
-                    .transition(.move(edge: L10n.isArabic ? .trailing : .leading))
-
-                    // زر إضافة خبر عائم — فوق البار السفلي
-                    if authVM.currentUser?.role != .pending && activeSubPage == nil {
-                        VStack {
-                            Spacer()
-                            HStack {
-                                Spacer()
-                                DSFloatingButton(icon: "plus") {
-                                    showingAddNews = true
-                                }
-                                .padding(.trailing, DS.Spacing.xl)
-                                .padding(.bottom, DS.Spacing.lg)
-                            }
+                        .onChange(of: memberVM.allMembers.count) { _ in
+                            shuffledTreeMembers = memberVM.allMembers.shuffled()
                         }
                     }
+                    .transition(.move(edge: L10n.isArabic ? .trailing : .leading))
                 }
             }
             .toolbar(.hidden, for: .navigationBar)
             .animation(DS.Anim.snappy, value: activeSubPage == nil)
-            .task {
-                await memberVM.fetchApprovedGalleryPhotos()
-                rebuildGalleryMembers()
-                rebuildStoryGroups()
-            }
-            .onChange(of: storyVM.membersWithStories.count) { _ in rebuildStoryGroups() }
-            .onChange(of: memberVM.approvedGalleryPhotos.count) { _ in rebuildGalleryMembers() }
             .onChange(of: newsSearchText) { newValue in
                 newsSearchTask?.cancel()
                 if newValue.isEmpty {
@@ -158,22 +130,6 @@ struct HomeNewsView: View {
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
             }
-            .sheet(isPresented: $showAddStory) {
-                AddStorySheet()
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
-            }
-            .overlay {
-                if showStoryViewer {
-                    StoryViewerView(
-                        isPresented: $showStoryViewer,
-                        allGroups: sortedStoryGroups,
-                        initialGroupIndex: storyViewerGroup ?? 0
-                    )
-                    .transition(.opacity)
-                    .zIndex(100)
-                }
-            }
         }
         .onChange(of: selectedTab) { _ in
             if selectedTab != 0, activeSubPage != nil {
@@ -202,8 +158,6 @@ struct HomeNewsView: View {
             }
             .presentationDragIndicator(.visible)
         }
-        .toolbar(showStoryViewer ? .hidden : .visible, for: .tabBar)
-        .animation(.easeInOut(duration: 0.3), value: showStoryViewer)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
 
@@ -216,6 +170,33 @@ struct HomeNewsView: View {
             case .photos: FamilyPhotoAlbumsView()
             case .projects: FamilyProjectsView()
             case .contact: MemberChatView()
+            case .news: newsFullPage
+            }
+        }
+    }
+
+    // صفحة الأخبار الكاملة (تظهر عند الضغط على مربع الأخبار)
+    private var newsFullPage: some View {
+        ZStack {
+            ScrollView(showsIndicators: false) {
+                newsFeedSection
+                    .padding(.top, DS.Spacing.sm)
+                    .padding(.bottom, DS.Spacing.xxxxl)
+            }
+            .refreshable { await refreshNews(notifyIfNew: true, force: true) }
+
+            if authVM.currentUser?.role != .pending {
+                VStack {
+                    Spacer()
+                    HStack {
+                        Spacer()
+                        DSFloatingButton(icon: "plus") {
+                            showingAddNews = true
+                        }
+                        .padding(.trailing, DS.Spacing.xl)
+                        .padding(.bottom, DS.Spacing.lg)
+                    }
+                }
             }
         }
     }
@@ -227,6 +208,7 @@ struct HomeNewsView: View {
             case .photos: return L10n.t("صور العائلة", "Family Photos")
             case .projects: return L10n.t("مشاريع العائلة", "Family Projects")
             case .contact: return L10n.t("التواصل", "Contact")
+            case .news: return L10n.t("أخبار العائلة", "Family News")
             }
         }()
 
@@ -253,251 +235,542 @@ struct HomeNewsView: View {
         .background(DS.Color.background)
     }
 
-    // MARK: - Gallery Stories Section
+    // MARK: - Bento Grid Section — توزيع عائلي احترافي
+    private var bentoSection: some View {
+        VStack(spacing: DS.Spacing.sm) {
+            // 1) Hero ترحيب (يفتح حسابي عند الضغط)
+            greetingCard
 
-    /// أعضاء عندهم صور معتمدة — cached
-    @State private var cachedGalleryMembers: [(member: FamilyMember, count: Int)] = []
+            // 2) شجرة العائلة
+            familyTreeCard
 
-    private var galleryMembersWithPhotos: [(member: FamilyMember, count: Int)] {
-        cachedGalleryMembers
-    }
+            // 3) آخر الأخبار
+            newsBentoCard
 
-    private func rebuildGalleryMembers() {
-        let grouped = Dictionary(grouping: memberVM.approvedGalleryPhotos, by: { $0.memberId })
-        cachedGalleryMembers = grouped.compactMap { (memberId, photos) in
-            guard let member = memberVM.member(byId: memberId) else { return nil }
-            return (member: member, count: photos.count)
+            // 4) ديوانيات + صور
+            diwaniyasAndPhotosRow
+
+            // 5) تواصل + مشاريع العائلة
+            contactAndProjectsRow
         }
-        .sorted { $0.count > $1.count }
-    }
-
-    // MARK: - Real Stories Section
-
-    /// ستوريات مرتبة: المستخدم الحالي أولاً — cached
-    @State private var cachedStoryGroups: [(member: FamilyMember, stories: [FamilyStory])] = []
-
-    private var sortedStoryGroups: [(member: FamilyMember, stories: [FamilyStory])] {
-        cachedStoryGroups
-    }
-
-    private func rebuildStoryGroups() {
-        var groups = storyVM.membersWithStories
-        if let userId = authVM.currentUser?.id,
-           let myIndex = groups.firstIndex(where: { $0.member.id == userId }) {
-            let myGroup = groups.remove(at: myIndex)
-            groups.insert(myGroup, at: 0)
-        }
-        cachedStoryGroups = groups
-    }
-
-    private var realStoriesSection: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            Text(L10n.t("القصص", "Stories"))
-                .font(DS.Font.caption1)
-                .fontWeight(.bold)
-                .foregroundColor(DS.Color.textSecondary)
-                .padding(.horizontal, DS.Spacing.xl)
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: DS.Spacing.lg) {
-                    addStoryButton
-
-                    ForEach(Array(sortedStoryGroups.enumerated()), id: \.element.member.id) { index, item in
-                        storyMemberCircle(item: item, index: index)
-                    }
-                }
-                .padding(.horizontal, DS.Spacing.lg)
-                .padding(.vertical, DS.Spacing.sm)
-            }
-        }
-        .padding(.vertical, DS.Spacing.sm)
-        .background(DS.Color.surface.opacity(0.4))
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
         .padding(.horizontal, DS.Spacing.lg)
     }
 
-    private var addStoryButton: some View {
-        Button { showAddStory = true } label: {
-            VStack(spacing: DS.Spacing.xs) {
-                ZStack {
-                    Circle()
-                        .fill(DS.Color.primary.opacity(0.12))
-                        .frame(width: 64, height: 64)
-
-                    Image(systemName: "plus")
-                        .font(DS.Font.scaled(24, weight: .bold))
-                        .foregroundColor(DS.Color.primary)
+    // صف الديوانيات + الصور — كل مربع مرن لو ال flag الآخر منطفئ
+    @ViewBuilder
+    private var diwaniyasAndPhotosRow: some View {
+        let showDiwaniyas = appSettingsVM.settings.diwaniyasEnabled ?? true
+        let showAlbums = appSettingsVM.settings.albumsEnabled ?? true
+        if showDiwaniyas || showAlbums {
+            HStack(spacing: DS.Spacing.sm) {
+                if showDiwaniyas {
+                    bentoTile(
+                        icon: "map.fill",
+                        title: L10n.t("الديوانيات", "Diwaniyas"),
+                        subtitle: nil,
+                        color: DS.Color.accent,
+                        height: 56,
+                        action: { selectedTab = 2 }
+                    )
                 }
-
-                Text(L10n.t("إضافة", "Add"))
-                    .font(DS.Font.scaled(11, weight: .medium))
-                    .foregroundColor(DS.Color.textSecondary)
-                    .lineLimit(1)
-                    .frame(width: 64)
-            }
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func storyMemberCircle(item: (member: FamilyMember, stories: [FamilyStory]), index: Int) -> some View {
-        Button {
-            storyViewerGroup = index
-            withAnimation(.easeOut(duration: 0.3)) {
-                showStoryViewer = true
-            }
-        } label: {
-            VStack(spacing: DS.Spacing.xs) {
-                ZStack {
-                    Circle()
-                        .stroke(DS.Color.gradientSecondary, lineWidth: 2.5)
-                        .frame(width: 64, height: 64)
-
-                    galleryMemberAvatar(item.member, size: 56)
-                        .frame(width: 56, height: 56)
-                        .clipShape(Circle())
-
-                    if item.stories.count > 1 {
-                        Text("\(item.stories.count)")
-                            .font(DS.Font.scaled(9, weight: .bold))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 1)
-                            .background(DS.Color.primary)
-                            .clipShape(Capsule())
-                            .offset(x: 18, y: 20)
-                    }
-                }
-
-                Text(item.member.firstName)
-                    .font(DS.Font.scaled(11, weight: .medium))
-                    .foregroundColor(DS.Color.textSecondary)
-                    .lineLimit(1)
-                    .frame(width: 64)
-            }
-        }
-        .buttonStyle(.plain)
-    }
-
-    // MARK: - Gallery Stories Section (Legacy)
-
-    private var galleryStoriesSection: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: DS.Spacing.lg) {
-                galleryStoryCircle(
-                    name: L10n.t("الصور", "Photos"),
-                    avatarView: AnyView(
-                        Image(systemName: "photo.on.rectangle.angled")
-                            .font(DS.Font.scaled(20, weight: .semibold))
-                            .foregroundColor(DS.Color.primary)
-                    ),
-                    count: memberVM.approvedGalleryPhotos.count,
-                    memberId: nil
-                )
-
-                ForEach(galleryMembersWithPhotos, id: \.member.id) { item in
-                    galleryStoryCircle(
-                        name: item.member.firstName,
-                        avatarView: AnyView(galleryMemberAvatar(item.member, size: 56)),
-                        count: item.count,
-                        memberId: item.member.id
+                if showAlbums {
+                    bentoTile(
+                        icon: "photo.on.rectangle.angled.fill",
+                        title: L10n.t("الصور", "Photos"),
+                        subtitle: nil,
+                        color: DS.Color.primary,
+                        height: 56,
+                        action: { withAnimation(DS.Anim.snappy) { activeSubPage = .photos } }
                     )
                 }
             }
-            .padding(.horizontal, DS.Spacing.lg)
-            .padding(.vertical, DS.Spacing.sm)
         }
     }
 
-    private func galleryStoryCircle(name: String, avatarView: AnyView, count: Int, memberId: UUID?) -> some View {
+    // صف التواصل + مشاريع العائلة — نفس نمط الديوانيات والصور (bentoTile)
+    @ViewBuilder
+    private var contactAndProjectsRow: some View {
+        let showProjects = appSettingsVM.settings.projectsEnabled ?? true
+        HStack(spacing: DS.Spacing.sm) {
+            bentoTile(
+                icon: "bubble.left.and.bubble.right.fill",
+                title: L10n.t("التواصل", "Contact"),
+                subtitle: nil,
+                color: DS.Color.info,
+                height: 56,
+                action: { withAnimation(DS.Anim.snappy) { activeSubPage = .contact } }
+            )
+            if showProjects {
+                bentoTile(
+                    icon: "briefcase.fill",
+                    title: L10n.t("مشاريع العائلة", "Family Projects"),
+                    subtitle: nil,
+                    color: DS.Color.warning,
+                    height: 56,
+                    action: { withAnimation(DS.Anim.snappy) { activeSubPage = .projects } }
+                )
+            }
+        }
+    }
+
+    // MARK: - بطاقة الترحيب (Hero) — تفتح "حسابي" عند الضغط
+    private var greetingCard: some View {
         Button {
-            withAnimation(DS.Anim.snappy) { activeSubPage = .photos }
+            selectedTab = 3
         } label: {
-            VStack(spacing: DS.Spacing.xs) {
-                ZStack {
-                    Circle()
-                        .stroke(DS.Color.gradientSecondary, lineWidth: 2.5)
-                        .frame(width: 64, height: 64)
-
-                    if memberId == nil {
-                        Circle()
-                            .fill(DS.Color.surface)
-                            .frame(width: 56, height: 56)
-                            .overlay(avatarView)
-                    } else {
-                        avatarView
-                            .frame(width: 56, height: 56)
-                            .clipShape(Circle())
-                    }
-
-                    if count > 0 {
-                        Text("\(count)")
-                            .font(DS.Font.scaled(9, weight: .bold))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 1)
-                            .background(DS.Color.primary)
-                            .clipShape(Capsule())
-                            .offset(x: 18, y: 20)
-                    }
-                }
-
-                Text(name)
-                    .font(DS.Font.scaled(11, weight: .medium))
-                    .foregroundColor(DS.Color.textSecondary)
-                    .lineLimit(1)
-                    .frame(width: 64)
-            }
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func galleryMemberAvatar(_ member: FamilyMember, size: CGFloat) -> some View {
-        DSMemberAvatar(name: member.firstName, avatarUrl: member.avatarUrl, size: size, roleColor: DS.Color.primary)
-    }
-
-    // MARK: - Quick Actions Section
-    private var quickActionsSection: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: DS.Spacing.md) {
-                if appSettingsVM.settings.albumsEnabled ?? true {
-                    quickActionItem(icon: "photo.on.rectangle.angled.fill", title: L10n.t("الصور", "Photos"), color: DS.Color.primary) { withAnimation(DS.Anim.snappy) { activeSubPage = .photos } }
+                if let user = authVM.currentUser {
+                    DSMemberAvatar(
+                        name: user.firstName,
+                        avatarUrl: user.avatarUrl,
+                        size: 56,
+                        roleColor: user.roleColor
+                    )
+                    .overlay(
+                        Circle()
+                            .strokeBorder(DS.Color.primary.opacity(0.20), lineWidth: 2)
+                    )
                 }
-                if appSettingsVM.settings.projectsEnabled ?? true {
-                    quickActionItem(icon: "briefcase.fill", title: L10n.t("مشاريع", "Projects"), color: DS.Color.accent) { withAnimation(DS.Anim.snappy) { activeSubPage = .projects } }
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(timeBasedGreeting)
+                        .font(DS.Font.scaled(11, weight: .heavy))
+                        .foregroundColor(DS.Color.primary)
+                        .tracking(0.6)
+                    Text(authVM.currentUser?.firstName ?? L10n.t("أهلاً بك", "Welcome"))
+                        .font(DS.Font.scaled(20, weight: .black))
+                        .foregroundColor(DS.Color.textPrimary)
+                        .lineLimit(1)
+                    Text(formattedToday)
+                        .font(DS.Font.scaled(11, weight: .medium))
+                        .foregroundColor(DS.Color.textSecondary)
+                        .lineLimit(1)
                 }
-                quickActionItem(icon: "bubble.left.and.bubble.right.fill", title: L10n.t("تواصل", "Contact"), color: DS.Color.primary) { withAnimation(DS.Anim.snappy) { activeSubPage = .contact } }
+
+                Spacer(minLength: 0)
             }
-            .padding(.horizontal, DS.Spacing.lg)
+            .padding(DS.Spacing.lg)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                ZStack {
+                    DS.Color.surface
+                    LinearGradient(
+                        colors: [
+                            DS.Color.primary.opacity(0.05),
+                            DS.Color.secondary.opacity(0.03)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                    Circle()
+                        .fill(DS.Color.primary.opacity(0.10))
+                        .frame(width: 200, height: 200)
+                        .blur(radius: 50)
+                        .offset(x: 130, y: -80)
+                    Circle()
+                        .fill(DS.Color.secondary.opacity(0.07))
+                        .frame(width: 120, height: 120)
+                        .blur(radius: 40)
+                        .offset(x: -50, y: 70)
+                    Circle()
+                        .fill(DS.Color.primary.opacity(0.13))
+                        .frame(width: 120, height: 120)
+                        .blur(radius: 35)
+                        .offset(x: -90, y: -50)
+                }
+            )
+            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xxl))
+            .shadow(color: .black.opacity(0.045), radius: 14, x: 0, y: 4)
+        }
+        .buttonStyle(DSScaleButtonStyle())
+    }
+
+    private var timeBasedGreeting: String {
+        let hour = Calendar.current.component(.hour, from: Date())
+        if hour < 12 {
+            return L10n.t("صباح الخير", "GOOD MORNING")
+        } else if hour < 17 {
+            return L10n.t("مساء الخير", "GOOD AFTERNOON")
+        } else {
+            return L10n.t("مساء الخير", "GOOD EVENING")
         }
     }
 
-    private func quickActionItem(icon: String, title: String, color: Color, action: @escaping () -> Void) -> some View {
+    private var formattedToday: String {
+        let formatter = DateFormatter()
+        formatter.locale = L10n.isArabic ? Locale(identifier: "ar") : Locale(identifier: "en_US")
+        formatter.dateFormat = L10n.isArabic ? "EEEE، d MMMM" : "EEEE, MMMM d"
+        return formatter.string(from: Date())
+    }
+
+    // MARK: - شريط الإحصائيات السريعة
+    private var statsStrip: some View {
+        HStack(spacing: DS.Spacing.sm) {
+            statChip(
+                icon: "person.2.fill",
+                value: memberVM.allMembers.count,
+                label: L10n.t("فرد", "Members"),
+                color: DS.Color.secondary
+            )
+            statChip(
+                icon: "newspaper.fill",
+                value: newsVM.allNews.count,
+                label: L10n.t("خبر", "News"),
+                color: DS.Color.primary
+            )
+            statChip(
+                icon: "photo.fill",
+                value: memberVM.approvedGalleryPhotos.count,
+                label: L10n.t("صورة", "Photos"),
+                color: DS.Color.accent
+            )
+        }
+    }
+
+    private func statChip(icon: String, value: Int, label: String, color: Color) -> some View {
+        VStack(spacing: 4) {
+            HStack(spacing: 5) {
+                Image(systemName: icon)
+                    .font(DS.Font.scaled(11, weight: .bold))
+                    .foregroundColor(color)
+                Text("\(value)")
+                    .font(DS.Font.scaled(17, weight: .heavy))
+                    .foregroundColor(DS.Color.textPrimary)
+                    .minimumScaleFactor(0.7)
+                    .lineLimit(1)
+            }
+            Text(label)
+                .font(DS.Font.scaled(10, weight: .medium))
+                .foregroundColor(DS.Color.textSecondary)
+                .lineLimit(1)
+        }
+        .padding(.vertical, DS.Spacing.sm)
+        .padding(.horizontal, DS.Spacing.xs)
+        .frame(maxWidth: .infinity)
+        .background(DS.Color.surface)
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
+        .shadow(color: .black.opacity(0.035), radius: 8, x: 0, y: 2)
+    }
+
+    // مربع شجرة العائلة — يحوي avatars حقيقية للأعضاء (إحساس عائلي)
+    private var familyTreeCard: some View {
+        Button {
+            selectedTab = 1
+        } label: {
+            VStack(alignment: .leading, spacing: DS.Spacing.md) {
+                HStack(alignment: .center, spacing: DS.Spacing.sm) {
+                    premiumIcon("tree.fill", color: DS.Color.secondary)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(L10n.t("شجرة العائلة", "Family Tree"))
+                            .font(DS.Font.scaled(18, weight: .bold))
+                            .foregroundColor(DS.Color.textPrimary)
+                        Text("\(memberVM.allMembers.count) " + L10n.t("فرد", "MEMBERS"))
+                            .font(DS.Font.scaled(10, weight: .heavy))
+                            .foregroundColor(DS.Color.textSecondary)
+                            .tracking(0.6)
+                    }
+
+                    Spacer()
+                }
+
+                familyAvatarsRow
+            }
+            .padding(DS.Spacing.lg)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                ZStack {
+                    DS.Color.surface
+                    Circle()
+                        .fill(DS.Color.secondary.opacity(0.10))
+                        .frame(width: 200, height: 200)
+                        .blur(radius: 55)
+                        .offset(x: 110, y: -70)
+                    Circle()
+                        .fill(DS.Color.primary.opacity(0.07))
+                        .frame(width: 130, height: 130)
+                        .blur(radius: 42)
+                        .offset(x: -70, y: 80)
+                    Circle()
+                        .fill(DS.Color.primary.opacity(0.12))
+                        .frame(width: 110, height: 110)
+                        .blur(radius: 33)
+                        .offset(x: -90, y: -50)
+                }
+            )
+            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xxl))
+            .shadow(color: .black.opacity(0.045), radius: 14, x: 0, y: 4)
+        }
+        .buttonStyle(DSScaleButtonStyle())
+    }
+
+    // صف avatars متراكبة لأعضاء العائلة (بدون badge عدد)
+    // يأخذ من القائمة المخلوطة (shuffled) ليتغير كل مرة تُفتح الصفحة
+    private var familyAvatarsRow: some View {
+        let source = shuffledTreeMembers.isEmpty ? memberVM.allMembers : shuffledTreeMembers
+        let visible = Array(source.prefix(5))
+        return HStack(spacing: -8) {
+            ForEach(Array(visible.enumerated()), id: \.element.id) { index, member in
+                DSMemberAvatar(
+                    name: member.firstName,
+                    avatarUrl: member.avatarUrl,
+                    size: 42,
+                    roleColor: member.roleColor
+                )
+                .overlay(
+                    Circle()
+                        .strokeBorder(DS.Color.surface, lineWidth: 2.5)
+                )
+                .zIndex(Double(visible.count - index))
+            }
+            Spacer()
+        }
+    }
+
+    // pill أفقي مدمج للأكشن الثانوي (التواصل / مشاريع العائلة)
+    private func actionPill(icon: String, title: String, color: Color, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: icon)
-                    .font(DS.Font.scaled(16, weight: .semibold))
+                    .font(DS.Font.scaled(13, weight: .bold))
                     .foregroundColor(color)
-                    .frame(width: 36, height: 36)
-                    .background(color.opacity(0.1))
+                    .frame(width: 26, height: 26)
+                    .background(color.opacity(0.14))
+                    .clipShape(Circle())
+                Text(title)
+                    .font(DS.Font.scaled(13, weight: .bold))
+                    .foregroundColor(DS.Color.textPrimary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+                Spacer(minLength: 0)
+                Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
+                    .font(DS.Font.scaled(10, weight: .bold))
+                    .foregroundColor(DS.Color.textTertiary)
+            }
+            .padding(.horizontal, DS.Spacing.md)
+            .padding(.vertical, 10)
+            .frame(maxWidth: .infinity)
+            .background(DS.Color.surface)
+            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
+            .shadow(color: .black.opacity(0.04), radius: 10, x: 0, y: 3)
+        }
+        .buttonStyle(DSScaleButtonStyle())
+    }
+
+    // مربع الأخبار: هيدر بأيقونة بتدرّج + معاينات بـ avatars + "عرض الكل"
+    private var newsBentoCard: some View {
+        Button {
+            withAnimation(DS.Anim.snappy) { activeSubPage = .news }
+        } label: {
+            VStack(alignment: .leading, spacing: DS.Spacing.md) {
+                HStack(alignment: .center, spacing: DS.Spacing.sm) {
+                    premiumIcon("newspaper.fill", color: DS.Color.primary)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(L10n.t("آخر الأخبار", "Latest News"))
+                            .font(DS.Font.scaled(18, weight: .bold))
+                            .foregroundColor(DS.Color.textPrimary)
+                        if !newsVM.allNews.isEmpty {
+                            Text("\(newsVM.allNews.count) " + L10n.t("منشور", "POSTS"))
+                                .font(DS.Font.scaled(10, weight: .heavy))
+                                .foregroundColor(DS.Color.textSecondary)
+                                .tracking(0.6)
+                        }
+                    }
+
+                    Spacer()
+                }
+
+                if newsVM.isLoading && newsVM.allNews.isEmpty {
+                    HStack {
+                        Spacer()
+                        ProgressView().tint(DS.Color.primary)
+                        Spacer()
+                    }
+                    .padding(.vertical, DS.Spacing.lg)
+                } else if newsVM.allNews.isEmpty {
+                    HStack(spacing: DS.Spacing.sm) {
+                        Image(systemName: "newspaper")
+                            .font(DS.Font.scaled(18))
+                            .foregroundColor(DS.Color.textTertiary)
+                        Text(L10n.t("لا توجد أخبار بعد", "No news yet"))
+                            .font(DS.Font.scaled(13, weight: .medium))
+                            .foregroundColor(DS.Color.textSecondary)
+                        Spacer()
+                    }
+                    .padding(.vertical, DS.Spacing.md)
+                } else {
+                    VStack(spacing: 0) {
+                        let preview = Array(newsVM.allNews.prefix(3))
+                        ForEach(Array(preview.enumerated()), id: \.element.id) { index, news in
+                            newsPreviewRow(for: news)
+                                .padding(.vertical, DS.Spacing.sm)
+                            if index < preview.count - 1 {
+                                Rectangle()
+                                    .fill(DS.Color.textTertiary.opacity(0.10))
+                                    .frame(height: 0.5)
+                            }
+                        }
+                    }
+                }
+
+                if newsVM.allNews.count > 3 {
+                    HStack {
+                        Spacer()
+                        Text(L10n.t("عرض المزيد", "Show more"))
+                            .font(DS.Font.scaled(13, weight: .bold))
+                            .foregroundColor(DS.Color.primary)
+                            .padding(.horizontal, DS.Spacing.lg)
+                            .padding(.vertical, 9)
+                            .frame(maxWidth: .infinity)
+                            .background(DS.Color.primary.opacity(0.10))
+                            .clipShape(Capsule())
+                            .overlay(
+                                Capsule()
+                                    .strokeBorder(DS.Color.primary.opacity(0.20), lineWidth: 1)
+                            )
+                        Spacer()
+                    }
+                    .padding(.top, DS.Spacing.sm)
+                }
+            }
+            .padding(DS.Spacing.lg)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                ZStack {
+                    DS.Color.surface
+                    Circle()
+                        .fill(DS.Color.primary.opacity(0.09))
+                        .frame(width: 220, height: 220)
+                        .blur(radius: 60)
+                        .offset(x: 130, y: -90)
+                    Circle()
+                        .fill(DS.Color.secondary.opacity(0.07))
+                        .frame(width: 160, height: 160)
+                        .blur(radius: 50)
+                        .offset(x: -70, y: 130)
+                    Circle()
+                        .fill(DS.Color.primary.opacity(0.13))
+                        .frame(width: 130, height: 130)
+                        .blur(radius: 38)
+                        .offset(x: -100, y: -70)
+                    Circle()
+                        .fill(DS.Color.secondary.opacity(0.09))
+                        .frame(width: 90, height: 90)
+                        .blur(radius: 30)
+                        .offset(x: -30, y: -60)
+                }
+            )
+            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xxl))
+            .shadow(color: .black.opacity(0.045), radius: 14, x: 0, y: 4)
+        }
+        .buttonStyle(DSScaleButtonStyle())
+    }
+
+    // صف معاينة خبر — avatar للمؤلف + نص الخبر + اسم رباعي/وقت (لون موحّد)
+    private func newsPreviewRow(for news: NewsPost) -> some View {
+        let member = news.author_id.flatMap { memberVM.member(byId: $0) }
+        let displayName = member?.fourPartName ?? news.author_name
+        let roleC = roleColorFor(news.role_color)
+        return HStack(alignment: .top, spacing: DS.Spacing.sm) {
+            DSMemberAvatar(
+                name: news.author_name,
+                avatarUrl: member?.avatarUrl,
+                size: 32,
+                roleColor: roleC
+            )
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(news.content)
+                    .font(DS.Font.scaled(13, weight: .medium))
+                    .foregroundColor(DS.Color.textPrimary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+
+                HStack(spacing: 4) {
+                    Text(displayName)
+                        .font(DS.Font.scaled(9, weight: .medium))
+                        .foregroundColor(DS.Color.textSecondary)
+                        .lineLimit(1)
+                    Text("•")
+                        .font(DS.Font.scaled(9))
+                        .foregroundColor(DS.Color.textTertiary)
+                    Text(getRelativeTime(for: news.timestamp))
+                        .font(DS.Font.scaled(9))
+                        .foregroundColor(DS.Color.textTertiary)
+                        .lineLimit(1)
+                }
+            }
+
+            Spacer(minLength: 0)
+        }
+    }
+
+    // مربع Bento مدمج أفقي — أيقونة جنب النص + إطار ودائرة زخرفية
+    private func bentoTile(icon: String, title: String, subtitle: String?, color: Color, height: CGFloat, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: DS.Spacing.sm) {
+                Image(systemName: icon)
+                    .font(DS.Font.scaled(14, weight: .bold))
+                    .foregroundColor(color)
+                    .frame(width: 32, height: 32)
+                    .background(color.opacity(0.14))
                     .clipShape(Circle())
 
                 Text(title)
-                    .font(DS.Font.caption1)
-                    .fontWeight(.semibold)
+                    .font(DS.Font.scaled(13, weight: .bold))
                     .foregroundColor(DS.Color.textPrimary)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+
+                Spacer(minLength: 0)
             }
             .padding(.horizontal, DS.Spacing.md)
             .padding(.vertical, DS.Spacing.sm)
-            .background(DS.Color.surface)
-            .clipShape(Capsule())
-            .overlay(
-                Capsule()
-                    .stroke(color.opacity(0.15), lineWidth: 1)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(height: height)
+            .background(
+                ZStack {
+                    DS.Color.surface
+                    Circle()
+                        .fill(color.opacity(0.12))
+                        .frame(width: 110, height: 110)
+                        .blur(radius: 40)
+                        .offset(x: 60, y: -15)
+                    Circle()
+                        .fill(color.opacity(0.13))
+                        .frame(width: 70, height: 70)
+                        .blur(radius: 26)
+                        .offset(x: -50, y: -15)
+                }
             )
+            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
+            .shadow(color: .black.opacity(0.035), radius: 8, x: 0, y: 2)
         }
         .buttonStyle(DSScaleButtonStyle())
-        .frame(maxWidth: .infinity)
+    }
+
+    // أيقونة دائرية بتدرّج خفيف + لمسة highlight
+    private func premiumIcon(_ icon: String, color: Color, size: CGFloat = 48) -> some View {
+        ZStack {
+            Circle()
+                .fill(
+                    LinearGradient(
+                        colors: [color.opacity(0.22), color.opacity(0.10)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .frame(width: size, height: size)
+                .overlay(
+                    Circle()
+                        .strokeBorder(color.opacity(0.15), lineWidth: 0.5)
+                )
+
+            Image(systemName: icon)
+                .font(DS.Font.scaled(size * 0.42, weight: .bold))
+                .foregroundColor(color)
+        }
     }
 
     // MARK: - News Feed Section

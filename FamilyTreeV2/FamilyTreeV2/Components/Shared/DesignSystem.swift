@@ -444,14 +444,22 @@ struct DSCard<Content: View>: View {
         VStack(spacing: 0) { content }
             .padding(padding)
             .background(
-                RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
-                    .fill(DS.Color.cardBackground)
+                ZStack {
+                    RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
+                        .fill(DS.Color.cardBackground)
+                    Circle()
+                        .fill(DS.Color.primary.opacity(0.06))
+                        .frame(width: 200, height: 200)
+                        .blur(radius: 55)
+                        .offset(x: 120, y: -80)
+                    Circle()
+                        .fill(DS.Color.secondary.opacity(0.04))
+                        .frame(width: 140, height: 140)
+                        .blur(radius: 50)
+                        .offset(x: -60, y: 100)
+                }
             )
             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
-                    .stroke(DS.Color.cardBorder, lineWidth: 1)
-            )
             .dsCardShadow()
     }
 }
