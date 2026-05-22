@@ -15,8 +15,10 @@ struct MainHeaderView<TrailingContent: View>: View {
     let customIcon: String?
     let backgroundGradient: LinearGradient?
     let hasDropShadow: Bool
+    let showNotificationBell: Bool
+    let subtitleAbove: Bool
     let trailingContent: TrailingContent
-    
+
     init(
         selectedTab: Binding<Int>,
         showingNotifications: Binding<Bool>,
@@ -25,6 +27,8 @@ struct MainHeaderView<TrailingContent: View>: View {
         icon: String? = nil,
         backgroundGradient: LinearGradient? = nil,
         hasDropShadow: Bool = true,
+        showNotificationBell: Bool = false,
+        subtitleAbove: Bool = false,
         @ViewBuilder trailingContent: () -> TrailingContent = { EmptyView() }
     ) {
         self._selectedTab = selectedTab
@@ -34,6 +38,8 @@ struct MainHeaderView<TrailingContent: View>: View {
         self.customIcon = icon
         self.backgroundGradient = backgroundGradient
         self.hasDropShadow = hasDropShadow
+        self.showNotificationBell = showNotificationBell
+        self.subtitleAbove = subtitleAbove
         self.trailingContent = trailingContent()
     }
     
@@ -48,11 +54,18 @@ struct MainHeaderView<TrailingContent: View>: View {
                                 .opacity(isAnimating ? 1.0 : 0.0)
                         }
 
-                        VStack(alignment: .leading, spacing: 3) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            if subtitleAbove, let customSubtitle = customSubtitle, !customSubtitle.isEmpty {
+                                Text(customSubtitle)
+                                    .font(DS.Font.scaled(14, weight: .semibold))
+                                    .foregroundColor(DS.Color.overlayText)
+                            }
                             Text(customTitle)
-                                .font(DS.Font.scaled(21, weight: .bold))
+                                .font(DS.Font.scaled(subtitleAbove ? 24 : 21, weight: .black))
                                 .foregroundColor(DS.Color.textOnPrimary)
-                            if let customSubtitle = customSubtitle, !customSubtitle.isEmpty {
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.7)
+                            if !subtitleAbove, let customSubtitle = customSubtitle, !customSubtitle.isEmpty {
                                 Text(customSubtitle)
                                     .font(DS.Font.scaled(13, weight: .medium))
                                     .foregroundColor(DS.Color.overlayText)
@@ -95,7 +108,9 @@ struct MainHeaderView<TrailingContent: View>: View {
                         }
                         .buttonStyle(BounceButtonStyle())
                         .accessibilityLabel(L10n.t("تسجيل الخروج", "Sign Out"))
+                    }
 
+                    if customTitle == nil || showNotificationBell {
                         NavigationLink(destination: NotificationsCenterView()) {
                             ZStack(alignment: .topTrailing) {
                                 headerIconView(
