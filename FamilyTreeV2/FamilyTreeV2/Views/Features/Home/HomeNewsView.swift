@@ -7,6 +7,7 @@ struct HomeNewsView: View {
     @EnvironmentObject var storyVM: StoryViewModel
     @EnvironmentObject var notificationVM: NotificationViewModel
     @EnvironmentObject var appSettingsVM: AppSettingsViewModel
+    @EnvironmentObject var adminRequestVM: AdminRequestViewModel
     @Environment(\.colorScheme) private var colorScheme
     @Binding var selectedTab: Int
     @State private var showingAddNews = false
@@ -158,6 +159,20 @@ struct HomeNewsView: View {
             }
             .presentationDragIndicator(.visible)
         }
+        .task {
+            // جلب بيانات لوحة الإدارة السريعة — فقط لمن لديه صلاحية
+            guard authVM.canModerate else { return }
+            await withTaskGroup(of: Void.self) { group in
+                group.addTask { @MainActor in await adminRequestVM.fetchDeceasedRequests() }
+                group.addTask { @MainActor in await adminRequestVM.fetchChildAddRequests() }
+                group.addTask { @MainActor in await adminRequestVM.fetchPhoneChangeRequests() }
+                group.addTask { @MainActor in await adminRequestVM.fetchNewsReportRequests() }
+                group.addTask { @MainActor in await adminRequestVM.fetchTreeEditRequests() }
+                group.addTask { @MainActor in await adminRequestVM.fetchNameChangeRequests() }
+                group.addTask { @MainActor in await adminRequestVM.fetchPhotoSuggestionRequests() }
+                group.addTask { @MainActor in await newsVM.fetchPendingNewsRequests() }
+            }
+        }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
 
@@ -252,6 +267,11 @@ struct HomeNewsView: View {
 
             // 5) تواصل + مشاريع العائلة
             contactAndProjectsRow
+
+            // 6) لوحة الإدارة — تظهر للمراقبين فقط أسفل القسم
+            if authVM.canModerate {
+                adminBentoCard
+            }
         }
         .padding(.horizontal, DS.Spacing.lg)
     }
@@ -703,6 +723,266 @@ struct HomeNewsView: View {
             }
 
             Spacer(minLength: 0)
+        }
+    }
+
+    // MARK: - بطاقة الإدارة (Bento) — للمراقبين فقط
+    private struct AdminActivityItem: Identifiable {
+        let id: UUID
+        let icon: String
+        let color: Color
+        let title: String
+        let subtitle: String
+        let date: Date
+    }
+
+    private static let isoFormatterNoFrac: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime]
+        return f
+    }()
+
+    private func parseISO(_ str: String?) -> Date? {
+        guard let s = str, !s.isEmpty else { return nil }
+        return Self.isoFormatter.date(from: s) ?? Self.isoFormatterNoFrac.date(from: s)
+    }
+
+    private var adminPendingTotalCount: Int {
+        adminRequestVM.deceasedRequests.count
+            + adminRequestVM.childAddRequests.count
+            + adminRequestVM.phoneChangeRequests.count
+            + adminRequestVM.newsReportRequests.count
+            + adminRequestVM.treeEditRequests.count
+            + adminRequestVM.nameChangeRequests.count
+            + adminRequestVM.photoSuggestionRequests.count
+            + newsVM.pendingNewsRequests.count
+            + memberVM.allMembers.filter { $0.role == .pending }.count
+    }
+
+    private var newMembersTodayCount: Int {
+        let cal = Calendar.current
+        let today = Date()
+        return memberVM.allMembers.filter { m in
+            guard let d = parseISO(m.createdAt) else { return false }
+            return cal.isDate(d, inSameDayAs: today)
+        }.count
+    }
+
+    private var recentAdminActivity: [AdminActivityItem] {
+        var items: [AdminActivityItem] = []
+        for m in memberVM.allMembers where m.role == .pending {
+            if let d = parseISO(m.createdAt) {
+                items.append(.init(id: m.id, icon: "person.badge.plus", color: DS.Color.success,
+                    title: L10n.t("تسجيل جديد", "New registration"),
+                    subtitle: m.fullName, date: d))
+            }
+        }
+        for r in adminRequestVM.deceasedRequests {
+            if let d = parseISO(r.createdAt) {
+                items.append(.init(id: r.id, icon: "heart.slash.fill", color: DS.Color.error,
+                    title: L10n.t("طلب وفاة", "Death request"),
+                    subtitle: r.member?.fullName ?? "", date: d))
+            }
+        }
+        for r in adminRequestVM.childAddRequests {
+            if let d = parseISO(r.createdAt) {
+                items.append(.init(id: r.id, icon: "person.2.fill", color: DS.Color.accent,
+                    title: L10n.t("طلب إضافة ابن", "Add child request"),
+                    subtitle: r.member?.fullName ?? "", date: d))
+            }
+        }
+        for n in newsVM.pendingNewsRequests {
+            items.append(.init(id: n.id, icon: "newspaper.fill", color: DS.Color.primary,
+                title: L10n.t("خبر بانتظار الموافقة", "News pending"),
+                subtitle: n.author_name, date: n.timestamp))
+        }
+        return Array(items.sorted { $0.date > $1.date }.prefix(3))
+    }
+
+    /// بطاقة Bento كبيرة للوحة الإدارة — تتبع نفس نمط familyTreeCard/newsBentoCard
+    private var adminBentoCard: some View {
+        Button {
+            selectedTab = 4
+        } label: {
+            VStack(alignment: .leading, spacing: DS.Spacing.md) {
+                // الهيدر
+                HStack(alignment: .center, spacing: DS.Spacing.sm) {
+                    premiumIcon("shield.lefthalf.filled", color: DS.Color.accent)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(L10n.t("لوحة الإدارة", "Admin Panel"))
+                            .font(DS.Font.scaled(18, weight: .bold))
+                            .foregroundColor(DS.Color.textPrimary)
+                        Text(L10n.t("نظرة سريعة على الطلبات والنشاط", "Quick overview"))
+                            .font(DS.Font.scaled(10, weight: .heavy))
+                            .foregroundColor(DS.Color.textSecondary)
+                            .tracking(0.6)
+                    }
+
+                    Spacer()
+                }
+
+                // 3 شارات إحصائية
+                HStack(spacing: DS.Spacing.sm) {
+                    adminMiniStat(
+                        icon: "tray.full.fill",
+                        value: adminPendingTotalCount,
+                        label: L10n.t("طلب", "Pending"),
+                        color: DS.Color.warning
+                    )
+                    adminMiniStat(
+                        icon: "person.badge.plus",
+                        value: newMembersTodayCount,
+                        label: L10n.t("جديد اليوم", "New Today"),
+                        color: DS.Color.success
+                    )
+                    adminMiniStat(
+                        icon: "newspaper.fill",
+                        value: newsVM.pendingNewsRequests.count,
+                        label: L10n.t("خبر", "News"),
+                        color: DS.Color.primary
+                    )
+                }
+
+                // بانر تحذيري — فقط لو فيه طلبات معلّقة
+                if adminPendingTotalCount > 0 {
+                    HStack(spacing: DS.Spacing.sm) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(DS.Font.scaled(13, weight: .bold))
+                            .foregroundColor(DS.Color.warning)
+                        Text(L10n.t(
+                            "عندك \(adminPendingTotalCount) طلب ينتظر مراجعتك",
+                            "\(adminPendingTotalCount) requests awaiting review"
+                        ))
+                        .font(DS.Font.scaled(12, weight: .semibold))
+                        .foregroundColor(DS.Color.textPrimary)
+                        .lineLimit(2)
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, DS.Spacing.md)
+                    .padding(.vertical, DS.Spacing.sm)
+                    .background(DS.Color.warning.opacity(0.10))
+                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: DS.Radius.md)
+                            .strokeBorder(DS.Color.warning.opacity(0.20), lineWidth: 1)
+                    )
+                }
+
+                // آخر النشاط الإداري
+                if !recentAdminActivity.isEmpty {
+                    VStack(spacing: 0) {
+                        ForEach(Array(recentAdminActivity.enumerated()), id: \.element.id) { index, item in
+                            adminActivityRow(item)
+                                .padding(.vertical, DS.Spacing.sm)
+                            if index < recentAdminActivity.count - 1 {
+                                Rectangle()
+                                    .fill(DS.Color.textTertiary.opacity(0.10))
+                                    .frame(height: 0.5)
+                            }
+                        }
+                    }
+                }
+
+                // CTA pill
+                HStack {
+                    Spacer()
+                    Text(L10n.t("الانتقال للوحة الإدارة", "Open Admin Dashboard"))
+                        .font(DS.Font.scaled(13, weight: .bold))
+                        .foregroundColor(DS.Color.accent)
+                        .padding(.horizontal, DS.Spacing.lg)
+                        .padding(.vertical, 9)
+                        .frame(maxWidth: .infinity)
+                        .background(DS.Color.accent.opacity(0.10))
+                        .clipShape(Capsule())
+                        .overlay(
+                            Capsule()
+                                .strokeBorder(DS.Color.accent.opacity(0.20), lineWidth: 1)
+                        )
+                    Spacer()
+                }
+                .padding(.top, DS.Spacing.xs)
+            }
+            .padding(DS.Spacing.lg)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                ZStack {
+                    DS.Color.surface
+                    Circle()
+                        .fill(DS.Color.accent.opacity(0.10))
+                        .frame(width: 220, height: 220)
+                        .blur(radius: 60)
+                        .offset(x: 130, y: -90)
+                    Circle()
+                        .fill(DS.Color.warning.opacity(0.06))
+                        .frame(width: 150, height: 150)
+                        .blur(radius: 48)
+                        .offset(x: -80, y: 120)
+                    Circle()
+                        .fill(DS.Color.accent.opacity(0.13))
+                        .frame(width: 120, height: 120)
+                        .blur(radius: 36)
+                        .offset(x: -100, y: -60)
+                }
+            )
+            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xxl))
+            .shadow(color: .black.opacity(0.045), radius: 14, x: 0, y: 4)
+        }
+        .buttonStyle(DSScaleButtonStyle())
+    }
+
+    private func adminMiniStat(icon: String, value: Int, label: String, color: Color) -> some View {
+        VStack(spacing: 4) {
+            HStack(spacing: 5) {
+                Image(systemName: icon)
+                    .font(DS.Font.scaled(11, weight: .bold))
+                    .foregroundColor(color)
+                Text("\(value)")
+                    .font(DS.Font.scaled(17, weight: .heavy))
+                    .foregroundColor(DS.Color.textPrimary)
+                    .minimumScaleFactor(0.7)
+                    .lineLimit(1)
+            }
+            Text(label)
+                .font(DS.Font.scaled(10, weight: .medium))
+                .foregroundColor(DS.Color.textSecondary)
+                .lineLimit(1)
+        }
+        .padding(.vertical, DS.Spacing.sm)
+        .padding(.horizontal, DS.Spacing.xs)
+        .frame(maxWidth: .infinity)
+        .background(DS.Color.background.opacity(0.6))
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
+    }
+
+    private func adminActivityRow(_ item: AdminActivityItem) -> some View {
+        HStack(alignment: .center, spacing: DS.Spacing.sm) {
+            ZStack {
+                Circle().fill(item.color.opacity(0.15)).frame(width: 32, height: 32)
+                Image(systemName: item.icon)
+                    .font(DS.Font.scaled(12, weight: .semibold))
+                    .foregroundColor(item.color)
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(item.title)
+                    .font(DS.Font.scaled(12, weight: .semibold))
+                    .foregroundColor(DS.Color.textPrimary)
+                    .lineLimit(1)
+                if !item.subtitle.isEmpty {
+                    Text(item.subtitle)
+                        .font(DS.Font.scaled(10, weight: .medium))
+                        .foregroundColor(DS.Color.textSecondary)
+                        .lineLimit(1)
+                }
+            }
+
+            Spacer(minLength: DS.Spacing.sm)
+
+            Text(getRelativeTime(for: item.date))
+                .font(DS.Font.scaled(9))
+                .foregroundColor(DS.Color.textTertiary)
+                .lineLimit(1)
         }
     }
 
