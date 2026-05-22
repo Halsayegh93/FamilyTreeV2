@@ -1,8 +1,8 @@
 name: Build & Upload to TestFlight
 
 on:
-  push:
-    branches: [main]
+  # التشغيل اليدوي فقط — يدفع المستخدم البناء لـ TestFlight لما يخلّص.
+  # لتفعيل التحفيز التلقائي على push لـ main: ارجع push: branches: [main]
   workflow_dispatch:
 
 jobs:
