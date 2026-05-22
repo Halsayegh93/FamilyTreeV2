@@ -26,8 +26,45 @@ class AdminRequestViewModel: ObservableObject {
     @Published var mergeResult: MergeResult? = nil
     @Published var errorMessage: String? = nil
 
-    /// عدد رسائل التواصل غير المُعالَجة (status == pending)
+    /// معرّفات رسائل التواصل التي قرأها المدير (محفوظة محلياً في UserDefaults).
+    /// تُستخدم لتحديد العدّاد "غير المقروء" المعروض في لوحة الإدارة.
+    @Published private(set) var readContactMessageIds: Set<UUID> = AdminRequestViewModel.loadReadIds()
+
+    private static let readIdsKey = "readContactMessageIds_v1"
+
+    private static func loadReadIds() -> Set<UUID> {
+        guard let arr = UserDefaults.standard.array(forKey: readIdsKey) as? [String] else { return [] }
+        return Set(arr.compactMap(UUID.init(uuidString:)))
+    }
+
+    private func persistReadIds() {
+        let arr = readContactMessageIds.map { $0.uuidString }
+        UserDefaults.standard.set(arr, forKey: Self.readIdsKey)
+    }
+
+    /// تعليم رسالة كمقروءة محلياً. يرفع تحديث للـ UI تلقائياً.
+    func markContactMessageRead(_ id: UUID) {
+        guard !readContactMessageIds.contains(id) else { return }
+        readContactMessageIds.insert(id)
+        persistReadIds()
+    }
+
+    /// تعليم كل الرسائل الحالية كمقروءة.
+    func markAllContactMessagesRead() {
+        let allIds = Set(contactMessages.map { $0.id })
+        guard !allIds.isSubset(of: readContactMessageIds) else { return }
+        readContactMessageIds.formUnion(allIds)
+        persistReadIds()
+    }
+
+    /// عدد رسائل التواصل غير المقروءة (لم يضغط عليها المدير بعد).
+    /// يُعرض كـ badge في لوحة الإدارة. يتقلّص فور الضغط على الرسالة.
     var unreadContactMessagesCount: Int {
+        contactMessages.filter { !readContactMessageIds.contains($0.id) }.count
+    }
+
+    /// عدد الرسائل التي تنتظر التعامل (status == pending) — للفلاتر داخل صندوق الوارد.
+    var pendingContactMessagesCount: Int {
         contactMessages.filter { $0.status == ApprovalStatus.pending.rawValue }.count
     }
     

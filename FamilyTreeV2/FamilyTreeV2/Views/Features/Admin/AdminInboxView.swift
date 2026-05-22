@@ -60,10 +60,19 @@ struct AdminInboxView: View {
                     emptyState
                     Spacer()
                 } else {
+                    if adminRequestVM.unreadContactMessagesCount > 0 {
+                        markAllReadBar
+                            .padding(.horizontal, DS.Spacing.lg)
+                            .padding(.top, DS.Spacing.sm)
+                    }
+
                     ScrollView {
                         LazyVStack(spacing: DS.Spacing.sm) {
                             ForEach(filteredMessages) { msg in
-                                Button { selectedMessage = msg } label: {
+                                Button {
+                                    adminRequestVM.markContactMessageRead(msg.id)
+                                    selectedMessage = msg
+                                } label: {
                                     messageRow(msg)
                                 }
                                 .buttonStyle(.plain)
@@ -191,48 +200,111 @@ struct AdminInboxView: View {
         let preview = ContactParser.message(from: msg)
         let date = ContactParser.date(msg.createdAt)
         let isPending = msg.status == ApprovalStatus.pending.rawValue
+        let isUnread = !adminRequestVM.readContactMessageIds.contains(msg.id)
 
         return HStack(alignment: .top, spacing: DS.Spacing.md) {
+            // نقطة "غير مقروء" — تظهر فقط للرسائل اللي ما ضغط عليها المدير بعد
+            ZStack {
+                if isUnread {
+                    Circle()
+                        .fill(DS.Color.primary)
+                        .frame(width: 9, height: 9)
+                        .transition(.scale.combined(with: .opacity))
+                }
+            }
+            .frame(width: 9)
+            .padding(.top, 6)
+            .animation(DS.Anim.snappy, value: isUnread)
+
             avatar(for: msg.member)
 
             VStack(alignment: .leading, spacing: DS.Spacing.xs) {
                 HStack(spacing: DS.Spacing.xs) {
                     Text(msg.member?.fullName ?? L10n.t("عضو", "Member"))
                         .font(DS.Font.calloutBold)
+                        .fontWeight(isUnread ? .black : .bold)
                         .foregroundColor(DS.Color.textPrimary)
                         .lineLimit(1)
                     Spacer(minLength: 0)
                     if let d = date {
                         Text(relativeShort(d))
                             .font(DS.Font.caption2)
-                            .foregroundColor(DS.Color.textTertiary)
+                            .fontWeight(isUnread ? .bold : .regular)
+                            .foregroundColor(isUnread ? DS.Color.primary : DS.Color.textTertiary)
                     }
                 }
 
                 HStack(spacing: DS.Spacing.xs) {
                     categoryChip(category)
                     if isPending {
-                        Circle()
-                            .fill(DS.Color.warning)
-                            .frame(width: 7, height: 7)
+                        Image(systemName: "clock.fill")
+                            .font(DS.Font.scaled(9, weight: .bold))
+                            .foregroundColor(DS.Color.warning)
                     }
                     Spacer(minLength: 0)
                 }
 
                 Text(preview)
                     .font(DS.Font.subheadline)
-                    .foregroundColor(DS.Color.textSecondary)
+                    .fontWeight(isUnread ? .semibold : .regular)
+                    .foregroundColor(isUnread ? DS.Color.textPrimary : DS.Color.textSecondary)
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         .padding(DS.Spacing.md)
-        .background(DS.Color.surface)
+        .background(isUnread ? DS.Color.primary.opacity(0.04) : DS.Color.surface)
         .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
         .overlay(
             RoundedRectangle(cornerRadius: DS.Radius.lg)
-                .strokeBorder(isPending ? DS.Color.warning.opacity(0.20) : Color.clear, lineWidth: 1)
+                .strokeBorder(
+                    isUnread
+                        ? DS.Color.primary.opacity(0.25)
+                        : (isPending ? DS.Color.warning.opacity(0.18) : Color.clear),
+                    lineWidth: isUnread ? 1.2 : 1
+                )
+        )
+    }
+
+    // MARK: - Mark all read bar
+
+    private var markAllReadBar: some View {
+        HStack(spacing: DS.Spacing.sm) {
+            Image(systemName: "envelope.badge.fill")
+                .font(DS.Font.scaled(12, weight: .bold))
+                .foregroundColor(DS.Color.primary)
+            Text(L10n.t(
+                "\(adminRequestVM.unreadContactMessagesCount) رسالة جديدة",
+                "\(adminRequestVM.unreadContactMessagesCount) new messages"
+            ))
+            .font(DS.Font.caption1)
+            .fontWeight(.semibold)
+            .foregroundColor(DS.Color.textPrimary)
+            Spacer()
+            Button {
+                withAnimation(DS.Anim.snappy) {
+                    adminRequestVM.markAllContactMessagesRead()
+                }
+            } label: {
+                Text(L10n.t("تحديد الكل كمقروء", "Mark all read"))
+                    .font(DS.Font.caption1)
+                    .fontWeight(.bold)
+                    .foregroundColor(DS.Color.primary)
+                    .padding(.horizontal, DS.Spacing.md)
+                    .padding(.vertical, 6)
+                    .background(DS.Color.primary.opacity(0.10))
+                    .clipShape(Capsule())
+            }
+            .buttonStyle(DSScaleButtonStyle())
+        }
+        .padding(.horizontal, DS.Spacing.md)
+        .padding(.vertical, DS.Spacing.sm)
+        .background(DS.Color.primary.opacity(0.06))
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Radius.md)
+                .strokeBorder(DS.Color.primary.opacity(0.18), lineWidth: 1)
         )
     }
 
@@ -407,6 +479,10 @@ private struct MessageDetailSheet: View {
         .background(DS.Color.background)
         .navigationTitle(L10n.t("تفاصيل الرسالة", "Message Detail"))
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            // defensive: تأكد أن الرسالة معلّمة كمقروءة حتى لو فُتحت من مسار آخر
+            adminRequestVM.markContactMessageRead(message.id)
+        }
     }
 
     private func replyButton(title: String, icon: String, color: Color, action: @escaping () -> Void) -> some View {
@@ -442,6 +518,7 @@ private struct MessageDetailSheet: View {
     @MainActor
     private func markHandled() async {
         isMarking = true
+        adminRequestVM.markContactMessageRead(message.id)
         await adminRequestVM.markContactMessageHandled(message)
         isMarking = false
         onDismiss()
