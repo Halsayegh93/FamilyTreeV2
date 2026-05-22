@@ -184,7 +184,7 @@ struct HomeNewsView: View {
             switch page {
             case .photos: FamilyPhotoAlbumsView()
             case .projects: FamilyProjectsView()
-            case .contact: MemberChatView()
+            case .contact: MemberContactFormView()
             case .news: newsFullPage
             }
         }

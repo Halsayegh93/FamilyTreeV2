@@ -1,34 +1,40 @@
 import SwiftUI
 
-/// قائمة محادثات الإدارة — مجموعة حسب العضو (مثل WhatsApp/iMessage).
-/// كل صف = محادثة مع عضو واحد. الضغط يفتح AdminChatView.
+/// قائمة رسائل التواصل من الأعضاء — نموذج بسيط (لا دردشة).
+/// كل صف = رسالة واحدة. الضغط يفتح تفاصيلها مع خيارات الرد بالاتصال/واتساب.
 struct AdminInboxView: View {
     @EnvironmentObject var adminRequestVM: AdminRequestViewModel
 
     @State private var searchText: String = ""
     @State private var isLoading = false
+    @State private var selectedMessage: AdminRequest? = nil
+    @State private var filter: InboxFilter = .pending
 
-    /// تجميع admin_requests حسب member_id إلى محادثات.
-    private var conversations: [Conversation] {
-        let groups = Dictionary(grouping: adminRequestVM.contactMessages, by: { $0.memberId })
-        let convs: [Conversation] = groups.compactMap { (memberId, rows) in
-            guard let any = rows.first else { return nil }
-            let sorted = rows.sorted { ($0.createdAt ?? "") > ($1.createdAt ?? "") }
-            let latestRow = sorted.first!
-            let unreadCount = rows.filter { $0.adminReply?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true }.count
-            return Conversation(
-                memberId: memberId,
-                memberName: any.member?.fullName ?? L10n.t("عضو", "Member"),
-                memberFourPart: any.member?.fourPartName ?? any.member?.fullName ?? "—",
-                lastMessagePreview: lastPreview(of: latestRow),
-                lastMessageDate: AdminRequest.parseDate(latestRow.repliedAt ?? latestRow.createdAt),
-                unreadCount: unreadCount
-            )
+    private enum InboxFilter: String, CaseIterable {
+        case pending, handled
+        var title: String {
+            switch self {
+            case .pending: return L10n.t("لم يتم التعامل", "Pending")
+            case .handled: return L10n.t("تم التعامل", "Handled")
+            }
         }
-        let sorted = convs.sorted { ($0.lastMessageDate ?? Date.distantPast) > ($1.lastMessageDate ?? Date.distantPast) }
+    }
+
+    private var filteredMessages: [AdminRequest] {
+        let all = adminRequestVM.contactMessages
+        let byStatus: [AdminRequest]
+        switch filter {
+        case .pending: byStatus = all.filter { $0.status == ApprovalStatus.pending.rawValue }
+        case .handled: byStatus = all.filter { $0.status == ApprovalStatus.approved.rawValue }
+        }
+        let sorted = byStatus.sorted { ($0.createdAt ?? "") > ($1.createdAt ?? "") }
         let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !q.isEmpty else { return sorted }
-        return sorted.filter { $0.memberName.lowercased().contains(q) || $0.lastMessagePreview.lowercased().contains(q) }
+        return sorted.filter { msg in
+            let name = msg.member?.fullName.lowercased() ?? ""
+            let preview = ContactParser.message(from: msg).lowercased()
+            return name.contains(q) || preview.contains(q)
+        }
     }
 
     var body: some View {
@@ -36,6 +42,10 @@ struct AdminInboxView: View {
             DS.Color.background.ignoresSafeArea()
 
             VStack(spacing: 0) {
+                filterBar
+                    .padding(.horizontal, DS.Spacing.lg)
+                    .padding(.top, DS.Spacing.sm)
+
                 searchBar
                     .padding(.horizontal, DS.Spacing.lg)
                     .padding(.top, DS.Spacing.sm)
@@ -43,40 +53,81 @@ struct AdminInboxView: View {
 
                 if isLoading && adminRequestVM.contactMessages.isEmpty {
                     Spacer()
-                    ProgressView()
+                    ProgressView().tint(DS.Color.primary)
                     Spacer()
-                } else if conversations.isEmpty {
+                } else if filteredMessages.isEmpty {
                     Spacer()
                     emptyState
                     Spacer()
                 } else {
                     ScrollView {
-                        LazyVStack(spacing: 0) {
-                            ForEach(conversations) { conv in
-                                NavigationLink {
-                                    AdminChatView(memberId: conv.memberId)
-                                } label: {
-                                    conversationRow(conv)
+                        LazyVStack(spacing: DS.Spacing.sm) {
+                            ForEach(filteredMessages) { msg in
+                                Button { selectedMessage = msg } label: {
+                                    messageRow(msg)
                                 }
                                 .buttonStyle(.plain)
-                                Divider().padding(.leading, 72)
                             }
                         }
+                        .padding(.horizontal, DS.Spacing.lg)
                         .padding(.top, DS.Spacing.sm)
                         .padding(.bottom, DS.Spacing.xxxl)
                     }
-                    .refreshable {
-                        await adminRequestVM.fetchContactMessages(force: true)
-                    }
+                    .refreshable { await adminRequestVM.fetchContactMessages(force: true) }
                 }
             }
         }
-        .navigationTitle(L10n.t("الرسائل", "Messages"))
+        .navigationTitle(L10n.t("رسائل التواصل", "Contact Messages"))
         .navigationBarTitleDisplayMode(.inline)
         .task {
             isLoading = true
             await adminRequestVM.fetchContactMessages()
             isLoading = false
+        }
+        .sheet(item: $selectedMessage) { msg in
+            NavigationStack {
+                MessageDetailSheet(message: msg) {
+                    selectedMessage = nil
+                }
+            }
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+        }
+    }
+
+    // MARK: - Filter Bar
+
+    private var filterBar: some View {
+        HStack(spacing: DS.Spacing.sm) {
+            ForEach(InboxFilter.allCases, id: \.self) { f in
+                let selected = filter == f
+                let count = f == .pending
+                    ? adminRequestVM.contactMessages.filter { $0.status == ApprovalStatus.pending.rawValue }.count
+                    : adminRequestVM.contactMessages.filter { $0.status == ApprovalStatus.approved.rawValue }.count
+                Button {
+                    withAnimation(DS.Anim.snappy) { filter = f }
+                } label: {
+                    HStack(spacing: DS.Spacing.xs) {
+                        Text(f.title)
+                            .font(DS.Font.scaled(13, weight: .semibold))
+                        if count > 0 {
+                            Text("\(count)")
+                                .font(DS.Font.scaled(11, weight: .bold))
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(selected ? Color.white.opacity(0.25) : DS.Color.primary.opacity(0.15))
+                                .clipShape(Capsule())
+                        }
+                    }
+                    .foregroundColor(selected ? .white : DS.Color.textPrimary)
+                    .padding(.horizontal, DS.Spacing.md)
+                    .padding(.vertical, DS.Spacing.sm)
+                    .background(selected ? DS.Color.primary : DS.Color.surface)
+                    .clipShape(Capsule())
+                }
+                .buttonStyle(DSScaleButtonStyle())
+            }
+            Spacer()
         }
     }
 
@@ -114,20 +165,18 @@ struct AdminInboxView: View {
                 Circle()
                     .fill(DS.Color.primary.opacity(0.08))
                     .frame(width: 100, height: 100)
-                Image(systemName: "bubble.left.and.bubble.right")
+                Image(systemName: "tray")
                     .font(.system(size: 44, weight: .light))
                     .foregroundColor(DS.Color.primary)
             }
             VStack(spacing: 6) {
-                Text(searchText.isEmpty
-                     ? L10n.t("ما فيه محادثات بعد", "No conversations yet")
-                     : L10n.t("لا توجد نتائج", "No results"))
+                Text(L10n.t("ما فيه رسائل", "No messages"))
                     .font(DS.Font.title3)
                     .fontWeight(.bold)
                     .foregroundColor(DS.Color.textPrimary)
-                Text(searchText.isEmpty
-                     ? L10n.t("لما يرسل عضو رسالة بتشوفها هنا", "Member messages will appear here")
-                     : L10n.t("جرّب كلمة بحث مختلفة", "Try a different search"))
+                Text(filter == .pending
+                     ? L10n.t("كل الرسائل تم التعامل معها", "All messages handled")
+                     : L10n.t("لا توجد رسائل متعامل معها بعد", "No handled messages yet"))
                     .font(DS.Font.callout)
                     .foregroundColor(DS.Color.textSecondary)
             }
@@ -137,75 +186,81 @@ struct AdminInboxView: View {
 
     // MARK: - Row
 
-    private func conversationRow(_ conv: Conversation) -> some View {
-        HStack(alignment: .top, spacing: DS.Spacing.md) {
-            // Avatar
-            ZStack {
-                Circle()
-                    .fill(DS.Color.primary.opacity(0.15))
-                    .frame(width: 48, height: 48)
-                Text(String(conv.memberName.prefix(1)))
-                    .font(DS.Font.title3)
-                    .fontWeight(.semibold)
-                    .foregroundColor(DS.Color.primary)
-            }
+    private func messageRow(_ msg: AdminRequest) -> some View {
+        let category = ContactParser.category(of: msg)
+        let preview = ContactParser.message(from: msg)
+        let date = ContactParser.date(msg.createdAt)
+        let isPending = msg.status == ApprovalStatus.pending.rawValue
 
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 4) {
-                    Text(conv.memberFourPart)
-                        .font(conv.unreadCount > 0 ? DS.Font.calloutBold : DS.Font.callout)
+        return HStack(alignment: .top, spacing: DS.Spacing.md) {
+            avatar(for: msg.member)
+
+            VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                HStack(spacing: DS.Spacing.xs) {
+                    Text(msg.member?.fullName ?? L10n.t("عضو", "Member"))
+                        .font(DS.Font.calloutBold)
                         .foregroundColor(DS.Color.textPrimary)
                         .lineLimit(1)
-                    Spacer()
-                    if let d = conv.lastMessageDate {
-                        Text(timeAgo(d))
+                    Spacer(minLength: 0)
+                    if let d = date {
+                        Text(relativeShort(d))
                             .font(DS.Font.caption2)
-                            .foregroundColor(conv.unreadCount > 0 ? DS.Color.primary : DS.Color.textTertiary)
-                            .fontWeight(conv.unreadCount > 0 ? .semibold : .regular)
+                            .foregroundColor(DS.Color.textTertiary)
                     }
                 }
 
-                HStack(alignment: .top, spacing: DS.Spacing.xs) {
-                    Text(conv.lastMessagePreview)
-                        .font(DS.Font.subheadline)
-                        .foregroundColor(conv.unreadCount > 0 ? DS.Color.textPrimary : DS.Color.textSecondary)
-                        .lineLimit(2)
-                        .multilineTextAlignment(.leading)
-                    Spacer()
-                    if conv.unreadCount > 0 {
-                        Text("\(conv.unreadCount)")
-                            .font(DS.Font.caption2)
-                            .fontWeight(.bold)
-                            .foregroundColor(.white)
-                            .frame(minWidth: 20, minHeight: 20)
-                            .padding(.horizontal, 4)
-                            .background(Capsule().fill(DS.Color.primary))
+                HStack(spacing: DS.Spacing.xs) {
+                    categoryChip(category)
+                    if isPending {
+                        Circle()
+                            .fill(DS.Color.warning)
+                            .frame(width: 7, height: 7)
                     }
+                    Spacer(minLength: 0)
                 }
+
+                Text(preview)
+                    .font(DS.Font.subheadline)
+                    .foregroundColor(DS.Color.textSecondary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
-        .padding(.horizontal, DS.Spacing.lg)
-        .padding(.vertical, DS.Spacing.md)
-        .contentShape(Rectangle())
+        .padding(DS.Spacing.md)
+        .background(DS.Color.surface)
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Radius.lg)
+                .strokeBorder(isPending ? DS.Color.warning.opacity(0.20) : Color.clear, lineWidth: 1)
+        )
     }
 
-    // MARK: - Helpers
+    private func avatar(for member: FamilyMember?) -> some View {
+        DSMemberAvatar(
+            name: member?.firstName ?? "?",
+            avatarUrl: member?.avatarUrl,
+            size: 44,
+            roleColor: member?.roleColor ?? DS.Color.primary
+        )
+    }
 
-    private func lastPreview(of row: AdminRequest) -> String {
-        if let reply = row.adminReply?.trimmingCharacters(in: .whitespacesAndNewlines), !reply.isEmpty {
-            return L10n.t("أنت: ", "You: ") + reply
+    private func categoryChip(_ raw: String) -> some View {
+        let info = ContactCategoryInfo.from(raw: raw)
+        return HStack(spacing: 4) {
+            Image(systemName: info.icon)
+                .font(DS.Font.scaled(9, weight: .bold))
+            Text(info.title)
+                .font(DS.Font.scaled(10, weight: .bold))
         }
-        let parsed = ContactMessageParser.parse(row)
-        let text = parsed.message ?? row.details ?? ""
-        return text
-            .split(separator: "\n")
-            .map { String($0) }
-            .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("الموضوع:") }
-            .joined(separator: " ")
-            .trimmingCharacters(in: .whitespaces)
+        .foregroundColor(info.color)
+        .padding(.horizontal, DS.Spacing.sm)
+        .padding(.vertical, 3)
+        .background(info.color.opacity(0.12))
+        .clipShape(Capsule())
     }
 
-    private func timeAgo(_ d: Date) -> String {
+    private func relativeShort(_ d: Date) -> String {
         let secs = Int(Date().timeIntervalSince(d))
         if secs < 60 { return L10n.t("الآن", "Now") }
         if secs < 3600 { return L10n.t("\(secs/60) د", "\(secs/60)m") }
@@ -218,14 +273,278 @@ struct AdminInboxView: View {
     }
 }
 
-// MARK: - Conversation Model
+// MARK: - Message Detail Sheet
 
-private struct Conversation: Identifiable {
-    let memberId: UUID
-    let memberName: String
-    let memberFourPart: String
-    let lastMessagePreview: String
-    let lastMessageDate: Date?
-    let unreadCount: Int
-    var id: UUID { memberId }
+private struct MessageDetailSheet: View {
+    @EnvironmentObject var adminRequestVM: AdminRequestViewModel
+    let message: AdminRequest
+    let onDismiss: () -> Void
+
+    @State private var isMarking = false
+
+    var body: some View {
+        let category = ContactParser.category(of: message)
+        let body = ContactParser.message(from: message)
+        let phone = message.member?.phoneNumber ?? ""
+
+        ScrollView {
+            VStack(alignment: .leading, spacing: DS.Spacing.lg) {
+                // Sender
+                HStack(spacing: DS.Spacing.md) {
+                    DSMemberAvatar(
+                        name: message.member?.firstName ?? "?",
+                        avatarUrl: message.member?.avatarUrl,
+                        size: 52,
+                        roleColor: message.member?.roleColor ?? DS.Color.primary
+                    )
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(message.member?.fullName ?? L10n.t("عضو", "Member"))
+                            .font(DS.Font.headline)
+                            .foregroundColor(DS.Color.textPrimary)
+                        if !phone.isEmpty {
+                            Text(phone)
+                                .font(DS.Font.caption1)
+                                .foregroundColor(DS.Color.textSecondary)
+                        }
+                    }
+                    Spacer()
+                    let info = ContactCategoryInfo.from(raw: category)
+                    VStack(spacing: 2) {
+                        Image(systemName: info.icon)
+                            .font(DS.Font.scaled(13, weight: .bold))
+                            .foregroundColor(info.color)
+                            .frame(width: 34, height: 34)
+                            .background(info.color.opacity(0.14))
+                            .clipShape(Circle())
+                        Text(info.title)
+                            .font(DS.Font.caption2)
+                            .fontWeight(.semibold)
+                            .foregroundColor(DS.Color.textSecondary)
+                    }
+                }
+
+                Divider()
+
+                // Message body
+                VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                    Text(L10n.t("الرسالة", "Message"))
+                        .font(DS.Font.caption1)
+                        .fontWeight(.bold)
+                        .foregroundColor(DS.Color.textSecondary)
+                    Text(body)
+                        .font(DS.Font.body)
+                        .foregroundColor(DS.Color.textPrimary)
+                        .multilineTextAlignment(.leading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(DS.Spacing.md)
+                        .background(DS.Color.surface)
+                        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
+                }
+
+                // Reply actions
+                if !phone.isEmpty {
+                    VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                        Text(L10n.t("الرد على العضو", "Reply to member"))
+                            .font(DS.Font.caption1)
+                            .fontWeight(.bold)
+                            .foregroundColor(DS.Color.textSecondary)
+                        HStack(spacing: DS.Spacing.sm) {
+                            replyButton(
+                                title: L10n.t("اتصال", "Call"),
+                                icon: "phone.fill",
+                                color: DS.Color.success
+                            ) { openURL("tel:\(sanitize(phone))") }
+                            replyButton(
+                                title: L10n.t("واتساب", "WhatsApp"),
+                                icon: "message.fill",
+                                color: Color(hex: "#25D366")
+                            ) { openURL("https://wa.me/\(sanitize(phone))") }
+                        }
+                    }
+                }
+
+                // Mark handled
+                if message.status == ApprovalStatus.pending.rawValue {
+                    Button {
+                        Task { await markHandled() }
+                    } label: {
+                        HStack {
+                            if isMarking {
+                                ProgressView().tint(.white).scaleEffect(0.9)
+                            } else {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .font(DS.Font.scaled(15, weight: .bold))
+                            }
+                            Text(isMarking ? L10n.t("جارٍ…", "Working…") : L10n.t("تم التعامل", "Mark as Handled"))
+                                .font(DS.Font.calloutBold)
+                        }
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, DS.Spacing.md + 2)
+                        .background(DS.Color.gradientPrimary)
+                        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
+                    }
+                    .disabled(isMarking)
+                    .buttonStyle(DSScaleButtonStyle())
+                } else {
+                    HStack(spacing: DS.Spacing.sm) {
+                        Image(systemName: "checkmark.seal.fill")
+                            .foregroundColor(DS.Color.success)
+                        Text(L10n.t("تم التعامل مع هذه الرسالة", "This message was handled"))
+                            .font(DS.Font.callout)
+                            .foregroundColor(DS.Color.textSecondary)
+                        Spacer()
+                    }
+                    .padding(DS.Spacing.md)
+                    .background(DS.Color.success.opacity(0.10))
+                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
+                }
+
+                Spacer(minLength: DS.Spacing.lg)
+            }
+            .padding(DS.Spacing.lg)
+        }
+        .background(DS.Color.background)
+        .navigationTitle(L10n.t("تفاصيل الرسالة", "Message Detail"))
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func replyButton(title: String, icon: String, color: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: DS.Spacing.xs) {
+                Image(systemName: icon)
+                    .font(DS.Font.scaled(13, weight: .bold))
+                Text(title)
+                    .font(DS.Font.calloutBold)
+            }
+            .foregroundColor(color)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, DS.Spacing.sm + 2)
+            .background(color.opacity(0.12))
+            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Radius.md)
+                    .strokeBorder(color.opacity(0.25), lineWidth: 1)
+            )
+        }
+        .buttonStyle(DSScaleButtonStyle())
+    }
+
+    private func sanitize(_ phone: String) -> String {
+        phone.filter { $0.isNumber || $0 == "+" }
+    }
+
+    private func openURL(_ str: String) {
+        guard let url = URL(string: str) else { return }
+        UIApplication.shared.open(url)
+    }
+
+    @MainActor
+    private func markHandled() async {
+        isMarking = true
+        await adminRequestVM.markContactMessageHandled(message)
+        isMarking = false
+        onDismiss()
+    }
+}
+
+// MARK: - Helpers
+
+enum ContactParser {
+    private static let isoFull: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+    private static let isoBasic: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime]
+        return f
+    }()
+
+    /// تحويل ISO string لـ Date (يدعم بكسر ثواني أو بدونها).
+    static func date(_ str: String?) -> Date? {
+        guard let s = str, !s.isEmpty else { return nil }
+        return isoFull.date(from: s) ?? isoBasic.date(from: s)
+    }
+
+    /// التصنيف: من new_value مباشرة، fallback لتحليل details.
+    static func category(of msg: AdminRequest) -> String {
+        if let nv = msg.newValue?.trimmingCharacters(in: .whitespacesAndNewlines), !nv.isEmpty {
+            return nv
+        }
+        guard let details = msg.details else { return "—" }
+        for line in details.components(separatedBy: .newlines) {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.hasPrefix("التصنيف:") {
+                return String(trimmed.dropFirst("التصنيف:".count)).trimmingCharacters(in: .whitespaces)
+            }
+            if trimmed.lowercased().hasPrefix("category:") {
+                return String(trimmed.dropFirst("category:".count)).trimmingCharacters(in: .whitespaces)
+            }
+        }
+        return "—"
+    }
+
+    /// نص الرسالة: من سطر "الرسالة:" أو "Message:" — fallback للنص الكامل.
+    static func message(from msg: AdminRequest) -> String {
+        guard let details = msg.details else { return "" }
+        let lines = details.components(separatedBy: .newlines)
+        var capturing = false
+        var collected: [String] = []
+        for line in lines {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.hasPrefix("الرسالة:") {
+                capturing = true
+                let rest = String(trimmed.dropFirst("الرسالة:".count)).trimmingCharacters(in: .whitespaces)
+                if !rest.isEmpty { collected.append(rest) }
+                continue
+            }
+            if trimmed.lowercased().hasPrefix("message:") {
+                capturing = true
+                let rest = String(trimmed.dropFirst("message:".count)).trimmingCharacters(in: .whitespaces)
+                if !rest.isEmpty { collected.append(rest) }
+                continue
+            }
+            if trimmed.hasPrefix("التصنيف:") || trimmed.lowercased().hasPrefix("category:") {
+                continue
+            }
+            if trimmed.hasPrefix("وسيلة التواصل:") || trimmed.lowercased().hasPrefix("preferred contact:") {
+                capturing = false
+                continue
+            }
+            if capturing && !trimmed.isEmpty { collected.append(trimmed) }
+        }
+        if collected.isEmpty {
+            return details
+                .components(separatedBy: .newlines)
+                .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("التصنيف:") }
+                .joined(separator: " ")
+                .trimmingCharacters(in: .whitespaces)
+        }
+        return collected.joined(separator: "\n")
+    }
+}
+
+/// عرض موحّد للتصنيف (لون/أيقونة/ترجمة) بناءً على نص خام من قاعدة البيانات.
+struct ContactCategoryInfo {
+    let title: String
+    let icon: String
+    let color: Color
+
+    static func from(raw: String) -> ContactCategoryInfo {
+        let trimmed = raw.trimmingCharacters(in: .whitespaces)
+        switch trimmed {
+        case "شكوى", "complaint", "Complaint":
+            return .init(title: L10n.t("شكوى", "Complaint"), icon: "exclamationmark.bubble.fill", color: DS.Color.error)
+        case "اقتراح", "suggestion", "Suggestion":
+            return .init(title: L10n.t("اقتراح", "Suggestion"), icon: "lightbulb.fill", color: DS.Color.success)
+        case "استفسار", "inquiry", "Inquiry":
+            return .init(title: L10n.t("استفسار", "Inquiry"), icon: "questionmark.bubble.fill", color: DS.Color.primary)
+        case "أخرى", "other", "Other":
+            return .init(title: L10n.t("أخرى", "Other"), icon: "ellipsis.message.fill", color: DS.Color.accent)
+        default:
+            return .init(title: trimmed.isEmpty ? "—" : trimmed, icon: "envelope.fill", color: DS.Color.textSecondary)
+        }
+    }
 }

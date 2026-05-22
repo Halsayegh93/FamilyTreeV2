@@ -1,0 +1,352 @@
+import SwiftUI
+
+/// نموذج تواصل بسيط — لا دردشة، لا تاريخ.
+/// العضو يختار تصنيف + يكتب رسالة + يرسل → شاشة تأكيد.
+struct MemberContactFormView: View {
+    @EnvironmentObject var authVM: AuthViewModel
+    @Environment(\.colorScheme) private var colorScheme
+
+    @State private var selectedCategory: ContactCategory = .inquiry
+    @State private var message: String = ""
+    @State private var isSending = false
+    @State private var didSend = false
+    @State private var errorText: String? = nil
+    @FocusState private var messageFocused: Bool
+
+    private let maxLength = 1000
+
+    var body: some View {
+        ZStack {
+            DS.Color.background.ignoresSafeArea()
+
+            if didSend {
+                successState
+                    .transition(.opacity.combined(with: .scale(scale: 0.95)))
+            } else {
+                formState
+                    .transition(.opacity)
+            }
+        }
+        .animation(DS.Anim.smooth, value: didSend)
+    }
+
+    // MARK: - حالة الإدخال
+    private var formState: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: DS.Spacing.xl) {
+                introCard
+
+                categoryPicker
+
+                messageField
+
+                if let err = errorText {
+                    errorBanner(err)
+                }
+
+                sendButton
+
+                Spacer(minLength: DS.Spacing.xxxl)
+            }
+            .padding(.horizontal, DS.Spacing.lg)
+            .padding(.top, DS.Spacing.md)
+            .padding(.bottom, DS.Spacing.xxxxl)
+        }
+    }
+
+    // MARK: - شرح مختصر
+    private var introCard: some View {
+        HStack(alignment: .top, spacing: DS.Spacing.md) {
+            ZStack {
+                Circle()
+                    .fill(DS.Color.primary.opacity(0.12))
+                    .frame(width: 44, height: 44)
+                Image(systemName: "envelope.fill")
+                    .font(DS.Font.scaled(18, weight: .semibold))
+                    .foregroundColor(DS.Color.primary)
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(L10n.t("تواصل مع الإدارة", "Contact Admin"))
+                    .font(DS.Font.headline)
+                    .foregroundColor(DS.Color.textPrimary)
+                Text(L10n.t(
+                    "اكتب رسالتك وراح ترد عليك الإدارة بأقرب وقت.",
+                    "Write your message and admin will get back to you."
+                ))
+                .font(DS.Font.caption1)
+                .foregroundColor(DS.Color.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(DS.Spacing.md)
+        .background(DS.Color.surface)
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
+    }
+
+    // MARK: - اختيار التصنيف
+    private var categoryPicker: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            Text(L10n.t("التصنيف", "Category"))
+                .font(DS.Font.caption1)
+                .fontWeight(.bold)
+                .foregroundColor(DS.Color.textSecondary)
+
+            LazyVGrid(
+                columns: [GridItem(.flexible()), GridItem(.flexible())],
+                spacing: DS.Spacing.sm
+            ) {
+                ForEach(ContactCategory.allCases, id: \.self) { cat in
+                    categoryChip(cat)
+                }
+            }
+        }
+    }
+
+    private func categoryChip(_ cat: ContactCategory) -> some View {
+        let selected = selectedCategory == cat
+        return Button {
+            withAnimation(DS.Anim.snappy) { selectedCategory = cat }
+        } label: {
+            HStack(spacing: DS.Spacing.sm) {
+                Image(systemName: cat.icon)
+                    .font(DS.Font.scaled(13, weight: .bold))
+                    .foregroundColor(selected ? .white : cat.color)
+                    .frame(width: 28, height: 28)
+                    .background(selected ? cat.color : cat.color.opacity(0.14))
+                    .clipShape(Circle())
+                Text(cat.title)
+                    .font(DS.Font.scaled(13, weight: .semibold))
+                    .foregroundColor(DS.Color.textPrimary)
+                Spacer(minLength: 0)
+                if selected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(DS.Font.scaled(15, weight: .bold))
+                        .foregroundColor(cat.color)
+                }
+            }
+            .padding(.horizontal, DS.Spacing.md)
+            .padding(.vertical, DS.Spacing.sm)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(selected ? cat.color.opacity(0.08) : DS.Color.surface)
+            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Radius.md)
+                    .strokeBorder(selected ? cat.color.opacity(0.35) : Color.clear, lineWidth: 1.5)
+            )
+        }
+        .buttonStyle(DSScaleButtonStyle())
+    }
+
+    // MARK: - حقل الرسالة
+    private var messageField: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            HStack {
+                Text(L10n.t("الرسالة", "Message"))
+                    .font(DS.Font.caption1)
+                    .fontWeight(.bold)
+                    .foregroundColor(DS.Color.textSecondary)
+                Spacer()
+                Text("\(message.count)/\(maxLength)")
+                    .font(DS.Font.caption2)
+                    .foregroundColor(message.count > maxLength ? DS.Color.error : DS.Color.textTertiary)
+            }
+
+            ZStack(alignment: .topLeading) {
+                if message.isEmpty {
+                    Text(L10n.t("اكتب رسالتك هنا…", "Type your message here…"))
+                        .font(DS.Font.body)
+                        .foregroundColor(DS.Color.textTertiary)
+                        .padding(.horizontal, DS.Spacing.md + 4)
+                        .padding(.vertical, DS.Spacing.md + 8)
+                }
+                TextEditor(text: $message)
+                    .focused($messageFocused)
+                    .font(DS.Font.body)
+                    .scrollContentBackground(.hidden)
+                    .padding(DS.Spacing.sm)
+                    .frame(minHeight: 160, maxHeight: 240)
+            }
+            .background(DS.Color.surface)
+            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Radius.md)
+                    .strokeBorder(
+                        messageFocused ? DS.Color.primary.opacity(0.35) : DS.Color.textTertiary.opacity(0.15),
+                        lineWidth: messageFocused ? 1.5 : 1
+                    )
+            )
+        }
+    }
+
+    // MARK: - بانر خطأ
+    private func errorBanner(_ text: String) -> some View {
+        HStack(spacing: DS.Spacing.sm) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundColor(DS.Color.error)
+            Text(text)
+                .font(DS.Font.caption1)
+                .foregroundColor(DS.Color.textPrimary)
+                .lineLimit(3)
+            Spacer(minLength: 0)
+        }
+        .padding(DS.Spacing.sm)
+        .background(DS.Color.error.opacity(0.10))
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
+    }
+
+    // MARK: - زر الإرسال
+    private var sendButton: some View {
+        Button {
+            Task { await send() }
+        } label: {
+            HStack(spacing: DS.Spacing.sm) {
+                if isSending {
+                    ProgressView()
+                        .tint(.white)
+                        .scaleEffect(0.9)
+                } else {
+                    Image(systemName: "paperplane.fill")
+                        .font(DS.Font.scaled(14, weight: .bold))
+                }
+                Text(isSending ? L10n.t("جارٍ الإرسال…", "Sending…") : L10n.t("إرسال", "Send"))
+                    .font(DS.Font.calloutBold)
+            }
+            .foregroundColor(.white)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, DS.Spacing.md + 4)
+            .background(canSend ? DS.Color.gradientPrimary : LinearGradient(colors: [DS.Color.textTertiary.opacity(0.4)], startPoint: .leading, endPoint: .trailing))
+            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
+        }
+        .disabled(!canSend || isSending)
+        .buttonStyle(DSScaleButtonStyle())
+    }
+
+    private var canSend: Bool {
+        let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
+        return !trimmed.isEmpty && trimmed.count <= maxLength
+    }
+
+    // MARK: - حالة النجاح
+    private var successState: some View {
+        VStack(spacing: DS.Spacing.lg) {
+            Spacer()
+
+            ZStack {
+                Circle()
+                    .fill(DS.Color.success.opacity(0.15))
+                    .frame(width: 120, height: 120)
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 80, weight: .bold))
+                    .foregroundColor(DS.Color.success)
+            }
+
+            VStack(spacing: DS.Spacing.sm) {
+                Text(L10n.t("تم استلام رسالتك", "Message Received"))
+                    .font(DS.Font.title2)
+                    .fontWeight(.bold)
+                    .foregroundColor(DS.Color.textPrimary)
+                Text(L10n.t(
+                    "شكراً لتواصلك. راح ترد عليك الإدارة بأقرب وقت.",
+                    "Thank you. Admin will reach out shortly."
+                ))
+                .font(DS.Font.callout)
+                .foregroundColor(DS.Color.textSecondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, DS.Spacing.lg)
+            }
+
+            Spacer()
+
+            Button {
+                resetForm()
+            } label: {
+                Text(L10n.t("إرسال رسالة جديدة", "Send Another"))
+                    .font(DS.Font.calloutBold)
+                    .foregroundColor(DS.Color.primary)
+                    .padding(.horizontal, DS.Spacing.xl)
+                    .padding(.vertical, DS.Spacing.md)
+                    .background(DS.Color.primary.opacity(0.10))
+                    .clipShape(Capsule())
+                    .overlay(
+                        Capsule()
+                            .strokeBorder(DS.Color.primary.opacity(0.25), lineWidth: 1)
+                    )
+            }
+            .buttonStyle(DSScaleButtonStyle())
+            .padding(.bottom, DS.Spacing.xxxl)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    // MARK: - Actions
+
+    @MainActor
+    private func send() async {
+        errorText = nil
+        messageFocused = false
+        isSending = true
+        let ok = await authVM.sendContactMessage(
+            category: selectedCategory.serverValue,
+            message: message.trimmingCharacters(in: .whitespacesAndNewlines),
+            preferredContact: nil
+        )
+        isSending = false
+        if ok {
+            withAnimation(DS.Anim.smooth) { didSend = true }
+        } else {
+            errorText = authVM.contactMessageError ?? L10n.t("تعذر إرسال الرسالة. حاول مرة ثانية.", "Failed to send. Please try again.")
+        }
+    }
+
+    private func resetForm() {
+        message = ""
+        selectedCategory = .inquiry
+        errorText = nil
+        withAnimation(DS.Anim.smooth) { didSend = false }
+    }
+}
+
+// MARK: - التصنيفات الأربعة
+
+enum ContactCategory: CaseIterable {
+    case complaint, suggestion, inquiry, other
+
+    var title: String {
+        switch self {
+        case .complaint: return L10n.t("شكوى", "Complaint")
+        case .suggestion: return L10n.t("اقتراح", "Suggestion")
+        case .inquiry: return L10n.t("استفسار", "Inquiry")
+        case .other: return L10n.t("أخرى", "Other")
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .complaint: return "exclamationmark.bubble.fill"
+        case .suggestion: return "lightbulb.fill"
+        case .inquiry: return "questionmark.bubble.fill"
+        case .other: return "ellipsis.message.fill"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .complaint: return DS.Color.error
+        case .suggestion: return DS.Color.success
+        case .inquiry: return DS.Color.primary
+        case .other: return DS.Color.accent
+        }
+    }
+
+    /// القيمة المخزنة في قاعدة البيانات (ثابتة بالعربي للتوافق مع الخلفية).
+    var serverValue: String {
+        switch self {
+        case .complaint: return "شكوى"
+        case .suggestion: return "اقتراح"
+        case .inquiry: return "استفسار"
+        case .other: return "أخرى"
+        }
+    }
+}

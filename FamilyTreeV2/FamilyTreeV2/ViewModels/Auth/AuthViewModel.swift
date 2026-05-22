@@ -1411,52 +1411,6 @@ class AuthViewModel: ObservableObject {
     
     // MARK: - Contact
 
-    /// رسائل العضو الحالي مع الإدارة (طلبات contact_message التي أرسلها).
-    /// يستخدمها MyContactRepliesView لعرض الـ thread.
-    @Published var myContactMessages: [AdminRequest] = []
-
-    /// عدد الردود غير المقروءة (admin_reply موجود وأحدث من آخر فتح).
-    var unreadAdminRepliesCount: Int {
-        myContactMessages.filter { msg in
-            guard let reply = msg.adminReply?.trimmingCharacters(in: .whitespacesAndNewlines), !reply.isEmpty else { return false }
-            guard let repliedAt = msg.repliedAt else { return false }
-            return repliedAt > (lastSeenRepliesAt ?? "")
-        }.count
-    }
-
-    /// تاريخ آخر فتح لشاشة الردود — يُخزَّن في UserDefaults.
-    private var lastSeenRepliesAt: String? {
-        get { UserDefaults.standard.string(forKey: "lastSeenAdminRepliesAt") }
-    }
-
-    /// تعليم الردود كمقروءة (يُحدّث lastSeenRepliesAt للوقت الحالي).
-    func markAdminRepliesSeen() {
-        let nowISO = ISO8601DateFormatter().string(from: Date())
-        UserDefaults.standard.set(nowISO, forKey: "lastSeenAdminRepliesAt")
-        objectWillChange.send()
-    }
-
-    /// جلب رسائل العضو الحالي المرسلة لشاشة "التواصل".
-    /// يفلتر فقط على request_type = contact_message + requester_id = current user.
-    func fetchMyContactMessages(force: Bool = false) async {
-        guard let user = currentUser else { return }
-        do {
-            let requests: [AdminRequest] = try await supabase
-                .from("admin_requests")
-                .select()
-                .eq("request_type", value: "contact_message")
-                .eq("requester_id", value: user.id.uuidString)
-                .order("created_at", ascending: false)
-                .limit(100)
-                .execute()
-                .value
-            self.myContactMessages = requests
-            Log.info("[MyContact] جلب \(requests.count) رسالة")
-        } catch {
-            Log.error("[MyContact] فشل جلب الرسائل: \(error.localizedDescription)")
-        }
-    }
-
     func sendContactMessage(category: String, message: String, preferredContact: String?) async -> Bool {
         guard let user = currentUser else {
             Log.error("[Contact] ❌ لا يوجد مستخدم حالي — تم إلغاء الإرسال")
@@ -1467,7 +1421,6 @@ class AuthViewModel: ObservableObject {
         contactMessageError = nil
 
         let cleanMessage = message.trimmingCharacters(in: .whitespacesAndNewlines)
-        let cleanContact = preferredContact?.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleanMessage.isEmpty else {
             Log.warning("[Contact] ⚠️ الرسالة فارغة — تم الإلغاء")
             contactMessageError = "الرسالة فارغة."
@@ -1478,7 +1431,6 @@ class AuthViewModel: ObservableObject {
         let details = """
         التصنيف: \(category)
         الرسالة: \(cleanMessage)
-        وسيلة التواصل: \(cleanContact.flatMap { $0.isEmpty ? nil : $0 } ?? "غير محدد")
         """
 
         do {
@@ -1519,7 +1471,6 @@ class AuthViewModel: ObservableObject {
             let emailPayload: [String: AnyEncodable] = [
                 "category": AnyEncodable(category),
                 "message": AnyEncodable(cleanMessage),
-                "preferred_contact": AnyEncodable(cleanContact),
                 "sender_name": AnyEncodable(user.fullName),
                 "sender_phone": AnyEncodable(user.phoneNumber)
             ]
