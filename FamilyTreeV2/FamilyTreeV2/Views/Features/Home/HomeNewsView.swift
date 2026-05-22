@@ -7,6 +7,7 @@ struct HomeNewsView: View {
     @EnvironmentObject var storyVM: StoryViewModel
     @EnvironmentObject var notificationVM: NotificationViewModel
     @EnvironmentObject var appSettingsVM: AppSettingsViewModel
+    @EnvironmentObject var adminRequestVM: AdminRequestViewModel
     @Environment(\.colorScheme) private var colorScheme
     @Binding var selectedTab: Int
     @State private var showingAddNews = false
@@ -53,6 +54,13 @@ struct HomeNewsView: View {
                                     .opacity(appeared ? 1 : 0)
                                     .offset(y: appeared ? 0 : 15)
 
+                                // لوحة الإدارة السريعة — تظهر للمراقبين فقط بعد التواصل والمشاريع
+                                if authVM.canModerate {
+                                    adminQuickPanelSection
+                                        .opacity(appeared ? 1 : 0)
+                                        .offset(y: appeared ? 0 : 18)
+                                }
+
                                 // ستوري العائلة
                                 if appSettingsVM.settings.storiesEnabled ?? true {
                                     realStoriesSection
@@ -98,6 +106,20 @@ struct HomeNewsView: View {
                 await memberVM.fetchApprovedGalleryPhotos()
                 rebuildGalleryMembers()
                 rebuildStoryGroups()
+
+                // جلب بيانات لوحة الإدارة السريعة — فقط لمن لديه صلاحية
+                if authVM.canModerate {
+                    await withTaskGroup(of: Void.self) { group in
+                        group.addTask { @MainActor in await adminRequestVM.fetchDeceasedRequests() }
+                        group.addTask { @MainActor in await adminRequestVM.fetchChildAddRequests() }
+                        group.addTask { @MainActor in await adminRequestVM.fetchPhoneChangeRequests() }
+                        group.addTask { @MainActor in await adminRequestVM.fetchNewsReportRequests() }
+                        group.addTask { @MainActor in await adminRequestVM.fetchTreeEditRequests() }
+                        group.addTask { @MainActor in await adminRequestVM.fetchNameChangeRequests() }
+                        group.addTask { @MainActor in await adminRequestVM.fetchPhotoSuggestionRequests() }
+                        group.addTask { @MainActor in await newsVM.fetchPendingNewsRequests() }
+                    }
+                }
             }
             .onChange(of: storyVM.membersWithStories.count) { _ in rebuildStoryGroups() }
             .onChange(of: memberVM.approvedGalleryPhotos.count) { _ in rebuildGalleryMembers() }
@@ -719,6 +741,285 @@ struct HomeNewsView: View {
 
     private func toggleLike(for postId: UUID) {
         Task { await newsVM.toggleNewsLike(for: postId) }
+    }
+
+    // MARK: - Admin Quick Panel (visible only to moderators)
+    private struct AdminActivityItem: Identifiable {
+        let id: UUID
+        let icon: String
+        let color: Color
+        let title: String
+        let subtitle: String
+        let date: Date
+    }
+
+    private static let isoFormatterNoFrac: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime]
+        return f
+    }()
+
+    private func parseISO(_ str: String?) -> Date? {
+        guard let s = str, !s.isEmpty else { return nil }
+        return Self.isoFormatter.date(from: s) ?? Self.isoFormatterNoFrac.date(from: s)
+    }
+
+    private var adminPendingTotalCount: Int {
+        adminRequestVM.deceasedRequests.count
+            + adminRequestVM.childAddRequests.count
+            + adminRequestVM.phoneChangeRequests.count
+            + adminRequestVM.newsReportRequests.count
+            + adminRequestVM.treeEditRequests.count
+            + adminRequestVM.nameChangeRequests.count
+            + adminRequestVM.photoSuggestionRequests.count
+            + newsVM.pendingNewsRequests.count
+            + memberVM.allMembers.filter { $0.role == .pending }.count
+    }
+
+    private var newMembersTodayCount: Int {
+        let cal = Calendar.current
+        let today = Date()
+        return memberVM.allMembers.filter { m in
+            guard let d = parseISO(m.createdAt) else { return false }
+            return cal.isDate(d, inSameDayAs: today)
+        }.count
+    }
+
+    private var recentAdminActivity: [AdminActivityItem] {
+        var items: [AdminActivityItem] = []
+
+        for m in memberVM.allMembers where m.role == .pending {
+            if let d = parseISO(m.createdAt) {
+                items.append(.init(
+                    id: m.id,
+                    icon: "person.badge.plus",
+                    color: DS.Color.success,
+                    title: L10n.t("تسجيل جديد", "New registration"),
+                    subtitle: m.fullName,
+                    date: d
+                ))
+            }
+        }
+
+        for r in adminRequestVM.deceasedRequests {
+            if let d = parseISO(r.createdAt) {
+                items.append(.init(
+                    id: r.id,
+                    icon: "heart.slash.fill",
+                    color: DS.Color.error,
+                    title: L10n.t("طلب وفاة", "Death request"),
+                    subtitle: r.member?.fullName ?? "",
+                    date: d
+                ))
+            }
+        }
+
+        for r in adminRequestVM.childAddRequests {
+            if let d = parseISO(r.createdAt) {
+                items.append(.init(
+                    id: r.id,
+                    icon: "person.2.fill",
+                    color: DS.Color.accent,
+                    title: L10n.t("طلب إضافة ابن", "Add child request"),
+                    subtitle: r.member?.fullName ?? "",
+                    date: d
+                ))
+            }
+        }
+
+        for n in newsVM.pendingNewsRequests {
+            items.append(.init(
+                id: n.id,
+                icon: "newspaper.fill",
+                color: DS.Color.primary,
+                title: L10n.t("خبر بانتظار الموافقة", "News pending"),
+                subtitle: n.author_name,
+                date: n.timestamp
+            ))
+        }
+
+        return Array(items.sorted { $0.date > $1.date }.prefix(3))
+    }
+
+    private var adminQuickPanelSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Section header — مطابق لنمط أخبار العائلة
+            HStack(spacing: DS.Spacing.sm) {
+                Image(systemName: "shield.lefthalf.filled")
+                    .font(DS.Font.scaled(14, weight: .semibold))
+                    .foregroundColor(DS.Color.textOnPrimary)
+                    .frame(width: 30, height: 30)
+                    .background(DS.Color.gradientPrimary)
+                    .clipShape(Circle())
+
+                Text(L10n.t("لوحة الإدارة", "Admin Panel"))
+                    .font(DS.Font.headline)
+                    .foregroundColor(DS.Color.textPrimary)
+
+                Spacer()
+            }
+            .padding(.horizontal, DS.Spacing.lg)
+            .padding(.vertical, DS.Spacing.sm)
+
+            VStack(spacing: DS.Spacing.md) {
+                // الإحصائيات
+                HStack(spacing: DS.Spacing.sm) {
+                    adminStatChip(
+                        title: L10n.t("طلبات", "Requests"),
+                        value: adminPendingTotalCount,
+                        icon: "tray.full.fill",
+                        color: DS.Color.warning
+                    )
+                    adminStatChip(
+                        title: L10n.t("جدد اليوم", "New Today"),
+                        value: newMembersTodayCount,
+                        icon: "person.badge.plus",
+                        color: DS.Color.success
+                    )
+                    adminStatChip(
+                        title: L10n.t("أخبار", "News"),
+                        value: newsVM.pendingNewsRequests.count,
+                        icon: "newspaper.fill",
+                        color: DS.Color.accent
+                    )
+                }
+
+                // بانر تحذيري — فقط لو فيه طلبات معلّقة
+                if adminPendingTotalCount > 0 {
+                    adminWarningBanner
+                }
+
+                // آخر النشاط الإداري
+                if !recentAdminActivity.isEmpty {
+                    VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                        Text(L10n.t("آخر النشاط", "Recent Activity"))
+                            .font(DS.Font.caption1)
+                            .fontWeight(.bold)
+                            .foregroundColor(DS.Color.textSecondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.bottom, DS.Spacing.xs)
+
+                        ForEach(recentAdminActivity) { item in
+                            adminActivityRow(item)
+                        }
+                    }
+                }
+
+                // CTA — انتقال للوحة الإدارة الكاملة
+                Button {
+                    selectedTab = 4
+                } label: {
+                    HStack(spacing: DS.Spacing.xs) {
+                        Text(L10n.t("الانتقال للوحة الإدارة", "Open Admin Dashboard"))
+                            .font(DS.Font.callout)
+                            .fontWeight(.semibold)
+                        Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
+                            .font(DS.Font.scaled(12, weight: .bold))
+                    }
+                    .foregroundColor(DS.Color.textOnPrimary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, DS.Spacing.md)
+                    .background(DS.Color.gradientPrimary)
+                    .clipShape(Capsule())
+                }
+                .buttonStyle(DSScaleButtonStyle())
+            }
+            .padding(DS.Spacing.lg)
+            .background(DS.Color.surface)
+            .cornerRadius(DS.Radius.lg)
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Radius.lg)
+                    .stroke(DS.Color.primary.opacity(0.15), lineWidth: 1)
+            )
+            .dsCardShadow()
+            .padding(.horizontal, DS.Spacing.lg)
+        }
+    }
+
+    private func adminStatChip(title: String, value: Int, icon: String, color: Color) -> some View {
+        VStack(spacing: DS.Spacing.xs) {
+            ZStack {
+                Circle().fill(color.opacity(0.12)).frame(width: 32, height: 32)
+                Image(systemName: icon)
+                    .font(DS.Font.scaled(13, weight: .bold))
+                    .foregroundColor(color)
+            }
+
+            Text("\(value)")
+                .font(DS.Font.title3)
+                .fontWeight(.black)
+                .foregroundColor(DS.Color.textPrimary)
+
+            Text(title)
+                .font(DS.Font.caption2)
+                .foregroundColor(DS.Color.textSecondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, DS.Spacing.sm)
+        .background(DS.Color.background)
+        .cornerRadius(DS.Radius.md)
+    }
+
+    private var adminWarningBanner: some View {
+        HStack(spacing: DS.Spacing.sm) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(DS.Font.scaled(14, weight: .bold))
+                .foregroundColor(DS.Color.warning)
+
+            Text(L10n.t(
+                "عندك \(adminPendingTotalCount) طلب ينتظر مراجعتك",
+                "\(adminPendingTotalCount) requests awaiting your review"
+            ))
+            .font(DS.Font.caption1)
+            .fontWeight(.semibold)
+            .foregroundColor(DS.Color.textPrimary)
+            .lineLimit(2)
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, DS.Spacing.md)
+        .padding(.vertical, DS.Spacing.sm)
+        .background(DS.Color.warning.opacity(0.1))
+        .cornerRadius(DS.Radius.md)
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Radius.md)
+                .stroke(DS.Color.warning.opacity(0.25), lineWidth: 1)
+        )
+    }
+
+    private func adminActivityRow(_ item: AdminActivityItem) -> some View {
+        HStack(spacing: DS.Spacing.sm) {
+            ZStack {
+                Circle().fill(item.color.opacity(0.15)).frame(width: 28, height: 28)
+                Image(systemName: item.icon)
+                    .font(DS.Font.scaled(11, weight: .semibold))
+                    .foregroundColor(item.color)
+            }
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(item.title)
+                    .font(DS.Font.caption1)
+                    .fontWeight(.semibold)
+                    .foregroundColor(DS.Color.textPrimary)
+                    .lineLimit(1)
+                if !item.subtitle.isEmpty {
+                    Text(item.subtitle)
+                        .font(DS.Font.caption2)
+                        .foregroundColor(DS.Color.textSecondary)
+                        .lineLimit(1)
+                }
+            }
+
+            Spacer(minLength: DS.Spacing.sm)
+
+            Text(getRelativeTime(for: item.date))
+                .font(DS.Font.caption2)
+                .foregroundColor(DS.Color.textTertiary)
+                .lineLimit(1)
+        }
+        .padding(.vertical, DS.Spacing.xs)
     }
 
     @MainActor
