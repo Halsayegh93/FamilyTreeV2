@@ -38,7 +38,8 @@ struct MainTabView: View {
                 }
                 .tag(0)
 
-            TreeView(selectedTab: $selectedTab)
+            // مغلّف يسمح بالتبديل بين الواجهة الكلاسيكية والتجربة الجديدة
+            TreeTabContainer(selectedTab: $selectedTab)
                 .tabItem {
                     Image(systemName: selectedTab == 1 ? "tree.fill" : "tree")
                     Text(L10n.t("الشجرة", "Tree"))

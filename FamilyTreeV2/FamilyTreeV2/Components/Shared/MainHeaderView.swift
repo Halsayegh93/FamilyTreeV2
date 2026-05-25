@@ -139,9 +139,9 @@ struct MainHeaderView<TrailingContent: View>: View {
                 .opacity(isAnimating ? 1.0 : 0.0)
             }
             .padding(.horizontal, DS.Spacing.lg)
-            .padding(.bottom, DS.Spacing.md)
-            .padding(.top, DS.Spacing.sm)
-            .frame(minHeight: 86, alignment: .bottom)
+            .padding(.bottom, DS.Spacing.sm)
+            .padding(.top, 0)
+            .frame(minHeight: 70, alignment: .bottom)
 
             Rectangle()
                 .fill(DS.Color.headerBorder)

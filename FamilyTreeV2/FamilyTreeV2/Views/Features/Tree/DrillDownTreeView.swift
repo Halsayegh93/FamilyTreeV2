@@ -1,0 +1,454 @@
+import SwiftUI
+
+/// شجرة بنمط drill-down متراكم — كل مستوى يضاف **أسفل** السابق.
+/// كل عضو = مربع موحّد الحجم. السلف يظهر مرة واحدة (بدون شبكة)،
+/// والعضو النشط (الأخير) يظهر مع شبكة أبنائه بترتيب ذكي حسب العدد.
+///
+/// **ملاحظة**: هذا الملف موجود للتجربة. مربوط حالياً عبر TreeTabContainer.
+struct DrillDownTreeView: View {
+    @EnvironmentObject var memberVM: MemberViewModel
+    @EnvironmentObject var authVM: AuthViewModel
+    @Binding var selectedTab: Int
+
+    /// السلسلة الكاملة: الجذر → الأقرب. آخر عضو = النشط.
+    @State private var chain: [FamilyMember] = []
+    @State private var selectedMemberForDetails: FamilyMember? = nil
+    @State private var showingNotifications = false
+    @State private var showSearchBar = false
+    @State private var scrollTarget: UUID? = nil
+
+    /// الحجم الموحّد لمربع العضو.
+    private let squareSize: CGFloat = 120
+
+    /// استخراج السنة (4 أرقام) من نص تاريخ قد يكون بأي صيغة (YYYY-MM-DD، YYYY/M/D، YYYY فقط).
+    private func year(from dateString: String?) -> String? {
+        guard let s = dateString?.trimmingCharacters(in: .whitespacesAndNewlines), !s.isEmpty else { return nil }
+        if let range = s.range(of: "\\d{4}", options: .regularExpression) {
+            return String(s[range])
+        }
+        return nil
+    }
+
+    // MARK: - Helpers
+
+    private var roots: [FamilyMember] {
+        let visible = memberVM.allMembers.filter(\.isCountable)
+        let byId = Dictionary(uniqueKeysWithValues: visible.map { ($0.id, $0) })
+        let fatherIds = Set(visible.compactMap(\.fatherId))
+        return visible.filter { m in
+            guard let fid = m.fatherId else { return fatherIds.contains(m.id) }
+            return byId[fid] == nil
+        }.sortedForDisplay()
+    }
+
+    private func children(of memberId: UUID) -> [FamilyMember] {
+        memberVM.allMembers
+            .filter { $0.fatherId == memberId && $0.isCountable }
+            .sortedForDisplay()
+    }
+
+    /// ترتيب صفوف الأبناء: دائماً 3 لكل صف، الصف الأخير حسب الباقي.
+    /// 1→1، 2→2، 3→3، 4→3+1، 5→3+2، 6→3+3، 7→3+3+1، ...
+    private func smartRows(_ kids: [FamilyMember]) -> [[FamilyMember]] {
+        let n = kids.count
+        guard n > 0 else { return [] }
+        let perRow = 3
+        if n <= perRow { return [kids] }
+        let full = n / perRow
+        let rem = n % perRow
+        let counts = Array(repeating: perRow, count: full) + (rem > 0 ? [rem] : [])
+        var rows: [[FamilyMember]] = []
+        var idx = 0
+        for c in counts {
+            rows.append(Array(kids[idx..<idx + c]))
+            idx += c
+        }
+        return rows
+    }
+
+    // MARK: - Body
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                DS.Color.background.ignoresSafeArea()
+
+                VStack(spacing: 0) {
+                    MainHeaderView(
+                        selectedTab: $selectedTab,
+                        showingNotifications: $showingNotifications,
+                        title: L10n.t("الشجرة", "Family Tree"),
+                        subtitle: L10n.t("تصفّح بالتفرّع", "Drill-down")
+                    )
+
+                    // منطقة ثابتة: البحث (يظهر عند الضغط على زر البحث)، ثم البداية + موقعي
+                    VStack(spacing: DS.Spacing.sm) {
+                        if showSearchBar {
+                            TreeSearchOverlay { member in
+                                jumpTo(member)
+                                withAnimation(DS.Anim.snappy) { showSearchBar = false }
+                            }
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                        }
+                        stickyActionsBar
+                    }
+                    .padding(.horizontal, DS.Spacing.lg)
+                    .padding(.top, DS.Spacing.sm)
+                    .padding(.bottom, DS.Spacing.xs)
+                    .animation(DS.Anim.snappy, value: showSearchBar)
+
+                    if memberVM.allMembers.isEmpty {
+                        Spacer()
+                        emptyState
+                        Spacer()
+                    } else if chain.isEmpty {
+                        Spacer()
+                        ProgressView().tint(DS.Color.primary)
+                        Spacer()
+                    } else {
+                        ScrollViewReader { proxy in
+                            ScrollView(showsIndicators: false) {
+                                VStack(spacing: DS.Spacing.md) {
+                                    ForEach(Array(chain.enumerated()), id: \.element.id) { idx, member in
+                                        let isLast = idx == chain.count - 1
+
+                                        // مربع العضو (مركّز)
+                                        ancestorOrActiveSquare(member, atIndex: idx, isActive: isLast)
+                                            .id(member.id)
+
+                                        if isLast {
+                                            // شبكة أبناء النشط
+                                            childrenGridSection(of: member, atSectionIndex: idx)
+                                        } else {
+                                            chainConnector
+                                        }
+                                    }
+                                }
+                                .padding(.horizontal, DS.Spacing.lg)
+                                .padding(.top, DS.Spacing.sm)
+                                .padding(.bottom, DS.Spacing.xxxxl)
+                            }
+                            .onChange(of: scrollTarget) { newId in
+                                guard let id = newId else { return }
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                                    withAnimation(.easeInOut(duration: 0.45)) {
+                                        proxy.scrollTo(id, anchor: .center)
+                                    }
+                                    scrollTarget = nil
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .toolbar(.hidden, for: .navigationBar)
+            .onAppear { initializeChainIfNeeded() }
+            .onChange(of: memberVM.allMembers.count) { _ in initializeChainIfNeeded() }
+            .sheet(isPresented: $showingNotifications) {
+                NavigationStack { NotificationsCenterView() }
+                    .presentationDragIndicator(.visible)
+            }
+            .sheet(item: $selectedMemberForDetails) { m in
+                NavigationStack { MemberDetailsView(member: m) }
+                    .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
+            }
+        }
+        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+    }
+
+    // MARK: - Top Bar (Root + Me)
+
+    /// أزرار "البداية" و"موقعي" و"بحث" — ثابتة خارج الـ ScrollView.
+    private var stickyActionsBar: some View {
+        HStack(spacing: DS.Spacing.sm) {
+            // زر البحث — أيقونة دائرية تفتح الشريط
+            Button {
+                withAnimation(DS.Anim.snappy) { showSearchBar.toggle() }
+            } label: {
+                Image(systemName: showSearchBar ? "xmark" : "magnifyingglass")
+                    .font(DS.Font.scaled(13, weight: .bold))
+                    .foregroundColor(showSearchBar ? .white : DS.Color.accent)
+                    .frame(width: 36, height: 36)
+                    .background(
+                        Circle()
+                            .fill(showSearchBar ? DS.Color.accent : DS.Color.accent.opacity(0.12))
+                    )
+            }
+            .buttonStyle(DSScaleButtonStyle())
+            .accessibilityLabel(L10n.t("بحث", "Search"))
+
+            Button {
+                if let first = roots.first {
+                    withAnimation(DS.Anim.smooth) { chain = [first] }
+                    scrollTarget = first.id
+                }
+            } label: {
+                pillLabel(icon: "house.fill", text: L10n.t("البداية", "Start"), color: DS.Color.primary)
+            }
+            .buttonStyle(DSScaleButtonStyle())
+
+            Spacer()
+
+            if let me = authVM.currentUser {
+                Button { jumpTo(me) } label: {
+                    pillLabel(icon: "location.fill", text: L10n.t("موقعي", "Me"), color: DS.Color.success)
+                }
+                .buttonStyle(DSScaleButtonStyle())
+            }
+        }
+    }
+
+    private func pillLabel(icon: String, text: String, color: Color) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: icon).font(DS.Font.scaled(11, weight: .bold))
+            Text(text).font(DS.Font.caption1).fontWeight(.bold)
+        }
+        .foregroundColor(color)
+        .padding(.horizontal, DS.Spacing.md)
+        .padding(.vertical, 7)
+        .background(color.opacity(0.12))
+        .clipShape(Capsule())
+    }
+
+    // MARK: - Ancestor / Active Square
+
+    /// المربع المركّز للسلف أو النشط — متطابق الحجم. لمسة بصرية مختلفة للنشط.
+    private func ancestorOrActiveSquare(_ member: FamilyMember, atIndex idx: Int, isActive: Bool) -> some View {
+        let kidsCount = children(of: member.id).count
+        return HStack {
+            Spacer()
+            Button {
+                if isActive {
+                    selectedMemberForDetails = member
+                } else {
+                    // سلف: اضغطه يخليه النشط (يقطع السلسلة عند هذا المستوى)
+                    makeActive(at: idx)
+                }
+            } label: {
+                memberSquareContent(member, isActive: isActive, kidsCount: kidsCount)
+            }
+            .buttonStyle(DSScaleButtonStyle())
+            Spacer()
+        }
+    }
+
+    // MARK: - Member Square Content (unified visual)
+
+    private func memberSquareContent(_ member: FamilyMember, isActive: Bool, kidsCount: Int) -> some View {
+        let isDeceased = member.isDeceased == true
+        let birthY = year(from: member.birthDate)
+        let deathY = year(from: member.deathDate)
+        let hasDates = birthY != nil || deathY != nil
+
+        return VStack(spacing: 4) {
+            // الصورة + علامة المتوفى (نقطة داكنة بأعلى الزاوية)
+            ZStack(alignment: .topTrailing) {
+                DSMemberAvatar(
+                    name: member.firstName,
+                    avatarUrl: member.avatarUrl,
+                    size: isActive ? 46 : 42,
+                    roleColor: member.roleColor
+                )
+                .overlay(
+                    Circle().strokeBorder(
+                        deceasedAwareBorderColor(isActive: isActive, isDeceased: isDeceased),
+                        lineWidth: isActive ? 2.5 : 1.5
+                    )
+                )
+                .saturation(isDeceased ? 0.55 : 1.0)
+
+                if isDeceased {
+                    Image(systemName: "sparkle")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(.white)
+                        .frame(width: 18, height: 18)
+                        .background(Circle().fill(DS.Color.error))
+                        .overlay(Circle().strokeBorder(Color.white, lineWidth: 1.5))
+                        .shadow(color: .black.opacity(0.20), radius: 2, x: 0, y: 1)
+                        .offset(x: 3, y: -3)
+                        .accessibilityLabel(L10n.t("متوفى", "Deceased"))
+                }
+            }
+
+            Text(member.firstName)
+                .font(DS.Font.scaled(12, weight: isActive ? .black : .bold))
+                .foregroundColor(isDeceased ? DS.Color.textSecondary : DS.Color.textPrimary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+
+            // التواريخ — بدون أيقونة
+            if hasDates {
+                Text(dateRangeText(birthY: birthY, deathY: deathY, isDeceased: isDeceased))
+                    .font(DS.Font.scaled(9, weight: .semibold))
+                    .foregroundColor(isDeceased ? DS.Color.deceased : DS.Color.textSecondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+
+            // عدّاد الأبناء (دائماً)
+            HStack(spacing: 3) {
+                Image(systemName: kidsCount > 0 ? "person.2.fill" : "person.fill")
+                    .font(.system(size: 8, weight: .bold))
+                Text("\(kidsCount)")
+                    .font(DS.Font.scaled(9, weight: .bold))
+            }
+            .foregroundColor(kidsCount > 0 ? DS.Color.primary : DS.Color.textTertiary)
+        }
+        .padding(.vertical, 8)
+        .padding(.horizontal, 6)
+        .frame(width: squareSize, height: squareSize)
+        .background(squareBackground(isActive: isActive, isDeceased: isDeceased))
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Radius.md)
+                .strokeBorder(
+                    squareBorderColor(isActive: isActive, isDeceased: isDeceased),
+                    lineWidth: isActive ? 1.5 : 1
+                )
+        )
+        .shadow(color: .black.opacity(isActive ? 0.07 : 0.03), radius: isActive ? 9 : 4, x: 0, y: 2)
+    }
+
+    private func deceasedAwareBorderColor(isActive: Bool, isDeceased: Bool) -> Color {
+        if isDeceased {
+            return DS.Color.deceased.opacity(isActive ? 0.55 : 0.40)
+        }
+        return isActive ? DS.Color.primary.opacity(0.45) : DS.Color.primary.opacity(0.18)
+    }
+
+    private func squareBackground(isActive: Bool, isDeceased: Bool) -> Color {
+        if isActive { return DS.Color.primary.opacity(0.08) }
+        if isDeceased { return DS.Color.deceased.opacity(0.06) }
+        return DS.Color.surface
+    }
+
+    private func squareBorderColor(isActive: Bool, isDeceased: Bool) -> Color {
+        if isActive { return DS.Color.primary.opacity(0.40) }
+        if isDeceased { return DS.Color.deceased.opacity(0.30) }
+        return DS.Color.textTertiary.opacity(0.12)
+    }
+
+    private func dateRangeText(birthY: String?, deathY: String?, isDeceased: Bool) -> String {
+        // الترتيب: الوفاة (يسار) – الميلاد (يمين)
+        switch (birthY, deathY) {
+        case let (b?, d?): return "\(d) – \(b)"
+        case let (b?, nil): return isDeceased ? "؟ – \(b)" : b
+        case let (nil, d?): return "؟ – \(d)"   // وفاة فقط → بالجهة الثانية (يمين)
+        case (nil, nil):   return ""
+        }
+    }
+
+    // MARK: - Children Grid (smart row layout)
+
+    private func childrenGridSection(of member: FamilyMember, atSectionIndex idx: Int) -> some View {
+        let kids = children(of: member.id)
+        return Group {
+            if kids.isEmpty {
+                emptyChildrenCard
+                    .padding(.top, DS.Spacing.sm)
+            } else {
+                VStack(spacing: DS.Spacing.sm) {
+                    // خط رابط من النشط للشبكة
+                    Rectangle()
+                        .fill(DS.Color.primary.opacity(0.25))
+                        .frame(width: 2, height: 14)
+
+                    ForEach(Array(smartRows(kids).enumerated()), id: \.offset) { _, row in
+                        HStack(spacing: DS.Spacing.sm) {
+                            ForEach(row) { child in
+                                Button {
+                                    drillFromSection(at: idx, to: child)
+                                } label: {
+                                    memberSquareContent(
+                                        child,
+                                        isActive: false,
+                                        kidsCount: children(of: child.id).count
+                                    )
+                                }
+                                .buttonStyle(DSScaleButtonStyle())
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - Chain Connector (between ancestor squares)
+
+    private var chainConnector: some View {
+        Rectangle()
+            .fill(DS.Color.primary.opacity(0.22))
+            .frame(width: 2, height: 22)
+    }
+
+    // MARK: - Empty States
+
+    private var emptyChildrenCard: some View {
+        VStack(spacing: DS.Spacing.xs) {
+            Image(systemName: "person.3.sequence")
+                .font(.system(size: 32, weight: .light))
+                .foregroundColor(DS.Color.textTertiary)
+            Text(L10n.t("لا أبناء مسجّلين", "No registered children"))
+                .font(DS.Font.caption1)
+                .foregroundColor(DS.Color.textSecondary)
+        }
+        .padding(DS.Spacing.lg)
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: DS.Spacing.md) {
+            Image(systemName: "tree")
+                .font(.system(size: 60, weight: .light))
+                .foregroundColor(DS.Color.textTertiary)
+            Text(L10n.t("لا يوجد أعضاء", "No members"))
+                .font(DS.Font.headline)
+                .foregroundColor(DS.Color.textSecondary)
+        }
+    }
+
+    // MARK: - Navigation
+
+    private func initializeChainIfNeeded() {
+        if chain.isEmpty, let first = roots.first {
+            chain = [first]
+        }
+    }
+
+    /// قطع السلسلة عند سلف معين → يصير هو النشط (تظهر شبكة أبنائه).
+    private func makeActive(at index: Int) {
+        guard index < chain.count else { return }
+        let newChain = Array(chain[0...index])
+        guard newChain.count != chain.count else { return }
+        withAnimation(.easeInOut(duration: 0.35)) {
+            chain = newChain
+        }
+        scrollTarget = chain[index].id
+    }
+
+    /// الضغط على ابن في شبكة النشط → اقطع السلسلة عند هذا المستوى وأضف الابن أسفله.
+    private func drillFromSection(at sectionIndex: Int, to child: FamilyMember) {
+        guard sectionIndex < chain.count else { return }
+        let upToIncluding = Array(chain[0...sectionIndex])
+        withAnimation(.easeInOut(duration: 0.35)) {
+            chain = upToIncluding + [child]
+        }
+        scrollTarget = child.id
+    }
+
+    /// قفز مباشر لأي عضو — بناء السلسلة من الجذر إليه.
+    private func jumpTo(_ member: FamilyMember) {
+        var ancestors: [FamilyMember] = []
+        var currentId = member.fatherId
+        while let fid = currentId, let father = memberVM.member(byId: fid) {
+            ancestors.append(father)
+            currentId = father.fatherId
+        }
+        ancestors.reverse()
+        withAnimation(.easeInOut(duration: 0.35)) {
+            chain = ancestors + [member]
+        }
+        scrollTarget = member.id
+    }
+}
