@@ -4,7 +4,13 @@ import SwiftUI
 /// كل عضو = مربع موحّد الحجم. السلف يظهر مرة واحدة (بدون شبكة)،
 /// والعضو النشط (الأخير) يظهر مع شبكة أبنائه بترتيب ذكي حسب العدد.
 ///
-/// **ملاحظة**: هذا الملف موجود للتجربة. مربوط حالياً عبر TreeTabContainer.
+/// **التحكّم:**
+///   - نقرة على ابن في الشبكة → تفرّع داخله (يصير النشط).
+///   - نقرة على سلف في السلسلة → قفز إليه (طي ما تحته).
+///   - نقرة على النشط → طي مستوى واحد للأعلى (collapse).
+///   - ضغطة مطوّلة على أي عضو → فتح شاشة التفاصيل.
+///
+/// **ملاحظة**: مربوط حالياً عبر TreeTabContainer مع تبويب الكلاسيكي.
 struct DrillDownTreeView: View {
     @EnvironmentObject var memberVM: MemberViewModel
     @EnvironmentObject var authVM: AuthViewModel
@@ -130,11 +136,20 @@ struct DrillDownTreeView: View {
                             }
                             .onChange(of: scrollTarget) { newId in
                                 guard let id = newId else { return }
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                                // تأخير بسيط حتى يضمّ ScrollView ID الجديد
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                    // تأكد إن الـ ID لا يزال موجود في السلسلة قبل الـ scroll
+                                    guard chain.contains(where: { $0.id == id }) else {
+                                        scrollTarget = nil
+                                        return
+                                    }
                                     withAnimation(.easeInOut(duration: 0.45)) {
                                         proxy.scrollTo(id, anchor: .center)
                                     }
-                                    scrollTarget = nil
+                                    // إعادة التعيين على الـ runloop التالي لتفادي تعديل state أثناء view update
+                                    DispatchQueue.main.async {
+                                        scrollTarget = nil
+                                    }
                                 }
                             }
                         }
@@ -214,21 +229,36 @@ struct DrillDownTreeView: View {
     // MARK: - Ancestor / Active Square
 
     /// المربع المركّز للسلف أو النشط — متطابق الحجم. لمسة بصرية مختلفة للنشط.
+    /// **السلوك:** نقرة قصيرة = توسيع/طي (drill أو collapse). ضغطة مطوّلة = عرض التفاصيل.
     private func ancestorOrActiveSquare(_ member: FamilyMember, atIndex idx: Int, isActive: Bool) -> some View {
         let kidsCount = children(of: member.id).count
         return HStack {
             Spacer()
             Button {
                 if isActive {
-                    selectedMemberForDetails = member
+                    // النشط: نقرة = طيّ مستوى واحد (للأعلى). إذا هو الجذر الوحيد → افتح التفاصيل.
+                    if chain.count > 1 {
+                        collapseLastLevel()
+                    } else {
+                        selectedMemberForDetails = member
+                    }
                 } else {
-                    // سلف: اضغطه يخليه النشط (يقطع السلسلة عند هذا المستوى)
+                    // سلف: نقرة تخليه النشط (يقطع السلسلة عند هذا المستوى)
                     makeActive(at: idx)
                 }
             } label: {
                 memberSquareContent(member, isActive: isActive, kidsCount: kidsCount)
             }
             .buttonStyle(DSScaleButtonStyle())
+            .simultaneousGesture(
+                LongPressGesture(minimumDuration: 0.4).onEnded { _ in
+                    selectedMemberForDetails = member
+                }
+            )
+            .accessibilityHint(L10n.t(
+                isActive ? "اضغط لطيّ مستوى — اضغط مطوّلاً للتفاصيل" : "اضغط لتفعيله — اضغط مطوّلاً للتفاصيل",
+                isActive ? "Tap to collapse one level. Long-press for details." : "Tap to activate. Long-press for details."
+            ))
             Spacer()
         }
     }
@@ -367,6 +397,15 @@ struct DrillDownTreeView: View {
                                     )
                                 }
                                 .buttonStyle(DSScaleButtonStyle())
+                                .simultaneousGesture(
+                                    LongPressGesture(minimumDuration: 0.4).onEnded { _ in
+                                        selectedMemberForDetails = child
+                                    }
+                                )
+                                .accessibilityHint(L10n.t(
+                                    "اضغط للتفرّع — اضغط مطوّلاً للتفاصيل",
+                                    "Tap to drill in. Long-press for details."
+                                ))
                             }
                         }
                     }
@@ -411,25 +450,39 @@ struct DrillDownTreeView: View {
     // MARK: - Navigation
 
     private func initializeChainIfNeeded() {
-        if chain.isEmpty, let first = roots.first {
+        // إعادة التهيئة لو السلسلة فاضية، أو لو جذرها صار غير موجود (data refresh)
+        let rootStale = !chain.isEmpty && memberVM.member(byId: chain[0].id) == nil
+        if chain.isEmpty || rootStale, let first = roots.first {
             chain = [first]
         }
     }
 
     /// قطع السلسلة عند سلف معين → يصير هو النشط (تظهر شبكة أبنائه).
     private func makeActive(at index: Int) {
-        guard index < chain.count else { return }
+        guard index >= 0, index < chain.count else { return }
         let newChain = Array(chain[0...index])
         guard newChain.count != chain.count else { return }
+        let targetId = newChain[index].id   // حفظ قبل تعديل state عشان نتجنّب index بعد التغيير
         withAnimation(.easeInOut(duration: 0.35)) {
             chain = newChain
         }
-        scrollTarget = chain[index].id
+        scrollTarget = targetId
+    }
+
+    /// طيّ مستوى واحد للأعلى — يحذف العضو النشط من نهاية السلسلة.
+    private func collapseLastLevel() {
+        guard chain.count > 1 else { return }
+        let newChain = Array(chain.dropLast())
+        let targetId = newChain.last?.id
+        withAnimation(.easeInOut(duration: 0.35)) {
+            chain = newChain
+        }
+        scrollTarget = targetId
     }
 
     /// الضغط على ابن في شبكة النشط → اقطع السلسلة عند هذا المستوى وأضف الابن أسفله.
     private func drillFromSection(at sectionIndex: Int, to child: FamilyMember) {
-        guard sectionIndex < chain.count else { return }
+        guard sectionIndex >= 0, sectionIndex < chain.count else { return }
         let upToIncluding = Array(chain[0...sectionIndex])
         withAnimation(.easeInOut(duration: 0.35)) {
             chain = upToIncluding + [child]
@@ -437,12 +490,14 @@ struct DrillDownTreeView: View {
         scrollTarget = child.id
     }
 
-    /// قفز مباشر لأي عضو — بناء السلسلة من الجذر إليه.
+    /// قفز مباشر لأي عضو — بناء السلسلة من الجذر إليه. آمن ضد المراجع الدائرية.
     private func jumpTo(_ member: FamilyMember) {
         var ancestors: [FamilyMember] = []
         var currentId = member.fatherId
-        while let fid = currentId, let father = memberVM.member(byId: fid) {
+        var visited: Set<UUID> = [member.id]
+        while let fid = currentId, !visited.contains(fid), let father = memberVM.member(byId: fid) {
             ancestors.append(father)
+            visited.insert(fid)
             currentId = father.fatherId
         }
         ancestors.reverse()
