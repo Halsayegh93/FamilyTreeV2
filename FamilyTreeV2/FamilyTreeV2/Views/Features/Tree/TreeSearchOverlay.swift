@@ -5,6 +5,12 @@ struct TreeSearchOverlay: View {
     @EnvironmentObject private var memberVM: MemberViewModel
     let onSelect: (FamilyMember) -> Void
 
+    /// عند `true` تأخذ قائمة النتائج كامل المساحة المتاحة (مناسب داخل sheet/شاشة كاملة).
+    /// عند `false` تُحدَّد بـ 280pt (السلوك inline داخل الشجرة).
+    var usesFullHeight: Bool = false
+    /// عند `true` يركّز الحقل تلقائياً عند الظهور.
+    var autoFocus: Bool = false
+
     @State private var searchText = ""
     @State private var debouncedSearchText = ""
     @State private var debounceTask: Task<Void, Never>?
@@ -12,6 +18,7 @@ struct TreeSearchOverlay: View {
     @State private var searchResults: [SearchResult] = []
     @State private var searchTask: Task<Void, Never>?
     @State private var statusFilter: StatusFilter = .all
+    @FocusState private var fieldFocused: Bool
 
     @AppStorage("recentTreeSearches") private var recentSearchesData: Data = Data()
 
@@ -59,6 +66,14 @@ struct TreeSearchOverlay: View {
             resultsSection
         }
         .zIndex(100)
+        .onAppear {
+            if autoFocus {
+                // تأخير صغير حتى تظهر لوحة المفاتيح في الـ sheet بسلاسة
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                    fieldFocused = true
+                }
+            }
+        }
         .onChange(of: searchText) { newValue in
             debounceTask?.cancel()
             if newValue.isEmpty {
@@ -93,8 +108,11 @@ struct TreeSearchOverlay: View {
             TextField(L10n.t("ابحث بالاسم أو الهاتف...", "Search by name or phone..."), text: $searchText, onEditingChanged: { focused in
                 isSearchFocused = focused
             })
+            .focused($fieldFocused)
             .font(DS.Font.body)
             .multilineTextAlignment(.leading)
+            .submitLabel(.search)
+            .autocorrectionDisabled()
 
             if !searchText.isEmpty {
                 Button(action: { searchText = "" }) {
@@ -215,6 +233,7 @@ struct TreeSearchOverlay: View {
                         ForEach(filteredResults) { result in
                             Button(action: {
                                 saveRecentSearch(searchText)
+                                fieldFocused = false
                                 searchText = ""
                                 isSearchFocused = false
                                 searchResults = []
@@ -229,12 +248,13 @@ struct TreeSearchOverlay: View {
                         }
                     }
                 } else {
-                    // نتائج كثيرة — سكرول مع حد أقصى
+                    // نتائج كثيرة — سكرول. inline: حد 280pt. fullHeight: يأخذ المساحة المتاحة.
                     ScrollView {
                         LazyVStack(spacing: 0) {
                             ForEach(filteredResults) { result in
                                 Button(action: {
                                     saveRecentSearch(searchText)
+                                    fieldFocused = false
                                     searchText = ""
                                     isSearchFocused = false
                                     searchResults = []
@@ -249,7 +269,7 @@ struct TreeSearchOverlay: View {
                             }
                         }
                     }
-                    .frame(maxHeight: 280)
+                    .frame(maxHeight: usesFullHeight ? .infinity : 280)
                 }
             }
             .glassCard(radius: DS.Radius.lg)

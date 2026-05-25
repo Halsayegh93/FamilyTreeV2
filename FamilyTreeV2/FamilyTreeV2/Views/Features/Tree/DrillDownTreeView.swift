@@ -87,21 +87,11 @@ struct DrillDownTreeView: View {
                         subtitle: L10n.t("تصفّح بالتفرّع", "Drill-down")
                     )
 
-                    // منطقة ثابتة: البحث (يظهر عند الضغط على زر البحث)، ثم البداية + موقعي
-                    VStack(spacing: DS.Spacing.sm) {
-                        if showSearchBar {
-                            TreeSearchOverlay { member in
-                                jumpTo(member)
-                                withAnimation(DS.Anim.snappy) { showSearchBar = false }
-                            }
-                            .transition(.move(edge: .top).combined(with: .opacity))
-                        }
-                        stickyActionsBar
-                    }
-                    .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.top, DS.Spacing.sm)
-                    .padding(.bottom, DS.Spacing.xs)
-                    .animation(DS.Anim.snappy, value: showSearchBar)
+                    // أزرار البداية/موقعي/البحث — ثابتة، يفتح البحث في sheet كامل
+                    stickyActionsBar
+                        .padding(.horizontal, DS.Spacing.lg)
+                        .padding(.top, DS.Spacing.sm)
+                        .padding(.bottom, DS.Spacing.xs)
 
                     if memberVM.allMembers.isEmpty {
                         Spacer()
@@ -168,6 +158,9 @@ struct DrillDownTreeView: View {
                     .presentationDetents([.medium, .large])
                     .presentationDragIndicator(.visible)
             }
+            .sheet(isPresented: $showSearchBar) {
+                searchSheet
+            }
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
@@ -177,18 +170,15 @@ struct DrillDownTreeView: View {
     /// أزرار "البداية" و"موقعي" و"بحث" — ثابتة خارج الـ ScrollView.
     private var stickyActionsBar: some View {
         HStack(spacing: DS.Spacing.sm) {
-            // زر البحث — أيقونة دائرية تفتح الشريط
+            // زر البحث — يفتح sheet كامل
             Button {
-                withAnimation(DS.Anim.snappy) { showSearchBar.toggle() }
+                showSearchBar = true
             } label: {
-                Image(systemName: showSearchBar ? "xmark" : "magnifyingglass")
+                Image(systemName: "magnifyingglass")
                     .font(DS.Font.scaled(13, weight: .bold))
-                    .foregroundColor(showSearchBar ? .white : DS.Color.accent)
+                    .foregroundColor(DS.Color.accent)
                     .frame(width: 36, height: 36)
-                    .background(
-                        Circle()
-                            .fill(showSearchBar ? DS.Color.accent : DS.Color.accent.opacity(0.12))
-                    )
+                    .background(Circle().fill(DS.Color.accent.opacity(0.12)))
             }
             .buttonStyle(DSScaleButtonStyle())
             .accessibilityLabel(L10n.t("بحث", "Search"))
@@ -488,6 +478,44 @@ struct DrillDownTreeView: View {
             chain = upToIncluding + [child]
         }
         scrollTarget = child.id
+    }
+
+    // MARK: - Search Sheet
+
+    /// شيت البحث الكامل — يحلّ مشكلة قصّ الأسماء في الـ inline overlay.
+    private var searchSheet: some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                TreeSearchOverlay(
+                    onSelect: { member in
+                        showSearchBar = false
+                        // تأخير صغير حتى تنغلق الـ sheet قبل تحريك الشجرة
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                            jumpTo(member)
+                        }
+                    },
+                    usesFullHeight: true,
+                    autoFocus: true
+                )
+                .padding(.horizontal, DS.Spacing.lg)
+                .padding(.top, DS.Spacing.sm)
+                Spacer(minLength: 0)
+            }
+            .background(DS.Color.background.ignoresSafeArea())
+            .navigationTitle(L10n.t("بحث في الشجرة", "Search Tree"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(L10n.t("إغلاق", "Close")) {
+                        showSearchBar = false
+                    }
+                    .foregroundColor(DS.Color.primary)
+                }
+            }
+        }
+        .presentationDetents([.large])
+        .presentationDragIndicator(.visible)
+        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
 
     /// قفز مباشر لأي عضو — بناء السلسلة من الجذر إليه. آمن ضد المراجع الدائرية.
