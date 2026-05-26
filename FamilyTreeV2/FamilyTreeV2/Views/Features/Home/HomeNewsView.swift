@@ -8,6 +8,7 @@ struct HomeNewsView: View {
     @EnvironmentObject var notificationVM: NotificationViewModel
     @EnvironmentObject var appSettingsVM: AppSettingsViewModel
     @EnvironmentObject var adminRequestVM: AdminRequestViewModel
+    @EnvironmentObject var projectsVM: ProjectsViewModel
     @Environment(\.colorScheme) private var colorScheme
     @Binding var selectedTab: Int
     @State private var showingAddNews = false
@@ -159,6 +160,12 @@ struct HomeNewsView: View {
             }
             .presentationDragIndicator(.visible)
         }
+        .task {
+            // جلب المشاريع لعرض البطاقة الفاخرة بأحدث مشروع (مع كاش داخلي)
+            if (appSettingsVM.settings.projectsEnabled ?? true), projectsVM.projects.isEmpty {
+                await projectsVM.fetchProjects()
+            }
+        }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
 
@@ -251,8 +258,13 @@ struct HomeNewsView: View {
             // 4) ديوانيات + صور
             diwaniyasAndPhotosRow
 
-            // 5) تواصل + مشاريع العائلة
-            contactAndProjectsRow
+            // 5) مشاريع العائلة (بطاقة فاخرة بصورة)
+            if appSettingsVM.settings.projectsEnabled ?? true {
+                familyProjectsCard
+            }
+
+            // 6) التواصل (بطاقة مستقلة)
+            contactCard
         }
         .padding(.horizontal, DS.Spacing.lg)
     }
@@ -283,30 +295,197 @@ struct HomeNewsView: View {
         }
     }
 
-    // صف التواصل + مشاريع العائلة — نفس نمط الديوانيات والصور (bentoTile)
-    @ViewBuilder
-    private var contactAndProjectsRow: some View {
-        let showProjects = appSettingsVM.settings.projectsEnabled ?? true
-        HStack(spacing: DS.Spacing.sm) {
-            bentoTile(
-                icon: "bubble.left.and.bubble.right.fill",
-                title: L10n.t("التواصل", "Contact"),
-                subtitle: nil,
-                color: DS.Color.info,
-                height: 56,
-                action: { withAnimation(DS.Anim.snappy) { activeSubPage = .contact } }
-            )
-            if showProjects {
-                bentoTile(
-                    icon: "briefcase.fill",
-                    title: L10n.t("مشاريع العائلة", "Family Projects"),
-                    subtitle: nil,
-                    color: DS.Color.warning,
-                    height: 56,
-                    action: { withAnimation(DS.Anim.snappy) { activeSubPage = .projects } }
+    // MARK: - Premium Family Projects Card (hero with image)
+
+    /// بطاقة مشاريع العائلة الفاخرة — صورة أحدث مشروع كخلفية + اسمه + العدد.
+    private var familyProjectsCard: some View {
+        let approvedProjects = projectsVM.projects
+        let featured = approvedProjects.first
+        let total = approvedProjects.count
+
+        return Button {
+            withAnimation(DS.Anim.snappy) { activeSubPage = .projects }
+        } label: {
+            ZStack(alignment: .bottomLeading) {
+                // ── خلفية: صورة المشروع المميَّز أو gradient ──
+                projectsBackground(featured: featured)
+
+                // ── تدرّج داكن للقراءة ──
+                LinearGradient(
+                    colors: [.clear, .black.opacity(0.10), .black.opacity(0.65)],
+                    startPoint: .top,
+                    endPoint: .bottom
                 )
+
+                // ── شارة القسم أعلى ──
+                VStack {
+                    HStack {
+                        HStack(spacing: 5) {
+                            Image(systemName: "briefcase.fill")
+                                .font(DS.Font.scaled(11, weight: .bold))
+                            Text(L10n.t("مشاريع العائلة", "Family Projects"))
+                                .font(DS.Font.scaled(11, weight: .black))
+                                .tracking(0.5)
+                        }
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(Capsule().fill(.ultraThinMaterial))
+                        .overlay(Capsule().strokeBorder(Color.white.opacity(0.30), lineWidth: 1))
+
+                        Spacer()
+
+                        // عدّاد إجمالي
+                        if total > 0 {
+                            HStack(spacing: 3) {
+                                Image(systemName: "square.stack.fill")
+                                    .font(DS.Font.scaled(10, weight: .bold))
+                                Text("\(total)")
+                                    .font(DS.Font.scaled(11, weight: .black))
+                            }
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 9)
+                            .padding(.vertical, 5)
+                            .background(Capsule().fill(.ultraThinMaterial))
+                            .overlay(Capsule().strokeBorder(Color.white.opacity(0.30), lineWidth: 1))
+                        }
+                    }
+                    Spacer()
+                }
+                .padding(DS.Spacing.md)
+
+                // ── معلومات أسفل ──
+                VStack(alignment: .leading, spacing: 6) {
+                    if let p = featured {
+                        Text(p.title)
+                            .font(DS.Font.scaled(22, weight: .black))
+                            .foregroundColor(.white)
+                            .lineLimit(2)
+                            .multilineTextAlignment(.leading)
+                            .shadow(color: .black.opacity(0.35), radius: 6, x: 0, y: 1)
+
+                        HStack(spacing: 6) {
+                            Image(systemName: "person.fill")
+                                .font(DS.Font.scaled(10, weight: .bold))
+                            Text(L10n.t("صاحب المشروع: ", "Owner: ") + p.ownerName)
+                                .font(DS.Font.scaled(11, weight: .semibold))
+                                .lineLimit(1)
+                        }
+                        .foregroundColor(.white.opacity(0.95))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(Capsule().fill(Color.black.opacity(0.30)))
+                    } else {
+                        Text(L10n.t("ابدأ مشاريع العائلة",
+                                   "Start Family Projects"))
+                            .font(DS.Font.scaled(20, weight: .black))
+                            .foregroundColor(.white)
+                            .shadow(color: .black.opacity(0.35), radius: 6, x: 0, y: 1)
+
+                        Text(L10n.t("اعرض ما يقدّمه أبناء العائلة",
+                                   "Showcase what family members offer"))
+                            .font(DS.Font.scaled(12, weight: .semibold))
+                            .foregroundColor(.white.opacity(0.90))
+                    }
+                }
+                .padding(DS.Spacing.md)
             }
+            .frame(height: 200)
+            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xxl, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Radius.xxl, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+            )
+            .shadow(color: .black.opacity(0.12), radius: 14, x: 0, y: 5)
         }
+        .buttonStyle(DSScaleButtonStyle())
+        .accessibilityLabel(L10n.t("افتح مشاريع العائلة", "Open Family Projects"))
+    }
+
+    /// خلفية البطاقة — صورة شعار المشروع المميَّز أو gradient عند عدم وجود مشاريع.
+    @ViewBuilder
+    private func projectsBackground(featured: Project?) -> some View {
+        if let urlStr = featured?.logoUrl, let url = URL(string: urlStr) {
+            CachedAsyncImage(url: url) { image in
+                image
+                    .resizable()
+                    .scaledToFill()
+            } placeholder: {
+                projectsPlaceholderGradient
+            }
+        } else {
+            projectsPlaceholderGradient
+        }
+    }
+
+    private var projectsPlaceholderGradient: some View {
+        ZStack {
+            LinearGradient(
+                colors: [DS.Color.warning, DS.Color.warning.opacity(0.7), DS.Color.accent],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            // زخرفة باهتة
+            Image(systemName: "briefcase.fill")
+                .font(.system(size: 110, weight: .light))
+                .foregroundColor(.white.opacity(0.15))
+                .offset(x: 90, y: -20)
+            Image(systemName: "lightbulb.fill")
+                .font(.system(size: 60, weight: .light))
+                .foregroundColor(.white.opacity(0.10))
+                .offset(x: -90, y: 30)
+        }
+    }
+
+    // MARK: - Contact Card
+
+    /// بطاقة التواصل المستقلة — full-width أصغر من بطاقة المشاريع، بنمط الـ tile الموحّد.
+    private var contactCard: some View {
+        Button {
+            withAnimation(DS.Anim.snappy) { activeSubPage = .contact }
+        } label: {
+            HStack(spacing: DS.Spacing.md) {
+                ZStack {
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: [DS.Color.info, DS.Color.info.opacity(0.75)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 44, height: 44)
+                    Image(systemName: "bubble.left.and.bubble.right.fill")
+                        .font(DS.Font.scaled(17, weight: .bold))
+                        .foregroundColor(.white)
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(L10n.t("التواصل مع الإدارة", "Contact Admin"))
+                        .font(DS.Font.scaled(15, weight: .bold))
+                        .foregroundColor(DS.Color.textPrimary)
+                    Text(L10n.t("أرسل سؤالاً أو ملاحظة",
+                               "Send a question or remark"))
+                        .font(DS.Font.scaled(11, weight: .semibold))
+                        .foregroundColor(DS.Color.textSecondary)
+                }
+                Spacer()
+                Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
+                    .font(DS.Font.scaled(12, weight: .bold))
+                    .foregroundColor(DS.Color.textTertiary)
+            }
+            .padding(DS.Spacing.md)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
+                    .fill(DS.Color.surface)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
+                    .stroke(DS.Color.info.opacity(0.12), lineWidth: 1)
+            )
+            .dsSubtleShadow()
+        }
+        .buttonStyle(DSScaleButtonStyle())
     }
 
     // MARK: - بطاقة الترحيب (Hero) — تفتح "حسابي" عند الضغط
