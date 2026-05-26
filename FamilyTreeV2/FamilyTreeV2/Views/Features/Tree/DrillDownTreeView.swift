@@ -87,21 +87,21 @@ struct DrillDownTreeView: View {
                         subtitle: L10n.t("تصفّح بالتفرّع", "Drill-down")
                     )
 
-                    // أزرار البداية/موقعي/البحث — ثابتة، البحث inline يأخذ مساحة كاملة
+                    // أزرار الإجراءات — البحث دائماً، البداية/موقعي تختفي مع فتح البحث
                     stickyActionsBar
                         .padding(.horizontal, DS.Spacing.lg)
                         .padding(.top, DS.Spacing.sm)
                         .padding(.bottom, DS.Spacing.xs)
 
+                    // لوحة البحث ثابتة فوق بمساحة محدودة، الشجرة تظل ظاهرة تحتها
                     if showSearchBar {
                         searchInlinePanel
+                            .frame(maxHeight: 360)
                             .transition(.opacity.combined(with: .move(edge: .top)))
                     }
 
-                    if showSearchBar {
-                        // البحث يأخذ كامل المساحة المتبقّية
-                        EmptyView()
-                    } else if memberVM.allMembers.isEmpty {
+                    // الشجرة دائماً مرئية تحت — حتى عند فتح البحث
+                    if memberVM.allMembers.isEmpty {
                         Spacer()
                         emptyState
                         Spacer()
@@ -174,10 +174,10 @@ struct DrillDownTreeView: View {
 
     // MARK: - Top Bar (Root + Me)
 
-    /// أزرار "البداية" و"موقعي" و"بحث" — ثابتة خارج الـ ScrollView.
+    /// أزرار "البداية" و"موقعي" و"بحث" — ثابتة. البداية/موقعي تختفي عند فتح البحث.
     private var stickyActionsBar: some View {
         HStack(spacing: DS.Spacing.sm) {
-            // زر البحث — يفتح/يغلق inline panel
+            // زر البحث — دائماً ظاهر
             Button {
                 showSearchBar.toggle()
             } label: {
@@ -190,23 +190,36 @@ struct DrillDownTreeView: View {
             .buttonStyle(DSScaleButtonStyle())
             .accessibilityLabel(L10n.t(showSearchBar ? "إغلاق البحث" : "بحث", showSearchBar ? "Close search" : "Search"))
 
-            Button {
-                if let first = roots.first {
-                    withAnimation(DS.Anim.smooth) { chain = [first] }
-                    scrollTarget = first.id
-                }
-            } label: {
-                pillLabel(icon: "house.fill", text: L10n.t("البداية", "Start"), color: DS.Color.primary)
-            }
-            .buttonStyle(DSScaleButtonStyle())
-
-            Spacer()
-
-            if let me = authVM.currentUser {
-                Button { jumpTo(me) } label: {
-                    pillLabel(icon: "location.fill", text: L10n.t("موقعي", "Me"), color: DS.Color.success)
+            // البداية + موقعي — تختفي مع فتح البحث
+            if !showSearchBar {
+                Button {
+                    if let first = roots.first {
+                        withAnimation(DS.Anim.smooth) { chain = [first] }
+                        scrollTarget = first.id
+                    }
+                } label: {
+                    pillLabel(icon: "house.fill", text: L10n.t("البداية", "Start"), color: DS.Color.primary)
                 }
                 .buttonStyle(DSScaleButtonStyle())
+                .transition(.opacity.combined(with: .scale(scale: 0.85)))
+
+                Spacer()
+
+                if let me = authVM.currentUser {
+                    Button { jumpTo(me) } label: {
+                        pillLabel(icon: "location.fill", text: L10n.t("موقعي", "Me"), color: DS.Color.success)
+                    }
+                    .buttonStyle(DSScaleButtonStyle())
+                    .transition(.opacity.combined(with: .scale(scale: 0.85)))
+                }
+            } else {
+                // ملصق دلالي عند فتح البحث — يخلّي البار ما يصير فاضي
+                Text(L10n.t("بحث", "Search"))
+                    .font(DS.Font.scaled(13, weight: .bold))
+                    .foregroundColor(DS.Color.textSecondary)
+                    .padding(.leading, 4)
+                    .transition(.opacity)
+                Spacer()
             }
         }
     }
