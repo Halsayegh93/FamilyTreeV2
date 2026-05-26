@@ -39,20 +39,10 @@ struct FamilyArchiveView: View {
                         .transition(.opacity)
                 }
 
-                // زر "تحديد متعدّد" فوق صف الفلاتر — للإدارة فقط
-                if authVM.isAdmin && !selectionMode {
-                    HStack {
-                        Spacer()
-                        selectModeButton
-                    }
-                    .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.top, DS.Spacing.sm)
-                }
-
-                // صف الفلاتر
+                // صف الفلاتر (مع زر التحديد مدمج للإدارة)
                 categoryPicker
                     .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.top, DS.Spacing.xs)
+                    .padding(.top, DS.Spacing.sm)
                     .padding(.bottom, DS.Spacing.xs)
 
                 if archiveVM.isLoading && archiveVM.items.isEmpty {
@@ -194,29 +184,6 @@ struct FamilyArchiveView: View {
     }
 
     // MARK: - Selection Mode UI
-
-    private var selectModeButton: some View {
-        Button {
-            withAnimation(DS.Anim.snappy) {
-                selectionMode = true
-                selectedIDs = []
-            }
-        } label: {
-            HStack(spacing: 5) {
-                Image(systemName: "checkmark.circle")
-                    .font(DS.Font.scaled(12, weight: .bold))
-                Text(L10n.t("تحديد", "Select"))
-                    .font(DS.Font.scaled(12, weight: .bold))
-            }
-            .foregroundColor(DS.Color.primary)
-            .padding(.horizontal, DS.Spacing.md)
-            .padding(.vertical, 6)
-            .background(Capsule().fill(DS.Color.primary.opacity(0.10)))
-            .overlay(Capsule().strokeBorder(DS.Color.primary.opacity(0.25), lineWidth: 1))
-        }
-        .buttonStyle(DSScaleButtonStyle())
-        .accessibilityLabel(L10n.t("تحديد متعدّد", "Multi-select"))
-    }
 
     private var selectionTopBar: some View {
         HStack(spacing: DS.Spacing.sm) {
@@ -411,6 +378,18 @@ struct FamilyArchiveView: View {
                         .transition(.scale(scale: 0.85).combined(with: .opacity))
                 }
             }
+
+            // زر التحديد مدمج داخل الكبسولة — للإدارة فقط، يختفي في وضع التحديد
+            if authVM.isAdmin && !selectionMode {
+                Capsule()
+                    .fill(DS.Color.textTertiary.opacity(0.25))
+                    .frame(width: 1, height: 22)
+                    .padding(.horizontal, 2)
+                    .transition(.opacity)
+
+                inlineSelectButton
+                    .transition(.scale(scale: 0.85).combined(with: .opacity))
+            }
         }
         .padding(6)
         .background(
@@ -423,6 +402,26 @@ struct FamilyArchiveView: View {
         )
         .shadow(color: .black.opacity(0.06), radius: 8, x: 0, y: 3)
         .animation(.spring(response: 0.40, dampingFraction: 0.78), value: selectedCategory)
+        .animation(.spring(response: 0.40, dampingFraction: 0.78), value: selectionMode)
+    }
+
+    /// زر تحديد مدمج — أيقونة فقط ليتناغم مع الفلاتر inactive.
+    private var inlineSelectButton: some View {
+        Button {
+            withAnimation(DS.Anim.snappy) {
+                selectionMode = true
+                selectedIDs = []
+            }
+        } label: {
+            Image(systemName: "checkmark.circle")
+                .font(DS.Font.scaled(13, weight: .bold))
+                .foregroundColor(DS.Color.success)
+                .frame(width: 36, height: 36)
+                .background(Circle().fill(DS.Color.success.opacity(0.12)))
+                .overlay(Circle().strokeBorder(DS.Color.success.opacity(0.25), lineWidth: 1))
+        }
+        .buttonStyle(DSScaleButtonStyle())
+        .accessibilityLabel(L10n.t("تحديد متعدّد", "Multi-select"))
     }
 
     /// الفلتر النشط — pill ممتدّ بلون فئته + اسم + عدّاد.
