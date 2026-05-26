@@ -89,7 +89,6 @@ struct TreeSearchOverlay: View {
     var body: some View {
         VStack(spacing: 0) {
             searchBar
-            branchFilterButton
             recentSearchesSection
             resultsSection
         }
@@ -245,12 +244,18 @@ struct TreeSearchOverlay: View {
                 .padding(.top, DS.Spacing.sm)
                 .padding(.bottom, DS.Spacing.xs)
 
-                Picker("", selection: $statusFilter) {
-                    ForEach(StatusFilter.allCases, id: \.self) { filter in
-                        Text(filter.label).tag(filter)
+                // صف الفلاتر: حالة + فرع (مدمجين في صف واحد أنيق)
+                HStack(spacing: DS.Spacing.sm) {
+                    Picker("", selection: $statusFilter) {
+                        ForEach(StatusFilter.allCases, id: \.self) { filter in
+                            Text(filter.label).tag(filter)
+                        }
                     }
+                    .pickerStyle(.segmented)
+                    .frame(maxWidth: .infinity)
+
+                    branchPill
                 }
-                .pickerStyle(.segmented)
                 .padding(.horizontal, DS.Spacing.md)
                 .padding(.bottom, DS.Spacing.sm)
 
@@ -487,82 +492,53 @@ struct TreeSearchOverlay: View {
         return parts.joined(separator: " ")
     }
 
-    // MARK: - Branch Filter Button (نمط التقارير)
+    // MARK: - Branch Pill (مدمج داخل صف الفلاتر)
 
-    /// زر "حصر على فرع معيّن" — يظهر بشكل دائم تحت شريط البحث.
-    /// عند اختيار فرع، يتحوّل إلى بطاقة فيها اسم الفرع وعدد أعضائه وزر إزالة.
+    /// كبسولة الفرع — تتغيّر شكلاً حسب وجود تحديد. مدمجة بجانب فلتر الحالة.
     @ViewBuilder
-    private var branchFilterButton: some View {
+    private var branchPill: some View {
         if let m = branchRootMember {
-            HStack(spacing: DS.Spacing.sm) {
-                Image(systemName: "tree.fill")
-                    .font(DS.Font.scaled(12, weight: .bold))
-                    .foregroundColor(DS.Color.primary)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(L10n.t("فرع: \(m.fullName)", "Branch: \(m.fullName)"))
-                        .font(DS.Font.caption1)
-                        .fontWeight(.bold)
-                        .foregroundColor(DS.Color.primary)
-                        .lineLimit(1)
-                    Text(L10n.t("\((branchDescendantIds?.count ?? 0)) عضو في الفرع", "\((branchDescendantIds?.count ?? 0)) members in branch"))
-                        .font(DS.Font.caption2)
-                        .foregroundColor(DS.Color.textTertiary)
-                }
-                Spacer()
-                Button { branchPickerOpen = true } label: {
-                    Text(L10n.t("تغيير", "Change"))
-                        .font(DS.Font.caption2)
-                        .fontWeight(.bold)
-                        .foregroundColor(DS.Color.primary)
-                        .padding(.horizontal, DS.Spacing.sm)
-                        .padding(.vertical, 4)
-                        .background(Capsule().fill(DS.Color.primary.opacity(0.12)))
-                }
-                Button {
-                    branchRootId = nil
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundColor(DS.Color.error)
-                }
-            }
-            .padding(.horizontal, DS.Spacing.md)
-            .padding(.vertical, DS.Spacing.sm)
-            .background(
-                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                    .fill(DS.Color.primary.opacity(0.08))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                    .stroke(DS.Color.primary.opacity(0.20), lineWidth: 1)
-            )
-            .padding(.top, DS.Spacing.xs)
-        } else {
+            // فرع مختار: كبسولة ملوّنة فيها الاسم + ✕
             Button { branchPickerOpen = true } label: {
-                HStack(spacing: DS.Spacing.sm) {
-                    Image(systemName: "tree")
-                        .font(DS.Font.scaled(12, weight: .semibold))
-                    Text(L10n.t("حصر على فرع معيّن", "Restrict to a branch"))
-                        .font(DS.Font.caption1)
-                        .fontWeight(.semibold)
-                    Spacer()
-                    Image(systemName: L10n.isArabic ? "chevron.backward" : "chevron.forward")
+                HStack(spacing: 4) {
+                    Image(systemName: "tree.fill")
                         .font(DS.Font.scaled(10, weight: .bold))
-                        .opacity(0.5)
+                    Text(m.firstName)
+                        .font(DS.Font.scaled(12, weight: .bold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
+
+                    Button {
+                        branchRootId = nil
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(DS.Font.scaled(13, weight: .semibold))
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.leading, 2)
                 }
-                .foregroundColor(DS.Color.textSecondary)
-                .padding(.horizontal, DS.Spacing.md)
-                .padding(.vertical, DS.Spacing.sm)
-                .background(
-                    RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                        .fill(DS.Color.surface)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                        .stroke(DS.Color.textTertiary.opacity(0.2), lineWidth: 1)
-                )
+                .foregroundColor(.white)
+                .padding(.horizontal, DS.Spacing.sm)
+                .padding(.vertical, 6)
+                .background(Capsule().fill(DS.Color.primary))
             }
             .buttonStyle(DSScaleButtonStyle())
-            .padding(.top, DS.Spacing.xs)
+        } else {
+            // لا فرع: كبسولة شفّافة بأيقونة فقط
+            Button { branchPickerOpen = true } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "tree")
+                        .font(DS.Font.scaled(11, weight: .bold))
+                    Text(L10n.t("الفرع", "Branch"))
+                        .font(DS.Font.scaled(12, weight: .semibold))
+                }
+                .foregroundColor(DS.Color.primary)
+                .padding(.horizontal, DS.Spacing.sm)
+                .padding(.vertical, 6)
+                .background(Capsule().fill(DS.Color.primary.opacity(0.10)))
+                .overlay(Capsule().strokeBorder(DS.Color.primary.opacity(0.25), lineWidth: 1))
+            }
+            .buttonStyle(DSScaleButtonStyle())
         }
     }
 

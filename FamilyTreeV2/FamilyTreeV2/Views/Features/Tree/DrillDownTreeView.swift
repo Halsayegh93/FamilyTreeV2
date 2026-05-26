@@ -134,15 +134,16 @@ struct DrillDownTreeView: View {
                             }
                             .onChange(of: scrollTarget) { newId in
                                 guard let id = newId else { return }
-                                // تأخير بسيط حتى يضمّ ScrollView ID الجديد
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                // تأخير أكبر شوية حتى يُرسَم محتوى الأبناء قبل التمرير
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
                                     // تأكد إن الـ ID لا يزال موجود في السلسلة قبل الـ scroll
                                     guard chain.contains(where: { $0.id == id }) else {
                                         scrollTarget = nil
                                         return
                                     }
-                                    withAnimation(.easeInOut(duration: 0.45)) {
-                                        proxy.scrollTo(id, anchor: .center)
+                                    withAnimation(.easeInOut(duration: 0.5)) {
+                                        // anchor قريب من الأعلى عشان شبكة الأبناء تبيّن تحته
+                                        proxy.scrollTo(id, anchor: UnitPoint(x: 0.5, y: 0.15))
                                     }
                                     // إعادة التعيين على الـ runloop التالي لتفادي تعديل state أثناء view update
                                     DispatchQueue.main.async {
