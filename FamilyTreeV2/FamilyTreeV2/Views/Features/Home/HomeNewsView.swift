@@ -29,7 +29,7 @@ struct HomeNewsView: View {
     @State private var newsSearchTask: Task<Void, Never>?
 
     private enum HomeSubPage {
-        case photos, projects, contact, news
+        case archive, projects, contact, news
     }
 
     var body: some View {
@@ -159,20 +159,6 @@ struct HomeNewsView: View {
             }
             .presentationDragIndicator(.visible)
         }
-        .task {
-            // جلب بيانات لوحة الإدارة السريعة — فقط لمن لديه صلاحية
-            guard authVM.canModerate else { return }
-            await withTaskGroup(of: Void.self) { group in
-                group.addTask { @MainActor in await adminRequestVM.fetchDeceasedRequests() }
-                group.addTask { @MainActor in await adminRequestVM.fetchChildAddRequests() }
-                group.addTask { @MainActor in await adminRequestVM.fetchPhoneChangeRequests() }
-                group.addTask { @MainActor in await adminRequestVM.fetchNewsReportRequests() }
-                group.addTask { @MainActor in await adminRequestVM.fetchTreeEditRequests() }
-                group.addTask { @MainActor in await adminRequestVM.fetchNameChangeRequests() }
-                group.addTask { @MainActor in await adminRequestVM.fetchPhotoSuggestionRequests() }
-                group.addTask { @MainActor in await newsVM.fetchPendingNewsRequests() }
-            }
-        }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
 
@@ -182,7 +168,7 @@ struct HomeNewsView: View {
         VStack(spacing: 0) {
             subPageHeader(for: page)
             switch page {
-            case .photos: FamilyPhotoAlbumsView()
+            case .archive: FamilyArchiveView()
             case .projects: FamilyProjectsView()
             case .contact: MemberContactFormView()
             case .news: newsFullPage
@@ -220,7 +206,7 @@ struct HomeNewsView: View {
     private func subPageHeader(for page: HomeSubPage) -> some View {
         let title: String = {
             switch page {
-            case .photos: return L10n.t("صور العائلة", "Family Photos")
+            case .archive: return L10n.t("أرشيف العائلة", "Family Archive")
             case .projects: return L10n.t("مشاريع العائلة", "Family Projects")
             case .contact: return L10n.t("التواصل", "Contact")
             case .news: return L10n.t("أخبار العائلة", "Family News")
@@ -267,43 +253,33 @@ struct HomeNewsView: View {
 
             // 5) تواصل + مشاريع العائلة
             contactAndProjectsRow
-
-            // 6) لوحة الإدارة — تظهر للمراقبين فقط أسفل القسم
-            if authVM.canModerate {
-                adminBentoCard
-            }
         }
         .padding(.horizontal, DS.Spacing.lg)
     }
 
-    // صف الديوانيات + الصور — كل مربع مرن لو ال flag الآخر منطفئ
+    // صف الديوانيات + أرشيف العائلة
     @ViewBuilder
     private var diwaniyasAndPhotosRow: some View {
         let showDiwaniyas = appSettingsVM.settings.diwaniyasEnabled ?? true
-        let showAlbums = appSettingsVM.settings.albumsEnabled ?? true
-        if showDiwaniyas || showAlbums {
-            HStack(spacing: DS.Spacing.sm) {
-                if showDiwaniyas {
-                    bentoTile(
-                        icon: "map.fill",
-                        title: L10n.t("الديوانيات", "Diwaniyas"),
-                        subtitle: nil,
-                        color: DS.Color.accent,
-                        height: 56,
-                        action: { selectedTab = 2 }
-                    )
-                }
-                if showAlbums {
-                    bentoTile(
-                        icon: "photo.on.rectangle.angled.fill",
-                        title: L10n.t("الصور", "Photos"),
-                        subtitle: nil,
-                        color: DS.Color.primary,
-                        height: 56,
-                        action: { withAnimation(DS.Anim.snappy) { activeSubPage = .photos } }
-                    )
-                }
+        HStack(spacing: DS.Spacing.sm) {
+            if showDiwaniyas {
+                bentoTile(
+                    icon: "map.fill",
+                    title: L10n.t("الديوانيات", "Diwaniyas"),
+                    subtitle: nil,
+                    color: DS.Color.accent,
+                    height: 56,
+                    action: { selectedTab = 2 }
+                )
             }
+            bentoTile(
+                icon: "archivebox.fill",
+                title: L10n.t("أرشيف العائلة", "Family Archive"),
+                subtitle: nil,
+                color: DS.Color.primary,
+                height: 56,
+                action: { withAnimation(DS.Anim.snappy) { activeSubPage = .archive } }
+            )
         }
     }
 
