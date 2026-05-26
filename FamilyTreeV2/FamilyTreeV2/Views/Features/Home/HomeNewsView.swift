@@ -315,7 +315,7 @@ struct HomeNewsView: View {
         }
     }
 
-    /// مربّع موحّد (square 1:1) بنمط بطاقة المشاريع: صورة/gradient + overlay داكن + عنوان أسفل.
+    /// مربّع موحّد مدمج (أوسع من ارتفاع — 1.55:1) بنمط بطاقة المشاريع.
     private func unifiedTile(
         title: String,
         icon: String,
@@ -326,62 +326,56 @@ struct HomeNewsView: View {
     ) -> some View {
         Button(action: action) {
             ZStack(alignment: .bottomLeading) {
-                // خلفية: صورة (إن وُجدت) أو gradient بلون الفئة
                 tileBackground(color: color, imageURL: imageURL, icon: icon)
 
-                // تدرّج داكن لقراءة العنوان
                 LinearGradient(
-                    colors: [.clear, .black.opacity(0.10), .black.opacity(0.65)],
+                    colors: [.clear, .black.opacity(0.08), .black.opacity(0.62)],
                     startPoint: .top,
                     endPoint: .bottom
                 )
 
-                // أيقونة وعدّاد بأعلى
+                // أيقونة وعدّاد بأعلى — أصغر من السابق
                 VStack {
                     HStack {
                         Image(systemName: icon)
-                            .font(DS.Font.scaled(14, weight: .bold))
+                            .font(DS.Font.scaled(11, weight: .bold))
                             .foregroundColor(.white)
-                            .frame(width: 32, height: 32)
+                            .frame(width: 24, height: 24)
                             .background(Circle().fill(.ultraThinMaterial))
                             .overlay(Circle().strokeBorder(Color.white.opacity(0.25), lineWidth: 1))
 
                         Spacer()
 
                         if let count, count > 0 {
-                            HStack(spacing: 3) {
-                                Image(systemName: "square.stack.fill")
-                                    .font(DS.Font.scaled(8, weight: .bold))
-                                Text("\(count)")
-                                    .font(DS.Font.scaled(10, weight: .black))
-                            }
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 7)
-                            .padding(.vertical, 3)
-                            .background(Capsule().fill(.ultraThinMaterial))
-                            .overlay(Capsule().strokeBorder(Color.white.opacity(0.30), lineWidth: 1))
+                            Text("\(count)")
+                                .font(DS.Font.scaled(9, weight: .black))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Capsule().fill(.ultraThinMaterial))
+                                .overlay(Capsule().strokeBorder(Color.white.opacity(0.30), lineWidth: 1))
                         }
                     }
                     Spacer()
                 }
-                .padding(DS.Spacing.sm)
+                .padding(8)
 
-                // العنوان أسفل
+                // العنوان أسفل — حجم أصغر
                 Text(title)
-                    .font(DS.Font.scaled(15, weight: .black))
+                    .font(DS.Font.scaled(13, weight: .black))
                     .foregroundColor(.white)
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
-                    .shadow(color: .black.opacity(0.35), radius: 4, x: 0, y: 1)
-                    .padding(DS.Spacing.sm)
+                    .shadow(color: .black.opacity(0.35), radius: 3, x: 0, y: 1)
+                    .padding(8)
             }
-            .aspectRatio(1.0, contentMode: .fit)
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
+            .aspectRatio(1.55, contentMode: .fit)
+            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
+                RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
                     .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
             )
-            .shadow(color: .black.opacity(0.10), radius: 10, x: 0, y: 4)
+            .shadow(color: .black.opacity(0.08), radius: 7, x: 0, y: 3)
         }
         .buttonStyle(DSScaleButtonStyle())
         .accessibilityLabel(title)
@@ -408,11 +402,11 @@ struct HomeNewsView: View {
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
-            // زخرفة خفيفة جداً
+            // زخرفة خفيفة
             Image(systemName: icon)
-                .font(.system(size: 110, weight: .light))
-                .foregroundColor(.white.opacity(0.12))
-                .offset(x: 35, y: 20)
+                .font(.system(size: 80, weight: .light))
+                .foregroundColor(.white.opacity(0.13))
+                .offset(x: 30, y: 15)
         }
     }
 
