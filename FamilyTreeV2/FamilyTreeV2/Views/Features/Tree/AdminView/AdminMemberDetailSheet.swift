@@ -921,22 +921,29 @@ struct AdminMemberDetailSheet: View {
                     iconColor: DS.Color.accent
                 )
 
-                // Birth date toggle
-                HStack(spacing: DS.Spacing.sm) {
-                    DSIcon("calendar", color: DS.Color.accent, size: iconSm, iconSize: iconFontSm)
+                // Birth date toggle — الصف كله Button لتفادي gesture conflict مع StableScrollView
+                Button {
+                    hasBirthDate.toggle()
+                } label: {
+                    HStack(spacing: DS.Spacing.sm) {
+                        DSIcon("calendar", color: DS.Color.accent, size: iconSm, iconSize: iconFontSm)
 
-                    Text(L10n.t("تاريخ الميلاد متوفر", "Birth date available"))
-                        .font(DS.Font.callout)
-                        .foregroundColor(DS.Color.textPrimary)
+                        Text(L10n.t("تاريخ الميلاد متوفر", "Birth date available"))
+                            .font(DS.Font.callout)
+                            .foregroundColor(DS.Color.textPrimary)
 
-                    Spacer()
+                        Spacer()
 
-                    Toggle("", isOn: $hasBirthDate)
-                        .labelsHidden()
-                        .tint(DS.Color.primary)
+                        Toggle("", isOn: $hasBirthDate)
+                            .labelsHidden()
+                            .tint(DS.Color.primary)
+                            .allowsHitTesting(false)
+                    }
+                    .padding(.horizontal, DS.Spacing.md)
+                    .padding(.vertical, DS.Spacing.xs)
+                    .contentShape(Rectangle())
                 }
-                .padding(.horizontal, DS.Spacing.md)
-                .padding(.vertical, DS.Spacing.xs)
+                .buttonStyle(.plain)
 
                 if hasBirthDate {
                     DSDivider()
@@ -970,41 +977,55 @@ struct AdminMemberDetailSheet: View {
 
                 DSDivider()
 
-                // Deceased toggle
-                HStack(spacing: DS.Spacing.sm) {
-                    DSIcon("heart.text.square.fill", color: DS.Color.error, size: iconSm, iconSize: iconFontSm)
-
-                    Text(L10n.t("متوفي", "Deceased"))
-                        .font(DS.Font.callout)
-                        .foregroundColor(DS.Color.textPrimary)
-
-                    Spacer()
-
-                    Toggle("", isOn: $isDeceased)
-                        .labelsHidden()
-                        .tint(DS.Color.error)
-                }
-                .padding(.horizontal, DS.Spacing.md)
-                .padding(.vertical, DS.Spacing.xs)
-
-                if isDeceased {
-                    DSDivider()
-
+                // Deceased toggle — الصف كله Button
+                Button {
+                    isDeceased.toggle()
+                } label: {
                     HStack(spacing: DS.Spacing.sm) {
-                        DSIcon("calendar.badge.minus", color: DS.Color.error, size: iconSm, iconSize: iconFontSm)
+                        DSIcon("heart.text.square.fill", color: DS.Color.error, size: iconSm, iconSize: iconFontSm)
 
-                        Text(L10n.t("تاريخ الوفاة متوفر", "Death date available"))
+                        Text(L10n.t("متوفي", "Deceased"))
                             .font(DS.Font.callout)
                             .foregroundColor(DS.Color.textPrimary)
 
                         Spacer()
 
-                        Toggle("", isOn: $hasDeathDate)
+                        Toggle("", isOn: $isDeceased)
                             .labelsHidden()
                             .tint(DS.Color.error)
+                            .allowsHitTesting(false)
                     }
                     .padding(.horizontal, DS.Spacing.md)
                     .padding(.vertical, DS.Spacing.xs)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+
+                if isDeceased {
+                    DSDivider()
+
+                    Button {
+                        hasDeathDate.toggle()
+                    } label: {
+                        HStack(spacing: DS.Spacing.sm) {
+                            DSIcon("calendar.badge.minus", color: DS.Color.error, size: iconSm, iconSize: iconFontSm)
+
+                            Text(L10n.t("تاريخ الوفاة متوفر", "Death date available"))
+                                .font(DS.Font.callout)
+                                .foregroundColor(DS.Color.textPrimary)
+
+                            Spacer()
+
+                            Toggle("", isOn: $hasDeathDate)
+                                .labelsHidden()
+                                .tint(DS.Color.error)
+                                .allowsHitTesting(false)
+                        }
+                        .padding(.horizontal, DS.Spacing.md)
+                        .padding(.vertical, DS.Spacing.xs)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
 
                     if hasDeathDate {
                         DSDivider()

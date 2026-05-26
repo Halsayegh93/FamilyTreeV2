@@ -375,18 +375,10 @@ struct DrillDownTreeView: View {
                     .padding(.top, DS.Spacing.sm)
             } else {
                 VStack(spacing: DS.Spacing.sm) {
-                    // خط رابط من النشط للـ header
+                    // خط رابط من النشط مباشرة للشبكة (بدون header تكراري)
                     Rectangle()
                         .fill(DS.Color.primary.opacity(0.25))
-                        .frame(width: 2, height: 10)
-
-                    // Header: "أبناء [الاسم] · N"
-                    childrenHeader(parentName: member.firstName, count: kids.count)
-
-                    // خط رابط من الـ header للشبكة
-                    Rectangle()
-                        .fill(DS.Color.primary.opacity(0.18))
-                        .frame(width: 2, height: 8)
+                        .frame(width: 2, height: 14)
 
                     ForEach(Array(smartRows(kids).enumerated()), id: \.offset) { _, row in
                         HStack(spacing: DS.Spacing.sm) {
@@ -416,38 +408,6 @@ struct DrillDownTreeView: View {
                 }
             }
         }
-    }
-
-    /// Header يبيّن "أبناء [الاسم]" + عدد — يوضّح العلاقة بين النشط وشبكة الأبناء.
-    private func childrenHeader(parentName: String, count: Int) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: "person.2.fill")
-                .font(DS.Font.scaled(10, weight: .bold))
-                .foregroundColor(DS.Color.primary)
-            Text(L10n.t("أبناء ", "Children of "))
-                .font(DS.Font.scaled(12, weight: .semibold))
-                .foregroundColor(DS.Color.textSecondary)
-            +
-            Text(parentName)
-                .font(DS.Font.scaled(12, weight: .black))
-                .foregroundColor(DS.Color.textPrimary)
-            Text("·")
-                .font(DS.Font.scaled(12, weight: .black))
-                .foregroundColor(DS.Color.textTertiary)
-            Text("\(count)")
-                .font(DS.Font.scaled(12, weight: .black))
-                .foregroundColor(DS.Color.primary)
-        }
-        .padding(.horizontal, DS.Spacing.md)
-        .padding(.vertical, 6)
-        .background(
-            Capsule()
-                .fill(DS.Color.primary.opacity(0.08))
-        )
-        .overlay(
-            Capsule()
-                .strokeBorder(DS.Color.primary.opacity(0.20), lineWidth: 1)
-        )
     }
 
     // MARK: - Chain Connector (between ancestor squares)
