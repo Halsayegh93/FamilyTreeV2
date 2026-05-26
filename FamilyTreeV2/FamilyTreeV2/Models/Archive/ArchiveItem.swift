@@ -17,6 +17,14 @@ struct ArchiveItem: Identifiable, Codable, Equatable {
     /// إخفاء soft من قِبَل الإدارة — العضو العادي ما يشوف، الإدارة تشوف بعلامة مميّزة.
     /// `var` لتسهيل التحديث المحلّي بعد toggle.
     var isHidden: Bool
+    /// حالة الموافقة. الافتراضي pending للأعضاء العاديين، approved للإدارة.
+    var approvalStatus: ApprovalStatus
+    var approvedBy: UUID?
+    var approvedAt: Date?
+
+    enum ApprovalStatus: String, Codable {
+        case pending, approved, rejected
+    }
 
     enum Category: String, Codable, CaseIterable, Identifiable {
         case documents = "documents"
@@ -79,31 +87,38 @@ struct ArchiveItem: Identifiable, Codable, Equatable {
         case title
         case description
         case category
-        case fileUrl       = "file_url"
-        case fileType      = "file_type"
-        case fileSize      = "file_size"
-        case fileName      = "file_name"
-        case thumbnailUrl  = "thumbnail_url"
-        case uploadedBy    = "uploaded_by"
-        case createdAt     = "created_at"
-        case isHidden      = "is_hidden"
+        case fileUrl        = "file_url"
+        case fileType       = "file_type"
+        case fileSize       = "file_size"
+        case fileName       = "file_name"
+        case thumbnailUrl   = "thumbnail_url"
+        case uploadedBy     = "uploaded_by"
+        case createdAt      = "created_at"
+        case isHidden       = "is_hidden"
+        case approvalStatus = "approval_status"
+        case approvedBy     = "approved_by"
+        case approvedAt     = "approved_at"
     }
 
-    // Decoder متسامح: يفترض isHidden = false لو الحقل غير موجود
-    // (للتوافق مع migrations القديمة قبل تطبيق إضافة العمود)
+    // Decoder متسامح: يفترض القيم الافتراضية للحقول الجديدة (للتوافق مع
+    // migrations القديمة قبل تطبيقها).
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        id            = try c.decode(UUID.self,    forKey: .id)
-        title         = try c.decode(String.self,  forKey: .title)
-        description   = try c.decodeIfPresent(String.self, forKey: .description)
-        category      = try c.decode(Category.self, forKey: .category)
-        fileUrl       = try c.decode(String.self,  forKey: .fileUrl)
-        fileType      = try c.decode(String.self,  forKey: .fileType)
-        fileSize      = try c.decodeIfPresent(Int64.self,  forKey: .fileSize)
-        fileName      = try c.decodeIfPresent(String.self, forKey: .fileName)
-        thumbnailUrl  = try c.decodeIfPresent(String.self, forKey: .thumbnailUrl)
-        uploadedBy    = try c.decode(UUID.self,    forKey: .uploadedBy)
-        createdAt     = try c.decode(Date.self,    forKey: .createdAt)
-        isHidden      = try c.decodeIfPresent(Bool.self,   forKey: .isHidden) ?? false
+        id              = try c.decode(UUID.self,    forKey: .id)
+        title           = try c.decode(String.self,  forKey: .title)
+        description     = try c.decodeIfPresent(String.self, forKey: .description)
+        category        = try c.decode(Category.self, forKey: .category)
+        fileUrl         = try c.decode(String.self,  forKey: .fileUrl)
+        fileType        = try c.decode(String.self,  forKey: .fileType)
+        fileSize        = try c.decodeIfPresent(Int64.self,  forKey: .fileSize)
+        fileName        = try c.decodeIfPresent(String.self, forKey: .fileName)
+        thumbnailUrl    = try c.decodeIfPresent(String.self, forKey: .thumbnailUrl)
+        uploadedBy      = try c.decode(UUID.self,    forKey: .uploadedBy)
+        createdAt       = try c.decode(Date.self,    forKey: .createdAt)
+        isHidden        = try c.decodeIfPresent(Bool.self,   forKey: .isHidden) ?? false
+        // إذا لا يوجد عمود approval_status (قبل migration الموافقة)، نعتبره مقبولاً
+        approvalStatus  = try c.decodeIfPresent(ApprovalStatus.self, forKey: .approvalStatus) ?? .approved
+        approvedBy      = try c.decodeIfPresent(UUID.self, forKey: .approvedBy)
+        approvedAt      = try c.decodeIfPresent(Date.self, forKey: .approvedAt)
     }
 }

@@ -71,15 +71,14 @@ final class FamilyArchiveViewModel: ObservableObject {
             errorMessage = L10n.t("لم يتم تسجيل الدخول.", "Not signed in.")
             return nil
         }
-        guard authVM?.isAdmin == true else {
-            errorMessage = L10n.t("الرفع متاح للمدراء فقط.", "Upload is restricted to admins.")
-            return nil
-        }
 
         isUploading = true
         uploadProgress = 0
         errorMessage = nil
         defer { isUploading = false; uploadProgress = 0 }
+
+        // المدير/المالك → موافق عليه تلقائياً. غيره → بانتظار الموافقة.
+        let isAdmin = authVM?.isAdmin == true
 
         let itemId = UUID()
         let ext = (fileName as NSString).pathExtension.lowercased()
@@ -106,17 +105,23 @@ final class FamilyArchiveViewModel: ObservableObject {
             // 3) إدراج صف في الجدول
             let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
             let trimmedDescription = description?.trimmingCharacters(in: .whitespacesAndNewlines)
-            let payload: [String: AnyEncodable] = [
-                "id":            AnyEncodable(itemId.uuidString),
-                "title":         AnyEncodable(trimmedTitle),
-                "description":   AnyEncodable((trimmedDescription?.isEmpty ?? true) ? Optional<String>.none : trimmedDescription),
-                "category":      AnyEncodable(category.rawValue),
-                "file_url":      AnyEncodable(publicURL.absoluteString),
-                "file_type":     AnyEncodable(mimeType),
-                "file_size":     AnyEncodable(Int64(fileData.count)),
-                "file_name":     AnyEncodable(fileName),
-                "uploaded_by":   AnyEncodable(uploaderId.uuidString)
+            let nowIso = ISO8601DateFormatter().string(from: Date())
+            var payload: [String: AnyEncodable] = [
+                "id":              AnyEncodable(itemId.uuidString),
+                "title":           AnyEncodable(trimmedTitle),
+                "description":     AnyEncodable((trimmedDescription?.isEmpty ?? true) ? Optional<String>.none : trimmedDescription),
+                "category":        AnyEncodable(category.rawValue),
+                "file_url":        AnyEncodable(publicURL.absoluteString),
+                "file_type":       AnyEncodable(mimeType),
+                "file_size":       AnyEncodable(Int64(fileData.count)),
+                "file_name":       AnyEncodable(fileName),
+                "uploaded_by":     AnyEncodable(uploaderId.uuidString),
+                "approval_status": AnyEncodable(isAdmin ? "approved" : "pending")
             ]
+            if isAdmin {
+                payload["approved_by"] = AnyEncodable(uploaderId.uuidString)
+                payload["approved_at"] = AnyEncodable(nowIso)
+            }
 
             let inserted: [ArchiveItem] = try await supabase
                 .from(tableName)
@@ -138,6 +143,63 @@ final class FamilyArchiveViewModel: ObservableObject {
             self.errorMessage = L10n.t("تعذّر رفع العنصر.", "Failed to upload item.")
             Log.error("[Archive] خطأ رفع: \(error.localizedDescription)")
             return nil
+        }
+    }
+
+    // MARK: - Approval (admin + owner)
+
+    /// الموافقة على عنصر معلَّق — يصير مرئياً للجميع.
+    func approveItem(_ item: ArchiveItem) async {
+        await setApproval(item: item, status: .approved)
+    }
+
+    /// رفض عنصر معلَّق — يبقى موجود لكن لا يظهر للجمهور.
+    func rejectItem(_ item: ArchiveItem) async {
+        await setApproval(item: item, status: .rejected)
+    }
+
+    private func setApproval(item: ArchiveItem, status: ArchiveItem.ApprovalStatus) async {
+        guard NetworkMonitor.shared.requireOnline() else { return }
+        guard authVM?.isAdmin == true, let approverId = authVM?.currentUser?.id else {
+            errorMessage = L10n.t("الموافقة متاحة للمدراء فقط.",
+                                  "Approval is restricted to admins.")
+            return
+        }
+
+        // تحديث تفاؤلي
+        let oldStatus = item.approvalStatus
+        let oldApprover = item.approvedBy
+        let oldApprovedAt = item.approvedAt
+        if let idx = items.firstIndex(of: item) {
+            items[idx].approvalStatus = status
+            items[idx].approvedBy = approverId
+            items[idx].approvedAt = Date()
+        }
+
+        let nowIso = ISO8601DateFormatter().string(from: Date())
+        let payload: [String: AnyEncodable] = [
+            "approval_status": AnyEncodable(status.rawValue),
+            "approved_by":     AnyEncodable(approverId.uuidString),
+            "approved_at":     AnyEncodable(nowIso)
+        ]
+
+        do {
+            try await supabase
+                .from(tableName)
+                .update(payload)
+                .eq("id", value: item.id.uuidString)
+                .execute()
+            Log.info("[Archive] \(status.rawValue): \(item.title)")
+        } catch {
+            // استرجاع
+            if let idx = items.firstIndex(where: { $0.id == item.id }) {
+                items[idx].approvalStatus = oldStatus
+                items[idx].approvedBy = oldApprover
+                items[idx].approvedAt = oldApprovedAt
+            }
+            self.errorMessage = L10n.t("تعذّر تحديث حالة الموافقة.",
+                                       "Failed to update approval.")
+            Log.error("[Archive] خطأ setApproval: \(error.localizedDescription)")
         }
     }
 
@@ -289,14 +351,20 @@ final class FamilyArchiveViewModel: ObservableObject {
 
     // MARK: - Helpers
 
-    /// عناصر القسم معيّن — مفلترة من القائمة الكاملة.
-    func items(in category: ArchiveItem.Category) -> [ArchiveItem] {
-        items.filter { $0.category == category }
+    /// عناصر قسم معيّن — أو الكل لو `nil`.
+    func items(in category: ArchiveItem.Category?) -> [ArchiveItem] {
+        guard let category else { return items }
+        return items.filter { $0.category == category }
     }
 
-    /// عدد العناصر في قسم معيّن.
-    func count(in category: ArchiveItem.Category) -> Int {
+    /// عدد العناصر في قسم معيّن — أو الإجمالي لو `nil`.
+    func count(in category: ArchiveItem.Category?) -> Int {
         items(in: category).count
+    }
+
+    /// عدد العناصر بانتظار الموافقة (يفيد المدراء).
+    var pendingCount: Int {
+        items.filter { $0.approvalStatus == .pending }.count
     }
 
     /// استخراج مسار التخزين من URL عام (لإستخدامه عند الحذف).

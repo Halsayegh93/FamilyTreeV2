@@ -9,7 +9,8 @@ struct FamilyArchiveView: View {
     @EnvironmentObject private var authVM: AuthViewModel
     @StateObject private var archiveVM = FamilyArchiveViewModel()
 
-    @State private var selectedCategory: ArchiveItem.Category = .documents
+    /// nil = الكل
+    @State private var selectedCategory: ArchiveItem.Category? = nil
     @State private var showingUpload = false
     @State private var selectedItem: ArchiveItem? = nil
     @State private var itemToDelete: ArchiveItem? = nil
@@ -77,15 +78,34 @@ struct FamilyArchiveView: View {
                                 .buttonStyle(DSScaleButtonStyle())
                                 .contextMenu {
                                     if authVM.isAdmin && !selectionMode {
-                                        Button {
-                                            Task { await archiveVM.toggleHidden(item) }
-                                        } label: {
-                                            Label(
-                                                item.isHidden
-                                                    ? L10n.t("إظهار للجميع", "Show to all")
-                                                    : L10n.t("إخفاء من الأعضاء", "Hide from members"),
-                                                systemImage: item.isHidden ? "eye.fill" : "eye.slash.fill"
-                                            )
+                                        // إجراءات الموافقة — فقط للعناصر المعلَّقة
+                                        if item.approvalStatus == .pending {
+                                            Button {
+                                                Task { await archiveVM.approveItem(item) }
+                                            } label: {
+                                                Label(L10n.t("موافقة", "Approve"),
+                                                      systemImage: "checkmark.circle.fill")
+                                            }
+                                            Button {
+                                                Task { await archiveVM.rejectItem(item) }
+                                            } label: {
+                                                Label(L10n.t("رفض", "Reject"),
+                                                      systemImage: "xmark.circle.fill")
+                                            }
+                                            Divider()
+                                        }
+                                        // إجراءات الإخفاء — فقط للموافق عليها
+                                        if item.approvalStatus == .approved {
+                                            Button {
+                                                Task { await archiveVM.toggleHidden(item) }
+                                            } label: {
+                                                Label(
+                                                    item.isHidden
+                                                        ? L10n.t("إظهار للجميع", "Show to all")
+                                                        : L10n.t("إخفاء من الأعضاء", "Hide from members"),
+                                                    systemImage: item.isHidden ? "eye.fill" : "eye.slash.fill"
+                                                )
+                                            }
                                         }
                                         Button(role: .destructive) {
                                             itemToDelete = item
@@ -103,8 +123,8 @@ struct FamilyArchiveView: View {
                 }
             }
 
-            // زر رفع — للمدراء فقط، يختفي في وضع التحديد
-            if authVM.isAdmin && !selectionMode {
+            // زر رفع — متاح للجميع، يختفي فقط في وضع التحديد
+            if !selectionMode {
                 HStack {
                     Spacer()
                     DSFloatingButton(icon: "plus") {
@@ -127,7 +147,7 @@ struct FamilyArchiveView: View {
             await archiveVM.fetchItems()
         }
         .sheet(isPresented: $showingUpload) {
-            ArchiveUploadSheet(archiveVM: archiveVM, defaultCategory: selectedCategory)
+            ArchiveUploadSheet(archiveVM: archiveVM, defaultCategory: selectedCategory ?? .documents)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }
@@ -345,11 +365,46 @@ struct FamilyArchiveView: View {
     private var categoryPicker: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: DS.Spacing.sm) {
+                // الكل (nil)
+                allCategoryChip
+                // الأقسام الأربعة
                 ForEach(ArchiveItem.Category.allCases) { category in
                     categoryChip(category)
                 }
             }
         }
+    }
+
+    /// chip خاص لـ "الكل" — يجمع كل الأقسام.
+    private var allCategoryChip: some View {
+        let isActive = selectedCategory == nil
+        let count = archiveVM.items.count
+        return Button {
+            withAnimation(DS.Anim.snappy) { selectedCategory = nil }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "square.grid.2x2.fill")
+                    .font(DS.Font.scaled(12, weight: .bold))
+                Text(L10n.t("الكل", "All"))
+                    .font(DS.Font.scaled(13, weight: isActive ? .bold : .semibold))
+                if count > 0 {
+                    Text("\(count)")
+                        .font(DS.Font.scaled(11, weight: .bold))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(
+                            Capsule().fill(isActive ? Color.white.opacity(0.25) : DS.Color.primary.opacity(0.15))
+                        )
+                }
+            }
+            .foregroundColor(isActive ? .white : DS.Color.primary)
+            .padding(.horizontal, DS.Spacing.md)
+            .padding(.vertical, 8)
+            .background(
+                Capsule().fill(isActive ? DS.Color.primary : DS.Color.primary.opacity(0.10))
+            )
+        }
+        .buttonStyle(DSScaleButtonStyle())
     }
 
     private func categoryChip(_ category: ArchiveItem.Category) -> some View {
@@ -418,20 +473,29 @@ struct FamilyArchiveView: View {
                 .frame(height: 130)
                 .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
 
-                // شارة "مخفي" — تظهر فقط للإدارة (الأعضاء العاديون لا يجلبون العنصر أصلاً)
-                if item.isHidden {
-                    HStack(spacing: 3) {
-                        Image(systemName: "eye.slash.fill")
-                            .font(DS.Font.scaled(9, weight: .bold))
-                        Text(L10n.t("مخفي", "Hidden"))
-                            .font(DS.Font.scaled(9, weight: .bold))
+                // شارة الحالة (الأولوية: pending > rejected > hidden)
+                VStack(alignment: .trailing, spacing: 4) {
+                    if item.approvalStatus == .pending {
+                        statusBadge(
+                            icon: "clock.fill",
+                            label: L10n.t("بانتظار", "Pending"),
+                            color: DS.Color.warning
+                        )
+                    } else if item.approvalStatus == .rejected {
+                        statusBadge(
+                            icon: "xmark.circle.fill",
+                            label: L10n.t("مرفوض", "Rejected"),
+                            color: DS.Color.error
+                        )
+                    } else if item.isHidden {
+                        statusBadge(
+                            icon: "eye.slash.fill",
+                            label: L10n.t("مخفي", "Hidden"),
+                            color: DS.Color.textTertiary
+                        )
                     }
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 3)
-                    .background(Capsule().fill(DS.Color.warning))
-                    .padding(6)
                 }
+                .padding(6)
             }
 
             // عنوان + حجم
@@ -457,17 +521,38 @@ struct FamilyArchiveView: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                .stroke(item.isHidden ? DS.Color.warning.opacity(0.30) : DS.Color.primary.opacity(0.08), lineWidth: 1)
+                .stroke(borderColor(for: item), lineWidth: 1)
         )
-        .opacity(item.isHidden ? 0.75 : 1.0)
+        .opacity(item.approvalStatus == .rejected ? 0.55 : (item.isHidden || item.approvalStatus == .pending ? 0.75 : 1.0))
         .dsSubtleShadow()
+    }
+
+    private func borderColor(for item: ArchiveItem) -> Color {
+        switch item.approvalStatus {
+        case .rejected: return DS.Color.error.opacity(0.35)
+        case .pending:  return DS.Color.warning.opacity(0.35)
+        case .approved: return item.isHidden ? DS.Color.textTertiary.opacity(0.30)
+                                             : DS.Color.primary.opacity(0.08)
+        }
+    }
+
+    /// شارة حالة موحّدة (capsule صغيرة بأيقونة + نص).
+    private func statusBadge(icon: String, label: String, color: Color) -> some View {
+        HStack(spacing: 3) {
+            Image(systemName: icon).font(DS.Font.scaled(9, weight: .bold))
+            Text(label).font(DS.Font.scaled(9, weight: .bold))
+        }
+        .foregroundColor(.white)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 3)
+        .background(Capsule().fill(color))
     }
 
     // MARK: - Empty State
 
     private var emptyState: some View {
         VStack(spacing: DS.Spacing.md) {
-            Image(systemName: selectedCategory.iconName)
+            Image(systemName: selectedCategory?.iconName ?? "archivebox")
                 .font(.system(size: 56, weight: .light))
                 .foregroundColor(DS.Color.textTertiary)
             Text(L10n.t("لا توجد عناصر في هذا القسم بعد",
@@ -475,12 +560,14 @@ struct FamilyArchiveView: View {
                 .font(DS.Font.callout)
                 .foregroundColor(DS.Color.textSecondary)
                 .multilineTextAlignment(.center)
-            if authVM.isAdmin {
-                Text(L10n.t("اضغط + لإضافة عنصر",
-                           "Tap + to add an item"))
-                    .font(DS.Font.caption1)
-                    .foregroundColor(DS.Color.textTertiary)
-            }
+            // أي مستخدم يقدر يضيف — مع تنبيه للأعضاء بحاجة الموافقة
+            Text(authVM.isAdmin
+                 ? L10n.t("اضغط + لإضافة عنصر", "Tap + to add an item")
+                 : L10n.t("اضغط + لإضافة عنصر (سيُعرض بعد موافقة الإدارة)",
+                          "Tap + to add (visible after admin approval)"))
+                .font(DS.Font.caption1)
+                .foregroundColor(DS.Color.textTertiary)
+                .multilineTextAlignment(.center)
         }
         .padding()
     }
