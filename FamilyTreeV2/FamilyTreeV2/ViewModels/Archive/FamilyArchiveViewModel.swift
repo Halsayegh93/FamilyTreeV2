@@ -175,6 +175,80 @@ final class FamilyArchiveViewModel: ObservableObject {
         }
     }
 
+    // MARK: - Batch Operations
+
+    /// حذف عدة عناصر دفعة واحدة (للمدراء فقط).
+    func deleteItems(ids: Set<UUID>) async {
+        guard NetworkMonitor.shared.requireOnline() else { return }
+        guard authVM?.isAdmin == true else {
+            errorMessage = L10n.t("الحذف متاح للمدراء فقط.", "Delete is restricted to admins.")
+            return
+        }
+        guard !ids.isEmpty else { return }
+
+        // التقاط العناصر قبل الحذف (للاسترجاع عند الفشل ولتنظيف Storage)
+        let targets = items.filter { ids.contains($0.id) }
+        let idStrings = targets.map { $0.id.uuidString }
+
+        // إزالة محلية تفاؤلية
+        items.removeAll { ids.contains($0.id) }
+
+        do {
+            try await supabase
+                .from(tableName)
+                .delete()
+                .in("id", values: idStrings)
+                .execute()
+
+            // حذف الملفات من Storage (best-effort)
+            let paths = targets.compactMap { storagePath(from: $0.fileUrl) }
+            if !paths.isEmpty {
+                try? await supabase.storage.from(bucketName).remove(paths: paths)
+            }
+            Log.info("[Archive] حذف دفعي: \(targets.count) عنصر")
+        } catch {
+            // استرجاع
+            items.append(contentsOf: targets)
+            items.sort { $0.createdAt > $1.createdAt }
+            self.errorMessage = L10n.t("تعذّر حذف بعض العناصر.",
+                                       "Failed to delete some items.")
+            Log.error("[Archive] خطأ حذف دفعي: \(error.localizedDescription)")
+        }
+    }
+
+    /// تعيين isHidden لعدة عناصر دفعة واحدة (للمدراء فقط).
+    func setHidden(ids: Set<UUID>, hidden: Bool) async {
+        guard NetworkMonitor.shared.requireOnline() else { return }
+        guard authVM?.isAdmin == true else {
+            errorMessage = L10n.t("الإخفاء متاح للمدراء فقط.", "Hiding is restricted to admins.")
+            return
+        }
+        guard !ids.isEmpty else { return }
+
+        let idStrings = Array(ids).map { $0.uuidString }
+
+        // تحديث محلي تفاؤلي
+        for i in items.indices where ids.contains(items[i].id) {
+            items[i].isHidden = hidden
+        }
+
+        do {
+            try await supabase
+                .from(tableName)
+                .update(["is_hidden": hidden])
+                .in("id", values: idStrings)
+                .execute()
+            Log.info("[Archive] \(hidden ? "إخفاء" : "إظهار") دفعي: \(ids.count) عنصر")
+        } catch {
+            // استرجاع
+            for i in items.indices where ids.contains(items[i].id) {
+                items[i].isHidden = !hidden
+            }
+            self.errorMessage = L10n.t("تعذّر تغيير الحالة.", "Failed to toggle visibility.")
+            Log.error("[Archive] خطأ setHidden دفعي: \(error.localizedDescription)")
+        }
+    }
+
     // MARK: - Delete
 
     func deleteItem(_ item: ArchiveItem) async {

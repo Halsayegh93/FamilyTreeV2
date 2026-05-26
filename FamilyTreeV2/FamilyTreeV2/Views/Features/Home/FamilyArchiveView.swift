@@ -14,17 +14,36 @@ struct FamilyArchiveView: View {
     @State private var selectedItem: ArchiveItem? = nil
     @State private var itemToDelete: ArchiveItem? = nil
 
+    // وضع التحديد المتعدّد (للمدراء فقط)
+    @State private var selectionMode = false
+    @State private var selectedIDs: Set<UUID> = []
+    @State private var showBatchDeleteAlert = false
+
     private let gridColumns: [GridItem] = [
         GridItem(.flexible(), spacing: DS.Spacing.sm),
         GridItem(.flexible(), spacing: DS.Spacing.sm)
     ]
 
     var body: some View {
-        ZStack(alignment: .bottomTrailing) {
+        ZStack(alignment: .bottom) {
             DS.Color.background.ignoresSafeArea()
 
             VStack(spacing: 0) {
-                categoryPicker
+                // شريط التحديد العلوي يحلّ محل صف الفئات في وضع التحديد
+                if selectionMode {
+                    selectionTopBar
+                        .padding(.horizontal, DS.Spacing.lg)
+                        .padding(.top, DS.Spacing.sm)
+                        .padding(.bottom, DS.Spacing.xs)
+                        .transition(.opacity)
+                }
+
+                HStack(spacing: DS.Spacing.sm) {
+                    categoryPicker
+                    if authVM.isAdmin && !selectionMode {
+                        selectModeButton
+                    }
+                }
                     .padding(.horizontal, DS.Spacing.lg)
                     .padding(.top, DS.Spacing.sm)
                     .padding(.bottom, DS.Spacing.xs)
@@ -41,12 +60,23 @@ struct FamilyArchiveView: View {
                     ScrollView(showsIndicators: false) {
                         LazyVGrid(columns: gridColumns, spacing: DS.Spacing.sm) {
                             ForEach(archiveVM.items(in: selectedCategory)) { item in
-                                Button { selectedItem = item } label: {
+                                Button {
+                                    if selectionMode {
+                                        toggleSelection(item.id)
+                                    } else {
+                                        selectedItem = item
+                                    }
+                                } label: {
                                     archiveCard(item)
+                                        .overlay(alignment: .topLeading) {
+                                            if selectionMode {
+                                                selectionCheckmark(for: item.id)
+                                            }
+                                        }
                                 }
                                 .buttonStyle(DSScaleButtonStyle())
                                 .contextMenu {
-                                    if authVM.isAdmin {
+                                    if authVM.isAdmin && !selectionMode {
                                         Button {
                                             Task { await archiveVM.toggleHidden(item) }
                                         } label: {
@@ -73,15 +103,25 @@ struct FamilyArchiveView: View {
                 }
             }
 
-            // زر رفع — للمدراء فقط
-            if authVM.isAdmin {
-                DSFloatingButton(icon: "plus") {
-                    showingUpload = true
+            // زر رفع — للمدراء فقط، يختفي في وضع التحديد
+            if authVM.isAdmin && !selectionMode {
+                HStack {
+                    Spacer()
+                    DSFloatingButton(icon: "plus") {
+                        showingUpload = true
+                    }
+                    .padding(.trailing, DS.Spacing.xl)
+                    .padding(.bottom, DS.Spacing.lg)
                 }
-                .padding(.trailing, DS.Spacing.xl)
-                .padding(.bottom, DS.Spacing.lg)
+            }
+
+            // شريط الإجراءات السفلي في وضع التحديد
+            if selectionMode {
+                selectionBottomBar
+                    .transition(.move(edge: .bottom))
             }
         }
+        .animation(DS.Anim.snappy, value: selectionMode)
         .task {
             archiveVM.configure(authVM: authVM)
             await archiveVM.fetchItems()
@@ -109,6 +149,194 @@ struct FamilyArchiveView: View {
         } message: {
             Text(L10n.t("حذف هذا العنصر نهائياً من الأرشيف؟",
                        "Permanently delete this item from the archive?"))
+        }
+        .alert(L10n.t("حذف العناصر المختارة", "Delete selected items"),
+               isPresented: $showBatchDeleteAlert) {
+            Button(L10n.t("حذف \(selectedIDs.count)", "Delete \(selectedIDs.count)"),
+                   role: .destructive) {
+                let ids = selectedIDs
+                Task {
+                    await archiveVM.deleteItems(ids: ids)
+                    await MainActor.run { exitSelectionMode() }
+                }
+            }
+            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
+        } message: {
+            Text(L10n.t("حذف \(selectedIDs.count) عنصر نهائياً من الأرشيف؟",
+                       "Permanently delete \(selectedIDs.count) items from the archive?"))
+        }
+    }
+
+    // MARK: - Selection Mode UI
+
+    private var selectModeButton: some View {
+        Button {
+            withAnimation(DS.Anim.snappy) {
+                selectionMode = true
+                selectedIDs = []
+            }
+        } label: {
+            Image(systemName: "checkmark.circle")
+                .font(DS.Font.scaled(15, weight: .bold))
+                .foregroundColor(DS.Color.primary)
+                .frame(width: 36, height: 36)
+                .background(Circle().fill(DS.Color.primary.opacity(0.10)))
+                .overlay(Circle().strokeBorder(DS.Color.primary.opacity(0.25), lineWidth: 1))
+        }
+        .buttonStyle(DSScaleButtonStyle())
+        .accessibilityLabel(L10n.t("تحديد متعدّد", "Multi-select"))
+    }
+
+    private var selectionTopBar: some View {
+        HStack(spacing: DS.Spacing.sm) {
+            Button {
+                exitSelectionMode()
+            } label: {
+                Text(L10n.t("إلغاء", "Cancel"))
+                    .font(DS.Font.scaled(13, weight: .semibold))
+                    .foregroundColor(DS.Color.error)
+            }
+            Spacer()
+            Text(L10n.t("اختيار \(selectedIDs.count)", "Selected \(selectedIDs.count)"))
+                .font(DS.Font.scaled(13, weight: .bold))
+                .foregroundColor(DS.Color.textPrimary)
+            Spacer()
+            Button {
+                toggleSelectAllInCategory()
+            } label: {
+                Text(allInCategorySelected ? L10n.t("إلغاء الكل", "Clear all")
+                                           : L10n.t("تحديد الكل", "Select all"))
+                    .font(DS.Font.scaled(13, weight: .semibold))
+                    .foregroundColor(DS.Color.primary)
+            }
+        }
+        .padding(.horizontal, DS.Spacing.md)
+        .padding(.vertical, DS.Spacing.sm)
+        .background(
+            RoundedRectangle(cornerRadius: DS.Radius.md)
+                .fill(DS.Color.surface)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Radius.md)
+                .strokeBorder(DS.Color.primary.opacity(0.18), lineWidth: 1)
+        )
+    }
+
+    private func selectionCheckmark(for id: UUID) -> some View {
+        let isSelected = selectedIDs.contains(id)
+        return Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+            .font(.system(size: 22, weight: .bold))
+            .foregroundColor(isSelected ? .white : DS.Color.textPrimary.opacity(0.7))
+            .background(
+                Circle()
+                    .fill(isSelected ? DS.Color.primary : Color.white.opacity(0.85))
+                    .frame(width: 22, height: 22)
+            )
+            .shadow(color: .black.opacity(0.15), radius: 2, x: 0, y: 1)
+            .padding(10)
+    }
+
+    private var selectionBottomBar: some View {
+        let selected = archiveVM.items.filter { selectedIDs.contains($0.id) }
+        let anyVisible = selected.contains { !$0.isHidden }
+        let anyHidden = selected.contains { $0.isHidden }
+        let isEmpty = selectedIDs.isEmpty
+
+        return HStack(spacing: DS.Spacing.md) {
+            // إخفاء (يظهر فقط إذا فيه عنصر مرئي ضمن التحديد)
+            if anyVisible {
+                actionPill(icon: "eye.slash.fill",
+                           label: L10n.t("إخفاء", "Hide"),
+                           color: DS.Color.warning) {
+                    let ids = selectedIDs
+                    Task {
+                        await archiveVM.setHidden(ids: ids, hidden: true)
+                        await MainActor.run { exitSelectionMode() }
+                    }
+                }
+                .disabled(isEmpty)
+            }
+
+            // إظهار (يظهر فقط إذا فيه مخفي ضمن التحديد)
+            if anyHidden {
+                actionPill(icon: "eye.fill",
+                           label: L10n.t("إظهار", "Show"),
+                           color: DS.Color.success) {
+                    let ids = selectedIDs
+                    Task {
+                        await archiveVM.setHidden(ids: ids, hidden: false)
+                        await MainActor.run { exitSelectionMode() }
+                    }
+                }
+                .disabled(isEmpty)
+            }
+
+            Spacer()
+
+            // حذف
+            actionPill(icon: "trash.fill",
+                       label: L10n.t("حذف", "Delete"),
+                       color: DS.Color.error) {
+                showBatchDeleteAlert = true
+            }
+            .disabled(isEmpty)
+        }
+        .padding(.horizontal, DS.Spacing.lg)
+        .padding(.vertical, DS.Spacing.sm)
+        .background(.ultraThinMaterial)
+        .overlay(
+            Rectangle()
+                .fill(DS.Color.textTertiary.opacity(0.15))
+                .frame(height: 0.5),
+            alignment: .top
+        )
+    }
+
+    private func actionPill(icon: String, label: String, color: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 5) {
+                Image(systemName: icon)
+                    .font(DS.Font.scaled(12, weight: .bold))
+                Text(label)
+                    .font(DS.Font.scaled(13, weight: .bold))
+            }
+            .foregroundColor(.white)
+            .padding(.horizontal, DS.Spacing.md)
+            .padding(.vertical, 9)
+            .background(Capsule().fill(color))
+        }
+        .buttonStyle(DSScaleButtonStyle())
+    }
+
+    // MARK: - Selection Helpers
+
+    private var allInCategorySelected: Bool {
+        let inCat = archiveVM.items(in: selectedCategory)
+        guard !inCat.isEmpty else { return false }
+        return inCat.allSatisfy { selectedIDs.contains($0.id) }
+    }
+
+    private func toggleSelection(_ id: UUID) {
+        if selectedIDs.contains(id) {
+            selectedIDs.remove(id)
+        } else {
+            selectedIDs.insert(id)
+        }
+    }
+
+    private func toggleSelectAllInCategory() {
+        let inCat = archiveVM.items(in: selectedCategory).map(\.id)
+        if allInCategorySelected {
+            for id in inCat { selectedIDs.remove(id) }
+        } else {
+            for id in inCat { selectedIDs.insert(id) }
+        }
+    }
+
+    private func exitSelectionMode() {
+        withAnimation(DS.Anim.snappy) {
+            selectionMode = false
+            selectedIDs = []
         }
     }
 
