@@ -373,80 +373,122 @@ struct FamilyArchiveView: View {
 
     // MARK: - Category Picker
 
+    // MARK: - Premium Filter Bar
+    // التصميم: حاوية ultraThinMaterial. الفلتر النشط = pill ممتدّ بلون فئته + اسم + عدّاد.
+    // البقية = أيقونات دائرية بلون باهت. النقر على أيقونة يبدّل النشط بـ matched geometry.
+
+    private var allCategoryAccent: Color { DS.Color.primary }
+    private var allCategoryIcon: String { "square.grid.2x2.fill" }
+
+    private func accentColor(for category: ArchiveItem.Category?) -> Color {
+        category?.accentColor ?? allCategoryAccent
+    }
+
+    private func icon(for category: ArchiveItem.Category?) -> String {
+        category?.iconName ?? allCategoryIcon
+    }
+
+    private func title(for category: ArchiveItem.Category?) -> String {
+        if let c = category {
+            return L10n.t(c.displayName, c.displayNameEn)
+        }
+        return L10n.t("الكل", "All")
+    }
+
+    /// كل الخيارات بترتيب ثابت: الكل ثم 4 أقسام.
+    private var allFilterOptions: [ArchiveItem.Category?] {
+        [nil, .documents, .books, .oldPhotos, .other]
+    }
+
     private var categoryPicker: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: DS.Spacing.sm) {
-                // الكل (nil)
-                allCategoryChip
-                // الأقسام الأربعة
-                ForEach(ArchiveItem.Category.allCases) { category in
-                    categoryChip(category)
+        HStack(spacing: 6) {
+            ForEach(allFilterOptions, id: \.self) { option in
+                if selectedCategory == option {
+                    activeFilterPill(option)
+                        .transition(.scale(scale: 0.85).combined(with: .opacity))
+                } else {
+                    inactiveFilterIcon(option)
+                        .transition(.scale(scale: 0.85).combined(with: .opacity))
                 }
             }
         }
+        .padding(6)
+        .background(
+            Capsule(style: .continuous)
+                .fill(.ultraThinMaterial)
+        )
+        .overlay(
+            Capsule(style: .continuous)
+                .strokeBorder(DS.Color.primary.opacity(0.10), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.06), radius: 8, x: 0, y: 3)
+        .animation(.spring(response: 0.40, dampingFraction: 0.78), value: selectedCategory)
     }
 
-    /// chip خاص لـ "الكل" — يجمع كل الأقسام.
-    private var allCategoryChip: some View {
-        let isActive = selectedCategory == nil
-        let count = archiveVM.items.count
-        return Button {
-            withAnimation(DS.Anim.snappy) { selectedCategory = nil }
-        } label: {
-            HStack(spacing: 6) {
-                Image(systemName: "square.grid.2x2.fill")
-                    .font(DS.Font.scaled(12, weight: .bold))
-                Text(L10n.t("الكل", "All"))
-                    .font(DS.Font.scaled(13, weight: isActive ? .bold : .semibold))
-                if count > 0 {
-                    Text("\(count)")
-                        .font(DS.Font.scaled(11, weight: .bold))
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(
-                            Capsule().fill(isActive ? Color.white.opacity(0.25) : DS.Color.primary.opacity(0.15))
-                        )
-                }
+    /// الفلتر النشط — pill ممتدّ بلون فئته + اسم + عدّاد.
+    private func activeFilterPill(_ option: ArchiveItem.Category?) -> some View {
+        let color = accentColor(for: option)
+        let count = archiveVM.count(in: option)
+        return HStack(spacing: 6) {
+            Image(systemName: icon(for: option))
+                .font(DS.Font.scaled(12, weight: .bold))
+                .foregroundColor(.white)
+            Text(title(for: option))
+                .font(DS.Font.scaled(13, weight: .bold))
+                .foregroundColor(.white)
+                .lineLimit(1)
+            if count > 0 {
+                Text("\(count)")
+                    .font(DS.Font.scaled(10, weight: .black))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 1)
+                    .background(Capsule().fill(Color.white.opacity(0.25)))
             }
-            .foregroundColor(isActive ? .white : DS.Color.primary)
-            .padding(.horizontal, DS.Spacing.md)
-            .padding(.vertical, 8)
-            .background(
-                Capsule().fill(isActive ? DS.Color.primary : DS.Color.primary.opacity(0.10))
-            )
         }
-        .buttonStyle(DSScaleButtonStyle())
+        .padding(.horizontal, DS.Spacing.md)
+        .padding(.vertical, 8)
+        .background(
+            Capsule().fill(
+                LinearGradient(
+                    colors: [color, color.opacity(0.85)],
+                    startPoint: .topLeading, endPoint: .bottomTrailing
+                )
+            )
+        )
+        .shadow(color: color.opacity(0.35), radius: 8, x: 0, y: 3)
     }
 
-    private func categoryChip(_ category: ArchiveItem.Category) -> some View {
-        let isActive = selectedCategory == category
-        let count = archiveVM.count(in: category)
+    /// الفلتر غير النشط — أيقونة دائرية فقط بلون الفئة.
+    private func inactiveFilterIcon(_ option: ArchiveItem.Category?) -> some View {
+        let color = accentColor(for: option)
+        let count = archiveVM.count(in: option)
         return Button {
-            withAnimation(DS.Anim.snappy) { selectedCategory = category }
+            selectedCategory = option
         } label: {
-            HStack(spacing: 6) {
-                Image(systemName: category.iconName)
-                    .font(DS.Font.scaled(12, weight: .bold))
-                Text(L10n.t(category.displayName, category.displayNameEn))
-                    .font(DS.Font.scaled(13, weight: isActive ? .bold : .semibold))
+            ZStack(alignment: .topTrailing) {
+                Image(systemName: icon(for: option))
+                    .font(DS.Font.scaled(13, weight: .bold))
+                    .foregroundColor(color)
+                    .frame(width: 36, height: 36)
+                    .background(Circle().fill(color.opacity(0.12)))
+                    .overlay(Circle().strokeBorder(color.opacity(0.20), lineWidth: 1))
+
+                // عدّاد صغير غير مزعج — يظهر فقط لو > 0
                 if count > 0 {
                     Text("\(count)")
-                        .font(DS.Font.scaled(11, weight: .bold))
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(
-                            Capsule().fill(isActive ? Color.white.opacity(0.25) : DS.Color.primary.opacity(0.15))
-                        )
+                        .font(DS.Font.scaled(9, weight: .black))
+                        .foregroundColor(.white)
+                        .frame(minWidth: 16, minHeight: 16)
+                        .padding(.horizontal, 3)
+                        .background(Capsule().fill(color))
+                        .overlay(Capsule().strokeBorder(Color.white, lineWidth: 1.5))
+                        .offset(x: 4, y: -4)
                 }
             }
-            .foregroundColor(isActive ? .white : DS.Color.primary)
-            .padding(.horizontal, DS.Spacing.md)
-            .padding(.vertical, 8)
-            .background(
-                Capsule().fill(isActive ? DS.Color.primary : DS.Color.primary.opacity(0.10))
-            )
         }
         .buttonStyle(DSScaleButtonStyle())
+        .accessibilityLabel(title(for: option))
     }
 
     // MARK: - Archive Card

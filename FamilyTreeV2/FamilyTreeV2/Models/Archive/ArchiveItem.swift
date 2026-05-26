@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 /// عنصر في أرشيف العائلة — وثيقة PDF أو صورة قديمة أو كتاب رقمي.
 /// مرتبط بـ Supabase table `family_archive` و bucket `family-archive`.
@@ -59,6 +60,16 @@ struct ArchiveItem: Identifiable, Codable, Equatable {
             case .books:      return "book.closed.fill"
             case .oldPhotos:  return "photo.stack.fill"
             case .other:      return "folder.fill"
+            }
+        }
+
+        /// لون مميّز لكل قسم — يفيد تصميم الفلاتر الفاخر.
+        var accentColor: Color {
+            switch self {
+            case .documents:  return DS.Color.info        // أزرق رسمي
+            case .books:      return DS.Color.warning     // ذهبي دافئ
+            case .oldPhotos:  return DS.Color.neonPink    // وردي عتيق (sepia feel)
+            case .other:      return DS.Color.textSecondary
             }
         }
     }
