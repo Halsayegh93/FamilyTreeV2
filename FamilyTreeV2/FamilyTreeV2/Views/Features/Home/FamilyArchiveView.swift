@@ -39,14 +39,20 @@ struct FamilyArchiveView: View {
                         .transition(.opacity)
                 }
 
-                HStack(spacing: DS.Spacing.sm) {
-                    categoryPicker
-                    if authVM.isAdmin && !selectionMode {
+                // زر "تحديد متعدّد" فوق صف الفلاتر — للإدارة فقط
+                if authVM.isAdmin && !selectionMode {
+                    HStack {
+                        Spacer()
                         selectModeButton
                     }
-                }
                     .padding(.horizontal, DS.Spacing.lg)
                     .padding(.top, DS.Spacing.sm)
+                }
+
+                // صف الفلاتر
+                categoryPicker
+                    .padding(.horizontal, DS.Spacing.lg)
+                    .padding(.top, DS.Spacing.xs)
                     .padding(.bottom, DS.Spacing.xs)
 
                 if archiveVM.isLoading && archiveVM.items.isEmpty {
@@ -196,12 +202,17 @@ struct FamilyArchiveView: View {
                 selectedIDs = []
             }
         } label: {
-            Image(systemName: "checkmark.circle")
-                .font(DS.Font.scaled(15, weight: .bold))
-                .foregroundColor(DS.Color.primary)
-                .frame(width: 36, height: 36)
-                .background(Circle().fill(DS.Color.primary.opacity(0.10)))
-                .overlay(Circle().strokeBorder(DS.Color.primary.opacity(0.25), lineWidth: 1))
+            HStack(spacing: 5) {
+                Image(systemName: "checkmark.circle")
+                    .font(DS.Font.scaled(12, weight: .bold))
+                Text(L10n.t("تحديد", "Select"))
+                    .font(DS.Font.scaled(12, weight: .bold))
+            }
+            .foregroundColor(DS.Color.primary)
+            .padding(.horizontal, DS.Spacing.md)
+            .padding(.vertical, 6)
+            .background(Capsule().fill(DS.Color.primary.opacity(0.10)))
+            .overlay(Capsule().strokeBorder(DS.Color.primary.opacity(0.25), lineWidth: 1))
         }
         .buttonStyle(DSScaleButtonStyle())
         .accessibilityLabel(L10n.t("تحديد متعدّد", "Multi-select"))
@@ -905,14 +916,17 @@ struct ArchiveItemViewer: View {
                     ArchivePDFView(url: url)
                         .ignoresSafeArea(edges: .bottom)
                 } else if item.isImage, let url = URL(string: item.fileUrl) {
-                    ScrollView([.horizontal, .vertical], showsIndicators: false) {
-                        CachedAsyncImage(url: url) { image in
-                            image.resizable().scaledToFit()
-                        } placeholder: {
-                            ProgressView().tint(DS.Color.primary)
-                                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        }
+                    // عرض طبيعي: scaledToFit مع كامل المساحة، بدون scroll/zoom زائد
+                    CachedAsyncImage(url: url) { image in
+                        image
+                            .resizable()
+                            .scaledToFit()
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    } placeholder: {
+                        ProgressView().tint(DS.Color.primary)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
+                    .padding(DS.Spacing.md)
                 } else {
                     VStack(spacing: DS.Spacing.md) {
                         Image(systemName: "doc.questionmark")
