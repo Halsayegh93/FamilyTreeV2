@@ -141,6 +141,40 @@ final class FamilyArchiveViewModel: ObservableObject {
         }
     }
 
+    // MARK: - Toggle Hidden (soft hide / show)
+
+    /// إخفاء/إظهار عنصر دون حذف. متاح لـ owner + admin فقط.
+    func toggleHidden(_ item: ArchiveItem) async {
+        guard NetworkMonitor.shared.requireOnline() else { return }
+        guard authVM?.isAdmin == true else {
+            errorMessage = L10n.t("الإخفاء متاح للمدراء فقط.", "Hiding is restricted to admins.")
+            return
+        }
+
+        let newValue = !item.isHidden
+        // تحديث تفاؤلي
+        if let idx = items.firstIndex(of: item) {
+            items[idx].isHidden = newValue
+        }
+
+        do {
+            try await supabase
+                .from(tableName)
+                .update(["is_hidden": newValue])
+                .eq("id", value: item.id.uuidString)
+                .execute()
+            Log.info("[Archive] \(newValue ? "إخفاء" : "إظهار"): \(item.title)")
+        } catch {
+            // استرجاع عند الفشل
+            if let idx = items.firstIndex(where: { $0.id == item.id }) {
+                items[idx].isHidden = !newValue
+            }
+            self.errorMessage = L10n.t("تعذّر تغيير حالة الإخفاء.",
+                                       "Failed to toggle visibility.")
+            Log.error("[Archive] خطأ toggleHidden: \(error.localizedDescription)")
+        }
+    }
+
     // MARK: - Delete
 
     func deleteItem(_ item: ArchiveItem) async {

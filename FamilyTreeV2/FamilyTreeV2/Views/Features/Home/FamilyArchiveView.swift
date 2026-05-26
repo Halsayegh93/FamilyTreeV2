@@ -47,6 +47,16 @@ struct FamilyArchiveView: View {
                                 .buttonStyle(DSScaleButtonStyle())
                                 .contextMenu {
                                     if authVM.isAdmin {
+                                        Button {
+                                            Task { await archiveVM.toggleHidden(item) }
+                                        } label: {
+                                            Label(
+                                                item.isHidden
+                                                    ? L10n.t("إظهار للجميع", "Show to all")
+                                                    : L10n.t("إخفاء من الأعضاء", "Hide from members"),
+                                                systemImage: item.isHidden ? "eye.fill" : "eye.slash.fill"
+                                            )
+                                        }
                                         Button(role: .destructive) {
                                             itemToDelete = item
                                         } label: {
@@ -150,34 +160,51 @@ struct FamilyArchiveView: View {
     private func archiveCard(_ item: ArchiveItem) -> some View {
         VStack(alignment: .leading, spacing: DS.Spacing.xs) {
             // معاينة بصرية أو أيقونة
-            ZStack {
-                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                    .fill(DS.Color.primary.opacity(0.08))
+            ZStack(alignment: .topTrailing) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                        .fill(DS.Color.primary.opacity(0.08))
 
-                if item.isImage, let url = URL(string: item.fileUrl) {
-                    CachedAsyncImage(url: url) { image in
-                        image.resizable().scaledToFill()
-                    } placeholder: {
-                        ProgressView().tint(DS.Color.primary)
-                    }
-                } else {
-                    VStack(spacing: 6) {
-                        Image(systemName: item.isPDF ? "doc.text.fill" : item.category.iconName)
-                            .font(.system(size: 36, weight: .light))
-                            .foregroundColor(DS.Color.primary.opacity(0.85))
-                        if item.isPDF {
-                            Text("PDF")
-                                .font(DS.Font.scaled(10, weight: .black))
-                                .foregroundColor(DS.Color.primary)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 1)
-                                .background(Capsule().fill(DS.Color.primary.opacity(0.15)))
+                    if item.isImage, let url = URL(string: item.fileUrl) {
+                        CachedAsyncImage(url: url) { image in
+                            image.resizable().scaledToFill()
+                        } placeholder: {
+                            ProgressView().tint(DS.Color.primary)
+                        }
+                    } else {
+                        VStack(spacing: 6) {
+                            Image(systemName: item.isPDF ? "doc.text.fill" : item.category.iconName)
+                                .font(.system(size: 36, weight: .light))
+                                .foregroundColor(DS.Color.primary.opacity(0.85))
+                            if item.isPDF {
+                                Text("PDF")
+                                    .font(DS.Font.scaled(10, weight: .black))
+                                    .foregroundColor(DS.Color.primary)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 1)
+                                    .background(Capsule().fill(DS.Color.primary.opacity(0.15)))
+                            }
                         }
                     }
                 }
+                .frame(height: 130)
+                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+
+                // شارة "مخفي" — تظهر فقط للإدارة (الأعضاء العاديون لا يجلبون العنصر أصلاً)
+                if item.isHidden {
+                    HStack(spacing: 3) {
+                        Image(systemName: "eye.slash.fill")
+                            .font(DS.Font.scaled(9, weight: .bold))
+                        Text(L10n.t("مخفي", "Hidden"))
+                            .font(DS.Font.scaled(9, weight: .bold))
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+                    .background(Capsule().fill(DS.Color.warning))
+                    .padding(6)
+                }
             }
-            .frame(height: 130)
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
 
             // عنوان + حجم
             VStack(alignment: .leading, spacing: 2) {
@@ -202,8 +229,9 @@ struct FamilyArchiveView: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                .stroke(DS.Color.primary.opacity(0.08), lineWidth: 1)
+                .stroke(item.isHidden ? DS.Color.warning.opacity(0.30) : DS.Color.primary.opacity(0.08), lineWidth: 1)
         )
+        .opacity(item.isHidden ? 0.75 : 1.0)
         .dsSubtleShadow()
     }
 
