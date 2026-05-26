@@ -255,49 +255,169 @@ struct HomeNewsView: View {
             // 3) آخر الأخبار
             newsBentoCard
 
-            // 4) ديوانيات + صور
-            diwaniyasAndPhotosRow
-
-            // 5) مشاريع العائلة (بطاقة فاخرة بصورة)
-            if appSettingsVM.settings.projectsEnabled ?? true {
-                familyProjectsCard
-            }
-
-            // 6) التواصل (بطاقة مستقلة)
-            contactCard
+            // 4) شبكة الوصول السريع — 2×2 بنمط موحّد فاخر
+            quickAccessGrid
         }
         .padding(.horizontal, DS.Spacing.lg)
     }
 
-    // صف الديوانيات + أرشيف العائلة
-    @ViewBuilder
-    private var diwaniyasAndPhotosRow: some View {
+    // MARK: - Quick Access Grid (2×2 موحّد بنمط فاخر)
+
+    /// شبكة 2×2 موحّدة: ديوانيات / أرشيف / تواصل / مشاريع — كلها بنفس التصميم.
+    private var quickAccessGrid: some View {
+        let showProjects = appSettingsVM.settings.projectsEnabled ?? true
         let showDiwaniyas = appSettingsVM.settings.diwaniyasEnabled ?? true
-        HStack(spacing: DS.Spacing.sm) {
+        let projectImageURL: String? = projectsVM.projects.first?.logoUrl
+
+        return LazyVGrid(
+            columns: [
+                GridItem(.flexible(), spacing: DS.Spacing.sm),
+                GridItem(.flexible(), spacing: DS.Spacing.sm)
+            ],
+            spacing: DS.Spacing.sm
+        ) {
             if showDiwaniyas {
-                bentoTile(
-                    icon: "map.fill",
+                unifiedTile(
                     title: L10n.t("الديوانيات", "Diwaniyas"),
-                    subtitle: nil,
+                    icon: "map.fill",
                     color: DS.Color.accent,
-                    height: 56,
+                    imageURL: nil,
+                    count: nil,
                     action: { selectedTab = 2 }
                 )
             }
-            bentoTile(
-                icon: "archivebox.fill",
+            unifiedTile(
                 title: L10n.t("أرشيف العائلة", "Family Archive"),
-                subtitle: nil,
+                icon: "archivebox.fill",
                 color: DS.Color.primary,
-                height: 56,
+                imageURL: nil,
+                count: nil,
                 action: { withAnimation(DS.Anim.snappy) { activeSubPage = .archive } }
             )
+            unifiedTile(
+                title: L10n.t("التواصل مع الإدارة", "Contact Admin"),
+                icon: "bubble.left.and.bubble.right.fill",
+                color: DS.Color.info,
+                imageURL: nil,
+                count: nil,
+                action: { withAnimation(DS.Anim.snappy) { activeSubPage = .contact } }
+            )
+            if showProjects {
+                unifiedTile(
+                    title: L10n.t("مشاريع العائلة", "Family Projects"),
+                    icon: "briefcase.fill",
+                    color: DS.Color.warning,
+                    imageURL: projectImageURL,
+                    count: projectsVM.projects.count,
+                    action: { withAnimation(DS.Anim.snappy) { activeSubPage = .projects } }
+                )
+            }
         }
     }
 
-    // MARK: - Premium Family Projects Card (hero with image)
+    /// مربّع موحّد (square 1:1) بنمط بطاقة المشاريع: صورة/gradient + overlay داكن + عنوان أسفل.
+    private func unifiedTile(
+        title: String,
+        icon: String,
+        color: Color,
+        imageURL: String?,
+        count: Int?,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            ZStack(alignment: .bottomLeading) {
+                // خلفية: صورة (إن وُجدت) أو gradient بلون الفئة
+                tileBackground(color: color, imageURL: imageURL, icon: icon)
 
-    /// بطاقة مشاريع العائلة الفاخرة — صورة أحدث مشروع كخلفية + اسمه + العدد.
+                // تدرّج داكن لقراءة العنوان
+                LinearGradient(
+                    colors: [.clear, .black.opacity(0.10), .black.opacity(0.65)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+
+                // أيقونة وعدّاد بأعلى
+                VStack {
+                    HStack {
+                        Image(systemName: icon)
+                            .font(DS.Font.scaled(14, weight: .bold))
+                            .foregroundColor(.white)
+                            .frame(width: 32, height: 32)
+                            .background(Circle().fill(.ultraThinMaterial))
+                            .overlay(Circle().strokeBorder(Color.white.opacity(0.25), lineWidth: 1))
+
+                        Spacer()
+
+                        if let count, count > 0 {
+                            HStack(spacing: 3) {
+                                Image(systemName: "square.stack.fill")
+                                    .font(DS.Font.scaled(8, weight: .bold))
+                                Text("\(count)")
+                                    .font(DS.Font.scaled(10, weight: .black))
+                            }
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 3)
+                            .background(Capsule().fill(.ultraThinMaterial))
+                            .overlay(Capsule().strokeBorder(Color.white.opacity(0.30), lineWidth: 1))
+                        }
+                    }
+                    Spacer()
+                }
+                .padding(DS.Spacing.sm)
+
+                // العنوان أسفل
+                Text(title)
+                    .font(DS.Font.scaled(15, weight: .black))
+                    .foregroundColor(.white)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                    .shadow(color: .black.opacity(0.35), radius: 4, x: 0, y: 1)
+                    .padding(DS.Spacing.sm)
+            }
+            .aspectRatio(1.0, contentMode: .fit)
+            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+            )
+            .shadow(color: .black.opacity(0.10), radius: 10, x: 0, y: 4)
+        }
+        .buttonStyle(DSScaleButtonStyle())
+        .accessibilityLabel(title)
+    }
+
+    /// خلفية المربّع — صورة من رابط أو gradient بلون الفئة مع زخارف.
+    @ViewBuilder
+    private func tileBackground(color: Color, imageURL: String?, icon: String) -> some View {
+        if let urlStr = imageURL, let url = URL(string: urlStr) {
+            CachedAsyncImage(url: url) { img in
+                img.resizable().scaledToFill()
+            } placeholder: {
+                gradientBackground(color: color, icon: icon)
+            }
+        } else {
+            gradientBackground(color: color, icon: icon)
+        }
+    }
+
+    private func gradientBackground(color: Color, icon: String) -> some View {
+        ZStack {
+            LinearGradient(
+                colors: [color, color.opacity(0.75)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            // زخرفة خفيفة جداً
+            Image(systemName: icon)
+                .font(.system(size: 110, weight: .light))
+                .foregroundColor(.white.opacity(0.12))
+                .offset(x: 35, y: 20)
+        }
+    }
+
+    // MARK: - Legacy (لم يعد مستخدماً بعد توحيد الشبكة)
+    @available(*, deprecated, message: "Replaced by quickAccessGrid")
     private var familyProjectsCard: some View {
         let approvedProjects = projectsVM.projects
         let featured = approvedProjects.first
