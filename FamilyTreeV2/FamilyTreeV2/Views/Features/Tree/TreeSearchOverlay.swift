@@ -18,6 +18,8 @@ struct TreeSearchOverlay: View {
     @State private var searchResults: [SearchResult] = []
     @State private var searchTask: Task<Void, Never>?
     @State private var statusFilter: StatusFilter = .all
+    @State private var branchFilterRootId: UUID? = nil
+    @State private var generationFilter: GenerationFilter = .all
     @FocusState private var fieldFocused: Bool
 
     @AppStorage("recentTreeSearches") private var recentSearchesData: Data = Data()
@@ -31,6 +33,8 @@ struct TreeSearchOverlay: View {
         let score: Double
         let matchContext: String?
         let displayName: String // الاسم الرباعي محسوب مسبقاً
+        let generation: Int     // عمق الجيل من الجذر (1 = جذر، 2 = أبناء الجذر، ...)
+        let rootId: UUID        // معرّف جذر فرع هذا العضو
         var id: UUID { member.id }
     }
 
@@ -48,14 +52,55 @@ struct TreeSearchOverlay: View {
         }
     }
 
+    enum GenerationFilter: Equatable, CaseIterable {
+        case all, one, two, three, four, fivePlus
+
+        var label: String {
+            switch self {
+            case .all: return L10n.t("الكل", "All")
+            case .one: return "1"
+            case .two: return "2"
+            case .three: return "3"
+            case .four: return "4"
+            case .fivePlus: return L10n.t("+5", "5+")
+            }
+        }
+
+        func matches(_ depth: Int) -> Bool {
+            switch self {
+            case .all: return true
+            case .one: return depth == 1
+            case .two: return depth == 2
+            case .three: return depth == 3
+            case .four: return depth == 4
+            case .fivePlus: return depth >= 5
+            }
+        }
+    }
+
+    /// جذور الشجرة (أعضاء بدون أب موجود) — تُستخدم لقائمة فلتر الفرع.
+    private var availableRoots: [FamilyMember] {
+        let visible = memberVM.allMembers.filter { $0.isHiddenFromTree != true }
+        let byId = Dictionary(uniqueKeysWithValues: visible.map { ($0.id, $0) })
+        return visible.filter { m in
+            guard let fid = m.fatherId else { return true }
+            return byId[fid] == nil
+        }.sortedForDisplay()
+    }
+
     private var filteredResults: [SearchResult] {
-        switch statusFilter {
-        case .all:
-            return searchResults
-        case .alive:
-            return searchResults.filter { $0.member.isDeceased != true }
-        case .deceased:
-            return searchResults.filter { $0.member.isDeceased == true }
+        searchResults.filter { result in
+            // فلتر الحالة
+            switch statusFilter {
+            case .all: break
+            case .alive: if result.member.isDeceased == true { return false }
+            case .deceased: if result.member.isDeceased != true { return false }
+            }
+            // فلتر الجيل
+            if !generationFilter.matches(result.generation) { return false }
+            // فلتر الفرع
+            if let rootId = branchFilterRootId, result.rootId != rootId { return false }
+            return true
         }
     }
 
@@ -80,6 +125,8 @@ struct TreeSearchOverlay: View {
                 debouncedSearchText = ""
                 searchResults = []
                 statusFilter = .all
+                generationFilter = .all
+                branchFilterRootId = nil
             } else {
                 debounceTask = Task {
                     try? await Task.sleep(nanoseconds: 250_000_000)
@@ -214,7 +261,13 @@ struct TreeSearchOverlay: View {
                 }
                 .pickerStyle(.segmented)
                 .padding(.horizontal, DS.Spacing.md)
-                .padding(.bottom, DS.Spacing.sm)
+                .padding(.bottom, DS.Spacing.xs)
+
+                // فلتر الجيل
+                generationFilterRow
+
+                // فلتر الفرع (الجذر)
+                branchFilterRow
 
                 if filteredResults.isEmpty {
                     HStack(spacing: DS.Spacing.sm) {
@@ -402,9 +455,17 @@ struct TreeSearchOverlay: View {
             }
 
             if score > 0 {
-                // حساب الاسم الرباعي مسبقاً
+                // حساب الاسم الرباعي + الجيل + الجذر مسبقاً
                 let displayName = fourPartName(for: member, lookup: lookup)
-                results.append(SearchResult(member: member, score: score, matchContext: matchContext, displayName: displayName))
+                let depthAndRoot = generationAndRoot(for: member, lookup: lookup)
+                results.append(SearchResult(
+                    member: member,
+                    score: score,
+                    matchContext: matchContext,
+                    displayName: displayName,
+                    generation: depthAndRoot.depth,
+                    rootId: depthAndRoot.rootId
+                ))
             }
         }
 
@@ -418,6 +479,19 @@ struct TreeSearchOverlay: View {
                 }
                 .prefix(50)
         )
+    }
+
+    /// عمق العضو من الجذر + معرّف الجذر — للفلترة. آمن ضد المراجع الدائرية.
+    private static func generationAndRoot(for member: FamilyMember, lookup: [UUID: FamilyMember]) -> (depth: Int, rootId: UUID) {
+        var depth = 1
+        var current = member
+        var visited: Set<UUID> = [member.id]
+        while let fid = current.fatherId, let father = lookup[fid], !visited.contains(fid) {
+            depth += 1
+            visited.insert(fid)
+            current = father
+        }
+        return (depth, current.id)
     }
 
     /// الاسم الرباعي + اسم العائلة
@@ -442,6 +516,95 @@ struct TreeSearchOverlay: View {
             }
         }
         return parts.joined(separator: " ")
+    }
+
+    // MARK: - Filter Rows
+
+    /// صف فلتر الجيل — segmented control بأرقام 1..5+
+    private var generationFilterRow: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "rectangle.stack")
+                .font(DS.Font.scaled(11, weight: .semibold))
+                .foregroundColor(DS.Color.textSecondary)
+            Text(L10n.t("الجيل", "Generation"))
+                .font(DS.Font.scaled(11, weight: .semibold))
+                .foregroundColor(DS.Color.textSecondary)
+            Spacer(minLength: DS.Spacing.sm)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 4) {
+                    ForEach(GenerationFilter.allCases, id: \.self) { gen in
+                        Button {
+                            generationFilter = gen
+                        } label: {
+                            Text(gen.label)
+                                .font(DS.Font.scaled(11, weight: generationFilter == gen ? .bold : .medium))
+                                .foregroundColor(generationFilter == gen ? .white : DS.Color.primary)
+                                .padding(.horizontal, DS.Spacing.sm)
+                                .padding(.vertical, 4)
+                                .background(
+                                    Capsule().fill(generationFilter == gen ? DS.Color.primary : DS.Color.primary.opacity(0.10))
+                                )
+                        }
+                        .buttonStyle(DSScaleButtonStyle())
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, DS.Spacing.md)
+        .padding(.bottom, DS.Spacing.xs)
+    }
+
+    /// صف فلتر الفرع — chips بأسماء جذور الشجرة. عند الضغط يصبح مفعّلاً.
+    @ViewBuilder
+    private var branchFilterRow: some View {
+        let roots = availableRoots
+        if roots.count > 1 {
+            HStack(spacing: 6) {
+                Image(systemName: "arrow.triangle.branch")
+                    .font(DS.Font.scaled(11, weight: .semibold))
+                    .foregroundColor(DS.Color.textSecondary)
+                Text(L10n.t("الفرع", "Branch"))
+                    .font(DS.Font.scaled(11, weight: .semibold))
+                    .foregroundColor(DS.Color.textSecondary)
+                Spacer(minLength: DS.Spacing.sm)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 4) {
+                        // الكل
+                        Button {
+                            branchFilterRootId = nil
+                        } label: {
+                            Text(L10n.t("الكل", "All"))
+                                .font(DS.Font.scaled(11, weight: branchFilterRootId == nil ? .bold : .medium))
+                                .foregroundColor(branchFilterRootId == nil ? .white : DS.Color.accent)
+                                .padding(.horizontal, DS.Spacing.sm)
+                                .padding(.vertical, 4)
+                                .background(
+                                    Capsule().fill(branchFilterRootId == nil ? DS.Color.accent : DS.Color.accent.opacity(0.10))
+                                )
+                        }
+                        .buttonStyle(DSScaleButtonStyle())
+
+                        ForEach(roots) { root in
+                            Button {
+                                branchFilterRootId = root.id
+                            } label: {
+                                Text(root.firstName)
+                                    .font(DS.Font.scaled(11, weight: branchFilterRootId == root.id ? .bold : .medium))
+                                    .foregroundColor(branchFilterRootId == root.id ? .white : DS.Color.accent)
+                                    .padding(.horizontal, DS.Spacing.sm)
+                                    .padding(.vertical, 4)
+                                    .background(
+                                        Capsule().fill(branchFilterRootId == root.id ? DS.Color.accent : DS.Color.accent.opacity(0.10))
+                                    )
+                            }
+                            .buttonStyle(DSScaleButtonStyle())
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal, DS.Spacing.md)
+            .padding(.bottom, DS.Spacing.sm)
+        }
     }
 
     // MARK: - Search Result Row

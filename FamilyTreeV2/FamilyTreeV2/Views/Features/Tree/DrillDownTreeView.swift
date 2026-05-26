@@ -87,13 +87,21 @@ struct DrillDownTreeView: View {
                         subtitle: L10n.t("تصفّح بالتفرّع", "Drill-down")
                     )
 
-                    // أزرار البداية/موقعي/البحث — ثابتة، يفتح البحث في sheet كامل
+                    // أزرار البداية/موقعي/البحث — ثابتة، البحث inline يأخذ مساحة كاملة
                     stickyActionsBar
                         .padding(.horizontal, DS.Spacing.lg)
                         .padding(.top, DS.Spacing.sm)
                         .padding(.bottom, DS.Spacing.xs)
 
-                    if memberVM.allMembers.isEmpty {
+                    if showSearchBar {
+                        searchInlinePanel
+                            .transition(.opacity.combined(with: .move(edge: .top)))
+                    }
+
+                    if showSearchBar {
+                        // البحث يأخذ كامل المساحة المتبقّية
+                        EmptyView()
+                    } else if memberVM.allMembers.isEmpty {
                         Spacer()
                         emptyState
                         Spacer()
@@ -158,9 +166,7 @@ struct DrillDownTreeView: View {
                     .presentationDetents([.medium, .large])
                     .presentationDragIndicator(.visible)
             }
-            .sheet(isPresented: $showSearchBar) {
-                searchSheet
-            }
+            .animation(DS.Anim.snappy, value: showSearchBar)
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
@@ -170,18 +176,18 @@ struct DrillDownTreeView: View {
     /// أزرار "البداية" و"موقعي" و"بحث" — ثابتة خارج الـ ScrollView.
     private var stickyActionsBar: some View {
         HStack(spacing: DS.Spacing.sm) {
-            // زر البحث — يفتح sheet كامل
+            // زر البحث — يفتح/يغلق inline panel
             Button {
-                showSearchBar = true
+                showSearchBar.toggle()
             } label: {
-                Image(systemName: "magnifyingglass")
+                Image(systemName: showSearchBar ? "xmark" : "magnifyingglass")
                     .font(DS.Font.scaled(13, weight: .bold))
-                    .foregroundColor(DS.Color.accent)
+                    .foregroundColor(showSearchBar ? .white : DS.Color.accent)
                     .frame(width: 36, height: 36)
-                    .background(Circle().fill(DS.Color.accent.opacity(0.12)))
+                    .background(Circle().fill(showSearchBar ? DS.Color.accent : DS.Color.accent.opacity(0.12)))
             }
             .buttonStyle(DSScaleButtonStyle())
-            .accessibilityLabel(L10n.t("بحث", "Search"))
+            .accessibilityLabel(L10n.t(showSearchBar ? "إغلاق البحث" : "بحث", showSearchBar ? "Close search" : "Search"))
 
             Button {
                 if let first = roots.first {
@@ -369,10 +375,18 @@ struct DrillDownTreeView: View {
                     .padding(.top, DS.Spacing.sm)
             } else {
                 VStack(spacing: DS.Spacing.sm) {
-                    // خط رابط من النشط للشبكة
+                    // خط رابط من النشط للـ header
                     Rectangle()
                         .fill(DS.Color.primary.opacity(0.25))
-                        .frame(width: 2, height: 14)
+                        .frame(width: 2, height: 10)
+
+                    // Header: "أبناء [الاسم] · N"
+                    childrenHeader(parentName: member.firstName, count: kids.count)
+
+                    // خط رابط من الـ header للشبكة
+                    Rectangle()
+                        .fill(DS.Color.primary.opacity(0.18))
+                        .frame(width: 2, height: 8)
 
                     ForEach(Array(smartRows(kids).enumerated()), id: \.offset) { _, row in
                         HStack(spacing: DS.Spacing.sm) {
@@ -402,6 +416,38 @@ struct DrillDownTreeView: View {
                 }
             }
         }
+    }
+
+    /// Header يبيّن "أبناء [الاسم]" + عدد — يوضّح العلاقة بين النشط وشبكة الأبناء.
+    private func childrenHeader(parentName: String, count: Int) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: "person.2.fill")
+                .font(DS.Font.scaled(10, weight: .bold))
+                .foregroundColor(DS.Color.primary)
+            Text(L10n.t("أبناء ", "Children of "))
+                .font(DS.Font.scaled(12, weight: .semibold))
+                .foregroundColor(DS.Color.textSecondary)
+            +
+            Text(parentName)
+                .font(DS.Font.scaled(12, weight: .black))
+                .foregroundColor(DS.Color.textPrimary)
+            Text("·")
+                .font(DS.Font.scaled(12, weight: .black))
+                .foregroundColor(DS.Color.textTertiary)
+            Text("\(count)")
+                .font(DS.Font.scaled(12, weight: .black))
+                .foregroundColor(DS.Color.primary)
+        }
+        .padding(.horizontal, DS.Spacing.md)
+        .padding(.vertical, 6)
+        .background(
+            Capsule()
+                .fill(DS.Color.primary.opacity(0.08))
+        )
+        .overlay(
+            Capsule()
+                .strokeBorder(DS.Color.primary.opacity(0.20), lineWidth: 1)
+        )
     }
 
     // MARK: - Chain Connector (between ancestor squares)
@@ -480,42 +526,25 @@ struct DrillDownTreeView: View {
         scrollTarget = child.id
     }
 
-    // MARK: - Search Sheet
+    // MARK: - Search Inline Panel
 
-    /// شيت البحث الكامل — يحلّ مشكلة قصّ الأسماء في الـ inline overlay.
-    private var searchSheet: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                TreeSearchOverlay(
-                    onSelect: { member in
-                        showSearchBar = false
-                        // تأخير صغير حتى تنغلق الـ sheet قبل تحريك الشجرة
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-                            jumpTo(member)
-                        }
-                    },
-                    usesFullHeight: true,
-                    autoFocus: true
-                )
-                .padding(.horizontal, DS.Spacing.lg)
-                .padding(.top, DS.Spacing.sm)
-                Spacer(minLength: 0)
-            }
-            .background(DS.Color.background.ignoresSafeArea())
-            .navigationTitle(L10n.t("بحث في الشجرة", "Search Tree"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button(L10n.t("إغلاق", "Close")) {
-                        showSearchBar = false
-                    }
-                    .foregroundColor(DS.Color.primary)
+    /// لوحة البحث inline — تأخذ كامل المساحة بين stickyActionsBar وأسفل الشاشة.
+    /// تظهر بدل ScrollView الشجرة عند `showSearchBar = true`.
+    private var searchInlinePanel: some View {
+        TreeSearchOverlay(
+            onSelect: { member in
+                showSearchBar = false
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                    jumpTo(member)
                 }
-            }
-        }
-        .presentationDetents([.large])
-        .presentationDragIndicator(.visible)
-        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+            },
+            usesFullHeight: true,
+            autoFocus: true
+        )
+        .padding(.horizontal, DS.Spacing.lg)
+        .padding(.top, DS.Spacing.xs)
+        .padding(.bottom, DS.Spacing.sm)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     /// قفز مباشر لأي عضو — بناء السلسلة من الجذر إليه. آمن ضد المراجع الدائرية.

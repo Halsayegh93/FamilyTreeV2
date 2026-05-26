@@ -70,6 +70,9 @@ struct AdminMemberDetailSheet: View {
 
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
+        // IMPORTANT: لا تحذف هذا — بدونه parsing التواريخ يفشل على الأجهزة العربية
+        // لأن DateFormatter يتوقّع أرقام عربية-هندية لو لم نُجبره على POSIX
+        formatter.locale = Locale(identifier: "en_US_POSIX")
 
         if let bDateStr = member.birthDate, !bDateStr.isEmpty, let date = formatter.date(from: bDateStr) {
             self._birthDate = State(initialValue: date)
@@ -1180,6 +1183,7 @@ struct AdminMemberDetailSheet: View {
         let datesChanged: Bool = {
             let formatter = DateFormatter()
             formatter.dateFormat = "yyyy-MM-dd"
+            formatter.locale = Locale(identifier: "en_US_POSIX")
             let origBirth = member.birthDate.flatMap { formatter.date(from: $0) }
             let origDeceased = member.isDeceased ?? false
             let origDeath = member.deathDate.flatMap { formatter.date(from: $0) }
@@ -1405,6 +1409,7 @@ struct AdminMemberDetailSheet: View {
                 changedFields.append(L10n.t("التواريخ", "Dates"))
                 let dateFormatter = DateFormatter()
                 dateFormatter.dateFormat = "yyyy-MM-dd"
+                dateFormatter.locale = Locale(identifier: "en_US_POSIX")
                 if (member.birthDate ?? "") != (capturedBirthDate.map { dateFormatter.string(from: $0) } ?? "") {
                     changeEntries.append(.init(
                         field: "birth_date",
