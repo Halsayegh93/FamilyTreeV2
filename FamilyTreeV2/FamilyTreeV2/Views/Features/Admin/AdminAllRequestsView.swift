@@ -447,6 +447,9 @@ struct AdminAllRequestsView: View {
             withAnimation(DS.Anim.snappy) {
                 isSelectMode = false
                 selectedIds.removeAll()
+                // تنظيف bindings الشيتات حتى لا تبقى مفتوحة لطلبات لم تعد في القائمة
+                phoneEditRequest = nil
+                nameEditRequest = nil
             }
         }
         .onChange(of: memberVM.allMembers.count) { _ in

@@ -371,7 +371,8 @@ final class FamilyArchiveViewModel: ObservableObject {
     private func storagePath(from publicURL: String) -> String? {
         // النمط: .../storage/v1/object/public/family-archive/<path>
         guard let range = publicURL.range(of: "/object/public/\(bucketName)/") else { return nil }
-        return String(publicURL[range.upperBound...])
+        let path = String(publicURL[range.upperBound...])
+        return path.isEmpty ? nil : path
     }
 
     /// امتداد افتراضي بناءً على MIME (احتياط لو fileName بدون امتداد).
@@ -387,7 +388,10 @@ final class FamilyArchiveViewModel: ObservableObject {
 
     private func isMissingTableError(_ error: Error) -> Bool {
         let msg = error.localizedDescription.lowercased()
-        return msg.contains("does not exist") || msg.contains("relation") && msg.contains("not")
-            || msg.contains("42p01") || msg.contains("pgrst205")
+        // أولوية operators صريحة بأقواس
+        return msg.contains("does not exist")
+            || (msg.contains("relation") && msg.contains("not"))
+            || msg.contains("42p01")
+            || msg.contains("pgrst205")
     }
 }
