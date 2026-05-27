@@ -1311,14 +1311,25 @@ struct AdminMemberDetailSheet: View {
         // ═══════════════════════════════════════════════════════════════
         // 3. حفظ السيرفر في الخلفية (المستخدم ما ينتظر)
         // ═══════════════════════════════════════════════════════════════
+        Log.info("[AdminEdit] ▶️ بدء حفظ تعديلات عضو: \(auditMemberName) — " +
+                 "nameChanged=\(nameChanged), phoneChanged=\(phoneChanged), " +
+                 "fatherChanged=\(fatherChanged), genderChanged=\(genderChanged), " +
+                 "datesChanged=\(datesChanged), bioChanged=\(bioChanged), " +
+                 "orderChanged=\(childrenOrderChanged)")
         Task {
             // Pass silent: true لكل دالة عشان نرسل إشعار موحَّد واحد بدل واحد لكل حقل
             if nameChanged {
+                Log.info("[AdminEdit] 📝 تعديل الاسم: \(capturedFullName)")
                 await memberVM.updateMemberName(memberId: capturedMemberId, fullName: capturedFullName, silent: true)
+                if let err = memberVM.errorMessage {
+                    Log.error("[AdminEdit] ❌ فشل حفظ الاسم: \(err)")
+                }
             }
             if phoneChanged {
+                Log.info("[AdminEdit] 📞 تعديل الهاتف: \(capturedPhone.isEmpty ? "حذف" : "تعيين")")
                 if capturedPhone.isEmpty {
                     await memberVM.clearMemberPhone(memberId: capturedMemberId)
+                    if let err = memberVM.errorMessage { Log.error("[AdminEdit] ❌ فشل مسح الهاتف: \(err)") }
                 } else {
                     // إذا الرقم مستخدم من عضو ثاني → امسحه منه أولاً
                     let normalized = KuwaitPhone.normalizedForStorage(
@@ -1337,32 +1348,44 @@ struct AdminMemberDetailSheet: View {
                         localPhone: capturedPhone,
                         silent: true
                     )
+                    if let err = memberVM.errorMessage { Log.error("[AdminEdit] ❌ فشل تحديث الهاتف: \(err)") }
                 }
             }
             if fatherChanged {
+                Log.info("[AdminEdit] 🌳 تعديل الأب: \(capturedFatherId?.uuidString ?? "بدون")")
                 await memberVM.updateMemberFather(memberId: capturedMemberId, fatherId: capturedFatherId, silent: true)
+                if let err = memberVM.errorMessage { Log.error("[AdminEdit] ❌ فشل تحديث الأب: \(err)") }
             }
             if genderChanged {
+                Log.info("[AdminEdit] ⚧ تعديل الجنس: \(capturedGender)")
                 await memberVM.updateMemberGender(memberId: capturedMemberId, gender: capturedGender, silent: true)
+                if let err = memberVM.errorMessage { Log.error("[AdminEdit] ❌ فشل تحديث الجنس: \(err)") }
             }
             if datesChanged {
+                Log.info("[AdminEdit] 📅 تعديل التواريخ: deceased=\(capturedIsDeceased), birth=\(capturedBirthDate?.description ?? "—"), death=\(capturedDeathDate?.description ?? "—")")
                 await memberVM.updateMemberHealthAndBirth(
                     memberId: capturedMemberId,
                     birthDate: capturedBirthDate,
                     isDeceased: capturedIsDeceased,
                     deathDate: capturedDeathDate
                 )
+                if let err = memberVM.errorMessage { Log.error("[AdminEdit] ❌ فشل تحديث التواريخ: \(err)") }
             }
             if bioChanged {
+                Log.info("[AdminEdit] 📖 تعديل السيرة: \(capturedBioStations.count) محطّة")
                 await memberVM.updateMemberBio(memberId: capturedMemberId, bio: capturedBioStations)
+                if let err = memberVM.errorMessage { Log.error("[AdminEdit] ❌ فشل تحديث السيرة: \(err)") }
             }
             if childrenOrderChanged && !capturedChildren.isEmpty {
+                Log.info("[AdminEdit] 🔢 تعديل ترتيب الأبناء (\(capturedChildren.count))")
                 var updatedChildren = capturedChildren
                 for i in 0..<updatedChildren.count {
                     updatedChildren[i].sortOrder = i
                 }
                 await memberVM.updateChildrenOrder(for: capturedMemberId, newOrder: updatedChildren)
+                if let err = memberVM.errorMessage { Log.error("[AdminEdit] ❌ فشل تحديث الترتيب: \(err)") }
             }
+            Log.info("[AdminEdit] ✅ انتهى حفظ تعديلات: \(auditMemberName)")
 
             // Audit log: تسجيل التعديلات المباشرة في admin_requests كسجل (status='approved')
             if nameChanged {

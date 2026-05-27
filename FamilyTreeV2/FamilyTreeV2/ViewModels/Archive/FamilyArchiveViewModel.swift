@@ -139,7 +139,7 @@ final class FamilyArchiveViewModel: ObservableObject {
             return nil
         } catch {
             // تنظيف: لو رفع الملف نجح والإدراج فشل، احذف الملف
-            try? await supabase.storage.from(bucketName).remove(paths: [storagePath])
+            _ = try? await supabase.storage.from(bucketName).remove(paths: [storagePath])
             self.errorMessage = L10n.t("تعذّر رفع العنصر.", "Failed to upload item.")
             Log.error("[Archive] خطأ رفع: \(error.localizedDescription)")
             return nil
@@ -265,7 +265,7 @@ final class FamilyArchiveViewModel: ObservableObject {
             // حذف الملفات من Storage (best-effort)
             let paths = targets.compactMap { storagePath(from: $0.fileUrl) }
             if !paths.isEmpty {
-                try? await supabase.storage.from(bucketName).remove(paths: paths)
+                _ = try? await supabase.storage.from(bucketName).remove(paths: paths)
             }
             Log.info("[Archive] حذف دفعي: \(targets.count) عنصر")
         } catch {
@@ -336,7 +336,7 @@ final class FamilyArchiveViewModel: ObservableObject {
 
             // 2) حذف الملف من Storage (best-effort)
             if let path = storagePath(from: item.fileUrl) {
-                try? await supabase.storage.from(bucketName).remove(paths: [path])
+                _ = try? await supabase.storage.from(bucketName).remove(paths: [path])
             }
             Log.info("[Archive] حذف ناجح: \(item.title)")
         } catch {

@@ -754,38 +754,31 @@ struct AdminAllRequestsView: View {
         }
     }
 
-    /// chip القسم — أيقونة فقط بدون خلفية، النشط يكشف الاسم بجانب الأيقونة.
+    /// chip القسم — أيقونة + نص دائماً + ✓ لما يكون نشط (بدون خلفية).
     private func sectionChip(title: String, icon: String, color: Color, count: Int, isActive: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 5) {
-                ZStack(alignment: .topTrailing) {
-                    Image(systemName: icon)
-                        .font(DS.Font.scaled(isActive ? 17 : 15, weight: .bold))
-                        .foregroundColor(isActive ? color : color.opacity(0.55))
-                    // عدّاد صغير معلَّق فقط للغير نشط (النشط يعرض الاسم + العدّ بشكل مختلف)
-                    if !isActive && count > 0 {
-                        Text("\(count)")
-                            .font(DS.Font.scaled(8, weight: .black))
-                            .foregroundColor(.white)
-                            .frame(minWidth: 12, minHeight: 12)
-                            .padding(.horizontal, 2)
-                            .background(Capsule().fill(color))
-                            .offset(x: 6, y: -6)
-                    }
-                }
-                .frame(width: 34, height: 30)
+                // علامة الاختيار للنشط
+                Image(systemName: isActive ? "checkmark.circle.fill" : "circle")
+                    .font(DS.Font.scaled(12, weight: .bold))
+                    .foregroundColor(isActive ? color : color.opacity(0.35))
 
-                // النص يظهر فقط لو نشط
-                if isActive {
-                    Text(title)
-                        .font(DS.Font.scaled(13, weight: .black))
-                        .foregroundColor(color)
-                        .lineLimit(1)
-                    if count > 0 {
-                        Text("· \(count)")
-                            .font(DS.Font.scaled(11, weight: .heavy))
-                            .foregroundColor(color.opacity(0.65))
-                    }
+                Image(systemName: icon)
+                    .font(DS.Font.scaled(13, weight: .bold))
+                    .foregroundColor(isActive ? color : color.opacity(0.65))
+
+                Text(title)
+                    .font(DS.Font.scaled(13, weight: isActive ? .black : .semibold))
+                    .foregroundColor(isActive ? color : color.opacity(0.75))
+                    .lineLimit(1)
+
+                if count > 0 {
+                    Text("\(count)")
+                        .font(DS.Font.scaled(10, weight: .black))
+                        .foregroundColor(isActive ? .white : color)
+                        .frame(minWidth: 16, minHeight: 16)
+                        .padding(.horizontal, 3)
+                        .background(Capsule().fill(isActive ? color : color.opacity(0.15)))
                 }
             }
         }
@@ -967,37 +960,32 @@ struct AdminAllRequestsView: View {
         }
     }
 
-    /// chip فلتر فرعي موحّد — أيقونة فقط بدون خلفية، النشط يكشف الاسم.
+    /// chip فلتر فرعي موحّد — أيقونة + نص + ✓ نشط (بدون خلفية).
     private func tabChipBody(tab: RequestTab, isActive: Bool, action: @escaping () -> Void) -> some View {
         let count = itemCount(for: tab)
         return Button(action: action) {
-            HStack(spacing: 5) {
-                ZStack(alignment: .topTrailing) {
-                    Image(systemName: tab.icon)
-                        .font(DS.Font.scaled(isActive ? 15 : 13, weight: .bold))
-                        .foregroundColor(isActive ? tab.color : tab.color.opacity(0.55))
-                    if !isActive && count > 0 {
-                        Text("\(count)")
-                            .font(DS.Font.scaled(8, weight: .black))
-                            .foregroundColor(.white)
-                            .frame(minWidth: 12, minHeight: 12)
-                            .padding(.horizontal, 2)
-                            .background(Capsule().fill(tab.color))
-                            .offset(x: 6, y: -6)
-                    }
-                }
-                .frame(width: 30, height: 26)
+            HStack(spacing: 4) {
+                // علامة اختيار للنشط
+                Image(systemName: isActive ? "checkmark.circle.fill" : "circle")
+                    .font(DS.Font.scaled(11, weight: .bold))
+                    .foregroundColor(isActive ? tab.color : tab.color.opacity(0.35))
 
-                if isActive {
-                    Text(tab.title)
-                        .font(DS.Font.scaled(12, weight: .black))
-                        .foregroundColor(tab.color)
-                        .lineLimit(1)
-                    if count > 0 {
-                        Text("· \(count)")
-                            .font(DS.Font.scaled(10, weight: .heavy))
-                            .foregroundColor(tab.color.opacity(0.65))
-                    }
+                Image(systemName: tab.icon)
+                    .font(DS.Font.scaled(12, weight: .bold))
+                    .foregroundColor(isActive ? tab.color : tab.color.opacity(0.65))
+
+                Text(tab.title)
+                    .font(DS.Font.scaled(12, weight: isActive ? .black : .semibold))
+                    .foregroundColor(isActive ? tab.color : tab.color.opacity(0.75))
+                    .lineLimit(1)
+
+                if count > 0 {
+                    Text("\(count)")
+                        .font(DS.Font.scaled(9, weight: .black))
+                        .foregroundColor(isActive ? .white : tab.color)
+                        .frame(minWidth: 14, minHeight: 14)
+                        .padding(.horizontal, 3)
+                        .background(Capsule().fill(isActive ? tab.color : tab.color.opacity(0.15)))
                 }
             }
         }

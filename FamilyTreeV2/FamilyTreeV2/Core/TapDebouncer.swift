@@ -10,7 +10,8 @@ final class TapDebouncer {
     private var lastFireTimes: [String: Date] = [:]
 
     /// الفترة الافتراضية لمنع الضغط المكرر (بالثواني)
-    static let defaultInterval: TimeInterval = 0.6
+    /// nonisolated عشان نقدر نستخدمه default parameter من سياقات غير main-actor (Swift 6).
+    nonisolated static let defaultInterval: TimeInterval = 0.6
 
     /// فحص ما إذا كان يمكن تنفيذ الإجراء، وإذا أمكن سجّل الوقت
     /// - Returns: `true` إذا مرّ وقت كافٍ منذ آخر ضغط لنفس المفتاح
