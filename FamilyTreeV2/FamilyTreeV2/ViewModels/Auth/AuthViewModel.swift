@@ -360,7 +360,7 @@ class AuthViewModel: ObservableObject {
                     "kind": AnyEncodable(kind),
                     "created_by": AnyEncodable(creatorId?.uuidString)
                 ]
-                try? await supabase.from("notifications").insert(fallback).execute()
+                _ = try? await supabase.from("notifications").insert(fallback).execute()
             }
         }
     }
@@ -1294,7 +1294,7 @@ class AuthViewModel: ObservableObject {
             // يحدث عندما يُحذف المستخدم ثم يُعيد التسجيل بنفس الرقم
             let phoneToCheck = user.phone ?? toE164(dialingCode: dialingCode, localDigits: phoneNumber) ?? ""
             if !phoneToCheck.isEmpty {
-                try? await supabase.rpc("free_phone_for_reregistration", params: [
+                _ = try? await supabase.rpc("free_phone_for_reregistration", params: [
                     "p_phone": AnyEncodable(phoneToCheck),
                     "p_new_member_id": AnyEncodable(user.id.uuidString)
                 ]).execute()

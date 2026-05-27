@@ -313,7 +313,6 @@ struct StoryViewerView: View {
               currentStoryIndex < allGroups[currentGroupIndex].stories.count else { return false }
         let story = allGroups[currentGroupIndex].stories[currentStoryIndex]
         let isCreator = story.createdBy == authVM.currentUser?.id
-        let role = authVM.currentUser?.role
         // فقط المدير أو المالك أو صاحب القصة
         return isCreator || authVM.canDeleteStories
     }

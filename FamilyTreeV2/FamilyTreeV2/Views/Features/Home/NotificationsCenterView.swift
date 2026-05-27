@@ -1132,7 +1132,6 @@ struct NotificationsCenterView: View {
 
     // MARK: - Detail: Hero (compact horizontal)
     private func detailHero(notification: AppNotification, iconInfo: NotificationKindStyle, date: Date) -> some View {
-        let isBroadcast = (notification.kind == "admin" || notification.kind == "admin_broadcast")
         return HStack(alignment: .center, spacing: DS.Spacing.md) {
             ZStack {
                 Circle()

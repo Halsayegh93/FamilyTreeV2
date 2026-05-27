@@ -370,7 +370,7 @@ class NotificationViewModel: ObservableObject {
                 guard devices.count > maxDevices else { continue }
                 let toDelete = devices.prefix(devices.count - maxDevices)
                 for device in toDelete {
-                    try? await supabase
+                    _ = try? await supabase
                         .from("device_tokens")
                         .delete()
                         .eq("id", value: device.id)
@@ -1082,7 +1082,7 @@ class NotificationViewModel: ObservableObject {
                     "kind": AnyEncodable(kind),
                     "created_by": AnyEncodable(creatorId?.uuidString)
                 ]
-                try? await supabase.from("notifications").insert(fallback).execute()
+                _ = try? await supabase.from("notifications").insert(fallback).execute()
             }
         }
     }
