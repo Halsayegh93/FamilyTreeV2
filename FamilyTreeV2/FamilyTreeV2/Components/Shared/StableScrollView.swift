@@ -43,10 +43,10 @@ struct StableScrollView<Content: View>: UIViewRepresentable {
     }
 
     func updateUIView(_ scrollView: UIScrollView, context: Context) {
+        // تحديث rootView (SwiftUI يحتاج هذا لتمرير تغييرات state)
         context.coordinator.hostingController?.rootView = AnyView(content)
-        // أعد تطبيق آخر موقع مستخدم — مرتين للتعامل مع layout passes اللي
-        // يفعلها iOS بعد sheet dismiss / keyboard hide.
-        context.coordinator.restoreOffset()
+        // إعادة تطبيق آخر موقع مستخدم — مرّة واحدة فقط على الـ runloop التالي
+        // (يكفي للتعامل مع sheet dismiss / keyboard، ويخفف الضغط من 2× إلى 1×)
         DispatchQueue.main.async {
             context.coordinator.restoreOffset()
         }

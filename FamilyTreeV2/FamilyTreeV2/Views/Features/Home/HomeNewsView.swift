@@ -60,15 +60,15 @@ struct HomeNewsView: View {
                                 .padding(.top, DS.Spacing.md)
                                 .padding(.bottom, DS.Spacing.xxxxl)
                                 .onAppear {
-                                    shuffledTreeMembers = memberVM.allMembers.shuffled()
+                                    // shuffle مرة واحدة فقط — لا إعادة على كل تغيير عدد
+                                    if shuffledTreeMembers.isEmpty {
+                                        shuffledTreeMembers = memberVM.allMembers.shuffled()
+                                    }
                                     guard !appeared else { return }
                                     withAnimation(DS.Anim.smooth.delay(0.1)) { appeared = true }
                                 }
                         }
                         .refreshable { await refreshNews(notifyIfNew: true, force: true) }
-                        .onChange(of: memberVM.allMembers.count) { _ in
-                            shuffledTreeMembers = memberVM.allMembers.shuffled()
-                        }
                     }
                     .transition(.move(edge: L10n.isArabic ? .trailing : .leading))
                 }
@@ -369,13 +369,13 @@ struct HomeNewsView: View {
                     .shadow(color: .black.opacity(0.35), radius: 3, x: 0, y: 1)
                     .padding(8)
             }
-            .aspectRatio(1.55, contentMode: .fit)
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+            .aspectRatio(1.85, contentMode: .fit)
+            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
                     .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
             )
-            .shadow(color: .black.opacity(0.08), radius: 7, x: 0, y: 3)
+            .shadow(color: .black.opacity(0.07), radius: 5, x: 0, y: 2)
         }
         .buttonStyle(DSScaleButtonStyle())
         .accessibilityLabel(title)
