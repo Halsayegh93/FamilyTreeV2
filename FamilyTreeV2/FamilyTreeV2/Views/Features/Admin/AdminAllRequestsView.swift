@@ -478,16 +478,34 @@ struct AdminAllRequestsView: View {
         cachedAvailableTabs = RequestTab.allCases.filter { itemCount(for: $0) > 0 }
     }
 
+    /// شريط الفلاتر بنمط أرشيف العائلة الفاخر — كبسولة زجاجية، نشط ممتدّ، الباقي أيقونات.
     private var tabBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: DS.Spacing.sm) {
+            HStack(spacing: 6) {
                 ForEach(availableTabs) { tab in
-                    tabButton(for: tab)
+                    if selectedTab == tab {
+                        activeTabPill(tab)
+                            .transition(.scale(scale: 0.85).combined(with: .opacity))
+                    } else {
+                        inactiveTabIcon(tab)
+                            .transition(.scale(scale: 0.85).combined(with: .opacity))
+                    }
                 }
             }
+            .padding(6)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(.ultraThinMaterial)
+            )
+            .overlay(
+                Capsule(style: .continuous)
+                    .strokeBorder(DS.Color.primary.opacity(0.10), lineWidth: 1)
+            )
+            .shadow(color: .black.opacity(0.06), radius: 8, x: 0, y: 3)
             .padding(.horizontal, DS.Spacing.lg)
         }
         .padding(.vertical, DS.Spacing.xs)
+        .animation(.spring(response: 0.40, dampingFraction: 0.78), value: selectedTab)
         .onChange(of: totalCount) { _ in
             // إذا التاب المحدد صار فارغ، انقل لأول تاب متاح
             if itemCount(for: selectedTab) == 0, let first = availableTabs.first {
@@ -496,45 +514,63 @@ struct AdminAllRequestsView: View {
         }
     }
 
-    private func tabButton(for tab: RequestTab) -> some View {
-        let isSelected = selectedTab == tab
+    /// التاب النشط — pill ممتدّ بلون فئته + اسم + عدّاد.
+    private func activeTabPill(_ tab: RequestTab) -> some View {
         let count = itemCount(for: tab)
+        return HStack(spacing: 6) {
+            Image(systemName: tab.icon)
+                .font(DS.Font.scaled(12, weight: .bold))
+                .foregroundColor(.white)
+            Text(tab.title)
+                .font(DS.Font.scaled(13, weight: .bold))
+                .foregroundColor(.white)
+                .lineLimit(1)
+            if count > 0 {
+                Text("\(count)")
+                    .font(DS.Font.scaled(10, weight: .black))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 1)
+                    .background(Capsule().fill(Color.white.opacity(0.25)))
+            }
+        }
+        .padding(.horizontal, DS.Spacing.md)
+        .padding(.vertical, 8)
+        .background(
+            Capsule().fill(
+                LinearGradient(
+                    colors: [tab.color, tab.color.opacity(0.85)],
+                    startPoint: .topLeading, endPoint: .bottomTrailing
+                )
+            )
+        )
+        .shadow(color: tab.color.opacity(0.35), radius: 8, x: 0, y: 3)
+    }
 
+    /// التاب غير النشط — أيقونة دائرية فقط بلون الفئة + badge عدّاد.
+    private func inactiveTabIcon(_ tab: RequestTab) -> some View {
+        let count = itemCount(for: tab)
         return Button {
-            withAnimation(DS.Anim.snappy) { selectedTab = tab }
+            selectedTab = tab
         } label: {
-            HStack(spacing: DS.Spacing.xs) {
+            ZStack(alignment: .topTrailing) {
                 Image(systemName: tab.icon)
-                    .font(DS.Font.scaled(11, weight: .semibold))
-
-                Text(tab.title)
-                    .font(DS.Font.caption1)
-                    .fontWeight(.semibold)
-
+                    .font(DS.Font.scaled(13, weight: .bold))
+                    .foregroundColor(tab.color)
+                    .frame(width: 36, height: 36)
+                    .background(Circle().fill(tab.color.opacity(0.12)))
+                    .overlay(Circle().strokeBorder(tab.color.opacity(0.20), lineWidth: 1))
                 if count > 0 {
                     Text("\(count)")
-                        .font(DS.Font.caption2)
-                        .fontWeight(.bold)
-                        .foregroundColor(isSelected ? tab.color : DS.Color.textOnPrimary)
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 2)
-                        .background(
-                            Capsule()
-                                .fill(isSelected ? Color.white.opacity(0.28) : tab.color)
-                        )
+                        .font(DS.Font.scaled(9, weight: .black))
+                        .foregroundColor(.white)
+                        .frame(minWidth: 16, minHeight: 16)
+                        .padding(.horizontal, 3)
+                        .background(Capsule().fill(tab.color))
+                        .overlay(Capsule().strokeBorder(Color.white, lineWidth: 1.5))
+                        .offset(x: 4, y: -4)
                 }
             }
-            .foregroundColor(isSelected ? DS.Color.textOnPrimary : tab.color)
-            .padding(.horizontal, DS.Spacing.md)
-            .padding(.vertical, DS.Spacing.sm)
-            .background(
-                Capsule()
-                    .fill(isSelected ? tab.color : tab.color.opacity(0.1))
-            )
-            .overlay(
-                Capsule()
-                    .stroke(isSelected ? Color.clear : tab.color.opacity(0.3), lineWidth: 1)
-            )
         }
         .buttonStyle(DSScaleButtonStyle())
         .accessibilityLabel(tab.title)
