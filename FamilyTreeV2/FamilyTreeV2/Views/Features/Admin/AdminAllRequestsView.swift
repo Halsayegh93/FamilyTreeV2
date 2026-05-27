@@ -46,33 +46,37 @@ struct AdminAllRequestsView: View {
 
     /// أقسام رئيسية للطلبات — تجميع منطقي للفلاتر.
     enum RequestSection: String, CaseIterable, Identifiable {
-        case members  // أعضاء — انضمام/اسم/جوال/وفاة/معرض
-        case tree     // الشجرة — أبناء/إضافة شجرة/حذف شجرة
-        case content  // محتوى ونشاط — أخبار/بلاغات/صور/ديوانيات/مشاريع
+        case members      // أعضاء — انضمام/اسم/جوال/وفاة/معرض
+        case tree         // الشجرة — أبناء/إضافة شجرة/حذف شجرة
+        case content      // محتوى ونشاط — أخبار/بلاغات/صور/ديوانيات/مشاريع
+        case treeHealth   // صحة الشجرة — يتائم/بدون اسم/روابط مكسورة/مخفي/رقم مكرر
 
         var id: String { rawValue }
 
         var title: String {
             switch self {
-            case .members: return L10n.t("أعضاء", "Members")
-            case .tree:    return L10n.t("الشجرة", "Tree")
-            case .content: return L10n.t("محتوى ونشاط", "Content")
+            case .members:     return L10n.t("أعضاء", "Members")
+            case .tree:        return L10n.t("الشجرة", "Tree")
+            case .content:     return L10n.t("محتوى ونشاط", "Content")
+            case .treeHealth:  return L10n.t("صحة الشجرة", "Tree Health")
             }
         }
 
         var icon: String {
             switch self {
-            case .members: return "person.2.fill"
-            case .tree:    return "tree.fill"
-            case .content: return "doc.fill"
+            case .members:    return "person.2.fill"
+            case .tree:       return "tree.fill"
+            case .content:    return "doc.fill"
+            case .treeHealth: return "heart.text.square.fill"
             }
         }
 
         var color: Color {
             switch self {
-            case .members: return DS.Color.info
-            case .tree:    return DS.Color.success
-            case .content: return DS.Color.warning
+            case .members:    return DS.Color.info
+            case .tree:       return DS.Color.success
+            case .content:    return DS.Color.warning
+            case .treeHealth: return DS.Color.error
             }
         }
     }
@@ -85,6 +89,8 @@ struct AdminAllRequestsView: View {
         case children, treeAdd, treeEditName, treeEditPhone, treeDeceased, treeDelete
         // محتوى ونشاط
         case news, reports, photos, diwaniya, projects
+        // صحة الشجرة (audit issues)
+        case healthOrphan, healthNoName, healthBrokenParent, healthHidden, healthDupPhone
 
         var id: String { rawValue }
 
@@ -107,6 +113,11 @@ struct AdminAllRequestsView: View {
             case .photos: return L10n.t("صور مقترحة", "Suggested Photos")
             case .projects: return L10n.t("مشاريع", "Projects")
             case .gallery: return L10n.t("معرض", "Gallery")
+            case .healthOrphan: return L10n.t("معلّق", "Unlinked")
+            case .healthNoName: return L10n.t("بدون اسم", "No Name")
+            case .healthBrokenParent: return L10n.t("رابط مكسور", "Broken Link")
+            case .healthHidden: return L10n.t("مخفي", "Hidden")
+            case .healthDupPhone: return L10n.t("رقم مكرر", "Dup Phone")
             }
         }
 
@@ -129,6 +140,11 @@ struct AdminAllRequestsView: View {
             case .photos: return "camera.badge.ellipsis"
             case .projects: return "briefcase.fill"
             case .gallery: return "photo.on.rectangle.angled"
+            case .healthOrphan: return "person.fill.xmark"
+            case .healthNoName: return "textformat.abc.dottedunderline"
+            case .healthBrokenParent: return "link.badge.plus"
+            case .healthHidden: return "eye.slash"
+            case .healthDupPhone: return "phone.badge.waveform"
             }
         }
 
@@ -151,6 +167,11 @@ struct AdminAllRequestsView: View {
             case .photos: return DS.Color.neonBlue
             case .projects: return DS.Color.neonPurple
             case .gallery: return DS.Color.gridDiwaniya
+            case .healthOrphan: return DS.Color.error
+            case .healthNoName: return DS.Color.warning
+            case .healthBrokenParent: return DS.Color.info
+            case .healthHidden: return DS.Color.textTertiary
+            case .healthDupPhone: return DS.Color.neonPink
             }
         }
 
@@ -161,6 +182,7 @@ struct AdminAllRequestsView: View {
             case .joinRequests, .nameChange, .phone, .deceased, .gallery: return .members
             case .children, .treeAdd, .treeEditName, .treeEditPhone, .treeDeceased, .treeDelete: return .tree
             case .news, .reports, .photos, .diwaniya, .projects: return .content
+            case .healthOrphan, .healthNoName, .healthBrokenParent, .healthHidden, .healthDupPhone: return .treeHealth
             }
         }
     }
@@ -194,6 +216,99 @@ struct AdminAllRequestsView: View {
 
     @State private var cachedPendingMembers: [FamilyMember] = []
     private var pendingMembers: [FamilyMember] { cachedPendingMembers }
+
+    // MARK: - Tree Health Caches
+    @State private var cachedHealthIssueMembers: [FamilyMember] = []
+    @State private var cachedHealthMemberIssues: [UUID: Set<TreeHealthIssue>] = [:]
+    @State private var cachedHealthCounts: [TreeHealthIssue: Int] = [:]
+    @State private var openTreeHealthFilter: AdminTreeHealthView.TreeIssueFilter? = nil
+
+    enum TreeHealthIssue: String, Hashable {
+        case orphan, noName, brokenParent, hiddenFromTree, duplicatePhone
+
+        var asTab: RequestTab {
+            switch self {
+            case .orphan:         return .healthOrphan
+            case .noName:         return .healthNoName
+            case .brokenParent:   return .healthBrokenParent
+            case .hiddenFromTree: return .healthHidden
+            case .duplicatePhone: return .healthDupPhone
+            }
+        }
+
+        var asAdminFilter: AdminTreeHealthView.TreeIssueFilter {
+            switch self {
+            case .orphan:         return .orphan
+            case .noName:         return .noName
+            case .brokenParent:   return .brokenParent
+            case .hiddenFromTree: return .hiddenFromTree
+            case .duplicatePhone: return .duplicatePhone
+            }
+        }
+
+        static func from(tab: RequestTab) -> TreeHealthIssue? {
+            switch tab {
+            case .healthOrphan:        return .orphan
+            case .healthNoName:        return .noName
+            case .healthBrokenParent:  return .brokenParent
+            case .healthHidden:        return .hiddenFromTree
+            case .healthDupPhone:      return .duplicatePhone
+            default: return nil
+            }
+        }
+    }
+
+    private func rebuildTreeHealthCache() {
+        let allActive = memberVM.allMembers.filter { $0.role != .pending && $0.status != .frozen }
+        let fatherIds = Set(allActive.compactMap(\.fatherId))
+        let activeIds = Set(allActive.map(\.id))
+
+        var issues: [UUID: Set<TreeHealthIssue>] = [:]
+        var result: [FamilyMember] = []
+
+        for member in memberVM.allMembers where member.status != .frozen {
+            var memberIssues = Set<TreeHealthIssue>()
+            if member.fatherId == nil && !fatherIds.contains(member.id) && member.role != .pending {
+                memberIssues.insert(.orphan)
+            }
+            let name = member.fullName.trimmingCharacters(in: .whitespacesAndNewlines)
+            if name.isEmpty || name == "بدون اسم" {
+                memberIssues.insert(.noName)
+            }
+            if let fid = member.fatherId, !activeIds.contains(fid) {
+                memberIssues.insert(.brokenParent)
+            }
+            if member.isHiddenFromTree {
+                memberIssues.insert(.hiddenFromTree)
+            }
+            if !memberIssues.isEmpty {
+                issues[member.id] = memberIssues
+                result.append(member)
+            }
+        }
+        for group in memberVM.duplicatePhoneGroups {
+            for member in group {
+                issues[member.id, default: []].insert(.duplicatePhone)
+                if !result.contains(where: { $0.id == member.id }) {
+                    result.append(member)
+                }
+            }
+        }
+        result.sort { $0.fullName < $1.fullName }
+
+        var counts: [TreeHealthIssue: Int] = [:]
+        for issue in [TreeHealthIssue.orphan, .noName, .brokenParent, .hiddenFromTree, .duplicatePhone] {
+            counts[issue] = issues.values.filter { $0.contains(issue) }.count
+        }
+
+        cachedHealthIssueMembers = result
+        cachedHealthMemberIssues = issues
+        cachedHealthCounts = counts
+    }
+
+    private func healthMembers(for issue: TreeHealthIssue) -> [FamilyMember] {
+        cachedHealthIssueMembers.filter { cachedHealthMemberIssues[$0.id]?.contains(issue) == true }
+    }
 
     var body: some View {
         ZStack {
@@ -326,6 +441,21 @@ struct AdminAllRequestsView: View {
             withAnimation(DS.Anim.snappy) {
                 isSelectMode = false
                 selectedIds.removeAll()
+            }
+        }
+        .onChange(of: memberVM.allMembers.count) { _ in
+            rebuildTreeHealthCache()
+        }
+        .sheet(item: $openTreeHealthFilter) { filter in
+            NavigationStack {
+                AdminTreeHealthView(initialFilter: filter)
+                    .environmentObject(memberVM)
+                    .toolbar {
+                        ToolbarItem(placement: .topBarLeading) {
+                            Button(L10n.t("إغلاق", "Close")) { openTreeHealthFilter = nil }
+                                .foregroundColor(DS.Color.primary)
+                        }
+                    }
             }
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
@@ -532,6 +662,11 @@ struct AdminAllRequestsView: View {
         case .photos: return adminRequestVM.photoSuggestionRequests.count
         case .projects: return projectsVM.pendingProjects.count
         case .gallery: return memberVM.pendingGalleryPhotos.count
+        case .healthOrphan: return cachedHealthCounts[.orphan] ?? 0
+        case .healthNoName: return cachedHealthCounts[.noName] ?? 0
+        case .healthBrokenParent: return cachedHealthCounts[.brokenParent] ?? 0
+        case .healthHidden: return cachedHealthCounts[.hiddenFromTree] ?? 0
+        case .healthDupPhone: return cachedHealthCounts[.duplicatePhone] ?? 0
         }
     }
 
@@ -553,9 +688,12 @@ struct AdminAllRequestsView: View {
 
     private func recalculateCounts() {
         cachedPendingMembers = memberVM.allMembers.filter { $0.role == .pending }
+        // إعادة بناء كاش صحة الشجرة كذلك
+        rebuildTreeHealthCache()
         // المجموع الكلّي = كل الأنواع ما عدا .all نفسه (لتفادي العدّ المضاعف)
+        // نستثني كذلك tabs الصحة من المجموع الكلّي للطلبات (الصحة ليست "طلبات" بالمعنى الإداري)
         cachedTotalCount = RequestTab.allCases
-            .filter { $0 != .all }
+            .filter { $0 != .all && $0.section != .treeHealth }
             .reduce(0) { $0 + itemCount(for: $1) }
         // عرض كل التابات دائماً — حتى الفارغة (المستخدم يبيها كلها مرئية)
         cachedAvailableTabs = RequestTab.allCases
@@ -872,6 +1010,9 @@ struct AdminAllRequestsView: View {
         case .photos:       return adminRequestVM.photoSuggestionRequests.map { $0.id }
         case .projects:     return projectsVM.pendingProjects.map { $0.id }
         case .gallery:      return memberVM.pendingGalleryPhotos.map { $0.id }
+        // الصحة لا تدعم التحديد المتعدّد (الإجراءات تفصيلية)
+        case .healthOrphan, .healthNoName, .healthBrokenParent, .healthHidden, .healthDupPhone:
+            return []
         }
     }
 
@@ -1142,6 +1283,16 @@ struct AdminAllRequestsView: View {
                 treeEditList(action: .deceased, color: RequestTab.treeDeceased.color)
             case .treeDelete:
                 treeEditList(action: .delete, color: RequestTab.treeDelete.color)
+            case .healthOrphan:
+                treeHealthList(issue: .orphan, color: RequestTab.healthOrphan.color)
+            case .healthNoName:
+                treeHealthList(issue: .noName, color: RequestTab.healthNoName.color)
+            case .healthBrokenParent:
+                treeHealthList(issue: .brokenParent, color: RequestTab.healthBrokenParent.color)
+            case .healthHidden:
+                treeHealthList(issue: .hiddenFromTree, color: RequestTab.healthHidden.color)
+            case .healthDupPhone:
+                treeHealthList(issue: .duplicatePhone, color: RequestTab.healthDupPhone.color)
             case .all:
                 allRequestsContent()
             }
@@ -1412,6 +1563,8 @@ struct AdminAllRequestsView: View {
                     count += 1
                 }
             }
+        case .healthOrphan, .healthNoName, .healthBrokenParent, .healthHidden, .healthDupPhone:
+            break // التحديد المتعدّد غير مدعوم للصحة — الإجراءات تفصيلية لكل عضو
         }
         return count
     }
@@ -1504,8 +1657,46 @@ struct AdminAllRequestsView: View {
                     count += 1
                 }
             }
+        case .healthOrphan, .healthNoName, .healthBrokenParent, .healthHidden, .healthDupPhone:
+            break // الصحة لا تدعم الرفض الدفعي
         }
         return count
+    }
+
+    /// قائمة عناصر صحة الشجرة لفئة معيّنة — صف بسيط بدون موافقة/رفض، تفتح AdminTreeHealthView بالنقر.
+    @ViewBuilder
+    private func treeHealthList(issue: TreeHealthIssue, color: Color) -> some View {
+        ForEach(healthMembers(for: issue)) { member in
+            selectableRow(
+                id: member.id,
+                accentColor: color,
+                onApprove: nil,
+                onReject: nil,
+                onTap: { openTreeHealthFilter = issue.asAdminFilter }
+            ) {
+                treeHealthRow(member: member, issue: issue, color: color)
+            }
+        }
+    }
+
+    /// صف بسيط لعنصر صحة شجرة — اسم العضو + الـ issue badge.
+    private func treeHealthRow(member: FamilyMember, issue: TreeHealthIssue, color: Color) -> some View {
+        HStack(spacing: DS.Spacing.sm) {
+            iconCircle(icon: issue.asTab.icon, color: color, size: 36)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(member.fullName.isEmpty ? L10n.t("بدون اسم", "(no name)") : member.fullName)
+                    .font(DS.Font.calloutBold)
+                    .foregroundColor(DS.Color.textPrimary)
+                    .lineLimit(1)
+                Text(issue.asTab.title)
+                    .font(DS.Font.caption2)
+                    .foregroundColor(color)
+            }
+            Spacer()
+            Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
+                .font(DS.Font.scaled(11, weight: .bold))
+                .foregroundColor(DS.Color.textTertiary)
+        }
     }
 
     /// القيمة الجديدة للعرض حسب نوع الإجراء.

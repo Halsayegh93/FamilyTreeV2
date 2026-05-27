@@ -7,7 +7,11 @@ struct AdminTreeHealthView: View {
     @EnvironmentObject var memberVM: MemberViewModel
     @State private var appeared = false
     @State private var searchText = ""
-    @State private var selectedFilter: TreeIssueFilter = .orphan
+    @State private var selectedFilter: TreeIssueFilter
+
+    init(initialFilter: TreeIssueFilter = .orphan) {
+        self._selectedFilter = State(initialValue: initialFilter)
+    }
     @State private var memberToLinkFather: FamilyMember?
     @State private var memberToEditName: FamilyMember?
     @State private var memberToToggleHidden: FamilyMember?
@@ -23,8 +27,10 @@ struct AdminTreeHealthView: View {
 
     // MARK: - Filter Enum
 
-    enum TreeIssueFilter: String, CaseIterable {
+    enum TreeIssueFilter: String, CaseIterable, Identifiable {
         case orphan, noName, brokenParent, hiddenFromTree, duplicatePhone
+
+        var id: String { rawValue }
 
         var label: String {
             switch self {
