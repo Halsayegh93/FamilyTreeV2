@@ -475,7 +475,8 @@ struct AdminAllRequestsView: View {
     private func recalculateCounts() {
         cachedPendingMembers = memberVM.allMembers.filter { $0.role == .pending }
         cachedTotalCount = RequestTab.allCases.reduce(0) { $0 + itemCount(for: $1) }
-        cachedAvailableTabs = RequestTab.allCases.filter { itemCount(for: $0) > 0 }
+        // عرض كل التابات دائماً — حتى الفارغة (المستخدم يبيها كلها مرئية)
+        cachedAvailableTabs = RequestTab.allCases
     }
 
     /// شريط الفلاتر بنمط أرشيف العائلة الفاخر — كبسولة زجاجية، نشط ممتدّ، الباقي أيقونات.
@@ -507,9 +508,10 @@ struct AdminAllRequestsView: View {
         .padding(.vertical, DS.Spacing.xs)
         .animation(.spring(response: 0.40, dampingFraction: 0.78), value: selectedTab)
         .onChange(of: totalCount) { _ in
-            // إذا التاب المحدد صار فارغ، انقل لأول تاب متاح
-            if itemCount(for: selectedTab) == 0, let first = availableTabs.first {
-                withAnimation(DS.Anim.snappy) { selectedTab = first }
+            // إذا التاب الحالي صار فارغ، انقل لأول تاب غير فارغ (لو فيه)
+            if itemCount(for: selectedTab) == 0,
+               let firstNonEmpty = RequestTab.allCases.first(where: { itemCount(for: $0) > 0 }) {
+                withAnimation(DS.Anim.snappy) { selectedTab = firstNonEmpty }
             }
         }
     }

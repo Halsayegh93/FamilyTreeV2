@@ -263,10 +263,8 @@ struct HomeNewsView: View {
 
     // MARK: - Quick Access Grid (2×2 موحّد بنمط فاخر)
 
-    /// شبكة 2×2 موحّدة: ديوانيات / أرشيف / تواصل / مشاريع — كلها بنفس التصميم.
+    /// شبكة 2×2 موحّدة: ديوانيات / أرشيف / تواصل / مشاريع — كلها بنفس التصميم وأحجام متطابقة.
     private var quickAccessGrid: some View {
-        let showProjects = appSettingsVM.settings.projectsEnabled ?? true
-        let showDiwaniyas = appSettingsVM.settings.diwaniyasEnabled ?? true
         let projectImageURL: String? = projectsVM.projects.first?.logoUrl
 
         return LazyVGrid(
@@ -276,16 +274,15 @@ struct HomeNewsView: View {
             ],
             spacing: DS.Spacing.sm
         ) {
-            if showDiwaniyas {
-                unifiedTile(
-                    title: L10n.t("الديوانيات", "Diwaniyas"),
-                    icon: "map.fill",
-                    color: DS.Color.accent,
-                    imageURL: nil,
-                    count: nil,
-                    action: { selectedTab = 2 }
-                )
-            }
+            // 4 مربعات ثابتة لضمان تساوي الشبكة (2×2)
+            unifiedTile(
+                title: L10n.t("الديوانيات", "Diwaniyas"),
+                icon: "map.fill",
+                color: DS.Color.accent,
+                imageURL: nil,
+                count: nil,
+                action: { selectedTab = 2 }
+            )
             unifiedTile(
                 title: L10n.t("أرشيف العائلة", "Family Archive"),
                 icon: "archivebox.fill",
@@ -302,16 +299,14 @@ struct HomeNewsView: View {
                 count: nil,
                 action: { withAnimation(DS.Anim.snappy) { activeSubPage = .contact } }
             )
-            if showProjects {
-                unifiedTile(
-                    title: L10n.t("مشاريع العائلة", "Family Projects"),
-                    icon: "briefcase.fill",
-                    color: DS.Color.warning,
-                    imageURL: projectImageURL,
-                    count: projectsVM.projects.count,
-                    action: { withAnimation(DS.Anim.snappy) { activeSubPage = .projects } }
-                )
-            }
+            unifiedTile(
+                title: L10n.t("مشاريع العائلة", "Family Projects"),
+                icon: "briefcase.fill",
+                color: DS.Color.warning,
+                imageURL: projectImageURL,
+                count: projectsVM.projects.count,
+                action: { withAnimation(DS.Anim.snappy) { activeSubPage = .projects } }
+            )
         }
     }
 
@@ -334,31 +329,32 @@ struct HomeNewsView: View {
                     endPoint: .bottom
                 )
 
-                // أيقونة وعدّاد بأعلى — أصغر من السابق
+                // أيقونة دائرية أكبر + عدّاد
                 VStack {
                     HStack {
                         Image(systemName: icon)
-                            .font(DS.Font.scaled(11, weight: .bold))
+                            .font(DS.Font.scaled(15, weight: .bold))
                             .foregroundColor(.white)
-                            .frame(width: 24, height: 24)
+                            .frame(width: 36, height: 36)
                             .background(Circle().fill(.ultraThinMaterial))
-                            .overlay(Circle().strokeBorder(Color.white.opacity(0.25), lineWidth: 1))
+                            .overlay(Circle().strokeBorder(Color.white.opacity(0.30), lineWidth: 1))
+                            .shadow(color: .black.opacity(0.15), radius: 3, x: 0, y: 1)
 
                         Spacer()
 
                         if let count, count > 0 {
                             Text("\(count)")
-                                .font(DS.Font.scaled(9, weight: .black))
+                                .font(DS.Font.scaled(10, weight: .black))
                                 .foregroundColor(.white)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 3)
                                 .background(Capsule().fill(.ultraThinMaterial))
                                 .overlay(Capsule().strokeBorder(Color.white.opacity(0.30), lineWidth: 1))
                         }
                     }
                     Spacer()
                 }
-                .padding(8)
+                .padding(9)
 
                 // العنوان أسفل — حجم أصغر
                 Text(title)
