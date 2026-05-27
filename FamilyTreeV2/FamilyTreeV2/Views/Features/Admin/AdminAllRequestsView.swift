@@ -44,8 +44,47 @@ struct AdminAllRequestsView: View {
         }
     }
 
+    /// أقسام رئيسية للطلبات — تجميع منطقي للفلاتر.
+    enum RequestSection: String, CaseIterable, Identifiable {
+        case members  // أعضاء — انضمام/اسم/جوال/وفاة/معرض
+        case tree     // الشجرة — أبناء/إضافة شجرة/حذف شجرة
+        case content  // محتوى ونشاط — أخبار/بلاغات/صور/ديوانيات/مشاريع
+
+        var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .members: return L10n.t("أعضاء", "Members")
+            case .tree:    return L10n.t("الشجرة", "Tree")
+            case .content: return L10n.t("محتوى ونشاط", "Content")
+            }
+        }
+
+        var icon: String {
+            switch self {
+            case .members: return "person.2.fill"
+            case .tree:    return "tree.fill"
+            case .content: return "doc.fill"
+            }
+        }
+
+        var color: Color {
+            switch self {
+            case .members: return DS.Color.info
+            case .tree:    return DS.Color.success
+            case .content: return DS.Color.warning
+            }
+        }
+    }
+
     enum RequestTab: String, CaseIterable, Identifiable {
-        case all, joinRequests, news, reports, phone, nameChange, diwaniya, deceased, children, photos, projects, gallery
+        case all
+        // أعضاء
+        case joinRequests, nameChange, phone, deceased, gallery
+        // الشجرة — كل أنواع طلبات تعديل الشجرة + إضافة الأبناء التقليدية
+        case children, treeAdd, treeEditName, treeEditPhone, treeDeceased, treeDelete
+        // محتوى ونشاط
+        case news, reports, photos, diwaniya, projects
 
         var id: String { rawValue }
 
@@ -60,6 +99,11 @@ struct AdminAllRequestsView: View {
             case .diwaniya: return L10n.t("ديوانيات", "Diwaniyas")
             case .deceased: return L10n.t("وفاة", "Deceased")
             case .children: return L10n.t("أبناء", "Children")
+            case .treeAdd: return L10n.t("إضافة (شجرة)", "Tree · Add")
+            case .treeEditName: return L10n.t("تعديل اسم (شجرة)", "Tree · Name")
+            case .treeEditPhone: return L10n.t("تعديل رقم (شجرة)", "Tree · Phone")
+            case .treeDeceased: return L10n.t("وفاة (شجرة)", "Tree · Deceased")
+            case .treeDelete: return L10n.t("حذف", "Delete")
             case .photos: return L10n.t("صور مقترحة", "Suggested Photos")
             case .projects: return L10n.t("مشاريع", "Projects")
             case .gallery: return L10n.t("معرض", "Gallery")
@@ -77,6 +121,11 @@ struct AdminAllRequestsView: View {
             case .diwaniya: return "tent.fill"
             case .deceased: return "bolt.heart.fill"
             case .children: return "person.badge.plus"
+            case .treeAdd: return "person.crop.circle.badge.plus"
+            case .treeEditName: return "pencil.line"
+            case .treeEditPhone: return "phone.arrow.up.right"
+            case .treeDeceased: return "heart.slash"
+            case .treeDelete: return "person.badge.minus"
             case .photos: return "camera.badge.ellipsis"
             case .projects: return "briefcase.fill"
             case .gallery: return "photo.on.rectangle.angled"
@@ -94,14 +143,30 @@ struct AdminAllRequestsView: View {
             case .diwaniya: return DS.Color.gridDiwaniya
             case .deceased: return DS.Color.error
             case .children: return DS.Color.info
+            case .treeAdd: return DS.Color.success
+            case .treeEditName: return DS.Color.neonPurple
+            case .treeEditPhone: return DS.Color.primary
+            case .treeDeceased: return DS.Color.error
+            case .treeDelete: return DS.Color.error
             case .photos: return DS.Color.neonBlue
             case .projects: return DS.Color.neonPurple
             case .gallery: return DS.Color.gridDiwaniya
             }
         }
+
+        /// القسم الذي ينتمي إليه — nil لـ .all (ليس له قسم).
+        var section: RequestSection? {
+            switch self {
+            case .all: return nil
+            case .joinRequests, .nameChange, .phone, .deceased, .gallery: return .members
+            case .children, .treeAdd, .treeEditName, .treeEditPhone, .treeDeceased, .treeDelete: return .tree
+            case .news, .reports, .photos, .diwaniya, .projects: return .content
+            }
+        }
     }
 
     @State private var selectedTab: RequestTab = .all
+    @State private var selectedSection: RequestSection? = nil   // nil = وضع الكل
     @State private var showBulkApproveChildrenConfirm = false
     @State private var bulkApproveResult: String?
     @State private var showBulkApproveResult = false
@@ -281,6 +346,7 @@ struct AdminAllRequestsView: View {
                 group.addTask { @MainActor in await adminRequestVM.fetchNameChangeRequests() }
                 group.addTask { @MainActor in await projectsVM.fetchPendingProjects() }
                 group.addTask { @MainActor in await memberVM.fetchPendingGalleryPhotos() }
+                group.addTask { @MainActor in await adminRequestVM.fetchTreeEditRequests(force: true) }
             }
             await fetchAllRegistrationMatches()
             recalculateCounts()
@@ -458,10 +524,25 @@ struct AdminAllRequestsView: View {
         case .diwaniya: return diwaniyaVM.pendingDiwaniyas.count
         case .deceased: return adminRequestVM.deceasedRequests.count
         case .children: return adminRequestVM.childAddRequests.count
+        case .treeAdd: return treeEditCount(action: .add)
+        case .treeEditName: return treeEditCount(action: .editName)
+        case .treeEditPhone: return treeEditCount(action: .editPhone)
+        case .treeDeceased: return treeEditCount(action: .deceased)
+        case .treeDelete: return treeEditCount(action: .delete)
         case .photos: return adminRequestVM.photoSuggestionRequests.count
         case .projects: return projectsVM.pendingProjects.count
         case .gallery: return memberVM.pendingGalleryPhotos.count
         }
+    }
+
+    /// عدد طلبات الشجرة لإجراء معيّن.
+    private func treeEditCount(action: TreeEditAction) -> Int {
+        adminRequestVM.treeEditRequests.filter { $0.treeEditPayload?.resolvedAction == action }.count
+    }
+
+    /// طلبات الشجرة المفلترة لإجراء معيّن.
+    private func treeEdits(action: TreeEditAction) -> [AdminRequest] {
+        adminRequestVM.treeEditRequests.filter { $0.treeEditPayload?.resolvedAction == action }
     }
 
     @State private var cachedTotalCount: Int = 0
@@ -481,6 +562,7 @@ struct AdminAllRequestsView: View {
     }
 
     /// شريط الفلاتر بنمط أرشيف العائلة — في وضع التحديد يتحوّل لشريط ملخّص التحديد.
+    /// خارج وضع التحديد: صف "الكل" + الأقسام أعلى + صف فلاتر القسم الحالي تحت.
     private var tabBar: some View {
         Group {
             if isSelectMode {
@@ -488,19 +570,173 @@ struct AdminAllRequestsView: View {
                     .padding(.horizontal, DS.Spacing.lg)
                     .transition(.opacity)
             } else {
-                filterCapsule
-                    .transition(.opacity)
+                VStack(spacing: DS.Spacing.xs) {
+                    sectionSelector
+                    if let section = selectedSection {
+                        subFilterCapsule(for: section)
+                            .transition(.opacity)
+                    }
+                }
+                .transition(.opacity)
             }
         }
         .padding(.vertical, DS.Spacing.xs)
         .animation(.spring(response: 0.40, dampingFraction: 0.78), value: selectedTab)
+        .animation(.spring(response: 0.40, dampingFraction: 0.78), value: selectedSection)
         .animation(.spring(response: 0.35, dampingFraction: 0.80), value: isSelectMode)
         .onChange(of: totalCount) { _ in
             // إذا التاب الحالي صار فارغ، انقل لأول تاب غير فارغ (لو فيه)
             if itemCount(for: selectedTab) == 0,
                let firstNonEmpty = RequestTab.allCases.first(where: { itemCount(for: $0) > 0 }) {
-                withAnimation(DS.Anim.snappy) { selectedTab = firstNonEmpty }
+                withAnimation(DS.Anim.snappy) {
+                    selectedTab = firstNonEmpty
+                    selectedSection = firstNonEmpty.section
+                }
             }
+        }
+    }
+
+    /// صف الأقسام الأعلى: "الكل" + 3 أقسام (أعضاء/شجرة/محتوى).
+    private var sectionSelector: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                // "الكل" — اختصار للتاب .all
+                sectionChip(
+                    title: L10n.t("الكل", "All"),
+                    icon: "tray.full.fill",
+                    color: DS.Color.primary,
+                    count: cachedTotalCount,
+                    isActive: selectedTab == .all
+                ) {
+                    selectedTab = .all
+                    selectedSection = nil
+                }
+                Capsule()
+                    .fill(DS.Color.textTertiary.opacity(0.25))
+                    .frame(width: 1, height: 22)
+                    .padding(.horizontal, 2)
+
+                ForEach(RequestSection.allCases) { section in
+                    sectionChip(
+                        title: section.title,
+                        icon: section.icon,
+                        color: section.color,
+                        count: sectionCount(section),
+                        isActive: selectedSection == section
+                    ) {
+                        selectedSection = section
+                        // اختر أول tab في القسم
+                        if let firstTab = RequestTab.allCases.first(where: { $0.section == section }) {
+                            selectedTab = firstTab
+                        }
+                    }
+                }
+            }
+            .padding(6)
+            .background(Capsule(style: .continuous).fill(.ultraThinMaterial))
+            .overlay(Capsule(style: .continuous).strokeBorder(DS.Color.primary.opacity(0.10), lineWidth: 1))
+            .shadow(color: .black.opacity(0.06), radius: 8, x: 0, y: 3)
+            .padding(.horizontal, DS.Spacing.lg)
+        }
+    }
+
+    /// chip القسم — يتمدّد لو نشط، أيقونة فقط لو غير نشط.
+    private func sectionChip(title: String, icon: String, color: Color, count: Int, isActive: Bool, action: @escaping () -> Void) -> some View {
+        Group {
+            if isActive {
+                HStack(spacing: 6) {
+                    Image(systemName: icon).font(DS.Font.scaled(12, weight: .bold)).foregroundColor(.white)
+                    Text(title).font(DS.Font.scaled(13, weight: .bold)).foregroundColor(.white)
+                    if count > 0 {
+                        Text("\(count)")
+                            .font(DS.Font.scaled(10, weight: .black))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 6).padding(.vertical, 1)
+                            .background(Capsule().fill(Color.white.opacity(0.25)))
+                    }
+                }
+                .padding(.horizontal, DS.Spacing.md).padding(.vertical, 8)
+                .background(Capsule().fill(LinearGradient(colors: [color, color.opacity(0.85)], startPoint: .topLeading, endPoint: .bottomTrailing)))
+                .shadow(color: color.opacity(0.35), radius: 8, x: 0, y: 3)
+                .transition(.scale(scale: 0.85).combined(with: .opacity))
+            } else {
+                Button(action: action) {
+                    ZStack(alignment: .topTrailing) {
+                        Image(systemName: icon)
+                            .font(DS.Font.scaled(13, weight: .bold))
+                            .foregroundColor(color)
+                            .frame(width: 36, height: 36)
+                            .background(Circle().fill(color.opacity(0.12)))
+                            .overlay(Circle().strokeBorder(color.opacity(0.20), lineWidth: 1))
+                        if count > 0 {
+                            Text("\(count)")
+                                .font(DS.Font.scaled(9, weight: .black))
+                                .foregroundColor(.white)
+                                .frame(minWidth: 16, minHeight: 16)
+                                .padding(.horizontal, 3)
+                                .background(Capsule().fill(color))
+                                .overlay(Capsule().strokeBorder(Color.white, lineWidth: 1.5))
+                                .offset(x: 4, y: -4)
+                        }
+                    }
+                }
+                .buttonStyle(DSScaleButtonStyle())
+                .transition(.scale(scale: 0.85).combined(with: .opacity))
+            }
+        }
+    }
+
+    /// مجموع طلبات القسم.
+    private func sectionCount(_ section: RequestSection) -> Int {
+        RequestTab.allCases
+            .filter { $0.section == section }
+            .reduce(0) { $0 + itemCount(for: $1) }
+    }
+
+    /// صف الفلاتر الفرعية داخل القسم — كبسولة أرشيف العائلة.
+    private func subFilterCapsule(for section: RequestSection) -> some View {
+        let sectionTabs = RequestTab.allCases.filter { $0.section == section }
+        return ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(sectionTabs) { tab in
+                    if selectedTab == tab {
+                        activeTabPill(tab)
+                            .transition(.scale(scale: 0.85).combined(with: .opacity))
+                    } else {
+                        inactiveTabIcon(tab)
+                            .transition(.scale(scale: 0.85).combined(with: .opacity))
+                    }
+                }
+
+                // زر التحديد المدمج — يظهر فقط لو في الـ tab الحالي طلبات
+                if itemCount(for: selectedTab) > 0 {
+                    Capsule()
+                        .fill(DS.Color.textTertiary.opacity(0.25))
+                        .frame(width: 1, height: 22)
+                        .padding(.horizontal, 2)
+
+                    Button {
+                        withAnimation(DS.Anim.snappy) {
+                            isSelectMode = true
+                            selectedIds.removeAll()
+                        }
+                    } label: {
+                        Image(systemName: "checkmark.circle")
+                            .font(DS.Font.scaled(13, weight: .bold))
+                            .foregroundColor(DS.Color.success)
+                            .frame(width: 36, height: 36)
+                            .background(Circle().fill(DS.Color.success.opacity(0.12)))
+                            .overlay(Circle().strokeBorder(DS.Color.success.opacity(0.25), lineWidth: 1))
+                    }
+                    .buttonStyle(DSScaleButtonStyle())
+                    .accessibilityLabel(L10n.t("تحديد متعدّد", "Multi-select"))
+                }
+            }
+            .padding(6)
+            .background(Capsule(style: .continuous).fill(.ultraThinMaterial))
+            .overlay(Capsule(style: .continuous).strokeBorder(section.color.opacity(0.18), lineWidth: 1))
+            .shadow(color: section.color.opacity(0.10), radius: 6, x: 0, y: 2)
+            .padding(.horizontal, DS.Spacing.lg)
         }
     }
 
@@ -608,7 +844,6 @@ struct AdminAllRequestsView: View {
     private var currentTabIds: [UUID] {
         switch selectedTab {
         case .all:
-            // كل المعرّفات عبر كل الأنواع
             return pendingMembers.map { $0.id }
                 + newsVM.pendingNewsRequests.map { $0.id }
                 + adminRequestVM.newsReportRequests.map { $0.id }
@@ -617,6 +852,7 @@ struct AdminAllRequestsView: View {
                 + diwaniyaVM.pendingDiwaniyas.map { $0.id }
                 + adminRequestVM.deceasedRequests.map { $0.id }
                 + adminRequestVM.childAddRequests.map { $0.id }
+                + adminRequestVM.treeEditRequests.map { $0.id }
                 + adminRequestVM.photoSuggestionRequests.map { $0.id }
                 + projectsVM.pendingProjects.map { $0.id }
                 + memberVM.pendingGalleryPhotos.map { $0.id }
@@ -628,6 +864,11 @@ struct AdminAllRequestsView: View {
         case .diwaniya:     return diwaniyaVM.pendingDiwaniyas.map { $0.id }
         case .deceased:     return adminRequestVM.deceasedRequests.map { $0.id }
         case .children:     return adminRequestVM.childAddRequests.map { $0.id }
+        case .treeAdd:      return treeEdits(action: .add).map { $0.id }
+        case .treeEditName: return treeEdits(action: .editName).map { $0.id }
+        case .treeEditPhone: return treeEdits(action: .editPhone).map { $0.id }
+        case .treeDeceased: return treeEdits(action: .deceased).map { $0.id }
+        case .treeDelete:   return treeEdits(action: .delete).map { $0.id }
         case .photos:       return adminRequestVM.photoSuggestionRequests.map { $0.id }
         case .projects:     return projectsVM.pendingProjects.map { $0.id }
         case .gallery:      return memberVM.pendingGalleryPhotos.map { $0.id }
@@ -775,7 +1016,6 @@ struct AdminAllRequestsView: View {
                     }
                 }
             case .phone:
-                selectAllButton(ids: adminRequestVM.phoneChangeRequests.map { $0.id })
                 ForEach(adminRequestVM.phoneChangeRequests) { request in
                     selectableRow(
                         id: request.id,
@@ -791,7 +1031,6 @@ struct AdminAllRequestsView: View {
                     adminPhoneEditSheet(request: request)
                 }
             case .nameChange:
-                selectAllButton(ids: adminRequestVM.nameChangeRequests.map { $0.id })
                 ForEach(adminRequestVM.nameChangeRequests) { request in
                     selectableRow(
                         id: request.id,
@@ -893,6 +1132,16 @@ struct AdminAllRequestsView: View {
                         galleryPendingRow(photo: photo)
                     }
                 }
+            case .treeAdd:
+                treeEditList(action: .add, color: RequestTab.treeAdd.color)
+            case .treeEditName:
+                treeEditList(action: .editName, color: RequestTab.treeEditName.color)
+            case .treeEditPhone:
+                treeEditList(action: .editPhone, color: RequestTab.treeEditPhone.color)
+            case .treeDeceased:
+                treeEditList(action: .deceased, color: RequestTab.treeDeceased.color)
+            case .treeDelete:
+                treeEditList(action: .delete, color: RequestTab.treeDelete.color)
             case .all:
                 allRequestsContent()
             }
@@ -1156,6 +1405,13 @@ struct AdminAllRequestsView: View {
                 await memberVM.approveGalleryPhoto(photoId: id)
                 count += 1
             }
+        case .treeAdd, .treeEditName, .treeEditPhone, .treeDeceased, .treeDelete:
+            for id in ids {
+                if let req = adminRequestVM.treeEditRequests.first(where: { $0.id == id }) {
+                    await adminRequestVM.approveTreeEditRequest(request: req)
+                    count += 1
+                }
+            }
         }
         return count
     }
@@ -1241,8 +1497,85 @@ struct AdminAllRequestsView: View {
                     count += 1
                 }
             }
+        case .treeAdd, .treeEditName, .treeEditPhone, .treeDeceased, .treeDelete:
+            for id in ids {
+                if let req = adminRequestVM.treeEditRequests.first(where: { $0.id == id }) {
+                    await adminRequestVM.rejectTreeEditRequest(request: req, reason: nil)
+                    count += 1
+                }
+            }
         }
         return count
+    }
+
+    /// القيمة الجديدة للعرض حسب نوع الإجراء.
+    private func treeEditNewValue(payload: TreeEditPayload?, action: TreeEditAction) -> String? {
+        guard let payload else { return nil }
+        switch action {
+        case .editName: return (payload.newName?.isEmpty == false) ? payload.newName : nil
+        case .editPhone: return (payload.newPhone?.isEmpty == false) ? payload.newPhone : nil
+        case .deceased: return (payload.deathDate?.isEmpty == false) ? payload.deathDate : nil
+        case .add: return (payload.newMemberName?.isEmpty == false) ? payload.newMemberName : nil
+        case .delete: return nil
+        }
+    }
+
+    /// قائمة طلبات الشجرة لإجراء معيّن (الموافقة/الرفض يستخدمان APIs الخاصة بالشجرة).
+    @ViewBuilder
+    private func treeEditList(action: TreeEditAction, color: Color) -> some View {
+        ForEach(treeEdits(action: action)) { request in
+            selectableRow(
+                id: request.id,
+                accentColor: color,
+                onApprove: { Task { await adminRequestVM.approveTreeEditRequest(request: request) } },
+                onReject: { Task { await adminRequestVM.rejectTreeEditRequest(request: request, reason: nil) } },
+                onTap: { /* لا شيت تفاصيل خاص بطلبات الشجرة حالياً */ }
+            ) {
+                treeEditRow(request: request, action: action, color: color)
+            }
+        }
+    }
+
+    /// صف موحّد لطلبات الشجرة — يعرض الإجراء واسم العضو والقيمة الجديدة + الوقت.
+    private func treeEditRow(request: AdminRequest, action: TreeEditAction, color: Color) -> some View {
+        let payload = request.treeEditPayload
+        return VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            HStack(spacing: DS.Spacing.sm) {
+                iconCircle(icon: action.iconName, color: color, size: 36)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(L10n.t(action.arabicLabel, action.englishLabel))
+                        .font(DS.Font.calloutBold)
+                        .foregroundColor(DS.Color.textPrimary)
+                    Text(request.member?.fullName ?? L10n.t("عضو", "Member"))
+                        .font(DS.Font.caption1)
+                        .foregroundColor(DS.Color.textSecondary)
+                }
+                Spacer()
+            }
+
+            // قيمة جديدة حسب الإجراء
+            if let newDisplay = treeEditNewValue(payload: payload, action: action) {
+                HStack(spacing: 4) {
+                    Image(systemName: "arrow.right.circle.fill")
+                        .font(DS.Font.scaled(10, weight: .bold))
+                        .foregroundColor(DS.Color.success)
+                    Text(L10n.t("القيمة الجديدة:", "New:")).font(DS.Font.caption2).foregroundColor(DS.Color.textSecondary)
+                    Text(newDisplay).font(DS.Font.caption1).fontWeight(.semibold).foregroundColor(DS.Color.textPrimary)
+                    Spacer()
+                }
+            }
+
+            if let date = request.createdAt {
+                HStack(spacing: DS.Spacing.xs) {
+                    Image(systemName: "clock")
+                        .font(DS.Font.scaled(10, weight: .medium))
+                        .foregroundColor(DS.Color.textTertiary)
+                    Text(formatRegistrationDate(date))
+                        .font(DS.Font.caption2)
+                        .foregroundColor(DS.Color.textTertiary)
+                }
+            }
+        }
     }
 
     /// محتوى تاب "الكل" — يصدر كل الأنواع في تسلسل (إطار البطاقة الملوّن يعطي تمييزاً بصرياً).
@@ -1360,6 +1693,12 @@ struct AdminAllRequestsView: View {
                 onTap: { }
             ) { galleryPendingRow(photo: photo) }
         }
+        // طلبات الشجرة (كل الإجراءات)
+        treeEditList(action: .add, color: RequestTab.treeAdd.color)
+        treeEditList(action: .editName, color: RequestTab.treeEditName.color)
+        treeEditList(action: .editPhone, color: RequestTab.treeEditPhone.color)
+        treeEditList(action: .deceased, color: RequestTab.treeDeceased.color)
+        treeEditList(action: .delete, color: RequestTab.treeDelete.color)
     }
 
     /// موافقة دفعية تعبر كل الأنواع (لوضع "الكل").
@@ -1393,6 +1732,8 @@ struct AdminAllRequestsView: View {
                 await projectsVM.approveProject(id: proj.id, approvedBy: adminId); count += 1
             } else if memberVM.pendingGalleryPhotos.contains(where: { $0.id == id }) {
                 await memberVM.approveGalleryPhoto(photoId: id); count += 1
+            } else if let req = adminRequestVM.treeEditRequests.first(where: { $0.id == id }) {
+                await adminRequestVM.approveTreeEditRequest(request: req); count += 1
             }
         }
         _ = idSet // silence unused
@@ -1426,6 +1767,8 @@ struct AdminAllRequestsView: View {
                 await projectsVM.rejectProject(id: id); count += 1
             } else if let photo = memberVM.pendingGalleryPhotos.first(where: { $0.id == id }) {
                 await memberVM.rejectGalleryPhoto(photoId: photo.id, photoURL: photo.photoURL); count += 1
+            } else if let req = adminRequestVM.treeEditRequests.first(where: { $0.id == id }) {
+                await adminRequestVM.rejectTreeEditRequest(request: req, reason: nil); count += 1
             }
         }
         return count
