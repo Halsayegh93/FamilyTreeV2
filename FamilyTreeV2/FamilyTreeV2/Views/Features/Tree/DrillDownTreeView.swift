@@ -23,6 +23,20 @@ struct DrillDownTreeView: View {
     @State private var showSearchBar = false
     @State private var scrollTarget: UUID? = nil
 
+    // صلة القرابة — البانر + المعرّفات المهايلايتة + الطرفين
+    @State private var kinshipBanner: String? = nil
+    @State private var kinshipPathIds: Set<UUID> = []
+    @State private var kinshipTargetId: UUID? = nil
+    @State private var kinshipMeId: UUID? = nil
+    @State private var kinshipCommonAncestorId: UUID? = nil
+    @State private var kinshipDismissTask: Task<Void, Never>? = nil
+
+    // نمط فروع الخطوط (قوس/زاوية) — يبقى عبر التشغيل
+    @AppStorage("drillBranchStyle") private var drillBranchStyleRaw: String = BranchConnectorStyle.arc.rawValue
+    private var drillBranchStyle: BranchConnectorStyle {
+        BranchConnectorStyle(rawValue: drillBranchStyleRaw) ?? .arc
+    }
+
     /// الحجم الموحّد لمربع العضو.
     private let squareSize: CGFloat = 120
 
@@ -93,15 +107,12 @@ struct DrillDownTreeView: View {
                         .padding(.top, DS.Spacing.sm)
                         .padding(.bottom, DS.Spacing.xs)
 
-                    // لوحة البحث ثابتة فوق بمساحة محدودة، الشجرة تظل ظاهرة تحتها
+                    // لوحة البحث تأخذ كل المساحة لما تفتح — الشجرة تختفي
                     if showSearchBar {
                         searchInlinePanel
-                            .frame(maxHeight: 360)
+                            .frame(maxHeight: .infinity)
                             .transition(.opacity.combined(with: .move(edge: .top)))
-                    }
-
-                    // الشجرة دائماً مرئية تحت — حتى عند فتح البحث
-                    if memberVM.allMembers.isEmpty {
+                    } else if memberVM.allMembers.isEmpty {
                         Spacer()
                         emptyState
                         Spacer()
@@ -109,10 +120,13 @@ struct DrillDownTreeView: View {
                         Spacer()
                         ProgressView().tint(DS.Color.primary)
                         Spacer()
+                    } else if kinshipBanner != nil {
+                        // وضع القرابة: السلسلة أفقياً (جنب بعض)
+                        horizontalKinshipChain
                     } else {
                         ScrollViewReader { proxy in
                             ScrollView(showsIndicators: false) {
-                                VStack(spacing: DS.Spacing.md) {
+                                VStack(spacing: DS.Spacing.xs) {
                                     ForEach(Array(chain.enumerated()), id: \.element.id) { idx, member in
                                         let isLast = idx == chain.count - 1
 
@@ -155,9 +169,19 @@ struct DrillDownTreeView: View {
                     }
                 }
             }
+            .overlay(alignment: .top) {
+                if let banner = kinshipBanner {
+                    kinshipBannerView(text: banner)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                        .padding(.top, 8)
+                }
+            }
             .toolbar(.hidden, for: .navigationBar)
             .onAppear { initializeChainIfNeeded() }
             .onChange(of: memberVM.allMembers.count) { _ in initializeChainIfNeeded() }
+            .onReceive(NotificationCenter.default.publisher(for: .showKinshipPath)) { note in
+                handleKinshipNotification(note)
+            }
             .sheet(isPresented: $showingNotifications) {
                 NavigationStack { NotificationsCenterView() }
                     .presentationDragIndicator(.visible)
@@ -168,8 +192,176 @@ struct DrillDownTreeView: View {
                     .presentationDragIndicator(.visible)
             }
             .animation(DS.Anim.snappy, value: showSearchBar)
+            .animation(DS.Anim.snappy, value: kinshipBanner)
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+    }
+
+    // MARK: - Kinship Horizontal Chain
+
+    /// عرض سلسلة القرابة أفقياً — كل المربعات جنب بعض من اليمين لليسار
+    /// (مع RTL تلقائياً). يستخدم بدل العرض العمودي عند تفعيل القرابة فقط.
+    private var horizontalKinshipChain: some View {
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(alignment: .center, spacing: 0) {
+                    ForEach(Array(chain.enumerated()), id: \.element.id) { idx, member in
+                        let isLast = idx == chain.count - 1
+                        Button {
+                            selectedMemberForDetails = member
+                        } label: {
+                            memberSquareContent(
+                                member,
+                                isActive: kinshipTargetId == member.id,
+                                kidsCount: children(of: member.id).count
+                            )
+                        }
+                        .buttonStyle(DSScaleButtonStyle())
+                        .simultaneousGesture(
+                            LongPressGesture(minimumDuration: 0.4).onEnded { _ in
+                                selectedMemberForDetails = member
+                            }
+                        )
+                        .id(member.id)
+
+                        if !isLast {
+                            horizontalKinshipConnector
+                        }
+                    }
+                }
+                .padding(.horizontal, DS.Spacing.lg)
+                .padding(.vertical, DS.Spacing.xl)
+            }
+            .onChange(of: scrollTarget) { newId in
+                guard let id = newId else { return }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                    guard chain.contains(where: { $0.id == id }) else {
+                        scrollTarget = nil
+                        return
+                    }
+                    withAnimation(.easeInOut(duration: 0.5)) {
+                        proxy.scrollTo(id, anchor: .center)
+                    }
+                    DispatchQueue.main.async { scrollTarget = nil }
+                }
+            }
+        }
+    }
+
+    /// خط أفقي يصل بين مربعين متتاليين في سلسلة القرابة (ذهبي بارز)
+    private var horizontalKinshipConnector: some View {
+        Rectangle()
+            .fill(DS.Color.warning.opacity(0.85))
+            .frame(width: 22, height: 3)
+    }
+
+    // MARK: - Kinship Banner + Handler
+
+    private func kinshipBannerView(text: String) -> some View {
+        HStack(spacing: DS.Spacing.sm) {
+            Image(systemName: "person.2.fill")
+                .font(DS.Font.scaled(15, weight: .bold))
+            Text(text)
+                .font(DS.Font.calloutBold)
+                .lineLimit(2)
+                .minimumScaleFactor(0.8)
+            Spacer(minLength: DS.Spacing.sm)
+            Button {
+                clearKinship()
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(DS.Font.scaled(18))
+                    .foregroundColor(DS.Color.textOnPrimary.opacity(0.7))
+            }
+        }
+        .foregroundColor(DS.Color.textOnPrimary)
+        .padding(.horizontal, DS.Spacing.lg)
+        .padding(.vertical, DS.Spacing.md)
+        .background(DS.Color.gradientPrimary)
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+        .padding(.horizontal, DS.Spacing.lg)
+        .shadow(color: DS.Color.primary.opacity(0.3), radius: 8, y: 4)
+    }
+
+    /// يستقبل إشعار `.showKinshipPath` ويبني سلسلة ثنائية الاتجاه:
+    /// **أنت → ... → الجد المشترك → ... → الهدف**
+    /// — كل أعضاء مسار القرابة يظهرون في سلسلة خطّية واحدة، الطرفان مميّزان.
+    private func handleKinshipNotification(_ note: Notification) {
+        guard let info = note.userInfo,
+              let memberId = info["memberId"] as? UUID,
+              let relationship = info["relationship"] as? String,
+              let target = memberVM.member(byId: memberId),
+              let meId = authVM.currentUser?.id,
+              let me = memberVM.member(byId: meId) else { return }
+
+        let lookup = memberVM._memberById
+        let result = KinshipCalculator.calculate(from: me, to: target, lookup: lookup)
+
+        // pathA = [me, ..., common_ancestor]
+        // pathB = [target, ..., common_ancestor]
+        // نُركّب سلسلة خطّية: pathA + (pathB بدون الجد المشترك، معكوس)
+        // → [me, ..., CA, ..., target]
+        let newChain: [FamilyMember]
+        if result.commonAncestor != nil, !result.pathB.isEmpty {
+            newChain = result.pathA + Array(result.pathB.dropLast().reversed())
+        } else {
+            // لا يوجد جد مشترك — fallback لمسار الهدف فقط من الجذر
+            var ancestors: [FamilyMember] = []
+            var current: FamilyMember? = target
+            while let c = current {
+                ancestors.append(c)
+                current = c.fatherId.flatMap { memberVM.member(byId: $0) }
+            }
+            newChain = Array(ancestors.reversed())
+        }
+
+        guard !newChain.isEmpty else { return }
+
+        // مجموعة معرّفات للهايلايت — كل أعضاء السلسلة + pathIds من الإشعار
+        var pathSet: Set<UUID> = Set(newChain.map(\.id))
+        if let ids = info["pathIds"] as? [UUID] {
+            pathSet.formUnion(ids)
+        }
+
+        kinshipDismissTask?.cancel()
+
+        withAnimation(.easeInOut(duration: 0.4)) {
+            chain = newChain
+            kinshipBanner = relationship
+            kinshipPathIds = pathSet
+            kinshipTargetId = memberId
+            kinshipMeId = meId
+            kinshipCommonAncestorId = result.commonAncestor?.id
+        }
+
+        // التمرير للجد المشترك ليبيّن نقطة الوصل بين الطرفين
+        scrollTarget = result.commonAncestor?.id ?? target.id
+
+        // إخفاء البانر والهايلايت بعد 20 ثانية
+        kinshipDismissTask = Task {
+            try? await Task.sleep(nanoseconds: 20_000_000_000)
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                withAnimation(DS.Anim.snappy) {
+                    kinshipBanner = nil
+                    kinshipPathIds = []
+                    kinshipTargetId = nil
+                    kinshipMeId = nil
+                    kinshipCommonAncestorId = nil
+                }
+            }
+        }
+    }
+
+    private func clearKinship() {
+        kinshipDismissTask?.cancel()
+        withAnimation(DS.Anim.snappy) {
+            kinshipBanner = nil
+            kinshipPathIds = []
+            kinshipTargetId = nil
+            kinshipMeId = nil
+            kinshipCommonAncestorId = nil
+        }
     }
 
     // MARK: - Top Bar (Root + Me)
@@ -207,11 +399,34 @@ struct DrillDownTreeView: View {
 
                 if let me = authVM.currentUser {
                     Button { jumpTo(me) } label: {
-                        pillLabel(icon: "location.fill", text: L10n.t("موقعي", "Me"), color: DS.Color.success)
+                        pillLabel(icon: "location.fill", text: L10n.t("موقعي", "Me"), color: DS.Color.neonPink)
                     }
                     .buttonStyle(DSScaleButtonStyle())
                     .transition(.opacity.combined(with: .scale(scale: 0.85)))
                 }
+
+                // زر تبديل نمط الفروع (قوس ↔ زاوية)
+                Button {
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        drillBranchStyleRaw = (drillBranchStyle == .arc)
+                            ? BranchConnectorStyle.angle.rawValue
+                            : BranchConnectorStyle.arc.rawValue
+                    }
+                } label: {
+                    Image(systemName: drillBranchStyle == .arc
+                          ? "scribble.variable"
+                          : "arrow.turn.down.right")
+                        .font(DS.Font.scaled(13, weight: .bold))
+                        .foregroundColor(DS.Color.accent)
+                        .frame(width: 36, height: 36)
+                        .background(Circle().fill(DS.Color.accent.opacity(0.12)))
+                }
+                .buttonStyle(DSScaleButtonStyle())
+                .accessibilityLabel(L10n.t(
+                    drillBranchStyle == .arc ? "تبديل لخطوط بزاوية" : "تبديل لخطوط بقوس",
+                    drillBranchStyle == .arc ? "Switch to angled lines" : "Switch to arc lines"
+                ))
+                .transition(.opacity.combined(with: .scale(scale: 0.85)))
             } else {
                 // ملصق دلالي عند فتح البحث — يخلّي البار ما يصير فاضي
                 Text(L10n.t("بحث", "Search"))
@@ -281,7 +496,7 @@ struct DrillDownTreeView: View {
         let deathY = year(from: member.deathDate)
         let hasDates = birthY != nil || deathY != nil
 
-        return VStack(spacing: 4) {
+        return VStack(spacing: 2) {
             // الصورة + علامة المتوفى (نقطة داكنة بأعلى الزاوية)
             ZStack(alignment: .topTrailing) {
                 DSMemberAvatar(
@@ -335,7 +550,7 @@ struct DrillDownTreeView: View {
             }
             .foregroundColor(kidsCount > 0 ? DS.Color.primary : DS.Color.textTertiary)
         }
-        .padding(.vertical, 8)
+        .padding(.vertical, 5)
         .padding(.horizontal, 6)
         .frame(width: squareSize, height: squareSize)
         .background(squareBackground(isActive: isActive, isDeceased: isDeceased))
@@ -348,6 +563,64 @@ struct DrillDownTreeView: View {
                 )
         )
         .shadow(color: .black.opacity(isActive ? 0.07 : 0.03), radius: isActive ? 9 : 4, x: 0, y: 2)
+        // سهم خفيف جداً يوضح أن عند العضو أبناء — داخل المربع من الأسفل
+        .overlay(alignment: .bottom) {
+            if kidsCount > 0 {
+                Image(systemName: "chevron.compact.down")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(DS.Color.primary.opacity(0.45))
+                    .padding(.bottom, 3)
+                    .allowsHitTesting(false)
+            }
+        }
+        // تمييز ذهبي لأعضاء مسار القرابة + نجمة للمستهدف
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Radius.md)
+                .strokeBorder(
+                    kinshipPathIds.contains(member.id) ? DS.Color.warning : Color.clear,
+                    lineWidth: 2.5
+                )
+        )
+        .shadow(
+            color: kinshipPathIds.contains(member.id) ? DS.Color.warning.opacity(0.45) : .clear,
+            radius: 10, x: 0, y: 0
+        )
+        .overlay(alignment: .topLeading) {
+            if kinshipTargetId == member.id {
+                // الهدف — نجمة ذهبية
+                Image(systemName: "star.fill")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(.white)
+                    .padding(5)
+                    .background(Circle().fill(DS.Color.warning))
+                    .overlay(Circle().strokeBorder(Color.white, lineWidth: 1.5))
+                    .shadow(color: DS.Color.warning.opacity(0.5), radius: 3, x: 0, y: 1)
+                    .offset(x: -3, y: -3)
+                    .allowsHitTesting(false)
+            } else if kinshipMeId == member.id {
+                // أنا — شخص أخضر
+                Image(systemName: "person.fill")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(.white)
+                    .padding(5)
+                    .background(Circle().fill(DS.Color.success))
+                    .overlay(Circle().strokeBorder(Color.white, lineWidth: 1.5))
+                    .shadow(color: DS.Color.success.opacity(0.5), radius: 3, x: 0, y: 1)
+                    .offset(x: -3, y: -3)
+                    .allowsHitTesting(false)
+            } else if kinshipCommonAncestorId == member.id {
+                // الجد المشترك — تاج
+                Image(systemName: "crown.fill")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(.white)
+                    .padding(5)
+                    .background(Circle().fill(DS.Color.accent))
+                    .overlay(Circle().strokeBorder(Color.white, lineWidth: 1.5))
+                    .shadow(color: DS.Color.accent.opacity(0.5), radius: 3, x: 0, y: 1)
+                    .offset(x: -3, y: -3)
+                    .allowsHitTesting(false)
+            }
+        }
     }
 
     private func deceasedAwareBorderColor(isActive: Bool, isDeceased: Bool) -> Color {
@@ -383,18 +656,27 @@ struct DrillDownTreeView: View {
 
     private func childrenGridSection(of member: FamilyMember, atSectionIndex idx: Int) -> some View {
         let kids = children(of: member.id)
+        let rows = smartRows(kids)
         return Group {
             if kids.isEmpty {
                 emptyChildrenCard
                     .padding(.top, DS.Spacing.sm)
             } else {
-                VStack(spacing: DS.Spacing.sm) {
-                    // خط رابط من النشط مباشرة للشبكة (بدون header تكراري)
-                    Rectangle()
-                        .fill(DS.Color.primary.opacity(0.25))
-                        .frame(width: 2, height: 14)
+                VStack(spacing: 2) {
+                    ForEach(Array(rows.enumerated()), id: \.offset) { rowIndex, row in
+                        // فروع فقط للصف الأول (أول 3 أبناء كحد أقصى) — البقية بلا فروع
+                        if rowIndex == 0 {
+                            BranchConnector(
+                                branchCount: min(3, row.count),
+                                style: drillBranchStyle
+                            )
+                            .stroke(
+                                DS.Color.primary.opacity(0.55),
+                                style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round)
+                            )
+                            .frame(height: 22)
+                        }
 
-                    ForEach(Array(smartRows(kids).enumerated()), id: \.offset) { _, row in
                         HStack(spacing: DS.Spacing.sm) {
                             ForEach(row) { child in
                                 Button {
@@ -428,8 +710,12 @@ struct DrillDownTreeView: View {
 
     private var chainConnector: some View {
         Rectangle()
-            .fill(DS.Color.primary.opacity(0.22))
-            .frame(width: 2, height: 22)
+            .fill(
+                kinshipPathIds.isEmpty
+                    ? DS.Color.primary.opacity(0.22)
+                    : DS.Color.warning.opacity(0.85)
+            )
+            .frame(width: kinshipPathIds.isEmpty ? 2 : 3, height: 14)
     }
 
     // MARK: - Empty States
@@ -518,7 +804,7 @@ struct DrillDownTreeView: View {
         .padding(.horizontal, DS.Spacing.lg)
         .padding(.top, DS.Spacing.xs)
         .padding(.bottom, DS.Spacing.sm)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
     /// قفز مباشر لأي عضو — بناء السلسلة من الجذر إليه. آمن ضد المراجع الدائرية.

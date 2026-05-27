@@ -229,22 +229,7 @@ struct TreeSearchOverlay: View {
     private var resultsSection: some View {
         if !searchResults.isEmpty {
             VStack(spacing: 0) {
-                HStack {
-                    HStack(spacing: 4) {
-                        Text(L10n.t("النتائج", "Results"))
-                            .font(DS.Font.scaled(11, weight: .semibold))
-                            .foregroundColor(DS.Color.textSecondary)
-                        Text("(\(filteredResults.count))")
-                            .font(DS.Font.scaled(11, weight: .bold))
-                            .foregroundColor(DS.Color.primary)
-                    }
-                    Spacer()
-                }
-                .padding(.horizontal, DS.Spacing.md)
-                .padding(.top, DS.Spacing.sm)
-                .padding(.bottom, DS.Spacing.xs)
-
-                // صف الفلاتر: حالة + فرع (مدمجين في صف واحد أنيق)
+                // صف الفلاتر فقط — بدون عداد النتائج
                 HStack(spacing: DS.Spacing.sm) {
                     Picker("", selection: $statusFilter) {
                         ForEach(StatusFilter.allCases, id: \.self) { filter in
@@ -257,7 +242,8 @@ struct TreeSearchOverlay: View {
                     branchPill
                 }
                 .padding(.horizontal, DS.Spacing.md)
-                .padding(.bottom, DS.Spacing.sm)
+                .padding(.top, DS.Spacing.sm)
+                .padding(.bottom, DS.Spacing.xs)
 
                 if filteredResults.isEmpty {
                     HStack(spacing: DS.Spacing.sm) {
@@ -464,7 +450,7 @@ struct TreeSearchOverlay: View {
                     }
                     return $0.displayName.localizedCompare($1.displayName) == .orderedAscending
                 }
-                .prefix(50)
+                .prefix(500)
         )
     }
 
@@ -598,14 +584,6 @@ struct TreeSearchOverlay: View {
                     .lineLimit(1)
 
                 HStack(spacing: DS.Spacing.xs) {
-                    Text(result.member.roleName)
-                        .font(DS.Font.scaled(10, weight: .medium))
-                        .foregroundColor(result.member.roleColor)
-                        .padding(.horizontal, DS.Spacing.xs)
-                        .padding(.vertical, 2)
-                        .background(result.member.roleColor.opacity(0.1))
-                        .clipShape(Capsule())
-
                     if result.member.isDeceased ?? false {
                         Text(L10n.t("متوفى", "Deceased"))
                             .font(DS.Font.scaled(9, weight: .medium))

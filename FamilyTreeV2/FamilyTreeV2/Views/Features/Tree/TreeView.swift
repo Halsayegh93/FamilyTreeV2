@@ -40,6 +40,59 @@ private enum TreeConst {
     static let dividerWidth: CGFloat = 30
 }
 
+// MARK: - Branch Connector Style
+/// نمط الخطوط بين الأب وأبنائه. مخزّن في @AppStorage لذا يبقى عبر التشغيل.
+enum BranchConnectorStyle: String {
+    case arc   // قوس (bezier)
+    case angle // زاوية (L-shape)
+}
+
+// MARK: - Branch Connector Shape
+/// يرسم فروع من نقطة الأب أعلى إلى نقاط الأبناء أسفل.
+/// `branchCount`: عدد الفروع (1-3). الأبناء من الـ4 فما فوق لا يُرسم لهم فرع
+/// (طلب صريح من المالك — الشجرة الكبيرة ما تنرسم).
+/// `style`: قوس أو زاوية.
+struct BranchConnector: Shape {
+    let branchCount: Int
+    let style: BranchConnectorStyle
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        guard branchCount > 0 else { return path }
+        let count = min(3, branchCount)
+        let topCenter = CGPoint(x: rect.midX, y: 0)
+
+        // نقاط النهاية أسفل — تطابق مراكز الأبناء في HStack بتوزيع متساوٍ.
+        // عند 3 أبناء: نشيل الخط الأوسط (طلب صريح) — فقط الأطراف.
+        let endpoints: [CGFloat]
+        switch count {
+        case 1: endpoints = [rect.midX]
+        case 2: endpoints = [rect.width * 0.25, rect.width * 0.75]
+        default: endpoints = [rect.width / 6, rect.width * 5 / 6] // 3 أبناء — أطراف فقط بدون الأوسط
+        }
+
+        for endX in endpoints {
+            switch style {
+            case .arc:
+                // bezier curve ناعم من نقطة الأب إلى نقطة الابن
+                path.move(to: topCenter)
+                let c1 = CGPoint(x: topCenter.x, y: rect.height * 0.55)
+                let c2 = CGPoint(x: endX, y: rect.height * 0.55)
+                let end = CGPoint(x: endX, y: rect.height)
+                path.addCurve(to: end, control1: c1, control2: c2)
+            case .angle:
+                // L-shape: عمودي → أفقي → عمودي
+                let elbowY = rect.height * 0.5
+                path.move(to: topCenter)
+                path.addLine(to: CGPoint(x: topCenter.x, y: elbowY))
+                path.addLine(to: CGPoint(x: endX, y: elbowY))
+                path.addLine(to: CGPoint(x: endX, y: rect.height))
+            }
+        }
+        return path
+    }
+}
+
 /// تطبيق `.drawingGroup()` بشكل مشروط — يفعّله فقط للأشجار الكبيرة
 /// لتجنب overhead الـ rasterization على الأشجار الصغيرة.
 private struct ConditionalDrawingGroup: ViewModifier {
@@ -535,12 +588,8 @@ struct TreeView: View {
 
     private func resetToTopRoot(animated: Bool = true) {
         if let root = primaryRootMember {
-            // فتح مستويين: الجذر + أبنائه
-            var expandedIds: Set<UUID> = [root.id]
-            let level2 = cachedChildrenByFatherId[root.id] ?? []
-            for child in level2 {
-                expandedIds.insert(child.id)
-            }
+            // الجذر فقط مفتوح — الأبناء يظهرون، وأبناؤهم لما يضغط المستخدم
+            let expandedIds: Set<UUID> = [root.id]
             let updates = {
                 scale = preferredBaseScale
                 baseScale = preferredBaseScale
@@ -829,6 +878,7 @@ struct RecursiveTreeBranch: View {
             .onAppear { renderedCount += 1 }
 
             // ما نعرض الأبناء إلا إذا العقدة مفتوحة فعلياً (في المسار النشط)
+            // الوضع التفاعلي: الأبناء يظهرون لما المستخدم يضغط على العقدة فقط
             let isPathOpen = viewMode == .fullTree || activePath.contains(member.id)
             if isPathOpen && renderedCount < maxRendered {
                 let childrenToDisplay = self.visibleChildren
