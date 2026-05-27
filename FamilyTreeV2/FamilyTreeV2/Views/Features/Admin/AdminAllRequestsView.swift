@@ -616,101 +616,55 @@ struct AdminAllRequestsView: View {
             case .joinRequests:
                 selectAllButton(ids: pendingMembers.map { $0.id })
                 ForEach(pendingMembers) { member in
-                    selectableRow(id: member.id) {
-                        selectedDetail = .join(member)
-                    } content: {
+                    selectableRow(
+                        id: member.id,
+                        accentColor: RequestTab.joinRequests.color,
+                        approveLabel: L10n.t("ربط", "Link"),
+                        approveIcon: "link.badge.plus",
+                        onApprove: { memberToLink = member },
+                        onReject: { Task { await adminRequestVM.rejectOrDeleteMember(memberId: member.id) } },
+                        onTap: { selectedDetail = .join(member) }
+                    ) {
                         joinRequestRow(for: member)
-                    }
-                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                        if !isSelectMode {
-                            Button { memberToLink = member } label: {
-                                Label(L10n.t("ربط", "Link"), systemImage: "link.badge.plus")
-                            }.tint(DS.Color.success)
-                        }
-                    }
-                    .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                        if !isSelectMode && authVM.canRejectRequests {
-                            Button(role: .destructive) {
-                                Task { await adminRequestVM.rejectOrDeleteMember(memberId: member.id) }
-                            } label: {
-                                Label(L10n.t("رفض", "Reject"), systemImage: "xmark.circle.fill")
-                            }
-                        }
                     }
                 }
             case .news:
                 selectAllButton(ids: newsVM.pendingNewsRequests.map { $0.id })
                 ForEach(newsVM.pendingNewsRequests) { post in
-                    selectableRow(id: post.id) {
-                        selectedDetail = .news(post)
-                    } content: {
+                    selectableRow(
+                        id: post.id,
+                        accentColor: RequestTab.news.color,
+                        onApprove: { Task { await newsVM.approveNewsPost(postId: post.id) } },
+                        onReject: { Task { await newsVM.rejectNewsPost(postId: post.id) } },
+                        onTap: { selectedDetail = .news(post) }
+                    ) {
                         newsRow(for: post)
-                    }
-                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                        if !isSelectMode {
-                            Button { Task { await newsVM.approveNewsPost(postId: post.id) } } label: {
-                                Label(L10n.t("اعتماد", "Approve"), systemImage: "checkmark.circle.fill")
-                            }.tint(DS.Color.success)
-                        }
-                    }
-                    .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                        if !isSelectMode && authVM.canRejectRequests {
-                            Button(role: .destructive) { Task { await newsVM.rejectNewsPost(postId: post.id) } } label: {
-                                Label(L10n.t("رفض", "Reject"), systemImage: "xmark.circle.fill")
-                            }
-                        }
                     }
                 }
             case .reports:
                 selectAllButton(ids: adminRequestVM.newsReportRequests.map { $0.id })
                 ForEach(adminRequestVM.newsReportRequests) { request in
-                    selectableRow(id: request.id) {
-                        selectedDetail = .report(request)
-                    } content: {
+                    selectableRow(
+                        id: request.id,
+                        accentColor: RequestTab.reports.color,
+                        onApprove: { Task { await adminRequestVM.approveNewsReport(request: request) } },
+                        onReject: { Task { await adminRequestVM.rejectNewsReport(request: request) } },
+                        onTap: { selectedDetail = .report(request) }
+                    ) {
                         reportRow(for: request)
-                    }
-                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                        if !isSelectMode {
-                            Button { Task { await adminRequestVM.approveNewsReport(request: request) } } label: {
-                                Label(L10n.t("اعتماد", "Approve"), systemImage: "checkmark.circle.fill")
-                            }.tint(DS.Color.success)
-                        }
-                    }
-                    .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                        if !isSelectMode && authVM.canRejectRequests {
-                            Button(role: .destructive) { Task { await adminRequestVM.rejectNewsReport(request: request) } } label: {
-                                Label(L10n.t("رفض", "Reject"), systemImage: "xmark.circle.fill")
-                            }
-                        }
                     }
                 }
             case .phone:
                 selectAllButton(ids: adminRequestVM.phoneChangeRequests.map { $0.id })
                 ForEach(adminRequestVM.phoneChangeRequests) { request in
-                    selectableRow(id: request.id) {
-                        selectedDetail = .phone(request)
-                    } content: {
+                    selectableRow(
+                        id: request.id,
+                        accentColor: RequestTab.phone.color,
+                        onApprove: { Task { await adminRequestVM.approvePhoneChangeRequest(request: request) } },
+                        onReject: { Task { await adminRequestVM.rejectPhoneChangeRequest(request: request) } },
+                        onTap: { selectedDetail = .phone(request) }
+                    ) {
                         phoneRow(for: request)
-                    }
-                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                        if !isSelectMode {
-                            Button { Task { await adminRequestVM.approvePhoneChangeRequest(request: request) } } label: {
-                                Label(L10n.t("اعتماد", "Approve"), systemImage: "checkmark.circle.fill")
-                            }.tint(DS.Color.success)
-                            Button {
-                                editedPhone = request.newValue ?? ""
-                                phoneEditRequest = request
-                            } label: {
-                                Label(L10n.t("تعديل", "Edit"), systemImage: "pencil.circle.fill")
-                            }.tint(DS.Color.primary)
-                        }
-                    }
-                    .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                        if !isSelectMode && authVM.canRejectRequests {
-                            Button(role: .destructive) { Task { await adminRequestVM.rejectPhoneChangeRequest(request: request) } } label: {
-                                Label(L10n.t("رفض", "Reject"), systemImage: "xmark.circle.fill")
-                            }
-                        }
                     }
                 }
                 .sheet(item: $phoneEditRequest) { request in
@@ -719,30 +673,14 @@ struct AdminAllRequestsView: View {
             case .nameChange:
                 selectAllButton(ids: adminRequestVM.nameChangeRequests.map { $0.id })
                 ForEach(adminRequestVM.nameChangeRequests) { request in
-                    selectableRow(id: request.id) {
-                        selectedDetail = .nameChange(request)
-                    } content: {
+                    selectableRow(
+                        id: request.id,
+                        accentColor: RequestTab.nameChange.color,
+                        onApprove: { Task { await adminRequestVM.approveNameChangeRequest(request: request) } },
+                        onReject: { Task { await adminRequestVM.rejectNameChangeRequest(request: request) } },
+                        onTap: { selectedDetail = .nameChange(request) }
+                    ) {
                         nameChangeRow(for: request)
-                    }
-                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                        if !isSelectMode {
-                            Button { Task { await adminRequestVM.approveNameChangeRequest(request: request) } } label: {
-                                Label(L10n.t("موافقة", "Approve"), systemImage: "checkmark.circle.fill")
-                            }.tint(DS.Color.success)
-                            Button {
-                                editedName = request.newValue ?? ""
-                                nameEditRequest = request
-                            } label: {
-                                Label(L10n.t("تعديل", "Edit"), systemImage: "pencil.circle.fill")
-                            }.tint(DS.Color.primary)
-                        }
-                    }
-                    .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                        if !isSelectMode && authVM.canRejectRequests {
-                            Button(role: .destructive) { Task { await adminRequestVM.rejectNameChangeRequest(request: request) } } label: {
-                                Label(L10n.t("رفض", "Reject"), systemImage: "xmark.circle.fill")
-                            }
-                        }
                     }
                 }
                 .sheet(item: $nameEditRequest) { request in
@@ -751,180 +689,102 @@ struct AdminAllRequestsView: View {
             case .diwaniya:
                 selectAllButton(ids: diwaniyaVM.pendingDiwaniyas.map { $0.id })
                 ForEach(diwaniyaVM.pendingDiwaniyas) { diwaniya in
-                    selectableRow(id: diwaniya.id) {
-                        selectedDetail = .diwaniya(diwaniya)
-                    } content: {
-                        diwaniyaRow(for: diwaniya)
-                    }
-                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                        if !isSelectMode {
-                            Button {
-                                if let adminId = authVM.currentUser?.id {
-                                    Task { await diwaniyaVM.approveDiwaniya(id: diwaniya.id, adminId: adminId) }
-                                }
-                            } label: {
-                                Label(L10n.t("اعتماد", "Approve"), systemImage: "checkmark.circle.fill")
-                            }.tint(DS.Color.success)
-                        }
-                    }
-                    .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                        if !isSelectMode && authVM.canRejectRequests {
-                            Button(role: .destructive) { Task { await diwaniyaVM.rejectDiwaniya(id: diwaniya.id) } } label: {
-                                Label(L10n.t("رفض", "Reject"), systemImage: "xmark.circle.fill")
+                    selectableRow(
+                        id: diwaniya.id,
+                        accentColor: RequestTab.diwaniya.color,
+                        onApprove: {
+                            if let adminId = authVM.currentUser?.id {
+                                Task { await diwaniyaVM.approveDiwaniya(id: diwaniya.id, adminId: adminId) }
                             }
-                        }
+                        },
+                        onReject: { Task { await diwaniyaVM.rejectDiwaniya(id: diwaniya.id) } },
+                        onTap: { selectedDetail = .diwaniya(diwaniya) }
+                    ) {
+                        diwaniyaRow(for: diwaniya)
                     }
                 }
             case .deceased:
                 selectAllButton(ids: adminRequestVM.deceasedRequests.map { $0.id })
                 ForEach(adminRequestVM.deceasedRequests) { request in
-                    selectableRow(id: request.id) {
-                        selectedDetail = .deceased(request)
-                    } content: {
+                    selectableRow(
+                        id: request.id,
+                        accentColor: RequestTab.deceased.color,
+                        onApprove: { Task { await adminRequestVM.approveDeceasedRequest(request: request) } },
+                        onReject: { Task { await adminRequestVM.rejectDeceasedRequest(request: request) } },
+                        onTap: { selectedDetail = .deceased(request) }
+                    ) {
                         deceasedRow(for: request)
-                    }
-                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                        if !isSelectMode {
-                            Button { Task { await adminRequestVM.approveDeceasedRequest(request: request) } } label: {
-                                Label(L10n.t("موافقة", "Approve"), systemImage: "checkmark.circle.fill")
-                            }.tint(DS.Color.success)
-                        }
-                    }
-                    .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                        if !isSelectMode && authVM.canRejectRequests {
-                            Button(role: .destructive) { Task { await adminRequestVM.rejectDeceasedRequest(request: request) } } label: {
-                                Label(L10n.t("رفض", "Reject"), systemImage: "xmark.circle.fill")
-                            }
-                        }
                     }
                 }
             case .children:
                 selectAllButton(ids: adminRequestVM.childAddRequests.map { $0.id })
                 ForEach(adminRequestVM.childAddRequests) { request in
-                    selectableRow(id: request.id) {
-                        selectedDetail = .child(request)
-                    } content: {
+                    selectableRow(
+                        id: request.id,
+                        accentColor: RequestTab.children.color,
+                        approveLabel: L10n.t("تأكيد", "Confirm"),
+                        onApprove: { Task { await adminRequestVM.acknowledgeChildAddRequest(request: request) } },
+                        onReject: { Task { await adminRequestVM.rejectChildAddRequest(request: request) } },
+                        onTap: { selectedDetail = .child(request) }
+                    ) {
                         childRow(for: request)
-                    }
-                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                        if !isSelectMode {
-                            Button { Task { await adminRequestVM.acknowledgeChildAddRequest(request: request) } } label: {
-                                Label(L10n.t("تأكيد", "Confirm"), systemImage: "checkmark.circle.fill")
-                            }.tint(DS.Color.success)
-                        }
-                    }
-                    .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                        if !isSelectMode && authVM.canRejectRequests {
-                            Button(role: .destructive) { Task { await adminRequestVM.rejectChildAddRequest(request: request) } } label: {
-                                Label(L10n.t("رفض", "Reject"), systemImage: "xmark.circle.fill")
-                            }
-                        }
                     }
                 }
             case .photos:
                 selectAllButton(ids: adminRequestVM.photoSuggestionRequests.map { $0.id })
                 ForEach(adminRequestVM.photoSuggestionRequests) { request in
-                    selectableRow(id: request.id) {
-                        selectedDetail = .photo(request)
-                    } content: {
+                    selectableRow(
+                        id: request.id,
+                        accentColor: RequestTab.photos.color,
+                        onApprove: { Task { await adminRequestVM.approvePhotoSuggestion(request: request) } },
+                        onReject: { Task { await adminRequestVM.rejectPhotoSuggestion(request: request) } },
+                        onTap: { selectedDetail = .photo(request) }
+                    ) {
                         photoRow(for: request)
-                    }
-                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                        if !isSelectMode {
-                            Button { Task { await adminRequestVM.approvePhotoSuggestion(request: request) } } label: {
-                                Label(L10n.t("موافقة", "Approve"), systemImage: "checkmark.circle.fill")
-                            }.tint(DS.Color.success)
-                        }
-                    }
-                    .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                        if !isSelectMode && authVM.canRejectRequests {
-                            Button(role: .destructive) { Task { await adminRequestVM.rejectPhotoSuggestion(request: request) } } label: {
-                                Label(L10n.t("رفض", "Reject"), systemImage: "xmark.circle.fill")
-                            }
-                        }
                     }
                 }
             case .projects:
                 selectAllButton(ids: projectsVM.pendingProjects.map { $0.id })
                 ForEach(projectsVM.pendingProjects) { project in
-                    selectableRow(id: project.id) {
-                        selectedDetail = .project(project)
-                    } content: {
-                        projectRow(for: project)
-                    }
-                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                        if !isSelectMode {
-                            Button {
-                                if let adminId = authVM.currentUser?.id {
-                                    Task { await projectsVM.approveProject(id: project.id, approvedBy: adminId) }
-                                }
-                            } label: {
-                                Label(L10n.t("اعتماد", "Approve"), systemImage: "checkmark.circle.fill")
-                            }.tint(DS.Color.success)
-                        }
-                    }
-                    .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                        if !isSelectMode && authVM.canRejectRequests {
-                            Button(role: .destructive) {
-                                Task { await projectsVM.rejectProject(id: project.id) }
-                            } label: {
-                                Label(L10n.t("رفض", "Reject"), systemImage: "xmark.circle.fill")
+                    selectableRow(
+                        id: project.id,
+                        accentColor: RequestTab.projects.color,
+                        onApprove: {
+                            if let adminId = authVM.currentUser?.id {
+                                Task { await projectsVM.approveProject(id: project.id, approvedBy: adminId) }
                             }
-                        }
+                        },
+                        onReject: { Task { await projectsVM.rejectProject(id: project.id) } },
+                        onTap: { selectedDetail = .project(project) }
+                    ) {
+                        projectRow(for: project)
                     }
                 }
             case .gallery:
                 selectAllButton(ids: memberVM.pendingGalleryPhotos.map { $0.id })
                 ForEach(memberVM.pendingGalleryPhotos) { photo in
-                    selectableRow(id: photo.id) {
-                        // no detail sheet for gallery
-                    } content: {
+                    selectableRow(
+                        id: photo.id,
+                        accentColor: RequestTab.gallery.color,
+                        onApprove: { Task { await memberVM.approveGalleryPhoto(photoId: photo.id) } },
+                        onReject: { Task { await memberVM.rejectGalleryPhoto(photoId: photo.id, photoURL: photo.photoURL) } },
+                        onTap: { }
+                    ) {
                         galleryPendingRow(photo: photo)
-                    }
-                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                        if !isSelectMode {
-                            Button {
-                                Task { await memberVM.approveGalleryPhoto(photoId: photo.id) }
-                            } label: {
-                                Label(L10n.t("موافقة", "Approve"), systemImage: "checkmark.circle.fill")
-                            }.tint(DS.Color.success)
-                        }
-                    }
-                    .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                        if !isSelectMode && authVM.canRejectRequests {
-                            Button(role: .destructive) {
-                                Task { await memberVM.rejectGalleryPhoto(photoId: photo.id, photoURL: photo.photoURL) }
-                            } label: {
-                                Label(L10n.t("رفض", "Reject"), systemImage: "xmark.circle.fill")
-                            }
-                        }
                     }
                 }
             case .stories:
                 selectAllButton(ids: storyVM.pendingStories.map { $0.id })
                 ForEach(storyVM.pendingStories) { story in
-                    selectableRow(id: story.id) {
-                        // no detail sheet for stories
-                    } content: {
+                    selectableRow(
+                        id: story.id,
+                        accentColor: RequestTab.stories.color,
+                        approveLabel: L10n.t("نشر", "Publish"),
+                        onApprove: { Task { await storyVM.approveStory(story) } },
+                        onReject: { Task { await storyVM.rejectStory(story) } },
+                        onTap: { }
+                    ) {
                         storyPendingRow(story: story)
-                    }
-                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                        if !isSelectMode {
-                            Button {
-                                Task { await storyVM.approveStory(story) }
-                            } label: {
-                                Label(L10n.t("نشر", "Publish"), systemImage: "checkmark.circle.fill")
-                            }.tint(DS.Color.success)
-                        }
-                    }
-                    .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                        if !isSelectMode && authVM.canRejectRequests {
-                            Button(role: .destructive) {
-                                Task { await storyVM.rejectStory(story) }
-                            } label: {
-                                Label(L10n.t("رفض", "Reject"), systemImage: "xmark.circle.fill")
-                            }
-                        }
                     }
                 }
             }
@@ -970,35 +830,139 @@ struct AdminAllRequestsView: View {
         }
     }
 
+    /// بطاقة طلب موحّدة — تشمل محتوى الطلب + أزرار موافقة/رفض مرئية + إطار نظيف.
+    /// - `accentColor`: لون الـ tab — يُستخدم لإطار البطاقة (إشارة بصرية للنوع)
+    /// - `approveLabel`: نص زر الموافقة (افتراضي: "موافقة")
+    /// - `approveIcon`: أيقونة زر الموافقة (افتراضي: checkmark)
+    /// - `onApprove`/`onReject`: nil = الزر يختفي
     private func selectableRow<Content: View>(
         id: UUID,
+        accentColor: Color = DS.Color.primary,
+        approveLabel: String? = nil,
+        approveIcon: String = "checkmark",
+        approveColor: Color = DS.Color.success,
+        onApprove: (() -> Void)? = nil,
+        onReject: (() -> Void)? = nil,
         onTap: @escaping () -> Void,
         @ViewBuilder content: () -> Content
     ) -> some View {
-        Button {
-            if isSelectMode {
-                withAnimation(DS.Anim.snappy) {
-                    if selectedIds.contains(id) { selectedIds.remove(id) }
-                    else { selectedIds.insert(id) }
-                }
-            } else {
-                onTap()
-            }
-        } label: {
-            HStack(spacing: DS.Spacing.sm) {
+        VStack(spacing: 0) {
+            // المحتوى — قابل للنقر
+            Button {
                 if isSelectMode {
-                    Image(systemName: selectedIds.contains(id) ? "checkmark.circle.fill" : "circle")
-                        .font(DS.Font.scaled(22, weight: .regular))
-                        .foregroundColor(selectedIds.contains(id) ? DS.Color.primary : DS.Color.textTertiary)
-                        .transition(.scale.combined(with: .opacity))
+                    withAnimation(DS.Anim.snappy) {
+                        if selectedIds.contains(id) { selectedIds.remove(id) }
+                        else { selectedIds.insert(id) }
+                    }
+                } else {
+                    onTap()
                 }
-                content()
+            } label: {
+                HStack(alignment: .top, spacing: DS.Spacing.sm) {
+                    if isSelectMode {
+                        Image(systemName: selectedIds.contains(id) ? "checkmark.circle.fill" : "circle")
+                            .font(DS.Font.scaled(22, weight: .regular))
+                            .foregroundColor(selectedIds.contains(id) ? DS.Color.primary : DS.Color.textTertiary)
+                            .transition(.scale.combined(with: .opacity))
+                            .padding(.top, 2)
+                    }
+                    content()
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .padding(DS.Spacing.md)
+            }
+            .buttonStyle(.plain)
+
+            // شريط الإجراءات السفلي — يظهر فقط خارج وضع التحديد
+            if !isSelectMode, (onApprove != nil || onReject != nil) {
+                Divider().opacity(0.35).padding(.horizontal, DS.Spacing.md)
+                requestActionsBar(
+                    approveLabel: approveLabel,
+                    approveIcon: approveIcon,
+                    approveColor: approveColor,
+                    onApprove: onApprove,
+                    onReject: onReject
+                )
+                .padding(.horizontal, DS.Spacing.md)
+                .padding(.vertical, DS.Spacing.sm)
             }
         }
-        .buttonStyle(.plain)
-        .listRowBackground(
-            isSelectMode && selectedIds.contains(id) ? DS.Color.primary.opacity(0.06) : Color.clear
+        .background(
+            RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                .fill(
+                    isSelectMode && selectedIds.contains(id)
+                        ? DS.Color.primary.opacity(0.06)
+                        : DS.Color.surface
+                )
         )
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                .strokeBorder(
+                    isSelectMode && selectedIds.contains(id)
+                        ? DS.Color.primary.opacity(0.40)
+                        : accentColor.opacity(0.15),
+                    lineWidth: 1
+                )
+        )
+        .shadow(color: .black.opacity(0.04), radius: 5, x: 0, y: 2)
+        .listRowBackground(Color.clear)
+        .listRowSeparator(.hidden)
+        .listRowInsets(EdgeInsets(top: 6, leading: DS.Spacing.lg, bottom: 6, trailing: DS.Spacing.lg))
+    }
+
+    /// شريط أزرار موافقة/رفض — يتكيّف حسب الصلاحيات وما هو مرسَل.
+    @ViewBuilder
+    private func requestActionsBar(
+        approveLabel: String?,
+        approveIcon: String,
+        approveColor: Color,
+        onApprove: (() -> Void)?,
+        onReject: (() -> Void)?
+    ) -> some View {
+        HStack(spacing: DS.Spacing.sm) {
+            // زر الرفض — يظهر فقط لمن يملك الصلاحية
+            if let onReject, authVM.canRejectRequests {
+                Button(action: onReject) {
+                    HStack(spacing: 5) {
+                        Image(systemName: "xmark")
+                            .font(DS.Font.scaled(11, weight: .bold))
+                        Text(L10n.t("رفض", "Reject"))
+                            .font(DS.Font.scaled(13, weight: .bold))
+                    }
+                    .foregroundColor(DS.Color.error)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 9)
+                    .background(Capsule().fill(DS.Color.error.opacity(0.10)))
+                    .overlay(Capsule().strokeBorder(DS.Color.error.opacity(0.25), lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+            }
+
+            // زر الموافقة — قابل للتخصيص (مثل "ربط" بدل "موافقة" لطلبات الانضمام)
+            if let onApprove {
+                Button(action: onApprove) {
+                    HStack(spacing: 5) {
+                        Image(systemName: approveIcon)
+                            .font(DS.Font.scaled(11, weight: .bold))
+                        Text(approveLabel ?? L10n.t("موافقة", "Approve"))
+                            .font(DS.Font.scaled(13, weight: .bold))
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 9)
+                    .background(
+                        Capsule().fill(
+                            LinearGradient(
+                                colors: [approveColor, approveColor.opacity(0.85)],
+                                startPoint: .leading, endPoint: .trailing
+                            )
+                        )
+                    )
+                    .shadow(color: approveColor.opacity(0.30), radius: 5, x: 0, y: 2)
+                }
+                .buttonStyle(.plain)
+            }
+        }
     }
 
     private func bulkApproveSelected() async -> Int {
