@@ -52,7 +52,7 @@ enum TreeEditAction: String, Codable, CaseIterable, Identifiable {
 }
 
 // MARK: - Tree Edit Payload (v3 structured JSON in details column)
-struct TreeEditPayload: Codable {
+nonisolated struct TreeEditPayload: Codable {
     let v: Int
     let action: String
     let targetMemberId: String?
