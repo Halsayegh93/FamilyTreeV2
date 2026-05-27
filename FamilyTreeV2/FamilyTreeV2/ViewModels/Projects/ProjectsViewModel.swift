@@ -63,7 +63,7 @@ class ProjectsViewModel: ObservableObject {
                     websiteUrl: String?, instagramUrl: String?,
                     twitterUrl: String?,
                     snapchatUrl: String?, whatsappNumber: String?,
-                    phoneNumber: String?) async -> Bool {
+                    phoneNumber: String?, locationUrl: String? = nil) async -> Bool {
         guard NetworkMonitor.shared.requireOnline() else { return false }
         isLoading = true
         errorMessage = nil
@@ -84,6 +84,7 @@ class ProjectsViewModel: ObservableObject {
             if let snapchatUrl, !snapchatUrl.isEmpty { payload["snapchat_url"] = AnyEncodable(snapchatUrl) }
             if let whatsappNumber, !whatsappNumber.isEmpty { payload["whatsapp_number"] = AnyEncodable(whatsappNumber) }
             if let phoneNumber, !phoneNumber.isEmpty { payload["phone_number"] = AnyEncodable(phoneNumber) }
+            if let locationUrl, !locationUrl.isEmpty { payload["location_url"] = AnyEncodable(locationUrl) }
 
             try await supabase
                 .from("projects")
@@ -258,7 +259,8 @@ class ProjectsViewModel: ObservableObject {
                        logoUrl: String?, websiteUrl: String?,
                        instagramUrl: String?, twitterUrl: String?,
                        snapchatUrl: String?,
-                       whatsappNumber: String?, phoneNumber: String?) async -> Bool {
+                       whatsappNumber: String?, phoneNumber: String?,
+                       locationUrl: String? = nil) async -> Bool {
         guard NetworkMonitor.shared.requireOnline() else { return false }
         isLoading = true
         errorMessage = nil
@@ -274,7 +276,8 @@ class ProjectsViewModel: ObservableObject {
                     "twitter_url": twitterUrl ?? "",
                     "snapchat_url": snapchatUrl ?? "",
                     "whatsapp_number": whatsappNumber ?? "",
-                    "phone_number": phoneNumber ?? ""
+                    "phone_number": phoneNumber ?? "",
+                    "location_url": locationUrl ?? ""
                 ])
                 .eq("id", value: id.uuidString)
                 .execute()

@@ -472,11 +472,12 @@ struct FamilyProjectsView: View {
     /// أيقونات المنصات اللي عنده روابط فيها — مؤشّر بصري سريع.
     private func socialIndicators(project: Project) -> some View {
         HStack(spacing: 4) {
-            if project.websiteUrl != nil      { socialDot(icon: "globe", color: DS.Color.info) }
-            if project.instagramUrl != nil    { socialDot(icon: "camera.fill", color: DS.Color.neonPurple) }
-            if project.twitterUrl != nil      { socialDot(icon: "bird.fill", color: DS.Color.neonBlue) }
-            if project.whatsappNumber != nil  { socialDot(icon: "phone.fill", color: DS.Color.success) }
-            if project.phoneNumber != nil     { socialDot(icon: "phone.circle.fill", color: DS.Color.accent) }
+            if project.locationUrl != nil    { socialDot(icon: "mappin.and.ellipse", color: Color(hex: "#EA4335")) }
+            if project.websiteUrl != nil     { socialDot(icon: "globe", color: DS.Color.info) }
+            if project.whatsappNumber != nil { socialDot(icon: "message.fill", color: Color(hex: "#25D366")) }
+            if project.phoneNumber != nil    { socialDot(icon: "phone.fill", color: DS.Color.success) }
+            if project.instagramUrl != nil   { socialDot(icon: "camera.fill", color: Color(hex: "#E1306C")) }
+            if project.twitterUrl != nil     { socialDot(icon: "xmark", color: Color(hex: "#000000")) }
         }
     }
 
@@ -570,6 +571,7 @@ struct AddProjectView: View {
     @State private var twitterUrl = ""
     @State private var whatsappNumber = ""
     @State private var phoneNumber = ""
+    @State private var locationUrl = ""
     @State private var logoImage: UIImage? = nil
     @State private var isSaving = false
     @State private var selectedOwnerId: UUID?
@@ -681,7 +683,7 @@ struct AddProjectView: View {
             // الاسم — مطلوب
             DSTextField(
                 label: L10n.t("اسم المشروع", "Project Name"),
-                placeholder: L10n.t("مثلاً: نحلتي للعسل", "e.g. Honey Workshop"),
+                placeholder: L10n.t("اكتب اسم المشروع هنا", "Enter project name"),
                 text: $title,
                 icon: "briefcase.fill",
                 required: true
@@ -819,6 +821,7 @@ struct AddProjectView: View {
                 .foregroundColor(DS.Color.textSecondary)
 
             VStack(spacing: DS.Spacing.xs) {
+                socialRow(platform: .location, placeholder: L10n.t("رابط الموقع (Maps)", "Maps URL"), text: $locationUrl)
                 socialRow(platform: .website, placeholder: "https://...", text: $websiteUrl)
                 socialRow(platform: .whatsapp, placeholder: "+965...", text: $whatsappNumber)
                 socialRow(platform: .phone, placeholder: "+965...", text: $phoneNumber)
@@ -1037,7 +1040,8 @@ struct AddProjectView: View {
             twitterUrl: twitterUrl.isEmpty ? nil : twitterUrl,
             snapchatUrl: nil,
             whatsappNumber: whatsappNumber.isEmpty ? nil : whatsappNumber,
-            phoneNumber: phoneNumber.isEmpty ? nil : phoneNumber
+            phoneNumber: phoneNumber.isEmpty ? nil : phoneNumber,
+            locationUrl: locationUrl.isEmpty ? nil : locationUrl
         )
 
         if success {

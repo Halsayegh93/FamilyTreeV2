@@ -13,6 +13,7 @@ nonisolated struct Project: Identifiable, Codable, Sendable {
     var snapchatUrl: String?
     var whatsappNumber: String?
     var phoneNumber: String?
+    var locationUrl: String?
     var approvalStatus: String
     var approvedBy: UUID?
     var createdAt: String?
@@ -30,6 +31,7 @@ nonisolated struct Project: Identifiable, Codable, Sendable {
         case snapchatUrl = "snapchat_url"
         case whatsappNumber = "whatsapp_number"
         case phoneNumber = "phone_number"
+        case locationUrl = "location_url"
         case approvalStatus = "approval_status"
         case approvedBy = "approved_by"
         case createdAt = "created_at"
@@ -49,6 +51,7 @@ nonisolated struct Project: Identifiable, Codable, Sendable {
         snapchatUrl = try container.decodeIfPresent(String.self, forKey: .snapchatUrl)
         whatsappNumber = try container.decodeIfPresent(String.self, forKey: .whatsappNumber)
         phoneNumber = try container.decodeIfPresent(String.self, forKey: .phoneNumber)
+        locationUrl = try container.decodeIfPresent(String.self, forKey: .locationUrl)
         approvalStatus = try container.decode(String.self, forKey: .approvalStatus)
         approvedBy = try container.decodeIfPresent(UUID.self, forKey: .approvedBy)
         createdAt = try container.decodeIfPresent(String.self, forKey: .createdAt)
@@ -59,7 +62,8 @@ nonisolated struct Project: Identifiable, Codable, Sendable {
          websiteUrl: String? = nil, instagramUrl: String? = nil,
          twitterUrl: String? = nil,
          snapchatUrl: String? = nil, whatsappNumber: String? = nil,
-         phoneNumber: String? = nil, approvalStatus: String = "approved",
+         phoneNumber: String? = nil, locationUrl: String? = nil,
+         approvalStatus: String = "approved",
          approvedBy: UUID? = nil, createdAt: String? = nil) {
         self.id = id
         self.ownerId = ownerId
@@ -73,6 +77,7 @@ nonisolated struct Project: Identifiable, Codable, Sendable {
         self.snapchatUrl = snapchatUrl
         self.whatsappNumber = whatsappNumber
         self.phoneNumber = phoneNumber
+        self.locationUrl = locationUrl
         self.approvalStatus = approvalStatus
         self.approvedBy = approvedBy
         self.createdAt = createdAt
@@ -82,6 +87,6 @@ nonisolated struct Project: Identifiable, Codable, Sendable {
     var hasSocialLinks: Bool {
         instagramUrl != nil || twitterUrl != nil ||
         snapchatUrl != nil || whatsappNumber != nil || websiteUrl != nil ||
-        phoneNumber != nil
+        phoneNumber != nil || locationUrl != nil
     }
 }

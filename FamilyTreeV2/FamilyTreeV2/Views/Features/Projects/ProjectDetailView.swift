@@ -2,88 +2,111 @@ import SwiftUI
 
 // MARK: - Social Platform Brand Icons
 enum SocialPlatform {
-    case website, instagram, twitter, snapchat, whatsapp, phone
+    case website, instagram, twitter, snapchat, whatsapp, phone, location
 
     var label: String {
         switch self {
-        case .website: return L10n.t("الموقع الإلكتروني", "Website")
+        case .website:   return L10n.t("الموقع الإلكتروني", "Website")
         case .instagram: return "Instagram"
-        case .twitter: return "X"
-        case .snapchat: return "Snapchat"
-        case .whatsapp: return "WhatsApp"
-        case .phone: return L10n.t("الهاتف", "Phone")
+        case .twitter:   return "X"
+        case .snapchat:  return "Snapchat"
+        case .whatsapp:  return "WhatsApp"
+        case .phone:     return L10n.t("الهاتف", "Phone")
+        case .location:  return L10n.t("الموقع — اللوكيشن", "Location")
         }
     }
 
+    /// لون البراند الأساسي — يُستخدم خلفية للأيقونة.
     var brandColor: Color {
         switch self {
-        case .website: return DS.Color.primary
-        case .instagram: return Color(hex: "#E1306C")
-        case .twitter: return Color(hex: "#000000")
-        case .snapchat: return Color(hex: "#FFFC00")
-        case .whatsapp: return Color(hex: "#25D366")
-        case .phone: return DS.Color.success
+        case .website:   return DS.Color.primary           // أزرق هادئ
+        case .instagram: return Color(hex: "#E1306C")     // وردي إنستجرام
+        case .twitter:   return Color(hex: "#000000")     // أسود X
+        case .snapchat:  return Color(hex: "#FFFC00")     // أصفر Snap
+        case .whatsapp:  return Color(hex: "#25D366")     // أخضر WhatsApp
+        case .phone:     return DS.Color.success           // أخضر هاتف
+        case .location:  return Color(hex: "#EA4335")     // أحمر Maps
         }
     }
 
-    var bgColor: Color {
+    /// gradient إنستجرام الأوفيشيال — للحالة الخاصة فقط.
+    private var instagramGradient: LinearGradient {
+        LinearGradient(
+            colors: [
+                Color(hex: "#F58529"),   // برتقالي
+                Color(hex: "#DD2A7B"),   // وردي
+                Color(hex: "#8134AF"),   // بنفسجي
+                Color(hex: "#515BD4")    // أزرق
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
+
+    /// لون الأيقونة الأمامية — أبيض غالباً، أسود مع Snapchat الأصفر.
+    var foregroundColor: Color {
         switch self {
-        case .snapchat: return Color(hex: "#FFFC00")
-        case .twitter: return Color(hex: "#000000")
-        case .instagram: return Color(hex: "#E1306C")
-        case .whatsapp: return Color(hex: "#25D366")
-        case .website: return DS.Color.primary
-        case .phone: return DS.Color.success
+        case .snapchat: return .black
+        default:        return .white
         }
     }
 
     @ViewBuilder
     func iconView(size: CGFloat = 40) -> some View {
-        let iconSize = size * 0.45
+        let iconSize = size * 0.50
         ZStack {
-            Circle()
-                .fill(DS.Color.primary.opacity(0.10))
-                .frame(width: size, height: size)
-            
-            switch self {
-            case .website:
-                Image(systemName: "globe")
-                    .font(DS.Font.scaled(iconSize, weight: .bold))
-                    .foregroundColor(DS.Color.primary)
-            case .instagram:
-                // Instagram camera icon
-                Image(systemName: "camera.fill")
-                    .font(DS.Font.scaled(iconSize, weight: .bold))
-                    .foregroundColor(DS.Color.primary)
-            case .twitter:
-                Text("𝕏")
-                    .font(DS.Font.scaled(iconSize + 2, weight: .black))
-                    .foregroundColor(DS.Color.primary)
-            case .snapchat:
-                Image(systemName: "ghost.fill")
-                    .font(DS.Font.scaled(iconSize, weight: .bold))
-                    .foregroundColor(DS.Color.primary)
-            case .whatsapp:
-                Image(systemName: "phone.bubble.fill")
-                    .font(DS.Font.scaled(iconSize, weight: .bold))
-                    .foregroundColor(DS.Color.primary)
-            case .phone:
-                Image(systemName: "phone.fill")
-                    .font(DS.Font.scaled(iconSize, weight: .bold))
-                    .foregroundColor(DS.Color.primary)
+            // خلفية: إنستجرام gradient، الباقي لون موحّد
+            if case .instagram = self {
+                Circle()
+                    .fill(instagramGradient)
+                    .frame(width: size, height: size)
+                    .shadow(color: brandColor.opacity(0.25), radius: 4, x: 0, y: 2)
+            } else {
+                Circle()
+                    .fill(brandColor)
+                    .frame(width: size, height: size)
+                    .shadow(color: brandColor.opacity(0.25), radius: 4, x: 0, y: 2)
             }
+
+            Group {
+                switch self {
+                case .website:
+                    Image(systemName: "globe")
+                        .font(.system(size: iconSize, weight: .bold))
+                case .instagram:
+                    Image(systemName: "camera.fill")
+                        .font(.system(size: iconSize * 0.95, weight: .bold))
+                case .twitter:
+                    Text("𝕏")
+                        .font(.system(size: iconSize + 2, weight: .black))
+                case .snapchat:
+                    Image(systemName: "bolt.horizontal.fill")
+                        .font(.system(size: iconSize, weight: .bold))
+                case .whatsapp:
+                    Image(systemName: "message.fill")
+                        .font(.system(size: iconSize, weight: .bold))
+                case .phone:
+                    Image(systemName: "phone.fill")
+                        .font(.system(size: iconSize, weight: .bold))
+                case .location:
+                    Image(systemName: "mappin.and.ellipse")
+                        .font(.system(size: iconSize, weight: .bold))
+                }
+            }
+            .foregroundColor(foregroundColor)
         }
     }
 
     /// SF Symbol name for use in DSTextField
     var sfSymbol: String {
         switch self {
-        case .website: return "globe"
+        case .website:   return "globe"
         case .instagram: return "camera.fill"
-        case .twitter: return "xmark"
-        case .snapchat: return "ghost.fill"
-        case .whatsapp: return "phone.bubble.fill"
-        case .phone: return "phone.fill"
+        case .twitter:   return "xmark"
+        case .snapchat:  return "bolt.horizontal.fill"
+        case .whatsapp:  return "message.fill"
+        case .phone:     return "phone.fill"
+        case .location:  return "mappin.and.ellipse"
         }
     }
 }
@@ -291,20 +314,23 @@ struct ProjectDetailView: View {
             )
             
             VStack(spacing: DS.Spacing.sm) {
+                if let url = project.locationUrl, !url.isEmpty {
+                    socialLinkRow(platform: .location, value: url)
+                }
                 if let url = project.websiteUrl, !url.isEmpty {
                     socialLinkRow(platform: .website, value: url)
-                }
-                if let url = project.instagramUrl, !url.isEmpty {
-                    socialLinkRow(platform: .instagram, value: url)
-                }
-                if let url = project.twitterUrl, !url.isEmpty {
-                    socialLinkRow(platform: .twitter, value: url)
                 }
                 if let number = project.whatsappNumber, !number.isEmpty {
                     socialLinkRow(platform: .whatsapp, value: number)
                 }
                 if let number = project.phoneNumber, !number.isEmpty {
                     socialLinkRow(platform: .phone, value: number)
+                }
+                if let url = project.instagramUrl, !url.isEmpty {
+                    socialLinkRow(platform: .instagram, value: url)
+                }
+                if let url = project.twitterUrl, !url.isEmpty {
+                    socialLinkRow(platform: .twitter, value: url)
                 }
             }
         }
@@ -399,6 +425,23 @@ struct ProjectDetailView: View {
             
         case .website:
             openWebURL(trimmed)
+
+        case .location:
+            // يدعم: روابط Google Maps، Apple Maps، إحداثيات lat,lng، أو نص
+            if trimmed.hasPrefix("http") {
+                openWebURL(trimmed)
+            } else if trimmed.contains(",") {
+                // إحداثيات → Apple Maps
+                if let url = URL(string: "https://maps.apple.com/?q=\(trimmed)") {
+                    openURL(url)
+                }
+            } else {
+                // نص → بحث في الخرائط
+                let encoded = trimmed.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? trimmed
+                if let url = URL(string: "https://maps.apple.com/?q=\(encoded)") {
+                    openURL(url)
+                }
+            }
         }
     }
     
@@ -428,9 +471,10 @@ struct EditProjectView: View {
     @State private var twitterUrl: String
     @State private var whatsappNumber: String
     @State private var phoneNumber: String
+    @State private var locationUrl: String
     @State private var logoImage: UIImage? = nil
     @State private var isSaving = false
-    
+
     init(project: Project, didEdit: Binding<Bool>) {
         self.project = project
         _didEdit = didEdit
@@ -441,6 +485,7 @@ struct EditProjectView: View {
         _twitterUrl = State(initialValue: project.twitterUrl ?? "")
         _whatsappNumber = State(initialValue: project.whatsappNumber ?? "")
         _phoneNumber = State(initialValue: project.phoneNumber ?? "")
+        _locationUrl = State(initialValue: project.locationUrl ?? "")
     }
     
     var body: some View {
@@ -488,11 +533,12 @@ struct EditProjectView: View {
                         
                         DSSectionHeader(title: L10n.t("حسابات التواصل", "Social Accounts"), icon: "link")
                         
+                        socialTextField(platform: .location, placeholder: L10n.t("رابط الموقع (Maps)", "Maps URL"), text: $locationUrl)
                         socialTextField(platform: .website, placeholder: "https://...", text: $websiteUrl)
-                        socialTextField(platform: .instagram, placeholder: "@username", text: $instagramUrl)
-                        socialTextField(platform: .twitter, placeholder: "@username", text: $twitterUrl)
                         socialTextField(platform: .whatsapp, placeholder: "+965...", text: $whatsappNumber)
                         socialTextField(platform: .phone, placeholder: "+965...", text: $phoneNumber)
+                        socialTextField(platform: .instagram, placeholder: "@username", text: $instagramUrl)
+                        socialTextField(platform: .twitter, placeholder: "@username", text: $twitterUrl)
                         
                         DSPrimaryButton(
                             L10n.t("حفظ التعديلات", "Save Changes"),
@@ -563,9 +609,10 @@ struct EditProjectView: View {
             twitterUrl: twitterUrl.isEmpty ? nil : twitterUrl,
             snapchatUrl: nil,
             whatsappNumber: whatsappNumber.isEmpty ? nil : whatsappNumber,
-            phoneNumber: phoneNumber.isEmpty ? nil : phoneNumber
+            phoneNumber: phoneNumber.isEmpty ? nil : phoneNumber,
+            locationUrl: locationUrl.isEmpty ? nil : locationUrl
         )
-        
+
         if success {
             await projectsVM.fetchProjects()
             if let userId = authVM.currentUser?.id {
