@@ -314,23 +314,23 @@ struct ProjectDetailView: View {
             )
             
             VStack(spacing: DS.Spacing.sm) {
-                if let url = project.locationUrl, !url.isEmpty {
-                    socialLinkRow(platform: .location, value: url)
-                }
-                if let url = project.websiteUrl, !url.isEmpty {
-                    socialLinkRow(platform: .website, value: url)
+                if let number = project.phoneNumber, !number.isEmpty {
+                    socialLinkRow(platform: .phone, value: number)
                 }
                 if let number = project.whatsappNumber, !number.isEmpty {
                     socialLinkRow(platform: .whatsapp, value: number)
-                }
-                if let number = project.phoneNumber, !number.isEmpty {
-                    socialLinkRow(platform: .phone, value: number)
                 }
                 if let url = project.instagramUrl, !url.isEmpty {
                     socialLinkRow(platform: .instagram, value: url)
                 }
                 if let url = project.twitterUrl, !url.isEmpty {
                     socialLinkRow(platform: .twitter, value: url)
+                }
+                if let url = project.websiteUrl, !url.isEmpty {
+                    socialLinkRow(platform: .website, value: url)
+                }
+                if let url = project.locationUrl, !url.isEmpty {
+                    socialLinkRow(platform: .location, value: url)
                 }
             }
         }
@@ -533,12 +533,12 @@ struct EditProjectView: View {
                         
                         DSSectionHeader(title: L10n.t("حسابات التواصل", "Social Accounts"), icon: "link")
                         
-                        socialTextField(platform: .location, placeholder: L10n.t("رابط الموقع (Maps)", "Maps URL"), text: $locationUrl)
-                        socialTextField(platform: .website, placeholder: "https://...", text: $websiteUrl)
-                        socialTextField(platform: .whatsapp, placeholder: "+965...", text: $whatsappNumber)
                         socialTextField(platform: .phone, placeholder: "+965...", text: $phoneNumber)
+                        socialTextField(platform: .whatsapp, placeholder: "+965...", text: $whatsappNumber)
                         socialTextField(platform: .instagram, placeholder: "@username", text: $instagramUrl)
                         socialTextField(platform: .twitter, placeholder: "@username", text: $twitterUrl)
+                        socialTextField(platform: .website, placeholder: "https://...", text: $websiteUrl)
+                        socialTextField(platform: .location, placeholder: L10n.t("رابط الموقع (Maps)", "Maps URL"), text: $locationUrl)
                         
                         DSPrimaryButton(
                             L10n.t("حفظ التعديلات", "Save Changes"),

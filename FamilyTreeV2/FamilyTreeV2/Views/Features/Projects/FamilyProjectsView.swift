@@ -472,12 +472,12 @@ struct FamilyProjectsView: View {
     /// أيقونات المنصات اللي عنده روابط فيها — مؤشّر بصري سريع.
     private func socialIndicators(project: Project) -> some View {
         HStack(spacing: 4) {
-            if project.locationUrl != nil    { socialDot(icon: "mappin.and.ellipse", color: Color(hex: "#EA4335")) }
-            if project.websiteUrl != nil     { socialDot(icon: "globe", color: DS.Color.info) }
-            if project.whatsappNumber != nil { socialDot(icon: "message.fill", color: Color(hex: "#25D366")) }
             if project.phoneNumber != nil    { socialDot(icon: "phone.fill", color: DS.Color.success) }
+            if project.whatsappNumber != nil { socialDot(icon: "message.fill", color: Color(hex: "#25D366")) }
             if project.instagramUrl != nil   { socialDot(icon: "camera.fill", color: Color(hex: "#E1306C")) }
             if project.twitterUrl != nil     { socialDot(icon: "xmark", color: Color(hex: "#000000")) }
+            if project.websiteUrl != nil     { socialDot(icon: "globe", color: DS.Color.info) }
+            if project.locationUrl != nil    { socialDot(icon: "mappin.and.ellipse", color: Color(hex: "#EA4335")) }
         }
     }
 
@@ -821,12 +821,12 @@ struct AddProjectView: View {
                 .foregroundColor(DS.Color.textSecondary)
 
             VStack(spacing: DS.Spacing.xs) {
-                socialRow(platform: .location, placeholder: L10n.t("رابط الموقع (Maps)", "Maps URL"), text: $locationUrl)
-                socialRow(platform: .website, placeholder: "https://...", text: $websiteUrl)
-                socialRow(platform: .whatsapp, placeholder: "+965...", text: $whatsappNumber)
                 socialRow(platform: .phone, placeholder: "+965...", text: $phoneNumber)
+                socialRow(platform: .whatsapp, placeholder: "+965...", text: $whatsappNumber)
                 socialRow(platform: .instagram, placeholder: "@username", text: $instagramUrl)
                 socialRow(platform: .twitter, placeholder: "@username", text: $twitterUrl)
+                socialRow(platform: .website, placeholder: "https://...", text: $websiteUrl)
+                socialRow(platform: .location, placeholder: L10n.t("رابط الموقع (Maps)", "Maps URL"), text: $locationUrl)
             }
         }
         .padding(DS.Spacing.md)
