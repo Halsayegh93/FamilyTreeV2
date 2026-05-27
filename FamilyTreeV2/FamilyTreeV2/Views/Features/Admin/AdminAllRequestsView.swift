@@ -45,12 +45,13 @@ struct AdminAllRequestsView: View {
     }
 
     enum RequestTab: String, CaseIterable, Identifiable {
-        case joinRequests, news, reports, phone, nameChange, diwaniya, deceased, children, photos, projects, gallery, stories
+        case all, joinRequests, news, reports, phone, nameChange, diwaniya, deceased, children, photos, projects, gallery
 
         var id: String { rawValue }
 
         var title: String {
             switch self {
+            case .all: return L10n.t("الكل", "All")
             case .joinRequests: return L10n.t("انضمام", "Join")
             case .news: return L10n.t("أخبار", "News")
             case .reports: return L10n.t("بلاغات", "Reports")
@@ -62,12 +63,12 @@ struct AdminAllRequestsView: View {
             case .photos: return L10n.t("صور مقترحة", "Suggested Photos")
             case .projects: return L10n.t("مشاريع", "Projects")
             case .gallery: return L10n.t("معرض", "Gallery")
-            case .stories: return L10n.t("قصص", "Stories")
             }
         }
 
         var icon: String {
             switch self {
+            case .all: return "tray.full.fill"
             case .joinRequests: return "person.badge.shield.checkmark"
             case .news: return "newspaper.fill"
             case .reports: return "exclamationmark.bubble.fill"
@@ -79,12 +80,12 @@ struct AdminAllRequestsView: View {
             case .photos: return "camera.badge.ellipsis"
             case .projects: return "briefcase.fill"
             case .gallery: return "photo.on.rectangle.angled"
-            case .stories: return "circle.dashed"
             }
         }
 
         var color: Color {
             switch self {
+            case .all: return DS.Color.primary
             case .joinRequests: return DS.Color.info
             case .news: return DS.Color.warning
             case .reports: return DS.Color.error
@@ -96,12 +97,11 @@ struct AdminAllRequestsView: View {
             case .photos: return DS.Color.neonBlue
             case .projects: return DS.Color.neonPurple
             case .gallery: return DS.Color.gridDiwaniya
-            case .stories: return DS.Color.neonCyan
             }
         }
     }
 
-    @State private var selectedTab: RequestTab = .joinRequests
+    @State private var selectedTab: RequestTab = .all
     @State private var showBulkApproveChildrenConfirm = false
     @State private var bulkApproveResult: String?
     @State private var showBulkApproveResult = false
@@ -281,7 +281,6 @@ struct AdminAllRequestsView: View {
                 group.addTask { @MainActor in await adminRequestVM.fetchNameChangeRequests() }
                 group.addTask { @MainActor in await projectsVM.fetchPendingProjects() }
                 group.addTask { @MainActor in await memberVM.fetchPendingGalleryPhotos() }
-                group.addTask { @MainActor in await storyVM.fetchPendingStories(force: true) }
             }
             await fetchAllRegistrationMatches()
             recalculateCounts()
@@ -450,6 +449,7 @@ struct AdminAllRequestsView: View {
 
     private func itemCount(for tab: RequestTab) -> Int {
         switch tab {
+        case .all: return cachedTotalCount
         case .joinRequests: return pendingMembers.count
         case .news: return newsVM.pendingNewsRequests.count
         case .reports: return adminRequestVM.newsReportRequests.count
@@ -461,7 +461,6 @@ struct AdminAllRequestsView: View {
         case .photos: return adminRequestVM.photoSuggestionRequests.count
         case .projects: return projectsVM.pendingProjects.count
         case .gallery: return memberVM.pendingGalleryPhotos.count
-        case .stories: return storyVM.pendingStories.count
         }
     }
 
@@ -473,7 +472,10 @@ struct AdminAllRequestsView: View {
 
     private func recalculateCounts() {
         cachedPendingMembers = memberVM.allMembers.filter { $0.role == .pending }
-        cachedTotalCount = RequestTab.allCases.reduce(0) { $0 + itemCount(for: $1) }
+        // المجموع الكلّي = كل الأنواع ما عدا .all نفسه (لتفادي العدّ المضاعف)
+        cachedTotalCount = RequestTab.allCases
+            .filter { $0 != .all }
+            .reduce(0) { $0 + itemCount(for: $1) }
         // عرض كل التابات دائماً — حتى الفارغة (المستخدم يبيها كلها مرئية)
         cachedAvailableTabs = RequestTab.allCases
     }
@@ -605,6 +607,19 @@ struct AdminAllRequestsView: View {
     /// معرّفات عناصر التاب الحالي (للاستخدام في "تحديد الكل").
     private var currentTabIds: [UUID] {
         switch selectedTab {
+        case .all:
+            // كل المعرّفات عبر كل الأنواع
+            return pendingMembers.map { $0.id }
+                + newsVM.pendingNewsRequests.map { $0.id }
+                + adminRequestVM.newsReportRequests.map { $0.id }
+                + adminRequestVM.phoneChangeRequests.map { $0.id }
+                + adminRequestVM.nameChangeRequests.map { $0.id }
+                + diwaniyaVM.pendingDiwaniyas.map { $0.id }
+                + adminRequestVM.deceasedRequests.map { $0.id }
+                + adminRequestVM.childAddRequests.map { $0.id }
+                + adminRequestVM.photoSuggestionRequests.map { $0.id }
+                + projectsVM.pendingProjects.map { $0.id }
+                + memberVM.pendingGalleryPhotos.map { $0.id }
         case .joinRequests: return pendingMembers.map { $0.id }
         case .news:         return newsVM.pendingNewsRequests.map { $0.id }
         case .reports:      return adminRequestVM.newsReportRequests.map { $0.id }
@@ -616,7 +631,6 @@ struct AdminAllRequestsView: View {
         case .photos:       return adminRequestVM.photoSuggestionRequests.map { $0.id }
         case .projects:     return projectsVM.pendingProjects.map { $0.id }
         case .gallery:      return memberVM.pendingGalleryPhotos.map { $0.id }
-        case .stories:      return storyVM.pendingStories.map { $0.id }
         }
     }
 
@@ -879,20 +893,8 @@ struct AdminAllRequestsView: View {
                         galleryPendingRow(photo: photo)
                     }
                 }
-            case .stories:
-                selectAllButton(ids: storyVM.pendingStories.map { $0.id })
-                ForEach(storyVM.pendingStories) { story in
-                    selectableRow(
-                        id: story.id,
-                        accentColor: RequestTab.stories.color,
-                        approveLabel: L10n.t("نشر", "Publish"),
-                        onApprove: { Task { await storyVM.approveStory(story) } },
-                        onReject: { Task { await storyVM.rejectStory(story) } },
-                        onTap: { }
-                    ) {
-                        storyPendingRow(story: story)
-                    }
-                }
+            case .all:
+                allRequestsContent()
             }
         }
         .listStyle(.plain)
@@ -1077,6 +1079,9 @@ struct AdminAllRequestsView: View {
         let ids = Array(selectedIds)
         var count = 0
         switch selectedTab {
+        case .all:
+            // في وضع "الكل": نمشي عبر كل القوائم بنفس الترتيب ونوافق على كل ID مطابق
+            count = await bulkApproveAcrossAllTypes(ids: ids)
         case .joinRequests:
             return await adminRequestVM.bulkApproveJoinRequests(memberIds: ids)
         case .news:
@@ -1151,13 +1156,6 @@ struct AdminAllRequestsView: View {
                 await memberVM.approveGalleryPhoto(photoId: id)
                 count += 1
             }
-        case .stories:
-            for id in ids {
-                if let story = storyVM.pendingStories.first(where: { $0.id == id }) {
-                    await storyVM.approveStory(story)
-                    count += 1
-                }
-            }
         }
         return count
     }
@@ -1166,6 +1164,8 @@ struct AdminAllRequestsView: View {
         let ids = Array(selectedIds)
         var count = 0
         switch selectedTab {
+        case .all:
+            count = await bulkRejectAcrossAllTypes(ids: ids)
         case .joinRequests:
             for id in ids {
                 await adminRequestVM.rejectOrDeleteMember(memberId: id)
@@ -1241,12 +1241,191 @@ struct AdminAllRequestsView: View {
                     count += 1
                 }
             }
-        case .stories:
-            for id in ids {
-                if let story = storyVM.pendingStories.first(where: { $0.id == id }) {
-                    await storyVM.rejectStory(story)
-                    count += 1
-                }
+        }
+        return count
+    }
+
+    /// محتوى تاب "الكل" — يصدر كل الأنواع في تسلسل (إطار البطاقة الملوّن يعطي تمييزاً بصرياً).
+    @ViewBuilder
+    private func allRequestsContent() -> some View {
+        ForEach(pendingMembers) { member in
+            selectableRow(
+                id: member.id,
+                accentColor: RequestTab.joinRequests.color,
+                approveLabel: L10n.t("ربط", "Link"),
+                approveIcon: "link.badge.plus",
+                onApprove: { memberToLink = member },
+                onReject: { Task { await adminRequestVM.rejectOrDeleteMember(memberId: member.id) } },
+                onTap: { selectedDetail = .join(member) }
+            ) {
+                joinRequestRow(for: member)
+            }
+        }
+        ForEach(newsVM.pendingNewsRequests) { post in
+            selectableRow(
+                id: post.id,
+                accentColor: RequestTab.news.color,
+                onApprove: { Task { await newsVM.approveNewsPost(postId: post.id) } },
+                onReject: { Task { await newsVM.rejectNewsPost(postId: post.id) } },
+                onTap: { selectedDetail = .news(post) }
+            ) { newsRow(for: post) }
+        }
+        ForEach(adminRequestVM.newsReportRequests) { request in
+            selectableRow(
+                id: request.id,
+                accentColor: RequestTab.reports.color,
+                onApprove: { Task { await adminRequestVM.approveNewsReport(request: request) } },
+                onReject: { Task { await adminRequestVM.rejectNewsReport(request: request) } },
+                onTap: { selectedDetail = .report(request) }
+            ) { reportRow(for: request) }
+        }
+        ForEach(adminRequestVM.phoneChangeRequests) { request in
+            selectableRow(
+                id: request.id,
+                accentColor: RequestTab.phone.color,
+                onApprove: { Task { await adminRequestVM.approvePhoneChangeRequest(request: request) } },
+                onReject: { Task { await adminRequestVM.rejectPhoneChangeRequest(request: request) } },
+                onTap: { selectedDetail = .phone(request) }
+            ) { phoneRow(for: request) }
+        }
+        ForEach(adminRequestVM.nameChangeRequests) { request in
+            selectableRow(
+                id: request.id,
+                accentColor: RequestTab.nameChange.color,
+                onApprove: { Task { await adminRequestVM.approveNameChangeRequest(request: request) } },
+                onReject: { Task { await adminRequestVM.rejectNameChangeRequest(request: request) } },
+                onTap: { selectedDetail = .nameChange(request) }
+            ) { nameChangeRow(for: request) }
+        }
+        ForEach(diwaniyaVM.pendingDiwaniyas) { diwaniya in
+            selectableRow(
+                id: diwaniya.id,
+                accentColor: RequestTab.diwaniya.color,
+                onApprove: {
+                    if let adminId = authVM.currentUser?.id {
+                        Task { await diwaniyaVM.approveDiwaniya(id: diwaniya.id, adminId: adminId) }
+                    }
+                },
+                onReject: { Task { await diwaniyaVM.rejectDiwaniya(id: diwaniya.id) } },
+                onTap: { selectedDetail = .diwaniya(diwaniya) }
+            ) { diwaniyaRow(for: diwaniya) }
+        }
+        ForEach(adminRequestVM.deceasedRequests) { request in
+            selectableRow(
+                id: request.id,
+                accentColor: RequestTab.deceased.color,
+                onApprove: { Task { await adminRequestVM.approveDeceasedRequest(request: request) } },
+                onReject: { Task { await adminRequestVM.rejectDeceasedRequest(request: request) } },
+                onTap: { selectedDetail = .deceased(request) }
+            ) { deceasedRow(for: request) }
+        }
+        ForEach(adminRequestVM.childAddRequests) { request in
+            selectableRow(
+                id: request.id,
+                accentColor: RequestTab.children.color,
+                approveLabel: L10n.t("تأكيد", "Confirm"),
+                onApprove: { Task { await adminRequestVM.acknowledgeChildAddRequest(request: request) } },
+                onReject: { Task { await adminRequestVM.rejectChildAddRequest(request: request) } },
+                onTap: { selectedDetail = .child(request) }
+            ) { childRow(for: request) }
+        }
+        ForEach(adminRequestVM.photoSuggestionRequests) { request in
+            selectableRow(
+                id: request.id,
+                accentColor: RequestTab.photos.color,
+                onApprove: { Task { await adminRequestVM.approvePhotoSuggestion(request: request) } },
+                onReject: { Task { await adminRequestVM.rejectPhotoSuggestion(request: request) } },
+                onTap: { selectedDetail = .photo(request) }
+            ) { photoRow(for: request) }
+        }
+        ForEach(projectsVM.pendingProjects) { project in
+            selectableRow(
+                id: project.id,
+                accentColor: RequestTab.projects.color,
+                onApprove: {
+                    if let adminId = authVM.currentUser?.id {
+                        Task { await projectsVM.approveProject(id: project.id, approvedBy: adminId) }
+                    }
+                },
+                onReject: { Task { await projectsVM.rejectProject(id: project.id) } },
+                onTap: { selectedDetail = .project(project) }
+            ) { projectRow(for: project) }
+        }
+        ForEach(memberVM.pendingGalleryPhotos) { photo in
+            selectableRow(
+                id: photo.id,
+                accentColor: RequestTab.gallery.color,
+                onApprove: { Task { await memberVM.approveGalleryPhoto(photoId: photo.id) } },
+                onReject: { Task { await memberVM.rejectGalleryPhoto(photoId: photo.id, photoURL: photo.photoURL) } },
+                onTap: { }
+            ) { galleryPendingRow(photo: photo) }
+        }
+    }
+
+    /// موافقة دفعية تعبر كل الأنواع (لوضع "الكل").
+    private func bulkApproveAcrossAllTypes(ids: [UUID]) async -> Int {
+        var count = 0
+        let idSet = Set(ids)
+
+        for id in ids {
+            if pendingMembers.contains(where: { $0.id == id }) {
+                _ = await adminRequestVM.bulkApproveJoinRequests(memberIds: [id])
+                count += 1
+            } else if let post = newsVM.pendingNewsRequests.first(where: { $0.id == id }) {
+                await newsVM.approveNewsPost(postId: post.id); count += 1
+            } else if let req = adminRequestVM.newsReportRequests.first(where: { $0.id == id }) {
+                await adminRequestVM.approveNewsReport(request: req); count += 1
+            } else if let req = adminRequestVM.phoneChangeRequests.first(where: { $0.id == id }) {
+                await adminRequestVM.approvePhoneChangeRequest(request: req); count += 1
+            } else if let req = adminRequestVM.nameChangeRequests.first(where: { $0.id == id }) {
+                await adminRequestVM.approveNameChangeRequest(request: req); count += 1
+            } else if let d = diwaniyaVM.pendingDiwaniyas.first(where: { $0.id == id }),
+                      let adminId = authVM.currentUser?.id {
+                await diwaniyaVM.approveDiwaniya(id: d.id, adminId: adminId); count += 1
+            } else if let req = adminRequestVM.deceasedRequests.first(where: { $0.id == id }) {
+                await adminRequestVM.approveDeceasedRequest(request: req); count += 1
+            } else if let req = adminRequestVM.childAddRequests.first(where: { $0.id == id }) {
+                await adminRequestVM.acknowledgeChildAddRequest(request: req); count += 1
+            } else if let req = adminRequestVM.photoSuggestionRequests.first(where: { $0.id == id }) {
+                await adminRequestVM.approvePhotoSuggestion(request: req); count += 1
+            } else if let proj = projectsVM.pendingProjects.first(where: { $0.id == id }),
+                      let adminId = authVM.currentUser?.id {
+                await projectsVM.approveProject(id: proj.id, approvedBy: adminId); count += 1
+            } else if memberVM.pendingGalleryPhotos.contains(where: { $0.id == id }) {
+                await memberVM.approveGalleryPhoto(photoId: id); count += 1
+            }
+        }
+        _ = idSet // silence unused
+        return count
+    }
+
+    /// رفض دفعي يعبر كل الأنواع (لوضع "الكل").
+    private func bulkRejectAcrossAllTypes(ids: [UUID]) async -> Int {
+        var count = 0
+
+        for id in ids {
+            if pendingMembers.contains(where: { $0.id == id }) {
+                await adminRequestVM.rejectOrDeleteMember(memberId: id); count += 1
+            } else if let post = newsVM.pendingNewsRequests.first(where: { $0.id == id }) {
+                await newsVM.rejectNewsPost(postId: post.id); count += 1
+            } else if let req = adminRequestVM.newsReportRequests.first(where: { $0.id == id }) {
+                await adminRequestVM.rejectNewsReport(request: req); count += 1
+            } else if let req = adminRequestVM.phoneChangeRequests.first(where: { $0.id == id }) {
+                await adminRequestVM.rejectPhoneChangeRequest(request: req); count += 1
+            } else if let req = adminRequestVM.nameChangeRequests.first(where: { $0.id == id }) {
+                await adminRequestVM.rejectNameChangeRequest(request: req); count += 1
+            } else if let d = diwaniyaVM.pendingDiwaniyas.first(where: { $0.id == id }) {
+                await diwaniyaVM.rejectDiwaniya(id: d.id); count += 1
+            } else if let req = adminRequestVM.deceasedRequests.first(where: { $0.id == id }) {
+                await adminRequestVM.rejectDeceasedRequest(request: req); count += 1
+            } else if let req = adminRequestVM.childAddRequests.first(where: { $0.id == id }) {
+                await adminRequestVM.rejectChildAddRequest(request: req); count += 1
+            } else if let req = adminRequestVM.photoSuggestionRequests.first(where: { $0.id == id }) {
+                await adminRequestVM.rejectPhotoSuggestion(request: req); count += 1
+            } else if projectsVM.pendingProjects.contains(where: { $0.id == id }) {
+                await projectsVM.rejectProject(id: id); count += 1
+            } else if let photo = memberVM.pendingGalleryPhotos.first(where: { $0.id == id }) {
+                await memberVM.rejectGalleryPhoto(photoId: photo.id, photoURL: photo.photoURL); count += 1
             }
         }
         return count
