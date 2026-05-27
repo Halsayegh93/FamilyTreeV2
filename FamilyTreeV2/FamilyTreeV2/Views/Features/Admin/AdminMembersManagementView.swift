@@ -6,12 +6,12 @@ struct AdminMembersManagementView: View {
     @EnvironmentObject var adminRequestVM: AdminRequestViewModel
 
     enum Tab: Int, CaseIterable {
-        case management, treeHealth, directory
+        // ملاحظة: تاب صحة الشجرة (treeHealth) نُقل إلى "طلبات المراجعة" → قسم "صحة الشجرة"
+        case management, directory
 
         var title: String {
             switch self {
             case .management:  return L10n.t("إدارة", "Manage")
-            case .treeHealth:  return L10n.t("الشجرة", "Tree")
             case .directory:   return L10n.t("السجل", "Registry")
             }
         }
@@ -19,7 +19,6 @@ struct AdminMembersManagementView: View {
         var icon: String {
             switch self {
             case .management:  return "person.badge.exclamationmark"
-            case .treeHealth:  return "tree.fill"
             case .directory:   return "person.3.sequence.fill"
             }
         }
@@ -27,7 +26,6 @@ struct AdminMembersManagementView: View {
         var color: Color {
             switch self {
             case .management:  return DS.Color.warning
-            case .treeHealth:  return DS.Color.success
             case .directory:   return DS.Color.primary
             }
         }
@@ -52,11 +50,6 @@ struct AdminMembersManagementView: View {
                         .environmentObject(authVM)
                         .environmentObject(memberVM)
                         .environmentObject(adminRequestVM)
-
-                case .treeHealth:
-                    AdminTreeHealthView()
-                        .environmentObject(authVM)
-                        .environmentObject(memberVM)
 
                 case .directory:
                     AdminMembersDirectoryView()

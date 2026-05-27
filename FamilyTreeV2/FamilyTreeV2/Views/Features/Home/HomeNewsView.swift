@@ -292,7 +292,7 @@ struct HomeNewsView: View {
                 action: { withAnimation(DS.Anim.snappy) { activeSubPage = .archive } }
             )
             unifiedTile(
-                title: L10n.t("التواصل مع الإدارة", "Contact Admin"),
+                title: L10n.t("التواصل", "Contact"),
                 icon: "bubble.left.and.bubble.right.fill",
                 color: DS.Color.info,
                 imageURL: nil,
@@ -356,11 +356,12 @@ struct HomeNewsView: View {
                 }
                 .padding(9)
 
-                // العنوان أسفل — حجم أصغر
+                // العنوان أسفل — سطر واحد لضمان تساوي الأحجام
                 Text(title)
                     .font(DS.Font.scaled(13, weight: .black))
                     .foregroundColor(.white)
-                    .lineLimit(2)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
                     .multilineTextAlignment(.leading)
                     .shadow(color: .black.opacity(0.35), radius: 3, x: 0, y: 1)
                     .padding(8)

@@ -150,16 +150,7 @@ struct AdminDashboardView: View {
                                         )
                                     }
                                     DSDivider()
-                                    NavigationLink(destination: AdminTreeEditRequestsView()) {
-                                        DSActionRow(
-                                            title: L10n.t("طلبات الشجرة", "Tree Requests"),
-                                            subtitle: L10n.t("إضافة وتعديل وحذف الأعضاء", "Add, edit & delete members"),
-                                            icon: "pencil.and.list.clipboard",
-                                            color: DS.Color.accent,
-                                            badge: adminRequestVM.treeEditRequests.count > 0 ? adminRequestVM.treeEditRequests.count : nil
-                                        )
-                                    }
-                                    DSDivider()
+                                    // طلبات الشجرة وصحّتها مدمجة الآن في "طلبات المراجعة" — لا حاجة لإدخال مستقل
                                     NavigationLink(destination: AdminInboxView()) {
                                         DSActionRow(
                                             title: L10n.t("الرسائل", "Messages"),

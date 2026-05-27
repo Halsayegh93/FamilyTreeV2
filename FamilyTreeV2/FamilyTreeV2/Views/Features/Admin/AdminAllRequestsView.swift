@@ -327,24 +327,6 @@ struct AdminAllRequestsView: View {
                     emptyState
                     Spacer()
                 } else {
-                    HStack(spacing: DS.Spacing.xs) {
-                        Image(systemName: "hand.draw.fill")
-                            .font(DS.Font.scaled(11, weight: .medium))
-                        Text(selectedTab == .joinRequests
-                            ? L10n.t(
-                                authVM.canRejectRequests ? "اسحب لليسار للربط • اسحب لليمين للرفض" : "اسحب لليسار للربط",
-                                authVM.canRejectRequests ? "Swipe left to link • Swipe right to reject" : "Swipe left to link"
-                            )
-                            : L10n.t(
-                                authVM.canRejectRequests ? "اسحب لليسار للموافقة • اسحب لليمين للرفض" : "اسحب لليسار للموافقة",
-                                authVM.canRejectRequests ? "Swipe left to approve • Swipe right to reject" : "Swipe left to approve"
-                            )
-                        )
-                            .font(DS.Font.caption2)
-                    }
-                    .foregroundColor(DS.Color.textTertiary)
-                    .padding(.top, DS.Spacing.xs)
-
                     tabContent
                 }
             }
@@ -420,8 +402,8 @@ struct AdminAllRequestsView: View {
         .navigationTitle(L10n.t("طلبات المراجعة", "Review Requests"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                // عدّاد إجمالي الطلبات — بدل زر التحديد (تم نقله للفلاتر)
+            // عدّاد إجمالي
+            ToolbarItem(placement: .topBarLeading) {
                 if totalCount > 0 {
                     HStack(spacing: 4) {
                         Image(systemName: "tray.full.fill")
@@ -434,6 +416,30 @@ struct AdminAllRequestsView: View {
                     .padding(.vertical, 4)
                     .background(Capsule().fill(DS.Color.primary.opacity(0.12)))
                     .overlay(Capsule().strokeBorder(DS.Color.primary.opacity(0.25), lineWidth: 1))
+                }
+            }
+            // زر التحديد المتعدّد — بارز في الأعلى يمين (لا يظهر إلا لو في طلبات قابلة)
+            ToolbarItem(placement: .topBarTrailing) {
+                if !isSelectMode && itemCount(for: selectedTab) > 0
+                    && selectedTab.section != .treeHealth {
+                    Button {
+                        withAnimation(DS.Anim.snappy) {
+                            isSelectMode = true
+                            selectedIds.removeAll()
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "checkmark.circle")
+                                .font(DS.Font.scaled(12, weight: .bold))
+                            Text(L10n.t("تحديد", "Select"))
+                                .font(DS.Font.scaled(13, weight: .bold))
+                        }
+                        .foregroundColor(DS.Color.success)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(Capsule().fill(DS.Color.success.opacity(0.12)))
+                        .overlay(Capsule().strokeBorder(DS.Color.success.opacity(0.30), lineWidth: 1))
+                    }
                 }
             }
         }
@@ -778,50 +784,41 @@ struct AdminAllRequestsView: View {
         }
     }
 
-    /// chip القسم — يتمدّد لو نشط، أيقونة فقط لو غير نشط.
+    /// chip القسم — أيقونة + نص دائماً (نشط ممتدّ بـ gradient، غير نشط شفّاف).
     private func sectionChip(title: String, icon: String, color: Color, count: Int, isActive: Bool, action: @escaping () -> Void) -> some View {
-        Group {
-            if isActive {
-                HStack(spacing: 6) {
-                    Image(systemName: icon).font(DS.Font.scaled(12, weight: .bold)).foregroundColor(.white)
-                    Text(title).font(DS.Font.scaled(13, weight: .bold)).foregroundColor(.white)
-                    if count > 0 {
-                        Text("\(count)")
-                            .font(DS.Font.scaled(10, weight: .black))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 6).padding(.vertical, 1)
-                            .background(Capsule().fill(Color.white.opacity(0.25)))
-                    }
+        Button(action: action) {
+            HStack(spacing: 5) {
+                Image(systemName: icon)
+                    .font(DS.Font.scaled(12, weight: .bold))
+                Text(title)
+                    .font(DS.Font.scaled(13, weight: isActive ? .bold : .semibold))
+                    .lineLimit(1)
+                if count > 0 {
+                    Text("\(count)")
+                        .font(DS.Font.scaled(10, weight: .black))
+                        .padding(.horizontal, 6).padding(.vertical, 1)
+                        .background(
+                            Capsule().fill(isActive ? Color.white.opacity(0.25) : color.opacity(0.18))
+                        )
                 }
-                .padding(.horizontal, DS.Spacing.md).padding(.vertical, 8)
-                .background(Capsule().fill(LinearGradient(colors: [color, color.opacity(0.85)], startPoint: .topLeading, endPoint: .bottomTrailing)))
-                .shadow(color: color.opacity(0.35), radius: 8, x: 0, y: 3)
-                .transition(.scale(scale: 0.85).combined(with: .opacity))
-            } else {
-                Button(action: action) {
-                    ZStack(alignment: .topTrailing) {
-                        Image(systemName: icon)
-                            .font(DS.Font.scaled(13, weight: .bold))
-                            .foregroundColor(color)
-                            .frame(width: 36, height: 36)
-                            .background(Circle().fill(color.opacity(0.12)))
-                            .overlay(Circle().strokeBorder(color.opacity(0.20), lineWidth: 1))
-                        if count > 0 {
-                            Text("\(count)")
-                                .font(DS.Font.scaled(9, weight: .black))
-                                .foregroundColor(.white)
-                                .frame(minWidth: 16, minHeight: 16)
-                                .padding(.horizontal, 3)
-                                .background(Capsule().fill(color))
-                                .overlay(Capsule().strokeBorder(Color.white, lineWidth: 1.5))
-                                .offset(x: 4, y: -4)
-                        }
-                    }
-                }
-                .buttonStyle(DSScaleButtonStyle())
-                .transition(.scale(scale: 0.85).combined(with: .opacity))
             }
+            .foregroundColor(isActive ? .white : color)
+            .padding(.horizontal, DS.Spacing.md)
+            .padding(.vertical, 8)
+            .background(
+                Capsule().fill(
+                    isActive
+                        ? AnyShapeStyle(LinearGradient(colors: [color, color.opacity(0.85)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                        : AnyShapeStyle(color.opacity(0.10))
+                )
+            )
+            .overlay(
+                Capsule().strokeBorder(isActive ? Color.clear : color.opacity(0.25), lineWidth: 1)
+            )
+            .shadow(color: isActive ? color.opacity(0.30) : Color.clear, radius: 6, x: 0, y: 2)
         }
+        .buttonStyle(DSScaleButtonStyle())
+        .transition(.scale(scale: 0.92).combined(with: .opacity))
     }
 
     /// مجموع طلبات القسم.
@@ -846,29 +843,6 @@ struct AdminAllRequestsView: View {
                     }
                 }
 
-                // زر التحديد المدمج — يظهر فقط لو في الـ tab الحالي طلبات
-                if itemCount(for: selectedTab) > 0 {
-                    Capsule()
-                        .fill(DS.Color.textTertiary.opacity(0.25))
-                        .frame(width: 1, height: 22)
-                        .padding(.horizontal, 2)
-
-                    Button {
-                        withAnimation(DS.Anim.snappy) {
-                            isSelectMode = true
-                            selectedIds.removeAll()
-                        }
-                    } label: {
-                        Image(systemName: "checkmark.circle")
-                            .font(DS.Font.scaled(13, weight: .bold))
-                            .foregroundColor(DS.Color.success)
-                            .frame(width: 36, height: 36)
-                            .background(Circle().fill(DS.Color.success.opacity(0.12)))
-                            .overlay(Circle().strokeBorder(DS.Color.success.opacity(0.25), lineWidth: 1))
-                    }
-                    .buttonStyle(DSScaleButtonStyle())
-                    .accessibilityLabel(L10n.t("تحديد متعدّد", "Multi-select"))
-                }
             }
             .padding(6)
             .background(Capsule(style: .continuous).fill(.ultraThinMaterial))
@@ -1016,63 +990,51 @@ struct AdminAllRequestsView: View {
         }
     }
 
-    /// التاب النشط — pill ممتدّ بلون فئته + اسم + عدّاد.
+    /// التاب النشط — pill ممتدّ بـ gradient + نص + عدّاد.
     private func activeTabPill(_ tab: RequestTab) -> some View {
-        let count = itemCount(for: tab)
-        return HStack(spacing: 6) {
-            Image(systemName: tab.icon)
-                .font(DS.Font.scaled(12, weight: .bold))
-                .foregroundColor(.white)
-            Text(tab.title)
-                .font(DS.Font.scaled(13, weight: .bold))
-                .foregroundColor(.white)
-                .lineLimit(1)
-            if count > 0 {
-                Text("\(count)")
-                    .font(DS.Font.scaled(10, weight: .black))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 1)
-                    .background(Capsule().fill(Color.white.opacity(0.25)))
-            }
-        }
-        .padding(.horizontal, DS.Spacing.md)
-        .padding(.vertical, 8)
-        .background(
-            Capsule().fill(
-                LinearGradient(
-                    colors: [tab.color, tab.color.opacity(0.85)],
-                    startPoint: .topLeading, endPoint: .bottomTrailing
-                )
-            )
-        )
-        .shadow(color: tab.color.opacity(0.35), radius: 8, x: 0, y: 3)
+        tabChipBody(tab: tab, isActive: true) {}
     }
 
-    /// التاب غير النشط — أيقونة دائرية فقط بلون الفئة + badge عدّاد.
+    /// التاب غير النشط — كبسولة شفّافة بنص (مش أيقونة فقط).
     private func inactiveTabIcon(_ tab: RequestTab) -> some View {
-        let count = itemCount(for: tab)
-        return Button {
+        tabChipBody(tab: tab, isActive: false) {
             selectedTab = tab
-        } label: {
-            ZStack(alignment: .topTrailing) {
+        }
+    }
+
+    /// chip فلتر فرعي موحّد — نص + أيقونة + عدّاد دائماً.
+    private func tabChipBody(tab: RequestTab, isActive: Bool, action: @escaping () -> Void) -> some View {
+        let count = itemCount(for: tab)
+        return Button(action: action) {
+            HStack(spacing: 5) {
                 Image(systemName: tab.icon)
-                    .font(DS.Font.scaled(13, weight: .bold))
-                    .foregroundColor(tab.color)
-                    .frame(width: 36, height: 36)
-                    .background(Circle().fill(tab.color.opacity(0.12)))
-                    .overlay(Circle().strokeBorder(tab.color.opacity(0.20), lineWidth: 1))
+                    .font(DS.Font.scaled(11, weight: .bold))
+                Text(tab.title)
+                    .font(DS.Font.scaled(12, weight: isActive ? .bold : .semibold))
+                    .lineLimit(1)
                 if count > 0 {
                     Text("\(count)")
-                        .font(DS.Font.scaled(9, weight: .black))
-                        .foregroundColor(.white)
-                        .frame(minWidth: 16, minHeight: 16)
-                        .padding(.horizontal, 3)
-                        .background(Capsule().fill(tab.color))
-                        .overlay(Capsule().strokeBorder(Color.white, lineWidth: 1.5))
-                        .offset(x: 4, y: -4)
+                        .font(DS.Font.scaled(10, weight: .black))
+                        .padding(.horizontal, 5).padding(.vertical, 1)
+                        .background(
+                            Capsule().fill(isActive ? Color.white.opacity(0.25) : tab.color.opacity(0.18))
+                        )
                 }
             }
+            .foregroundColor(isActive ? .white : tab.color)
+            .padding(.horizontal, DS.Spacing.sm)
+            .padding(.vertical, 7)
+            .background(
+                Capsule().fill(
+                    isActive
+                        ? AnyShapeStyle(LinearGradient(colors: [tab.color, tab.color.opacity(0.85)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                        : AnyShapeStyle(tab.color.opacity(0.10))
+                )
+            )
+            .overlay(
+                Capsule().strokeBorder(isActive ? Color.clear : tab.color.opacity(0.25), lineWidth: 1)
+            )
+            .shadow(color: isActive ? tab.color.opacity(0.30) : Color.clear, radius: 6, x: 0, y: 2)
         }
         .buttonStyle(DSScaleButtonStyle())
         .accessibilityLabel(tab.title)
