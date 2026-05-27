@@ -18,7 +18,7 @@ struct AdminMembersManagementView: View {
 
         var icon: String {
             switch self {
-            case .management:  return "person.badge.exclamationmark"
+            case .management:  return "person.crop.circle.badge.exclamationmark"
             case .directory:   return "person.3.sequence.fill"
             }
         }

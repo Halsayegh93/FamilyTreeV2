@@ -41,7 +41,7 @@ struct AdminActivateAccountsView: View {
 
         var icon: String {
             switch self {
-            case .notActivated: return "phone.badge.exclamationmark"
+            case .notActivated: return "phone.badge.waveform"
             case .noBirthDate:  return "calendar.badge.exclamationmark"
             case .noFather:     return "person.line.dotted.person"
             case .noGender:     return "person.fill.questionmark"

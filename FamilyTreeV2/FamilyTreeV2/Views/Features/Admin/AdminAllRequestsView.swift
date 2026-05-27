@@ -402,23 +402,7 @@ struct AdminAllRequestsView: View {
         .navigationTitle(L10n.t("طلبات المراجعة", "Review Requests"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            // عدّاد إجمالي
-            ToolbarItem(placement: .topBarLeading) {
-                if totalCount > 0 {
-                    HStack(spacing: 4) {
-                        Image(systemName: "tray.full.fill")
-                            .font(DS.Font.scaled(11, weight: .bold))
-                        Text("\(totalCount)")
-                            .font(DS.Font.scaled(12, weight: .black))
-                    }
-                    .foregroundColor(DS.Color.primary)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Capsule().fill(DS.Color.primary.opacity(0.12)))
-                    .overlay(Capsule().strokeBorder(DS.Color.primary.opacity(0.25), lineWidth: 1))
-                }
-            }
-            // زر التحديد المتعدّد — بارز في الأعلى يمين (لا يظهر إلا لو في طلبات قابلة)
+            // زر التحديد المتعدّد — أيقونة فقط بدون خلفية
             ToolbarItem(placement: .topBarTrailing) {
                 if !isSelectMode && itemCount(for: selectedTab) > 0
                     && selectedTab.section != .treeHealth {
@@ -428,18 +412,11 @@ struct AdminAllRequestsView: View {
                             selectedIds.removeAll()
                         }
                     } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: "checkmark.circle")
-                                .font(DS.Font.scaled(12, weight: .bold))
-                            Text(L10n.t("تحديد", "Select"))
-                                .font(DS.Font.scaled(13, weight: .bold))
-                        }
-                        .foregroundColor(DS.Color.success)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
-                        .background(Capsule().fill(DS.Color.success.opacity(0.12)))
-                        .overlay(Capsule().strokeBorder(DS.Color.success.opacity(0.30), lineWidth: 1))
+                        Image(systemName: "checkmark.circle")
+                            .font(DS.Font.scaled(16, weight: .semibold))
+                            .foregroundColor(DS.Color.success)
                     }
+                    .accessibilityLabel(L10n.t("تحديد", "Select"))
                 }
             }
         }
@@ -743,11 +720,10 @@ struct AdminAllRequestsView: View {
         }
     }
 
-    /// صف الأقسام الأعلى: "الكل" + 3 أقسام (أعضاء/شجرة/محتوى).
+    /// صف الأقسام الأعلى: "الكل" + 3 أقسام (أعضاء/شجرة/محتوى) — أيقونات فقط بدون خلفية.
     private var sectionSelector: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
-                // "الكل" — اختصار للتاب .all
+            HStack(spacing: DS.Spacing.sm) {
                 sectionChip(
                     title: L10n.t("الكل", "All"),
                     icon: "tray.full.fill",
@@ -758,10 +734,6 @@ struct AdminAllRequestsView: View {
                     selectedTab = .all
                     selectedSection = nil
                 }
-                Capsule()
-                    .fill(DS.Color.textTertiary.opacity(0.25))
-                    .frame(width: 1, height: 22)
-                    .padding(.horizontal, 2)
 
                 ForEach(RequestSection.allCases) { section in
                     sectionChip(
@@ -772,56 +744,53 @@ struct AdminAllRequestsView: View {
                         isActive: selectedSection == section
                     ) {
                         selectedSection = section
-                        // اختر أول tab في القسم
                         if let firstTab = RequestTab.allCases.first(where: { $0.section == section }) {
                             selectedTab = firstTab
                         }
                     }
                 }
             }
-            .padding(6)
-            .background(Capsule(style: .continuous).fill(.ultraThinMaterial))
-            .overlay(Capsule(style: .continuous).strokeBorder(DS.Color.primary.opacity(0.10), lineWidth: 1))
-            .shadow(color: .black.opacity(0.06), radius: 8, x: 0, y: 3)
             .padding(.horizontal, DS.Spacing.lg)
         }
     }
 
-    /// chip القسم — أيقونة + نص دائماً (نشط ممتدّ بـ gradient، غير نشط شفّاف).
+    /// chip القسم — أيقونة فقط بدون خلفية، النشط يكشف الاسم بجانب الأيقونة.
     private func sectionChip(title: String, icon: String, color: Color, count: Int, isActive: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 5) {
-                Image(systemName: icon)
-                    .font(DS.Font.scaled(12, weight: .bold))
-                Text(title)
-                    .font(DS.Font.scaled(13, weight: isActive ? .bold : .semibold))
-                    .lineLimit(1)
-                if count > 0 {
-                    Text("\(count)")
-                        .font(DS.Font.scaled(10, weight: .black))
-                        .padding(.horizontal, 6).padding(.vertical, 1)
-                        .background(
-                            Capsule().fill(isActive ? Color.white.opacity(0.25) : color.opacity(0.18))
-                        )
+                ZStack(alignment: .topTrailing) {
+                    Image(systemName: icon)
+                        .font(DS.Font.scaled(isActive ? 17 : 15, weight: .bold))
+                        .foregroundColor(isActive ? color : color.opacity(0.55))
+                    // عدّاد صغير معلَّق فقط للغير نشط (النشط يعرض الاسم + العدّ بشكل مختلف)
+                    if !isActive && count > 0 {
+                        Text("\(count)")
+                            .font(DS.Font.scaled(8, weight: .black))
+                            .foregroundColor(.white)
+                            .frame(minWidth: 12, minHeight: 12)
+                            .padding(.horizontal, 2)
+                            .background(Capsule().fill(color))
+                            .offset(x: 6, y: -6)
+                    }
+                }
+                .frame(width: 34, height: 30)
+
+                // النص يظهر فقط لو نشط
+                if isActive {
+                    Text(title)
+                        .font(DS.Font.scaled(13, weight: .black))
+                        .foregroundColor(color)
+                        .lineLimit(1)
+                    if count > 0 {
+                        Text("· \(count)")
+                            .font(DS.Font.scaled(11, weight: .heavy))
+                            .foregroundColor(color.opacity(0.65))
+                    }
                 }
             }
-            .foregroundColor(isActive ? .white : color)
-            .padding(.horizontal, DS.Spacing.md)
-            .padding(.vertical, 8)
-            .background(
-                Capsule().fill(
-                    isActive
-                        ? AnyShapeStyle(LinearGradient(colors: [color, color.opacity(0.85)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                        : AnyShapeStyle(color.opacity(0.10))
-                )
-            )
-            .overlay(
-                Capsule().strokeBorder(isActive ? Color.clear : color.opacity(0.25), lineWidth: 1)
-            )
-            .shadow(color: isActive ? color.opacity(0.30) : Color.clear, radius: 6, x: 0, y: 2)
         }
         .buttonStyle(DSScaleButtonStyle())
-        .transition(.scale(scale: 0.92).combined(with: .opacity))
+        .transition(.opacity)
     }
 
     /// مجموع طلبات القسم.
@@ -831,26 +800,19 @@ struct AdminAllRequestsView: View {
             .reduce(0) { $0 + itemCount(for: $1) }
     }
 
-    /// صف الفلاتر الفرعية داخل القسم — كبسولة أرشيف العائلة.
+    /// صف الفلاتر الفرعية داخل القسم — أيقونات بدون خلفية، النشط يكشف الاسم.
     private func subFilterCapsule(for section: RequestSection) -> some View {
         let sectionTabs = RequestTab.allCases.filter { $0.section == section }
         return ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
+            HStack(spacing: DS.Spacing.sm) {
                 ForEach(sectionTabs) { tab in
                     if selectedTab == tab {
-                        activeTabPill(tab)
-                            .transition(.scale(scale: 0.85).combined(with: .opacity))
+                        activeTabPill(tab).transition(.opacity)
                     } else {
-                        inactiveTabIcon(tab)
-                            .transition(.scale(scale: 0.85).combined(with: .opacity))
+                        inactiveTabIcon(tab).transition(.opacity)
                     }
                 }
-
             }
-            .padding(6)
-            .background(Capsule(style: .continuous).fill(.ultraThinMaterial))
-            .overlay(Capsule(style: .continuous).strokeBorder(section.color.opacity(0.18), lineWidth: 1))
-            .shadow(color: section.color.opacity(0.10), radius: 6, x: 0, y: 2)
             .padding(.horizontal, DS.Spacing.lg)
         }
     }
@@ -1005,39 +967,39 @@ struct AdminAllRequestsView: View {
         }
     }
 
-    /// chip فلتر فرعي موحّد — نص + أيقونة + عدّاد دائماً.
+    /// chip فلتر فرعي موحّد — أيقونة فقط بدون خلفية، النشط يكشف الاسم.
     private func tabChipBody(tab: RequestTab, isActive: Bool, action: @escaping () -> Void) -> some View {
         let count = itemCount(for: tab)
         return Button(action: action) {
             HStack(spacing: 5) {
-                Image(systemName: tab.icon)
-                    .font(DS.Font.scaled(11, weight: .bold))
-                Text(tab.title)
-                    .font(DS.Font.scaled(12, weight: isActive ? .bold : .semibold))
-                    .lineLimit(1)
-                if count > 0 {
-                    Text("\(count)")
-                        .font(DS.Font.scaled(10, weight: .black))
-                        .padding(.horizontal, 5).padding(.vertical, 1)
-                        .background(
-                            Capsule().fill(isActive ? Color.white.opacity(0.25) : tab.color.opacity(0.18))
-                        )
+                ZStack(alignment: .topTrailing) {
+                    Image(systemName: tab.icon)
+                        .font(DS.Font.scaled(isActive ? 15 : 13, weight: .bold))
+                        .foregroundColor(isActive ? tab.color : tab.color.opacity(0.55))
+                    if !isActive && count > 0 {
+                        Text("\(count)")
+                            .font(DS.Font.scaled(8, weight: .black))
+                            .foregroundColor(.white)
+                            .frame(minWidth: 12, minHeight: 12)
+                            .padding(.horizontal, 2)
+                            .background(Capsule().fill(tab.color))
+                            .offset(x: 6, y: -6)
+                    }
+                }
+                .frame(width: 30, height: 26)
+
+                if isActive {
+                    Text(tab.title)
+                        .font(DS.Font.scaled(12, weight: .black))
+                        .foregroundColor(tab.color)
+                        .lineLimit(1)
+                    if count > 0 {
+                        Text("· \(count)")
+                            .font(DS.Font.scaled(10, weight: .heavy))
+                            .foregroundColor(tab.color.opacity(0.65))
+                    }
                 }
             }
-            .foregroundColor(isActive ? .white : tab.color)
-            .padding(.horizontal, DS.Spacing.sm)
-            .padding(.vertical, 7)
-            .background(
-                Capsule().fill(
-                    isActive
-                        ? AnyShapeStyle(LinearGradient(colors: [tab.color, tab.color.opacity(0.85)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                        : AnyShapeStyle(tab.color.opacity(0.10))
-                )
-            )
-            .overlay(
-                Capsule().strokeBorder(isActive ? Color.clear : tab.color.opacity(0.25), lineWidth: 1)
-            )
-            .shadow(color: isActive ? tab.color.opacity(0.30) : Color.clear, radius: 6, x: 0, y: 2)
         }
         .buttonStyle(DSScaleButtonStyle())
         .accessibilityLabel(tab.title)
