@@ -369,20 +369,26 @@ struct TreeSearchOverlay: View {
             } else {
                 let normalizedFull = ArabicTextNormalizer.normalizeForSearch(member.fullName)
                 let fullWords = normalizedFull.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
-                let allMatch = searchWords.allSatisfy { sw in fullWords.contains { $0.hasPrefix(sw) } }
+                // تطابق بالبادئة (أولوية عالية) أو تطابق جزئي substring (طبقة احتياطية)
+                let allMatchPrefix = searchWords.allSatisfy { sw in fullWords.contains { $0.hasPrefix(sw) } }
+                let allMatchPartial = searchWords.allSatisfy { sw in fullWords.contains { $0.contains(sw) } }
 
                 if searchWords.count == 1 {
-                    // كلمة وحدة — نعرض كل من يبدأ اسمه فيها
-                    if normalizedFirst == searchWords[0] {
+                    let sw = searchWords[0]
+                    // كلمة وحدة — البادئة أولاً، ثم تطابق جزئي
+                    if normalizedFirst == sw {
                         score += 100
-                    } else if normalizedFirst.hasPrefix(searchWords[0]) {
+                    } else if normalizedFirst.hasPrefix(sw) {
                         score += 80
-                    } else if allMatch {
+                    } else if allMatchPrefix {
                         score += 50
+                    } else if fullWords.contains(where: { $0.contains(sw) }) {
+                        score += 35
+                        matchContext = L10n.t("تطابق جزئي", "Partial match")
                     }
                 } else {
-                    // أكثر من كلمة — لازم كل الكلمات تطابق عشان يطلع بالنتائج
-                    if allMatch {
+                    // أكثر من كلمة — كل الكلمات لازم تطابق (بادئة أو جزئياً)
+                    if allMatchPrefix || allMatchPartial {
                         // نقاط أساسية
                         if normalizedFirst == searchWords[0] {
                             score += 100
@@ -399,7 +405,7 @@ struct TreeSearchOverlay: View {
                             score += 220
                         }
 
-                        // نقاط إضافية لكل كلمة تطابق بالترتيب
+                        // نقاط إضافية لكل كلمة تطابق بالترتيب (بادئة)
                         var matchedInOrder = 0
                         var wordIdx = 0
                         for sw in searchWords {
@@ -413,6 +419,12 @@ struct TreeSearchOverlay: View {
                             }
                         }
                         score += Double(matchedInOrder) * 30.0
+
+                        // تطابق جزئي فقط (بدون بادئة) → نقاط أقل + سياق
+                        if !allMatchPrefix {
+                            score = max(score - 45, 20)
+                            matchContext = L10n.t("تطابق جزئي", "Partial match")
+                        }
                     }
                 }
 

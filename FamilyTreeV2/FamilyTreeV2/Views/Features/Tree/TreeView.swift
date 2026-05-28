@@ -131,6 +131,7 @@ struct TreeView: View {
     @State private var currentAnchor: UnitPoint = .center
     @State private var baseScale: CGFloat = TreeConst.closeNodeScale
     @State private var zoomAnchor: UnitPoint = .center
+    @State private var treeContentSize: CGSize = .zero
 
     @Environment(\.verticalSizeClass) var verticalSizeClass
     @Environment(\.colorScheme) var colorScheme
@@ -259,6 +260,17 @@ struct TreeView: View {
                                 // للأشجار الصغيرة، يضيف overhead أكثر من الفائدة
                                 // ويعيد الـ rasterize عند كل zoom gesture مما يهنّق الواجهة
                                 .modifier(ConditionalDrawingGroup(enabled: cachedVisibleMembers.count > 300))
+                                .background(
+                                    GeometryReader { g in
+                                        SwiftUI.Color.clear
+                                            .preference(key: TreeContentSizeKey.self, value: g.size)
+                                    }
+                                )
+                                .onPreferenceChange(TreeContentSizeKey.self) { treeContentSize = $0 }
+                                .simultaneousGesture(
+                                    SpatialTapGesture(count: 2, coordinateSpace: .local)
+                                        .onEnded { value in handleDoubleTap(at: value.location) }
+                                )
                                 .scaleEffect(scale, anchor: zoomAnchor)
                                 .frame(
                                     minWidth: geometry.size.width,
@@ -688,6 +700,31 @@ struct TreeView: View {
                 .padding(.bottom, DS.Spacing.xl)
             }
             .padding(.horizontal, DS.Spacing.lg)
+        }
+    }
+
+    /// نقر مزدوج: تكبير نحو نقطة اللمس، أو تصغير للوضع الافتراضي إذا كان مكبّراً
+    private func handleDoubleTap(at location: CGPoint) {
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        if scale > TreeConst.defaultScale + 0.05 {
+            // مكبّر حالياً → رجوع للوضع الافتراضي من المركز
+            withAnimation(.easeInOut(duration: 0.3)) {
+                zoomAnchor = .center
+                scale = TreeConst.defaultScale
+                baseScale = scale
+            }
+        } else {
+            // تكبير نحو نقطة اللمس
+            guard treeContentSize.width > 0, treeContentSize.height > 0 else { return }
+            let anchor = UnitPoint(
+                x: min(max(location.x / treeContentSize.width, 0), 1),
+                y: min(max(location.y / treeContentSize.height, 0), 1)
+            )
+            withAnimation(.easeInOut(duration: 0.3)) {
+                zoomAnchor = anchor
+                scale = min(TreeConst.defaultScale * 2.2, TreeConst.maxScale)
+                baseScale = scale
+            }
         }
     }
 
@@ -1324,6 +1361,15 @@ struct TreeMemberNode: View {
             parts.append(L10n.t("موقعك الحالي", "your location"))
         }
         return parts.joined(separator: "، ")
+    }
+}
+
+// MARK: - مفتاح التقاط حجم محتوى الشجرة (لزوم النقر المزدوج نحو نقطة اللمس)
+private struct TreeContentSizeKey: PreferenceKey {
+    static var defaultValue: CGSize = .zero
+    static func reduce(value: inout CGSize, nextValue: () -> CGSize) {
+        let next = nextValue()
+        if next != .zero { value = next }
     }
 }
 
