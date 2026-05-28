@@ -643,7 +643,7 @@ struct HomeNewsView: View {
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(timeBasedGreeting)
-                        .font(DS.Font.scaled(11, weight: .heavy))
+                        .font(.system(.footnote, design: .serif).weight(.heavy))
                         .foregroundColor(DS.Color.primary)
                         .tracking(0.6)
                     Text(authVM.currentUser?.firstName ?? L10n.t("أهلاً بك", "Welcome"))
