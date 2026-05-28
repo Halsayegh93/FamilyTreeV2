@@ -25,6 +25,7 @@ struct AdminDashboardView: View {
     @State private var totalMembersCount: Int = 0
     @State private var aliveMembersCount: Int = 0
     @State private var deceasedMembersCount: Int = 0
+    @State private var isInitialLoading = true
     @Environment(\.dismiss) var dismiss
 
     // Admin theme accent (purple #6C5CE7)
@@ -90,14 +91,7 @@ struct AdminDashboardView: View {
             }
         }
 
-        pendingCount = pending
-        moderatorCount = moderator
-        totalMembersCount = total
-        aliveMembersCount = alive
-        deceasedMembersCount = deceased
-        issueMembersCount = issues
-        treeIssuesCount = treeIssues
-        totalReviewRequestsCount = pending
+        let reviewTotal = pending
             + newsVM.pendingNewsRequests.count
             + adminRequestVM.newsReportRequests.count
             + adminRequestVM.phoneChangeRequests.count
@@ -108,6 +102,17 @@ struct AdminDashboardView: View {
             + adminRequestVM.nameChangeRequests.count
             + memberVM.pendingGalleryPhotos.count
             + storyVM.pendingStories.count
+
+        withAnimation(DS.Anim.smooth) {
+            pendingCount = pending
+            moderatorCount = moderator
+            totalMembersCount = total
+            aliveMembersCount = alive
+            deceasedMembersCount = deceased
+            issueMembersCount = issues
+            treeIssuesCount = treeIssues
+            totalReviewRequestsCount = reviewTotal
+        }
     }
 
     var body: some View {
@@ -261,6 +266,7 @@ struct AdminDashboardView: View {
                             withAnimation(DS.Anim.smooth.delay(0.15)) { appeared = true }
                         }
                     }
+                    .refreshable { await loadAllAdminData(force: true) }
                 }
             }
             .navigationDestination(for: AdminReviewDestination.self) { destination in
@@ -284,83 +290,112 @@ struct AdminDashboardView: View {
             navigationPath.append(destination)
         }
         .task {
-            diwaniyaVM.canModerate = authVM.canModerate
-            diwaniyaVM.authVM = authVM
-            // تحميل كل البيانات بالتوازي — بدون تأخير
-            await memberVM.fetchAllMembers()
-
-            await withTaskGroup(of: Void.self) { group in
-                group.addTask { @MainActor in await adminRequestVM.fetchDeceasedRequests() }
-                group.addTask { @MainActor in await newsVM.fetchPendingNewsRequests() }
-                group.addTask { @MainActor in await adminRequestVM.fetchChildAddRequests() }
-                group.addTask { @MainActor in await adminRequestVM.fetchNewsReportRequests() }
-                group.addTask { @MainActor in await adminRequestVM.fetchPhoneChangeRequests() }
-                group.addTask { @MainActor in await adminRequestVM.fetchPhotoSuggestionRequests() }
-                group.addTask { @MainActor in await diwaniyaVM.fetchPendingDiwaniyas() }
-                group.addTask { @MainActor in await adminRequestVM.fetchTreeEditRequests() }
-                group.addTask { @MainActor in await memberVM.fetchPendingGalleryPhotos() }
-                group.addTask { @MainActor in await adminRequestVM.fetchNameChangeRequests() }
-                group.addTask { @MainActor in await adminRequestVM.fetchContactMessages() }
-                group.addTask { @MainActor in await authVM.fetchBannedPhones() }
-            }
-            recalculateBadges()
+            await loadAllAdminData()
         }
         .onChange(of: memberVM.membersVersion) { _ in recalculateBadges() }
         .onChange(of: pendingRequestsSum) { _ in recalculateBadges() }
     }
 
+    /// تحميل كل بيانات لوحة الإدارة بالتوازي — يُستخدم في .task وفي السحب للتحديث
+    private func loadAllAdminData(force: Bool = false) async {
+        diwaniyaVM.canModerate = authVM.canModerate
+        diwaniyaVM.authVM = authVM
+        await memberVM.fetchAllMembers(force: force)
+
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask { @MainActor in await adminRequestVM.fetchDeceasedRequests() }
+            group.addTask { @MainActor in await newsVM.fetchPendingNewsRequests() }
+            group.addTask { @MainActor in await adminRequestVM.fetchChildAddRequests() }
+            group.addTask { @MainActor in await adminRequestVM.fetchNewsReportRequests() }
+            group.addTask { @MainActor in await adminRequestVM.fetchPhoneChangeRequests() }
+            group.addTask { @MainActor in await adminRequestVM.fetchPhotoSuggestionRequests() }
+            group.addTask { @MainActor in await diwaniyaVM.fetchPendingDiwaniyas() }
+            group.addTask { @MainActor in await adminRequestVM.fetchTreeEditRequests() }
+            group.addTask { @MainActor in await memberVM.fetchPendingGalleryPhotos() }
+            group.addTask { @MainActor in await adminRequestVM.fetchNameChangeRequests() }
+            group.addTask { @MainActor in await adminRequestVM.fetchContactMessages() }
+            group.addTask { @MainActor in await authVM.fetchBannedPhones() }
+        }
+        recalculateBadges()
+        withAnimation(DS.Anim.smooth) { isInitialLoading = false }
+    }
+
 
     private var adminStatsGrid: some View {
-        VStack(spacing: DS.Spacing.sm) {
-            // السطر الأول: الأعضاء + الأحياء + المتوفين
-            HStack(spacing: DS.Spacing.md) {
-                adminColorfulStatCard(
-                    title: L10n.t("الأعضاء", "Members"),
-                    value: "\(totalMembersCount)",
-                    icon: "person.2.fill",
-                    color: DS.Color.primary
-                )
+        Group {
+            if isInitialLoading {
+                adminStatsSkeleton
+            } else {
+                VStack(spacing: DS.Spacing.sm) {
+                    // السطر الأول: الأعضاء + الأحياء + المتوفين
+                    HStack(spacing: DS.Spacing.md) {
+                        adminColorfulStatCard(
+                            title: L10n.t("الأعضاء", "Members"),
+                            value: totalMembersCount,
+                            icon: "person.2.fill",
+                            color: DS.Color.primary
+                        )
 
-                adminColorfulStatCard(
-                    title: L10n.t("الأحياء", "Alive"),
-                    value: "\(aliveMembersCount)",
-                    icon: "heart.fill",
-                    color: DS.Color.success
-                )
+                        adminColorfulStatCard(
+                            title: L10n.t("الأحياء", "Alive"),
+                            value: aliveMembersCount,
+                            icon: "heart.fill",
+                            color: DS.Color.success
+                        )
 
-                adminColorfulStatCard(
-                    title: L10n.t("المتوفين", "Deceased"),
-                    value: "\(deceasedMembersCount)",
-                    icon: "heart.slash.fill",
-                    color: DS.Color.deceased
-                )
-            }
+                        adminColorfulStatCard(
+                            title: L10n.t("المتوفين", "Deceased"),
+                            value: deceasedMembersCount,
+                            icon: "heart.slash.fill",
+                            color: DS.Color.deceased
+                        )
+                    }
 
-            // السطر الثاني: انتظار + طلبات
-            HStack(spacing: DS.Spacing.md) {
-                adminColorfulStatCard(
-                    title: L10n.t("انتظار", "Pending"),
-                    value: "\(pendingCount)",
-                    icon: "clock.fill",
-                    color: DS.Color.secondary
-                )
+                    // السطر الثاني: انتظار + طلبات
+                    HStack(spacing: DS.Spacing.md) {
+                        adminColorfulStatCard(
+                            title: L10n.t("انتظار", "Pending"),
+                            value: pendingCount,
+                            icon: "clock.fill",
+                            color: DS.Color.secondary
+                        )
 
-                adminColorfulStatCard(
-                    title: L10n.t("طلبات", "Requests"),
-                    value: "\(totalReviewRequestsCount)",
-                    icon: "tray.full.fill",
-                    color: DS.Color.warning
-                )
+                        adminColorfulStatCard(
+                            title: L10n.t("طلبات", "Requests"),
+                            value: totalReviewRequestsCount,
+                            icon: "tray.full.fill",
+                            color: DS.Color.warning
+                        )
+                    }
+                }
+                .transition(.opacity)
             }
         }
         .padding(.horizontal, DS.Spacing.lg)
         .padding(.top, DS.Spacing.sm)
     }
 
+    /// هياكل تحميل للإحصائيات أثناء أول تحميل
+    private var adminStatsSkeleton: some View {
+        VStack(spacing: DS.Spacing.sm) {
+            HStack(spacing: DS.Spacing.md) {
+                ForEach(0..<3, id: \.self) { _ in
+                    DSSkeleton(height: 84, cornerRadius: DS.Radius.lg)
+                }
+            }
+            HStack(spacing: DS.Spacing.md) {
+                ForEach(0..<2, id: \.self) { _ in
+                    DSSkeleton(height: 84, cornerRadius: DS.Radius.lg)
+                }
+            }
+        }
+        .transition(.opacity)
+    }
+
     /// Colorful stat card with gradient top border
     private func adminColorfulStatCard(
         title: String,
-        value: String,
+        value: Int,
         icon: String,
         color: Color
     ) -> some View {
@@ -370,10 +405,11 @@ struct AdminDashboardView: View {
                 Image(systemName: icon).font(DS.Font.scaled(14, weight: .bold)).foregroundColor(color)
             }
 
-            Text(value)
+            Text("\(value)")
                 .font(DS.Font.headline)
                 .fontWeight(.black)
                 .foregroundColor(DS.Color.textPrimary)
+                .contentTransition(.numericText())
 
             Text(title)
                 .font(DS.Font.caption2)
