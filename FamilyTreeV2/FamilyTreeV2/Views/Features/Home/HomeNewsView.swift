@@ -1337,7 +1337,7 @@ struct HomeNewsView: View {
     }
 
     // أيقونة دائرية بتدرّج خفيف + لمسة highlight
-    private func premiumIcon(_ icon: String, color: Color, size: CGFloat = 48) -> some View {
+    private func premiumIcon(_ icon: String, color: Color, size: CGFloat = 40) -> some View {
         ZStack {
             Circle()
                 .fill(
