@@ -633,54 +633,56 @@ struct HomeNewsView: View {
                     DSMemberAvatar(
                         name: user.firstName,
                         avatarUrl: user.avatarUrl,
-                        size: 64 * layout.scale,
+                        size: 56 * layout.scale,
                         roleColor: user.roleColor
                     )
                     .overlay(
                         Circle()
-                            .strokeBorder(.white.opacity(0.65), lineWidth: 3)
+                            .strokeBorder(DS.Color.primary.opacity(0.20), lineWidth: 2)
                     )
-                    .shadow(color: .black.opacity(0.20), radius: 6, x: 0, y: 3)
                 }
 
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 3) {
                     Text(timeBasedGreeting)
-                        .font(DS.Font.scaled(12, weight: .heavy))
-                        .foregroundColor(.white.opacity(0.85))
-                        .tracking(1.2)
+                        .font(DS.Font.scaled(11, weight: .heavy))
+                        .foregroundColor(DS.Color.primary)
+                        .tracking(0.6)
                     Text(authVM.currentUser?.firstName ?? L10n.t("أهلاً بك", "Welcome"))
-                        .font(DS.Font.scaled(27, weight: .black))
-                        .foregroundColor(.white)
+                        .font(DS.Font.scaled(20, weight: .black))
+                        .foregroundColor(DS.Color.textPrimary)
                         .lineLimit(1)
-                        .minimumScaleFactor(0.65)
+                        .minimumScaleFactor(0.7)
                 }
 
                 Spacer(minLength: 0)
-
-                Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
-                    .font(DS.Font.scaled(15, weight: .black))
-                    .foregroundColor(.white.opacity(0.7))
             }
-            .padding(DS.Spacing.xl)
+            .padding(DS.Spacing.lg)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 ZStack {
-                    DS.Color.gradientPrimary
-                    // دوائر بيضاء شفافة لإحساس بالعمق
+                    DS.Color.surface
+                    LinearGradient(
+                        colors: [
+                            DS.Color.primary.opacity(0.05),
+                            DS.Color.secondary.opacity(0.03)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
                     Circle()
-                        .fill(.white.opacity(0.14))
-                        .frame(width: 210, height: 210)
-                        .blur(radius: 30)
-                        .offset(x: 150, y: -80)
+                        .fill(DS.Color.primary.opacity(0.10))
+                        .frame(width: 200, height: 200)
+                        .blur(radius: 50)
+                        .offset(x: 130, y: -80)
                     Circle()
-                        .fill(.white.opacity(0.08))
-                        .frame(width: 150, height: 150)
-                        .blur(radius: 30)
-                        .offset(x: -70, y: 90)
+                        .fill(DS.Color.secondary.opacity(0.07))
+                        .frame(width: 120, height: 120)
+                        .blur(radius: 40)
+                        .offset(x: -50, y: 70)
                 }
             )
             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xxl, style: .continuous))
-            .shadow(color: DS.Color.primary.opacity(0.38), radius: 18, x: 0, y: 8)
+            .shadow(color: .black.opacity(0.045), radius: 14, x: 0, y: 4)
         }
         .buttonStyle(DSScaleButtonStyle())
     }
