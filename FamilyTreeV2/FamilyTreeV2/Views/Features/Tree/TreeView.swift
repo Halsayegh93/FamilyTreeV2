@@ -378,6 +378,7 @@ struct TreeView: View {
             .sheet(item: $selectedMember) { member in
                 MemberDetailsView(member: member)
                     .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
             }
             .task {
                 if cachedVisibleMembers.isEmpty {
@@ -622,7 +623,10 @@ struct TreeView: View {
 
                     Divider().frame(width: TreeConst.dividerWidth)
 
-                    Button(action: { withAnimation(.easeInOut(duration: 0.2)) { scale = min(scale + TreeConst.zoomStep, TreeConst.maxScale); baseScale = scale } }) {
+                    Button(action: {
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        withAnimation(.easeInOut(duration: 0.2)) { scale = min(scale + TreeConst.zoomStep, TreeConst.maxScale); baseScale = scale }
+                    }) {
                         Image(systemName: "plus")
                             .font(DS.Font.scaled(16, weight: .bold))
                             .foregroundColor(DS.Color.primary)
@@ -662,7 +666,10 @@ struct TreeView: View {
 
                     Divider().frame(width: TreeConst.dividerWidth)
 
-                    Button(action: { withAnimation(.easeInOut(duration: 0.2)) { scale = max(scale - TreeConst.zoomStep, TreeConst.minScale); baseScale = scale } }) {
+                    Button(action: {
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        withAnimation(.easeInOut(duration: 0.2)) { scale = max(scale - TreeConst.zoomStep, TreeConst.minScale); baseScale = scale }
+                    }) {
                         Image(systemName: "minus")
                             .font(DS.Font.scaled(16, weight: .bold))
                             .foregroundColor(DS.Color.primary)
@@ -709,34 +716,47 @@ struct TreeView: View {
     }
 
     // MARK: - حالة فارغة
+    @ViewBuilder
     private var emptyStateView: some View {
-        VStack(spacing: DS.Spacing.xl) {
-            Spacer()
+        if memberVM.membersLoadFailed {
+            DSErrorState(retryAction: {
+                memberVM.membersLoadFailed = false
+                Task {
+                    await memberVM.fetchAllMembers(force: true)
+                    guard !Task.isCancelled else { return }
+                    await rebuildCacheBackground()
+                    resetToTopRoot()
+                }
+            })
+        } else {
+            VStack(spacing: DS.Spacing.xl) {
+                Spacer()
 
-            ZStack {
-                Circle()
-                    .fill(DS.Color.primary.opacity(0.08))
-                    .frame(width: 120, height: 120)
-                Circle()
-                    .fill(DS.Color.gridTree.opacity(0.1))
-                    .frame(width: 80, height: 80)
-                Image(systemName: "leaf.arrow.triangle.circlepath")
-                    .font(DS.Font.scaled(36, weight: .medium))
-                    .foregroundStyle(DS.Color.gradientPrimary)
+                ZStack {
+                    Circle()
+                        .fill(DS.Color.primary.opacity(0.08))
+                        .frame(width: 120, height: 120)
+                    Circle()
+                        .fill(DS.Color.gridTree.opacity(0.1))
+                        .frame(width: 80, height: 80)
+                    Image(systemName: "leaf.arrow.triangle.circlepath")
+                        .font(DS.Font.scaled(36, weight: .medium))
+                        .foregroundStyle(DS.Color.gradientPrimary)
+                }
+
+                VStack(spacing: DS.Spacing.sm) {
+                    Text(L10n.t("جاري مزامنة الشجرة...", "Syncing tree..."))
+                        .font(DS.Font.title3)
+                        .foregroundColor(DS.Color.textPrimary)
+                    ProgressView()
+                        .tint(DS.Color.primary)
+                        .scaleEffect(1.1)
+                }
+
+                Spacer()
             }
-
-            VStack(spacing: DS.Spacing.sm) {
-                Text(L10n.t("جاري مزامنة الشجرة...", "Syncing tree..."))
-                    .font(DS.Font.title3)
-                    .foregroundColor(DS.Color.textPrimary)
-                ProgressView()
-                    .tint(DS.Color.primary)
-                    .scaleEffect(1.1)
-            }
-
-            Spacer()
+            .frame(maxWidth: .infinity)
         }
-        .frame(maxWidth: .infinity)
     }
 
 }
@@ -1041,6 +1061,9 @@ struct TreeMemberNode: View {
                     }
                 }
                 .buttonStyle(.plain)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(nodeAccessibilityLabel)
+                .accessibilityHint(L10n.t("افتح التفاصيل", "Open details"))
                 .frame(minWidth: 114, alignment: .top)
                 .zIndex(5)
             } else {
@@ -1095,6 +1118,9 @@ struct TreeMemberNode: View {
                         .clipShape(Capsule())
                         .overlay(Capsule().stroke(borderColor, lineWidth: 2.5))
                 }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(nodeAccessibilityLabel)
+                .accessibilityHint(L10n.t("افتح التفاصيل", "Open details"))
                 .frame(minWidth: 126, alignment: .top)
                 .zIndex(5)
             }
@@ -1191,6 +1217,9 @@ struct TreeMemberNode: View {
                         shouldLoadImage = true
                     }
                 }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(nodeAccessibilityLabel)
+                .accessibilityHint(L10n.t("افتح التفاصيل", "Open details"))
 
                 // الاسم
                 Button(action: onToggle) {
@@ -1225,6 +1254,9 @@ struct TreeMemberNode: View {
                         .background(isKinshipHighlighted ? DS.Color.warning : DS.Color.primaryDark)
                         .clipShape(SemiCircleShape())
                     }
+                    .accessibilityLabel(isExpanded
+                        ? L10n.t("طي الأبناء", "Collapse children")
+                        : L10n.t("عرض \(childrenCount) أبناء", "Show \(childrenCount) children"))
                     .offset(y: -1)
                     .zIndex(0)
                 }
@@ -1278,6 +1310,21 @@ struct TreeMemberNode: View {
     private var interactiveNodeSize: CGFloat { 105 }
     private var interactiveLabelWidth: CGFloat { 110 }
     private var interactiveLabelHeight: CGFloat { 28 }
+
+    /// وصف صوتي موحّد للعقدة (VoiceOver): الاسم + الحالة + عدد الأبناء
+    var nodeAccessibilityLabel: String {
+        var parts: [String] = [fullDisplayName]
+        if member.isDeceased == true {
+            parts.append(L10n.t("متوفى", "deceased"))
+        }
+        if hasChildren {
+            parts.append("\(childrenCount) " + L10n.t("أبناء", "children"))
+        }
+        if isCurrentLocationMember {
+            parts.append(L10n.t("موقعك الحالي", "your location"))
+        }
+        return parts.joined(separator: "، ")
+    }
 }
 
 // MARK: - نص دائرة (النص السفلي)

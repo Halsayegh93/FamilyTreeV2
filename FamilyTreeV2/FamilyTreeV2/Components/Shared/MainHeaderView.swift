@@ -95,6 +95,7 @@ struct MainHeaderView<TrailingContent: View>: View {
                         }
                     }
                     .buttonStyle(BounceButtonStyle())
+                    .accessibilityHint(L10n.t("افتح الملف الشخصي", "Open profile"))
                 }
 
                 Spacer()

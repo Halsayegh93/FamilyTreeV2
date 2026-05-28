@@ -24,6 +24,7 @@ struct EditProfileView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var memberVM: MemberViewModel
     @EnvironmentObject var adminRequestVM: AdminRequestViewModel
+    @ObservedObject private var network = NetworkMonitor.shared
     @Environment(\.dismiss) var dismiss
 
     @State var member: FamilyMember
@@ -617,12 +618,24 @@ struct EditProfileView: View {
         let trimmedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
         let isEmailValid = trimmedEmail.isEmpty || isValidEmail(trimmedEmail)
 
-        return DSPrimaryButton(
-            L10n.t("حفظ التغييرات", "Save Changes"),
-            isLoading: memberVM.isLoading,
-            action: saveChangesAction
-        )
-        .disabled(fullName.isEmpty || memberVM.isLoading || !isPhoneValid || !isEmailValid)
+        return VStack(spacing: DS.Spacing.sm) {
+            if !network.isConnected {
+                HStack(spacing: DS.Spacing.xs) {
+                    Image(systemName: "wifi.slash")
+                        .font(DS.Font.caption2)
+                    Text(L10n.t("لا يمكن الحفظ بدون اتصال", "Can't save while offline"))
+                        .font(DS.Font.caption1)
+                }
+                .foregroundColor(DS.Color.error)
+            }
+
+            DSPrimaryButton(
+                L10n.t("حفظ التغييرات", "Save Changes"),
+                isLoading: memberVM.isLoading,
+                action: saveChangesAction
+            )
+            .disabled(fullName.isEmpty || memberVM.isLoading || !isPhoneValid || !isEmailValid || !network.isConnected)
+        }
         .padding(.horizontal, DS.Spacing.lg)
     }
 

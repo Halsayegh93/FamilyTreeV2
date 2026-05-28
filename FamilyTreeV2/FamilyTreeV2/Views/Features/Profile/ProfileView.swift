@@ -73,6 +73,10 @@ struct ProfileView: View {
                             }
                             .padding(.bottom, DS.Spacing.xxl)
                         } // closes ScrollView
+                        .refreshable {
+                            await memberVM.fetchAllMembers(force: true)
+                            await memberVM.fetchChildren(for: currentUser.id)
+                        }
                         .task {
                             isLoadingChildren = true
                             await memberVM.fetchChildren(for: currentUser.id)
@@ -92,7 +96,7 @@ struct ProfileView: View {
                 NavigationStack { SettingsView() }
                     .environment(\.layoutDirection, langManager.layoutDirection)
             }
-            .sheet(isPresented: $showEditProfile) { if let c = user { EditProfileView(member: c) } }
+            .sheet(isPresented: $showEditProfile) { if let c = user { EditProfileView(member: c).presentationDragIndicator(.visible) } }
             .sheet(isPresented: $showQRCode) {
                 if let c = user {
                     QRCodeSheet(member: c, selectedTab: $selectedTab)
@@ -101,7 +105,7 @@ struct ProfileView: View {
                 }
             }
             .fullScreenCover(isPresented: $showQRScanner) { QRScannerView(selectedTab: $selectedTab) }
-            .sheet(isPresented: $showAddChild) { if let c = user { AddChildSheet(member: c) } }
+            .sheet(isPresented: $showAddChild) { if let c = user { AddChildSheet(member: c).presentationDragIndicator(.visible) } }
             .confirmationDialog(
                 L10n.t("تسجيل الخروج", "Sign Out"),
                 isPresented: $showSignOutConfirm,
@@ -114,7 +118,7 @@ struct ProfileView: View {
             } message: {
                 Text(L10n.t("هل تريد الخروج من حسابك على هذا الجهاز؟", "Do you want to sign out of your account on this device?"))
             }
-            .sheet(item: $editingChild) { child in EditChildSheet(member: child) }
+            .sheet(item: $editingChild) { child in EditChildSheet(member: child).presentationDragIndicator(.visible) }
             .onChange(of: showAddChild) { isPresented in
                 guard !isPresented, let currentUser = user else { return }
                 Task { await memberVM.fetchChildren(for: currentUser.id) }
@@ -480,21 +484,23 @@ struct ProfileView: View {
                 }
 
                 if isLoadingChildren && memberVM.currentMemberChildren.isEmpty {
-                    HStack {
-                        Spacer()
-                        ProgressView()
-                            .tint(DS.Color.primary)
-                            .padding(DS.Spacing.lg)
-                        Spacer()
+                    VStack(spacing: DS.Spacing.sm) {
+                        ForEach(0..<3, id: \.self) { _ in
+                            DSSkeletonRow(avatarSize: 44)
+                        }
                     }
+                    .padding(DS.Spacing.md)
+                    .transition(.opacity)
                 } else if isReorderingChildren {
                     // وضع الترتيب — قائمة عمودية مع أسهم
                     childrenReorderView
                 } else {
                     // الوضع العادي — شبكة
                     childrenGridView
+                        .transition(.opacity)
                 }
             }
+            .animation(DS.Anim.medium, value: isLoadingChildren)
         }
         .padding(.horizontal, DS.Spacing.lg)
     }
@@ -511,6 +517,9 @@ struct ProfileView: View {
                         childGridCell(son: son)
                     }
                     .buttonStyle(PlainButtonStyle())
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(son.firstName.isEmpty ? L10n.t("ابن بدون اسم", "Unnamed child") : son.firstName)
+                    .accessibilityHint(L10n.t("تعديل", "Edit"))
                 }
 
                 // Add child as last grid cell

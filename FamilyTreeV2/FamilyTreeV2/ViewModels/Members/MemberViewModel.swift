@@ -41,6 +41,9 @@ class MemberViewModel: ObservableObject {
     @Published var isLoading: Bool = false
     @Published var errorMessage: String?
 
+    /// يصير true إذا فشل تحميل الأعضاء ولا توجد بيانات محلية (للشاشات تعرض حالة خطأ + إعادة محاولة)
+    @Published var membersLoadFailed: Bool = false
+
     /// يزداد عند كل تحديث للأعضاء (حذف، تعديل، إضافة) لإعادة بناء الشجرة
     @Published var membersVersion: Int = 0
 
@@ -231,7 +234,10 @@ class MemberViewModel: ObservableObject {
         guard throttler.canFetch(key: "members", interval: 15, force: force) || allMembers.isEmpty else { return }
 
         // لا نحمل من السيرفر إذا مو متصلين بالنت
-        guard NetworkMonitor.shared.isConnected else { return }
+        guard NetworkMonitor.shared.isConnected else {
+            if allMembers.isEmpty { membersLoadFailed = true }
+            return
+        }
 
         self.activePath = [] // تصفير المسار عند كل تحميل
 
@@ -245,6 +251,7 @@ class MemberViewModel: ObservableObject {
             let members = try JSONDecoder().decode([FamilyMember].self, from: response.data)
 
             self.allMembers = members
+            self.membersLoadFailed = false
             self.throttler.didFetch(key: "members")
             self.membersVersion += 1
 
@@ -264,6 +271,7 @@ class MemberViewModel: ObservableObject {
         } catch {
             // فلتر URLError "cancelled" من URLSession
             if (error as NSError).code == NSURLErrorCancelled { return }
+            if allMembers.isEmpty { membersLoadFailed = true }
             Log.error("خطأ برمجياً في الشجرة: \(error)")
             CrashReporter.log(error, context: "fetchAllMembers")
         }

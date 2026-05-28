@@ -10,6 +10,8 @@ struct HomeNewsView: View {
     @EnvironmentObject var adminRequestVM: AdminRequestViewModel
     @EnvironmentObject var projectsVM: ProjectsViewModel
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.horizontalSizeClass) private var hSizeClass
+    @State private var contentWidth: CGFloat = 0
     @Binding var selectedTab: Int
     @State private var showingAddNews = false
     @State private var showingNotifications = false
@@ -31,6 +33,12 @@ struct HomeNewsView: View {
 
     private enum HomeSubPage {
         case archive, projects, contact, news
+    }
+
+    /// مقاييس التخطيط المتجاوبة — تتكيّف مع عرض الجهاز الفعلي + size class
+    private var layout: DS.Layout.Metrics {
+        let w = contentWidth > 0 ? contentWidth : UIScreen.main.bounds.width
+        return DS.Layout.metrics(width: w, isRegularWidth: hSizeClass == .regular)
     }
 
     var body: some View {
@@ -55,6 +63,13 @@ struct HomeNewsView: View {
 
                         ScrollView(showsIndicators: false) {
                             bentoSection
+                                .background(
+                                    GeometryReader { proxy in
+                                        SwiftUI.Color.clear
+                                            .preference(key: HomeWidthKey.self, value: proxy.size.width)
+                                    }
+                                )
+                                .onPreferenceChange(HomeWidthKey.self) { contentWidth = $0 }
                                 .opacity(appeared ? 1 : 0)
                                 .offset(y: appeared ? 0 : 20)
                                 .padding(.top, DS.Spacing.md)
@@ -255,10 +270,14 @@ struct HomeNewsView: View {
             // 3) آخر الأخبار
             newsBentoCard
 
-            // 4) شبكة الوصول السريع — 2×2 بنمط موحّد فاخر
+            // 4) شبكة الوصول السريع — متجاوبة حسب الجهاز
             quickAccessGrid
         }
         .padding(.horizontal, DS.Spacing.lg)
+        // حد أقصى للعرض على الأجهزة الواسعة (iPad) حتى لا تتمدد الكروت بشكل مبالغ
+        .frame(maxWidth: hSizeClass == .regular ? 700 : .infinity)
+        .frame(maxWidth: .infinity)
+        .animation(DS.Anim.smooth, value: layout)
     }
 
     // MARK: - Quick Access Grid (2×2 موحّد بنمط فاخر)
@@ -268,11 +287,11 @@ struct HomeNewsView: View {
         let projectImageURL: String? = projectsVM.projects.first?.logoUrl
 
         return LazyVGrid(
-            columns: [
-                GridItem(.flexible(), spacing: DS.Spacing.sm),
-                GridItem(.flexible(), spacing: DS.Spacing.sm)
-            ],
-            spacing: DS.Spacing.sm
+            columns: Array(
+                repeating: GridItem(.flexible(), spacing: layout.gridSpacing),
+                count: layout.gridColumns
+            ),
+            spacing: layout.gridSpacing
         ) {
             // 4 مربعات ثابتة لضمان تساوي الشبكة (2×2)
             unifiedTile(
@@ -294,7 +313,7 @@ struct HomeNewsView: View {
             unifiedTile(
                 title: L10n.t("التواصل", "Contact"),
                 icon: "envelope.fill",
-                color: Color(hex: "#0EA5E9"),
+                color: DS.Color.gridMessaging,
                 imageURL: nil,
                 count: nil,
                 action: { withAnimation(DS.Anim.snappy) { activeSubPage = .contact } }
@@ -335,7 +354,7 @@ struct HomeNewsView: View {
                         Image(systemName: icon)
                             .font(DS.Font.scaled(15, weight: .bold))
                             .foregroundColor(.white)
-                            .frame(width: 36, height: 36)
+                            .frame(width: 36 * layout.scale, height: 36 * layout.scale)
                             .background(Circle().fill(.ultraThinMaterial))
                             .overlay(Circle().strokeBorder(Color.white.opacity(0.30), lineWidth: 1))
                             .shadow(color: .black.opacity(0.15), radius: 3, x: 0, y: 1)
@@ -367,7 +386,7 @@ struct HomeNewsView: View {
                     .padding(8)
             }
             .frame(maxWidth: .infinity)
-            .frame(height: 88)
+            .frame(height: layout.tileHeight)
             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
@@ -610,7 +629,7 @@ struct HomeNewsView: View {
                     DSMemberAvatar(
                         name: user.firstName,
                         avatarUrl: user.avatarUrl,
-                        size: 56,
+                        size: 56 * layout.scale,
                         roleColor: user.roleColor
                     )
                     .overlay(
@@ -795,13 +814,15 @@ struct HomeNewsView: View {
     // يأخذ من القائمة المخلوطة (shuffled) ليتغير كل مرة تُفتح الصفحة
     private var familyAvatarsRow: some View {
         let source = shuffledTreeMembers.isEmpty ? memberVM.allMembers : shuffledTreeMembers
-        let visible = Array(source.prefix(5))
+        // أجهزة أعرض (iPad/أفقي) تعرض وجوهاً أكثر
+        let maxAvatars = hSizeClass == .regular ? 8 : 5
+        let visible = Array(source.prefix(maxAvatars))
         return HStack(spacing: -8) {
             ForEach(Array(visible.enumerated()), id: \.element.id) { index, member in
                 DSMemberAvatar(
                     name: member.firstName,
                     avatarUrl: member.avatarUrl,
-                    size: 42,
+                    size: 42 * layout.scale,
                     roleColor: member.roleColor
                 )
                 .overlay(
@@ -869,12 +890,12 @@ struct HomeNewsView: View {
                 }
 
                 if newsVM.isLoading && newsVM.allNews.isEmpty {
-                    HStack {
-                        Spacer()
-                        ProgressView().tint(DS.Color.primary)
-                        Spacer()
+                    VStack(spacing: DS.Spacing.sm) {
+                        ForEach(0..<2, id: \.self) { _ in
+                            DSSkeletonRow(avatarSize: 40)
+                        }
                     }
-                    .padding(.vertical, DS.Spacing.lg)
+                    .padding(.vertical, DS.Spacing.sm)
                 } else if newsVM.allNews.isEmpty {
                     HStack(spacing: DS.Spacing.sm) {
                         Image(systemName: "newspaper")
@@ -1370,15 +1391,9 @@ struct HomeNewsView: View {
             .padding(.vertical, DS.Spacing.sm)
 
             if newsVM.isLoading && newsVM.allNews.isEmpty {
-                VStack(spacing: DS.Spacing.md) {
-                    Spacer().frame(height: DS.Spacing.xxxl)
-                    ProgressView()
-                        .tint(DS.Color.primary)
-                        .scaleEffect(1.3)
-                    Text(L10n.t("جاري تحميل الأخبار...", "Loading news..."))
-                        .font(DS.Font.caption1)
-                        .foregroundColor(DS.Color.textSecondary)
-                }
+                newsLoadingSkeleton(count: 3)
+                    .padding(.horizontal, DS.Spacing.lg)
+                    .transition(.opacity)
             } else if newsVM.allNews.isEmpty {
                 emptyNewsView
             } else if !debouncedNewsSearch.isEmpty && filteredNews.isEmpty {
@@ -1392,8 +1407,39 @@ struct HomeNewsView: View {
                         .foregroundColor(DS.Color.textSecondary)
                         .multilineTextAlignment(.center)
                 }
+                .transition(.opacity)
             } else {
                 newsListView
+                    .transition(.opacity)
+            }
+        }
+        .animation(DS.Anim.medium, value: newsVM.isLoading)
+        .animation(DS.Anim.smooth, value: filteredNews.isEmpty)
+    }
+
+    /// بطاقة خبر هيكلية (skeleton) — تظهر أثناء التحميل الأول
+    private var newsCardSkeleton: some View {
+        DSCard {
+            VStack(alignment: .leading, spacing: DS.Spacing.md) {
+                HStack(spacing: DS.Spacing.sm) {
+                    DSSkeletonCircle(size: 40)
+                    VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                        DSSkeleton(width: 120, height: 13)
+                        DSSkeleton(width: 70, height: 10)
+                    }
+                    Spacer()
+                }
+                DSSkeleton(height: 12)
+                DSSkeleton(width: 220, height: 12)
+                DSSkeleton(height: 150, cornerRadius: DS.Radius.md)
+            }
+        }
+    }
+
+    private func newsLoadingSkeleton(count: Int) -> some View {
+        VStack(spacing: DS.Spacing.md) {
+            ForEach(0..<count, id: \.self) { _ in
+                newsCardSkeleton
             }
         }
     }
@@ -1566,6 +1612,14 @@ struct HomeNewsView: View {
 
 extension HomeNewsView {
     init(selectedTab: Binding<Int>) { self._selectedTab = selectedTab }
+}
+
+// MARK: - مفتاح التقاط عرض الرئيسية (للتخطيط المتجاوب)
+private struct HomeWidthKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
 }
 
 // MARK: - أيقونة الهيدر — Glass circle

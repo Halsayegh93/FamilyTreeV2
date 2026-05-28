@@ -15,8 +15,9 @@ struct MainTabView: View {
             set: { newValue in
                 if newValue == selectedTab {
                     NotificationCenter.default.post(name: .didReselectTab, object: nil, userInfo: ["tab": newValue])
+                } else {
+                    UISelectionFeedbackGenerator().selectionChanged()
                 }
-                UIImpactFeedbackGenerator(style: .light).impactOccurred()
                 selectedTab = newValue
                 NotificationCenter.default.post(name: Notification.Name("TabChanged"), object: nil)
                 let tabs = ["home", "tree", "diwaniyas", "profile", "admin"]
@@ -73,6 +74,11 @@ struct MainTabView: View {
         }
         .tint(DS.Color.primary)
         .toolbarBackground(.ultraThinMaterial, for: .tabBar)
+        .overlay(alignment: .top) {
+            OfflineBanner()
+                .padding(.top, DS.Spacing.xs)
+                .zIndex(999)
+        }
         .onReceive(NotificationCenter.default.publisher(for: .openAdminRequests)) { _ in
             guard authVM.canModerate else { return }
             withAnimation { selectedTab = 4 }

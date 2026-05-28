@@ -30,6 +30,20 @@ struct AdminDashboardView: View {
     // Admin theme accent (purple #6C5CE7)
     private let adminAccent = DS.Color.gridTree
 
+    /// مجموع كل الطلبات المعلّقة من مصادر مختلفة — يُستخدم لتشغيل إعادة الحساب لحظياً عند أي تغيير
+    private var pendingRequestsSum: Int {
+        newsVM.pendingNewsRequests.count
+            + adminRequestVM.newsReportRequests.count
+            + adminRequestVM.phoneChangeRequests.count
+            + diwaniyaVM.pendingDiwaniyas.count
+            + adminRequestVM.deceasedRequests.count
+            + adminRequestVM.childAddRequests.count
+            + adminRequestVM.photoSuggestionRequests.count
+            + adminRequestVM.nameChangeRequests.count
+            + memberVM.pendingGalleryPhotos.count
+            + storyVM.pendingStories.count
+    }
+
     private func recalculateBadges() {
         let all = memberVM.allMembers
 
@@ -292,6 +306,7 @@ struct AdminDashboardView: View {
             recalculateBadges()
         }
         .onChange(of: memberVM.membersVersion) { _ in recalculateBadges() }
+        .onChange(of: pendingRequestsSum) { _ in recalculateBadges() }
     }
 
 

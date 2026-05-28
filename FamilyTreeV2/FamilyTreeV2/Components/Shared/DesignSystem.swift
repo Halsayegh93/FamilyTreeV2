@@ -143,6 +143,7 @@ enum DS {
         static let gridAlerts    = error
         static let gridDiwaniya  = secondary
         static let gridContact   = accent
+        static let gridMessaging = SwiftUI.Color.adaptive(light: "#0EA5E9", dark: "#38BDF8") // Sky cyan — التواصل
 
         // Glass Effect Helpers — adaptive for light/dark mode
         static func glassBright(_ cs: ColorScheme) -> SwiftUI.Color {
@@ -316,6 +317,41 @@ enum DS {
         static let elastic   = Animation.spring(response: 0.45, dampingFraction: 0.55, blendDuration: 0)
         static let quick     = Animation.easeOut(duration: 0.18)
         static let medium    = Animation.easeInOut(duration: 0.32)
+    }
+
+    // MARK: Layout — تخطيط متجاوب حسب موديل الجهاز (العرض الحقيقي + size class)
+    enum Layout {
+        /// مقاييس متكيّفة تُشتق من عرض الشاشة الفعلي
+        struct Metrics: Equatable {
+            /// عدد أعمدة شبكة الوصول السريع
+            let gridColumns: Int
+            /// ارتفاع مربعات الوصول السريع
+            let tileHeight: CGFloat
+            /// المسافة بين عناصر الشبكة
+            let gridSpacing: CGFloat
+            /// مُضاعِف عام للعناصر الزخرفية والأيقونات (1.0 = الحجم القياسي)
+            let scale: CGFloat
+        }
+
+        /// نقاط الكسر:
+        /// - regular (iPad/أفقي) → 4 أعمدة
+        /// - ≥430 (Pro Max/Plus) → مربعات أطول
+        /// - 390–429 (الموديلات القياسية) → القياس المرجعي
+        /// - 375–389 (mini/الأقدم) → أصغر قليلاً
+        /// - <375 (SE الجيل الأول) → مدمج
+        static func metrics(width: CGFloat, isRegularWidth: Bool) -> Metrics {
+            if isRegularWidth {
+                return Metrics(gridColumns: 4, tileHeight: 104, gridSpacing: Spacing.md, scale: 1.12)
+            } else if width >= 430 {
+                return Metrics(gridColumns: 2, tileHeight: 96, gridSpacing: Spacing.md, scale: 1.06)
+            } else if width >= 390 {
+                return Metrics(gridColumns: 2, tileHeight: 90, gridSpacing: Spacing.sm, scale: 1.0)
+            } else if width >= 375 {
+                return Metrics(gridColumns: 2, tileHeight: 86, gridSpacing: Spacing.sm, scale: 0.97)
+            } else {
+                return Metrics(gridColumns: 2, tileHeight: 78, gridSpacing: Spacing.xs, scale: 0.9)
+            }
+        }
     }
 }
 
@@ -1393,6 +1429,8 @@ struct DSEmptyState: View {
     var buttonTitle: String? = nil
     var buttonAction: (() -> Void)? = nil
     var style: Style = .simple
+    /// أيقونة زر الإجراء — "arrow.clockwise" لإعادة المحاولة مثلاً
+    var buttonIcon: String = "plus.circle.fill"
     /// لون الأيقونة — استخدم DS.Color.success لحالات "كل شيء تمام"
     var tint: SwiftUI.Color = DS.Color.primary
 
@@ -1415,14 +1453,14 @@ struct DSEmptyState: View {
             if let buttonTitle, let buttonAction {
                 Button(action: buttonAction) {
                     HStack(spacing: DS.Spacing.sm) {
-                        Image(systemName: "plus.circle.fill")
+                        Image(systemName: buttonIcon)
                         Text(buttonTitle)
                     }
                     .font(DS.Font.calloutBold)
                     .foregroundColor(.white)
                     .padding(.horizontal, DS.Spacing.xl)
                     .padding(.vertical, DS.Spacing.sm)
-                    .background(DS.Color.gradientPrimary)
+                    .background(buttonBackground)
                     .clipShape(Capsule())
                 }
                 .buttonStyle(DSScaleButtonStyle())
@@ -1430,6 +1468,16 @@ struct DSEmptyState: View {
             Spacer()
         }
         .frame(maxWidth: .infinity)
+    }
+
+    /// خلفية زر الإجراء: التدرّج الافتراضي للحالات العادية، لون صلب لحالات الخطأ/المخصصة
+    @ViewBuilder
+    private var buttonBackground: some View {
+        if tint == DS.Color.primary {
+            DS.Color.gradientPrimary
+        } else {
+            tint
+        }
     }
 
     @ViewBuilder
@@ -1460,5 +1508,85 @@ struct DSEmptyState: View {
                     .foregroundColor(.white)
             }
         }
+    }
+}
+
+/// حالة خطأ موحّدة مع رسالة + زر إعادة المحاولة. تُبنى فوق DSEmptyState.
+struct DSErrorState: View {
+    var message: String? = nil
+    var retryAction: (() -> Void)? = nil
+
+    var body: some View {
+        DSEmptyState(
+            icon: "exclamationmark.triangle.fill",
+            title: L10n.t("تعذّر تحميل البيانات", "Couldn't load data"),
+            subtitle: message ?? L10n.t("تحقّق من اتصالك وحاول مرة أخرى", "Check your connection and try again"),
+            buttonTitle: retryAction != nil ? L10n.t("إعادة المحاولة", "Retry") : nil,
+            buttonAction: retryAction,
+            style: .simple,
+            buttonIcon: "arrow.clockwise",
+            tint: DS.Color.error
+        )
+    }
+}
+
+// MARK: - Skeleton Loading
+
+/// عنصر هيكلي (skeleton) بتأثير لمعان متحرك — يحل محل الـ spinner للإحساس بسرعة أكبر
+struct DSSkeleton: View {
+    var width: CGFloat? = nil
+    var height: CGFloat = 16
+    var cornerRadius: CGFloat = DS.Radius.sm
+
+    @State private var phase: CGFloat = -1
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            .fill(DS.Color.mutedBackground)
+            .frame(width: width, height: height)
+            .frame(maxWidth: width == nil ? .infinity : nil, alignment: .leading)
+            .overlay {
+                GeometryReader { geo in
+                    LinearGradient(
+                        colors: [.clear, SwiftUI.Color.white.opacity(0.45), .clear],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                    .frame(width: geo.size.width * 0.55)
+                    .offset(x: phase * geo.size.width * 1.7)
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .onAppear {
+                withAnimation(.linear(duration: 1.2).repeatForever(autoreverses: false)) {
+                    phase = 1
+                }
+            }
+    }
+}
+
+/// دائرة هيكلية — للصور الرمزية أثناء التحميل
+struct DSSkeletonCircle: View {
+    var size: CGFloat = 56
+
+    var body: some View {
+        DSSkeleton(width: size, height: size, cornerRadius: size / 2)
+    }
+}
+
+/// صف هيكلي جاهز: دائرة + سطرين نص — مناسب لقوائم الأعضاء/الأخبار
+struct DSSkeletonRow: View {
+    var avatarSize: CGFloat = 48
+
+    var body: some View {
+        HStack(spacing: DS.Spacing.md) {
+            DSSkeletonCircle(size: avatarSize)
+            VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                DSSkeleton(width: 140, height: 14)
+                DSSkeleton(width: 90, height: 11)
+            }
+            Spacer()
+        }
+        .padding(.vertical, DS.Spacing.xs)
     }
 }
