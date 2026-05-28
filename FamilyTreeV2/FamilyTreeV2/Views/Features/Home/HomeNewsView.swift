@@ -30,7 +30,6 @@ struct HomeNewsView: View {
     @State private var newsSearchText = ""
     @State private var debouncedNewsSearch = ""
     @State private var newsSearchTask: Task<Void, Never>?
-    @State private var displayedMemberCount = 0
 
     private enum HomeSubPage {
         case archive, projects, contact, news
@@ -756,50 +755,14 @@ struct HomeNewsView: View {
                 HStack(alignment: .center, spacing: DS.Spacing.sm) {
                     premiumIcon("tree.fill", color: DS.Color.secondary)
 
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(L10n.t("شجرة العائلة", "Family Tree"))
-                            .font(DS.Font.scaled(21, weight: .black))
-                            .foregroundColor(DS.Color.textPrimary)
-                        HStack(spacing: 3) {
-                            Text("\(displayedMemberCount)")
-                                .font(DS.Font.scaled(10, weight: .heavy))
-                                .foregroundColor(DS.Color.textSecondary)
-                                .contentTransition(.numericText())
-                            Text(L10n.t("فرد", "MEMBERS"))
-                                .font(DS.Font.scaled(10, weight: .heavy))
-                                .foregroundColor(DS.Color.textSecondary)
-                        }
-                        .tracking(0.6)
-                    }
+                    Text(L10n.t("شجرة العائلة", "Family Tree"))
+                        .font(DS.Font.scaled(21, weight: .black))
+                        .foregroundColor(DS.Color.textPrimary)
 
                     Spacer()
                 }
 
                 familyAvatarsRow
-
-                if let newest = newestMember, !newest.firstName.isEmpty {
-                    HStack(spacing: DS.Spacing.xs) {
-                        Image(systemName: "sparkles")
-                            .font(DS.Font.scaled(9, weight: .bold))
-                            .foregroundColor(DS.Color.secondary)
-                        Text(L10n.t("أحدث فرد", "Newest") + ": ")
-                            .font(DS.Font.scaled(10, weight: .medium))
-                            .foregroundColor(DS.Color.textTertiary)
-                        + Text(newest.firstName)
-                            .font(DS.Font.scaled(10, weight: .bold))
-                            .foregroundColor(DS.Color.textSecondary)
-                    }
-                    .padding(.horizontal, DS.Spacing.sm)
-                    .padding(.vertical, 5)
-                    .background(DS.Color.secondary.opacity(0.10))
-                    .clipShape(Capsule())
-                }
-            }
-            .onAppear {
-                withAnimation(DS.Anim.smooth) { displayedMemberCount = memberVM.allMembers.count }
-            }
-            .onChange(of: memberVM.allMembers.count) { newCount in
-                withAnimation(DS.Anim.smooth) { displayedMemberCount = newCount }
             }
             .padding(DS.Spacing.lg)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -1100,13 +1063,6 @@ struct HomeNewsView: View {
             + adminRequestVM.photoSuggestionRequests.count
             + newsVM.pendingNewsRequests.count
             + memberVM.allMembers.filter { $0.role == .pending }.count
-    }
-
-    /// أحدث عضو مُضاف للشجرة (حسب تاريخ الإنشاء)
-    private var newestMember: FamilyMember? {
-        memberVM.allMembers
-            .filter { $0.role != .pending && parseISO($0.createdAt) != nil }
-            .max { (parseISO($0.createdAt) ?? .distantPast) < (parseISO($1.createdAt) ?? .distantPast) }
     }
 
     private var newMembersTodayCount: Int {
