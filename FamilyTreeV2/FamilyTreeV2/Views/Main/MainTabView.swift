@@ -34,7 +34,7 @@ struct MainTabView: View {
         TabView(selection: tabSelection) {
             HomeNewsView(selectedTab: $selectedTab)
                 .tabItem {
-                    Image(systemName: selectedTab == 0 ? "newspaper.fill" : "newspaper")
+                    Image(systemName: selectedTab == 0 ? "house.fill" : "house")
                     Text(L10n.t("الرئيسية", "Home"))
                 }
                 .tag(0)
