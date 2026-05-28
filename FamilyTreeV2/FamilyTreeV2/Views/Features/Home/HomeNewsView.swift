@@ -653,20 +653,6 @@ struct HomeNewsView: View {
                         .foregroundColor(.white)
                         .lineLimit(1)
                         .minimumScaleFactor(0.65)
-                    HStack(spacing: 5) {
-                        Text(formattedToday)
-                            .font(DS.Font.scaled(11, weight: .semibold))
-                            .foregroundColor(.white.opacity(0.85))
-                            .lineLimit(1)
-                        Text("•")
-                            .font(DS.Font.scaled(9))
-                            .foregroundColor(.white.opacity(0.55))
-                        Text(formattedHijri)
-                            .font(DS.Font.scaled(11, weight: .semibold))
-                            .foregroundColor(.white.opacity(0.9))
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.8)
-                    }
                 }
 
                 Spacer(minLength: 0)
@@ -708,23 +694,6 @@ struct HomeNewsView: View {
         } else {
             return L10n.t("مساء الخير", "GOOD EVENING")
         }
-    }
-
-    private var formattedHijri: String {
-        var cal = Calendar(identifier: .islamicUmmAlQura)
-        cal.locale = Locale(identifier: L10n.isArabic ? "ar" : "en")
-        let formatter = DateFormatter()
-        formatter.calendar = cal
-        formatter.locale = Locale(identifier: L10n.isArabic ? "ar" : "en")
-        formatter.dateFormat = L10n.isArabic ? "d MMMM yyyy" : "d MMMM yyyy"
-        return formatter.string(from: Date()) + " " + L10n.t("هـ", "AH")
-    }
-
-    private var formattedToday: String {
-        let formatter = DateFormatter()
-        formatter.locale = L10n.isArabic ? Locale(identifier: "ar") : Locale(identifier: "en_US")
-        formatter.dateFormat = L10n.isArabic ? "EEEE، d MMMM" : "EEEE, MMMM d"
-        return formatter.string(from: Date())
     }
 
     // MARK: - شريط الإحصائيات السريعة
