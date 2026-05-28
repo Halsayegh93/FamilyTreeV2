@@ -98,6 +98,9 @@ class AdminRequestViewModel: ObservableObject {
     private var currentUser: FamilyMember? { authVM?.currentUser }
     private var canModerate: Bool { authVM?.canModerate ?? false }
     private var isAdmin: Bool { authVM?.isAdmin ?? false }
+    /// قبول/رفض الطلبات: owner+admin+monitor (المشرف يقدر يقبل بس لا يرفض).
+    /// نطابق `AuthViewModel.canRejectRequests` (راجع CLAUDE.md).
+    private var canRejectRequests: Bool { authVM?.canRejectRequests ?? false }
 
     /// حذف العنصر محلياً فوراً مع أنيميشن ثم تحديث من السيرفر بعد تأخير
     private func removeLocallyThenRefresh<T: Identifiable>(
@@ -287,6 +290,7 @@ class AdminRequestViewModel: ObservableObject {
 
     func approveTreeEditRequest(request: AdminRequest) async {
         guard NetworkMonitor.shared.requireOnline() else { return }
+        guard canModerate else { Log.warning("قبول طلب التعديل مرفوض: لا صلاحية"); return }
         let payload = request.treeEditPayload
 
         optimisticRemove(from: &treeEditRequests, id: request.id, apiWork: { [weak self] in
@@ -632,6 +636,7 @@ class AdminRequestViewModel: ObservableObject {
 
     func approveDeceasedRequest(request: AdminRequest) async {
         guard NetworkMonitor.shared.requireOnline() else { return }
+        guard canModerate else { Log.warning("قبول طلب الوفاة مرفوض: لا صلاحية"); return }
         let memberName = request.member?.fullName ?? ""
         optimisticRemove(from: &deceasedRequests, id: request.id, apiWork: { [weak self] in
             do {
@@ -672,7 +677,8 @@ class AdminRequestViewModel: ObservableObject {
 
     func rejectDeceasedRequest(request: AdminRequest) async {
         guard NetworkMonitor.shared.requireOnline() else { return }
-        guard isAdmin else { Log.warning("رفض الطلب مرفوض: الصلاحية للمدير فقط"); return }
+        // المراقب يقدر يرفض حسب CLAUDE.md (المشرف فقط ممنوع من الرفض)
+        guard canRejectRequests else { Log.warning("رفض الطلب مرفوض: لا صلاحية"); return }
         let memberName = request.member?.fullName ?? ""
         optimisticRemove(from: &deceasedRequests, id: request.id, apiWork: { [weak self] in
             do {
@@ -719,7 +725,8 @@ class AdminRequestViewModel: ObservableObject {
     }
 
     func rejectChildAddRequest(request: AdminRequest) async {
-        guard isAdmin else { Log.warning("رفض الطلب مرفوض: الصلاحية للمدير فقط"); return }
+        // المراقب يقدر يرفض حسب CLAUDE.md (المشرف فقط ممنوع من الرفض)
+        guard canRejectRequests else { Log.warning("رفض الطلب مرفوض: لا صلاحية"); return }
         let childName = request.member?.firstName ?? ""
         optimisticRemove(from: &childAddRequests, id: request.id, apiWork: { [weak self] in
             do {
@@ -1093,6 +1100,7 @@ class AdminRequestViewModel: ObservableObject {
     }
 
     func approveNameChangeRequest(request: AdminRequest) async {
+        guard canModerate else { Log.warning("قبول طلب الاسم مرفوض: لا صلاحية"); return }
         guard let newName = request.newValue, !newName.isEmpty else {
             Log.error("[NameChange] الاسم الجديد غير موجود في الطلب")
             return
@@ -1147,7 +1155,8 @@ class AdminRequestViewModel: ObservableObject {
     }
 
     func rejectNameChangeRequest(request: AdminRequest) async {
-        guard isAdmin else { Log.warning("رفض الطلب مرفوض: الصلاحية للمدير فقط"); return }
+        // كان isAdmin (يستبعد المراقب). حسب CLAUDE.md المراقب يقدر يرفض.
+        guard canRejectRequests else { Log.warning("رفض الطلب مرفوض: لا صلاحية"); return }
         optimisticRemove(from: &nameChangeRequests, id: request.id, apiWork: { [weak self] in
             do {
                 try await self?.supabase
@@ -1256,7 +1265,8 @@ class AdminRequestViewModel: ObservableObject {
     }
 
     func rejectPhoneChangeRequest(request: PhoneChangeRequest) async {
-        guard isAdmin else { Log.warning("رفض الطلب مرفوض: الصلاحية للمدير فقط"); return }
+        // كان isAdmin (يستبعد المراقب). حسب CLAUDE.md المراقب يقدر يرفض.
+        guard canRejectRequests else { Log.warning("رفض الطلب مرفوض: لا صلاحية"); return }
 
         optimisticRemove(from: &phoneChangeRequests, id: request.id, apiWork: { [weak self] in
             do {
@@ -1347,6 +1357,7 @@ class AdminRequestViewModel: ObservableObject {
 
     /// Approve a new member and activate their account with father linkage
     func approveMember(memberId: UUID, fatherId: UUID?) async {
+        guard canModerate else { Log.warning("قبول العضو مرفوض: لا صلاحية"); return }
         self.isLoading = true
         let fatherName = fatherId.flatMap { id in
             memberById(id)?.fullName
@@ -1703,7 +1714,8 @@ class AdminRequestViewModel: ObservableObject {
     }
 
     func rejectNewsReport(request: AdminRequest) async {
-        guard isAdmin else { Log.warning("رفض الطلب مرفوض: الصلاحية للمدير فقط"); return }
+        // المراقب يقدر يرفض حسب CLAUDE.md (المشرف فقط ممنوع من الرفض)
+        guard canRejectRequests else { Log.warning("رفض الطلب مرفوض: لا صلاحية"); return }
 
         optimisticRemove(from: &newsReportRequests, id: request.id, apiWork: { [weak self] in
             do {
@@ -1858,7 +1870,8 @@ class AdminRequestViewModel: ObservableObject {
 
     /// رفض اقتراح صورة — حذف الصورة من التخزين
     func rejectPhotoSuggestion(request: AdminRequest) async {
-        guard isAdmin else { Log.warning("رفض الطلب مرفوض: الصلاحية للمدير فقط"); return }
+        // المراقب يقدر يرفض حسب CLAUDE.md (المشرف فقط ممنوع من الرفض)
+        guard canRejectRequests else { Log.warning("رفض الطلب مرفوض: لا صلاحية"); return }
 
         optimisticRemove(from: &photoSuggestionRequests, id: request.id, apiWork: { [weak self] in
             do {

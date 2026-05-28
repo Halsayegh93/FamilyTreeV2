@@ -279,6 +279,19 @@ struct AdminReportsView: View {
             .padding(.horizontal, DS.Spacing.lg)
             .padding(.top, DS.Spacing.md)
             .padding(.bottom, DS.Spacing.xxxxl)
+            // ⚠️ مهم: نعلّق sheet الفرع على VStack الداخلي عشان لا يتزاحم
+            // مع sheet المشاركة المعلّق على الـScrollView. SwiftUI لا يدعم
+            // sheet متعدد على نفس الـView — يتم تجاهل الـsheet الثاني.
+            .sheet(isPresented: $branchPickerOpen) {
+                BranchPickerSheet(
+                    allMembers: memberVM.allMembers,
+                    onSelect: { id in
+                        branchRootId = id
+                        branchPickerOpen = false
+                        displayLimit = 20
+                    }
+                )
+            }
         }
         .background(DS.Color.background.ignoresSafeArea())
         .navigationTitle("مركز التقارير")
@@ -293,16 +306,6 @@ struct AdminReportsView: View {
             ActivityView(items: shareItems) {
                 cleanupShareState()
             }
-        }
-        .sheet(isPresented: $branchPickerOpen) {
-            BranchPickerSheet(
-                allMembers: memberVM.allMembers,
-                onSelect: { id in
-                    branchRootId = id
-                    branchPickerOpen = false
-                    displayLimit = 20
-                }
-            )
         }
         .alert("خطأ", isPresented: $showErrorAlert) {
             Button("موافق", role: .cancel) {}

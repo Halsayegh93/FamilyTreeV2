@@ -128,20 +128,18 @@ final class PushNotificationDelegate: NSObject, UIApplicationDelegate, UNUserNot
                 )
             }
         case PushAction.openRequest:
-            NotificationCenter.default.post(
-                name: .didTapOpenRequestAction,
-                object: nil,
-                userInfo: ["request_id": requestId as Any, "request_type": requestType as Any]
-            )
+            // كان `as Any` يحوّل nil إلى NSNull → downstream `as? String` يرجع nil
+            // حتى لو المفتاح موجود. الآن نُضمن أن المفتاح يطلع فقط لو القيمة موجودة.
+            var info: [AnyHashable: Any] = [:]
+            if let requestId   { info["request_id"]   = requestId }
+            if let requestType { info["request_type"] = requestType }
+            NotificationCenter.default.post(name: .didTapOpenRequestAction, object: nil, userInfo: info)
         default:
             // ضغط على الإشعار نفسه (بدون action)
-            if requestId != nil {
-                // يفتح التطبيق على صفحة الطلبات
-                NotificationCenter.default.post(
-                    name: .didTapOpenRequestAction,
-                    object: nil,
-                    userInfo: ["request_id": requestId as Any, "request_type": requestType as Any]
-                )
+            if let requestId {
+                var info: [AnyHashable: Any] = ["request_id": requestId]
+                if let requestType { info["request_type"] = requestType }
+                NotificationCenter.default.post(name: .didTapOpenRequestAction, object: nil, userInfo: info)
             } else {
                 NotificationCenter.default.post(name: .didTapPushNotification, object: userInfo)
             }

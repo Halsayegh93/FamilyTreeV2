@@ -189,6 +189,7 @@ struct AdminAllRequestsView: View {
 
     @State private var selectedTab: RequestTab = .all
     @State private var selectedSection: RequestSection? = nil   // nil = وضع الكل
+    @Namespace private var tabAnimation
     @State private var showBulkApproveChildrenConfirm = false
     @State private var bulkApproveResult: String?
     @State private var showBulkApproveResult = false
@@ -751,39 +752,18 @@ struct AdminAllRequestsView: View {
                 }
             }
             .padding(.horizontal, DS.Spacing.lg)
+            .padding(.vertical, 4) // مساحة لظل النشط
         }
     }
 
-    /// chip القسم — أيقونة + نص دائماً + ✓ لما يكون نشط (بدون خلفية).
+    /// chip القسم — أيقونة فقط افتراضياً، النشط يتمدّد لكبسولة بخلفية + نص.
+    @ViewBuilder
     private func sectionChip(title: String, icon: String, color: Color, count: Int, isActive: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 5) {
-                // علامة الاختيار للنشط
-                Image(systemName: isActive ? "checkmark.circle.fill" : "circle")
-                    .font(DS.Font.scaled(12, weight: .bold))
-                    .foregroundColor(isActive ? color : color.opacity(0.35))
-
-                Image(systemName: icon)
-                    .font(DS.Font.scaled(13, weight: .bold))
-                    .foregroundColor(isActive ? color : color.opacity(0.65))
-
-                Text(title)
-                    .font(DS.Font.scaled(13, weight: isActive ? .black : .semibold))
-                    .foregroundColor(isActive ? color : color.opacity(0.75))
-                    .lineLimit(1)
-
-                if count > 0 {
-                    Text("\(count)")
-                        .font(DS.Font.scaled(10, weight: .black))
-                        .foregroundColor(isActive ? .white : color)
-                        .frame(minWidth: 16, minHeight: 16)
-                        .padding(.horizontal, 3)
-                        .background(Capsule().fill(isActive ? color : color.opacity(0.15)))
-                }
-            }
+        if isActive {
+            activeChip(title: title, icon: icon, color: color, count: count, namespace: "section", action: action)
+        } else {
+            inactiveChip(icon: icon, color: color, count: count, namespace: "section", action: action, accessibilityLabel: title)
         }
-        .buttonStyle(DSScaleButtonStyle())
-        .transition(.opacity)
     }
 
     /// مجموع طلبات القسم.
@@ -807,6 +787,7 @@ struct AdminAllRequestsView: View {
                 }
             }
             .padding(.horizontal, DS.Spacing.lg)
+            .padding(.vertical, 4) // مساحة لظل النشط
         }
     }
 
@@ -960,37 +941,107 @@ struct AdminAllRequestsView: View {
         }
     }
 
-    /// chip فلتر فرعي موحّد — أيقونة + نص + ✓ نشط (بدون خلفية).
+    /// chip فلتر فرعي موحّد — أيقونة فقط، النشط يتمدّد لكبسولة ملوّنة.
+    @ViewBuilder
     private func tabChipBody(tab: RequestTab, isActive: Bool, action: @escaping () -> Void) -> some View {
         let count = itemCount(for: tab)
-        return Button(action: action) {
-            HStack(spacing: 4) {
-                // علامة اختيار للنشط
-                Image(systemName: isActive ? "checkmark.circle.fill" : "circle")
-                    .font(DS.Font.scaled(11, weight: .bold))
-                    .foregroundColor(isActive ? tab.color : tab.color.opacity(0.35))
+        if isActive {
+            activeChip(title: tab.title, icon: tab.icon, color: tab.color, count: count, namespace: "tab", action: action)
+        } else {
+            inactiveChip(icon: tab.icon, color: tab.color, count: count, namespace: "tab", action: action, accessibilityLabel: tab.title)
+        }
+    }
 
-                Image(systemName: tab.icon)
-                    .font(DS.Font.scaled(12, weight: .bold))
-                    .foregroundColor(isActive ? tab.color : tab.color.opacity(0.65))
+    // MARK: - Shared Chip Components
 
-                Text(tab.title)
-                    .font(DS.Font.scaled(12, weight: isActive ? .black : .semibold))
-                    .foregroundColor(isActive ? tab.color : tab.color.opacity(0.75))
+    /// شيب نشط — كبسولة ممتدّة بـ gradient + أيقونة + نص + عدّاد. حركة matchedGeometry.
+    private func activeChip(
+        title: String,
+        icon: String,
+        color: Color,
+        count: Int,
+        namespace: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(DS.Font.scaled(13, weight: .bold))
+                    .foregroundColor(.white)
+                Text(title)
+                    .font(DS.Font.scaled(13, weight: .bold))
+                    .foregroundColor(.white)
                     .lineLimit(1)
-
                 if count > 0 {
                     Text("\(count)")
-                        .font(DS.Font.scaled(9, weight: .black))
-                        .foregroundColor(isActive ? .white : tab.color)
-                        .frame(minWidth: 14, minHeight: 14)
-                        .padding(.horizontal, 3)
-                        .background(Capsule().fill(isActive ? tab.color : tab.color.opacity(0.15)))
+                        .font(DS.Font.scaled(10, weight: .black))
+                        .foregroundColor(.white)
+                        .frame(minWidth: 18, minHeight: 18)
+                        .padding(.horizontal, 4)
+                        .background(Capsule().fill(Color.white.opacity(0.28)))
                 }
             }
+            .padding(.horizontal, DS.Spacing.md)
+            .padding(.vertical, 8)
+            .background(
+                Capsule(style: .continuous).fill(
+                    LinearGradient(
+                        colors: [color, color.opacity(0.82)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+            )
+            .overlay(
+                Capsule(style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.20), lineWidth: 0.5)
+            )
+            .shadow(color: color.opacity(0.35), radius: 8, x: 0, y: 3)
+            .contentShape(Capsule())
+            .matchedGeometryEffect(id: "chip-\(namespace)-active", in: tabAnimation)
         }
         .buttonStyle(DSScaleButtonStyle())
-        .accessibilityLabel(tab.title)
+        .accessibilityLabel(title)
+    }
+
+    /// شيب غير نشط — أيقونة دائرية فقط، عدّاد كنقطة صغيرة بالزاوية.
+    /// نستخدم padding على الأيقونة بدل offset على badge ليكون layout
+    /// bounds يشمل badge كاملاً (و إلا الـ ScrollView يقصّه).
+    private func inactiveChip(
+        icon: String,
+        color: Color,
+        count: Int,
+        namespace: String,
+        action: @escaping () -> Void,
+        accessibilityLabel: String
+    ) -> some View {
+        let hasBadge = count > 0
+        return Button(action: action) {
+            ZStack(alignment: .topTrailing) {
+                // الأيقونة — تتزحزح أسفل/يمين لما في badge ليفسح له مكاناً
+                Image(systemName: icon)
+                    .font(DS.Font.scaled(14, weight: .bold))
+                    .foregroundColor(color)
+                    .frame(width: 38, height: 38)
+                    .background(Circle().fill(color.opacity(0.10)))
+                    .overlay(Circle().strokeBorder(color.opacity(0.22), lineWidth: 1))
+                    .padding(.top, hasBadge ? 6 : 0)
+                    .padding(.trailing, hasBadge ? 6 : 0)
+
+                if hasBadge {
+                    Text("\(count)")
+                        .font(DS.Font.scaled(9, weight: .black))
+                        .foregroundColor(.white)
+                        .frame(minWidth: 18, minHeight: 18)
+                        .padding(.horizontal, 4)
+                        .background(Capsule().fill(color))
+                        .overlay(Capsule().strokeBorder(DS.Color.background, lineWidth: 1.5))
+                }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(DSScaleButtonStyle())
+        .accessibilityLabel(accessibilityLabel)
     }
 
     // MARK: - Tab Content

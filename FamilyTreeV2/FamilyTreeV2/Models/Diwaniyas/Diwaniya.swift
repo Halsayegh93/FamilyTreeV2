@@ -40,8 +40,10 @@ nonisolated struct Diwaniya: Identifiable, Codable, Sendable {
         contactPhone = try container.decodeIfPresent(String.self, forKey: .contactPhone)
         mapsUrl = try container.decodeIfPresent(String.self, forKey: .mapsUrl)
         imageUrl = try container.decodeIfPresent(String.self, forKey: .imageUrl)
-        address = try? container.decodeIfPresent(String.self, forKey: .address)
-        isClosed = try? container.decodeIfPresent(Bool.self, forKey: .isClosed)
+        // ما في داعي للـ try? المكدوبل — decodeIfPresent يرجع nil لو المفتاح
+        // مفقود. الـ try? الخارجي كان يبلع أخطاء type mismatch بصمت.
+        address = try container.decodeIfPresent(String.self, forKey: .address)
+        isClosed = try container.decodeIfPresent(Bool.self, forKey: .isClosed)
         approvalStatus = try container.decode(String.self, forKey: .approvalStatus)
         approvedBy = try container.decodeIfPresent(UUID.self, forKey: .approvedBy)
     }

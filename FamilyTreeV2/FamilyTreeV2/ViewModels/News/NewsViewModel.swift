@@ -275,11 +275,15 @@ class NewsViewModel: ObservableObject {
         guard let memberId = await authenticatedUserId() else { return }
 
         let isCurrentlyLiked = likedPosts.contains(postId)
+        // ✅ التقط author_id الآن قبل أي await — لو allNews تغيّر أثناء الـ
+        // network call (refresh من مكان ثاني) ما نضيع الإشعار لصاحب الخبر.
+        let postAuthorIdSnapshot = allNews.first(where: { $0.id == postId })?.author_id
 
-        // Optimistic update
+        // Optimistic update — استخدم max(0,…) عشان نتجنّب underflow لو الكاش
+        // المحلي مو متّسق مع السيرفر (مثلاً post اتجاب بدون likes_count).
         if isCurrentlyLiked {
             likedPosts.remove(postId)
-            likesCountByPost[postId, default: 1] -= 1
+            likesCountByPost[postId] = max(0, (likesCountByPost[postId] ?? 0) - 1)
         } else {
             likedPosts.insert(postId)
             likesCountByPost[postId, default: 0] += 1
@@ -303,9 +307,8 @@ class NewsViewModel: ObservableObject {
                     .insert(likeRecord)
                     .execute()
 
-                // إشعار صاحب الخبر بالإعجاب (إذا مو هو نفسه)
-                if let postAuthorId = allNews.first(where: { $0.id == postId })?.author_id,
-                   postAuthorId != memberId {
+                // إشعار صاحب الخبر بالإعجاب (إذا مو هو نفسه) — نستخدم snapshot
+                if let postAuthorId = postAuthorIdSnapshot, postAuthorId != memberId {
                     let likerName = currentUser?.fullName ?? ""
                     await notificationVM?.sendPushToMembers(
                         title: L10n.t("إعجاب جديد", "New Like"),
@@ -329,13 +332,13 @@ class NewsViewModel: ObservableObject {
             }
         } catch {
             Log.error("خطأ تحديث الاعجاب: \(error.localizedDescription)")
-            // Revert on error
+            // Revert on error — نفس الحماية ضد underflow
             if isCurrentlyLiked {
                 likedPosts.insert(postId)
                 likesCountByPost[postId, default: 0] += 1
             } else {
                 likedPosts.remove(postId)
-                likesCountByPost[postId, default: 1] -= 1
+                likesCountByPost[postId] = max(0, (likesCountByPost[postId] ?? 0) - 1)
             }
         }
     }
@@ -349,6 +352,9 @@ class NewsViewModel: ObservableObject {
 
         let normalizedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalizedText.isEmpty else { return false }
+
+        // التقط author_id قبل الـ network call — راجع toggleNewsLike
+        let postAuthorIdSnapshot = allNews.first(where: { $0.id == postId })?.author_id
 
         do {
             let commentRecord: [String: AnyEncodable] = [
@@ -366,9 +372,8 @@ class NewsViewModel: ObservableObject {
             // تحديث تعليقات الخبر المعني فقط بدل كل الأخبار
             await fetchNewsComments(for: [postId])
 
-            // إشعار صاحب الخبر بالتعليق الجديد (إذا مو هو نفسه)
-            if let postAuthorId = allNews.first(where: { $0.id == postId })?.author_id,
-               postAuthorId != memberId {
+            // إشعار صاحب الخبر بالتعليق الجديد (إذا مو هو نفسه) — snapshot
+            if let postAuthorId = postAuthorIdSnapshot, postAuthorId != memberId {
                 await notificationVM?.sendPushToMembers(
                     title: L10n.t("تعليق جديد", "New Comment"),
                     body: L10n.t(

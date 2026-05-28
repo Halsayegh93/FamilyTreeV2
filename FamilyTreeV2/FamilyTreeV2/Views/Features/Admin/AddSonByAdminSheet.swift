@@ -1,5 +1,9 @@
 import SwiftUI
 
+// ════════════════════════════════════════════════════════════════════
+// AddSonByAdminSheet — تصميم Form الموحَّد (2026-05-27)
+// نفس واجهة AdminMemberDetailSheet الجديدة — Form أصلي من iOS.
+// ════════════════════════════════════════════════════════════════════
 struct AddSonByAdminSheet: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var memberVM: MemberViewModel
@@ -54,63 +58,50 @@ struct AddSonByAdminSheet: View {
 
     var body: some View {
         NavigationStack {
-            ZStack {
-                DS.Color.background.ignoresSafeArea()
-
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: DS.Spacing.sm) {
-
-                        // Parent info hint
-                        HStack {
-                            Text(isEditMode
-                                 ? L10n.t("تعديل بيانات: \(editingChild?.firstName ?? "")", "Editing: \(editingChild?.firstName ?? "")")
-                                 : L10n.t("إضافة ابن جديد للسيد: \(parent.fullName)", "Adding new child for: \(parent.fullName)"))
-                                .font(DS.Font.caption2)
-                                .fontWeight(.semibold)
-                                .foregroundColor(DS.Color.textSecondary)
-                            Spacer()
-                        }
-                        .padding(.horizontal, DS.Spacing.lg)
-                        .padding(.top, DS.Spacing.sm)
-
-                        // Basic info section
-                        basicInfoSection
-
-                        // Phone section
-                        if !isDeceased {
-                            phoneSection
-                        }
-
-                        // Dates & status section
-                        datesSection
-
-                        // Admin note
-                        if !isEditMode {
-                            Text(L10n.t("بصفتك مديراً، ستتم إضافة العضو للشجرة فوراً.", "As admin, the member will be added to the tree immediately."))
-                                .font(DS.Font.caption2)
-                                .foregroundColor(DS.Color.textSecondary)
-                                .padding(.horizontal, DS.Spacing.lg)
-                        }
+            Form {
+                contextSection
+                identitySection
+                genderSection
+                if !isDeceased {
+                    phoneSection
+                }
+                datesSection
+                if !isEditMode {
+                    Section {
+                        Label(
+                            L10n.t(
+                                "بصفتك مديراً، ستتم إضافة العضو للشجرة فوراً.",
+                                "As admin, the member will be added to the tree immediately."
+                            ),
+                            systemImage: "info.circle.fill"
+                        )
+                        .font(DS.Font.caption1)
+                        .foregroundColor(DS.Color.textSecondary)
                     }
-                    .padding(.bottom, DS.Spacing.xxxl)
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background(DS.Color.background)
             .navigationTitle(isEditMode ? L10n.t("تعديل الابن", "Edit Child") : L10n.t("إضافة ابن", "Add Child"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button(action: saveAction) {
-                        Text(isEditMode ? L10n.t("حفظ", "Save") : L10n.t("إضافة", "Add"))
-                            .font(DS.Font.caption1)
-                            .fontWeight(.bold)
-                            .foregroundColor(DS.Color.primary)
-                    }
-                    .disabled(firstName.isEmpty || isSaving)
-                }
-                ToolbarItem(placement: .topBarTrailing) {
                     Button(L10n.t("إلغاء", "Cancel")) { dismiss() }
                         .font(DS.Font.caption1)
                         .foregroundColor(DS.Color.textSecondary)
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(action: saveAction) {
+                        if isSaving {
+                            ProgressView().tint(DS.Color.primary)
+                        } else {
+                            Text(isEditMode ? L10n.t("حفظ", "Save") : L10n.t("إضافة", "Add"))
+                                .font(DS.Font.callout)
+                                .fontWeight(.bold)
+                                .foregroundColor(DS.Color.primary)
+                        }
+                    }
+                    .disabled(firstName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSaving)
                 }
             }
         }
@@ -127,218 +118,209 @@ struct AddSonByAdminSheet: View {
             ))
         }
         .onAppear {
-            // في وضع الإضافة: استخدم رمز الدولة من تسجيل الدخول
             if editingChild == nil, !lastAuthDialingCode.isEmpty {
                 selectedPhoneCountry = KuwaitPhone.countryForDialingCode(lastAuthDialingCode)
             }
         }
     }
 
-    // MARK: - Helpers
-    private let iconSm: CGFloat = 30
-    private let iconFontSm: CGFloat = 13
+    // MARK: - Context Section (Parent info hint)
+    private var contextSection: some View {
+        Section {
+            HStack(spacing: DS.Spacing.sm) {
+                Image(systemName: isEditMode ? "pencil.circle.fill" : "person.badge.plus.fill")
+                    .font(DS.Font.scaled(15, weight: .semibold))
+                    .foregroundColor(DS.Color.primary)
+                    .frame(width: 28, height: 28)
+                    .background(DS.Color.primary.opacity(0.12))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
 
-    // MARK: - Basic Info Section
-    private var basicInfoSection: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            DSCard(padding: 0) {
-                DSSectionHeader(
-                    title: L10n.t("بيانات الابن", "Child Info"),
-                    icon: "person.badge.plus.fill",
-                    iconColor: DS.Color.primary
-                )
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(isEditMode
+                         ? L10n.t("تعديل ابن", "Editing Child")
+                         : L10n.t("إضافة ابن لـ:", "Adding child to:"))
+                        .font(DS.Font.caption1)
+                        .foregroundColor(DS.Color.textTertiary)
 
-                // Name field
-                HStack(spacing: DS.Spacing.sm) {
-                    DSIcon("person.fill", color: DS.Color.primary, size: iconSm, iconSize: iconFontSm)
-
-                    TextField(L10n.t("اسم الابن الأول", "Child's first name"), text: $firstName)
+                    Text(isEditMode
+                         ? (editingChild?.firstName ?? "")
+                         : parent.fullName)
                         .font(DS.Font.callout)
+                        .fontWeight(.semibold)
                         .foregroundColor(DS.Color.textPrimary)
-                        .multilineTextAlignment(.leading)
-                        .onChange(of: firstName) { _ in
-                            if firstName.count > 50 {
-                                firstName = String(firstName.prefix(50))
-                            }
-                        }
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
                 }
-                .padding(.horizontal, DS.Spacing.md)
-                .padding(.vertical, DS.Spacing.xs)
-
-                DSDivider()
-
-                // اختيار الجنس — segmented picker
-                HStack(spacing: DS.Spacing.sm) {
-                    DSIcon("person.fill", color: DS.Color.primary, size: iconSm, iconSize: iconFontSm)
-                    Text(L10n.t("الجنس", "Gender"))
-                        .font(DS.Font.callout)
-                        .foregroundColor(DS.Color.textPrimary)
-                    Spacer()
-                    Picker("", selection: $selectedGender) {
-                        Text(L10n.t("ذكر", "Male")).tag("male")
-                        Text(L10n.t("أنثى", "Female")).tag("female")
-                    }
-                    .pickerStyle(.segmented)
-                    .frame(width: 160)
-                }
-                .padding(.horizontal, DS.Spacing.md)
-                .padding(.vertical, DS.Spacing.xs)
+                Spacer()
             }
+            .padding(.vertical, 2)
         }
-        .padding(.horizontal, DS.Spacing.lg)
     }
 
-    // MARK: - Phone Section — بدون رمز الدولة
+    // MARK: - Identity Section
+    private var identitySection: some View {
+        Section {
+            VStack(alignment: .leading, spacing: 4) {
+                Label(L10n.t("الاسم الأول", "First Name"), systemImage: "person.fill")
+                    .foregroundColor(DS.Color.textSecondary)
+                    .font(DS.Font.caption1)
+                TextField(L10n.t("اسم الابن الأول", "Child's first name"), text: $firstName)
+                    .font(DS.Font.callout)
+                    .onChange(of: firstName) { _ in
+                        if firstName.count > 50 { firstName = String(firstName.prefix(50)) }
+                    }
+            }
+            .padding(.vertical, 2)
+        } header: {
+            sectionHeader(L10n.t("الهوية", "Identity"), icon: "person.text.rectangle.fill", color: DS.Color.primary)
+        }
+    }
+
+    // MARK: - Gender Section
+    private var genderSection: some View {
+        Section {
+            Picker(L10n.t("الجنس", "Gender"), selection: $selectedGender) {
+                Label(L10n.t("ذكر", "Male"), systemImage: "figure.stand").tag("male")
+                Label(L10n.t("أنثى", "Female"), systemImage: "figure.stand.dress").tag("female")
+            }
+            .pickerStyle(.segmented)
+            .padding(.vertical, DS.Spacing.xs)
+        } header: {
+            sectionHeader(L10n.t("الجنس", "Gender"), icon: "person.crop.circle", color: DS.Color.accent)
+        }
+    }
+
+    // MARK: - Phone Section
     private var phoneSection: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            DSCard(padding: 0) {
-                DSSectionHeader(
-                    title: L10n.t("رقم الهاتف (اختياري)", "Phone Number (Optional)"),
-                    icon: "phone.fill",
-                    iconColor: DS.Color.success
-                )
-
-                HStack(spacing: DS.Spacing.sm) {
-                    DSIcon("phone.fill", color: DS.Color.success, size: iconSm, iconSize: iconFontSm)
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(L10n.t("رقم الهاتف", "Phone Number"))
-                            .font(DS.Font.caption1)
-                            .foregroundColor(DS.Color.textSecondary)
-                        PhoneNumberTextField(
-                            text: $phoneNumber,
-                            placeholder: L10n.t("اختياري", "Optional"),
-                            font: .systemFont(ofSize: 15),
-                            keyboardType: .phonePad,
-                            maxLength: selectedPhoneCountry.maxDigits
-                        )
-                        .frame(height: 30)
-                    }
-                    Spacer()
-                }
-                .padding(.horizontal, DS.Spacing.md)
-                .padding(.vertical, DS.Spacing.xs)
-            }
-        }
-        .padding(.horizontal, DS.Spacing.lg)
-    }
-
-    // MARK: - Dates & Status Section
-    private var datesSection: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            DSCard(padding: 0) {
-                DSSectionHeader(
-                    title: L10n.t("التواريخ والحالة", "Dates & Status"),
-                    icon: "calendar",
-                    iconColor: DS.Color.warning
-                )
-
-                // Birth date toggle
-                HStack(spacing: DS.Spacing.sm) {
-                    DSIcon("calendar", color: DS.Color.primary, size: iconSm, iconSize: iconFontSm)
-
-                    Text(L10n.t("تاريخ الميلاد متوفر", "Birth date available"))
-                        .font(DS.Font.callout)
-                        .foregroundColor(DS.Color.textPrimary)
-
-                    Spacer()
-
-                    Toggle("", isOn: $hasBirthDate)
-                        .labelsHidden()
-                        .tint(DS.Color.primary)
-                }
-                .padding(.horizontal, DS.Spacing.md)
-                .padding(.vertical, DS.Spacing.xs)
-                .animation(.default, value: hasBirthDate)
-
-                if hasBirthDate {
-                    DSDivider()
-                    VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                        HStack(spacing: DS.Spacing.sm) {
-                            DSIcon("calendar.badge.clock", color: DS.Color.info, size: iconSm, iconSize: iconFontSm)
-                            Text(L10n.t("تاريخ الميلاد", "Birth Date"))
-                                .font(DS.Font.callout)
-                                .foregroundColor(DS.Color.textPrimary)
-                            Spacer()
+        Section {
+            HStack(spacing: DS.Spacing.sm) {
+                Menu {
+                    Picker("", selection: $selectedPhoneCountry) {
+                        ForEach(KuwaitPhone.supportedCountries) { country in
+                            Text("\(country.flag) \(country.nameArabic) \(country.dialingCode)")
+                                .tag(country)
                         }
-                        StableWheelDatePicker(selection: $birthDate, in: ...Date())
                     }
-                    .padding(.horizontal, DS.Spacing.md)
-                    .padding(.vertical, DS.Spacing.xs)
-                }
-
-                DSDivider()
-
-                // Deceased toggle
-                HStack(spacing: DS.Spacing.sm) {
-                    DSIcon("heart.text.square.fill", color: DS.Color.error, size: iconSm, iconSize: iconFontSm)
-
-                    Text(L10n.t("إضافة كمتوفى", "Add as deceased"))
-                        .font(DS.Font.callout)
-                        .foregroundColor(DS.Color.textPrimary)
-
-                    Spacer()
-
-                    Toggle("", isOn: $isDeceased)
-                        .labelsHidden()
-                        .tint(DS.Color.error)
-                }
-                .padding(.horizontal, DS.Spacing.md)
-                .padding(.vertical, DS.Spacing.xs)
-                .animation(.default, value: isDeceased)
-
-                if isDeceased {
-                    DSDivider()
-
-                    HStack(spacing: DS.Spacing.sm) {
-                        DSIcon("calendar.badge.minus", color: DS.Color.error, size: iconSm, iconSize: iconFontSm)
-
-                        Text(L10n.t("تاريخ الوفاة متوفر", "Death date available"))
+                } label: {
+                    HStack(spacing: 4) {
+                        Text(selectedPhoneCountry.flag)
+                        Text(selectedPhoneCountry.dialingCode)
                             .font(DS.Font.callout)
+                            .fontWeight(.semibold)
                             .foregroundColor(DS.Color.textPrimary)
-
-                        Spacer()
-
-                        Toggle("", isOn: $hasDeathDate)
-                            .labelsHidden()
-                            .tint(DS.Color.error)
+                        Image(systemName: "chevron.down")
+                            .font(DS.Font.scaled(10, weight: .bold))
+                            .foregroundColor(DS.Color.textTertiary)
                     }
-                    .padding(.horizontal, DS.Spacing.md)
-                    .padding(.vertical, DS.Spacing.xs)
-                    .animation(.default, value: hasDeathDate)
+                    .padding(.horizontal, DS.Spacing.sm)
+                    .padding(.vertical, 6)
+                    .background(DS.Color.surfaceElevated)
+                    .clipShape(Capsule())
+                }
 
-                    if hasDeathDate {
-                        DSDivider()
-                        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                            HStack(spacing: DS.Spacing.sm) {
-                                DSIcon("calendar.badge.exclamationmark", color: DS.Color.error, size: iconSm, iconSize: iconFontSm)
-                                Text(L10n.t("تاريخ الوفاة", "Death Date"))
-                                    .font(DS.Font.callout)
-                                    .foregroundColor(DS.Color.textPrimary)
-                                Spacer()
-                            }
-                            StableWheelDatePicker(selection: $deathDate, in: ...Date())
-                        }
-                        .padding(.horizontal, DS.Spacing.md)
-                        .padding(.vertical, DS.Spacing.xs)
+                TextField(L10n.t("اختياري", "Optional"), text: $phoneNumber)
+                    .font(DS.Font.callout)
+                    .keyboardType(.numberPad)
+                    .textContentType(.telephoneNumber)
+                    .multilineTextAlignment(.trailing)
+                    .environment(\.layoutDirection, .leftToRight)
+                    .onChange(of: phoneNumber) { newValue in
+                        phoneNumber = KuwaitPhone.userTypedDigits(newValue, maxDigits: selectedPhoneCountry.maxDigits)
                     }
+                    .onChange(of: selectedPhoneCountry) { newCountry in
+                        phoneNumber = KuwaitPhone.userTypedDigits(phoneNumber, maxDigits: newCountry.maxDigits)
+                    }
+
+                if !phoneNumber.isEmpty {
+                    Button {
+                        phoneNumber = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(DS.Font.scaled(16))
+                            .foregroundColor(DS.Color.textTertiary)
+                    }
+                    .buttonStyle(.plain)
                 }
             }
+        } header: {
+            sectionHeader(L10n.t("رقم الهاتف (اختياري)", "Phone (Optional)"), icon: "phone.fill", color: DS.Color.secondary)
         }
-        .padding(.horizontal, DS.Spacing.lg)
     }
 
-    // MARK: - Save Action
+    // MARK: - Dates Section
+    private var datesSection: some View {
+        Section {
+            Toggle(isOn: $hasBirthDate.animation(DS.Anim.snappy)) {
+                Label(L10n.t("تاريخ الميلاد متوفر", "Birth date available"), systemImage: "calendar")
+                    .foregroundColor(DS.Color.textPrimary)
+            }
+            .tint(DS.Color.primary)
+
+            if hasBirthDate {
+                DatePicker(
+                    selection: $birthDate,
+                    in: ...Date(),
+                    displayedComponents: .date
+                ) {
+                    Label(L10n.t("تاريخ الميلاد", "Birth Date"), systemImage: "calendar.badge.clock")
+                        .foregroundColor(DS.Color.textPrimary)
+                }
+                .environment(\.locale, Locale(identifier: L10n.isArabic ? "ar" : "en_US"))
+            }
+
+            Toggle(isOn: $isDeceased.animation(DS.Anim.snappy)) {
+                Label(L10n.t("إضافة كمتوفى", "Add as deceased"), systemImage: "heart.text.square.fill")
+                    .foregroundColor(DS.Color.textPrimary)
+            }
+            .tint(DS.Color.neonPink)
+
+            if isDeceased {
+                Toggle(isOn: $hasDeathDate.animation(DS.Anim.snappy)) {
+                    Label(L10n.t("تاريخ الوفاة متوفر", "Death date available"), systemImage: "calendar.badge.minus")
+                        .foregroundColor(DS.Color.textPrimary)
+                }
+                .tint(DS.Color.neonPink)
+
+                if hasDeathDate {
+                    DatePicker(
+                        selection: $deathDate,
+                        in: ...Date(),
+                        displayedComponents: .date
+                    ) {
+                        Label(L10n.t("تاريخ الوفاة", "Death Date"), systemImage: "calendar.badge.exclamationmark")
+                            .foregroundColor(DS.Color.textPrimary)
+                    }
+                    .environment(\.locale, Locale(identifier: L10n.isArabic ? "ar" : "en_US"))
+                }
+            }
+        } header: {
+            sectionHeader(L10n.t("التواريخ والحالة", "Dates & Status"), icon: "calendar", color: DS.Color.secondary)
+        }
+    }
+
+    // MARK: - Section Header Helper
+    private func sectionHeader(_ title: String, icon: String, color: Color) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(DS.Font.scaled(11, weight: .bold))
+                .foregroundColor(color)
+            Text(title)
+                .font(DS.Font.caption1)
+                .fontWeight(.bold)
+                .foregroundColor(DS.Color.textSecondary)
+                .textCase(nil)
+        }
+    }
+
+    // MARK: - Save Action (unchanged logic)
     private func saveAction() {
         guard !isSaving else { return }
-        // تحقّق من الإنترنت قبل الإرسال — لا حفظ بدون اتصال (لا offline queue حالياً)
         guard NetworkMonitor.shared.isConnected else {
             showOfflineAlert = true
             return
         }
         isSaving = true
-        // Capture values before dismiss
-        let capturedFirstName = firstName
+        let capturedFirstName = firstName.trimmingCharacters(in: .whitespacesAndNewlines)
         let capturedPhone = KuwaitPhone.normalizedForStorage(
             country: selectedPhoneCountry,
             rawLocalDigits: phoneNumber
@@ -352,14 +334,12 @@ struct AddSonByAdminSheet: View {
         let capturedGender = selectedGender
         let vm = memberVM
 
-        // Dismiss immediately for snappy UX
         dismiss()
 
         let adminName = authVM.currentUser?.firstName ?? "مدير"
         let parentName = parent.fullName
 
         if let child = editingChild {
-            // Edit mode: detect what actually changed
             let origPhone = KuwaitPhone.normalizedForStorage(
                 country: KuwaitPhone.detectCountryAndLocal(child.phoneNumber).country,
                 rawLocalDigits: KuwaitPhone.detectCountryAndLocal(child.phoneNumber).localDigits
@@ -386,7 +366,6 @@ struct AddSonByAdminSheet: View {
                     gender: capturedGender
                 )
 
-                // بناء قائمة الحقول المتغيرة فقط
                 var changedFields: [String] = []
                 if nameChanged { changedFields.append(L10n.t("الاسم", "Name")) }
                 if phoneChanged { changedFields.append(L10n.t("الهاتف", "Phone")) }
@@ -406,7 +385,6 @@ struct AddSonByAdminSheet: View {
                 Log.info("[Admin] \(adminName) عدّل بيانات الابن \(capturedFirstName): \(fieldsList)")
             }
         } else {
-            // Add mode: create new child
             let capturedParentId = parent.id
             Task {
                 _ = await vm.addChild(
@@ -419,7 +397,6 @@ struct AddSonByAdminSheet: View {
                     gender: capturedGender,
                     silent: true
                 )
-                // إشعار: أي مدير أضاف الابن
                 await vm.notificationVM?.notifyAdminsWithPush(
                     title: L10n.t("إضافة ابن جديد", "New Child Added"),
                     body: L10n.t(

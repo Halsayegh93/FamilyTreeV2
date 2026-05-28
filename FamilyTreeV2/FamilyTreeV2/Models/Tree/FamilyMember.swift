@@ -130,6 +130,10 @@ nonisolated struct FamilyMember: Identifiable, Codable, Equatable, Sendable {
     }
     
     static func == (lhs: FamilyMember, rhs: FamilyMember) -> Bool {
+        // كانت تنقص: birthDate, deathDate, gender, fatherId, sortOrder, bio,
+        // isMarried, isPhoneHidden, email — SwiftUI ما يعيد رسم العضو لما
+        // تتغيّر هذي الحقول (مثلاً ترتيب الأبناء، أو إضافة سيرة).
+        // membersVersion في الـVM يغطّي بعض الحالات لكن ليس كلها.
         return lhs.id == rhs.id
             && lhs.role == rhs.role
             && lhs.firstName == rhs.firstName
@@ -139,6 +143,15 @@ nonisolated struct FamilyMember: Identifiable, Codable, Equatable, Sendable {
             && lhs.avatarUrl == rhs.avatarUrl
             && lhs.isDeceased == rhs.isDeceased
             && lhs.isHiddenFromTree == rhs.isHiddenFromTree
+            && lhs.birthDate == rhs.birthDate
+            && lhs.deathDate == rhs.deathDate
+            && lhs.gender == rhs.gender
+            && lhs.fatherId == rhs.fatherId
+            && lhs.sortOrder == rhs.sortOrder
+            && lhs.bio == rhs.bio
+            && lhs.isMarried == rhs.isMarried
+            && lhs.isPhoneHidden == rhs.isPhoneHidden
+            && lhs.email == rhs.email
         }
 
     // MARK: - Enums
@@ -151,7 +164,7 @@ nonisolated struct FamilyMember: Identifiable, Codable, Equatable, Sendable {
         case pending, active, frozen
     }
 
-    struct BioStation: Codable, Identifiable, Sendable {
+    struct BioStation: Codable, Identifiable, Sendable, Equatable {
         var id: UUID = UUID()
         var year: String?
         var title: String

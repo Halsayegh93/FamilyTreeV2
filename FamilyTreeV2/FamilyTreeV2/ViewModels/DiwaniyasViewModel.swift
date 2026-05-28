@@ -28,7 +28,10 @@ class DiwaniyasViewModel: ObservableObject {
         withAnimation(.snappy(duration: 0.25)) {
             array.removeAll { $0.id as AnyHashable == id as AnyHashable }
         }
-        Task {
+        // [weak self] غير ضروري هنا لأن الـ closures (refresh) محقونة من بره
+        // ولا تلمس self، لكن نُضيفه للاتساق ولحماية في حال تعديل مستقبلي.
+        Task { [weak self] in
+            _ = self // الـ Task يبقى حيّ ضروري لتنفيذ refresh — ما يحتاج guard
             try? await Task.sleep(nanoseconds: 800_000_000)
             await refresh()
         }
@@ -44,7 +47,8 @@ class DiwaniyasViewModel: ObservableObject {
         withAnimation(.snappy(duration: 0.25)) {
             array.removeAll { $0.id as AnyHashable == id as AnyHashable }
         }
-        Task {
+        Task { [weak self] in
+            _ = self
             await apiWork()
             try? await Task.sleep(nanoseconds: 500_000_000)
             await refresh()

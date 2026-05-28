@@ -30,6 +30,8 @@ struct PhoneNumberTextField: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: UITextField, context: Context) {
+        // The country can change while this UIKit field remains alive.
+        context.coordinator.parent = self
         if uiView.text != text {
             uiView.text = text
         }

@@ -293,8 +293,8 @@ struct HomeNewsView: View {
             )
             unifiedTile(
                 title: L10n.t("التواصل", "Contact"),
-                icon: "bubble.left.and.bubble.right.fill",
-                color: DS.Color.info,
+                icon: "envelope.fill",
+                color: Color(hex: "#0EA5E9"),
                 imageURL: nil,
                 count: nil,
                 action: { withAnimation(DS.Anim.snappy) { activeSubPage = .contact } }
@@ -310,7 +310,7 @@ struct HomeNewsView: View {
         }
     }
 
-    /// مربّع موحّد مدمج (أوسع من ارتفاع — 1.55:1) بنمط بطاقة المشاريع.
+    /// بطاقة وصول سريع بارتفاع موحد وصغير حتى تبقى الشبكة خفيفة.
     private func unifiedTile(
         title: String,
         icon: String,
@@ -366,7 +366,8 @@ struct HomeNewsView: View {
                     .shadow(color: .black.opacity(0.35), radius: 3, x: 0, y: 1)
                     .padding(8)
             }
-            .aspectRatio(1.85, contentMode: .fit)
+            .frame(maxWidth: .infinity)
+            .frame(height: 88)
             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)

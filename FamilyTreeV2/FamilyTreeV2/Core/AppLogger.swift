@@ -7,7 +7,20 @@ enum Log {
         category: "App"
     )
 
+    /// Routine traces are noisy during normal runs. Enable only while debugging
+    /// with the `-VerboseLogs` launch argument or `VERBOSE_LOGS=1` environment value.
+    private static let verboseInfoEnabled: Bool = {
+#if DEBUG
+        let processInfo = ProcessInfo.processInfo
+        return processInfo.arguments.contains("-VerboseLogs")
+            || processInfo.environment["VERBOSE_LOGS"] == "1"
+#else
+        return false
+#endif
+    }()
+
     static func info(_ message: String) {
+        guard verboseInfoEnabled else { return }
         logger.info("\(message)")
     }
 
