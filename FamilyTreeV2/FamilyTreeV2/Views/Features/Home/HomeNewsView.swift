@@ -30,6 +30,7 @@ struct HomeNewsView: View {
     @State private var newsSearchText = ""
     @State private var debouncedNewsSearch = ""
     @State private var newsSearchTask: Task<Void, Never>?
+    @State private var displayedMemberCount = 0
 
     private enum HomeSubPage {
         case archive, projects, contact, news
@@ -338,7 +339,10 @@ struct HomeNewsView: View {
         count: Int?,
         action: @escaping () -> Void
     ) -> some View {
-        Button(action: action) {
+        Button(action: {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            action()
+        }) {
             ZStack(alignment: .bottomLeading) {
                 tileBackground(color: color, imageURL: imageURL, icon: icon)
 
@@ -647,10 +651,20 @@ struct HomeNewsView: View {
                         .font(DS.Font.scaled(20, weight: .black))
                         .foregroundColor(DS.Color.textPrimary)
                         .lineLimit(1)
-                    Text(formattedToday)
-                        .font(DS.Font.scaled(11, weight: .medium))
-                        .foregroundColor(DS.Color.textSecondary)
-                        .lineLimit(1)
+                    HStack(spacing: 5) {
+                        Text(formattedToday)
+                            .font(DS.Font.scaled(11, weight: .medium))
+                            .foregroundColor(DS.Color.textSecondary)
+                            .lineLimit(1)
+                        Text("•")
+                            .font(DS.Font.scaled(9))
+                            .foregroundColor(DS.Color.textTertiary)
+                        Text(formattedHijri)
+                            .font(DS.Font.scaled(11, weight: .medium))
+                            .foregroundColor(DS.Color.primary.opacity(0.85))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                    }
                 }
 
                 Spacer(minLength: 0)
@@ -700,6 +714,16 @@ struct HomeNewsView: View {
         } else {
             return L10n.t("مساء الخير", "GOOD EVENING")
         }
+    }
+
+    private var formattedHijri: String {
+        var cal = Calendar(identifier: .islamicUmmAlQura)
+        cal.locale = Locale(identifier: L10n.isArabic ? "ar" : "en")
+        let formatter = DateFormatter()
+        formatter.calendar = cal
+        formatter.locale = Locale(identifier: L10n.isArabic ? "ar" : "en")
+        formatter.dateFormat = L10n.isArabic ? "d MMMM yyyy" : "d MMMM yyyy"
+        return formatter.string(from: Date()) + " " + L10n.t("هـ", "AH")
     }
 
     private var formattedToday: String {
@@ -771,16 +795,46 @@ struct HomeNewsView: View {
                         Text(L10n.t("شجرة العائلة", "Family Tree"))
                             .font(DS.Font.scaled(18, weight: .bold))
                             .foregroundColor(DS.Color.textPrimary)
-                        Text("\(memberVM.allMembers.count) " + L10n.t("فرد", "MEMBERS"))
-                            .font(DS.Font.scaled(10, weight: .heavy))
-                            .foregroundColor(DS.Color.textSecondary)
-                            .tracking(0.6)
+                        HStack(spacing: 3) {
+                            Text("\(displayedMemberCount)")
+                                .font(DS.Font.scaled(10, weight: .heavy))
+                                .foregroundColor(DS.Color.textSecondary)
+                                .contentTransition(.numericText())
+                            Text(L10n.t("فرد", "MEMBERS"))
+                                .font(DS.Font.scaled(10, weight: .heavy))
+                                .foregroundColor(DS.Color.textSecondary)
+                        }
+                        .tracking(0.6)
                     }
 
                     Spacer()
                 }
 
                 familyAvatarsRow
+
+                if let newest = newestMember, !newest.firstName.isEmpty {
+                    HStack(spacing: DS.Spacing.xs) {
+                        Image(systemName: "sparkles")
+                            .font(DS.Font.scaled(9, weight: .bold))
+                            .foregroundColor(DS.Color.secondary)
+                        Text(L10n.t("أحدث فرد", "Newest") + ": ")
+                            .font(DS.Font.scaled(10, weight: .medium))
+                            .foregroundColor(DS.Color.textTertiary)
+                        + Text(newest.firstName)
+                            .font(DS.Font.scaled(10, weight: .bold))
+                            .foregroundColor(DS.Color.textSecondary)
+                    }
+                    .padding(.horizontal, DS.Spacing.sm)
+                    .padding(.vertical, 5)
+                    .background(DS.Color.secondary.opacity(0.10))
+                    .clipShape(Capsule())
+                }
+            }
+            .onAppear {
+                withAnimation(DS.Anim.smooth) { displayedMemberCount = memberVM.allMembers.count }
+            }
+            .onChange(of: memberVM.allMembers.count) { newCount in
+                withAnimation(DS.Anim.smooth) { displayedMemberCount = newCount }
             }
             .padding(DS.Spacing.lg)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -975,11 +1029,14 @@ struct HomeNewsView: View {
         .buttonStyle(DSScaleButtonStyle())
     }
 
-    // صف معاينة خبر — avatar للمؤلف + نص الخبر + اسم رباعي/وقت (لون موحّد)
+    // صف معاينة خبر — avatar للمؤلف + نص الخبر + اسم/وقت + تفاعلات + صورة مصغّرة
     private func newsPreviewRow(for news: NewsPost) -> some View {
         let member = news.author_id.flatMap { memberVM.member(byId: $0) }
         let displayName = member?.fourPartName ?? news.author_name
         let roleC = roleColorFor(news.role_color)
+        let likes = newsVM.likesCountByPost[news.id] ?? 0
+        let comments = newsVM.commentsCountByPost[news.id] ?? 0
+        let thumbURL = news.mediaURLs.first.flatMap { URL(string: $0) }
         return HStack(alignment: .top, spacing: DS.Spacing.sm) {
             DSMemberAvatar(
                 name: news.author_name,
@@ -1007,11 +1064,44 @@ struct HomeNewsView: View {
                         .font(DS.Font.scaled(9))
                         .foregroundColor(DS.Color.textTertiary)
                         .lineLimit(1)
+
+                    if news.hasPoll {
+                        previewMetaChip(icon: "chart.bar.fill", value: nil)
+                    }
+                    if likes > 0 {
+                        previewMetaChip(icon: "heart.fill", value: likes)
+                    }
+                    if comments > 0 {
+                        previewMetaChip(icon: "bubble.left.fill", value: comments)
+                    }
                 }
             }
 
             Spacer(minLength: 0)
+
+            if let thumbURL {
+                CachedAsyncImage(url: thumbURL) { img in
+                    img.resizable().scaledToFill()
+                } placeholder: {
+                    DS.Color.mutedBackground
+                }
+                .frame(width: 44, height: 44)
+                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
+            }
         }
+    }
+
+    /// شريحة بيانات صغيرة في معاينة الخبر (تفاعل/تصويت)
+    private func previewMetaChip(icon: String, value: Int?) -> some View {
+        HStack(spacing: 2) {
+            Image(systemName: icon)
+                .font(DS.Font.scaled(8, weight: .bold))
+            if let value {
+                Text("\(value)")
+                    .font(DS.Font.scaled(9, weight: .bold))
+            }
+        }
+        .foregroundColor(DS.Color.textTertiary)
     }
 
     // MARK: - بطاقة الإدارة (Bento) — للمراقبين فقط
@@ -1045,6 +1135,13 @@ struct HomeNewsView: View {
             + adminRequestVM.photoSuggestionRequests.count
             + newsVM.pendingNewsRequests.count
             + memberVM.allMembers.filter { $0.role == .pending }.count
+    }
+
+    /// أحدث عضو مُضاف للشجرة (حسب تاريخ الإنشاء)
+    private var newestMember: FamilyMember? {
+        memberVM.allMembers
+            .filter { $0.role != .pending && parseISO($0.createdAt) != nil }
+            .max { (parseISO($0.createdAt) ?? .distantPast) < (parseISO($1.createdAt) ?? .distantPast) }
     }
 
     private var newMembersTodayCount: Int {
