@@ -265,6 +265,22 @@ class AdminRequestViewModel: ObservableObject {
         }
     }
 
+    /// حذف رسائل تواصل (واحدة أو أكثر) من admin_requests.
+    func deleteContactMessages(ids: [UUID]) async {
+        guard NetworkMonitor.shared.requireOnline(), !ids.isEmpty else { return }
+        do {
+            try await supabase
+                .from("admin_requests")
+                .delete()
+                .in("id", values: ids.map { $0.uuidString })
+                .execute()
+            contactMessages.removeAll { ids.contains($0.id) }
+            Log.info("[Contact] تم حذف \(ids.count) رسالة")
+        } catch {
+            Log.error("فشل حذف الرسائل: \(error.localizedDescription)")
+        }
+    }
+
     /// إرسال رد إداري على رسالة تواصل.
     /// يحفظ الرد في DB + إشعار داخلي + push + إيميل (إذا للعضو إيميل).
     // MARK: - Fetch / Approve / Reject Tree Edit Requests

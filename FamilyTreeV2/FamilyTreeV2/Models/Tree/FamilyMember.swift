@@ -483,6 +483,22 @@ enum KuwaitPhone {
         guard let e164 = e164(normalized) else { return nil }
         return URL(string: "tel://\(e164)")
     }
+
+    /// رابط واتساب (wa.me) — يقبل رقم دولي بكود أو محلي كويتي
+    static func whatsappURL(_ raw: String?) -> URL? {
+        guard let raw, !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        let normalized = normalizeDigits(raw).trimmingCharacters(in: .whitespacesAndNewlines)
+        let digits: String
+        if normalized.hasPrefix("+") {
+            digits = String(normalized.dropFirst()).filter(\.isNumber)
+        } else if let e164 = e164(normalized) {
+            digits = String(e164.dropFirst())
+        } else {
+            digits = normalized.filter(\.isNumber)
+        }
+        guard digits.count >= 8 else { return nil }
+        return URL(string: "https://wa.me/\(digits)")
+    }
 }
 
 // MARK: - Display sort

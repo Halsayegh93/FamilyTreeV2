@@ -409,27 +409,13 @@ struct FamilyProjectsView: View {
                 } else {
                     projectPlaceholderCover
                 }
-
-                if project.approvalStatus == "pending" {
-                    VStack {
-                        HStack {
-                            Spacer()
-                            HStack(spacing: 3) {
-                                Image(systemName: "clock.fill").font(DS.Font.scaled(9, weight: .bold))
-                                Text(L10n.t("بانتظار", "Pending")).font(DS.Font.scaled(9, weight: .bold))
-                            }
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 6).padding(.vertical, 3)
-                            .background(Capsule().fill(DS.Color.warning))
-                            .padding(6)
-                        }
-                        Spacer()
-                    }
-                }
             }
-            .frame(height: 110)
+            .frame(width: 96, height: 96)
             .clipped()
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+            .clipShape(Circle())
+            .overlay(Circle().strokeBorder(DS.Color.primary.opacity(0.12), lineWidth: 1))
+            .frame(maxWidth: .infinity, alignment: .center)
+            .padding(.top, DS.Spacing.xs)
 
             // العنوان والمالك
             VStack(alignment: .leading, spacing: 2) {
@@ -465,6 +451,18 @@ struct FamilyProjectsView: View {
                         : DS.Color.primary.opacity(0.08),
                         lineWidth: 1)
         )
+        .overlay(alignment: .topTrailing) {
+            if project.approvalStatus == "pending" {
+                HStack(spacing: 3) {
+                    Image(systemName: "clock.fill").font(DS.Font.scaled(9, weight: .bold))
+                    Text(L10n.t("بانتظار", "Pending")).font(DS.Font.scaled(9, weight: .bold))
+                }
+                .foregroundColor(.white)
+                .padding(.horizontal, 6).padding(.vertical, 3)
+                .background(Capsule().fill(DS.Color.warning))
+                .padding(DS.Spacing.sm)
+            }
+        }
         .opacity(project.approvalStatus == "pending" ? 0.85 : 1.0)
         .dsSubtleShadow()
     }
@@ -472,12 +470,12 @@ struct FamilyProjectsView: View {
     /// أيقونات المنصات اللي عنده روابط فيها — مؤشّر بصري سريع.
     private func socialIndicators(project: Project) -> some View {
         HStack(spacing: 4) {
-            if project.phoneNumber != nil    { socialDot(icon: "phone.fill", color: DS.Color.success) }
-            if project.whatsappNumber != nil { socialDot(icon: "message.fill", color: Color(hex: "#25D366")) }
-            if project.instagramUrl != nil   { socialDot(icon: "camera.fill", color: Color(hex: "#E1306C")) }
-            if project.twitterUrl != nil     { socialDot(icon: "xmark", color: Color(hex: "#000000")) }
-            if project.websiteUrl != nil     { socialDot(icon: "globe", color: DS.Color.info) }
-            if project.locationUrl != nil    { socialDot(icon: "mappin.and.ellipse", color: Color(hex: "#EA4335")) }
+            if project.phoneNumber?.isEmpty == false    { socialDot(icon: "phone.fill", color: DS.Color.success) }
+            if project.whatsappNumber?.isEmpty == false { socialDot(icon: "message.fill", color: Color(hex: "#25D366")) }
+            if project.instagramUrl?.isEmpty == false   { socialDot(icon: "camera.fill", color: Color(hex: "#E1306C")) }
+            if project.twitterUrl?.isEmpty == false     { socialDot(icon: "xmark", color: Color(hex: "#000000")) }
+            if project.websiteUrl?.isEmpty == false     { socialDot(icon: "globe", color: DS.Color.info) }
+            if project.locationUrl?.isEmpty == false    { socialDot(icon: "mappin.and.ellipse", color: Color(hex: "#EA4335")) }
         }
     }
 
@@ -569,7 +567,7 @@ struct AddProjectView: View {
     @State private var websiteUrl = ""
     @State private var instagramUrl = ""
     @State private var twitterUrl = ""
-    @State private var whatsappNumber = ""
+    @State private var whatsappNumber = "+965 "
     @State private var phoneNumber = ""
     @State private var locationUrl = ""
     @State private var logoImage: UIImage? = nil
@@ -1039,7 +1037,10 @@ struct AddProjectView: View {
             instagramUrl: instagramUrl.isEmpty ? nil : instagramUrl,
             twitterUrl: twitterUrl.isEmpty ? nil : twitterUrl,
             snapchatUrl: nil,
-            whatsappNumber: whatsappNumber.isEmpty ? nil : whatsappNumber,
+            whatsappNumber: {
+                let t = whatsappNumber.trimmingCharacters(in: .whitespacesAndNewlines)
+                return (t.isEmpty || t == "+965") ? nil : whatsappNumber
+            }(),
             phoneNumber: phoneNumber.isEmpty ? nil : phoneNumber,
             locationUrl: locationUrl.isEmpty ? nil : locationUrl
         )

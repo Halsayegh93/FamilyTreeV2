@@ -362,6 +362,7 @@ struct ProjectDetailView: View {
                         .foregroundColor(DS.Color.textTertiary)
                 }
             }
+            .contentShape(Rectangle())
         }
         .buttonStyle(DSScaleButtonStyle())
     }

@@ -62,6 +62,7 @@ final class FamilyArchiveViewModel: ObservableObject {
         title: String,
         description: String?,
         category: ArchiveItem.Category,
+        year: Int? = nil,
         fileData: Data,
         fileName: String,
         mimeType: String
@@ -118,6 +119,7 @@ final class FamilyArchiveViewModel: ObservableObject {
                 "uploaded_by":     AnyEncodable(uploaderId.uuidString),
                 "approval_status": AnyEncodable(isAdmin ? "approved" : "pending")
             ]
+            if let year { payload["year"] = AnyEncodable(year) }
             if isAdmin {
                 payload["approved_by"] = AnyEncodable(uploaderId.uuidString)
                 payload["approved_at"] = AnyEncodable(nowIso)
@@ -143,6 +145,48 @@ final class FamilyArchiveViewModel: ObservableObject {
             self.errorMessage = L10n.t("تعذّر رفع العنصر.", "Failed to upload item.")
             Log.error("[Archive] خطأ رفع: \(error.localizedDescription)")
             return nil
+        }
+    }
+
+    // MARK: - Edit (تعديل البيانات الوصفية — بدون تغيير الملف)
+
+    /// تعديل العنوان/الوصف/القسم/السنة لعنصر موجود. متاح للمدير/المالك أو صاحب العنصر.
+    func updateItem(
+        _ item: ArchiveItem,
+        title: String,
+        description: String?,
+        category: ArchiveItem.Category,
+        year: Int?
+    ) async -> Bool {
+        guard NetworkMonitor.shared.requireOnline() else { return false }
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedTitle.isEmpty else { return false }
+        let trimmedDesc = description?.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        let payload: [String: AnyEncodable] = [
+            "title":       AnyEncodable(trimmedTitle),
+            "description": AnyEncodable((trimmedDesc?.isEmpty ?? true) ? Optional<String>.none : trimmedDesc),
+            "category":    AnyEncodable(category.rawValue),
+            "year":        AnyEncodable(year)
+        ]
+
+        do {
+            let updated: [ArchiveItem] = try await supabase
+                .from(tableName)
+                .update(payload)
+                .eq("id", value: item.id.uuidString)
+                .select()
+                .execute()
+                .value
+            if let newItem = updated.first, let idx = items.firstIndex(where: { $0.id == item.id }) {
+                items[idx] = newItem
+            }
+            Log.info("[Archive] تعديل ناجح: \(trimmedTitle)")
+            return true
+        } catch {
+            self.errorMessage = L10n.t("تعذّر حفظ التعديل.", "Failed to save changes.")
+            Log.error("[Archive] خطأ تعديل: \(error.localizedDescription)")
+            return false
         }
     }
 

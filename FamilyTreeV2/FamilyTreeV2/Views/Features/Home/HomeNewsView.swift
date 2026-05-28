@@ -380,7 +380,7 @@ struct HomeNewsView: View {
 
                 // العنوان أسفل — سطر واحد لضمان تساوي الأحجام
                 Text(title)
-                    .font(DS.Font.scaled(15, weight: .black))
+                    .font(DS.Font.scaled(13, weight: .black))
                     .foregroundColor(.white)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
@@ -643,14 +643,13 @@ struct HomeNewsView: View {
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(timeBasedGreeting)
-                        .font(.system(.footnote, design: .serif).weight(.heavy))
+                        .font(DS.Font.scaled(11, weight: .heavy))
                         .foregroundColor(DS.Color.primary)
                         .tracking(0.6)
                     Text(authVM.currentUser?.firstName ?? L10n.t("أهلاً بك", "Welcome"))
                         .font(DS.Font.scaled(20, weight: .black))
                         .foregroundColor(DS.Color.textPrimary)
                         .lineLimit(1)
-                        .minimumScaleFactor(0.7)
                 }
 
                 Spacer(minLength: 0)
@@ -678,9 +677,14 @@ struct HomeNewsView: View {
                         .frame(width: 120, height: 120)
                         .blur(radius: 40)
                         .offset(x: -50, y: 70)
+                    Circle()
+                        .fill(DS.Color.primary.opacity(0.13))
+                        .frame(width: 120, height: 120)
+                        .blur(radius: 35)
+                        .offset(x: -90, y: -50)
                 }
             )
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xxl, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xxl))
             .shadow(color: .black.opacity(0.045), radius: 14, x: 0, y: 4)
         }
         .buttonStyle(DSScaleButtonStyle())
@@ -756,7 +760,7 @@ struct HomeNewsView: View {
                     premiumIcon("tree.fill", color: DS.Color.secondary)
 
                     Text(L10n.t("شجرة العائلة", "Family Tree"))
-                        .font(DS.Font.scaled(21, weight: .black))
+                        .font(DS.Font.scaled(18, weight: .bold))
                         .foregroundColor(DS.Color.textPrimary)
 
                     Spacer()
@@ -858,7 +862,7 @@ struct HomeNewsView: View {
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(L10n.t("آخر الأخبار", "Latest News"))
-                            .font(DS.Font.scaled(21, weight: .black))
+                            .font(DS.Font.scaled(18, weight: .bold))
                             .foregroundColor(DS.Color.textPrimary)
                         if !newsVM.allNews.isEmpty {
                             Text("\(newsVM.allNews.count) " + L10n.t("منشور", "POSTS"))
@@ -1337,12 +1341,12 @@ struct HomeNewsView: View {
     }
 
     // أيقونة دائرية بتدرّج خفيف + لمسة highlight
-    private func premiumIcon(_ icon: String, color: Color, size: CGFloat = 40) -> some View {
+    private func premiumIcon(_ icon: String, color: Color, size: CGFloat = 48) -> some View {
         ZStack {
             Circle()
                 .fill(
                     LinearGradient(
-                        colors: [color, color.opacity(0.72)],
+                        colors: [color.opacity(0.22), color.opacity(0.10)],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
@@ -1350,13 +1354,12 @@ struct HomeNewsView: View {
                 .frame(width: size, height: size)
                 .overlay(
                     Circle()
-                        .strokeBorder(.white.opacity(0.25), lineWidth: 1)
+                        .strokeBorder(color.opacity(0.15), lineWidth: 0.5)
                 )
-                .shadow(color: color.opacity(0.40), radius: 7, x: 0, y: 3)
 
             Image(systemName: icon)
-                .font(DS.Font.scaled(size * 0.44, weight: .black))
-                .foregroundColor(.white)
+                .font(DS.Font.scaled(size * 0.42, weight: .bold))
+                .foregroundColor(color)
         }
     }
 

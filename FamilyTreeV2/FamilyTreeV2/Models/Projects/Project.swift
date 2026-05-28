@@ -85,8 +85,8 @@ nonisolated struct Project: Identifiable, Codable, Sendable {
 
     /// Whether this project has any social media links
     var hasSocialLinks: Bool {
-        instagramUrl != nil || twitterUrl != nil ||
-        snapchatUrl != nil || whatsappNumber != nil || websiteUrl != nil ||
-        phoneNumber != nil || locationUrl != nil
+        [instagramUrl, twitterUrl, snapchatUrl, whatsappNumber,
+         websiteUrl, phoneNumber, locationUrl]
+            .contains { $0?.isEmpty == false }
     }
 }

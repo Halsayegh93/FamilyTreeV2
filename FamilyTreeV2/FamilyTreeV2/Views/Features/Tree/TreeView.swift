@@ -898,27 +898,39 @@ struct RecursiveTreeBranch: View {
             ) {
                 selectedMember = member
             } onToggle: {
-                let willExpand = !isExpanded
+                // هل لهالعقدة مسار أعمق مفتوح (أحد أبنائها ضمن activePath)؟
+                let hasDeeperPath = (childrenByFatherId[member.id] ?? []).contains { activePath.contains($0.id) }
+                // نركّز على العقدة في حالتي: الفتح، أو التسطيح (إظهار كل الأبناء)
+                let focusOnNode = !isExpanded || hasDeeperPath
+
+                func collectDescendants(of parentId: UUID, into set: inout Set<UUID>) {
+                    for child in childrenByFatherId[parentId] ?? [] {
+                        set.insert(child.id)
+                        collectDescendants(of: child.id, into: &set)
+                    }
+                }
+
                 withAnimation(.easeInOut(duration: 0.2)) {
-                    if willExpand {
-                        // نضيف العقدة للمسار بدون ما نشيل الإخوان المفتوحين
+                    if !isExpanded {
+                        // فتح — نضيف العقدة للمسار (تظهر كل أبنائها لعدم وجود مسار أعمق)
                         activePath.insert(member.id)
-                        // زوم 75% عند فتح عقدة
+                        scale = TreeConst.openNodeScale
+                        baseScale = TreeConst.openNodeScale
+                    } else if hasDeeperPath {
+                        // مفتوحة وفيها مسار أعمق → سطّح لهالعقدة عشان تظهر كل أبنائها
+                        // (نشيل الذرية من المسار ونبقي العقدة نفسها)
+                        var idsToRemove: Set<UUID> = []
+                        collectDescendants(of: member.id, into: &idsToRemove)
+                        activePath.subtract(idsToRemove)
+                        searchedMemberID = nil
                         scale = TreeConst.openNodeScale
                         baseScale = TreeConst.openNodeScale
                     } else {
-                        // نقفل هالعقدة وكل ذريتها
+                        // طي — نقفل العقدة وكل ذريتها
                         var idsToRemove: Set<UUID> = [member.id]
-                        func collectDescendants(of parentId: UUID) {
-                            for child in childrenByFatherId[parentId] ?? [] {
-                                idsToRemove.insert(child.id)
-                                collectDescendants(of: child.id)
-                            }
-                        }
-                        collectDescendants(of: member.id)
+                        collectDescendants(of: member.id, into: &idsToRemove)
                         activePath.subtract(idsToRemove)
                         searchedMemberID = nil
-                        // رجوع عند إغلاق العقدة
                         scale = TreeConst.closeNodeScale
                         baseScale = TreeConst.closeNodeScale
                     }
@@ -927,8 +939,7 @@ struct RecursiveTreeBranch: View {
                     try? await Task.sleep(nanoseconds: TreeConst.scrollDelay)
                     guard !Task.isCancelled else { return }
                     scrollAnchor = .center
-                    // عند الفتح نركز على العقدة، عند الإغلاق نركز على الأب لعرض الإخوان
-                    scrollTarget = willExpand ? member.id : (member.fatherId ?? member.id)
+                    scrollTarget = focusOnNode ? member.id : (member.fatherId ?? member.id)
                     scrollCounter += 1
                 }
             }.id(member.id)

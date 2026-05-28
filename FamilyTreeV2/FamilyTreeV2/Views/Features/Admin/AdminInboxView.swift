@@ -9,6 +9,10 @@ struct AdminInboxView: View {
     @State private var isLoading = false
     @State private var selectedMessage: AdminRequest? = nil
     @State private var filter: InboxFilter = .pending
+    @State private var isSelectMode = false
+    @State private var selectedIDs: Set<UUID> = []
+    @State private var showDeleteConfirm = false
+    @State private var isDeleting = false
 
     private enum InboxFilter: String, CaseIterable {
         case pending, handled
@@ -70,10 +74,21 @@ struct AdminInboxView: View {
                         LazyVStack(spacing: DS.Spacing.sm) {
                             ForEach(filteredMessages) { msg in
                                 Button {
-                                    adminRequestVM.markContactMessageRead(msg.id)
-                                    selectedMessage = msg
+                                    if isSelectMode {
+                                        toggleSelection(msg.id)
+                                    } else {
+                                        adminRequestVM.markContactMessageRead(msg.id)
+                                        selectedMessage = msg
+                                    }
                                 } label: {
-                                    messageRow(msg)
+                                    HStack(spacing: DS.Spacing.sm) {
+                                        if isSelectMode {
+                                            Image(systemName: selectedIDs.contains(msg.id) ? "checkmark.circle.fill" : "circle")
+                                                .font(DS.Font.scaled(20, weight: .semibold))
+                                                .foregroundColor(selectedIDs.contains(msg.id) ? DS.Color.primary : DS.Color.textTertiary)
+                                        }
+                                        messageRow(msg)
+                                    }
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -85,6 +100,37 @@ struct AdminInboxView: View {
                     .refreshable { await adminRequestVM.fetchContactMessages(force: true) }
                 }
             }
+
+            // شريط الحذف السفلي في وضع التحديد
+            if isSelectMode {
+                VStack {
+                    Spacer()
+                    deleteBar
+                }
+            }
+        }
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                if !filteredMessages.isEmpty {
+                    Button(isSelectMode ? L10n.t("تم", "Done") : L10n.t("تحديد", "Select")) {
+                        withAnimation(DS.Anim.snappy) {
+                            isSelectMode.toggle()
+                            if !isSelectMode { selectedIDs.removeAll() }
+                        }
+                    }
+                    .font(DS.Font.calloutBold)
+                    .foregroundColor(DS.Color.primary)
+                }
+            }
+        }
+        .alert(L10n.t("حذف الرسائل", "Delete Messages"), isPresented: $showDeleteConfirm) {
+            Button(L10n.t("حذف", "Delete"), role: .destructive) {
+                Task { await deleteSelected() }
+            }
+            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
+        } message: {
+            Text(L10n.t("هل تريد حذف \(selectedIDs.count) رسالة؟ لا يمكن التراجع.",
+                        "Delete \(selectedIDs.count) message(s)? This can't be undone."))
         }
         .navigationTitle(L10n.t("رسائل التواصل", "Contact Messages"))
         .navigationBarTitleDisplayMode(.inline)
@@ -108,6 +154,7 @@ struct AdminInboxView: View {
 
     private var filterBar: some View {
         HStack(spacing: DS.Spacing.sm) {
+            Spacer(minLength: 0)
             ForEach(InboxFilter.allCases, id: \.self) { f in
                 let selected = filter == f
                 let count = f == .pending
@@ -116,28 +163,87 @@ struct AdminInboxView: View {
                 Button {
                     withAnimation(DS.Anim.snappy) { filter = f }
                 } label: {
-                    HStack(spacing: DS.Spacing.xs) {
+                    HStack(spacing: 5) {
                         Text(f.title)
-                            .font(DS.Font.scaled(13, weight: .semibold))
+                            .font(DS.Font.scaled(13, weight: selected ? .bold : .semibold))
+                            .lineLimit(1)
                         if count > 0 {
                             Text("\(count)")
-                                .font(DS.Font.scaled(11, weight: .bold))
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(selected ? Color.white.opacity(0.25) : DS.Color.primary.opacity(0.15))
-                                .clipShape(Capsule())
+                                .font(DS.Font.scaled(9, weight: .black))
+                                .foregroundColor(selected ? .white : .white)
+                                .frame(minWidth: 16, minHeight: 16)
+                                .padding(.horizontal, 3)
+                                .background(Capsule().fill(selected ? Color.white.opacity(0.28) : DS.Color.primary))
                         }
                     }
-                    .foregroundColor(selected ? .white : DS.Color.textPrimary)
+                    .foregroundColor(selected ? .white : DS.Color.primary)
                     .padding(.horizontal, DS.Spacing.md)
-                    .padding(.vertical, DS.Spacing.sm)
-                    .background(selected ? DS.Color.primary : DS.Color.surface)
-                    .clipShape(Capsule())
+                    .padding(.vertical, 8)
+                    .background(
+                        Group {
+                            if selected {
+                                Capsule(style: .continuous).fill(DS.Color.gradientPrimary)
+                            } else {
+                                Capsule(style: .continuous).fill(DS.Color.primary.opacity(0.10))
+                            }
+                        }
+                    )
+                    .overlay(
+                        Capsule(style: .continuous)
+                            .strokeBorder(selected ? Color.white.opacity(0.20) : DS.Color.primary.opacity(0.22), lineWidth: selected ? 0.5 : 1)
+                    )
+                    .shadow(color: selected ? DS.Color.primary.opacity(0.35) : .clear, radius: 8, x: 0, y: 3)
                 }
                 .buttonStyle(DSScaleButtonStyle())
             }
-            Spacer()
+            Spacer(minLength: 0)
         }
+    }
+
+    // MARK: - Select / Delete
+
+    private func toggleSelection(_ id: UUID) {
+        if selectedIDs.contains(id) { selectedIDs.remove(id) } else { selectedIDs.insert(id) }
+    }
+
+    private func deleteSelected() async {
+        isDeleting = true
+        await adminRequestVM.deleteContactMessages(ids: Array(selectedIDs))
+        selectedIDs.removeAll()
+        isDeleting = false
+        withAnimation(DS.Anim.snappy) { isSelectMode = false }
+    }
+
+    private var deleteBar: some View {
+        HStack(spacing: DS.Spacing.md) {
+            Text(L10n.t("\(selectedIDs.count) محدّدة", "\(selectedIDs.count) selected"))
+                .font(DS.Font.calloutBold)
+                .foregroundColor(DS.Color.textSecondary)
+            Spacer()
+            Button {
+                showDeleteConfirm = true
+            } label: {
+                HStack(spacing: 5) {
+                    if isDeleting {
+                        ProgressView().tint(.white)
+                    } else {
+                        Image(systemName: "trash.fill").font(DS.Font.scaled(13, weight: .bold))
+                    }
+                    Text(L10n.t("حذف", "Delete")).font(DS.Font.scaled(14, weight: .bold))
+                }
+                .foregroundColor(.white)
+                .padding(.horizontal, DS.Spacing.xl)
+                .padding(.vertical, 12)
+                .background(Capsule().fill(DS.Color.error))
+            }
+            .buttonStyle(.plain)
+            .disabled(selectedIDs.isEmpty || isDeleting)
+            .opacity(selectedIDs.isEmpty ? 0.5 : 1)
+        }
+        .padding(.horizontal, DS.Spacing.lg)
+        .padding(.vertical, DS.Spacing.md)
+        .background(.ultraThinMaterial)
+        .overlay(Divider(), alignment: .top)
     }
 
     // MARK: - Search

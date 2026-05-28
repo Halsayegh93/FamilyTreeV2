@@ -725,6 +725,7 @@ struct AdminAllRequestsView: View {
     private var sectionSelector: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: DS.Spacing.sm) {
+                Spacer(minLength: 0)
                 sectionChip(
                     title: L10n.t("الكل", "All"),
                     icon: "tray.full.fill",
@@ -750,9 +751,11 @@ struct AdminAllRequestsView: View {
                         }
                     }
                 }
+                Spacer(minLength: 0)
             }
             .padding(.horizontal, DS.Spacing.lg)
             .padding(.vertical, 4) // مساحة لظل النشط
+            .frame(minWidth: UIScreen.main.bounds.width - DS.Spacing.lg)
         }
     }
 
@@ -778,6 +781,7 @@ struct AdminAllRequestsView: View {
         let sectionTabs = RequestTab.allCases.filter { $0.section == section }
         return ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: DS.Spacing.sm) {
+                Spacer(minLength: 0)
                 ForEach(sectionTabs) { tab in
                     if selectedTab == tab {
                         activeTabPill(tab).transition(.opacity)
@@ -785,9 +789,11 @@ struct AdminAllRequestsView: View {
                         inactiveTabIcon(tab).transition(.opacity)
                     }
                 }
+                Spacer(minLength: 0)
             }
             .padding(.horizontal, DS.Spacing.lg)
             .padding(.vertical, 4) // مساحة لظل النشط
+            .frame(minWidth: UIScreen.main.bounds.width - DS.Spacing.lg)
         }
     }
 
@@ -1018,7 +1024,6 @@ struct AdminAllRequestsView: View {
         let hasBadge = count > 0
         return Button(action: action) {
             ZStack(alignment: .topTrailing) {
-                // الأيقونة — تتزحزح أسفل/يمين لما في badge ليفسح له مكاناً
                 Image(systemName: icon)
                     .font(DS.Font.scaled(14, weight: .bold))
                     .foregroundColor(color)
@@ -3144,26 +3149,23 @@ struct AdminAllRequestsView: View {
     private func requestDetailSheet(_ detail: RequestDetail) -> some View {
         let meta = detailMeta(for: detail)
         return NavigationStack {
-            ZStack(alignment: .bottom) {
-                ScrollView(showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: DS.Spacing.md) {
-                        // Hero — أيقونة كبيرة + نوع الطلب + الوقت
-                        detailHero(icon: meta.icon, color: meta.color, title: meta.title, timestamp: meta.timestamp)
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: DS.Spacing.md) {
+                    // Hero — أيقونة كبيرة + نوع الطلب + الوقت
+                    detailHero(icon: meta.icon, color: meta.color, title: meta.title, timestamp: meta.timestamp)
 
-                        // محتوى مخصّص لكل نوع
-                        detailContent(for: detail)
+                    // محتوى مخصّص لكل نوع
+                    detailContent(for: detail)
 
-                        // مساحة سفلية لتجنّب اختفاء آخر بطاقة خلف شريط الإجراءات
-                        Color.clear.frame(height: 90)
-                    }
-                    .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.top, DS.Spacing.md)
+                    // أزرار الموافقة/الرفض — أسفل الطلب (غير ثابتة)
+                    stickyActionsBar(for: detail, accent: meta.color)
+                        .padding(.top, DS.Spacing.sm)
                 }
-                .background(DS.Color.background)
-
-                // شريط الإجراءات السفلي الثابت
-                stickyActionsBar(for: detail, accent: meta.color)
+                .padding(.horizontal, DS.Spacing.lg)
+                .padding(.top, DS.Spacing.md)
+                .padding(.bottom, DS.Spacing.xl)
             }
+            .background(DS.Color.background)
             .navigationTitle(L10n.t("تفاصيل الطلب", "Request Details"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -3276,6 +3278,12 @@ struct AdminAllRequestsView: View {
             if let phone = member.phoneNumber, !phone.isEmpty {
                 infoCard(icon: "phone.fill", label: L10n.t("رقم الهاتف", "Phone"),
                          value: KuwaitPhone.display(phone), color: DS.Color.success)
+                if let wa = KuwaitPhone.whatsappURL(phone) {
+                    contactLinkCard(icon: "message.fill",
+                                    label: L10n.t("تواصل واتساب", "WhatsApp"),
+                                    value: KuwaitPhone.display(phone),
+                                    color: DS.Color.success, url: wa)
+                }
             }
 
         case .news(let post):
@@ -3367,6 +3375,37 @@ struct AdminAllRequestsView: View {
                              label: L10n.t("الوصف", "Description"),
                              text: desc)
             }
+            // روابط التواصل
+            if let wa = project.whatsappNumber, !wa.isEmpty, let url = KuwaitPhone.whatsappURL(wa) {
+                contactLinkCard(icon: "message.fill", label: L10n.t("واتساب", "WhatsApp"),
+                                value: KuwaitPhone.display(wa), color: DS.Color.success, url: url)
+            }
+            if let phone = project.phoneNumber, !phone.isEmpty, let url = KuwaitPhone.telURL(phone) {
+                contactLinkCard(icon: "phone.fill", label: L10n.t("هاتف", "Phone"),
+                                value: KuwaitPhone.display(phone), color: DS.Color.primary, url: url)
+            }
+            if let web = project.websiteUrl, !web.isEmpty,
+               let url = URL(string: web.lowercased().hasPrefix("http") ? web : "https://\(web)") {
+                contactLinkCard(icon: "globe", label: L10n.t("الموقع", "Website"),
+                                value: web, color: DS.Color.info, url: url)
+            }
+            if let ig = project.instagramUrl, !ig.isEmpty, let url = socialURL(ig, base: "https://instagram.com/") {
+                contactLinkCard(icon: "camera.fill", label: L10n.t("إنستغرام", "Instagram"),
+                                value: ig, color: DS.Color.neonPink, url: url)
+            }
+            if let tw = project.twitterUrl, !tw.isEmpty, let url = socialURL(tw, base: "https://twitter.com/") {
+                contactLinkCard(icon: "bird.fill", label: "X / Twitter",
+                                value: tw, color: DS.Color.neonBlue, url: url)
+            }
+            if let sc = project.snapchatUrl, !sc.isEmpty, let url = socialURL(sc, base: "https://snapchat.com/add/") {
+                contactLinkCard(icon: "camera.viewfinder", label: L10n.t("سناب شات", "Snapchat"),
+                                value: sc, color: DS.Color.warning, url: url)
+            }
+            if let loc = project.locationUrl, !loc.isEmpty,
+               let url = URL(string: loc.lowercased().hasPrefix("http") ? loc : "https://\(loc)") {
+                contactLinkCard(icon: "mappin.and.ellipse", label: L10n.t("الموقع الجغرافي", "Location"),
+                                value: L10n.t("فتح الخريطة", "Open map"), color: DS.Color.error, url: url)
+            }
         }
     }
 
@@ -3401,6 +3440,54 @@ struct AdminAllRequestsView: View {
             RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
                 .strokeBorder(color.opacity(0.12), lineWidth: 1)
         )
+    }
+
+    /// بطاقة رابط قابلة للنقر — تفتح URL (واتساب/موقع/سوشال).
+    private func contactLinkCard(icon: String, label: String, value: String, color: Color, url: URL) -> some View {
+        Button {
+            UIApplication.shared.open(url)
+        } label: {
+            HStack(spacing: DS.Spacing.sm) {
+                ZStack {
+                    Circle().fill(color.opacity(0.15)).frame(width: 36, height: 36)
+                    Image(systemName: icon)
+                        .font(DS.Font.scaled(13, weight: .bold))
+                        .foregroundColor(color)
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(label)
+                        .font(DS.Font.scaled(11, weight: .semibold))
+                        .foregroundColor(DS.Color.textSecondary)
+                    Text(value)
+                        .font(DS.Font.scaled(15, weight: .bold))
+                        .foregroundColor(DS.Color.textPrimary)
+                        .lineLimit(1)
+                }
+                Spacer()
+                Image(systemName: "arrow.up.forward")
+                    .font(DS.Font.scaled(12, weight: .bold))
+                    .foregroundColor(color.opacity(0.7))
+            }
+            .padding(DS.Spacing.md)
+            .background(
+                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                    .fill(DS.Color.surface)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                    .strokeBorder(color.opacity(0.20), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// يبني رابط سوشال من handle (@user) أو URL كامل.
+    private func socialURL(_ raw: String, base: String) -> URL? {
+        let v = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !v.isEmpty else { return nil }
+        if v.lowercased().hasPrefix("http") { return URL(string: v) }
+        let handle = v.hasPrefix("@") ? String(v.dropFirst()) : v
+        return URL(string: base + handle)
     }
 
     /// بطاقة نص طويل — label + محتوى متعدد الأسطر.
@@ -3501,7 +3588,6 @@ struct AdminAllRequestsView: View {
     /// شريط إجراءات سفلي ثابت بـ ultraThinMaterial.
     private func stickyActionsBar(for detail: RequestDetail, accent: Color) -> some View {
         VStack(spacing: 0) {
-            Divider().opacity(0.3)
             HStack(spacing: DS.Spacing.sm) {
                 if authVM.canRejectRequests {
                     Button {
@@ -3545,9 +3631,6 @@ struct AdminAllRequestsView: View {
                 .buttonStyle(.plain)
                 .disabled(adminRequestVM.isLoading)
             }
-            .padding(.horizontal, DS.Spacing.lg)
-            .padding(.vertical, DS.Spacing.md)
-            .background(.ultraThinMaterial)
         }
     }
 

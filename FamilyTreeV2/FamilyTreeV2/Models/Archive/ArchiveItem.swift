@@ -8,6 +8,7 @@ struct ArchiveItem: Identifiable, Codable, Equatable {
     let title: String
     let description: String?
     let category: Category
+    let year: Int?                // سنة الوثيقة/الصورة — اختيارية
     let fileUrl: String           // URL عام لـ Supabase Storage
     let fileType: String          // MIME (مثلاً: application/pdf, image/jpeg)
     let fileSize: Int64?          // الحجم بالبايت — للعرض
@@ -98,6 +99,7 @@ struct ArchiveItem: Identifiable, Codable, Equatable {
         case title
         case description
         case category
+        case year
         case fileUrl        = "file_url"
         case fileType       = "file_type"
         case fileSize       = "file_size"
@@ -119,6 +121,7 @@ struct ArchiveItem: Identifiable, Codable, Equatable {
         title           = try c.decode(String.self,  forKey: .title)
         description     = try c.decodeIfPresent(String.self, forKey: .description)
         category        = try c.decode(Category.self, forKey: .category)
+        year            = try c.decodeIfPresent(Int.self, forKey: .year)
         fileUrl         = try c.decode(String.self,  forKey: .fileUrl)
         fileType        = try c.decode(String.self,  forKey: .fileType)
         fileSize        = try c.decodeIfPresent(Int64.self,  forKey: .fileSize)

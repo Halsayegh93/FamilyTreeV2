@@ -14,6 +14,7 @@ struct FamilyArchiveView: View {
     @State private var showingUpload = false
     @State private var selectedItem: ArchiveItem? = nil
     @State private var itemToDelete: ArchiveItem? = nil
+    @State private var itemToEdit: ArchiveItem? = nil
 
     // وضع التحديد المتعدّد (للمدراء فقط)
     @State private var selectionMode = false
@@ -103,6 +104,11 @@ struct FamilyArchiveView: View {
                                                 )
                                             }
                                         }
+                                        Button {
+                                            itemToEdit = item
+                                        } label: {
+                                            Label(L10n.t("تعديل", "Edit"), systemImage: "pencil")
+                                        }
                                         Button(role: .destructive) {
                                             itemToDelete = item
                                         } label: {
@@ -149,6 +155,11 @@ struct FamilyArchiveView: View {
         }
         .sheet(item: $selectedItem) { item in
             ArchiveItemViewer(item: item)
+        }
+        .sheet(item: $itemToEdit) { item in
+            ArchiveEditSheet(archiveVM: archiveVM, item: item)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
         }
         .alert(L10n.t("حذف من الأرشيف", "Delete from archive"),
                isPresented: Binding(
@@ -492,6 +503,21 @@ struct FamilyArchiveView: View {
 
     // MARK: - Archive Card
 
+    /// أيقونة PDF احتياطية (لو ما توفّر ملف لتوليد المصغّرة).
+    private var pdfIconPlaceholder: some View {
+        VStack(spacing: 6) {
+            Image(systemName: "doc.text.fill")
+                .font(.system(size: 36, weight: .light))
+                .foregroundColor(DS.Color.primary.opacity(0.85))
+            Text("PDF")
+                .font(DS.Font.scaled(10, weight: .black))
+                .foregroundColor(DS.Color.primary)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 1)
+                .background(Capsule().fill(DS.Color.primary.opacity(0.15)))
+        }
+    }
+
     private func archiveCard(_ item: ArchiveItem) -> some View {
         VStack(alignment: .leading, spacing: DS.Spacing.xs) {
             // معاينة بصرية أو أيقونة
@@ -506,24 +532,45 @@ struct FamilyArchiveView: View {
                         } placeholder: {
                             ProgressView().tint(DS.Color.primary)
                         }
+                    } else if item.isPDF {
+                        // معاينة أول صفحة من الـPDF — مصغّرة جاهزة أو نُولّدها
+                        if let thumb = item.thumbnailUrl, let turl = URL(string: thumb) {
+                            CachedAsyncImage(url: turl) { image in
+                                image.resizable().scaledToFill()
+                            } placeholder: {
+                                ProgressView().tint(DS.Color.primary)
+                            }
+                        } else if let furl = URL(string: item.fileUrl) {
+                            PDFThumbnailView(url: furl)
+                        } else {
+                            pdfIconPlaceholder
+                        }
                     } else {
                         VStack(spacing: 6) {
-                            Image(systemName: item.isPDF ? "doc.text.fill" : item.category.iconName)
+                            Image(systemName: item.category.iconName)
                                 .font(.system(size: 36, weight: .light))
                                 .foregroundColor(DS.Color.primary.opacity(0.85))
-                            if item.isPDF {
-                                Text("PDF")
-                                    .font(DS.Font.scaled(10, weight: .black))
-                                    .foregroundColor(DS.Color.primary)
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 1)
-                                    .background(Capsule().fill(DS.Color.primary.opacity(0.15)))
-                            }
                         }
                     }
                 }
+                .frame(maxWidth: .infinity)
                 .frame(height: 130)
                 .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+                .overlay(alignment: .bottomLeading) {
+                    if item.isPDF {
+                        HStack(spacing: 3) {
+                            Image(systemName: "doc.text.fill")
+                                .font(DS.Font.scaled(8, weight: .bold))
+                            Text("PDF")
+                                .font(DS.Font.scaled(9, weight: .black))
+                        }
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Capsule().fill(DS.Color.error.opacity(0.9)))
+                        .padding(6)
+                    }
+                }
 
                 // شارة الحالة (الأولوية: pending > rejected > hidden)
                 VStack(alignment: .trailing, spacing: 4) {
@@ -558,15 +605,31 @@ struct FamilyArchiveView: View {
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
 
+                if let year = item.year {
+                    HStack(spacing: 3) {
+                        Image(systemName: "calendar")
+                            .font(DS.Font.scaled(9, weight: .bold))
+                        Text(String(year))
+                            .font(DS.Font.scaled(10, weight: .bold))
+                    }
+                    .foregroundColor(item.category.accentColor)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Capsule().fill(item.category.accentColor.opacity(0.12)))
+                }
+
                 if !item.formattedSize.isEmpty {
                     Text(item.formattedSize)
                         .font(DS.Font.scaled(10, weight: .medium))
                         .foregroundColor(DS.Color.textTertiary)
                 }
             }
+
+            Spacer(minLength: 0)
         }
         .padding(DS.Spacing.sm)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(height: 226, alignment: .top)
         .background(
             RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
                 .fill(DS.Color.surface)
@@ -635,6 +698,7 @@ struct ArchiveUploadSheet: View {
 
     @State private var title = ""
     @State private var description = ""
+    @State private var yearText = ""
     @State private var category: ArchiveItem.Category
     @State private var pickedFileData: Data? = nil
     @State private var pickedFileName: String = ""
@@ -682,6 +746,17 @@ struct ArchiveUploadSheet: View {
                             text: $description,
                             icon: "text.alignleft"
                         )
+                    }
+
+                    // السنة (اختياري)
+                    fieldGroup(label: L10n.t("السنة (اختياري)", "Year (optional)")) {
+                        DSTextField(
+                            label: "",
+                            placeholder: L10n.t("مثلاً: 1965", "e.g. 1965"),
+                            text: $yearText,
+                            icon: "calendar"
+                        )
+                        .keyboardType(.numberPad)
                     }
 
                     // القسم
@@ -924,6 +999,7 @@ struct ArchiveUploadSheet: View {
                 title: title,
                 description: description,
                 category: category,
+                year: Int(yearText.trimmingCharacters(in: .whitespacesAndNewlines)),
                 fileData: data,
                 fileName: pickedFileName,
                 mimeType: pickedMimeType
@@ -933,6 +1009,102 @@ struct ArchiveUploadSheet: View {
             } else if let err = archiveVM.errorMessage {
                 errorBanner = err
             }
+        }
+    }
+}
+
+// MARK: - Archive Edit Sheet
+
+/// تعديل البيانات الوصفية لعنصر أرشيف (عنوان/وصف/سنة/قسم) — بدون تغيير الملف.
+struct ArchiveEditSheet: View {
+    @ObservedObject var archiveVM: FamilyArchiveViewModel
+    let item: ArchiveItem
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var title: String
+    @State private var description: String
+    @State private var yearText: String
+    @State private var category: ArchiveItem.Category
+    @State private var isSaving = false
+    @State private var errorBanner: String? = nil
+
+    init(archiveVM: FamilyArchiveViewModel, item: ArchiveItem) {
+        self.archiveVM = archiveVM
+        self.item = item
+        _title = State(initialValue: item.title)
+        _description = State(initialValue: item.description ?? "")
+        _yearText = State(initialValue: item.year.map(String.init) ?? "")
+        _category = State(initialValue: item.category)
+    }
+
+    private var canSave: Bool {
+        !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isSaving
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: DS.Spacing.lg) {
+                    DSTextField(label: L10n.t("العنوان", "Title"), placeholder: "", text: $title, icon: "textformat")
+                    DSTextField(label: L10n.t("الوصف (اختياري)", "Description (optional)"), placeholder: "", text: $description, icon: "text.alignleft")
+                    DSTextField(label: L10n.t("السنة (اختياري)", "Year (optional)"), placeholder: L10n.t("مثلاً: 1965", "e.g. 1965"), text: $yearText, icon: "calendar")
+                        .keyboardType(.numberPad)
+
+                    Text(L10n.t("القسم", "Category"))
+                        .font(DS.Font.scaled(12, weight: .semibold))
+                        .foregroundColor(DS.Color.textSecondary)
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: DS.Spacing.sm) {
+                            ForEach(ArchiveItem.Category.allCases) { cat in
+                                Button { category = cat } label: {
+                                    Text(L10n.isArabic ? cat.displayName : cat.displayNameEn)
+                                        .font(DS.Font.scaled(12, weight: category == cat ? .bold : .medium))
+                                        .foregroundColor(category == cat ? .white : DS.Color.primary)
+                                        .padding(.horizontal, DS.Spacing.md)
+                                        .padding(.vertical, DS.Spacing.sm)
+                                        .background(Capsule().fill(category == cat ? DS.Color.primary : DS.Color.primary.opacity(0.10)))
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+
+                    if let errorBanner {
+                        Text(errorBanner).font(DS.Font.caption1).foregroundColor(DS.Color.error)
+                    }
+                    Spacer(minLength: DS.Spacing.xxxl)
+                }
+                .padding(.horizontal, DS.Spacing.lg)
+                .padding(.top, DS.Spacing.md)
+            }
+            .background(DS.Color.background.ignoresSafeArea())
+            .navigationTitle(L10n.t("تعديل العنصر", "Edit Item"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(L10n.t("إلغاء", "Cancel")) { dismiss() }.disabled(isSaving)
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(L10n.t("حفظ", "Save")) { save() }
+                        .fontWeight(.bold)
+                        .disabled(!canSave)
+                }
+            }
+        }
+    }
+
+    private func save() {
+        Task {
+            isSaving = true
+            let ok = await archiveVM.updateItem(
+                item,
+                title: title,
+                description: description,
+                category: category,
+                year: Int(yearText.trimmingCharacters(in: .whitespacesAndNewlines))
+            )
+            isSaving = false
+            if ok { dismiss() } else { errorBanner = archiveVM.errorMessage }
         }
     }
 }
@@ -1065,4 +1237,65 @@ private struct ShareSheet: UIViewControllerRepresentable {
         UIActivityViewController(activityItems: items, applicationActivities: nil)
     }
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
+}
+
+// MARK: - PDF First-Page Thumbnail
+
+/// كاش للمصغّرات المولّدة من ملفات PDF (مفتاح = رابط الملف).
+private final class PDFThumbCache {
+    static let shared = NSCache<NSURL, UIImage>()
+}
+
+/// يولّد ويعرض أول صفحة من ملف PDF كمصغّرة (مع كاش)، ويرجع لأيقونة عند الفشل.
+private struct PDFThumbnailView: View {
+    let url: URL
+    @State private var image: UIImage? = nil
+    @State private var failed = false
+
+    var body: some View {
+        Group {
+            if let image {
+                Image(uiImage: image).resizable().scaledToFill()
+            } else if failed {
+                VStack(spacing: 6) {
+                    Image(systemName: "doc.text.fill")
+                        .font(.system(size: 36, weight: .light))
+                        .foregroundColor(DS.Color.primary.opacity(0.85))
+                    Text("PDF")
+                        .font(DS.Font.scaled(10, weight: .black))
+                        .foregroundColor(DS.Color.primary)
+                        .padding(.horizontal, 6).padding(.vertical, 1)
+                        .background(Capsule().fill(DS.Color.primary.opacity(0.15)))
+                }
+            } else {
+                ProgressView().tint(DS.Color.primary)
+            }
+        }
+        .task(id: url) { await load() }
+    }
+
+    private func load() async {
+        if let cached = PDFThumbCache.shared.object(forKey: url as NSURL) {
+            image = cached
+            return
+        }
+        let rendered = await Task.detached(priority: .utility) { () -> UIImage? in
+            guard let data = try? Data(contentsOf: url),
+                  let doc = PDFDocument(data: data),
+                  let page = doc.page(at: 0) else { return nil }
+            let box = page.bounds(for: .mediaBox)
+            guard box.width > 0, box.height > 0 else { return nil }
+            let target: CGFloat = 500
+            let scale = target / max(box.width, box.height)
+            let size = CGSize(width: box.width * scale, height: box.height * scale)
+            return page.thumbnail(of: size, for: .mediaBox)
+        }.value
+
+        if let rendered {
+            PDFThumbCache.shared.setObject(rendered, forKey: url as NSURL)
+            image = rendered
+        } else {
+            failed = true
+        }
+    }
 }
