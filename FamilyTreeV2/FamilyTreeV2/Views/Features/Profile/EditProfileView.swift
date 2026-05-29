@@ -79,6 +79,12 @@ struct EditProfileView: View {
                         VStack(spacing: DS.Spacing.xs) {
                             imagePickerHeader
                                 .cooldownGuarded(.avatar, cooldown: cooldown)
+                            Label(
+                                L10n.t("اضغط على الصورة لتغييرها", "Tap the photo to change it"),
+                                systemImage: "camera.fill"
+                            )
+                            .font(DS.Font.footnote)
+                            .foregroundColor(DS.Color.primary)
                             cooldownLabel(.avatar)
                         }
 

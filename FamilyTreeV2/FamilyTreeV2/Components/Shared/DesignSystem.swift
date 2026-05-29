@@ -1128,8 +1128,12 @@ struct DSApproveRejectButtons: View {
     var isLoading: Bool = false
     var approveGradient: LinearGradient = DS.Color.gradientPrimary
     var showReject: Bool = true
+    /// عند true تكون الأزرار بحواف دائرية كاملة (capsule) بدل المستطيل المُدوّر
+    var useCapsule: Bool = false
     var onApprove: () -> Void
     var onReject: () -> Void
+
+    private var cornerRadius: CGFloat { useCapsule ? DS.Radius.full : DS.Radius.md }
 
     private var debouncedApprove: () -> Void {
         let key = "DSApprove_\(approveTitle)"
@@ -1152,9 +1156,9 @@ struct DSApproveRejectButtons: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, DS.Spacing.md)
                     .background(DS.Color.error.opacity(0.08))
-                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
+                    .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
                     .overlay(
-                        RoundedRectangle(cornerRadius: DS.Radius.md)
+                        RoundedRectangle(cornerRadius: cornerRadius)
                             .stroke(DS.Color.error.opacity(0.3), lineWidth: 1.5)
                     )
             }
@@ -1173,7 +1177,7 @@ struct DSApproveRejectButtons: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, DS.Spacing.md)
                 .background(approveGradient)
-                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
+                .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
                 .dsGlowShadow()
             }
         }

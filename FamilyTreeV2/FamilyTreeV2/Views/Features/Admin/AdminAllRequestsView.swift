@@ -14,6 +14,7 @@ struct AdminAllRequestsView: View {
     @State private var phoneEditRequest: PhoneChangeRequest? = nil
     @State private var editedPhone: String = ""
     @State private var selectedDetail: RequestDetail? = nil
+    @State private var detailSheetHeight: CGFloat = 0
 
     /// نوع الطلب المحدد لعرض التفاصيل
     enum RequestDetail: Identifiable {
@@ -272,9 +273,6 @@ struct AdminAllRequestsView: View {
 
         for member in memberVM.allMembers where member.status != .frozen {
             var memberIssues = Set<TreeHealthIssue>()
-            if member.fatherId == nil && !fatherIds.contains(member.id) && member.role != .pending {
-                memberIssues.insert(.orphan)
-            }
             let name = member.fullName.trimmingCharacters(in: .whitespacesAndNewlines)
             if name.isEmpty || name == "بدون اسم" {
                 memberIssues.insert(.noName)
@@ -301,7 +299,7 @@ struct AdminAllRequestsView: View {
         result.sort { $0.fullName < $1.fullName }
 
         var counts: [TreeHealthIssue: Int] = [:]
-        for issue in [TreeHealthIssue.orphan, .noName, .brokenParent, .hiddenFromTree, .duplicatePhone] {
+        for issue in [TreeHealthIssue.noName, .brokenParent, .hiddenFromTree, .duplicatePhone] {
             counts[issue] = issues.values.filter { $0.contains(issue) }.count
         }
 
@@ -569,8 +567,15 @@ struct AdminAllRequestsView: View {
         }
         .sheet(item: $selectedDetail) { detail in
             requestDetailSheet(detail)
-                .presentationDetents([.medium, .large])
+                .onPreferenceChange(DetailSheetHeightKey.self) { h in
+                    // ارتفاع المحتوى + شريط التنقّل (~56)
+                    detailSheetHeight = h + 56
+                }
+                .presentationDetents(
+                    detailSheetHeight > 0 ? [.height(detailSheetHeight), .large] : [.medium, .large]
+                )
                 .presentationDragIndicator(.visible)
+                .onDisappear { detailSheetHeight = 0 }
         }
         .sheet(item: $memberToLink) { member in
             LinkToExistingMemberSheet(pendingMember: member)
@@ -676,6 +681,10 @@ struct AdminAllRequestsView: View {
     private var totalCount: Int { cachedTotalCount }
     private var availableTabs: [RequestTab] { cachedAvailableTabs }
 
+    /// تابات مخفية من «طلبات المراجعة» لأنها مغطّاة بأقسام أخرى:
+    /// «معلّق» (بدون أب) موجود في «إدارة الأعضاء ← أعضاء غير مكتملين ← بدون أب».
+    private static let hiddenTabs: Set<RequestTab> = [.healthOrphan]
+
     private func recalculateCounts() {
         cachedPendingMembers = memberVM.allMembers.filter { $0.role == .pending }
         // إعادة بناء كاش صحة الشجرة كذلك
@@ -686,7 +695,8 @@ struct AdminAllRequestsView: View {
             .filter { $0 != .all && $0.section != .treeHealth }
             .reduce(0) { $0 + itemCount(for: $1) }
         // عرض كل التابات دائماً — حتى الفارغة (المستخدم يبيها كلها مرئية)
-        cachedAvailableTabs = RequestTab.allCases
+        // ما عدا التابات المخفية (مغطّاة بأقسام أخرى).
+        cachedAvailableTabs = RequestTab.allCases.filter { !Self.hiddenTabs.contains($0) }
     }
 
     /// شريط الفلاتر بنمط أرشيف العائلة — في وضع التحديد يتحوّل لشريط ملخّص التحديد.
@@ -749,7 +759,7 @@ struct AdminAllRequestsView: View {
                         isActive: selectedSection == section
                     ) {
                         selectedSection = section
-                        if let firstTab = RequestTab.allCases.first(where: { $0.section == section }) {
+                        if let firstTab = RequestTab.allCases.first(where: { $0.section == section && !Self.hiddenTabs.contains($0) }) {
                             selectedTab = firstTab
                         }
                     }
@@ -775,13 +785,13 @@ struct AdminAllRequestsView: View {
     /// مجموع طلبات القسم.
     private func sectionCount(_ section: RequestSection) -> Int {
         RequestTab.allCases
-            .filter { $0.section == section }
+            .filter { $0.section == section && !Self.hiddenTabs.contains($0) }
             .reduce(0) { $0 + itemCount(for: $1) }
     }
 
     /// صف الفلاتر الفرعية داخل القسم — أيقونات بدون خلفية، النشط يكشف الاسم.
     private func subFilterCapsule(for section: RequestSection) -> some View {
-        let sectionTabs = RequestTab.allCases.filter { $0.section == section }
+        let sectionTabs = RequestTab.allCases.filter { $0.section == section && !Self.hiddenTabs.contains($0) }
         return ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: DS.Spacing.sm) {
                 Spacer(minLength: 0)
@@ -1353,7 +1363,8 @@ struct AdminAllRequestsView: View {
                     content()
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .padding(DS.Spacing.md)
+                .padding(.horizontal, DS.Spacing.md)
+                .padding(.vertical, DS.Spacing.sm)
             }
             .buttonStyle(.plain)
 
@@ -1368,7 +1379,8 @@ struct AdminAllRequestsView: View {
                     onReject: onReject
                 )
                 .padding(.horizontal, DS.Spacing.md)
-                .padding(.vertical, DS.Spacing.sm)
+                .padding(.top, 6)
+                .padding(.bottom, DS.Spacing.sm)
             }
         }
         .background(
@@ -1391,7 +1403,7 @@ struct AdminAllRequestsView: View {
         .shadow(color: .black.opacity(0.04), radius: 5, x: 0, y: 2)
         .listRowBackground(Color.clear)
         .listRowSeparator(.hidden)
-        .listRowInsets(EdgeInsets(top: 6, leading: DS.Spacing.lg, bottom: 6, trailing: DS.Spacing.lg))
+        .listRowInsets(EdgeInsets(top: 4, leading: DS.Spacing.lg, bottom: 4, trailing: DS.Spacing.lg))
     }
 
     /// شريط أزرار موافقة/رفض — يتكيّف حسب الصلاحيات وما هو مرسَل.
@@ -1404,45 +1416,37 @@ struct AdminAllRequestsView: View {
         onReject: (() -> Void)?
     ) -> some View {
         HStack(spacing: DS.Spacing.sm) {
-            // زر الرفض — يظهر فقط لمن يملك الصلاحية
+            Spacer(minLength: 0)
+
+            // زر الرفض — أيقونة دائرية، يظهر فقط لمن يملك الصلاحية
             if let onReject, authVM.canRejectRequests {
                 Button(action: onReject) {
-                    HStack(spacing: 5) {
-                        Image(systemName: "xmark")
-                            .font(DS.Font.scaled(11, weight: .bold))
-                        Text(L10n.t("رفض", "Reject"))
-                            .font(DS.Font.scaled(13, weight: .bold))
-                    }
-                    .foregroundColor(DS.Color.error)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 9)
-                    .background(Capsule().fill(DS.Color.error.opacity(0.10)))
-                    .overlay(Capsule().strokeBorder(DS.Color.error.opacity(0.25), lineWidth: 1))
+                    Image(systemName: "xmark")
+                        .font(DS.Font.scaled(15, weight: .bold))
+                        .foregroundColor(DS.Color.error)
+                        .frame(width: 40, height: 40)
+                        .background(Circle().fill(DS.Color.error.opacity(0.10)))
+                        .overlay(Circle().strokeBorder(DS.Color.error.opacity(0.25), lineWidth: 1))
                 }
                 .buttonStyle(.plain)
             }
 
-            // زر الموافقة — قابل للتخصيص (مثل "ربط" بدل "موافقة" لطلبات الانضمام)
+            // زر الموافقة — أيقونة دائرية متدرّجة
             if let onApprove {
                 Button(action: onApprove) {
-                    HStack(spacing: 5) {
-                        Image(systemName: approveIcon)
-                            .font(DS.Font.scaled(11, weight: .bold))
-                        Text(approveLabel ?? L10n.t("موافقة", "Approve"))
-                            .font(DS.Font.scaled(13, weight: .bold))
-                    }
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 9)
-                    .background(
-                        Capsule().fill(
-                            LinearGradient(
-                                colors: [approveColor, approveColor.opacity(0.85)],
-                                startPoint: .leading, endPoint: .trailing
+                    Image(systemName: approveIcon)
+                        .font(DS.Font.scaled(15, weight: .bold))
+                        .foregroundColor(.white)
+                        .frame(width: 40, height: 40)
+                        .background(
+                            Circle().fill(
+                                LinearGradient(
+                                    colors: [approveColor, approveColor.opacity(0.85)],
+                                    startPoint: .topLeading, endPoint: .bottomTrailing
+                                )
                             )
                         )
-                    )
-                    .shadow(color: approveColor.opacity(0.30), radius: 5, x: 0, y: 2)
+                        .shadow(color: approveColor.opacity(0.30), radius: 5, x: 0, y: 2)
                 }
                 .buttonStyle(.plain)
             }
@@ -1665,6 +1669,16 @@ struct AdminAllRequestsView: View {
                 Text(issue.asTab.title)
                     .font(DS.Font.caption2)
                     .foregroundColor(color)
+                if let createdAt = member.createdAt {
+                    HStack(spacing: DS.Spacing.xs) {
+                        Image(systemName: "clock")
+                            .font(DS.Font.scaled(10, weight: .medium))
+                            .foregroundColor(DS.Color.textTertiary)
+                        Text(formatRegistrationDate(createdAt))
+                            .font(DS.Font.caption2)
+                            .foregroundColor(DS.Color.textTertiary)
+                    }
+                }
             }
             Spacer()
             Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
@@ -1965,7 +1979,7 @@ struct AdminAllRequestsView: View {
         let isExpanded = expandedMatchMembers.contains(member.id)
         let visible = isExpanded ? orderedResults : Array(orderedResults.prefix(5))
 
-        return VStack(alignment: .leading, spacing: DS.Spacing.md) {
+        return VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             HStack(spacing: DS.Spacing.sm) {
                 iconCircle(icon: "person.badge.shield.checkmark", color: hasMatches ? DS.Color.success : DS.Color.warning, size: 36)
 
@@ -2394,7 +2408,7 @@ struct AdminAllRequestsView: View {
     // MARK: - News Row
 
     private func newsRow(for post: NewsPost) -> some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.md) {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             HStack(spacing: DS.Spacing.sm) {
                 iconCircle(icon: "newspaper.fill", color: newsTypeColor(post.type), size: 36)
 
@@ -2448,7 +2462,7 @@ struct AdminAllRequestsView: View {
         let postId = UUID(uuidString: request.newValue ?? "")
         let reportedPost = postId.flatMap { id in newsVM.allNews.first { $0.id == id } }
 
-        return VStack(alignment: .leading, spacing: DS.Spacing.md) {
+        return VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             HStack(spacing: DS.Spacing.sm) {
                 iconCircle(icon: "exclamationmark.triangle.fill", color: DS.Color.error, size: 36)
 
@@ -2491,7 +2505,7 @@ struct AdminAllRequestsView: View {
         let newPhone = KuwaitPhone.display(request.newValue)
         let memberName = request.member?.fullName ?? "Member"
 
-        return VStack(alignment: .leading, spacing: DS.Spacing.md) {
+        return VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             HStack(spacing: DS.Spacing.sm) {
                 iconCircle(icon: "phone.arrow.right", color: DS.Color.primary, size: 36)
 
@@ -2559,7 +2573,7 @@ struct AdminAllRequestsView: View {
     // MARK: - Diwaniya Row
 
     private func diwaniyaRow(for diwaniya: Diwaniya) -> some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.md) {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             HStack(spacing: DS.Spacing.sm) {
                 iconCircle(icon: "tent.fill", color: DS.Color.gridDiwaniya, size: 36)
 
@@ -2589,7 +2603,7 @@ struct AdminAllRequestsView: View {
     // MARK: - Deceased Row
 
     private func deceasedRow(for request: AdminRequest) -> some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.md) {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             HStack(spacing: DS.Spacing.sm) {
                 iconCircle(icon: "bolt.heart.fill", color: DS.Color.error, size: 36)
 
@@ -2629,7 +2643,7 @@ struct AdminAllRequestsView: View {
     // MARK: - Child Row
 
     private func childRow(for request: AdminRequest) -> some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.md) {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             HStack(spacing: DS.Spacing.sm) {
                 iconCircle(icon: "person.badge.plus", color: DS.Color.info, size: 36)
 
@@ -2669,7 +2683,7 @@ struct AdminAllRequestsView: View {
     // MARK: - Photo Row
 
     private func photoRow(for request: AdminRequest) -> some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.md) {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             HStack(spacing: DS.Spacing.sm) {
                 iconCircle(icon: "camera.badge.ellipsis", color: DS.Color.neonBlue, size: 36)
 
@@ -2730,7 +2744,7 @@ struct AdminAllRequestsView: View {
         let currentName = request.member?.fullName ?? L10n.t("عضو", "Member")
         let newName = request.newValue ?? "—"
 
-        return VStack(alignment: .leading, spacing: DS.Spacing.md) {
+        return VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             // الصف الأول: الأيقونة + الاسم + البادج
             HStack(spacing: DS.Spacing.sm) {
                 iconCircle(icon: "rectangle.and.pencil.and.ellipsis", color: DS.Color.neonPurple, size: 36)
@@ -2931,7 +2945,7 @@ struct AdminAllRequestsView: View {
 
     // MARK: - Gallery Pending Row
     private func galleryPendingRow(photo: MemberGalleryPhoto) -> some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.md) {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             HStack(spacing: DS.Spacing.sm) {
                 iconCircle(icon: "photo.on.rectangle.angled", color: DS.Color.gridDiwaniya, size: 36)
 
@@ -2979,7 +2993,7 @@ struct AdminAllRequestsView: View {
 
     // MARK: - Story Pending Row
     private func storyPendingRow(story: FamilyStory) -> some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.md) {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             HStack(spacing: DS.Spacing.sm) {
                 iconCircle(icon: "circle.dashed", color: DS.Color.neonCyan, size: 36)
 
@@ -3023,7 +3037,7 @@ struct AdminAllRequestsView: View {
     }
 
     private func projectRow(for project: Project) -> some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.md) {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             HStack(spacing: DS.Spacing.sm) {
                 // Logo or placeholder
                 if let logoUrl = project.logoUrl, let url = URL(string: logoUrl) {
@@ -3153,7 +3167,7 @@ struct AdminAllRequestsView: View {
         let meta = detailMeta(for: detail)
         return NavigationStack {
             ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: DS.Spacing.md) {
+                VStack(alignment: .leading, spacing: DS.Spacing.sm) {
                     // Hero — أيقونة كبيرة + نوع الطلب + الوقت
                     detailHero(icon: meta.icon, color: meta.color, title: meta.title, timestamp: meta.timestamp)
 
@@ -3162,11 +3176,16 @@ struct AdminAllRequestsView: View {
 
                     // أزرار الموافقة/الرفض — أسفل الطلب (غير ثابتة)
                     stickyActionsBar(for: detail, accent: meta.color)
-                        .padding(.top, DS.Spacing.sm)
+                        .padding(.top, DS.Spacing.xs)
                 }
                 .padding(.horizontal, DS.Spacing.lg)
-                .padding(.top, DS.Spacing.md)
-                .padding(.bottom, DS.Spacing.xl)
+                .padding(.top, DS.Spacing.sm)
+                .padding(.bottom, DS.Spacing.lg)
+                .background(
+                    GeometryReader { geo in
+                        Color.clear.preference(key: DetailSheetHeightKey.self, value: geo.size.height)
+                    }
+                )
             }
             .background(DS.Color.background)
             .navigationTitle(L10n.t("تفاصيل الطلب", "Request Details"))
@@ -3791,7 +3810,8 @@ struct AdminAllRequestsView: View {
             }(),
             rejectTitle: L10n.t("رفض", "Reject"),
             isLoading: adminRequestVM.isLoading,
-            showReject: authVM.canRejectRequests
+            showReject: authVM.canRejectRequests,
+            useCapsule: true
         ) {
             // موافقة
             Task {
@@ -3945,5 +3965,13 @@ struct AdminAllRequestsView: View {
         case "دعوة": return DS.Color.newsInvitation
         default: return DS.Color.primary
         }
+    }
+}
+
+// MARK: - Detail Sheet Height Preference
+private struct DetailSheetHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
     }
 }

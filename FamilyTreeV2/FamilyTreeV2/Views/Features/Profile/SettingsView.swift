@@ -112,10 +112,10 @@ struct SettingsView: View {
                         .buttonStyle(DSBoldButtonStyle())
                     }
 
-                    // ── منطقة الخطر ──
+                    // ── إدارة الحساب ──
                     DSCard(padding: 0) {
                         DSSectionHeader(
-                            title: t("منطقة الخطر", "Danger Zone"),
+                            title: t("إدارة الحساب", "Account Management"),
                             icon: "exclamationmark.triangle.fill",
                             iconColor: DS.Color.error
                         )
