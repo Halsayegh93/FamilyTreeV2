@@ -273,6 +273,9 @@ struct AdminAllRequestsView: View {
 
         for member in memberVM.allMembers where member.status != .frozen {
             var memberIssues = Set<TreeHealthIssue>()
+            if member.fatherId == nil && !fatherIds.contains(member.id) && member.role != .pending {
+                memberIssues.insert(.orphan)
+            }
             let name = member.fullName.trimmingCharacters(in: .whitespacesAndNewlines)
             if name.isEmpty || name == "بدون اسم" {
                 memberIssues.insert(.noName)
@@ -299,7 +302,7 @@ struct AdminAllRequestsView: View {
         result.sort { $0.fullName < $1.fullName }
 
         var counts: [TreeHealthIssue: Int] = [:]
-        for issue in [TreeHealthIssue.noName, .brokenParent, .hiddenFromTree, .duplicatePhone] {
+        for issue in [TreeHealthIssue.orphan, .noName, .brokenParent, .hiddenFromTree, .duplicatePhone] {
             counts[issue] = issues.values.filter { $0.contains(issue) }.count
         }
 
@@ -683,7 +686,7 @@ struct AdminAllRequestsView: View {
 
     /// تابات مخفية من «طلبات المراجعة» لأنها مغطّاة بأقسام أخرى:
     /// «معلّق» (بدون أب) موجود في «إدارة الأعضاء ← أعضاء غير مكتملين ← بدون أب».
-    private static let hiddenTabs: Set<RequestTab> = [.healthOrphan]
+    private static let hiddenTabs: Set<RequestTab> = []
 
     private func recalculateCounts() {
         cachedPendingMembers = memberVM.allMembers.filter { $0.role == .pending }
