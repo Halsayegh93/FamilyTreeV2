@@ -209,20 +209,26 @@ class AuthViewModel: ObservableObject {
             return .authenticatedNoProfile
         }
 
-        guard profile.role != .pending else {
-            return .pendingApproval
-        }
-
-        // العضو المجمد — يظهر له شاشة تجميد الحساب (بدون تسجيل خروج)
+        // المجمد — يظهر له شاشة تجميد الحساب (نفحص قبل role لأن الأولوية للتجميد)
         if profile.status == .frozen {
             Log.info("[AUTH] العضو \(profile.fullName) حالته frozen → شاشة الحساب المجمد")
             return .accountFrozen
         }
 
-        // العضو المعلق (status = pending) يظهر له شاشة انتظار الموافقة
-        if profile.status == .pending {
-            Log.info("[AUTH] العضو \(profile.fullName) حالته pending → شاشة انتظار الموافقة")
+        // شاشة الانتظار = المستخدم أكمل نموذج التسجيل فعلاً (role=pending).
+        // ملاحظة مهمة: لا نعتمد على status=pending وحده لأن الـ default في قاعدة البيانات
+        // لأي عضو جديد هو 'pending' — بمعنى أعضاء الشجرة المضافون بواسطة الإدارة
+        // (role='member', status='pending') سيتم إعادة توجيههم لفورم التسجيل بشكل صحيح.
+        guard profile.role != .pending else {
+            Log.info("[AUTH] العضو \(profile.fullName) role=pending → شاشة انتظار الموافقة")
             return .pendingApproval
+        }
+
+        // عضو الشجرة بـ role='member' وstatus='pending' = مضاف بالإدارة ولم يُسجّل بعد
+        // نوجّهه لفورم التسجيل حتى يرسل طلب الانضمام بشكل صحيح
+        if profile.status == .pending {
+            Log.info("[AUTH] العضو \(profile.fullName) role=member+status=pending → شاشة التسجيل (عضو شجرة غير مسجّل)")
+            return .authenticatedNoProfile
         }
 
         // العضو بدون رقم — المدير حذف رقمه → يسجّل من جديد
