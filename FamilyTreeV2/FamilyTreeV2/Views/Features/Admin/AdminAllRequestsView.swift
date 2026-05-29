@@ -27,6 +27,8 @@ struct AdminAllRequestsView: View {
         case child(AdminRequest)
         case photo(AdminRequest)
         case project(Project)
+        /// عنصر صحة الشجرة — للعرض فقط (بدون موافقة/رفض)، يعرض معلومات العضو + واتساب.
+        case healthMember(FamilyMember, TreeHealthIssue)
 
         var id: String {
             switch self {
@@ -40,6 +42,7 @@ struct AdminAllRequestsView: View {
             case .child(let r): return "child-\(r.id)"
             case .photo(let r): return "photo-\(r.id)"
             case .project(let p): return "proj-\(p.id)"
+            case .healthMember(let m, _): return "health-\(m.id)"
             }
         }
     }
@@ -1634,7 +1637,7 @@ struct AdminAllRequestsView: View {
         return count
     }
 
-    /// قائمة عناصر صحة الشجرة لفئة معيّنة — صف بسيط بدون موافقة/رفض، تفتح AdminTreeHealthView بالنقر.
+    /// قائمة عناصر صحة الشجرة لفئة معيّنة — صف بسيط بدون موافقة/رفض، تفتح شيت تفاصيل العضو بالنقر.
     @ViewBuilder
     private func treeHealthList(issue: TreeHealthIssue, color: Color) -> some View {
         ForEach(healthMembers(for: issue)) { member in
@@ -1643,7 +1646,7 @@ struct AdminAllRequestsView: View {
                 accentColor: color,
                 onApprove: nil,
                 onReject: nil,
-                onTap: { openTreeHealthFilter = issue.asAdminFilter }
+                onTap: { selectedDetail = .healthMember(member, issue) }
             ) {
                 treeHealthRow(member: member, issue: issue, color: color)
             }
@@ -3229,6 +3232,11 @@ struct AdminAllRequestsView: View {
             return .init(icon: "briefcase.fill", color: DS.Color.neonPurple,
                          title: L10n.t("طلب مشروع", "Project Request"),
                          timestamp: p.createdAt.map { formatRegistrationDate($0) })
+        case .healthMember(let member, let issue):
+            let name = member.fullName.trimmingCharacters(in: .whitespacesAndNewlines)
+            return .init(icon: issue.asTab.icon, color: issue.asTab.color,
+                         title: name.isEmpty ? L10n.t("بدون اسم", "(no name)") : name,
+                         timestamp: nil)
         }
     }
 
@@ -3405,6 +3413,35 @@ struct AdminAllRequestsView: View {
                let url = URL(string: loc.lowercased().hasPrefix("http") ? loc : "https://\(loc)") {
                 contactLinkCard(icon: "mappin.and.ellipse", label: L10n.t("الموقع الجغرافي", "Location"),
                                 value: L10n.t("فتح الخريطة", "Open map"), color: DS.Color.error, url: url)
+            }
+
+        case .healthMember(let member, let issue):
+            // نوع المشكلة
+            infoCard(icon: issue.asTab.icon,
+                     label: L10n.t("نوع المشكلة", "Issue Type"),
+                     value: issue.asTab.title,
+                     color: issue.asTab.color)
+            // اسم العضو
+            let displayName = member.fullName.trimmingCharacters(in: .whitespacesAndNewlines)
+            infoCard(icon: "person.fill",
+                     label: L10n.t("الاسم", "Name"),
+                     value: displayName.isEmpty ? L10n.t("بدون اسم", "(no name)") : displayName,
+                     color: DS.Color.primary)
+            // رقم الهاتف + واتساب
+            if let phone = member.phoneNumber, !phone.isEmpty {
+                infoCard(icon: "phone.fill",
+                         label: L10n.t("رقم الهاتف", "Phone"),
+                         value: KuwaitPhone.display(phone),
+                         color: DS.Color.success)
+                if let wa = KuwaitPhone.whatsappURL(phone) {
+                    contactLinkCard(icon: "message.fill",
+                                    label: L10n.t("تواصل واتساب", "WhatsApp"),
+                                    value: KuwaitPhone.display(phone),
+                                    color: DS.Color.success, url: wa)
+                }
+            } else {
+                infoCard(icon: "phone.slash", label: L10n.t("رقم الهاتف", "Phone"),
+                         value: L10n.t("لا يوجد", "None"), color: DS.Color.textTertiary)
             }
         }
     }
@@ -3586,50 +3623,56 @@ struct AdminAllRequestsView: View {
     }
 
     /// شريط إجراءات سفلي ثابت بـ ultraThinMaterial.
+    @ViewBuilder
     private func stickyActionsBar(for detail: RequestDetail, accent: Color) -> some View {
-        VStack(spacing: 0) {
-            HStack(spacing: DS.Spacing.sm) {
-                if authVM.canRejectRequests {
+        if case .healthMember = detail {
+            // عناصر صحة الشجرة — شيت للعرض فقط، لا إجراءات موافقة/رفض
+            EmptyView()
+        } else {
+            VStack(spacing: 0) {
+                HStack(spacing: DS.Spacing.sm) {
+                    if authVM.canRejectRequests {
+                        Button {
+                            rejectDetail(detail)
+                        } label: {
+                            HStack(spacing: 5) {
+                                Image(systemName: "xmark").font(DS.Font.scaled(12, weight: .bold))
+                                Text(L10n.t("رفض", "Reject")).font(DS.Font.scaled(14, weight: .bold))
+                            }
+                            .foregroundColor(DS.Color.error)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .background(Capsule().fill(DS.Color.error.opacity(0.10)))
+                            .overlay(Capsule().strokeBorder(DS.Color.error.opacity(0.25), lineWidth: 1))
+                        }
+                        .buttonStyle(.plain)
+                    }
+
                     Button {
-                        rejectDetail(detail)
+                        approveDetail(detail)
                     } label: {
                         HStack(spacing: 5) {
-                            Image(systemName: "xmark").font(DS.Font.scaled(12, weight: .bold))
-                            Text(L10n.t("رفض", "Reject")).font(DS.Font.scaled(14, weight: .bold))
+                            Image(systemName: approveIconFor(detail))
+                                .font(DS.Font.scaled(12, weight: .bold))
+                            Text(approveLabelFor(detail))
+                                .font(DS.Font.scaled(14, weight: .bold))
                         }
-                        .foregroundColor(DS.Color.error)
+                        .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
-                        .background(Capsule().fill(DS.Color.error.opacity(0.10)))
-                        .overlay(Capsule().strokeBorder(DS.Color.error.opacity(0.25), lineWidth: 1))
-                    }
-                    .buttonStyle(.plain)
-                }
-
-                Button {
-                    approveDetail(detail)
-                } label: {
-                    HStack(spacing: 5) {
-                        Image(systemName: approveIconFor(detail))
-                            .font(DS.Font.scaled(12, weight: .bold))
-                        Text(approveLabelFor(detail))
-                            .font(DS.Font.scaled(14, weight: .bold))
-                    }
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .background(
-                        Capsule().fill(
-                            LinearGradient(
-                                colors: [DS.Color.success, DS.Color.success.opacity(0.85)],
-                                startPoint: .leading, endPoint: .trailing
+                        .background(
+                            Capsule().fill(
+                                LinearGradient(
+                                    colors: [DS.Color.success, DS.Color.success.opacity(0.85)],
+                                    startPoint: .leading, endPoint: .trailing
+                                )
                             )
                         )
-                    )
-                    .shadow(color: DS.Color.success.opacity(0.35), radius: 6, x: 0, y: 3)
+                        .shadow(color: DS.Color.success.opacity(0.35), radius: 6, x: 0, y: 3)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(adminRequestVM.isLoading)
                 }
-                .buttonStyle(.plain)
-                .disabled(adminRequestVM.isLoading)
             }
         }
     }
@@ -3688,6 +3731,8 @@ struct AdminAllRequestsView: View {
                     await projectsVM.approveProject(id: project.id, approvedBy: adminId)
                 }
                 await MainActor.run { selectedDetail = nil }
+            case .healthMember:
+                await MainActor.run { selectedDetail = nil }
             }
         }
     }
@@ -3715,6 +3760,8 @@ struct AdminAllRequestsView: View {
                 await adminRequestVM.rejectPhotoSuggestion(request: request)
             case .project(let project):
                 await projectsVM.rejectProject(id: project.id)
+            case .healthMember:
+                break // لا إجراء رفض لعناصر الصحة
             }
             await MainActor.run { selectedDetail = nil }
         }
@@ -3785,6 +3832,8 @@ struct AdminAllRequestsView: View {
                         await projectsVM.approveProject(id: project.id, approvedBy: adminId)
                     }
                     selectedDetail = nil
+                case .healthMember:
+                    selectedDetail = nil
                 }
             }
         } onReject: {
@@ -3820,6 +3869,8 @@ struct AdminAllRequestsView: View {
                     selectedDetail = nil
                 case .project(let project):
                     await projectsVM.rejectProject(id: project.id)
+                    selectedDetail = nil
+                case .healthMember:
                     selectedDetail = nil
                 }
             }
