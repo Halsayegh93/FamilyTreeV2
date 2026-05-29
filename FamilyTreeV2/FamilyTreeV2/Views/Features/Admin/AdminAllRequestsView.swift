@@ -1416,45 +1416,37 @@ struct AdminAllRequestsView: View {
         onReject: (() -> Void)?
     ) -> some View {
         HStack(spacing: DS.Spacing.sm) {
-            // زر الرفض — يظهر فقط لمن يملك الصلاحية
+            Spacer(minLength: 0)
+
+            // زر الرفض — أيقونة دائرية، يظهر فقط لمن يملك الصلاحية
             if let onReject, authVM.canRejectRequests {
                 Button(action: onReject) {
-                    HStack(spacing: 5) {
-                        Image(systemName: "xmark")
-                            .font(DS.Font.scaled(11, weight: .bold))
-                        Text(L10n.t("رفض", "Reject"))
-                            .font(DS.Font.scaled(13, weight: .bold))
-                    }
-                    .foregroundColor(DS.Color.error)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 9)
-                    .background(Capsule().fill(DS.Color.error.opacity(0.10)))
-                    .overlay(Capsule().strokeBorder(DS.Color.error.opacity(0.25), lineWidth: 1))
+                    Image(systemName: "xmark")
+                        .font(DS.Font.scaled(15, weight: .bold))
+                        .foregroundColor(DS.Color.error)
+                        .frame(width: 40, height: 40)
+                        .background(Circle().fill(DS.Color.error.opacity(0.10)))
+                        .overlay(Circle().strokeBorder(DS.Color.error.opacity(0.25), lineWidth: 1))
                 }
                 .buttonStyle(.plain)
             }
 
-            // زر الموافقة — قابل للتخصيص (مثل "ربط" بدل "موافقة" لطلبات الانضمام)
+            // زر الموافقة — أيقونة دائرية متدرّجة
             if let onApprove {
                 Button(action: onApprove) {
-                    HStack(spacing: 5) {
-                        Image(systemName: approveIcon)
-                            .font(DS.Font.scaled(11, weight: .bold))
-                        Text(approveLabel ?? L10n.t("موافقة", "Approve"))
-                            .font(DS.Font.scaled(13, weight: .bold))
-                    }
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 9)
-                    .background(
-                        Capsule().fill(
-                            LinearGradient(
-                                colors: [approveColor, approveColor.opacity(0.85)],
-                                startPoint: .leading, endPoint: .trailing
+                    Image(systemName: approveIcon)
+                        .font(DS.Font.scaled(15, weight: .bold))
+                        .foregroundColor(.white)
+                        .frame(width: 40, height: 40)
+                        .background(
+                            Circle().fill(
+                                LinearGradient(
+                                    colors: [approveColor, approveColor.opacity(0.85)],
+                                    startPoint: .topLeading, endPoint: .bottomTrailing
+                                )
                             )
                         )
-                    )
-                    .shadow(color: approveColor.opacity(0.30), radius: 5, x: 0, y: 2)
+                        .shadow(color: approveColor.opacity(0.30), radius: 5, x: 0, y: 2)
                 }
                 .buttonStyle(.plain)
             }
