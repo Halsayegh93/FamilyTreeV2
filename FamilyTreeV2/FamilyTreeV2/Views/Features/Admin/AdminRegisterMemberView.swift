@@ -208,59 +208,70 @@ struct AdminRegisterMemberView: View {
 
     // MARK: - Birth Date Section
     private var birthDateSection: some View {
-        DSCard(padding: 0) {
-            DSSectionHeader(title: L10n.t("تاريخ الميلاد", "Birth Date"), icon: "calendar", iconColor: DS.Color.accent)
+        VStack(spacing: 0) {
+            HStack(spacing: DS.Spacing.md) {
+                DSIcon("calendar.badge.checkmark", color: DS.Color.accent)
+                Text(L10n.t("تاريخ الميلاد متوفر", "Birth date available"))
+                    .font(DS.Font.callout)
+                    .foregroundColor(DS.Color.textPrimary)
+                Spacer()
+                Toggle("", isOn: $hasBirthDate)
+                    .labelsHidden()
+                    .tint(DS.Color.primary)
+            }
 
-            VStack(spacing: 0) {
-                HStack(spacing: DS.Spacing.sm) {
-                    DSIcon("calendar.badge.checkmark", color: DS.Color.accent)
-                    Text(L10n.t("تاريخ الميلاد متوفر", "Birth date available"))
-                        .font(DS.Font.body)
-                        .foregroundColor(DS.Color.textSecondary)
-                    Spacer()
-                    Toggle("", isOn: $hasBirthDate)
-                        .labelsHidden()
-                        .tint(DS.Color.primary)
-                }
-                .padding(.horizontal, DS.Spacing.md)
-                .padding(.vertical, DS.Spacing.xs)
-                .animation(.default, value: hasBirthDate)
-
-                if hasBirthDate {
-                    DSDivider()
-                    VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                        HStack(spacing: DS.Spacing.sm) {
-                            DSIcon("calendar", color: DS.Color.accent)
-                            Text(L10n.t("تاريخ الميلاد", "Birth Date"))
-                                .font(DS.Font.callout)
-                                .foregroundColor(DS.Color.textPrimary)
-                            Spacer()
-                        }
-                        StableWheelDatePicker(selection: $birthDate, in: ...Date())
+            if hasBirthDate {
+                VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                    HStack(spacing: DS.Spacing.md) {
+                        DSIcon("calendar", color: DS.Color.accent)
+                        Text(L10n.t("تاريخ الميلاد", "Birth Date"))
+                            .font(DS.Font.callout)
+                            .foregroundColor(DS.Color.textPrimary)
+                        Spacer()
                     }
-                    .padding(.horizontal, DS.Spacing.md)
-                    .padding(.vertical, DS.Spacing.xs)
+                    StableWheelDatePicker(selection: $birthDate, in: ...Date())
                 }
+                .padding(.top, DS.Spacing.sm)
             }
         }
+        .padding(.horizontal, DS.Spacing.lg)
+        .padding(.vertical, DS.Spacing.md)
+        .background(DS.Color.surface)
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                .stroke(DS.Color.inactiveBorder, lineWidth: 1)
+        )
+        .animation(.default, value: hasBirthDate)
     }
 
     // MARK: - Phone Section — بدون رمز الدولة
     private var phoneSection: some View {
-        DSCard(padding: 0) {
-            DSSectionHeader(title: L10n.t("رقم الهاتف (اختياري)", "Phone Number (Optional)"), icon: "phone.fill", iconColor: DS.Color.success)
-
-            PhoneNumberTextField(
-                text: $phoneNumber,
-                placeholder: L10n.t("رقم الهاتف", "Phone Number"),
-                font: .systemFont(ofSize: 15),
-                keyboardType: .phonePad,
-                maxLength: selectedPhoneCountry.maxDigits
-            )
-            .frame(height: 30)
-            .padding(.horizontal, DS.Spacing.md)
-            .padding(.vertical, DS.Spacing.xs)
+        HStack(spacing: DS.Spacing.md) {
+            DSIcon("phone.fill", color: DS.Color.success)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(L10n.t("رقم الهاتف (اختياري)", "Phone Number (Optional)"))
+                    .font(DS.Font.caption1)
+                    .foregroundColor(DS.Color.textSecondary)
+                PhoneNumberTextField(
+                    text: $phoneNumber,
+                    placeholder: L10n.t("رقم الهاتف", "Phone Number"),
+                    font: .systemFont(ofSize: 15),
+                    keyboardType: .phonePad,
+                    maxLength: selectedPhoneCountry.maxDigits
+                )
+                .frame(height: 30)
+            }
+            Spacer()
         }
+        .padding(.horizontal, DS.Spacing.lg)
+        .padding(.vertical, DS.Spacing.md)
+        .background(DS.Color.surface)
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                .stroke(DS.Color.inactiveBorder, lineWidth: 1)
+        )
     }
 
     // MARK: - Submit Button
