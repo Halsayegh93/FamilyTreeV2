@@ -257,15 +257,13 @@ struct AddSonByAdminSheet: View {
             .tint(DS.Color.primary)
 
             if hasBirthDate {
-                DatePicker(
-                    selection: $birthDate,
-                    in: ...Date(),
-                    displayedComponents: .date
-                ) {
-                    Label(L10n.t("تاريخ الميلاد", "Birth Date"), systemImage: "calendar.badge.clock")
-                        .foregroundColor(DS.Color.textPrimary)
-                }
-                .environment(\.locale, Locale(identifier: L10n.isArabic ? "ar" : "en_US"))
+                DSDateField(
+                    label: L10n.t("تاريخ الميلاد", "Birth Date"),
+                    date: $birthDate,
+                    icon: "calendar.badge.clock",
+                    range: ...Date(),
+                    compact: true
+                )
             }
 
             Toggle(isOn: $isDeceased.animation(DS.Anim.snappy)) {
@@ -282,15 +280,13 @@ struct AddSonByAdminSheet: View {
                 .tint(DS.Color.neonPink)
 
                 if hasDeathDate {
-                    DatePicker(
-                        selection: $deathDate,
-                        in: ...Date(),
-                        displayedComponents: .date
-                    ) {
-                        Label(L10n.t("تاريخ الوفاة", "Death Date"), systemImage: "calendar.badge.exclamationmark")
-                            .foregroundColor(DS.Color.textPrimary)
-                    }
-                    .environment(\.locale, Locale(identifier: L10n.isArabic ? "ar" : "en_US"))
+                    DSDateField(
+                        label: L10n.t("تاريخ الوفاة", "Death Date"),
+                        date: $deathDate,
+                        icon: "calendar.badge.exclamationmark",
+                        range: ...Date(),
+                        compact: true
+                    )
                 }
             }
         } header: {

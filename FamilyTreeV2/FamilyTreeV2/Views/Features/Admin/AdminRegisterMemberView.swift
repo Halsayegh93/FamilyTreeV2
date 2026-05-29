@@ -126,43 +126,38 @@ struct AdminRegisterMemberView: View {
         .padding(.top, DS.Spacing.md)
     }
 
-    // MARK: - Name Field Section
+    // MARK: - Name Field Section — الاسم الرباعي (نفس فورم التسجيل)
     private var nameFieldSection: some View {
-        DSCard(padding: 0) {
-            DSSectionHeader(title: L10n.t("الاسم الخماسي", "Full Name (5 parts)"), icon: "person.fill", iconColor: DS.Color.primary)
-
-            HStack(spacing: DS.Spacing.sm) {
-                DSIcon("person.fill", color: DS.Color.primary)
-                TextField(L10n.t("مثال: حسن أحمد علي محمد السالم", "e.g. John Smith"), text: $fullName)
-                    .font(DS.Font.body)
-                    .onChange(of: fullName) { _ in
-                        if fullName.count > 100 {
-                            fullName = String(fullName.prefix(100))
-                        }
-                    }
+        DSTextField(
+            label: L10n.t("الاسم الرباعي", "Full Name (4 parts)"),
+            placeholder: L10n.t("محمد عبدالله علي أحمد", "Mohammad Abdullah Ali Ahmad"),
+            text: $fullName,
+            icon: "person.fill",
+            iconColor: DS.Color.primary,
+            required: true,
+            hint: L10n.t("(باللغة العربية)", "(in Arabic)")
+        )
+        .onChange(of: fullName) { _ in
+            if fullName.count > 100 {
+                fullName = String(fullName.prefix(100))
             }
-            .padding(.horizontal, DS.Spacing.md)
-            .padding(.vertical, DS.Spacing.xs)
         }
     }
 
-    // MARK: - Family Name Section
+    // MARK: - Family Name Section — نفس فورم التسجيل
     private var familyNameSection: some View {
-        DSCard(padding: 0) {
-            DSSectionHeader(title: L10n.t("اسم العائلة", "Family Name"), icon: "person.2.fill", iconColor: DS.Color.primary)
-
-            HStack(spacing: DS.Spacing.sm) {
-                DSIcon("person.2.fill", color: DS.Color.primary)
-                TextField(L10n.t("مثال: آل محمد علي", "e.g. Al-Mohammad Ali"), text: $familyName)
-                    .font(DS.Font.body)
-                    .onChange(of: familyName) { _ in
-                        if familyName.count > 50 {
-                            familyName = String(familyName.prefix(50))
-                        }
-                    }
+        DSTextField(
+            label: L10n.t("اسم العائلة", "Family Name"),
+            placeholder: L10n.t("مثال: آل محمد علي", "e.g. Al-Mohammad Ali"),
+            text: $familyName,
+            icon: "person.2.fill",
+            iconColor: DS.Color.accent,
+            required: true
+        )
+        .onChange(of: familyName) { _ in
+            if familyName.count > 50 {
+                familyName = String(familyName.prefix(50))
             }
-            .padding(.horizontal, DS.Spacing.md)
-            .padding(.vertical, DS.Spacing.xs)
         }
     }
 
@@ -213,59 +208,65 @@ struct AdminRegisterMemberView: View {
 
     // MARK: - Birth Date Section
     private var birthDateSection: some View {
-        DSCard(padding: 0) {
-            DSSectionHeader(title: L10n.t("تاريخ الميلاد", "Birth Date"), icon: "calendar", iconColor: DS.Color.accent)
+        VStack(spacing: 0) {
+            HStack(spacing: DS.Spacing.md) {
+                DSIcon("calendar.badge.checkmark", color: DS.Color.accent)
+                Text(L10n.t("تاريخ الميلاد متوفر", "Birth date available"))
+                    .font(DS.Font.callout)
+                    .foregroundColor(DS.Color.textPrimary)
+                Spacer()
+                Toggle("", isOn: $hasBirthDate)
+                    .labelsHidden()
+                    .tint(DS.Color.primary)
+            }
 
-            VStack(spacing: 0) {
-                HStack(spacing: DS.Spacing.sm) {
-                    DSIcon("calendar.badge.checkmark", color: DS.Color.accent)
-                    Text(L10n.t("تاريخ الميلاد متوفر", "Birth date available"))
-                        .font(DS.Font.body)
-                        .foregroundColor(DS.Color.textSecondary)
-                    Spacer()
-                    Toggle("", isOn: $hasBirthDate)
-                        .labelsHidden()
-                        .tint(DS.Color.primary)
-                }
-                .padding(.horizontal, DS.Spacing.md)
-                .padding(.vertical, DS.Spacing.xs)
-                .animation(.default, value: hasBirthDate)
-
-                if hasBirthDate {
-                    DSDivider()
-                    VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                        HStack(spacing: DS.Spacing.sm) {
-                            DSIcon("calendar", color: DS.Color.accent)
-                            Text(L10n.t("تاريخ الميلاد", "Birth Date"))
-                                .font(DS.Font.callout)
-                                .foregroundColor(DS.Color.textPrimary)
-                            Spacer()
-                        }
-                        StableWheelDatePicker(selection: $birthDate, in: ...Date())
-                    }
-                    .padding(.horizontal, DS.Spacing.md)
-                    .padding(.vertical, DS.Spacing.xs)
-                }
+            if hasBirthDate {
+                DSDateField(
+                    label: L10n.t("تاريخ الميلاد", "Birth Date"),
+                    date: $birthDate,
+                    range: ...Date()
+                )
+                .padding(.top, DS.Spacing.sm)
             }
         }
+        .padding(.horizontal, DS.Spacing.lg)
+        .padding(.vertical, DS.Spacing.md)
+        .background(DS.Color.surface)
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                .stroke(DS.Color.inactiveBorder, lineWidth: 1)
+        )
+        .animation(.default, value: hasBirthDate)
     }
 
     // MARK: - Phone Section — بدون رمز الدولة
     private var phoneSection: some View {
-        DSCard(padding: 0) {
-            DSSectionHeader(title: L10n.t("رقم الهاتف (اختياري)", "Phone Number (Optional)"), icon: "phone.fill", iconColor: DS.Color.success)
-
-            PhoneNumberTextField(
-                text: $phoneNumber,
-                placeholder: L10n.t("رقم الهاتف", "Phone Number"),
-                font: .systemFont(ofSize: 15),
-                keyboardType: .phonePad,
-                maxLength: selectedPhoneCountry.maxDigits
-            )
-            .frame(height: 30)
-            .padding(.horizontal, DS.Spacing.md)
-            .padding(.vertical, DS.Spacing.xs)
+        HStack(spacing: DS.Spacing.md) {
+            DSIcon("phone.fill", color: DS.Color.success)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(L10n.t("رقم الهاتف (اختياري)", "Phone Number (Optional)"))
+                    .font(DS.Font.caption1)
+                    .foregroundColor(DS.Color.textSecondary)
+                PhoneNumberTextField(
+                    text: $phoneNumber,
+                    placeholder: L10n.t("رقم الهاتف", "Phone Number"),
+                    font: .systemFont(ofSize: 15),
+                    keyboardType: .phonePad,
+                    maxLength: selectedPhoneCountry.maxDigits
+                )
+                .frame(height: 30)
+            }
+            Spacer()
         }
+        .padding(.horizontal, DS.Spacing.lg)
+        .padding(.vertical, DS.Spacing.md)
+        .background(DS.Color.surface)
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                .stroke(DS.Color.inactiveBorder, lineWidth: 1)
+        )
     }
 
     // MARK: - Submit Button
@@ -313,4 +314,5 @@ struct AdminRegisterMemberView: View {
             .padding(.bottom, DS.Spacing.xxl)
         }
     }
+
 }

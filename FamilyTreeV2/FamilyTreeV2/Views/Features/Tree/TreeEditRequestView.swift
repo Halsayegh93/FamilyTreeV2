@@ -292,14 +292,12 @@ struct TreeEditRequestView: View {
                 .font(DS.Font.calloutBold)
                 .foregroundColor(DS.Color.textPrimary)
 
-            DatePicker(
-                L10n.t("تاريخ الوفاة", "Date of Death"),
-                selection: $deathDate,
-                in: ...Date(),
-                displayedComponents: .date
+            DSDateField(
+                label: L10n.t("تاريخ الوفاة", "Date of Death"),
+                date: $deathDate,
+                iconColor: DS.Color.error,
+                range: ...Date()
             )
-            .labelsHidden()
-            .datePickerStyle(.compact)
             .padding(.horizontal, DS.Spacing.md)
             .padding(.vertical, DS.Spacing.md)
             .frame(maxWidth: .infinity, alignment: .leading)
