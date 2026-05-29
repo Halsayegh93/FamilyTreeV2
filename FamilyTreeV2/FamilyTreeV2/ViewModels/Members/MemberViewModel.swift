@@ -322,7 +322,8 @@ class MemberViewModel: ObservableObject {
         firstName: String,
         birthDate: String?,
         gender: String?,
-        phoneNumber: String?
+        phoneNumber: String?,
+        avatarImage: UIImage? = nil
     ) async -> Bool {
         guard NetworkMonitor.shared.requireOnline() else { return false }
         guard canModerate else {
@@ -363,6 +364,11 @@ class MemberViewModel: ObservableObject {
         do {
             try await supabase.from("profiles").insert(memberData).execute()
             await fetchSingleMember(id: newId)
+
+            // رفع الصورة الشخصية إن وُجدت (نفس مسار فورم التسجيل)
+            if let avatarImage {
+                await uploadAvatar(image: avatarImage, for: newId)
+            }
 
             let adminName = currentUser?.firstName ?? "مدير"
             await notificationVM?.notifyAdminsWithPush(

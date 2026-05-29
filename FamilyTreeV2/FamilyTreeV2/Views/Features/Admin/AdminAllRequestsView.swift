@@ -1453,6 +1453,8 @@ struct AdminAllRequestsView: View {
                 }
                 .buttonStyle(.plain)
             }
+
+            Spacer(minLength: 0)
         }
     }
 

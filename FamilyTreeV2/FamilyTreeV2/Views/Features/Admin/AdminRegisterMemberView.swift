@@ -8,9 +8,10 @@ struct AdminRegisterMemberView: View {
     @State private var fullName: String = ""
     @State private var familyName: String = ""
     @State private var selectedGender: String = "male"
-    @State private var hasBirthDate: Bool = false
     @State private var birthDate: Date = Calendar.current.date(byAdding: .year, value: -20, to: Date()) ?? Date()
+    @State private var selectedImage: UIImage? = nil
     @State private var phoneNumber: String = ""
+    @State private var hasAttemptedSubmit = false
     @AppStorage("lastAuthDialingCode") private var lastAuthDialingCode: String = ""
     @State private var selectedPhoneCountry: KuwaitPhone.Country = KuwaitPhone.defaultCountry
     @State private var showingSuccess = false
@@ -23,45 +24,58 @@ struct AdminRegisterMemberView: View {
 
     var body: some View {
         ZStack {
-            DS.Color.background.ignoresSafeArea()
-
-            // Decorative gradient background
+            LinearGradient(
+                colors: [DS.Color.primary.opacity(0.06), DS.Color.background],
+                startPoint: .top,
+                endPoint: .center
+            )
+            .ignoresSafeArea()
 
             VStack(spacing: 0) {
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: DS.Spacing.xl) {
-                        // Header with gradient icon
-                        headerSection
+                        // الصورة الشخصية — في الأعلى مثل فورم التسجيل
+                        photoSection
                             .scaleEffect(headerScale)
                             .opacity(headerOpacity)
 
+                        // العنوان — نفس فورم التسجيل
+                        VStack(spacing: DS.Spacing.sm) {
+                            Text(L10n.t("عائلة المحمدعلي", "Al-Mohammadali Family"))
+                                .font(DS.Font.title1)
+                                .fontWeight(.black)
+                                .foregroundColor(DS.Color.textPrimary)
+
+                            Text(L10n.t("أدخل بيانات العضو الجديد", "Enter the new member's details"))
+                                .font(DS.Font.callout)
+                                .foregroundColor(DS.Color.textSecondary)
+                        }
+                        .opacity(headerOpacity)
+
                         VStack(spacing: DS.Spacing.md) {
-                            // Full name field (5-part)
+                            // الاسم الرباعي
                             nameFieldSection
                                 .opacity(cardsAppeared ? 1 : 0)
                                 .offset(y: cardsAppeared ? 0 : 20)
 
-                            // Family name field
+                            // اسم العائلة
                             familyNameSection
                                 .opacity(cardsAppeared ? 1 : 0)
                                 .offset(y: cardsAppeared ? 0 : 25)
 
-                            // TODO: gender — re-enable when needed
-                            // genderSection
-
-                            // Birth date field
+                            // تاريخ الميلاد
                             birthDateSection
                                 .opacity(cardsAppeared ? 1 : 0)
                                 .offset(y: cardsAppeared ? 0 : 30)
 
-                            // Phone number
+                            // رقم الهاتف (خاص بالإدارة — اختياري)
                             phoneSection
                                 .opacity(cardsAppeared ? 1 : 0)
                                 .offset(y: cardsAppeared ? 0 : 33)
                         }
                         .padding(.horizontal, DS.Spacing.lg)
 
-                        // Submit button
+                        // زر الإرسال
                         submitButton
                             .opacity(cardsAppeared ? 1 : 0)
                             .offset(y: cardsAppeared ? 0 : 50)
@@ -86,149 +100,92 @@ struct AdminRegisterMemberView: View {
             if !lastAuthDialingCode.isEmpty {
                 selectedPhoneCountry = KuwaitPhone.countryForDialingCode(lastAuthDialingCode)
             }
-            withAnimation(.spring(response: 0.8, dampingFraction: 0.6).delay(0.2)) {
+            withAnimation(DS.Anim.elastic.delay(0.2)) {
                 headerScale = 1.0
                 headerOpacity = 1.0
             }
-            withAnimation(.easeOut(duration: 0.7).delay(0.5)) {
+            withAnimation(DS.Anim.smooth.delay(0.5)) {
                 cardsAppeared = true
             }
         }
     }
 
-    // MARK: - Header Section
-    private var headerSection: some View {
-        VStack(spacing: DS.Spacing.md) {
-            ZStack {
-                Circle()
-                    .fill(DS.Color.primary.opacity(0.08))
-                    .frame(width: 120, height: 120)
+    // MARK: - Photo Section — كاميرا على الصورة مباشرة (نفس فورم التسجيل)
+    private var photoSection: some View {
+        VStack(spacing: DS.Spacing.xs) {
+            DSProfilePhotoPicker(
+                selectedImage: $selectedImage,
+                enableCrop: true,
+                cropShape: .circle,
+                title: L10n.t("الصورة الشخصية", "Profile Photo"),
+                trailing: L10n.t("اختياري", "Optional"),
+                compactEmptyState: true
+            )
 
-                Circle()
-                    .fill(DS.Color.gradientPrimary)
-                    .frame(width: 100, height: 100)
-
-                Image(systemName: "person.badge.plus")
-                    .font(DS.Font.scaled(42, weight: .bold))
-                    .foregroundColor(DS.Color.textOnPrimary)
-            }
-            .dsGlowShadow()
-
-            Text(L10n.t("تسجيل عضو جديد", "Register New Member"))
-                .font(DS.Font.title1)
-                .foregroundColor(DS.Color.textPrimary)
-
-            Text(L10n.t("أدخل بيانات العضو الجديد وسيتم إضافته مباشرة للشجرة", "New member will be added to tree"))
-                .font(DS.Font.subheadline)
-                .foregroundColor(DS.Color.textSecondary)
-                .multilineTextAlignment(.center)
+            Text(L10n.t(
+                "سوف تُستخدم كصورة في شجرة العائلة",
+                "Will be used as the member's photo in the family tree"
+            ))
+            .font(DS.Font.caption1)
+            .foregroundColor(DS.Color.textTertiary)
         }
-        .padding(.top, DS.Spacing.md)
+        .padding(.top, DS.Spacing.xl)
     }
 
     // MARK: - Name Field Section — الاسم الرباعي (نفس فورم التسجيل)
     private var nameFieldSection: some View {
-        DSTextField(
-            label: L10n.t("الاسم الرباعي", "Full Name (4 parts)"),
-            placeholder: L10n.t("محمد عبدالله علي أحمد", "Mohammad Abdullah Ali Ahmad"),
-            text: $fullName,
-            icon: "person.fill",
-            iconColor: DS.Color.primary,
-            required: true,
-            hint: L10n.t("(باللغة العربية)", "(in Arabic)")
-        )
-        .onChange(of: fullName) { _ in
-            if fullName.count > 100 {
-                fullName = String(fullName.prefix(100))
+        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+            DSTextField(
+                label: L10n.t("الاسم الرباعي", "Full Name (4 parts)"),
+                placeholder: L10n.t("محمد عبدالله علي أحمد", "Mohammad Abdullah Ali Ahmad"),
+                text: $fullName,
+                icon: "person.fill",
+                iconColor: DS.Color.primary,
+                required: true,
+                hint: L10n.t("(باللغة العربية)", "(in Arabic)")
+            )
+            .onChange(of: fullName) { _ in
+                if fullName.count > 100 {
+                    fullName = String(fullName.prefix(100))
+                }
+            }
+
+            if hasAttemptedSubmit && fullName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                validationError(L10n.t("الاسم مطلوب", "Name is required"))
             }
         }
     }
 
     // MARK: - Family Name Section — نفس فورم التسجيل
     private var familyNameSection: some View {
-        DSTextField(
-            label: L10n.t("اسم العائلة", "Family Name"),
-            placeholder: L10n.t("مثال: آل محمد علي", "e.g. Al-Mohammad Ali"),
-            text: $familyName,
-            icon: "person.2.fill",
-            iconColor: DS.Color.accent,
-            required: true
-        )
-        .onChange(of: familyName) { _ in
-            if familyName.count > 50 {
-                familyName = String(familyName.prefix(50))
-            }
-        }
-    }
-
-    // MARK: - Gender Section
-    private var genderSection: some View {
-        DSCard(padding: 0) {
-            DSSectionHeader(title: L10n.t("الجنس", "Gender"), icon: "figure.dress.line.vertical.figure", iconColor: DS.Color.info)
-
-            HStack(spacing: DS.Spacing.sm) {
-                DSIcon("figure.dress.line.vertical.figure", color: DS.Color.info)
-
-                Text(L10n.t("الجنس", "Gender"))
-                    .font(DS.Font.body)
-                    .foregroundColor(DS.Color.textSecondary)
-
-                Spacer()
-
-                Menu {
-                    Button {
-                        selectedGender = "male"
-                    } label: {
-                        Label(L10n.t("ذكر", "Male"), systemImage: selectedGender == "male" ? "checkmark" : "")
-                    }
-                    Button {
-                        selectedGender = "female"
-                    } label: {
-                        Label(L10n.t("أنثى", "Female"), systemImage: selectedGender == "female" ? "checkmark" : "")
-                    }
-                } label: {
-                    HStack(spacing: DS.Spacing.xs) {
-                        Text(selectedGender == "male" ? L10n.t("ذكر", "Male") : L10n.t("أنثى", "Female"))
-                            .font(DS.Font.body)
-                            .foregroundColor(DS.Color.textPrimary)
-                        Image(systemName: "chevron.up.chevron.down")
-                            .font(DS.Font.caption1)
-                            .foregroundColor(DS.Color.textTertiary)
-                    }
-                    .padding(.horizontal, DS.Spacing.md)
-                    .padding(.vertical, DS.Spacing.xs)
-                    .background(DS.Color.surface)
-                    .cornerRadius(DS.Radius.sm)
+        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+            DSTextField(
+                label: L10n.t("اسم العائلة", "Family Name"),
+                placeholder: L10n.t("مثال: آل محمد علي", "e.g. Al-Mohammad Ali"),
+                text: $familyName,
+                icon: "person.2.fill",
+                iconColor: DS.Color.accent,
+                required: true
+            )
+            .onChange(of: familyName) { _ in
+                if familyName.count > 50 {
+                    familyName = String(familyName.prefix(50))
                 }
             }
-            .padding(.horizontal, DS.Spacing.md)
-            .padding(.vertical, DS.Spacing.xs)
+
+            if hasAttemptedSubmit && familyName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                validationError(L10n.t("اسم العائلة مطلوب", "Family name is required"))
+            }
         }
     }
 
-    // MARK: - Birth Date Section
+    // MARK: - Birth Date Section — نفس فورم التسجيل
     private var birthDateSection: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: DS.Spacing.md) {
-                DSIcon("calendar.badge.checkmark", color: DS.Color.accent)
-                Text(L10n.t("تاريخ الميلاد متوفر", "Birth date available"))
-                    .font(DS.Font.callout)
-                    .foregroundColor(DS.Color.textPrimary)
-                Spacer()
-                Toggle("", isOn: $hasBirthDate)
-                    .labelsHidden()
-                    .tint(DS.Color.primary)
-            }
-
-            if hasBirthDate {
-                DSDateField(
-                    label: L10n.t("تاريخ الميلاد", "Birth Date"),
-                    date: $birthDate,
-                    range: ...Date()
-                )
-                .padding(.top, DS.Spacing.sm)
-            }
-        }
+        DSDateField(
+            label: L10n.t("تاريخ الميلاد", "Birth Date"),
+            date: $birthDate,
+            range: ...Date()
+        )
         .padding(.horizontal, DS.Spacing.lg)
         .padding(.vertical, DS.Spacing.md)
         .background(DS.Color.surface)
@@ -237,7 +194,6 @@ struct AdminRegisterMemberView: View {
             RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
                 .stroke(DS.Color.inactiveBorder, lineWidth: 1)
         )
-        .animation(.default, value: hasBirthDate)
     }
 
     // MARK: - Phone Section — بدون رمز الدولة
@@ -274,21 +230,29 @@ struct AdminRegisterMemberView: View {
         VStack(spacing: DS.Spacing.sm) {
             let trimmedFull = fullName.trimmingCharacters(in: .whitespacesAndNewlines)
             let trimmedFamily = familyName.trimmingCharacters(in: .whitespacesAndNewlines)
-            let isDisabled = trimmedFull.isEmpty || trimmedFamily.isEmpty || memberVM.isLoading
+            // نفس Validation فورم التسجيل: 2-50 حرف + على الأقل حرفان أبجديان
+            let fullLetterCount = trimmedFull.filter { $0.isLetter }.count
+            let familyLetterCount = trimmedFamily.filter { $0.isLetter }.count
+            let isValid = trimmedFull.count >= 2 && trimmedFull.count <= 50 && fullLetterCount >= 2
+                       && trimmedFamily.count >= 2 && trimmedFamily.count <= 50 && familyLetterCount >= 2
+            let isDisabled = !isValid || memberVM.isLoading
             DSPrimaryButton(
                 L10n.t("إضافة العضو", "Add Member"),
                 icon: "person.badge.plus",
                 isLoading: memberVM.isLoading,
                 useGradient: !isDisabled,
-                color: isDisabled ? .gray : DS.Color.primary
+                color: isDisabled ? DS.Color.inactive : DS.Color.primary
             ) {
+                withAnimation(DS.Anim.snappy) { hasAttemptedSubmit = true }
+                guard isValid else { return }
+
                 let formatter = DateFormatter()
                 formatter.dateFormat = "yyyy-MM-dd"
                 formatter.locale = Locale(identifier: "en_US")
 
                 let parts = trimmedFull.split(whereSeparator: \.isWhitespace).map(String.init)
                 let first = parts.first ?? trimmedFull
-                let birthStr = hasBirthDate ? formatter.string(from: birthDate) : nil
+                let birthStr = formatter.string(from: birthDate)
                 let storedPhone = KuwaitPhone.normalizedForStorage(
                     country: selectedPhoneCountry,
                     rawLocalDigits: phoneNumber
@@ -300,7 +264,8 @@ struct AdminRegisterMemberView: View {
                         firstName: first,
                         birthDate: birthStr,
                         gender: selectedGender,
-                        phoneNumber: storedPhone
+                        phoneNumber: storedPhone,
+                        avatarImage: selectedImage
                     )
                     if success {
                         showingSuccess = true
@@ -309,10 +274,23 @@ struct AdminRegisterMemberView: View {
                     }
                 }
             }
-            .disabled(isDisabled)
+            .disabled(memberVM.isLoading)
             .padding(.horizontal, DS.Spacing.lg)
             .padding(.bottom, DS.Spacing.xxl)
         }
+    }
+
+    // MARK: - Validation Error — نفس فورم التسجيل
+    private func validationError(_ text: String) -> some View {
+        HStack(spacing: DS.Spacing.xs) {
+            Image(systemName: "exclamationmark.circle.fill")
+                .font(DS.Font.caption2)
+            Text(text)
+                .font(DS.Font.caption1)
+        }
+        .foregroundColor(DS.Color.error)
+        .padding(.leading, DS.Spacing.sm)
+        .transition(.opacity.combined(with: .move(edge: .top)))
     }
 
 }
