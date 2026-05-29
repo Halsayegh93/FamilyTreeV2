@@ -3191,7 +3191,7 @@ struct AdminAllRequestsView: View {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: DS.Spacing.sm) {
                     // Hero — أيقونة كبيرة + نوع الطلب + الوقت
-                    detailHero(icon: meta.icon, color: meta.color, title: meta.title, timestamp: meta.timestamp)
+                    detailHero(icon: meta.icon, color: meta.color, title: meta.title, timestamp: meta.timestamp, imageUrl: meta.imageUrl)
 
                     // محتوى مخصّص لكل نوع
                     detailContent(for: detail)
@@ -3229,6 +3229,8 @@ struct AdminAllRequestsView: View {
         let color: Color
         let title: String
         let timestamp: String?
+        /// صورة دائرية تظهر في الـ hero بدل الأيقونة (مثل صورة المشروع في صفحة المشاريع)
+        var imageUrl: String? = nil
     }
 
     private func detailMeta(for detail: RequestDetail) -> DetailMeta {
@@ -3272,7 +3274,8 @@ struct AdminAllRequestsView: View {
         case .project(let p):
             return .init(icon: "briefcase.fill", color: DS.Color.neonPurple,
                          title: L10n.t("طلب مشروع", "Project Request"),
-                         timestamp: p.createdAt.map { formatRegistrationDate($0) })
+                         timestamp: p.createdAt.map { formatRegistrationDate($0) },
+                         imageUrl: p.logoUrl)
         case .healthMember(let member, let issue):
             let name = member.fullName.trimmingCharacters(in: .whitespacesAndNewlines)
             return .init(icon: issue.asTab.icon, color: issue.asTab.color,
@@ -3282,21 +3285,36 @@ struct AdminAllRequestsView: View {
     }
 
     /// Hero فاخر: دائرة كبيرة بـ gradient + اسم الطلب + الوقت.
-    private func detailHero(icon: String, color: Color, title: String, timestamp: String?) -> some View {
+    private func detailHero(icon: String, color: Color, title: String, timestamp: String?, imageUrl: String? = nil) -> some View {
         VStack(spacing: DS.Spacing.sm) {
             ZStack {
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [color, color.opacity(0.75)],
-                            startPoint: .topLeading, endPoint: .bottomTrailing
+                if let imageUrl, let url = URL(string: imageUrl) {
+                    // صورة دائرية حقيقية (نفس صفحة المشاريع)
+                    CachedAsyncImage(url: url) { img in
+                        img.resizable().scaledToFill()
+                    } placeholder: {
+                        Circle().fill(color.opacity(0.12))
+                            .overlay(ProgressView().tint(color))
+                    }
+                    .frame(width: 96, height: 96)
+                    .clipped()
+                    .clipShape(Circle())
+                    .overlay(Circle().strokeBorder(color.opacity(0.18), lineWidth: 1))
+                    .shadow(color: color.opacity(0.25), radius: 10, x: 0, y: 5)
+                } else {
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: [color, color.opacity(0.75)],
+                                startPoint: .topLeading, endPoint: .bottomTrailing
+                            )
                         )
-                    )
-                    .frame(width: 72, height: 72)
-                    .shadow(color: color.opacity(0.35), radius: 10, x: 0, y: 5)
-                Image(systemName: icon)
-                    .font(.system(size: 32, weight: .bold))
-                    .foregroundColor(.white)
+                        .frame(width: 72, height: 72)
+                        .shadow(color: color.opacity(0.35), radius: 10, x: 0, y: 5)
+                    Image(systemName: icon)
+                        .font(.system(size: 32, weight: .bold))
+                        .foregroundColor(.white)
+                }
             }
 
             Text(title)
