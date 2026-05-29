@@ -693,9 +693,9 @@ struct AdminAllRequestsView: View {
         // إعادة بناء كاش صحة الشجرة كذلك
         rebuildTreeHealthCache()
         // المجموع الكلّي = كل الأنواع ما عدا .all نفسه (لتفادي العدّ المضاعف)
-        // نستثني كذلك tabs الصحة من المجموع الكلّي للطلبات (الصحة ليست "طلبات" بالمعنى الإداري)
+        // يشمل tabs الصحة كذلك (المستخدم يبيها ضمن "الكل")
         cachedTotalCount = RequestTab.allCases
-            .filter { $0 != .all && $0.section != .treeHealth }
+            .filter { $0 != .all }
             .reduce(0) { $0 + itemCount(for: $1) }
         // عرض كل التابات دائماً — حتى الفارغة (المستخدم يبيها كلها مرئية)
         // ما عدا التابات المخفية (مغطّاة بأقسام أخرى).
@@ -1881,6 +1881,12 @@ struct AdminAllRequestsView: View {
         treeEditList(action: .editPhone, color: RequestTab.treeEditPhone.color)
         treeEditList(action: .deceased, color: RequestTab.treeDeceased.color)
         treeEditList(action: .delete, color: RequestTab.treeDelete.color)
+        // صحة الشجرة — تشخيص (نقرة لفتح التفاصيل، بدون موافقة/رفض)
+        treeHealthList(issue: .orphan, color: RequestTab.healthOrphan.color)
+        treeHealthList(issue: .noName, color: RequestTab.healthNoName.color)
+        treeHealthList(issue: .brokenParent, color: RequestTab.healthBrokenParent.color)
+        treeHealthList(issue: .hiddenFromTree, color: RequestTab.healthHidden.color)
+        treeHealthList(issue: .duplicatePhone, color: RequestTab.healthDupPhone.color)
     }
 
     /// موافقة دفعية تعبر كل الأنواع (لوضع "الكل").
