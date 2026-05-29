@@ -1760,62 +1760,148 @@ struct AdminAllRequestsView: View {
         }
     }
 
-    /// محتوى تاب "الكل" — يصدر كل الأنواع في تسلسل (إطار البطاقة الملوّن يعطي تمييزاً بصرياً).
+    /// عنصر موحّد لوضع "الكل" — يجمع كل الأنواع في قائمة واحدة لترتيبها زمنياً.
+    private enum AllItem: Identifiable {
+        case join(FamilyMember)
+        case news(NewsPost)
+        case report(AdminRequest)
+        case phone(PhoneChangeRequest)
+        case nameChange(AdminRequest)
+        case diwaniya(Diwaniya)
+        case deceased(AdminRequest)
+        case child(AdminRequest)
+        case photo(AdminRequest)
+        case project(Project)
+        case gallery(MemberGalleryPhoto)
+        case treeEdit(AdminRequest, TreeEditAction)
+        case health(FamilyMember, TreeHealthIssue)
+
+        var id: String {
+            switch self {
+            case .join(let m): return "join-\(m.id)"
+            case .news(let p): return "news-\(p.id)"
+            case .report(let r): return "report-\(r.id)"
+            case .phone(let r): return "phone-\(r.id)"
+            case .nameChange(let r): return "name-\(r.id)"
+            case .diwaniya(let d): return "diw-\(d.id)"
+            case .deceased(let r): return "dec-\(r.id)"
+            case .child(let r): return "child-\(r.id)"
+            case .photo(let r): return "photo-\(r.id)"
+            case .project(let p): return "proj-\(p.id)"
+            case .gallery(let g): return "gal-\(g.id)"
+            case .treeEdit(let r, _): return "tree-\(r.id)"
+            case .health(let m, let i): return "health-\(i)-\(m.id)"
+            }
+        }
+    }
+
+    private func parseISODate(_ s: String?) -> Date {
+        guard let s else { return .distantPast }
+        let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let iso2 = ISO8601DateFormatter()
+        iso2.formatOptions = [.withInternetDateTime]
+        return iso.date(from: s) ?? iso2.date(from: s) ?? .distantPast
+    }
+
+    private func allItemDate(_ item: AllItem) -> Date {
+        switch item {
+        case .join(let m): return parseISODate(m.createdAt)
+        case .news(let p): return p.timestamp
+        case .report(let r), .nameChange(let r), .deceased(let r),
+             .child(let r), .photo(let r): return parseISODate(r.createdAt)
+        case .treeEdit(let r, _): return parseISODate(r.createdAt)
+        case .phone(let r): return parseISODate(r.createdAt)
+        case .diwaniya: return .distantPast
+        case .project(let p): return parseISODate(p.createdAt)
+        case .gallery(let g): return parseISODate(g.createdAt)
+        case .health(let m, _): return parseISODate(m.createdAt)
+        }
+    }
+
+    /// كل عناصر وضع "الكل" مرتّبة زمنياً (الأحدث أولاً).
+    private var sortedAllItems: [AllItem] {
+        var items: [AllItem] = []
+        items += pendingMembers.map { .join($0) }
+        items += newsVM.pendingNewsRequests.map { .news($0) }
+        items += adminRequestVM.newsReportRequests.map { .report($0) }
+        items += adminRequestVM.phoneChangeRequests.map { .phone($0) }
+        items += adminRequestVM.nameChangeRequests.map { .nameChange($0) }
+        items += diwaniyaVM.pendingDiwaniyas.map { .diwaniya($0) }
+        items += adminRequestVM.deceasedRequests.map { .deceased($0) }
+        items += adminRequestVM.childAddRequests.map { .child($0) }
+        items += adminRequestVM.photoSuggestionRequests.map { .photo($0) }
+        items += projectsVM.pendingProjects.map { .project($0) }
+        items += memberVM.pendingGalleryPhotos.map { .gallery($0) }
+        items += adminRequestVM.treeEditRequests.map {
+            AllItem.treeEdit($0, $0.treeEditPayload?.resolvedAction ?? .add)
+        }
+        for issue in [TreeHealthIssue.orphan, .noName, .brokenParent, .hiddenFromTree, .duplicatePhone] {
+            items += healthMembers(for: issue).map { .health($0, issue) }
+        }
+        return items.sorted { allItemDate($0) > allItemDate($1) }
+    }
+
+    private func treeEditColor(_ action: TreeEditAction) -> Color {
+        switch action {
+        case .add: return RequestTab.treeAdd.color
+        case .editName: return RequestTab.treeEditName.color
+        case .editPhone: return RequestTab.treeEditPhone.color
+        case .deceased: return RequestTab.treeDeceased.color
+        case .delete: return RequestTab.treeDelete.color
+        }
+    }
+
+    /// محتوى تاب "الكل" — كل الأنواع مدمجة ومرتّبة حسب الوقت (الأحدث أولاً).
     @ViewBuilder
     private func allRequestsContent() -> some View {
-        ForEach(pendingMembers) { member in
+        ForEach(sortedAllItems) { item in
+            allItemRow(item)
+        }
+    }
+
+    @ViewBuilder
+    private func allItemRow(_ item: AllItem) -> some View {
+        switch item {
+        case .join(let member):
             selectableRow(
-                id: member.id,
-                accentColor: RequestTab.joinRequests.color,
-                approveLabel: L10n.t("ربط", "Link"),
-                approveIcon: "link.badge.plus",
+                id: member.id, accentColor: RequestTab.joinRequests.color,
+                approveLabel: L10n.t("ربط", "Link"), approveIcon: "link.badge.plus",
                 onApprove: { memberToLink = member },
                 onReject: { Task { await adminRequestVM.rejectOrDeleteMember(memberId: member.id) } },
                 onTap: { selectedDetail = .join(member) }
-            ) {
-                joinRequestRow(for: member)
-            }
-        }
-        ForEach(newsVM.pendingNewsRequests) { post in
+            ) { joinRequestRow(for: member) }
+        case .news(let post):
             selectableRow(
-                id: post.id,
-                accentColor: RequestTab.news.color,
+                id: post.id, accentColor: RequestTab.news.color,
                 onApprove: { Task { await newsVM.approveNewsPost(postId: post.id) } },
                 onReject: { Task { await newsVM.rejectNewsPost(postId: post.id) } },
                 onTap: { selectedDetail = .news(post) }
             ) { newsRow(for: post) }
-        }
-        ForEach(adminRequestVM.newsReportRequests) { request in
+        case .report(let request):
             selectableRow(
-                id: request.id,
-                accentColor: RequestTab.reports.color,
+                id: request.id, accentColor: RequestTab.reports.color,
                 onApprove: { Task { await adminRequestVM.approveNewsReport(request: request) } },
                 onReject: { Task { await adminRequestVM.rejectNewsReport(request: request) } },
                 onTap: { selectedDetail = .report(request) }
             ) { reportRow(for: request) }
-        }
-        ForEach(adminRequestVM.phoneChangeRequests) { request in
+        case .phone(let request):
             selectableRow(
-                id: request.id,
-                accentColor: RequestTab.phone.color,
+                id: request.id, accentColor: RequestTab.phone.color,
                 onApprove: { Task { await adminRequestVM.approvePhoneChangeRequest(request: request) } },
                 onReject: { Task { await adminRequestVM.rejectPhoneChangeRequest(request: request) } },
                 onTap: { selectedDetail = .phone(request) }
             ) { phoneRow(for: request) }
-        }
-        ForEach(adminRequestVM.nameChangeRequests) { request in
+        case .nameChange(let request):
             selectableRow(
-                id: request.id,
-                accentColor: RequestTab.nameChange.color,
+                id: request.id, accentColor: RequestTab.nameChange.color,
                 onApprove: { Task { await adminRequestVM.approveNameChangeRequest(request: request) } },
                 onReject: { Task { await adminRequestVM.rejectNameChangeRequest(request: request) } },
                 onTap: { selectedDetail = .nameChange(request) }
             ) { nameChangeRow(for: request) }
-        }
-        ForEach(diwaniyaVM.pendingDiwaniyas) { diwaniya in
+        case .diwaniya(let diwaniya):
             selectableRow(
-                id: diwaniya.id,
-                accentColor: RequestTab.diwaniya.color,
+                id: diwaniya.id, accentColor: RequestTab.diwaniya.color,
                 onApprove: {
                     if let adminId = authVM.currentUser?.id {
                         Task { await diwaniyaVM.approveDiwaniya(id: diwaniya.id, adminId: adminId) }
@@ -1824,39 +1910,31 @@ struct AdminAllRequestsView: View {
                 onReject: { Task { await diwaniyaVM.rejectDiwaniya(id: diwaniya.id) } },
                 onTap: { selectedDetail = .diwaniya(diwaniya) }
             ) { diwaniyaRow(for: diwaniya) }
-        }
-        ForEach(adminRequestVM.deceasedRequests) { request in
+        case .deceased(let request):
             selectableRow(
-                id: request.id,
-                accentColor: RequestTab.deceased.color,
+                id: request.id, accentColor: RequestTab.deceased.color,
                 onApprove: { Task { await adminRequestVM.approveDeceasedRequest(request: request) } },
                 onReject: { Task { await adminRequestVM.rejectDeceasedRequest(request: request) } },
                 onTap: { selectedDetail = .deceased(request) }
             ) { deceasedRow(for: request) }
-        }
-        ForEach(adminRequestVM.childAddRequests) { request in
+        case .child(let request):
             selectableRow(
-                id: request.id,
-                accentColor: RequestTab.children.color,
+                id: request.id, accentColor: RequestTab.children.color,
                 approveLabel: L10n.t("تأكيد", "Confirm"),
                 onApprove: { Task { await adminRequestVM.acknowledgeChildAddRequest(request: request) } },
                 onReject: { Task { await adminRequestVM.rejectChildAddRequest(request: request) } },
                 onTap: { selectedDetail = .child(request) }
             ) { childRow(for: request) }
-        }
-        ForEach(adminRequestVM.photoSuggestionRequests) { request in
+        case .photo(let request):
             selectableRow(
-                id: request.id,
-                accentColor: RequestTab.photos.color,
+                id: request.id, accentColor: RequestTab.photos.color,
                 onApprove: { Task { await adminRequestVM.approvePhotoSuggestion(request: request) } },
                 onReject: { Task { await adminRequestVM.rejectPhotoSuggestion(request: request) } },
                 onTap: { selectedDetail = .photo(request) }
             ) { photoRow(for: request) }
-        }
-        ForEach(projectsVM.pendingProjects) { project in
+        case .project(let project):
             selectableRow(
-                id: project.id,
-                accentColor: RequestTab.projects.color,
+                id: project.id, accentColor: RequestTab.projects.color,
                 onApprove: {
                     if let adminId = authVM.currentUser?.id {
                         Task { await projectsVM.approveProject(id: project.id, approvedBy: adminId) }
@@ -1865,28 +1943,28 @@ struct AdminAllRequestsView: View {
                 onReject: { Task { await projectsVM.rejectProject(id: project.id) } },
                 onTap: { selectedDetail = .project(project) }
             ) { projectRow(for: project) }
-        }
-        ForEach(memberVM.pendingGalleryPhotos) { photo in
+        case .gallery(let photo):
             selectableRow(
-                id: photo.id,
-                accentColor: RequestTab.gallery.color,
+                id: photo.id, accentColor: RequestTab.gallery.color,
                 onApprove: { Task { await memberVM.approveGalleryPhoto(photoId: photo.id) } },
                 onReject: { Task { await memberVM.rejectGalleryPhoto(photoId: photo.id, photoURL: photo.photoURL) } },
                 onTap: { }
             ) { galleryPendingRow(photo: photo) }
+        case .treeEdit(let request, let action):
+            let color = treeEditColor(action)
+            selectableRow(
+                id: request.id, accentColor: color,
+                onApprove: { Task { await adminRequestVM.approveTreeEditRequest(request: request) } },
+                onReject: { Task { await adminRequestVM.rejectTreeEditRequest(request: request, reason: nil) } },
+                onTap: { }
+            ) { treeEditRow(request: request, action: action, color: color) }
+        case .health(let member, let issue):
+            selectableRow(
+                id: member.id, accentColor: issue.asTab.color,
+                onApprove: nil, onReject: nil,
+                onTap: { selectedDetail = .healthMember(member, issue) }
+            ) { treeHealthRow(member: member, issue: issue, color: issue.asTab.color) }
         }
-        // طلبات الشجرة (كل الإجراءات)
-        treeEditList(action: .add, color: RequestTab.treeAdd.color)
-        treeEditList(action: .editName, color: RequestTab.treeEditName.color)
-        treeEditList(action: .editPhone, color: RequestTab.treeEditPhone.color)
-        treeEditList(action: .deceased, color: RequestTab.treeDeceased.color)
-        treeEditList(action: .delete, color: RequestTab.treeDelete.color)
-        // صحة الشجرة — تشخيص (نقرة لفتح التفاصيل، بدون موافقة/رفض)
-        treeHealthList(issue: .orphan, color: RequestTab.healthOrphan.color)
-        treeHealthList(issue: .noName, color: RequestTab.healthNoName.color)
-        treeHealthList(issue: .brokenParent, color: RequestTab.healthBrokenParent.color)
-        treeHealthList(issue: .hiddenFromTree, color: RequestTab.healthHidden.color)
-        treeHealthList(issue: .duplicatePhone, color: RequestTab.healthDupPhone.color)
     }
 
     /// موافقة دفعية تعبر كل الأنواع (لوضع "الكل").
@@ -1980,10 +2058,8 @@ struct AdminAllRequestsView: View {
         let matches = combinedMatches(for: member)
         let hasMatches = !matches.isEmpty
         let serverMatchCount = registrationMatches[member.id]?.count ?? 0
-        let platform = member.registrationPlatform ?? "ios"
         let registrationTime = member.createdAt.map { formatRegistrationDate($0) } ?? "—"
         let uname = member.username
-        let isFullName = member.fullName.split(whereSeparator: \.isWhitespace).count >= 5
         let orderedResults = orderedMatchList(for: member)
         let isExpanded = expandedMatchMembers.contains(member.id)
         let visible = isExpanded ? orderedResults : Array(orderedResults.prefix(5))
@@ -2021,17 +2097,6 @@ struct AdminAllRequestsView: View {
                         .foregroundColor(DS.Color.textSecondary)
                     }
 
-                    if isFullName {
-                        HStack(spacing: 4) {
-                            Image(systemName: "checkmark.seal.fill")
-                                .font(DS.Font.scaled(10))
-                                .foregroundColor(DS.Color.success)
-                            Text(L10n.t("اسم خماسي مكتمل", "Full 5-part name"))
-                                .font(DS.Font.scaled(10))
-                                .foregroundColor(DS.Color.success)
-                        }
-                    }
-
                     // الوقت والتاريخ
                     HStack(spacing: 3) {
                         Image(systemName: "clock.fill")
@@ -2040,19 +2105,6 @@ struct AdminAllRequestsView: View {
                             .font(DS.Font.scaled(10, weight: .semibold))
                     }
                     .foregroundColor(DS.Color.textSecondary)
-
-                    // المصدر
-                    HStack(spacing: 3) {
-                        Image(systemName: platform == "web" ? "globe" : "iphone")
-                            .font(DS.Font.scaled(9))
-                        Text(platform == "web" ? L10n.t("الموقع", "Web") : L10n.t("التطبيق", "App"))
-                            .font(DS.Font.scaled(10, weight: .bold))
-                    }
-                    .foregroundColor(platform == "web" ? DS.Color.info : DS.Color.success)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background((platform == "web" ? DS.Color.info : DS.Color.success).opacity(0.12))
-                    .clipShape(Capsule())
                 }
 
                 Spacer()
@@ -2431,29 +2483,13 @@ struct AdminAllRequestsView: View {
                 typeBadge(text: post.type, color: newsTypeColor(post.type))
             }
 
-            contentBlock(post.content)
+            Text(post.content)
+                .font(DS.Font.caption1)
+                .foregroundColor(DS.Color.textSecondary)
+                .lineLimit(2)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
-            if !post.mediaURLs.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: DS.Spacing.xs) {
-                        ForEach(post.mediaURLs, id: \.self) { urlStr in
-                            if let url = URL(string: urlStr) {
-                                CachedAsyncImage(url: url) { img in
-                                    img.resizable().scaledToFill()
-                                } placeholder: {
-                                    RoundedRectangle(cornerRadius: DS.Radius.sm)
-                                        .fill(DS.Color.surface)
-                                        .overlay(ProgressView().tint(DS.Color.primary))
-                                }
-                                .frame(width: 56, height: 56)
-                                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm))
-                            }
-                        }
-                    }
-                }
-            }
-
-            // التاريخ تحت
+            // التاريخ تحت + إشارة صور إن وُجدت
             HStack(spacing: DS.Spacing.xs) {
                 Image(systemName: "clock")
                     .font(DS.Font.scaled(10, weight: .medium))
@@ -2461,6 +2497,14 @@ struct AdminAllRequestsView: View {
                 Text(formatRegistrationDate(String(post.created_at)))
                     .font(DS.Font.caption2)
                     .foregroundColor(DS.Color.textTertiary)
+                if !post.mediaURLs.isEmpty {
+                    Image(systemName: "photo.fill")
+                        .font(DS.Font.scaled(10, weight: .medium))
+                        .foregroundColor(DS.Color.textTertiary)
+                    Text("\(post.mediaURLs.count)")
+                        .font(DS.Font.caption2)
+                        .foregroundColor(DS.Color.textTertiary)
+                }
             }
         }
     }
@@ -2468,9 +2512,6 @@ struct AdminAllRequestsView: View {
     // MARK: - Report Row
 
     private func reportRow(for request: AdminRequest) -> some View {
-        let postId = UUID(uuidString: request.newValue ?? "")
-        let reportedPost = postId.flatMap { id in newsVM.allNews.first { $0.id == id } }
-
         return VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             HStack(spacing: DS.Spacing.sm) {
                 iconCircle(icon: "exclamationmark.triangle.fill", color: DS.Color.error, size: 36)
@@ -2482,18 +2523,11 @@ struct AdminAllRequestsView: View {
                 Spacer()
             }
 
-            contentBlock(request.details ?? L10n.t("بلاغ بدون تفاصيل", "Report without details"))
-
-            if let post = reportedPost {
-                Text(post.content)
-                    .font(DS.Font.caption2)
-                    .foregroundColor(DS.Color.textSecondary)
-                    .lineLimit(2)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(DS.Spacing.sm)
-                    .background(DS.Color.surfaceElevated)
-                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm))
-            }
+            Text(request.details ?? L10n.t("بلاغ بدون تفاصيل", "Report without details"))
+                .font(DS.Font.caption1)
+                .foregroundColor(DS.Color.textSecondary)
+                .lineLimit(2)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
             // التاريخ تحت
             HStack(spacing: DS.Spacing.xs) {
@@ -2531,38 +2565,21 @@ struct AdminAllRequestsView: View {
                 Spacer()
             }
 
-            HStack(spacing: DS.Spacing.md) {
-                VStack(spacing: 2) {
-                    Text(L10n.t("الجديد", "New"))
-                        .font(DS.Font.caption2)
-                        .foregroundColor(DS.Color.textTertiary)
-                    Text(newPhone)
-                        .font(DS.Font.caption1)
-                        .fontWeight(.bold)
-                        .foregroundColor(DS.Color.textPrimary)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, DS.Spacing.sm)
-                .background(DS.Color.surfaceElevated)
-                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm))
-
+            // سطر مقارنة مدمج: الحالي ← الجديد
+            HStack(spacing: DS.Spacing.xs) {
+                Text(currentPhone)
+                    .font(DS.Font.caption1)
+                    .foregroundColor(DS.Color.textSecondary)
+                    .strikethrough()
+                    .monospacedDigit()
                 Image(systemName: "arrow.forward")
-                    .font(DS.Font.scaled(12, weight: .semibold))
+                    .font(DS.Font.scaled(11, weight: .semibold))
                     .foregroundColor(DS.Color.textTertiary)
-
-                VStack(spacing: 2) {
-                    Text(L10n.t("الحالي", "Current"))
-                        .font(DS.Font.caption2)
-                        .foregroundColor(DS.Color.textTertiary)
-                    Text(currentPhone)
-                        .font(DS.Font.caption1)
-                        .fontWeight(.bold)
-                        .foregroundColor(DS.Color.textSecondary)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, DS.Spacing.sm)
-                .background(DS.Color.surfaceElevated)
-                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm))
+                Text(newPhone)
+                    .font(DS.Font.caption1)
+                    .fontWeight(.bold)
+                    .foregroundColor(DS.Color.primary)
+                    .monospacedDigit()
             }
 
             // التاريخ تحت
@@ -2715,32 +2732,34 @@ struct AdminAllRequestsView: View {
                 contentBlock(details)
             }
 
-            if let photoUrl = request.newValue, let url = URL(string: photoUrl) {
-                CachedAsyncImage(url: url) { img in
-                    img.resizable()
-                        .scaledToFill()
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 140)
-                        .clipped()
-                        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
-                } placeholder: {
-                    RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                        .fill(DS.Color.surface)
-                        .frame(height: 140)
-                        .overlay(ProgressView().tint(DS.Color.primary))
+            HStack(spacing: DS.Spacing.sm) {
+                if let photoUrl = request.newValue, let url = URL(string: photoUrl) {
+                    CachedAsyncImage(url: url) { img in
+                        img.resizable()
+                            .scaledToFill()
+                            .frame(width: 44, height: 44)
+                            .clipped()
+                            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
+                    } placeholder: {
+                        RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous)
+                            .fill(DS.Color.surface)
+                            .frame(width: 44, height: 44)
+                            .overlay(ProgressView().tint(DS.Color.primary))
+                    }
                 }
-            }
 
-            // التاريخ تحت
-            if let createdAt = request.createdAt {
-                HStack(spacing: DS.Spacing.xs) {
-                    Image(systemName: "clock")
-                        .font(DS.Font.scaled(10, weight: .medium))
-                        .foregroundColor(DS.Color.textTertiary)
-                    Text(formatRegistrationDate(String(createdAt)))
-                        .font(DS.Font.caption2)
-                        .foregroundColor(DS.Color.textTertiary)
+                // التاريخ
+                if let createdAt = request.createdAt {
+                    HStack(spacing: DS.Spacing.xs) {
+                        Image(systemName: "clock")
+                            .font(DS.Font.scaled(10, weight: .medium))
+                            .foregroundColor(DS.Color.textTertiary)
+                        Text(formatRegistrationDate(String(createdAt)))
+                            .font(DS.Font.caption2)
+                            .foregroundColor(DS.Color.textTertiary)
+                    }
                 }
+                Spacer()
             }
         }
     }
@@ -2773,23 +2792,17 @@ struct AdminAllRequestsView: View {
                 Spacer()
             }
 
-            // الاسم الجديد
+            // الاسم: الحالي ← الجديد (سطر مدمج)
             HStack(spacing: DS.Spacing.xs) {
                 Image(systemName: "arrow.forward")
-                    .font(DS.Font.scaled(10, weight: .bold))
-                    .foregroundColor(DS.Color.textTertiary)
-                Text(L10n.t("الاسم الجديد:", "New name:"))
-                    .font(DS.Font.caption2)
+                    .font(DS.Font.scaled(11, weight: .semibold))
                     .foregroundColor(DS.Color.textTertiary)
                 Text(newName)
-                    .font(DS.Font.calloutBold)
-                    .foregroundColor(DS.Color.textPrimary)
+                    .font(DS.Font.caption1)
+                    .fontWeight(.bold)
+                    .foregroundColor(DS.Color.primary)
+                    .lineLimit(1)
             }
-            .padding(.horizontal, DS.Spacing.sm)
-            .padding(.vertical, DS.Spacing.xs)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(DS.Color.surfaceElevated)
-            .cornerRadius(DS.Radius.sm)
 
             // التاريخ تحت
             if let createdAt = request.createdAt {
@@ -2965,37 +2978,35 @@ struct AdminAllRequestsView: View {
                 Spacer()
             }
 
-            if let caption = photo.caption, !caption.isEmpty {
-                contentBlock(caption)
-            }
-
-            // صورة مصغرة
-            AsyncImage(url: URL(string: photo.photoURL)) { phase in
-                switch phase {
-                case .success(let image):
-                    image.resizable().scaledToFill()
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 140)
-                        .clipped()
-                        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
-                default:
-                    RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                        .fill(DS.Color.surface)
-                        .frame(height: 140)
-                        .overlay(ProgressView().tint(DS.Color.primary))
+            HStack(spacing: DS.Spacing.sm) {
+                // صورة مصغرة
+                AsyncImage(url: URL(string: photo.photoURL)) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image.resizable().scaledToFill()
+                            .frame(width: 44, height: 44)
+                            .clipped()
+                            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
+                    default:
+                        RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous)
+                            .fill(DS.Color.surface)
+                            .frame(width: 44, height: 44)
+                            .overlay(ProgressView().tint(DS.Color.primary))
+                    }
                 }
-            }
 
-            // التاريخ تحت
-            if let date = photo.createdAt {
-                HStack(spacing: DS.Spacing.xs) {
-                    Image(systemName: "clock")
-                        .font(DS.Font.scaled(10, weight: .medium))
-                        .foregroundColor(DS.Color.textTertiary)
-                    Text(formatRegistrationDate(String(date)))
-                        .font(DS.Font.caption2)
-                        .foregroundColor(DS.Color.textTertiary)
+                // التاريخ
+                if let date = photo.createdAt {
+                    HStack(spacing: DS.Spacing.xs) {
+                        Image(systemName: "clock")
+                            .font(DS.Font.scaled(10, weight: .medium))
+                            .foregroundColor(DS.Color.textTertiary)
+                        Text(formatRegistrationDate(String(date)))
+                            .font(DS.Font.caption2)
+                            .foregroundColor(DS.Color.textTertiary)
+                    }
                 }
+                Spacer()
             }
         }
     }
