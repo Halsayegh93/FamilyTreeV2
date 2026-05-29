@@ -3238,7 +3238,8 @@ struct AdminAllRequestsView: View {
         case .join(let m):
             return .init(icon: "person.badge.shield.checkmark", color: DS.Color.info,
                          title: L10n.t("طلب انضمام", "Join Request"),
-                         timestamp: m.createdAt.map { formatRegistrationDate($0) })
+                         timestamp: m.createdAt.map { formatRegistrationDate($0) },
+                         imageUrl: m.avatarUrl)
         case .news(let p):
             return .init(icon: "newspaper.fill", color: DS.Color.warning,
                          title: L10n.t("خبر بانتظار الاعتماد", "Pending News"),
@@ -3270,7 +3271,8 @@ struct AdminAllRequestsView: View {
         case .photo(let r):
             return .init(icon: "camera.badge.ellipsis", color: DS.Color.neonBlue,
                          title: L10n.t("اقتراح صورة", "Photo Suggestion"),
-                         timestamp: r.createdAt.map { formatRegistrationDate($0) })
+                         timestamp: r.createdAt.map { formatRegistrationDate($0) },
+                         imageUrl: r.newValue)
         case .project(let p):
             return .init(icon: "briefcase.fill", color: DS.Color.neonPurple,
                          title: L10n.t("طلب مشروع", "Project Request"),
@@ -3280,7 +3282,8 @@ struct AdminAllRequestsView: View {
             let name = member.fullName.trimmingCharacters(in: .whitespacesAndNewlines)
             return .init(icon: issue.asTab.icon, color: issue.asTab.color,
                          title: name.isEmpty ? L10n.t("بدون اسم", "(no name)") : name,
-                         timestamp: nil)
+                         timestamp: nil,
+                         imageUrl: member.avatarUrl)
         }
     }
 
