@@ -182,16 +182,11 @@ struct RegistrationView: View {
 
     // MARK: - Birth Date
     private var birthDateSection: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            HStack(spacing: DS.Spacing.md) {
-                DSIcon("calendar", color: DS.Color.accent)
-                Text(L10n.t("تاريخ الميلاد", "Birth Date"))
-                    .font(DS.Font.callout)
-                    .foregroundColor(DS.Color.textPrimary)
-                Spacer()
-            }
-            StableWheelDatePicker(selection: $birthDate, in: ...Date())
-        }
+        DSDateField(
+            label: L10n.t("تاريخ الميلاد", "Birth Date"),
+            date: $birthDate,
+            range: ...Date()
+        )
         .padding(.horizontal, DS.Spacing.lg)
         .padding(.vertical, DS.Spacing.md)
         .background(DS.Color.surface)

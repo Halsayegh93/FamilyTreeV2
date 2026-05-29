@@ -466,16 +466,12 @@ struct EditProfileView: View {
     }
 
     private func modernDatePicker(label: String, selection: Binding<Date>, icon: String) -> some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-            HStack(spacing: DS.Spacing.md) {
-                DSIcon(icon, color: DS.Color.accent)
-                Text(label)
-                    .font(DS.Font.callout)
-                    .foregroundColor(DS.Color.textPrimary)
-                Spacer()
-            }
-            StableWheelDatePicker(selection: selection, in: ...Date())
-        }
+        DSDateField(
+            label: label,
+            date: selection,
+            icon: icon,
+            range: ...Date()
+        )
         .padding(.horizontal, DS.Spacing.lg)
         .padding(.vertical, DS.Spacing.xs)
     }

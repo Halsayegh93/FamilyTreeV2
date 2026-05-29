@@ -15,7 +15,6 @@ struct AdminRegisterMemberView: View {
     @State private var selectedPhoneCountry: KuwaitPhone.Country = KuwaitPhone.defaultCountry
     @State private var showingSuccess = false
     @State private var showingError = false
-    @State private var showBirthDateSheet = false
 
     // Animation states
     @State private var headerScale: CGFloat = 0.8
@@ -82,9 +81,6 @@ struct AdminRegisterMemberView: View {
             Button(L10n.t("حسناً", "OK"), role: .cancel) {}
         } message: {
             Text(L10n.t("تعذر الإضافة. حاول مرة أخرى.", "Add failed. Try again."))
-        }
-        .sheet(isPresented: $showBirthDateSheet) {
-            birthDateSheet
         }
         .onAppear {
             if !lastAuthDialingCode.isEmpty {
@@ -225,25 +221,12 @@ struct AdminRegisterMemberView: View {
             }
 
             if hasBirthDate {
-                Button {
-                    showBirthDateSheet = true
-                } label: {
-                    HStack(spacing: DS.Spacing.md) {
-                        DSIcon("calendar", color: DS.Color.accent)
-                        Text(L10n.t("تاريخ الميلاد", "Birth Date"))
-                            .font(DS.Font.callout)
-                            .foregroundColor(DS.Color.textPrimary)
-                        Spacer()
-                        Text(formattedBirthDate)
-                            .font(DS.Font.calloutBold)
-                            .foregroundColor(DS.Color.primary)
-                        Image(systemName: "chevron.up.chevron.down")
-                            .font(DS.Font.caption1)
-                            .foregroundColor(DS.Color.textTertiary)
-                    }
-                    .padding(.top, DS.Spacing.sm)
-                }
-                .buttonStyle(.plain)
+                DSDateField(
+                    label: L10n.t("تاريخ الميلاد", "Birth Date"),
+                    date: $birthDate,
+                    range: ...Date()
+                )
+                .padding(.top, DS.Spacing.sm)
             }
         }
         .padding(.horizontal, DS.Spacing.lg)
@@ -332,30 +315,4 @@ struct AdminRegisterMemberView: View {
         }
     }
 
-    // MARK: - Birth Date Bottom Sheet
-    private var formattedBirthDate: String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: L10n.isArabic ? "ar" : "en_US")
-        formatter.dateFormat = "d MMMM yyyy"
-        return formatter.string(from: birthDate)
-    }
-
-    private var birthDateSheet: some View {
-        VStack(spacing: DS.Spacing.lg) {
-            DSSheetHeader(
-                title: L10n.t("تاريخ الميلاد", "Birth Date"),
-                confirmTitle: L10n.t("تم", "Done"),
-                onCancel: { showBirthDateSheet = false },
-                onConfirm: { showBirthDateSheet = false }
-            )
-
-            StableWheelDatePicker(selection: $birthDate, in: ...Date(), height: 220)
-                .padding(.horizontal, DS.Spacing.lg)
-
-            Spacer()
-        }
-        .background(DS.Color.background)
-        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-        .presentationDetents([.height(360)])
-    }
 }

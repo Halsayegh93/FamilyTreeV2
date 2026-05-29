@@ -136,15 +136,11 @@ struct EditChildSheet: View {
                     DSDivider()
 
                     // Birth date
-                    VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                        HStack(spacing: DS.Spacing.md) {
-                            DSIcon("calendar", color: DS.Color.accent)
-                            Text(L10n.t("تاريخ الميلاد", "Birth Date"))
-                                .font(DS.Font.callout)
-                                .foregroundColor(DS.Color.textPrimary)
-                        }
-                        StableWheelDatePicker(selection: $birthDate, in: ...Date())
-                    }
+                    DSDateField(
+                        label: L10n.t("تاريخ الميلاد", "Birth Date"),
+                        date: $birthDate,
+                        range: ...Date()
+                    )
                     .padding(.horizontal, DS.Spacing.lg)
                     .padding(.vertical, DS.Spacing.xs)
 
@@ -163,15 +159,13 @@ struct EditChildSheet: View {
 
                     if isDeceased {
                         DSDivider()
-                        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                            HStack(spacing: DS.Spacing.md) {
-                                DSIcon("calendar", color: DS.Color.error)
-                                Text(L10n.t("تاريخ الوفاة", "Death Date"))
-                                    .font(DS.Font.callout)
-                                    .foregroundColor(DS.Color.textPrimary)
-                            }
-                            StableWheelDatePicker(selection: $deathDate, in: ...Date())
-                        }
+                        DSDateField(
+                            label: L10n.t("تاريخ الوفاة", "Death Date"),
+                            date: $deathDate,
+                            icon: "calendar",
+                            iconColor: DS.Color.error,
+                            range: ...Date()
+                        )
                         .padding(.horizontal, DS.Spacing.lg)
                         .padding(.vertical, DS.Spacing.xs)
                     }
