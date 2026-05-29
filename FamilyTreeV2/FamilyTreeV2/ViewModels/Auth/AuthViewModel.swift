@@ -219,11 +219,10 @@ class AuthViewModel: ObservableObject {
             return .accountFrozen
         }
 
-        // العضو المعلق (status = pending) يظهر له شاشة انتظار الموافقة
-        if profile.status == .pending {
-            Log.info("[AUTH] العضو \(profile.fullName) حالته pending → شاشة انتظار الموافقة")
-            return .pendingApproval
-        }
+        // ملاحظة: status='pending' هو القيمة الافتراضية في قاعدة البيانات لأي عضو يضيفه
+        // المدير في الشجرة، ولا يعني أنه ينتظر موافقة. بوابة الموافقة الوحيدة هي role='pending'.
+        // لذلك العضو الموجود في التطبيق أو الشجرة (له اسم + role≠pending) يدخل التطبيق مباشرة
+        // ولا يُوجَّه لفورم التسجيل ولا لشاشة الانتظار.
 
         // العضو بدون رقم — المدير حذف رقمه → يسجّل من جديد
         let phone = profile.phoneNumber?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
