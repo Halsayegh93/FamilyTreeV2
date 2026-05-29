@@ -1154,6 +1154,35 @@ struct ArchiveItemViewer: View {
                     }
                 }
             }
+            .overlay(alignment: .bottom) {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: DS.Spacing.sm) {
+                        Text(item.title)
+                            .font(DS.Font.scaled(16, weight: .bold))
+                            .foregroundColor(DS.Color.textPrimary)
+                            .lineLimit(2)
+                        Spacer(minLength: 0)
+                        if let year = item.year {
+                            HStack(spacing: 3) {
+                                Image(systemName: "calendar").font(DS.Font.scaled(10, weight: .bold))
+                                Text(String(year)).font(DS.Font.scaled(11, weight: .bold))
+                            }
+                            .foregroundColor(item.category.accentColor)
+                            .padding(.horizontal, 7).padding(.vertical, 3)
+                            .background(Capsule().fill(item.category.accentColor.opacity(0.15)))
+                        }
+                    }
+                    if let desc = item.description, !desc.isEmpty {
+                        Text(desc)
+                            .font(DS.Font.scaled(12, weight: .medium))
+                            .foregroundColor(DS.Color.textSecondary)
+                            .multilineTextAlignment(.leading)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(DS.Spacing.lg)
+                .background(.ultraThinMaterial)
+            }
             .navigationTitle(item.title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -1255,7 +1284,10 @@ private struct PDFThumbnailView: View {
     var body: some View {
         Group {
             if let image {
-                Image(uiImage: image).resizable().scaledToFill()
+                Color.clear.overlay(
+                    Image(uiImage: image).resizable().scaledToFill()
+                )
+                .clipped()
             } else if failed {
                 VStack(spacing: 6) {
                     Image(systemName: "doc.text.fill")
