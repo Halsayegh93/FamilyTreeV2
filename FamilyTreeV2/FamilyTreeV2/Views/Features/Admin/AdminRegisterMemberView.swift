@@ -126,43 +126,38 @@ struct AdminRegisterMemberView: View {
         .padding(.top, DS.Spacing.md)
     }
 
-    // MARK: - Name Field Section
+    // MARK: - Name Field Section — الاسم الرباعي (نفس فورم التسجيل)
     private var nameFieldSection: some View {
-        DSCard(padding: 0) {
-            DSSectionHeader(title: L10n.t("الاسم الخماسي", "Full Name (5 parts)"), icon: "person.fill", iconColor: DS.Color.primary)
-
-            HStack(spacing: DS.Spacing.sm) {
-                DSIcon("person.fill", color: DS.Color.primary)
-                TextField(L10n.t("مثال: حسن أحمد علي محمد السالم", "e.g. John Smith"), text: $fullName)
-                    .font(DS.Font.body)
-                    .onChange(of: fullName) { _ in
-                        if fullName.count > 100 {
-                            fullName = String(fullName.prefix(100))
-                        }
-                    }
+        DSTextField(
+            label: L10n.t("الاسم الرباعي", "Full Name (4 parts)"),
+            placeholder: L10n.t("محمد عبدالله علي أحمد", "Mohammad Abdullah Ali Ahmad"),
+            text: $fullName,
+            icon: "person.fill",
+            iconColor: DS.Color.primary,
+            required: true,
+            hint: L10n.t("(باللغة العربية)", "(in Arabic)")
+        )
+        .onChange(of: fullName) { _ in
+            if fullName.count > 100 {
+                fullName = String(fullName.prefix(100))
             }
-            .padding(.horizontal, DS.Spacing.md)
-            .padding(.vertical, DS.Spacing.xs)
         }
     }
 
-    // MARK: - Family Name Section
+    // MARK: - Family Name Section — نفس فورم التسجيل
     private var familyNameSection: some View {
-        DSCard(padding: 0) {
-            DSSectionHeader(title: L10n.t("اسم العائلة", "Family Name"), icon: "person.2.fill", iconColor: DS.Color.primary)
-
-            HStack(spacing: DS.Spacing.sm) {
-                DSIcon("person.2.fill", color: DS.Color.primary)
-                TextField(L10n.t("مثال: آل محمد علي", "e.g. Al-Mohammad Ali"), text: $familyName)
-                    .font(DS.Font.body)
-                    .onChange(of: familyName) { _ in
-                        if familyName.count > 50 {
-                            familyName = String(familyName.prefix(50))
-                        }
-                    }
+        DSTextField(
+            label: L10n.t("اسم العائلة", "Family Name"),
+            placeholder: L10n.t("مثال: آل محمد علي", "e.g. Al-Mohammad Ali"),
+            text: $familyName,
+            icon: "person.2.fill",
+            iconColor: DS.Color.accent,
+            required: true
+        )
+        .onChange(of: familyName) { _ in
+            if familyName.count > 50 {
+                familyName = String(familyName.prefix(50))
             }
-            .padding(.horizontal, DS.Spacing.md)
-            .padding(.vertical, DS.Spacing.xs)
         }
     }
 
