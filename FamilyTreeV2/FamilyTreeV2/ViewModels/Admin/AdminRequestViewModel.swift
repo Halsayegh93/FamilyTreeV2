@@ -243,7 +243,7 @@ class AdminRequestViewModel: ObservableObject {
                 .value
             self.contactMessages = requests
         } catch {
-            Log.error("فشل جلب رسائل التواصل: \(error.localizedDescription)")
+            Log.fetchError("فشل جلب رسائل التواصل", error)
         }
     }
 
@@ -300,7 +300,7 @@ class AdminRequestViewModel: ObservableObject {
 
             self.treeEditRequests = requests
         } catch {
-            Log.error("فشل جلب طلبات تعديل الشجرة: \(error)")
+            Log.fetchError("فشل جلب طلبات تعديل الشجرة", error)
         }
     }
 
@@ -646,7 +646,7 @@ class AdminRequestViewModel: ObservableObject {
 
             self.deceasedRequests = requests
         } catch {
-            Log.error("فشل جلب طلبات الوفاة: \(error)")
+            Log.fetchError("فشل جلب طلبات الوفاة", error)
         }
     }
 
@@ -736,7 +736,7 @@ class AdminRequestViewModel: ObservableObject {
 
             self.childAddRequests = requests
         } catch {
-            Log.error("فشل جلب طلبات إضافة الأبناء: \(error)")
+            Log.fetchError("فشل جلب طلبات إضافة الأبناء", error)
         }
     }
 
@@ -1111,7 +1111,7 @@ class AdminRequestViewModel: ObservableObject {
 
             self.nameChangeRequests = requests
         } catch {
-            Log.error("فشل جلب طلبات تغيير الاسم: \(error)")
+            Log.fetchError("فشل جلب طلبات تغيير الاسم", error)
         }
     }
 
@@ -1225,7 +1225,7 @@ class AdminRequestViewModel: ObservableObject {
 
             self.phoneChangeRequests = requests
         } catch {
-            Log.error("خطأ جلب طلبات تغيير الرقم: \(error.localizedDescription)")
+            Log.fetchError("خطأ جلب طلبات تغيير الرقم", error)
         }
     }
 
@@ -1692,7 +1692,7 @@ class AdminRequestViewModel: ObservableObject {
 
             self.newsReportRequests = requests
         } catch {
-            Log.error("خطأ جلب بلاغات الأخبار: \(error.localizedDescription)")
+            Log.fetchError("خطأ جلب بلاغات الأخبار", error)
         }
     }
 
@@ -1840,7 +1840,7 @@ class AdminRequestViewModel: ObservableObject {
 
             self.photoSuggestionRequests = requests
         } catch {
-            Log.error("خطأ جلب اقتراحات الصور: \(error.localizedDescription)")
+            Log.fetchError("خطأ جلب اقتراحات الصور", error)
         }
     }
 

@@ -147,7 +147,7 @@ class NewsViewModel: ObservableObject {
             await fetchNewsLikes(for: allPostIds)
             await fetchNewsComments(for: allPostIds)
         } catch {
-            Log.error("خطأ جلب الأخبار: \(error)")
+            Log.fetchError("خطأ جلب الأخبار", error)
         }
     }
 
@@ -193,7 +193,7 @@ class NewsViewModel: ObservableObject {
                 pollVotesByPost = [:]
                 userVoteByPost = [:]
             } else {
-                Log.error("خطأ جلب أصوات التصويت: \(error.localizedDescription)")
+                Log.fetchError("خطأ جلب أصوات التصويت", error)
             }
         }
     }
@@ -230,7 +230,7 @@ class NewsViewModel: ObservableObject {
             self.likedPosts.formUnion(userLikes)
         } catch {
             if ErrorHelper.isCancellation(error) { return }
-            Log.error("خطأ جلب الاعجابات: \(error.localizedDescription)")
+            Log.fetchError("خطأ جلب الاعجابات", error)
         }
     }
 
@@ -265,7 +265,7 @@ class NewsViewModel: ObservableObject {
             self.commentsCountByPost.merge(counts) { _, new in new }
         } catch {
             if ErrorHelper.isCancellation(error) { return }
-            Log.error("خطأ جلب التعليقات: \(error.localizedDescription)")
+            Log.fetchError("خطأ جلب التعليقات", error)
         }
     }
 
@@ -454,7 +454,7 @@ class NewsViewModel: ObservableObject {
                 newsApprovalFeatureAvailable = false
                 pendingNewsRequests = []
             } else {
-                Log.error("خطأ جلب طلبات الأخبار: \(error)")
+                Log.fetchError("خطأ جلب طلبات الأخبار", error)
             }
         }
     }

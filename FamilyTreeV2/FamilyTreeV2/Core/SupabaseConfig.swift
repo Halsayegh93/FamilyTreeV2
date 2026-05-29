@@ -10,11 +10,16 @@ private struct QuietSupabaseLogger: SupabaseLogger {
     )
 
     func log(message: SupabaseLogMessage) {
+        let text = message.description
+        // تجاهل أخطاء الإلغاء (-999) — تحصل عند الخروج من شاشة أو بدء تحديث جديد، وهي غير مؤذية
+        if text.contains("Code=-999") || text.contains("cancelled") || text.contains("CancellationError") {
+            return
+        }
         switch message.level {
         case .warning:
-            logger.warning("\(message.description)")
+            logger.warning("\(text)")
         case .error:
-            logger.error("\(message.description)")
+            logger.error("\(text)")
         default:
             break // تجاهل verbose و debug
         }

@@ -78,7 +78,7 @@ class AppSettingsViewModel: ObservableObject {
             if isSchemaError(error) {
                 Log.warning("جدول app_settings غير موجود — نستخدم القيم الافتراضية")
             } else {
-                Log.error("خطأ في جلب إعدادات التطبيق: \(error.localizedDescription)")
+                Log.fetchError("خطأ في جلب إعدادات التطبيق", error)
             }
         }
     }

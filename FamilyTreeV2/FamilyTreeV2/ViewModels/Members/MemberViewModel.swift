@@ -215,7 +215,7 @@ class MemberViewModel: ObservableObject {
             let member = try JSONDecoder().decode(FamilyMember.self, from: response.data)
             upsertMemberLocally(member)
         } catch {
-            Log.error("[Members] خطأ جلب عضو واحد (\(id.uuidString.prefix(8))): \(error.localizedDescription)")
+            Log.fetchError("[Members] خطأ جلب عضو واحد (\(id.uuidString.prefix(8)))", error)
         }
     }
 
@@ -293,7 +293,7 @@ class MemberViewModel: ObservableObject {
             // فلتر إضافي بالعميل لاستبعاد الأسماء الفارغة (يدخل ضمن isCountable)
             self.currentMemberChildren = response.filter(\.isCountable).sortedForDisplay()
         } catch {
-            Log.error("خطأ في جلب الأبناء: \(error)")
+            Log.fetchError("خطأ في جلب الأبناء", error)
         }
     }
     
@@ -916,7 +916,7 @@ class MemberViewModel: ObservableObject {
                 .value
             return photos
         } catch {
-            Log.error("خطأ جلب صور المعرض: \(error.localizedDescription)")
+            Log.fetchError("خطأ جلب صور المعرض", error)
             return []
         }
     }
@@ -932,7 +932,7 @@ class MemberViewModel: ObservableObject {
                 .value
             return photos
         } catch {
-            Log.error("خطأ جلب كل صور المعرض: \(error.localizedDescription)")
+            Log.fetchError("خطأ جلب كل صور المعرض", error)
             return []
         }
     }
@@ -960,7 +960,7 @@ class MemberViewModel: ObservableObject {
         } catch {
             // فلتر الـ URLError اللي تصير من إلغاء URLSession
             if (error as NSError).code == NSURLErrorCancelled { return }
-            Log.error("خطأ جلب الصور المعتمدة: \(error.localizedDescription)")
+            Log.fetchError("خطأ جلب الصور المعتمدة", error)
         }
     }
 
@@ -976,7 +976,7 @@ class MemberViewModel: ObservableObject {
                 .value
             self.pendingGalleryPhotos = photos
         } catch {
-            Log.error("خطأ جلب الصور المعلقة: \(error.localizedDescription)")
+            Log.fetchError("خطأ جلب الصور المعلقة", error)
         }
     }
 

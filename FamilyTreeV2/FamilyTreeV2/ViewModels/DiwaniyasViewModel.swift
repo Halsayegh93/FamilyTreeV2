@@ -85,7 +85,7 @@ class DiwaniyasViewModel: ObservableObject {
             Log.info("جلب الديوانيات تم إلغاؤه (URL)")
         } catch {
             self.errorMessage = L10n.t("تعذر تحميل الديوانيات. حاول مرة أخرى.", "Failed to load diwaniyas. Please try again.")
-            Log.error("خطأ جلب الديوانيات: \(error.localizedDescription)")
+            Log.fetchError("خطأ جلب الديوانيات", error)
         }
         isLoading = false
     }
@@ -108,7 +108,7 @@ class DiwaniyasViewModel: ObservableObject {
             Log.info("جلب الديوانيات المعلقة تم إلغاؤه (URL)")
         } catch {
             self.errorMessage = L10n.t("تعذر تحميل الطلبات المعلقة. حاول مرة أخرى.", "Failed to load pending requests. Please try again.")
-            Log.error("خطأ جلب الديوانيات المعلقة: \(error.localizedDescription)")
+            Log.fetchError("خطأ جلب الديوانيات المعلقة", error)
         }
         isLoading = false
     }

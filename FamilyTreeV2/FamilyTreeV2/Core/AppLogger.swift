@@ -28,6 +28,20 @@ enum Log {
         logger.error("\(message)")
     }
 
+    /// True if the error is a benign task cancellation (e.g. view dismissed or a
+    /// newer fetch superseded this one). These should NOT be logged as failures.
+    static func isCancellation(_ error: Error) -> Bool {
+        if error is CancellationError { return true }
+        let ns = error as NSError
+        return ns.domain == NSURLErrorDomain && ns.code == NSURLErrorCancelled
+    }
+
+    /// Logs a fetch/network failure, but stays silent for benign cancellations.
+    static func fetchError(_ message: String, _ error: Error) {
+        guard !isCancellation(error) else { return }
+        logger.error("\(message): \(error.localizedDescription)")
+    }
+
     static func warning(_ message: String) {
         logger.warning("\(message)")
     }

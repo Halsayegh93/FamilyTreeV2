@@ -51,7 +51,7 @@ class ProjectsViewModel: ObservableObject {
         } catch {
             self.errorMessage = L10n.t("تعذر تحميل المشاريع. حاول مرة أخرى.",
                                        "Failed to load projects. Please try again.")
-            Log.error("خطأ جلب المشاريع: \(error.localizedDescription)")
+            Log.fetchError("خطأ جلب المشاريع", error)
         }
         isLoading = false
     }
@@ -130,7 +130,7 @@ class ProjectsViewModel: ObservableObject {
 
             self.pendingProjects = response
         } catch {
-            Log.error("خطأ جلب المشاريع المعلقة: \(error.localizedDescription)")
+            Log.fetchError("خطأ جلب المشاريع المعلقة", error)
         }
     }
     
@@ -149,7 +149,7 @@ class ProjectsViewModel: ObservableObject {
 
             self.myPendingProjects = response
         } catch {
-            Log.error("خطأ جلب مشاريعي المعلقة: \(error.localizedDescription)")
+            Log.fetchError("خطأ جلب مشاريعي المعلقة", error)
         }
     }
     

@@ -500,7 +500,7 @@ class NotificationViewModel: ObservableObject {
                 .value
             self.linkedDevices = devices
         } catch {
-            Log.error("خطأ جلب الأجهزة المرتبطة: \(error.localizedDescription)")
+            Log.fetchError("خطأ جلب الأجهزة المرتبطة", error)
         }
     }
     
@@ -543,7 +543,7 @@ class NotificationViewModel: ObservableObject {
                 .value
             return devices
         } catch {
-            Log.error("[ADMIN-DEVICE] خطأ جلب أجهزة العضو: \(error.localizedDescription)")
+            Log.fetchError("[ADMIN-DEVICE] خطأ جلب أجهزة العضو", error)
             return []
         }
     }
@@ -591,7 +591,7 @@ class NotificationViewModel: ObservableObject {
                 .value
             return devices
         } catch {
-            Log.error("[ADMIN-DEVICE] خطأ جلب جميع الأجهزة: \(error.localizedDescription)")
+            Log.fetchError("[ADMIN-DEVICE] خطأ جلب جميع الأجهزة", error)
             return []
         }
     }
@@ -852,7 +852,7 @@ class NotificationViewModel: ObservableObject {
                 notificationsFeatureAvailable = false
                 notifications = []
             } else if !ErrorHelper.isCancellation(error) {
-                Log.error("[NOTIF] خطأ جلب الإشعارات: \(error.localizedDescription)")
+                Log.fetchError("[NOTIF] خطأ جلب الإشعارات", error)
             }
         }
 

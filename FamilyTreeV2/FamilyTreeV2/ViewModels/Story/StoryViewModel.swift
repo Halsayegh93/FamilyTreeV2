@@ -118,7 +118,7 @@ class StoryViewModel: ObservableObject {
             // حفظ في الكاش
             CacheManager.shared.save(all, for: .stories)
         } catch {
-            Log.error("فشل جلب القصص: \(error.localizedDescription)")
+            Log.fetchError("فشل جلب القصص", error)
         }
     }
 
@@ -140,7 +140,7 @@ class StoryViewModel: ObservableObject {
 
             self.pendingStories = stories
         } catch {
-            Log.error("فشل جلب الستوريات المعلقة: \(error.localizedDescription)")
+            Log.fetchError("فشل جلب الستوريات المعلقة", error)
         }
     }
 
@@ -370,7 +370,7 @@ class StoryViewModel: ObservableObject {
                 viewCounts[storyId] = count
             }
         } catch {
-            Log.error("فشل جلب المشاهدات: \(error.localizedDescription)")
+            Log.fetchError("فشل جلب المشاهدات", error)
         }
     }
 }
