@@ -1,6 +1,14 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { handleCors, validatePost, json } from "../_shared/cors.ts";
 import { authenticateRequest, parseBody } from "../_shared/auth.ts";
+import {
+  BRAND,
+  dataRow,
+  dataTable,
+  escapeHtml,
+  quoteBox,
+  renderEmail,
+} from "../_shared/email.ts";
 
 type ContactEmailPayload = {
   category?: string;
@@ -65,6 +73,23 @@ serve(async (req) => {
       message,
     ].join("\n");
 
+    const htmlBody = renderEmail({
+      title: "رسالة تواصل جديدة",
+      badge: category,
+      emoji: "✉️",
+      accentColor: BRAND.blue,
+      preheader: `${senderName}: ${message.slice(0, 80)}`,
+      body: `
+        ${dataTable(`
+          ${dataRow("المُرسِل", escapeHtml(senderName), { bold: true })}
+          ${dataRow("الهاتف", escapeHtml(senderPhone || "غير متوفر"))}
+          ${dataRow("وسيلة التواصل المفضّلة", escapeHtml(preferredContact || "غير محدد"))}
+          ${dataRow("التصنيف", escapeHtml(category))}
+        `)}
+        ${quoteBox(message, { label: "محتوى الرسالة", accent: BRAND.blue })}
+      `,
+    });
+
     // Try Resend first
     if (resendApiKey) {
       try {
@@ -79,6 +104,7 @@ serve(async (req) => {
             to: recipients,
             subject,
             text: textBody,
+            html: htmlBody,
           }),
         });
 
@@ -120,7 +146,10 @@ serve(async (req) => {
           personalizations: [{ to: recipients.map((email) => ({ email })) }],
           from: { email: fromEmail },
           subject,
-          content: [{ type: "text/plain", value: textBody }],
+          content: [
+            { type: "text/plain", value: textBody },
+            { type: "text/html", value: htmlBody },
+          ],
         }),
       });
 

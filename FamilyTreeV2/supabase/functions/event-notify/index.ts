@@ -1,6 +1,16 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { handleCors, validatePost, json } from "../_shared/cors.ts";
 import { authenticateRequest, parseBody } from "../_shared/auth.ts";
+import {
+  BRAND,
+  dataRow,
+  dataTable,
+  escapeHtml,
+  note,
+  paragraph,
+  quoteBox,
+  renderEmail,
+} from "../_shared/email.ts";
 
 type EventType = "join_request" | "role_changed" | "status_changed" | "contact_reply";
 
@@ -71,20 +81,19 @@ interface EmailContent {
 
 function buildJoinRequestEmail(p: JoinRequestPayload): EmailContent {
   const subject = `طلب انضمام جديد — ${p.member_name}`;
-  const phoneRow = p.member_phone
-    ? `<tr><td style="padding:8px 16px;color:#516F80;width:100px">رقم الهاتف</td><td style="padding:8px 16px;color:#1a1a1a;font-weight:500">${escapeHtml(p.member_phone)}</td></tr>`
-    : "";
+  const phoneRow = p.member_phone ? dataRow("رقم الهاتف", escapeHtml(p.member_phone)) : "";
   const html = renderEmail({
     title: "طلب انضمام جديد",
-    accentColor: "#2B7A9F",
+    badge: "طلب جديد",
+    emoji: "📨",
+    accentColor: BRAND.blue,
+    preheader: `طلب انضمام من ${p.member_name} — بانتظار المراجعة`,
     body: `
-      <p style="margin:0 0 16px;color:#516F80;line-height:1.7">
-        تم استلام طلب انضمام جديد لشجرة العائلة. الرجاء مراجعته من لوحة الإدارة.
-      </p>
-      <table style="width:100%;border-collapse:collapse;background:#F7F9FB;border-radius:10px;overflow:hidden;margin:16px 0">
-        <tr><td style="padding:8px 16px;color:#516F80;width:100px">الاسم</td><td style="padding:8px 16px;color:#1a1a1a;font-weight:500">${escapeHtml(p.member_name)}</td></tr>
+      ${paragraph("تم استلام طلب انضمام جديد لشجرة العائلة. الرجاء مراجعته من لوحة الإدارة.")}
+      ${dataTable(`
+        ${dataRow("الاسم", escapeHtml(p.member_name), { bold: true })}
         ${phoneRow}
-      </table>
+      `)}
     `,
   });
   const text = [
@@ -103,21 +112,18 @@ function buildRoleChangedEmailForMember(p: RoleChangedPayload): EmailContent {
   const subject = `تحديث صلاحيتك: ${newRole}`;
   const html = renderEmail({
     title: "تم تحديث صلاحيتك",
-    accentColor: "#2F5C3E",
+    badge: "تحديث صلاحية",
+    emoji: "🛡️",
+    accentColor: BRAND.emerald,
+    preheader: `صلاحيتك الجديدة: ${newRole}`,
     body: `
-      <p style="margin:0 0 16px;color:#516F80;line-height:1.7">
-        مرحباً ${escapeHtml(p.member_name)}،
-      </p>
-      <p style="margin:0 0 16px;color:#516F80;line-height:1.7">
-        تم تحديث صلاحيتك في تطبيق شجرة عائلة آل محمد علي.
-      </p>
-      <table style="width:100%;border-collapse:collapse;background:#F7F9FB;border-radius:10px;overflow:hidden;margin:16px 0">
-        <tr><td style="padding:8px 16px;color:#516F80;width:120px">الصلاحية السابقة</td><td style="padding:8px 16px;color:#1a1a1a">${escapeHtml(roleArabic(p.old_role))}</td></tr>
-        <tr><td style="padding:8px 16px;color:#516F80">الصلاحية الجديدة</td><td style="padding:8px 16px;color:#2F5C3E;font-weight:600">${escapeHtml(newRole)}</td></tr>
-      </table>
-      <p style="margin:0;color:#888;font-size:13px;line-height:1.6">
-        إذا كان عندك أي استفسار، تواصل مع الإدارة من شاشة "التواصل" في التطبيق.
-      </p>
+      ${paragraph(`مرحباً <strong style="color:${BRAND.ink}">${escapeHtml(p.member_name)}</strong>،`)}
+      ${paragraph("تم تحديث صلاحيتك في تطبيق شجرة عائلة آل محمد علي.")}
+      ${dataTable(`
+        ${dataRow("الصلاحية السابقة", escapeHtml(roleArabic(p.old_role)))}
+        ${dataRow("الصلاحية الجديدة", escapeHtml(newRole), { accent: BRAND.emerald })}
+      `)}
+      ${note('إذا كان عندك أي استفسار، تواصل مع الإدارة من شاشة "التواصل" في التطبيق.')}
     `,
   });
   const text = [
@@ -135,14 +141,17 @@ function buildRoleChangedEmailForAdmin(p: RoleChangedPayload): EmailContent {
   const subject = `[سجل] تغيير صلاحية — ${p.member_name}`;
   const html = renderEmail({
     title: "تسجيل تغيير صلاحية",
-    accentColor: "#516F80",
+    badge: "سجل إداري",
+    emoji: "🗂️",
+    accentColor: BRAND.indigo,
+    preheader: `تغيير صلاحية ${p.member_name}`,
     body: `
-      <table style="width:100%;border-collapse:collapse;background:#F7F9FB;border-radius:10px;overflow:hidden;margin:0 0 16px">
-        <tr><td style="padding:8px 16px;color:#516F80;width:100px">العضو</td><td style="padding:8px 16px;color:#1a1a1a;font-weight:500">${escapeHtml(p.member_name)}</td></tr>
-        <tr><td style="padding:8px 16px;color:#516F80">من</td><td style="padding:8px 16px;color:#1a1a1a">${escapeHtml(roleArabic(p.old_role))}</td></tr>
-        <tr><td style="padding:8px 16px;color:#516F80">إلى</td><td style="padding:8px 16px;color:#2B7A9F;font-weight:600">${escapeHtml(roleArabic(p.new_role))}</td></tr>
-      </table>
-      <p style="margin:0;color:#888;font-size:13px">إشعار تلقائي للأرشيف.</p>
+      ${dataTable(`
+        ${dataRow("العضو", escapeHtml(p.member_name), { bold: true })}
+        ${dataRow("من", escapeHtml(roleArabic(p.old_role)))}
+        ${dataRow("إلى", escapeHtml(roleArabic(p.new_role)), { accent: BRAND.indigo })}
+      `)}
+      ${note("إشعار تلقائي للأرشيف.")}
     `,
   });
   const text = `[سجل] تغيير صلاحية\n\nالعضو: ${p.member_name}\nمن: ${roleArabic(p.old_role)}\nإلى: ${roleArabic(p.new_role)}`;
@@ -153,26 +162,25 @@ function buildStatusChangedEmailForMember(p: StatusChangedPayload): EmailContent
   const newStatus = statusArabic(p.new_status);
   const isFrozen = p.new_status.toLowerCase() === "frozen";
   const subject = isFrozen ? "تجميد حسابك" : `تحديث حالة حسابك: ${newStatus}`;
-  const accent = isFrozen ? "#8C2A2A" : "#2F5C3E";
+  const accent = isFrozen ? BRAND.warn : BRAND.gold;
   const html = renderEmail({
     title: isFrozen ? "تم تجميد حسابك" : "تم تحديث حالة حسابك",
+    badge: isFrozen ? "تنبيه" : "تحديث حالة",
+    emoji: isFrozen ? "⏸️" : "✅",
     accentColor: accent,
+    preheader: `حالة حسابك الجديدة: ${newStatus}`,
     body: `
-      <p style="margin:0 0 16px;color:#516F80;line-height:1.7">مرحباً ${escapeHtml(p.member_name)}،</p>
-      <p style="margin:0 0 16px;color:#516F80;line-height:1.7">
-        ${isFrozen
-          ? "تم تجميد حسابك في تطبيق شجرة عائلة آل محمد علي."
-          : "تم تحديث حالة حسابك في تطبيق شجرة عائلة آل محمد علي."}
-      </p>
-      <table style="width:100%;border-collapse:collapse;background:#F7F9FB;border-radius:10px;overflow:hidden;margin:16px 0">
-        <tr><td style="padding:8px 16px;color:#516F80;width:120px">الحالة السابقة</td><td style="padding:8px 16px;color:#1a1a1a">${escapeHtml(statusArabic(p.old_status))}</td></tr>
-        <tr><td style="padding:8px 16px;color:#516F80">الحالة الجديدة</td><td style="padding:8px 16px;color:${accent};font-weight:600">${escapeHtml(newStatus)}</td></tr>
-      </table>
-      <p style="margin:0;color:#888;font-size:13px;line-height:1.6">
-        ${isFrozen
-          ? "إذا تعتقد أن هذا خطأ، تواصل مع الإدارة عبر إيميل الرد أو من شاشة \"التواصل\" قبل التجميد."
-          : "إذا كان عندك أي استفسار، تواصل مع الإدارة من شاشة \"التواصل\" في التطبيق."}
-      </p>
+      ${paragraph(`مرحباً <strong style="color:${BRAND.ink}">${escapeHtml(p.member_name)}</strong>،`)}
+      ${paragraph(isFrozen
+        ? "تم تجميد حسابك في تطبيق شجرة عائلة آل محمد علي."
+        : "تم تحديث حالة حسابك في تطبيق شجرة عائلة آل محمد علي.")}
+      ${dataTable(`
+        ${dataRow("الحالة السابقة", escapeHtml(statusArabic(p.old_status)))}
+        ${dataRow("الحالة الجديدة", escapeHtml(newStatus), { accent })}
+      `)}
+      ${note(isFrozen
+        ? 'إذا تعتقد أن هذا خطأ، تواصل مع الإدارة عبر إيميل الرد أو من شاشة "التواصل" قبل التجميد.'
+        : 'إذا كان عندك أي استفسار، تواصل مع الإدارة من شاشة "التواصل" في التطبيق.')}
     `,
   });
   const text = [
@@ -191,28 +199,20 @@ function buildStatusChangedEmailForMember(p: StatusChangedPayload): EmailContent
 function buildContactReplyEmail(p: ContactReplyPayload): EmailContent {
   const subject = "رد من الإدارة على رسالتك";
   const originalSection = p.original_message
-    ? `
-      <div style="margin-top:16px;padding:12px 16px;background:#F0F2F5;border-radius:10px;border-right:3px solid #8A9EA9">
-        <p style="margin:0 0 6px;color:#888;font-size:12px">رسالتك الأصلية:</p>
-        <p style="margin:0;color:#516F80;font-size:13px;line-height:1.6;white-space:pre-wrap">${escapeHtml(p.original_message)}</p>
-      </div>
-    `
+    ? quoteBox(p.original_message, { label: "رسالتك الأصلية", accent: BRAND.muted, subtle: true })
     : "";
   const html = renderEmail({
     title: "رد من الإدارة",
-    accentColor: "#2B7A9F",
+    badge: "رد على رسالتك",
+    emoji: "💬",
+    accentColor: BRAND.blue,
+    preheader: "تلقّينا رسالتك وهذا ردّنا",
     body: `
-      <p style="margin:0 0 16px;color:#516F80;line-height:1.7">مرحباً ${escapeHtml(p.member_name)}،</p>
-      <p style="margin:0 0 16px;color:#516F80;line-height:1.7">
-        تلقّينا رسالتك في تطبيق شجرة عائلة آل محمد علي وهذا ردّنا:
-      </p>
-      <div style="margin:16px 0;padding:16px;background:#E8F1F6;border-radius:10px;border-right:3px solid #2B7A9F">
-        <p style="margin:0;color:#1a1a1a;font-size:15px;line-height:1.7;white-space:pre-wrap">${escapeHtml(p.reply_text)}</p>
-      </div>
+      ${paragraph(`مرحباً <strong style="color:${BRAND.ink}">${escapeHtml(p.member_name)}</strong>،`)}
+      ${paragraph("تلقّينا رسالتك في تطبيق شجرة عائلة آل محمد علي وهذا ردّنا:")}
+      ${quoteBox(p.reply_text, { accent: BRAND.blue })}
       ${originalSection}
-      <p style="margin:16px 0 0;color:#888;font-size:13px;line-height:1.6">
-        لو احتجت متابعة، تقدر ترسل رسالة جديدة من شاشة "التواصل" في التطبيق.
-      </p>
+      ${note('لو احتجت متابعة، تقدر ترسل رسالة جديدة من شاشة "التواصل" في التطبيق.')}
     `,
   });
   const text = [
@@ -234,46 +234,21 @@ function buildStatusChangedEmailForAdmin(p: StatusChangedPayload): EmailContent 
   const subject = `[سجل] تغيير حالة — ${p.member_name}`;
   const html = renderEmail({
     title: "تسجيل تغيير حالة",
-    accentColor: "#516F80",
+    badge: "سجل إداري",
+    emoji: "🗂️",
+    accentColor: BRAND.indigo,
+    preheader: `تغيير حالة ${p.member_name}`,
     body: `
-      <table style="width:100%;border-collapse:collapse;background:#F7F9FB;border-radius:10px;overflow:hidden;margin:0 0 16px">
-        <tr><td style="padding:8px 16px;color:#516F80;width:100px">العضو</td><td style="padding:8px 16px;color:#1a1a1a;font-weight:500">${escapeHtml(p.member_name)}</td></tr>
-        <tr><td style="padding:8px 16px;color:#516F80">من</td><td style="padding:8px 16px;color:#1a1a1a">${escapeHtml(statusArabic(p.old_status))}</td></tr>
-        <tr><td style="padding:8px 16px;color:#516F80">إلى</td><td style="padding:8px 16px;color:#2B7A9F;font-weight:600">${escapeHtml(statusArabic(p.new_status))}</td></tr>
-      </table>
-      <p style="margin:0;color:#888;font-size:13px">إشعار تلقائي للأرشيف.</p>
+      ${dataTable(`
+        ${dataRow("العضو", escapeHtml(p.member_name), { bold: true })}
+        ${dataRow("من", escapeHtml(statusArabic(p.old_status)))}
+        ${dataRow("إلى", escapeHtml(statusArabic(p.new_status)), { accent: BRAND.indigo })}
+      `)}
+      ${note("إشعار تلقائي للأرشيف.")}
     `,
   });
   const text = `[سجل] تغيير حالة\n\nالعضو: ${p.member_name}\nمن: ${statusArabic(p.old_status)}\nإلى: ${statusArabic(p.new_status)}`;
   return { subject, html, text };
-}
-
-function renderEmail(args: { title: string; accentColor: string; body: string }): string {
-  return `<!doctype html>
-<html lang="ar" dir="rtl">
-<head><meta charset="utf-8"><title>${escapeHtml(args.title)}</title></head>
-<body style="margin:0;padding:24px 12px;background:#F0F2F5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Tahoma,sans-serif">
-  <table style="max-width:560px;margin:0 auto;width:100%;background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 2px 16px rgba(0,0,0,0.06)" cellpadding="0" cellspacing="0">
-    <tr><td style="background:${args.accentColor};padding:20px 24px">
-      <h1 style="margin:0;color:#fff;font-size:18px;font-weight:600">${escapeHtml(args.title)}</h1>
-    </td></tr>
-    <tr><td style="padding:24px">${args.body}</td></tr>
-    <tr><td style="background:#F7F9FB;padding:16px 24px;border-top:1px solid #E5E8EB">
-      <p style="margin:0;color:#888;font-size:12px;text-align:center">
-        تطبيق شجرة عائلة آل محمد علي
-      </p>
-    </td></tr>
-  </table>
-</body></html>`;
-}
-
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
 }
 
 async function sendEmail(args: {

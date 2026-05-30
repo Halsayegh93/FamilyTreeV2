@@ -121,8 +121,8 @@ struct DrillDownTreeView: View {
                         ProgressView().tint(DS.Color.primary)
                         Spacer()
                     } else if kinshipBanner != nil {
-                        // وضع القرابة: السلسلة أفقياً (جنب بعض)
-                        horizontalKinshipChain
+                        // وضع القرابة: السلسلة عموديًا — نفس ستايل الشجرة
+                        verticalKinshipChain
                     } else {
                         ScrollViewReader { proxy in
                             ScrollView(showsIndicators: false) {
@@ -197,40 +197,45 @@ struct DrillDownTreeView: View {
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
 
-    // MARK: - Kinship Horizontal Chain
+    // MARK: - Kinship Vertical Chain
 
-    /// عرض سلسلة القرابة أفقياً — كل المربعات جنب بعض من اليمين لليسار
-    /// (مع RTL تلقائياً). يستخدم بدل العرض العمودي عند تفعيل القرابة فقط.
-    private var horizontalKinshipChain: some View {
+    /// عرض سلسلة القرابة عموديًا — نفس مربعات ووصلات الشجرة العادية،
+    /// مع تمييز ذهبي للمسار ونجمة للطرف المستهدف. (بدل العرض الأفقي السابق)
+    private var verticalKinshipChain: some View {
         ScrollViewReader { proxy in
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(alignment: .center, spacing: 0) {
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: DS.Spacing.xs) {
                     ForEach(Array(chain.enumerated()), id: \.element.id) { idx, member in
                         let isLast = idx == chain.count - 1
-                        Button {
-                            selectedMemberForDetails = member
-                        } label: {
-                            memberSquareContent(
-                                member,
-                                isActive: kinshipTargetId == member.id,
-                                kidsCount: children(of: member.id).count
-                            )
-                        }
-                        .buttonStyle(DSScaleButtonStyle())
-                        .simultaneousGesture(
-                            LongPressGesture(minimumDuration: 0.4).onEnded { _ in
+                        HStack {
+                            Spacer()
+                            Button {
                                 selectedMemberForDetails = member
+                            } label: {
+                                memberSquareContent(
+                                    member,
+                                    isActive: kinshipTargetId == member.id,
+                                    kidsCount: children(of: member.id).count
+                                )
                             }
-                        )
+                            .buttonStyle(DSScaleButtonStyle())
+                            .simultaneousGesture(
+                                LongPressGesture(minimumDuration: 0.4).onEnded { _ in
+                                    selectedMemberForDetails = member
+                                }
+                            )
+                            Spacer()
+                        }
                         .id(member.id)
 
                         if !isLast {
-                            horizontalKinshipConnector
+                            chainConnector
                         }
                     }
                 }
                 .padding(.horizontal, DS.Spacing.lg)
-                .padding(.vertical, DS.Spacing.xl)
+                .padding(.top, DS.Spacing.sm)
+                .padding(.bottom, DS.Spacing.xxxxl)
             }
             .onChange(of: scrollTarget) { newId in
                 guard let id = newId else { return }
@@ -240,19 +245,12 @@ struct DrillDownTreeView: View {
                         return
                     }
                     withAnimation(.easeInOut(duration: 0.5)) {
-                        proxy.scrollTo(id, anchor: .center)
+                        proxy.scrollTo(id, anchor: UnitPoint(x: 0.5, y: 0.3))
                     }
                     DispatchQueue.main.async { scrollTarget = nil }
                 }
             }
         }
-    }
-
-    /// خط أفقي يصل بين مربعين متتاليين في سلسلة القرابة (ذهبي بارز)
-    private var horizontalKinshipConnector: some View {
-        Rectangle()
-            .fill(DS.Color.warning.opacity(0.85))
-            .frame(width: 22, height: 3)
     }
 
     // MARK: - Kinship Banner + Handler
