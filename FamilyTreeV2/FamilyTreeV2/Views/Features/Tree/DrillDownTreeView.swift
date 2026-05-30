@@ -30,6 +30,8 @@ struct DrillDownTreeView: View {
     @State private var kinshipMeId: UUID? = nil
     @State private var kinshipCommonAncestorId: UUID? = nil
     @State private var kinshipDismissTask: Task<Void, Never>? = nil
+    // لقطة سلسلة الشجرة قبل تفعيل القرابة — للرجوع لنفس المكان عند الانتهاء
+    @State private var preKinshipChain: [FamilyMember]? = nil
 
     // نمط فروع الخطوط (قوس/زاوية) — يبقى عبر التشغيل
     @AppStorage("drillBranchStyle") private var drillBranchStyleRaw: String = BranchConnectorStyle.arc.rawValue
@@ -364,6 +366,11 @@ struct DrillDownTreeView: View {
 
         kinshipDismissTask?.cancel()
 
+        // احفظ مكان الشجرة الحالي مرة واحدة فقط (لو القرابة مو مفعّلة أصلاً)
+        if kinshipBanner == nil {
+            preKinshipChain = chain
+        }
+
         withAnimation(.easeInOut(duration: 0.4)) {
             chain = newChain
             kinshipBanner = relationship
@@ -392,11 +399,15 @@ struct DrillDownTreeView: View {
             kinshipTargetId = nil
             kinshipMeId = nil
             kinshipCommonAncestorId = nil
-            // الرجوع لوضع الشجرة الطبيعي (البداية) — لأن السلسلة كانت مسار القرابة
-            if let first = roots.first {
+            // الرجوع لنفس مكان الشجرة الذي ضُغطت منه القرابة (أو البداية كحل احتياطي)
+            if let saved = preKinshipChain, !saved.isEmpty,
+               memberVM.member(byId: saved[0].id) != nil {
+                chain = saved
+            } else if let first = roots.first {
                 chain = [first]
             }
         }
+        preKinshipChain = nil
     }
 
     // MARK: - Top Bar (Root + Me)
