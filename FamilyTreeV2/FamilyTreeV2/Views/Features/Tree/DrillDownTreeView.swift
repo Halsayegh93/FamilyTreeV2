@@ -199,37 +199,78 @@ struct DrillDownTreeView: View {
 
     // MARK: - Kinship Vertical Chain
 
-    /// عرض سلسلة القرابة عموديًا — نفس مربعات ووصلات الشجرة العادية،
-    /// مع تمييز ذهبي للمسار ونجمة للطرف المستهدف. (بدل العرض الأفقي السابق)
-    private var verticalKinshipChain: some View {
-        ScrollViewReader { proxy in
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: DS.Spacing.xs) {
-                    ForEach(Array(chain.enumerated()), id: \.element.id) { idx, member in
-                        let isLast = idx == chain.count - 1
-                        HStack {
-                            Spacer()
-                            Button {
-                                selectedMemberForDetails = member
-                            } label: {
-                                memberSquareContent(
-                                    member,
-                                    isActive: kinshipTargetId == member.id,
-                                    kidsCount: children(of: member.id).count
-                                )
-                            }
-                            .buttonStyle(DSScaleButtonStyle())
-                            .simultaneousGesture(
-                                LongPressGesture(minimumDuration: 0.4).onEnded { _ in
-                                    selectedMemberForDetails = member
-                                }
-                            )
-                            Spacer()
-                        }
-                        .id(member.id)
+    /// مربّع عضو في وضع القرابة — نفس مربّع الشجرة، النقر يفتح التفاصيل.
+    private func kinshipSquareButton(_ member: FamilyMember) -> some View {
+        Button {
+            selectedMemberForDetails = member
+        } label: {
+            memberSquareContent(
+                member,
+                isActive: kinshipTargetId == member.id,
+                kidsCount: children(of: member.id).count
+            )
+        }
+        .buttonStyle(DSScaleButtonStyle())
+        .simultaneousGesture(
+            LongPressGesture(minimumDuration: 0.4).onEnded { _ in
+                selectedMemberForDetails = member
+            }
+        )
+        .id(member.id)
+    }
 
-                        if !isLast {
-                            chainConnector
+    /// عمود عمودي لفرع واحد من فروع القرابة (من تحت الجد المشترك للطرف).
+    private func kinshipBranchColumn(_ members: [FamilyMember]) -> some View {
+        VStack(spacing: DS.Spacing.xs) {
+            ForEach(Array(members.enumerated()), id: \.element.id) { idx, m in
+                kinshipSquareButton(m)
+                if idx != members.count - 1 {
+                    chainConnector
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .top)
+    }
+
+    /// عرض سلسلة القرابة عموديًا — نفس مربعات ووصلات الشجرة العادية.
+    /// عند وجود جدّ مشترك: يتفرّع عنده لفرعين (أنت / الهدف) تمامًا مثل تفرّع الشجرة.
+    private var verticalKinshipChain: some View {
+        let caIndex = kinshipCommonAncestorId.flatMap { caid in
+            chain.firstIndex(where: { $0.id == caid })
+        }
+        return ScrollViewReader { proxy in
+            ScrollView(showsIndicators: false) {
+                Group {
+                    if let caIndex, caIndex > 0, caIndex < chain.count - 1 {
+                        // تفرّع حقيقي عند الجد المشترك
+                        let ca = chain[caIndex]
+                        let meBranch = Array(chain[0..<caIndex].reversed())   // ابن الجد ← ... ← أنت
+                        let targetBranch = Array(chain[(caIndex + 1)...])     // ابن الجد ← ... ← الهدف
+                        VStack(spacing: DS.Spacing.xs) {
+                            HStack { Spacer(); kinshipSquareButton(ca); Spacer() }
+
+                            // فرع على شكل الشجرة (قوس/زاوية حسب الإعداد)
+                            BranchConnector(branchCount: 2, style: drillBranchStyle)
+                                .stroke(
+                                    DS.Color.warning.opacity(0.85),
+                                    style: StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round)
+                                )
+                                .frame(height: 22)
+
+                            HStack(alignment: .top, spacing: DS.Spacing.sm) {
+                                kinshipBranchColumn(meBranch)
+                                kinshipBranchColumn(targetBranch)
+                            }
+                        }
+                    } else {
+                        // fallback: سلسلة عمودية بسيطة (لا يوجد جد مشترك أو طرف هو الجد)
+                        VStack(spacing: DS.Spacing.xs) {
+                            ForEach(Array(chain.enumerated()), id: \.element.id) { idx, member in
+                                kinshipSquareButton(member)
+                                if idx != chain.count - 1 {
+                                    chainConnector
+                                }
+                            }
                         }
                     }
                 }
