@@ -380,15 +380,7 @@ struct DrillDownTreeView: View {
         kinshipDismissTask = Task {
             try? await Task.sleep(nanoseconds: 20_000_000_000)
             guard !Task.isCancelled else { return }
-            await MainActor.run {
-                withAnimation(DS.Anim.snappy) {
-                    kinshipBanner = nil
-                    kinshipPathIds = []
-                    kinshipTargetId = nil
-                    kinshipMeId = nil
-                    kinshipCommonAncestorId = nil
-                }
-            }
+            await MainActor.run { clearKinship() }
         }
     }
 
@@ -400,6 +392,10 @@ struct DrillDownTreeView: View {
             kinshipTargetId = nil
             kinshipMeId = nil
             kinshipCommonAncestorId = nil
+            // الرجوع لوضع الشجرة الطبيعي (البداية) — لأن السلسلة كانت مسار القرابة
+            if let first = roots.first {
+                chain = [first]
+            }
         }
     }
 
