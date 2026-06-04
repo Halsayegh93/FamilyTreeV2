@@ -119,7 +119,7 @@ struct DrillDownTreeView: View {
                     if showSearchBar {
                         searchInlinePanel
                             .frame(maxHeight: .infinity)
-                            .transition(.opacity.combined(with: .move(edge: .top)))
+                            .transition(.opacity)
                     } else if memberVM.allMembers.isEmpty {
                         Spacer()
                         emptyState
@@ -436,7 +436,7 @@ struct DrillDownTreeView: View {
                     scrollTarget = first.id
                 }
             } label: {
-                iconButton(icon: "arrow.up.to.line", color: DS.Color.primary)
+                iconButton(icon: "house.circle.fill", color: DS.Color.primary)
             }
             .buttonStyle(DSScaleButtonStyle())
             .accessibilityLabel(L10n.t("البداية", "Start"))
@@ -456,9 +456,9 @@ struct DrillDownTreeView: View {
     /// زر دائري بأيقونة فقط (بدون نص) — أيقونة أكبر ضمن خلفية ملوّنة خفيفة.
     private func iconButton(icon: String, color: Color) -> some View {
         Image(systemName: icon)
-            .font(DS.Font.scaled(19, weight: .bold))
+            .font(DS.Font.scaled(16, weight: .bold))
             .foregroundColor(color)
-            .frame(width: 44, height: 44)
+            .frame(width: 40, height: 40)
             .background(Circle().fill(color.opacity(0.12)))
     }
 
