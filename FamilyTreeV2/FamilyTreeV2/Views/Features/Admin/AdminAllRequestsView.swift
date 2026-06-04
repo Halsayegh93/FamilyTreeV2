@@ -1393,8 +1393,19 @@ struct AdminAllRequestsView: View {
         onTap: @escaping () -> Void,
         @ViewBuilder content: () -> Content
     ) -> some View {
-        VStack(spacing: 0) {
-            // المحتوى — قابل للنقر
+        let isSelected = isSelectMode && selectedIds.contains(id)
+        return HStack(spacing: 0) {
+            // شريط لوني جانبي يشير لنوع الطلب — لمسة احترافية
+            Rectangle()
+                .fill(
+                    LinearGradient(
+                        colors: [accentColor, accentColor.opacity(0.6)],
+                        startPoint: .top, endPoint: .bottom
+                    )
+                )
+                .frame(width: 4)
+
+            // المحتوى — قابل للنقر، يفتح تفاصيل الطلب
             Button {
                 if isSelectMode {
                     withAnimation(DS.Anim.snappy) {
@@ -1405,118 +1416,55 @@ struct AdminAllRequestsView: View {
                     onTap()
                 }
             } label: {
-                HStack(alignment: .top, spacing: DS.Spacing.sm) {
+                HStack(alignment: .center, spacing: DS.Spacing.sm) {
                     if isSelectMode {
-                        Image(systemName: selectedIds.contains(id) ? "checkmark.circle.fill" : "circle")
+                        Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                             .font(DS.Font.scaled(22, weight: .regular))
-                            .foregroundColor(selectedIds.contains(id) ? DS.Color.primary : DS.Color.textTertiary)
+                            .foregroundColor(isSelected ? DS.Color.primary : DS.Color.textTertiary)
                             .transition(.scale.combined(with: .opacity))
-                            .padding(.top, 2)
                     }
                     content()
                         .frame(maxWidth: .infinity, alignment: .leading)
+                    // chevron — إشارة إن الكرت يفتح التفاصيل (تظهر خارج وضع التحديد)
+                    if !isSelectMode {
+                        Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
+                            .font(DS.Font.scaled(13, weight: .bold))
+                            .foregroundColor(DS.Color.textTertiary.opacity(0.55))
+                    }
                 }
                 .padding(.horizontal, DS.Spacing.md)
-                .padding(.vertical, DS.Spacing.sm)
+                .padding(.vertical, DS.Spacing.md)
             }
             .buttonStyle(.plain)
-
-            // شريط الإجراءات السفلي — يظهر فقط خارج وضع التحديد
-            if !isSelectMode, (onApprove != nil || onReject != nil) {
-                Divider().opacity(0.35).padding(.horizontal, DS.Spacing.md)
-                requestActionsBar(
-                    approveLabel: approveLabel,
-                    approveIcon: approveIcon,
-                    approveColor: approveColor,
-                    onApprove: onApprove,
-                    onReject: onReject
-                )
-                .padding(.horizontal, DS.Spacing.md)
-                .padding(.top, 6)
-                .padding(.bottom, DS.Spacing.sm)
-            }
         }
-        .background(
-            RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                .fill(
-                    isSelectMode && selectedIds.contains(id)
-                        ? DS.Color.primary.opacity(0.06)
-                        : DS.Color.surface
-                )
-        )
+        .background(isSelected ? DS.Color.primary.opacity(0.06) : DS.Color.surface)
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
                 .strokeBorder(
-                    isSelectMode && selectedIds.contains(id)
-                        ? DS.Color.primary.opacity(0.40)
-                        : accentColor.opacity(0.15),
+                    isSelected ? DS.Color.primary.opacity(0.40) : accentColor.opacity(0.12),
                     lineWidth: 1
                 )
         )
-        .shadow(color: .black.opacity(0.04), radius: 5, x: 0, y: 2)
+        .shadow(color: .black.opacity(0.05), radius: 6, x: 0, y: 2)
         .listRowBackground(Color.clear)
         .listRowSeparator(.hidden)
         .listRowInsets(EdgeInsets(top: 4, leading: DS.Spacing.lg, bottom: 4, trailing: DS.Spacing.lg))
-    }
-
-    /// شريط أزرار موافقة/رفض — يتكيّف حسب الصلاحيات وما هو مرسَل.
-    @ViewBuilder
-    private func requestActionsBar(
-        approveLabel: String?,
-        approveIcon: String,
-        approveColor: Color,
-        onApprove: (() -> Void)?,
-        onReject: (() -> Void)?
-    ) -> some View {
-        HStack(spacing: DS.Spacing.sm) {
-            // زر الرفض — كبسولة بنص + أيقونة، يظهر فقط لمن يملك الصلاحية
-            if let onReject, authVM.canRejectRequests {
-                Button(action: onReject) {
-                    HStack(spacing: DS.Spacing.xs) {
-                        Image(systemName: "xmark")
-                            .font(DS.Font.scaled(13, weight: .bold))
-                        Text(L10n.t("رفض", "Reject"))
-                            .font(DS.Font.scaled(14, weight: .bold))
-                    }
-                    .foregroundColor(DS.Color.error)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 42)
-                    .background(
-                        RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                            .fill(DS.Color.error.opacity(0.10))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                            .strokeBorder(DS.Color.error.opacity(0.25), lineWidth: 1)
-                    )
-                }
-                .buttonStyle(DSScaleButtonStyle())
-            }
-
-            // زر الموافقة — كبسولة متدرّجة بنص + أيقونة
-            if let onApprove {
+        // الموافقة/الرفض عبر السحب — خارج وضع التحديد فقط
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            if !isSelectMode, let onApprove {
                 Button(action: onApprove) {
-                    HStack(spacing: DS.Spacing.xs) {
-                        Image(systemName: approveIcon)
-                            .font(DS.Font.scaled(13, weight: .bold))
-                        Text(approveLabel ?? L10n.t("موافقة", "Approve"))
-                            .font(DS.Font.scaled(14, weight: .bold))
-                    }
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 42)
-                    .background(
-                        RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                            .fill(
-                                LinearGradient(
-                                    colors: [approveColor, approveColor.opacity(0.85)],
-                                    startPoint: .topLeading, endPoint: .bottomTrailing
-                                )
-                            )
-                    )
-                    .shadow(color: approveColor.opacity(0.30), radius: 5, x: 0, y: 2)
+                    Label(approveLabel ?? L10n.t("موافقة", "Approve"), systemImage: approveIcon)
                 }
-                .buttonStyle(DSScaleButtonStyle())
+                .tint(approveColor)
+            }
+        }
+        .swipeActions(edge: .leading, allowsFullSwipe: false) {
+            if !isSelectMode, let onReject, authVM.canRejectRequests {
+                Button(action: onReject) {
+                    Label(L10n.t("رفض", "Reject"), systemImage: "xmark")
+                }
+                .tint(DS.Color.error)
             }
         }
     }
@@ -3484,12 +3432,6 @@ struct AdminAllRequestsView: View {
             if let phone = member.phoneNumber, !phone.isEmpty {
                 infoCard(icon: "phone.fill", label: L10n.t("رقم الهاتف", "Phone"),
                          value: KuwaitPhone.display(phone), color: DS.Color.success)
-                if let wa = KuwaitPhone.whatsappURL(phone) {
-                    contactLinkCard(icon: "message.fill",
-                                    label: L10n.t("تواصل واتساب", "WhatsApp"),
-                                    value: KuwaitPhone.display(phone),
-                                    color: DS.Color.success, url: wa)
-                }
             }
 
         case .news(let post):
