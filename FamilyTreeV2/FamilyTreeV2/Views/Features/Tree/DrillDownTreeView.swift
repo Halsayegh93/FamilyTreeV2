@@ -199,7 +199,7 @@ struct DrillDownTreeView: View {
                     .presentationDetents([.medium, .large])
                     .presentationDragIndicator(.visible)
             }
-            .animation(DS.Anim.snappy, value: showSearchBar)
+            .animation(DS.Anim.smooth, value: showSearchBar)
             .animation(DS.Anim.snappy, value: kinshipBanner)
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
@@ -418,14 +418,14 @@ struct DrillDownTreeView: View {
 
     // MARK: - Top Bar (Root + Me)
 
-    /// أزرار "بحث" و"البداية" و"موقعي" — تصميم موحّد (كبسولات بنفس الشكل واللون).
+    /// أزرار "بحث" و"البداية" و"موقعي" — أيقونات فقط (بدون نص) بتصميم موحّد.
     /// تظهر فقط عند إغلاق البحث؛ زر إغلاق البحث صار داخل مربع البحث نفسه.
     private var stickyActionsBar: some View {
         HStack(spacing: DS.Spacing.sm) {
             Button {
-                withAnimation(DS.Anim.snappy) { showSearchBar = true }
+                withAnimation(DS.Anim.smooth) { showSearchBar = true }
             } label: {
-                pillLabel(icon: "magnifyingglass", text: L10n.t("بحث", "Search"), color: DS.Color.primary)
+                iconButton(icon: "magnifyingglass", color: DS.Color.primary)
             }
             .buttonStyle(DSScaleButtonStyle())
             .accessibilityLabel(L10n.t("بحث", "Search"))
@@ -436,31 +436,30 @@ struct DrillDownTreeView: View {
                     scrollTarget = first.id
                 }
             } label: {
-                pillLabel(icon: "house.fill", text: L10n.t("البداية", "Start"), color: DS.Color.primary)
+                iconButton(icon: "arrow.up.to.line", color: DS.Color.primary)
             }
             .buttonStyle(DSScaleButtonStyle())
+            .accessibilityLabel(L10n.t("البداية", "Start"))
 
             Spacer()
 
             if let me = authVM.currentUser {
                 Button { jumpTo(me) } label: {
-                    pillLabel(icon: "location.fill", text: L10n.t("موقعي", "Me"), color: DS.Color.primary)
+                    iconButton(icon: "location.fill", color: DS.Color.primary)
                 }
                 .buttonStyle(DSScaleButtonStyle())
+                .accessibilityLabel(L10n.t("موقعي", "Me"))
             }
         }
     }
 
-    private func pillLabel(icon: String, text: String, color: Color) -> some View {
-        HStack(spacing: 5) {
-            Image(systemName: icon).font(DS.Font.scaled(11, weight: .bold))
-            Text(text).font(DS.Font.caption1).fontWeight(.bold)
-        }
-        .foregroundColor(color)
-        .padding(.horizontal, DS.Spacing.md)
-        .padding(.vertical, 7)
-        .background(color.opacity(0.12))
-        .clipShape(Capsule())
+    /// زر دائري بأيقونة فقط (بدون نص) — أيقونة أكبر ضمن خلفية ملوّنة خفيفة.
+    private func iconButton(icon: String, color: Color) -> some View {
+        Image(systemName: icon)
+            .font(DS.Font.scaled(19, weight: .bold))
+            .foregroundColor(color)
+            .frame(width: 44, height: 44)
+            .background(Circle().fill(color.opacity(0.12)))
     }
 
     // MARK: - Ancestor / Active Square
@@ -805,7 +804,7 @@ struct DrillDownTreeView: View {
     private var searchInlinePanel: some View {
         TreeSearchOverlay(
             onSelect: { member in
-                showSearchBar = false
+                withAnimation(DS.Anim.smooth) { showSearchBar = false }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
                     jumpTo(member)
                 }
@@ -813,7 +812,7 @@ struct DrillDownTreeView: View {
             usesFullHeight: true,
             autoFocus: true,
             onClose: {
-                withAnimation(DS.Anim.snappy) { showSearchBar = false }
+                withAnimation(DS.Anim.smooth) { showSearchBar = false }
             },
             externalBranchRootId: $searchBranchRootId
         )

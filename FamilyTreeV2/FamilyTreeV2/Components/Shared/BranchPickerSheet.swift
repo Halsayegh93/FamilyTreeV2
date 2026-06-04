@@ -132,21 +132,16 @@ struct BranchPickerSheet: View {
                     onSelect(node.member.id)
                 } label: {
                     HStack(spacing: DS.Spacing.sm) {
-                        VStack(alignment: .trailing, spacing: 2) {
-                            HStack(spacing: 4) {
-                                if node.member.isDeceased == true {
-                                    Image(systemName: "leaf.fill")
-                                        .font(DS.Font.scaled(9))
-                                        .foregroundColor(DS.Color.textTertiary)
-                                }
-                                Text(node.displayName)
-                                    .font(depth == 0 ? DS.Font.calloutBold : DS.Font.callout)
-                                    .foregroundColor(DS.Color.textPrimary)
-                                    .lineLimit(1)
+                        HStack(spacing: 4) {
+                            if node.member.isDeceased == true {
+                                Image(systemName: "leaf.fill")
+                                    .font(DS.Font.scaled(9))
+                                    .foregroundColor(DS.Color.textTertiary)
                             }
-                            Text(L10n.t("\(node.totalCount) عضو", "\(node.totalCount) members"))
-                                .font(DS.Font.caption2)
-                                .foregroundColor(DS.Color.textTertiary)
+                            Text(node.displayName)
+                                .font(depth == 0 ? DS.Font.calloutBold : DS.Font.callout)
+                                .foregroundColor(DS.Color.textPrimary)
+                                .lineLimit(1)
                         }
                         .frame(maxWidth: .infinity, alignment: .trailing)
                         DSMemberAvatar(

@@ -120,6 +120,9 @@ struct TreeSearchOverlay: View {
                     branchPickerOpen = false
                 }
             )
+            // الشيت بحجم يناسب المحتوى (متوسط) مع إمكانية التوسعة لكامل الشاشة
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
         }
         .onAppear {
             if autoFocus {
