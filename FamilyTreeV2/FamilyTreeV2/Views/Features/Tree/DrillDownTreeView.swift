@@ -22,6 +22,9 @@ struct DrillDownTreeView: View {
     @State private var showingNotifications = false
     @State private var showSearchBar = false
     @State private var scrollTarget: UUID? = nil
+    /// الفرع المختار في البحث — يبقى ثابتاً طول ما شجرة التفرّع ظاهرة (يُصفَّر عند
+    /// الخروج من الشاشة أو إغلاق التطبيق)، حتى لو أُعيد فتح لوحة البحث.
+    @State private var searchBranchRootId: UUID? = nil
 
     // صلة القرابة — البانر + المعرّفات المهايلايتة + الطرفين
     @State private var kinshipBanner: String? = nil
@@ -811,7 +814,8 @@ struct DrillDownTreeView: View {
             autoFocus: true,
             onClose: {
                 withAnimation(DS.Anim.snappy) { showSearchBar = false }
-            }
+            },
+            externalBranchRootId: $searchBranchRootId
         )
         .padding(.horizontal, DS.Spacing.lg)
         .padding(.top, DS.Spacing.xs)

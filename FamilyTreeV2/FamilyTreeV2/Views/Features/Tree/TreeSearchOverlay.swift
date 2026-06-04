@@ -21,9 +21,24 @@ struct TreeSearchOverlay: View {
     @State private var searchResults: [SearchResult] = []
     @State private var searchTask: Task<Void, Never>?
     @State private var statusFilter: StatusFilter = .all
-    @State private var branchRootId: UUID? = nil
+    /// تخزين داخلي للفرع — يُستخدم فقط إذا لم يُمرَّر binding خارجي.
+    @State private var internalBranchRootId: UUID? = nil
     @State private var branchPickerOpen = false
     @FocusState private var fieldFocused: Bool
+
+    /// عند توفّره: مصدر حقيقة خارجي لاختيار الفرع — يبقى ثابتاً طول عمر الشاشة
+    /// الأم (مثلاً شجرة التفرّع) حتى لو أُعيد فتح لوحة البحث. بدونه يُستخدم
+    /// التخزين الداخلي (السلوك السابق للوضع المضمّن).
+    var externalBranchRootId: Binding<UUID?>? = nil
+
+    /// الفرع المختار — يقرأ/يكتب على الـ binding الخارجي إن وُجد، وإلا الداخلي.
+    private var branchRootId: UUID? {
+        get { externalBranchRootId?.wrappedValue ?? internalBranchRootId }
+        nonmutating set {
+            if let ext = externalBranchRootId { ext.wrappedValue = newValue }
+            else { internalBranchRootId = newValue }
+        }
+    }
 
     @AppStorage("recentTreeSearches") private var recentSearchesData: Data = Data()
 
