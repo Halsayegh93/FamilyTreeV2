@@ -12,6 +12,7 @@ struct AdminDashboardView: View {
     @EnvironmentObject var newsVM: NewsViewModel
     @EnvironmentObject var adminRequestVM: AdminRequestViewModel
     @EnvironmentObject var storyVM: StoryViewModel
+    @EnvironmentObject var projectsVM: ProjectsViewModel
     @StateObject private var diwaniyaVM = DiwaniyasViewModel()
     @Binding var selectedTab: Int
     @State private var navigationPath = NavigationPath()
@@ -91,17 +92,11 @@ struct AdminDashboardView: View {
             }
         }
 
-        let reviewTotal = pending
-            + newsVM.pendingNewsRequests.count
-            + adminRequestVM.newsReportRequests.count
-            + adminRequestVM.phoneChangeRequests.count
-            + diwaniyaVM.pendingDiwaniyas.count
-            + adminRequestVM.deceasedRequests.count
-            + adminRequestVM.childAddRequests.count
-            + adminRequestVM.photoSuggestionRequests.count
-            + adminRequestVM.nameChangeRequests.count
-            + memberVM.pendingGalleryPhotos.count
-            + storyVM.pendingStories.count
+        // مصدر واحد للحقيقة — مطابق تماماً لعدّاد «الكل» داخل «طلبات المراجعة»
+        let reviewTotal = AdminAllRequestsView.reviewRequestsTotal(
+            memberVM: memberVM, newsVM: newsVM, adminRequestVM: adminRequestVM,
+            diwaniyaVM: diwaniyaVM, projectsVM: projectsVM
+        )
 
         withAnimation(DS.Anim.smooth) {
             pendingCount = pending
@@ -314,6 +309,7 @@ struct AdminDashboardView: View {
             group.addTask { @MainActor in await memberVM.fetchPendingGalleryPhotos() }
             group.addTask { @MainActor in await adminRequestVM.fetchNameChangeRequests() }
             group.addTask { @MainActor in await adminRequestVM.fetchContactMessages() }
+            group.addTask { @MainActor in await projectsVM.fetchPendingProjects() }
             group.addTask { @MainActor in await authVM.fetchBannedPhones() }
         }
         recalculateBadges()

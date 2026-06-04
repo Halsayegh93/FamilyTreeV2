@@ -283,9 +283,7 @@ struct AdminAllRequestsView: View {
             if let fid = member.fatherId, !activeIds.contains(fid) {
                 memberIssues.insert(.brokenParent)
             }
-            if member.isHiddenFromTree {
-                memberIssues.insert(.hiddenFromTree)
-            }
+            // ملاحظة: «مخفي» (hiddenFromTree) أُزيل من فحص صحة الشجرة بطلب المستخدم — لا يُعتبر مشكلة.
             if !memberIssues.isEmpty {
                 issues[member.id] = memberIssues
                 result.append(member)
@@ -302,7 +300,7 @@ struct AdminAllRequestsView: View {
         result.sort { $0.fullName < $1.fullName }
 
         var counts: [TreeHealthIssue: Int] = [:]
-        for issue in [TreeHealthIssue.orphan, .noName, .brokenParent, .hiddenFromTree, .duplicatePhone] {
+        for issue in [TreeHealthIssue.orphan, .noName, .brokenParent, .duplicatePhone] {
             counts[issue] = issues.values.filter { $0.contains(issue) }.count
         }
 
@@ -686,20 +684,72 @@ struct AdminAllRequestsView: View {
 
     /// تابات مخفية من «طلبات المراجعة» لأنها مغطّاة بأقسام أخرى:
     /// «معلّق» (بدون أب) موجود في «إدارة الأعضاء ← أعضاء غير مكتملين ← بدون أب».
-    private static let hiddenTabs: Set<RequestTab> = []
+    /// «مخفي» (healthHidden) أُزيل بطلب المستخدم — لا يُعتبر مشكلة صحة شجرة.
+    private static let hiddenTabs: Set<RequestTab> = [.healthHidden]
 
     private func recalculateCounts() {
         cachedPendingMembers = memberVM.allMembers.filter { $0.role == .pending }
-        // إعادة بناء كاش صحة الشجرة كذلك
+        // إعادة بناء كاش صحة الشجرة كذلك (لعدّادات التابات والقوائم)
         rebuildTreeHealthCache()
-        // المجموع الكلّي = كل الأنواع ما عدا .all نفسه (لتفادي العدّ المضاعف)
-        // يشمل tabs الصحة كذلك (المستخدم يبيها ضمن "الكل")
-        cachedTotalCount = RequestTab.allCases
-            .filter { $0 != .all }
-            .reduce(0) { $0 + itemCount(for: $1) }
+        // المجموع الكلّي عبر مصدر واحد للحقيقة — يطابق بادج «طلبات المراجعة» في لوحة الإدارة
+        cachedTotalCount = Self.reviewRequestsTotal(
+            memberVM: memberVM, newsVM: newsVM, adminRequestVM: adminRequestVM,
+            diwaniyaVM: diwaniyaVM, projectsVM: projectsVM
+        )
         // عرض كل التابات دائماً — حتى الفارغة (المستخدم يبيها كلها مرئية)
         // ما عدا التابات المخفية (مغطّاة بأقسام أخرى).
         cachedAvailableTabs = RequestTab.allCases.filter { !Self.hiddenTabs.contains($0) }
+    }
+
+    /// مصدر واحد للحقيقة لعدد «طلبات المراجعة» — يستخدمه «الكل» داخل الطلبات وبادج لوحة الإدارة
+    /// حتى يتطابق الرقمان دائماً. يطابق مجموع عدّادات كل التابات (joinRequests…صحة الشجرة).
+    @MainActor
+    static func reviewRequestsTotal(
+        memberVM: MemberViewModel,
+        newsVM: NewsViewModel,
+        adminRequestVM: AdminRequestViewModel,
+        diwaniyaVM: DiwaniyasViewModel,
+        projectsVM: ProjectsViewModel
+    ) -> Int {
+        let members = memberVM.allMembers
+        let pending = members.filter { $0.role == .pending }.count
+
+        // صحة الشجرة — نفس منطق rebuildTreeHealthCache (بدون «مخفي»)
+        let allActive = members.filter { $0.role != .pending && $0.status != .frozen }
+        let fatherIds = Set(allActive.compactMap(\.fatherId))
+        let activeIds = Set(allActive.map(\.id))
+        var issues: [UUID: Set<TreeHealthIssue>] = [:]
+        for member in members where member.status != .frozen {
+            var s = Set<TreeHealthIssue>()
+            if member.fatherId == nil && !fatherIds.contains(member.id) && member.role != .pending {
+                s.insert(.orphan)
+            }
+            let name = member.fullName.trimmingCharacters(in: .whitespacesAndNewlines)
+            if name.isEmpty || name == "بدون اسم" { s.insert(.noName) }
+            if let fid = member.fatherId, !activeIds.contains(fid) { s.insert(.brokenParent) }
+            if !s.isEmpty { issues[member.id] = s }
+        }
+        for group in memberVM.duplicatePhoneGroups {
+            for member in group { issues[member.id, default: []].insert(.duplicatePhone) }
+        }
+        var healthTotal = 0
+        for issue in [TreeHealthIssue.orphan, .noName, .brokenParent, .duplicatePhone] {
+            healthTotal += issues.values.filter { $0.contains(issue) }.count
+        }
+
+        return pending
+            + newsVM.pendingNewsRequests.count
+            + adminRequestVM.newsReportRequests.count
+            + adminRequestVM.phoneChangeRequests.count
+            + adminRequestVM.nameChangeRequests.count
+            + diwaniyaVM.pendingDiwaniyas.count
+            + adminRequestVM.deceasedRequests.count
+            + adminRequestVM.childAddRequests.count
+            + adminRequestVM.treeEditRequests.count
+            + adminRequestVM.photoSuggestionRequests.count
+            + projectsVM.pendingProjects.count
+            + memberVM.pendingGalleryPhotos.count
+            + healthTotal
     }
 
     /// شريط الفلاتر بنمط أرشيف العائلة — في وضع التحديد يتحوّل لشريط ملخّص التحديد.
@@ -1419,42 +1469,55 @@ struct AdminAllRequestsView: View {
         onReject: (() -> Void)?
     ) -> some View {
         HStack(spacing: DS.Spacing.sm) {
-            Spacer(minLength: 0)
-
-            // زر الرفض — أيقونة دائرية، يظهر فقط لمن يملك الصلاحية
+            // زر الرفض — كبسولة بنص + أيقونة، يظهر فقط لمن يملك الصلاحية
             if let onReject, authVM.canRejectRequests {
                 Button(action: onReject) {
-                    Image(systemName: "xmark")
-                        .font(DS.Font.scaled(15, weight: .bold))
-                        .foregroundColor(DS.Color.error)
-                        .frame(width: 40, height: 40)
-                        .background(Circle().fill(DS.Color.error.opacity(0.10)))
-                        .overlay(Circle().strokeBorder(DS.Color.error.opacity(0.25), lineWidth: 1))
+                    HStack(spacing: DS.Spacing.xs) {
+                        Image(systemName: "xmark")
+                            .font(DS.Font.scaled(13, weight: .bold))
+                        Text(L10n.t("رفض", "Reject"))
+                            .font(DS.Font.scaled(14, weight: .bold))
+                    }
+                    .foregroundColor(DS.Color.error)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 42)
+                    .background(
+                        RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                            .fill(DS.Color.error.opacity(0.10))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                            .strokeBorder(DS.Color.error.opacity(0.25), lineWidth: 1)
+                    )
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(DSScaleButtonStyle())
             }
 
-            // زر الموافقة — أيقونة دائرية متدرّجة
+            // زر الموافقة — كبسولة متدرّجة بنص + أيقونة
             if let onApprove {
                 Button(action: onApprove) {
-                    Image(systemName: approveIcon)
-                        .font(DS.Font.scaled(15, weight: .bold))
-                        .foregroundColor(.white)
-                        .frame(width: 40, height: 40)
-                        .background(
-                            Circle().fill(
+                    HStack(spacing: DS.Spacing.xs) {
+                        Image(systemName: approveIcon)
+                            .font(DS.Font.scaled(13, weight: .bold))
+                        Text(approveLabel ?? L10n.t("موافقة", "Approve"))
+                            .font(DS.Font.scaled(14, weight: .bold))
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 42)
+                    .background(
+                        RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                            .fill(
                                 LinearGradient(
                                     colors: [approveColor, approveColor.opacity(0.85)],
                                     startPoint: .topLeading, endPoint: .bottomTrailing
                                 )
                             )
-                        )
-                        .shadow(color: approveColor.opacity(0.30), radius: 5, x: 0, y: 2)
+                    )
+                    .shadow(color: approveColor.opacity(0.30), radius: 5, x: 0, y: 2)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(DSScaleButtonStyle())
             }
-
-            Spacer(minLength: 0)
         }
     }
 
@@ -1838,7 +1901,7 @@ struct AdminAllRequestsView: View {
         items += adminRequestVM.treeEditRequests.map {
             AllItem.treeEdit($0, $0.treeEditPayload?.resolvedAction ?? .add)
         }
-        for issue in [TreeHealthIssue.orphan, .noName, .brokenParent, .hiddenFromTree, .duplicatePhone] {
+        for issue in [TreeHealthIssue.orphan, .noName, .brokenParent, .duplicatePhone] {
             items += healthMembers(for: issue).map { .health($0, issue) }
         }
         return items.sorted { allItemDate($0) > allItemDate($1) }
@@ -2111,20 +2174,43 @@ struct AdminAllRequestsView: View {
 
                 Spacer()
 
-                // بادج مطابقات التسجيل
-                if serverMatchCount > 0 {
-                    VStack(spacing: 2) {
-                        Text("\(serverMatchCount)")
-                            .font(DS.Font.scaled(14, weight: .black))
-                            .foregroundColor(DS.Color.info)
-                        Text(L10n.t("مطابقة", "match"))
-                            .font(DS.Font.scaled(8, weight: .bold))
-                            .foregroundColor(DS.Color.info)
+                VStack(alignment: .trailing, spacing: DS.Spacing.xs) {
+                    // زر واتساب — تواصل مباشر مع المنضم من الكرت الخارجي
+                    if let phone = member.phoneNumber, !phone.isEmpty,
+                       let wa = KuwaitPhone.whatsappURL(phone) {
+                        Button {
+                            UIApplication.shared.open(wa)
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "message.fill")
+                                    .font(DS.Font.scaled(11, weight: .bold))
+                                Text(L10n.t("واتساب", "WhatsApp"))
+                                    .font(DS.Font.scaled(11, weight: .bold))
+                            }
+                            .foregroundColor(.white)
+                            .padding(.horizontal, DS.Spacing.sm)
+                            .padding(.vertical, 6)
+                            .background(Capsule().fill(DS.Color.success))
+                            .shadow(color: DS.Color.success.opacity(0.30), radius: 4, x: 0, y: 2)
+                        }
+                        .buttonStyle(DSScaleButtonStyle())
                     }
-                    .padding(.horizontal, DS.Spacing.sm)
-                    .padding(.vertical, DS.Spacing.xs)
-                    .background(DS.Color.info.opacity(0.1))
-                    .cornerRadius(DS.Radius.md)
+
+                    // بادج مطابقات التسجيل
+                    if serverMatchCount > 0 {
+                        VStack(spacing: 2) {
+                            Text("\(serverMatchCount)")
+                                .font(DS.Font.scaled(14, weight: .black))
+                                .foregroundColor(DS.Color.info)
+                            Text(L10n.t("مطابقة", "match"))
+                                .font(DS.Font.scaled(8, weight: .bold))
+                                .foregroundColor(DS.Color.info)
+                        }
+                        .padding(.horizontal, DS.Spacing.sm)
+                        .padding(.vertical, DS.Spacing.xs)
+                        .background(DS.Color.info.opacity(0.1))
+                        .cornerRadius(DS.Radius.md)
+                    }
                 }
             }
 
@@ -2347,6 +2433,47 @@ struct AdminAllRequestsView: View {
 
     // MARK: - Name Matching
 
+    /// تطبيع اسم عربي: إزالة التشكيل والتطويل + توحيد الألف/الهمزة/التاء المربوطة/الألف المقصورة.
+    /// يسمح بمطابقة الأسماء المكتوبة بإملاء مختلف (أحمد/احمد، فاطمه/فاطمة، يحيى/يحيي).
+    static func normalizeArabicName(_ s: String) -> String {
+        var t = s.folding(options: .diacriticInsensitive, locale: Locale(identifier: "ar"))
+        let map: [Character: Character] = [
+            "أ": "ا", "إ": "ا", "آ": "ا", "ٱ": "ا",
+            "ة": "ه", "ى": "ي", "ئ": "ي", "ؤ": "و"
+        ]
+        t = String(t.map { map[$0] ?? $0 })
+        t = t.replacingOccurrences(of: "ـ", with: "") // تطويل
+        return t.trimmingCharacters(in: .whitespaces).lowercased()
+    }
+
+    /// مسافة تعديل (Levenshtein) — للسماح بفرق حرف واحد بين اسمين.
+    private static func editDistance(_ a: [Character], _ b: [Character]) -> Int {
+        if a.isEmpty { return b.count }
+        if b.isEmpty { return a.count }
+        var prev = Array(0...b.count)
+        var curr = [Int](repeating: 0, count: b.count + 1)
+        for i in 1...a.count {
+            curr[0] = i
+            for j in 1...b.count {
+                let cost = a[i - 1] == b[j - 1] ? 0 : 1
+                curr[j] = min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + cost)
+            }
+            swap(&prev, &curr)
+        }
+        return prev[b.count]
+    }
+
+    /// هل الاسمان متطابقان أو متشابهان (فرق حرف واحد بعد التطبيع)؟
+    static func namesSimilar(_ a: String, _ b: String) -> Bool {
+        let na = normalizeArabicName(a)
+        let nb = normalizeArabicName(b)
+        if na.isEmpty || nb.isEmpty { return false }
+        if na == nb { return true }
+        // فرق حرف واحد فقط — وللأسماء بطول 3 أحرف فأكثر لتفادي التطابق الزائد
+        guard min(na.count, nb.count) >= 3, abs(na.count - nb.count) <= 1 else { return false }
+        return editDistance(Array(na), Array(nb)) <= 1
+    }
+
     private func findNameMatches(for member: FamilyMember) -> [(member: FamilyMember, matchCount: Int, matchedParts: [String])] {
         let newParts = member.fullName
             .split(whereSeparator: \.isWhitespace)
@@ -2365,9 +2492,9 @@ struct AdminAllRequestsView: View {
                 .map { String($0).trimmingCharacters(in: .whitespaces) }
                 .filter { !$0.isEmpty }
 
-            // تحقق: هل الاسم الأول للعضو الموجود يطابق أي جزء من اسم المنضم؟
+            // تحقق: هل الاسم الأول للعضو الموجود يطابق/يشابه أي جزء من اسم المنضم؟
             guard let existingFirst = existingParts.first else { continue }
-            let firstNameMatch = newParts.contains { $0.localizedCaseInsensitiveCompare(existingFirst) == .orderedSame }
+            let firstNameMatch = newParts.contains { Self.namesSimilar($0, existingFirst) }
             guard firstNameMatch else { continue }
 
             // عد كل الأجزاء المتطابقة
@@ -2376,7 +2503,7 @@ struct AdminAllRequestsView: View {
 
             for newPart in newParts {
                 for (idx, existingPart) in existingParts.enumerated() {
-                    if !usedIndices.contains(idx) && newPart.localizedCaseInsensitiveCompare(existingPart) == .orderedSame {
+                    if !usedIndices.contains(idx) && Self.namesSimilar(newPart, existingPart) {
                         matchedParts.append(newPart)
                         usedIndices.insert(idx)
                         break
@@ -2422,7 +2549,8 @@ struct AdminAllRequestsView: View {
             var matchedParts: [String] = []
             let minCount = min(newParts.count, existingParts.count)
             for i in 0..<minCount {
-                if newParts[i].localizedCaseInsensitiveCompare(existingParts[i]) == .orderedSame {
+                // تطابق أو تشابه (فرق حرف واحد) — يعرض الأسماء المشابهة لو فيه اختلاف بسيط بالإملاء
+                if Self.namesSimilar(newParts[i], existingParts[i]) {
                     matchedParts.append(newParts[i])
                 } else {
                     break
@@ -3345,6 +3473,14 @@ struct AdminAllRequestsView: View {
         case .join(let member):
             infoCard(icon: "person.fill", label: L10n.t("الاسم الكامل", "Full Name"),
                      value: member.fullName, color: DS.Color.primary)
+            if let uname = member.username, !uname.isEmpty {
+                infoCard(icon: "at", label: L10n.t("اسم المستخدم", "Username"),
+                         value: uname, color: DS.Color.info)
+            }
+            if let birth = member.birthDate?.trimmingCharacters(in: .whitespacesAndNewlines), !birth.isEmpty {
+                infoCard(icon: "calendar", label: L10n.t("تاريخ الميلاد", "Birth Date"),
+                         value: birth, color: DS.Color.neonPurple)
+            }
             if let phone = member.phoneNumber, !phone.isEmpty {
                 infoCard(icon: "phone.fill", label: L10n.t("رقم الهاتف", "Phone"),
                          value: KuwaitPhone.display(phone), color: DS.Color.success)
