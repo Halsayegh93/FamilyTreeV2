@@ -119,8 +119,7 @@ struct TreeSearchOverlay: View {
             if newValue.isEmpty {
                 debouncedSearchText = ""
                 searchResults = []
-                statusFilter = .all
-                branchRootId = nil
+                // لا نعيد تعيين الفلاتر (الحالة/الفرع) — تبقى ثابتة كما اختارها المستخدم.
             } else {
                 debounceTask = Task {
                     try? await Task.sleep(nanoseconds: 250_000_000)
@@ -190,11 +189,12 @@ struct TreeSearchOverlay: View {
 
     // MARK: - Filters Bar (ثابتة طوال البحث — لا تختفي مع غياب النتائج)
 
-    /// صف الفلاتر (الحالة + الفرع) — يظهر بمجرد وجود نص بحث ويبقى ثابتاً
+    /// صف الفلاتر (الحالة + الفرع) — في وضع التفرّع (full-height) يظهر فور فتح
+    /// البحث ويبقى ثابتاً؛ في الوضع المضمّن يظهر بمجرد وجود نص بحث. لا يختفي
     /// حتى لو ما فيه نتائج لهذه التصفية.
     @ViewBuilder
     private var filtersBar: some View {
-        if !searchText.isEmpty {
+        if usesFullHeight || !searchText.isEmpty {
             HStack(spacing: DS.Spacing.sm) {
                 Picker("", selection: $statusFilter) {
                     ForEach(StatusFilter.allCases, id: \.self) { filter in
