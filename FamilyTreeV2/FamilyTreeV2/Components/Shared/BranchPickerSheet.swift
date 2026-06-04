@@ -24,7 +24,15 @@ struct BranchPickerSheet: View {
 
     var body: some View {
         NavigationStack {
-            Group {
+            VStack(spacing: 0) {
+                // عنوان أعلى القائمة
+                Text(L10n.t("البحث بالفرع", "Search by branch"))
+                    .font(DS.Font.headline)
+                    .foregroundColor(DS.Color.textPrimary)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.top, DS.Spacing.sm)
+                    .padding(.bottom, DS.Spacing.xs)
+
                 if isLoading {
                     ProgressView().scaleEffect(1.2)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)

@@ -436,7 +436,7 @@ struct DrillDownTreeView: View {
                     scrollTarget = first.id
                 }
             } label: {
-                iconButton(icon: "house.circle.fill", color: DS.Color.primary)
+                iconButton(icon: "house.fill", color: DS.Color.primary)
             }
             .buttonStyle(DSScaleButtonStyle())
             .accessibilityLabel(L10n.t("البداية", "Start"))
