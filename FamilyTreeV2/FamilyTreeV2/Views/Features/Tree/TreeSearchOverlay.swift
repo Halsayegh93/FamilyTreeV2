@@ -10,6 +10,9 @@ struct TreeSearchOverlay: View {
     var usesFullHeight: Bool = false
     /// عند `true` يركّز الحقل تلقائياً عند الظهور.
     var autoFocus: Bool = false
+    /// عند توفّره: يظهر زر إغلاق (✕) داخل مربع البحث نفسه عندما يكون الحقل فارغاً
+    /// — يُستخدم لإغلاق لوحة البحث (مثلاً في شجرة التفرّع).
+    var onClose: (() -> Void)? = nil
 
     @State private var searchText = ""
     @State private var debouncedSearchText = ""
@@ -89,6 +92,7 @@ struct TreeSearchOverlay: View {
     var body: some View {
         VStack(spacing: 0) {
             searchBar
+            filtersBar
             recentSearchesSection
             resultsSection
         }
@@ -151,17 +155,11 @@ struct TreeSearchOverlay: View {
             .submitLabel(.search)
             .autocorrectionDisabled()
 
+            // زر داخل المربع: يمسح النص إذا فيه نص، وإلا يغلق لوحة البحث (إن توفّر onClose).
             if !searchText.isEmpty {
-                Button(action: { searchText = "" }) {
-                    ZStack {
-                        Circle()
-                            .fill(DS.Color.error.opacity(0.12))
-                            .frame(width: 28, height: 28)
-                        Image(systemName: "xmark")
-                            .font(DS.Font.scaled(11, weight: .bold))
-                            .foregroundColor(DS.Color.error)
-                    }
-                }
+                Button(action: { searchText = "" }) { searchTrailingIcon }
+            } else if onClose != nil {
+                Button(action: { onClose?() }) { searchTrailingIcon }
             }
         }
         .padding(.horizontal, DS.Spacing.md)
@@ -176,6 +174,42 @@ struct TreeSearchOverlay: View {
                 )
         )
         .dsGlowShadow()
+    }
+
+    /// أيقونة الزر داخل المربع (✕) — تُستخدم للمسح والإغلاق.
+    private var searchTrailingIcon: some View {
+        ZStack {
+            Circle()
+                .fill(DS.Color.error.opacity(0.12))
+                .frame(width: 28, height: 28)
+            Image(systemName: "xmark")
+                .font(DS.Font.scaled(11, weight: .bold))
+                .foregroundColor(DS.Color.error)
+        }
+    }
+
+    // MARK: - Filters Bar (ثابتة طوال البحث — لا تختفي مع غياب النتائج)
+
+    /// صف الفلاتر (الحالة + الفرع) — يظهر بمجرد وجود نص بحث ويبقى ثابتاً
+    /// حتى لو ما فيه نتائج لهذه التصفية.
+    @ViewBuilder
+    private var filtersBar: some View {
+        if !searchText.isEmpty {
+            HStack(spacing: DS.Spacing.sm) {
+                Picker("", selection: $statusFilter) {
+                    ForEach(StatusFilter.allCases, id: \.self) { filter in
+                        Text(filter.label).tag(filter)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .frame(maxWidth: .infinity)
+
+                branchPill
+            }
+            .padding(.horizontal, DS.Spacing.md)
+            .padding(.top, DS.Spacing.sm)
+            .padding(.bottom, DS.Spacing.xs)
+        }
     }
 
     // MARK: - Recent Searches Section
@@ -229,22 +263,6 @@ struct TreeSearchOverlay: View {
     private var resultsSection: some View {
         if !searchResults.isEmpty {
             VStack(spacing: 0) {
-                // صف الفلاتر فقط — بدون عداد النتائج
-                HStack(spacing: DS.Spacing.sm) {
-                    Picker("", selection: $statusFilter) {
-                        ForEach(StatusFilter.allCases, id: \.self) { filter in
-                            Text(filter.label).tag(filter)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .frame(maxWidth: .infinity)
-
-                    branchPill
-                }
-                .padding(.horizontal, DS.Spacing.md)
-                .padding(.top, DS.Spacing.sm)
-                .padding(.bottom, DS.Spacing.xs)
-
                 if filteredResults.isEmpty {
                     HStack(spacing: DS.Spacing.sm) {
                         Image(systemName: "line.3.horizontal.decrease.circle")

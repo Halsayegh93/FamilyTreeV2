@@ -103,11 +103,14 @@ struct DrillDownTreeView: View {
                         subtitle: L10n.t("تصفّح بالتفرّع", "Drill-down")
                     )
 
-                    // أزرار الإجراءات — البحث دائماً، البداية/موقعي تختفي مع فتح البحث
-                    stickyActionsBar
-                        .padding(.horizontal, DS.Spacing.lg)
-                        .padding(.top, DS.Spacing.sm)
-                        .padding(.bottom, DS.Spacing.xs)
+                    // أزرار الإجراءات — تختفي عند فتح البحث (الإغلاق صار داخل مربع البحث)
+                    if !showSearchBar {
+                        stickyActionsBar
+                            .padding(.horizontal, DS.Spacing.lg)
+                            .padding(.top, DS.Spacing.sm)
+                            .padding(.bottom, DS.Spacing.xs)
+                            .transition(.opacity)
+                    }
 
                     // لوحة البحث تأخذ كل المساحة لما تفتح — الشجرة تختفي
                     if showSearchBar {
@@ -412,75 +415,35 @@ struct DrillDownTreeView: View {
 
     // MARK: - Top Bar (Root + Me)
 
-    /// أزرار "البداية" و"موقعي" و"بحث" — ثابتة. البداية/موقعي تختفي عند فتح البحث.
+    /// أزرار "بحث" و"البداية" و"موقعي" — تصميم موحّد (كبسولات بنفس الشكل واللون).
+    /// تظهر فقط عند إغلاق البحث؛ زر إغلاق البحث صار داخل مربع البحث نفسه.
     private var stickyActionsBar: some View {
         HStack(spacing: DS.Spacing.sm) {
-            // زر البحث — دائماً ظاهر
             Button {
-                showSearchBar.toggle()
+                withAnimation(DS.Anim.snappy) { showSearchBar = true }
             } label: {
-                Image(systemName: showSearchBar ? "xmark" : "magnifyingglass")
-                    .font(DS.Font.scaled(13, weight: .bold))
-                    .foregroundColor(showSearchBar ? .white : DS.Color.accent)
-                    .frame(width: 36, height: 36)
-                    .background(Circle().fill(showSearchBar ? DS.Color.accent : DS.Color.accent.opacity(0.12)))
+                pillLabel(icon: "magnifyingglass", text: L10n.t("بحث", "Search"), color: DS.Color.primary)
             }
             .buttonStyle(DSScaleButtonStyle())
-            .accessibilityLabel(L10n.t(showSearchBar ? "إغلاق البحث" : "بحث", showSearchBar ? "Close search" : "Search"))
+            .accessibilityLabel(L10n.t("بحث", "Search"))
 
-            // البداية + موقعي — تختفي مع فتح البحث
-            if !showSearchBar {
-                Button {
-                    if let first = roots.first {
-                        withAnimation(DS.Anim.smooth) { chain = [first] }
-                        scrollTarget = first.id
-                    }
-                } label: {
-                    pillLabel(icon: "house.fill", text: L10n.t("البداية", "Start"), color: DS.Color.primary)
+            Button {
+                if let first = roots.first {
+                    withAnimation(DS.Anim.smooth) { chain = [first] }
+                    scrollTarget = first.id
+                }
+            } label: {
+                pillLabel(icon: "house.fill", text: L10n.t("البداية", "Start"), color: DS.Color.primary)
+            }
+            .buttonStyle(DSScaleButtonStyle())
+
+            Spacer()
+
+            if let me = authVM.currentUser {
+                Button { jumpTo(me) } label: {
+                    pillLabel(icon: "location.fill", text: L10n.t("موقعي", "Me"), color: DS.Color.primary)
                 }
                 .buttonStyle(DSScaleButtonStyle())
-                .transition(.opacity.combined(with: .scale(scale: 0.85)))
-
-                Spacer()
-
-                if let me = authVM.currentUser {
-                    Button { jumpTo(me) } label: {
-                        pillLabel(icon: "location.fill", text: L10n.t("موقعي", "Me"), color: DS.Color.neonPink)
-                    }
-                    .buttonStyle(DSScaleButtonStyle())
-                    .transition(.opacity.combined(with: .scale(scale: 0.85)))
-                }
-
-                // زر تبديل نمط الفروع (قوس ↔ زاوية)
-                Button {
-                    withAnimation(.easeInOut(duration: 0.25)) {
-                        drillBranchStyleRaw = (drillBranchStyle == .arc)
-                            ? BranchConnectorStyle.angle.rawValue
-                            : BranchConnectorStyle.arc.rawValue
-                    }
-                } label: {
-                    Image(systemName: drillBranchStyle == .arc
-                          ? "scribble.variable"
-                          : "arrow.turn.down.right")
-                        .font(DS.Font.scaled(13, weight: .bold))
-                        .foregroundColor(DS.Color.accent)
-                        .frame(width: 36, height: 36)
-                        .background(Circle().fill(DS.Color.accent.opacity(0.12)))
-                }
-                .buttonStyle(DSScaleButtonStyle())
-                .accessibilityLabel(L10n.t(
-                    drillBranchStyle == .arc ? "تبديل لخطوط بزاوية" : "تبديل لخطوط بقوس",
-                    drillBranchStyle == .arc ? "Switch to angled lines" : "Switch to arc lines"
-                ))
-                .transition(.opacity.combined(with: .scale(scale: 0.85)))
-            } else {
-                // ملصق دلالي عند فتح البحث — يخلّي البار ما يصير فاضي
-                Text(L10n.t("بحث", "Search"))
-                    .font(DS.Font.scaled(13, weight: .bold))
-                    .foregroundColor(DS.Color.textSecondary)
-                    .padding(.leading, 4)
-                    .transition(.opacity)
-                Spacer()
             }
         }
     }
@@ -845,7 +808,10 @@ struct DrillDownTreeView: View {
                 }
             },
             usesFullHeight: true,
-            autoFocus: true
+            autoFocus: true,
+            onClose: {
+                withAnimation(DS.Anim.snappy) { showSearchBar = false }
+            }
         )
         .padding(.horizontal, DS.Spacing.lg)
         .padding(.top, DS.Spacing.xs)
