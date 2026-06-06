@@ -15,6 +15,10 @@ struct AdminAllRequestsView: View {
     @State private var editedPhone: String = ""
     @State private var selectedDetail: RequestDetail? = nil
     @State private var detailSheetHeight: CGFloat = 0
+    // إدخال سبب الرفض — يُرسل كرسالة لمقدّم الطلب
+    @State private var showRejectReason = false
+    @State private var rejectReasonText: String = ""
+    @State private var rejectReasonDetail: RequestDetail? = nil
 
     /// نوع الطلب المحدد لعرض التفاصيل
     enum RequestDetail: Identifiable {
@@ -580,6 +584,19 @@ struct AdminAllRequestsView: View {
                 )
                 .presentationDragIndicator(.visible)
                 .onDisappear { detailSheetHeight = 0 }
+                .alert(L10n.t("سبب الرفض", "Rejection Reason"), isPresented: $showRejectReason) {
+                    TextField(L10n.t("اكتب السبب (اختياري)", "Reason (optional)"), text: $rejectReasonText)
+                    Button(L10n.t("إرسال الرفض", "Send Rejection"), role: .destructive) {
+                        if let d = rejectReasonDetail {
+                            rejectDetail(d, reason: rejectReasonText)
+                        }
+                        rejectReasonDetail = nil
+                    }
+                    Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { rejectReasonDetail = nil }
+                } message: {
+                    Text(L10n.t("سيصل السبب كرسالة إلى مقدّم الطلب.",
+                                "The reason will be sent as a message to the requester."))
+                }
         }
         .sheet(item: $memberToLink) { member in
             LinkToExistingMemberSheet(pendingMember: member)
@@ -3837,7 +3854,13 @@ struct AdminAllRequestsView: View {
                 HStack(spacing: DS.Spacing.sm) {
                     if authVM.canRejectRequests {
                         Button {
-                            rejectDetail(detail)
+                            if case .treeEdit = detail {
+                                rejectReasonText = ""
+                                rejectReasonDetail = detail
+                                showRejectReason = true
+                            } else {
+                                rejectDetail(detail)
+                            }
                         } label: {
                             HStack(spacing: 5) {
                                 Image(systemName: "xmark").font(DS.Font.scaled(12, weight: .bold))
@@ -3944,7 +3967,7 @@ struct AdminAllRequestsView: View {
         }
     }
 
-    private func rejectDetail(_ detail: RequestDetail) {
+    private func rejectDetail(_ detail: RequestDetail, reason: String? = nil) {
         Task {
             switch detail {
             case .join(let member):
@@ -3968,7 +3991,11 @@ struct AdminAllRequestsView: View {
             case .project(let project):
                 await projectsVM.rejectProject(id: project.id)
             case .treeEdit(let request, _):
-                await adminRequestVM.rejectTreeEditRequest(request: request, reason: nil)
+                let trimmed = reason?.trimmingCharacters(in: .whitespacesAndNewlines)
+                await adminRequestVM.rejectTreeEditRequest(
+                    request: request,
+                    reason: (trimmed?.isEmpty == false) ? trimmed : nil
+                )
             case .healthMember:
                 break // لا إجراء رفض لعناصر الصحة
             }
