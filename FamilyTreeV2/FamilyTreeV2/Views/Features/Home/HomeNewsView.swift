@@ -4,7 +4,6 @@ struct HomeNewsView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var newsVM: NewsViewModel
     @EnvironmentObject var memberVM: MemberViewModel
-    @EnvironmentObject var storyVM: StoryViewModel
     @EnvironmentObject var notificationVM: NotificationViewModel
     @EnvironmentObject var appSettingsVM: AppSettingsViewModel
     @EnvironmentObject var adminRequestVM: AdminRequestViewModel
@@ -715,12 +714,6 @@ struct HomeNewsView: View {
                 value: newsVM.allNews.count,
                 label: L10n.t("خبر", "News"),
                 color: DS.Color.primary
-            )
-            statChip(
-                icon: "photo.fill",
-                value: memberVM.approvedGalleryPhotos.count,
-                label: L10n.t("صورة", "Photos"),
-                color: DS.Color.accent
             )
         }
     }

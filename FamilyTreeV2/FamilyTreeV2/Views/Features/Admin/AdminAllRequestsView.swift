@@ -7,7 +7,6 @@ struct AdminAllRequestsView: View {
     @EnvironmentObject var memberVM: MemberViewModel
     @EnvironmentObject var notificationVM: NotificationViewModel
     @EnvironmentObject var projectsVM: ProjectsViewModel
-    @EnvironmentObject var storyVM: StoryViewModel
     @StateObject private var diwaniyaVM = DiwaniyasViewModel()
     @State private var nameEditRequest: AdminRequest? = nil
     @State private var editedName: String = ""
@@ -95,7 +94,7 @@ struct AdminAllRequestsView: View {
     enum RequestTab: String, CaseIterable, Identifiable {
         case all
         // أعضاء
-        case joinRequests, nameChange, phone, deceased, gallery
+        case joinRequests, nameChange, phone, deceased
         // الشجرة — كل أنواع طلبات تعديل الشجرة + إضافة الأبناء التقليدية
         case children, treeAdd, treeEditName, treeEditPhone, treeDeceased, treeDelete
         // محتوى ونشاط
@@ -123,7 +122,6 @@ struct AdminAllRequestsView: View {
             case .treeDelete: return L10n.t("حذف", "Delete")
             case .photos: return L10n.t("صور مقترحة", "Suggested Photos")
             case .projects: return L10n.t("مشاريع", "Projects")
-            case .gallery: return L10n.t("معرض", "Gallery")
             case .healthOrphan: return L10n.t("معلّق", "Unlinked")
             case .healthNoName: return L10n.t("بدون اسم", "No Name")
             case .healthBrokenParent: return L10n.t("رابط مكسور", "Broken Link")
@@ -150,7 +148,6 @@ struct AdminAllRequestsView: View {
             case .treeDelete: return "person.badge.minus"
             case .photos: return "camera.badge.ellipsis"
             case .projects: return "briefcase.fill"
-            case .gallery: return "photo.on.rectangle.angled"
             case .healthOrphan: return "person.fill.xmark"
             case .healthNoName: return "textformat.abc.dottedunderline"
             case .healthBrokenParent: return "link.badge.plus"
@@ -177,7 +174,6 @@ struct AdminAllRequestsView: View {
             case .treeDelete: return DS.Color.error
             case .photos: return DS.Color.neonBlue
             case .projects: return DS.Color.neonPurple
-            case .gallery: return DS.Color.gridDiwaniya
             case .healthOrphan: return DS.Color.error
             case .healthNoName: return DS.Color.warning
             case .healthBrokenParent: return DS.Color.info
@@ -190,7 +186,7 @@ struct AdminAllRequestsView: View {
         var section: RequestSection? {
             switch self {
             case .all: return nil
-            case .joinRequests, .nameChange, .phone, .deceased, .gallery: return .members
+            case .joinRequests, .nameChange, .phone, .deceased: return .members
             case .children, .treeAdd, .treeEditName, .treeEditPhone, .treeDeceased, .treeDelete: return .tree
             case .news, .reports, .photos, .diwaniya, .projects: return .content
             case .healthOrphan, .healthNoName, .healthBrokenParent, .healthHidden, .healthDupPhone: return .treeHealth
@@ -471,7 +467,6 @@ struct AdminAllRequestsView: View {
                 group.addTask { @MainActor in await adminRequestVM.fetchPhotoSuggestionRequests() }
                 group.addTask { @MainActor in await adminRequestVM.fetchNameChangeRequests() }
                 group.addTask { @MainActor in await projectsVM.fetchPendingProjects() }
-                group.addTask { @MainActor in await memberVM.fetchPendingGalleryPhotos() }
                 group.addTask { @MainActor in await adminRequestVM.fetchTreeEditRequests(force: true) }
             }
             await fetchAllRegistrationMatches()
@@ -677,7 +672,6 @@ struct AdminAllRequestsView: View {
         case .treeDelete: return treeEditCount(action: .delete)
         case .photos: return adminRequestVM.photoSuggestionRequests.count
         case .projects: return projectsVM.pendingProjects.count
-        case .gallery: return memberVM.pendingGalleryPhotos.count
         case .healthOrphan: return cachedHealthCounts[.orphan] ?? 0
         case .healthNoName: return cachedHealthCounts[.noName] ?? 0
         case .healthBrokenParent: return cachedHealthCounts[.brokenParent] ?? 0
@@ -768,7 +762,6 @@ struct AdminAllRequestsView: View {
             + adminRequestVM.treeEditRequests.count
             + adminRequestVM.photoSuggestionRequests.count
             + projectsVM.pendingProjects.count
-            + memberVM.pendingGalleryPhotos.count
             + healthTotal
     }
 
@@ -998,7 +991,6 @@ struct AdminAllRequestsView: View {
                 + adminRequestVM.treeEditRequests.map { $0.id }
                 + adminRequestVM.photoSuggestionRequests.map { $0.id }
                 + projectsVM.pendingProjects.map { $0.id }
-                + memberVM.pendingGalleryPhotos.map { $0.id }
         case .joinRequests: return pendingMembers.map { $0.id }
         case .news:         return newsVM.pendingNewsRequests.map { $0.id }
         case .reports:      return adminRequestVM.newsReportRequests.map { $0.id }
@@ -1014,7 +1006,6 @@ struct AdminAllRequestsView: View {
         case .treeDelete:   return treeEdits(action: .delete).map { $0.id }
         case .photos:       return adminRequestVM.photoSuggestionRequests.map { $0.id }
         case .projects:     return projectsVM.pendingProjects.map { $0.id }
-        case .gallery:      return memberVM.pendingGalleryPhotos.map { $0.id }
         // الصحة لا تدعم التحديد المتعدّد (الإجراءات تفصيلية)
         case .healthOrphan, .healthNoName, .healthBrokenParent, .healthHidden, .healthDupPhone:
             return []
@@ -1317,19 +1308,6 @@ struct AdminAllRequestsView: View {
                         projectRow(for: project)
                     }
                 }
-            case .gallery:
-                selectAllButton(ids: memberVM.pendingGalleryPhotos.map { $0.id })
-                ForEach(memberVM.pendingGalleryPhotos) { photo in
-                    selectableRow(
-                        id: photo.id,
-                        accentColor: RequestTab.gallery.color,
-                        onApprove: { Task { await memberVM.approveGalleryPhoto(photoId: photo.id) } },
-                        onReject: { Task { await memberVM.rejectGalleryPhoto(photoId: photo.id, photoURL: photo.photoURL) } },
-                        onTap: { }
-                    ) {
-                        galleryPendingRow(photo: photo)
-                    }
-                }
             case .treeAdd:
                 treeEditList(action: .add, color: RequestTab.treeAdd.color)
             case .treeEditName:
@@ -1565,11 +1543,6 @@ struct AdminAllRequestsView: View {
                     }
                 }
             }
-        case .gallery:
-            for id in ids {
-                await memberVM.approveGalleryPhoto(photoId: id)
-                count += 1
-            }
         case .treeAdd, .treeEditName, .treeEditPhone, .treeDeceased, .treeDelete:
             for id in ids {
                 if let req = adminRequestVM.treeEditRequests.first(where: { $0.id == id }) {
@@ -1654,13 +1627,6 @@ struct AdminAllRequestsView: View {
             for id in ids {
                 if projectsVM.pendingProjects.contains(where: { $0.id == id }) {
                     await projectsVM.rejectProject(id: id)
-                    count += 1
-                }
-            }
-        case .gallery:
-            for id in ids {
-                if let photo = memberVM.pendingGalleryPhotos.first(where: { $0.id == id }) {
-                    await memberVM.rejectGalleryPhoto(photoId: photo.id, photoURL: photo.photoURL)
                     count += 1
                 }
             }
@@ -1805,7 +1771,6 @@ struct AdminAllRequestsView: View {
         case child(AdminRequest)
         case photo(AdminRequest)
         case project(Project)
-        case gallery(MemberGalleryPhoto)
         case treeEdit(AdminRequest, TreeEditAction)
         case health(FamilyMember, TreeHealthIssue)
 
@@ -1821,7 +1786,6 @@ struct AdminAllRequestsView: View {
             case .child(let r): return "child-\(r.id)"
             case .photo(let r): return "photo-\(r.id)"
             case .project(let p): return "proj-\(p.id)"
-            case .gallery(let g): return "gal-\(g.id)"
             case .treeEdit(let r, _): return "tree-\(r.id)"
             case .health(let m, let i): return "health-\(i)-\(m.id)"
             }
@@ -1847,7 +1811,6 @@ struct AdminAllRequestsView: View {
         case .phone(let r): return parseISODate(r.createdAt)
         case .diwaniya: return .distantPast
         case .project(let p): return parseISODate(p.createdAt)
-        case .gallery(let g): return parseISODate(g.createdAt)
         case .health(let m, _): return parseISODate(m.createdAt)
         }
     }
@@ -1865,7 +1828,6 @@ struct AdminAllRequestsView: View {
         items += adminRequestVM.childAddRequests.map { .child($0) }
         items += adminRequestVM.photoSuggestionRequests.map { .photo($0) }
         items += projectsVM.pendingProjects.map { .project($0) }
-        items += memberVM.pendingGalleryPhotos.map { .gallery($0) }
         items += adminRequestVM.treeEditRequests.map {
             AllItem.treeEdit($0, $0.treeEditPayload?.resolvedAction ?? .add)
         }
@@ -1976,13 +1938,6 @@ struct AdminAllRequestsView: View {
                 onReject: { Task { await projectsVM.rejectProject(id: project.id) } },
                 onTap: { selectedDetail = .project(project) }
             ) { projectRow(for: project) }
-        case .gallery(let photo):
-            selectableRow(
-                id: photo.id, accentColor: RequestTab.gallery.color,
-                onApprove: { Task { await memberVM.approveGalleryPhoto(photoId: photo.id) } },
-                onReject: { Task { await memberVM.rejectGalleryPhoto(photoId: photo.id, photoURL: photo.photoURL) } },
-                onTap: { }
-            ) { galleryPendingRow(photo: photo) }
         case .treeEdit(let request, let action):
             let color = treeEditColor(action)
             selectableRow(
@@ -2029,8 +1984,6 @@ struct AdminAllRequestsView: View {
             } else if let proj = projectsVM.pendingProjects.first(where: { $0.id == id }),
                       let adminId = authVM.currentUser?.id {
                 await projectsVM.approveProject(id: proj.id, approvedBy: adminId); count += 1
-            } else if memberVM.pendingGalleryPhotos.contains(where: { $0.id == id }) {
-                await memberVM.approveGalleryPhoto(photoId: id); count += 1
             } else if let req = adminRequestVM.treeEditRequests.first(where: { $0.id == id }) {
                 await adminRequestVM.approveTreeEditRequest(request: req); count += 1
             }
@@ -2064,8 +2017,6 @@ struct AdminAllRequestsView: View {
                 await adminRequestVM.rejectPhotoSuggestion(request: req); count += 1
             } else if projectsVM.pendingProjects.contains(where: { $0.id == id }) {
                 await projectsVM.rejectProject(id: id); count += 1
-            } else if let photo = memberVM.pendingGalleryPhotos.first(where: { $0.id == id }) {
-                await memberVM.rejectGalleryPhoto(photoId: photo.id, photoURL: photo.photoURL); count += 1
             } else if let req = adminRequestVM.treeEditRequests.first(where: { $0.id == id }) {
                 await adminRequestVM.rejectTreeEditRequest(request: req, reason: nil); count += 1
             }
@@ -3108,111 +3059,6 @@ struct AdminAllRequestsView: View {
     // MARK: - Tree Edit Row
 
     // MARK: - Project Row
-
-    // MARK: - Gallery Pending Row
-    private func galleryPendingRow(photo: MemberGalleryPhoto) -> some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            HStack(spacing: DS.Spacing.sm) {
-                iconCircle(icon: "photo.on.rectangle.angled", color: DS.Color.gridDiwaniya, size: 36)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(L10n.t("صورة معرض", "Gallery Photo"))
-                        .font(DS.Font.calloutBold)
-                        .foregroundColor(DS.Color.textPrimary)
-
-                    Text(L10n.t("لـ: \(memberVM.member(byId: photo.memberId)?.fullName ?? "عضو")",
-                                "For: \(memberVM.member(byId: photo.memberId)?.fullName ?? "Member")"))
-                        .font(DS.Font.caption1)
-                        .foregroundColor(DS.Color.textSecondary)
-                }
-
-                Spacer()
-            }
-
-            HStack(spacing: DS.Spacing.sm) {
-                // صورة مصغرة
-                AsyncImage(url: URL(string: photo.photoURL)) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image.resizable().scaledToFill()
-                            .frame(width: 44, height: 44)
-                            .clipped()
-                            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
-                    default:
-                        RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous)
-                            .fill(DS.Color.surface)
-                            .frame(width: 44, height: 44)
-                            .overlay(ProgressView().tint(DS.Color.primary))
-                    }
-                }
-
-                // التاريخ
-                if let date = photo.createdAt {
-                    HStack(spacing: DS.Spacing.xs) {
-                        Image(systemName: "clock")
-                            .font(DS.Font.scaled(10, weight: .medium))
-                            .foregroundColor(DS.Color.textTertiary)
-                        Text(formatRegistrationDate(String(date)))
-                            .font(DS.Font.caption2)
-                            .foregroundColor(DS.Color.textTertiary)
-                    }
-                }
-                Spacer()
-            }
-        }
-    }
-
-    // MARK: - Story Pending Row
-    private func storyPendingRow(story: FamilyStory) -> some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            HStack(spacing: DS.Spacing.sm) {
-                iconCircle(icon: "circle.dashed", color: DS.Color.neonCyan, size: 36)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(L10n.t("قصة", "Story"))
-                        .font(DS.Font.calloutBold)
-                        .foregroundColor(DS.Color.textPrimary)
-
-                    Text(L10n.t("لـ: \(memberVM.member(byId: story.memberId)?.firstName ?? "عضو")",
-                                "For: \(memberVM.member(byId: story.memberId)?.firstName ?? "Member")"))
-                        .font(DS.Font.caption1)
-                        .foregroundColor(DS.Color.textSecondary)
-                }
-
-                Spacer()
-            }
-
-            if let caption = story.caption, !caption.isEmpty {
-                contentBlock(caption)
-            }
-
-            // صورة مصغرة
-            CachedAsyncPhaseImage(url: URL(string: story.imageUrl)) { phase in
-                if let image = phase.image {
-                    image.resizable().scaledToFill()
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 140)
-                        .clipped()
-                        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
-                } else {
-                    RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                        .fill(DS.Color.surface)
-                        .frame(height: 140)
-                        .overlay(ProgressView().tint(DS.Color.primary))
-                }
-            }
-
-            // التاريخ تحت
-            HStack(spacing: DS.Spacing.xs) {
-                Image(systemName: "clock")
-                    .font(DS.Font.scaled(10, weight: .medium))
-                    .foregroundColor(DS.Color.textTertiary)
-                Text(formatRegistrationDate(story.createdAt))
-                    .font(DS.Font.caption2)
-                    .foregroundColor(DS.Color.textTertiary)
-            }
-        }
-    }
 
     private func projectRow(for project: Project) -> some View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {

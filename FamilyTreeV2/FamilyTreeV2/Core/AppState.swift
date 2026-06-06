@@ -15,7 +15,6 @@ class AppState: ObservableObject {
     let adminRequestVM: AdminRequestViewModel
     let projectsVM: ProjectsViewModel
     let appSettingsVM: AppSettingsViewModel
-    let storyVM: StoryViewModel
 
     private var cancellables = Set<AnyCancellable>()
 
@@ -28,7 +27,6 @@ class AppState: ObservableObject {
         let admin = AdminRequestViewModel()
         let projects = ProjectsViewModel()
         let appSettings = AppSettingsViewModel()
-        let story = StoryViewModel()
 
         // 2. Wire dependencies after creation (avoids circular init)
         auth.notificationVM = notification
@@ -40,7 +38,6 @@ class AppState: ObservableObject {
         news.configure(authVM: auth, memberVM: member, notificationVM: notification)
         admin.configure(authVM: auth, memberVM: member, notificationVM: notification, newsVM: news)
         projects.configure(authVM: auth, notificationVM: notification)
-        story.configure(authVM: auth, memberVM: member, notificationVM: notification)
 
         // 3. Store references
         self.authVM = auth
@@ -50,13 +47,11 @@ class AppState: ObservableObject {
         self.adminRequestVM = admin
         self.projectsVM = projects
         self.appSettingsVM = appSettings
-        self.storyVM = story
 
         // 4. ربط RealtimeManager بالـ ViewModels
         let realtime = RealtimeManager.shared
         realtime.memberVM = member
         realtime.newsVM = news
-        realtime.storyVM = story
         realtime.notificationVM = notification
         realtime.projectsVM = projects
 
@@ -71,8 +66,7 @@ class AppState: ObservableObject {
                     async let n: () = self.newsVM.fetchNews()
                     async let notif: () = self.notificationVM.fetchNotifications()
                     async let proj: () = self.projectsVM.fetchProjects()
-                    async let stories: () = self.storyVM.fetchActiveStories()
-                    _ = await (m, n, notif, proj, stories)
+                    _ = await (m, n, notif, proj)
 
                     // بدء الاشتراكات الحية بعد تحميل البيانات
                     RealtimeManager.shared.subscribe()

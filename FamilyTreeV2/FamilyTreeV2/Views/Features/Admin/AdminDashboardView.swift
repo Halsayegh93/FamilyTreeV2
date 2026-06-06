@@ -11,7 +11,6 @@ struct AdminDashboardView: View {
     @EnvironmentObject var memberVM: MemberViewModel
     @EnvironmentObject var newsVM: NewsViewModel
     @EnvironmentObject var adminRequestVM: AdminRequestViewModel
-    @EnvironmentObject var storyVM: StoryViewModel
     @EnvironmentObject var projectsVM: ProjectsViewModel
     @StateObject private var diwaniyaVM = DiwaniyasViewModel()
     @Binding var selectedTab: Int
@@ -42,8 +41,6 @@ struct AdminDashboardView: View {
             + adminRequestVM.childAddRequests.count
             + adminRequestVM.photoSuggestionRequests.count
             + adminRequestVM.nameChangeRequests.count
-            + memberVM.pendingGalleryPhotos.count
-            + storyVM.pendingStories.count
     }
 
     private func recalculateBadges() {
@@ -306,7 +303,6 @@ struct AdminDashboardView: View {
             group.addTask { @MainActor in await adminRequestVM.fetchPhotoSuggestionRequests() }
             group.addTask { @MainActor in await diwaniyaVM.fetchPendingDiwaniyas() }
             group.addTask { @MainActor in await adminRequestVM.fetchTreeEditRequests() }
-            group.addTask { @MainActor in await memberVM.fetchPendingGalleryPhotos() }
             group.addTask { @MainActor in await adminRequestVM.fetchNameChangeRequests() }
             group.addTask { @MainActor in await adminRequestVM.fetchContactMessages() }
             group.addTask { @MainActor in await projectsVM.fetchPendingProjects() }

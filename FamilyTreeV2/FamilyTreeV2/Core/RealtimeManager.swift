@@ -13,7 +13,6 @@ final class RealtimeManager {
 
     weak var memberVM: MemberViewModel?
     weak var newsVM: NewsViewModel?
-    weak var storyVM: StoryViewModel?
     weak var notificationVM: NotificationViewModel?
     weak var projectsVM: ProjectsViewModel?
 
@@ -48,10 +47,6 @@ final class RealtimeManager {
         // الأخبار: debounce 5 ثوانٍ
         subscribeToTable("news", debounceKey: "news", debounceDelay: 5.0) { [weak self] in
             await self?.newsVM?.fetchNews(force: false)
-        }
-
-        subscribeToTable("family_stories", debounceKey: "stories") { [weak self] in
-            await self?.storyVM?.fetchActiveStories(force: true)
         }
 
         subscribeToTable("notifications", debounceKey: "notifications") { [weak self] in
