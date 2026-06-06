@@ -3605,6 +3605,11 @@ struct AdminAllRequestsView: View {
                 infoCard(icon: "person.fill", label: L10n.t("العضو", "Member"),
                          value: memberName, color: DS.Color.error)
             }
+            if let requester = memberVM.allMembers.first(where: { $0.id == request.requesterId }) {
+                infoCard(icon: "person.crop.circle.badge.checkmark",
+                         label: L10n.t("مقدّم التعديل", "Requested by"),
+                         value: requester.fullName, color: DS.Color.info)
+            }
             if let reason = payload?.reason, !reason.isEmpty {
                 longTextCard(icon: "text.bubble.fill",
                              label: L10n.t("السبب", "Reason"), text: reason)
