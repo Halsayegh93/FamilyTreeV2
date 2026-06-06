@@ -2088,12 +2088,11 @@ struct AdminAllRequestsView: View {
 
     private func joinRequestRow(for member: FamilyMember) -> some View {
         // كل المتغيرات خارج ViewBuilder لتفادي مشاكل @ViewBuilder مع let
-        let matches = combinedMatches(for: member)
-        let hasMatches = !matches.isEmpty
-        let serverMatchCount = registrationMatches[member.id]?.count ?? 0
         let registrationTime = member.createdAt.map { formatRegistrationDate($0) } ?? "—"
         let uname = member.username
         let orderedResults = orderedMatchList(for: member)
+        let hasMatches = !orderedResults.isEmpty
+        let serverMatchCount = orderedResults.count
         let isExpanded = expandedMatchMembers.contains(member.id)
         let visible = isExpanded ? orderedResults : Array(orderedResults.prefix(5))
 
@@ -2102,9 +2101,15 @@ struct AdminAllRequestsView: View {
                 iconCircle(icon: "person.badge.shield.checkmark", color: hasMatches ? DS.Color.success : DS.Color.warning, size: 36)
 
                 VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                    Text(member.fullName)
+                    // رأس الكرت: نوع الطلب
+                    Text(L10n.t("طلب انضمام", "Join Request"))
                         .font(DS.Font.calloutBold)
                         .foregroundColor(DS.Color.textPrimary)
+
+                    // اسم المنضم — سطر ثاني
+                    Text(member.fullName)
+                        .font(DS.Font.scaled(13, weight: .bold))
+                        .foregroundColor(DS.Color.textSecondary)
                         .lineLimit(2)
 
                     // اسم المستخدم (من الموقع)
@@ -2496,6 +2501,11 @@ struct AdminAllRequestsView: View {
 
         guard !newParts.isEmpty else { return [] }
 
+        // لازم تطابق أول 3 أسماء بالترتيب (أو كل الأسماء لو المنضم أقل من 3).
+        // مثال: «علي طارق علي حسين» → يُعرض فقط من يطابق «علي طارق علي»،
+        // ويُستبعد «علي طارق موسى» و«علي جعفر موسى».
+        let requiredPrefix = min(3, newParts.count)
+
         // فقط الأعضاء: بدون هاتف + أحياء + مو pending
         let existingMembers = memberVM.allMembers.filter { m in
             m.role != .pending && m.id != member.id &&
@@ -2525,8 +2535,8 @@ struct AdminAllRequestsView: View {
                 }
             }
 
-            // لازم الاسم الأول على الأقل يتطابق
-            if !matchedParts.isEmpty {
+            // لازم تطابق أول 3 أسماء بالترتيب (أو كل الأسماء لو أقل من 3)
+            if matchedParts.count >= requiredPrefix {
                 results.append((
                     member: existing,
                     matchCount: matchedParts.count,
@@ -2571,10 +2581,17 @@ struct AdminAllRequestsView: View {
             HStack(spacing: DS.Spacing.sm) {
                 iconCircle(icon: "newspaper.fill", color: newsTypeColor(post.type), size: 36)
 
-                Text(post.author_name)
-                    .font(DS.Font.calloutBold)
-                    .foregroundColor(DS.Color.textPrimary)
-                    .lineLimit(1)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(L10n.t("خبر", "News"))
+                        .font(DS.Font.calloutBold)
+                        .foregroundColor(DS.Color.textPrimary)
+                        .lineLimit(1)
+
+                    Text(post.author_name)
+                        .font(DS.Font.caption1)
+                        .foregroundColor(DS.Color.textSecondary)
+                        .lineLimit(1)
+                }
 
                 Spacer()
 
@@ -2614,9 +2631,17 @@ struct AdminAllRequestsView: View {
             HStack(spacing: DS.Spacing.sm) {
                 iconCircle(icon: "exclamationmark.triangle.fill", color: DS.Color.error, size: 36)
 
-                Text(request.member?.fullName ?? L10n.t("عضو", "Member"))
-                    .font(DS.Font.calloutBold)
-                    .foregroundColor(DS.Color.textPrimary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(L10n.t("بلاغ", "Report"))
+                        .font(DS.Font.calloutBold)
+                        .foregroundColor(DS.Color.textPrimary)
+
+                    if let name = request.member?.fullName {
+                        Text(L10n.t("عن: \(name)", "About: \(name)"))
+                            .font(DS.Font.caption1)
+                            .foregroundColor(DS.Color.textSecondary)
+                    }
+                }
 
                 Spacer()
             }
@@ -2651,11 +2676,11 @@ struct AdminAllRequestsView: View {
                 iconCircle(icon: "phone.arrow.right", color: DS.Color.primary, size: 36)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(memberName)
+                    Text(L10n.t("طلب تغيير رقم", "Phone Change"))
                         .font(DS.Font.calloutBold)
                         .foregroundColor(DS.Color.textPrimary)
 
-                    Text(L10n.t("طلب تغيير رقم", "Phone change request"))
+                    Text(memberName)
                         .font(DS.Font.caption1)
                         .foregroundColor(DS.Color.textSecondary)
                 }
@@ -2702,14 +2727,16 @@ struct AdminAllRequestsView: View {
                 iconCircle(icon: "tent.fill", color: DS.Color.gridDiwaniya, size: 36)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(diwaniya.title)
+                    Text(L10n.t("طلب ديوانية", "Diwaniya Request"))
                         .font(DS.Font.calloutBold)
                         .foregroundColor(DS.Color.textPrimary)
                         .lineLimit(1)
 
-                    Text(diwaniya.ownerName)
+                    Text(diwaniya.title)
                         .font(DS.Font.caption1)
+                        .fontWeight(.semibold)
                         .foregroundColor(DS.Color.textSecondary)
+                        .lineLimit(1)
                 }
 
                 Spacer()
@@ -2732,14 +2759,19 @@ struct AdminAllRequestsView: View {
                 iconCircle(icon: "bolt.heart.fill", color: DS.Color.error, size: 36)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(request.member?.fullName ?? L10n.t("عضو", "Member"))
+                    Text(L10n.t("تسجيل وفاة", "Deceased"))
                         .font(DS.Font.calloutBold)
                         .foregroundColor(DS.Color.textPrimary)
 
+                    Text(L10n.t("لـ: \(request.member?.fullName ?? "عضو")",
+                                "For: \(request.member?.fullName ?? "Member")"))
+                        .font(DS.Font.caption1)
+                        .foregroundColor(DS.Color.textSecondary)
+
                     if let requester = memberVM.allMembers.first(where: { $0.id == request.requesterId }) {
                         Text(L10n.t("من: \(requester.fullName)", "By: \(requester.fullName)"))
-                            .font(DS.Font.caption1)
-                            .foregroundColor(DS.Color.textSecondary)
+                            .font(DS.Font.caption2)
+                            .foregroundColor(DS.Color.textTertiary)
                     }
                 }
 
@@ -2772,14 +2804,19 @@ struct AdminAllRequestsView: View {
                 iconCircle(icon: "person.badge.plus", color: DS.Color.info, size: 36)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(request.member?.fullName ?? L10n.t("عضو", "Member"))
+                    Text(L10n.t("إضافة ابن", "Child Add"))
                         .font(DS.Font.calloutBold)
                         .foregroundColor(DS.Color.textPrimary)
 
+                    Text(L10n.t("الأب: \(request.member?.fullName ?? "عضو")",
+                                "Father: \(request.member?.fullName ?? "Member")"))
+                        .font(DS.Font.caption1)
+                        .foregroundColor(DS.Color.textSecondary)
+
                     if let requester = memberVM.allMembers.first(where: { $0.id == request.requesterId }) {
                         Text(L10n.t("من: \(requester.fullName)", "By: \(requester.fullName)"))
-                            .font(DS.Font.caption1)
-                            .foregroundColor(DS.Color.textSecondary)
+                            .font(DS.Font.caption2)
+                            .foregroundColor(DS.Color.textTertiary)
                     }
                 }
 
@@ -2812,14 +2849,19 @@ struct AdminAllRequestsView: View {
                 iconCircle(icon: "camera.badge.ellipsis", color: DS.Color.neonBlue, size: 36)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(request.member?.fullName ?? L10n.t("عضو", "Member"))
+                    Text(L10n.t("اقتراح صورة", "Photo Suggestion"))
                         .font(DS.Font.calloutBold)
                         .foregroundColor(DS.Color.textPrimary)
 
+                    Text(L10n.t("لـ: \(request.member?.fullName ?? "عضو")",
+                                "For: \(request.member?.fullName ?? "Member")"))
+                        .font(DS.Font.caption1)
+                        .foregroundColor(DS.Color.textSecondary)
+
                     if let requester = memberVM.allMembers.first(where: { $0.id == request.requesterId }) {
                         Text(L10n.t("من: \(requester.fullName)", "By: \(requester.fullName)"))
-                            .font(DS.Font.caption1)
-                            .foregroundColor(DS.Color.textSecondary)
+                            .font(DS.Font.caption2)
+                            .foregroundColor(DS.Color.textTertiary)
                     }
                 }
 
@@ -2876,14 +2918,18 @@ struct AdminAllRequestsView: View {
                 iconCircle(icon: "rectangle.and.pencil.and.ellipsis", color: DS.Color.neonPurple, size: 36)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(currentName)
+                    Text(L10n.t("تغيير اسم", "Name Change"))
                         .font(DS.Font.calloutBold)
                         .foregroundColor(DS.Color.textPrimary)
 
+                    Text(currentName)
+                        .font(DS.Font.caption1)
+                        .foregroundColor(DS.Color.textSecondary)
+
                     if let requester = memberVM.allMembers.first(where: { $0.id == request.requesterId }) {
                         Text(L10n.t("من: \(requester.fullName)", "By: \(requester.fullName)"))
-                            .font(DS.Font.caption1)
-                            .foregroundColor(DS.Color.textSecondary)
+                            .font(DS.Font.caption2)
+                            .foregroundColor(DS.Color.textTertiary)
                     }
                 }
 
@@ -3069,9 +3115,16 @@ struct AdminAllRequestsView: View {
             HStack(spacing: DS.Spacing.sm) {
                 iconCircle(icon: "photo.on.rectangle.angled", color: DS.Color.gridDiwaniya, size: 36)
 
-                Text(memberVM.member(byId: photo.memberId)?.fullName ?? L10n.t("عضو", "Member"))
-                    .font(DS.Font.calloutBold)
-                    .foregroundColor(DS.Color.textPrimary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(L10n.t("صورة معرض", "Gallery Photo"))
+                        .font(DS.Font.calloutBold)
+                        .foregroundColor(DS.Color.textPrimary)
+
+                    Text(L10n.t("لـ: \(memberVM.member(byId: photo.memberId)?.fullName ?? "عضو")",
+                                "For: \(memberVM.member(byId: photo.memberId)?.fullName ?? "Member")"))
+                        .font(DS.Font.caption1)
+                        .foregroundColor(DS.Color.textSecondary)
+                }
 
                 Spacer()
             }
@@ -3115,9 +3168,16 @@ struct AdminAllRequestsView: View {
             HStack(spacing: DS.Spacing.sm) {
                 iconCircle(icon: "circle.dashed", color: DS.Color.neonCyan, size: 36)
 
-                Text(memberVM.member(byId: story.memberId)?.firstName ?? L10n.t("عضو", "Member"))
-                    .font(DS.Font.calloutBold)
-                    .foregroundColor(DS.Color.textPrimary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(L10n.t("قصة", "Story"))
+                        .font(DS.Font.calloutBold)
+                        .foregroundColor(DS.Color.textPrimary)
+
+                    Text(L10n.t("لـ: \(memberVM.member(byId: story.memberId)?.firstName ?? "عضو")",
+                                "For: \(memberVM.member(byId: story.memberId)?.firstName ?? "Member")"))
+                        .font(DS.Font.caption1)
+                        .foregroundColor(DS.Color.textSecondary)
+                }
 
                 Spacer()
             }
@@ -3171,14 +3231,16 @@ struct AdminAllRequestsView: View {
                 }
 
                 VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                    Text(project.title)
+                    Text(L10n.t("طلب مشروع", "Project Request"))
                         .font(DS.Font.calloutBold)
                         .foregroundColor(DS.Color.textPrimary)
-                        .lineLimit(2)
+                        .lineLimit(1)
 
-                    Text(project.ownerName)
+                    Text(project.title)
                         .font(DS.Font.caption1)
+                        .fontWeight(.semibold)
                         .foregroundColor(DS.Color.textSecondary)
+                        .lineLimit(1)
                 }
 
                 Spacer()
