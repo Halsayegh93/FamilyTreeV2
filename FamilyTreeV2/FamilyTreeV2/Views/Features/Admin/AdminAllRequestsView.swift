@@ -28,6 +28,8 @@ struct AdminAllRequestsView: View {
         case child(AdminRequest)
         case photo(AdminRequest)
         case project(Project)
+        /// طلب تعديل على الشجرة (إضافة/تعديل اسم/تعديل رقم/وفاة/حذف).
+        case treeEdit(AdminRequest, TreeEditAction)
         /// عنصر صحة الشجرة — للعرض فقط (بدون موافقة/رفض)، يعرض معلومات العضو + واتساب.
         case healthMember(FamilyMember, TreeHealthIssue)
 
@@ -43,6 +45,7 @@ struct AdminAllRequestsView: View {
             case .child(let r): return "child-\(r.id)"
             case .photo(let r): return "photo-\(r.id)"
             case .project(let p): return "proj-\(p.id)"
+            case .treeEdit(let r, _): return "tree-\(r.id)"
             case .healthMember(let m, _): return "health-\(m.id)"
             }
         }
@@ -1724,7 +1727,7 @@ struct AdminAllRequestsView: View {
                 accentColor: color,
                 onApprove: { Task { await adminRequestVM.approveTreeEditRequest(request: request) } },
                 onReject: { Task { await adminRequestVM.rejectTreeEditRequest(request: request, reason: nil) } },
-                onTap: { /* لا شيت تفاصيل خاص بطلبات الشجرة حالياً */ }
+                onTap: { selectedDetail = .treeEdit(request, action) }
             ) {
                 treeEditRow(request: request, action: action, color: color)
             }
@@ -1969,7 +1972,7 @@ struct AdminAllRequestsView: View {
                 id: request.id, accentColor: color,
                 onApprove: { Task { await adminRequestVM.approveTreeEditRequest(request: request) } },
                 onReject: { Task { await adminRequestVM.rejectTreeEditRequest(request: request, reason: nil) } },
-                onTap: { }
+                onTap: { selectedDetail = .treeEdit(request, action) }
             ) { treeEditRow(request: request, action: action, color: color) }
         case .health(let member, let issue):
             selectableRow(
@@ -3354,6 +3357,11 @@ struct AdminAllRequestsView: View {
                          title: L10n.t("طلب مشروع", "Project Request"),
                          timestamp: p.createdAt.map { formatRegistrationDate($0) },
                          imageUrl: p.logoUrl)
+        case .treeEdit(let request, let action):
+            return .init(icon: action.iconName, color: treeEditColor(action),
+                         title: L10n.t(action.arabicLabel, action.englishLabel),
+                         timestamp: request.createdAt.map { formatRegistrationDate($0) },
+                         imageUrl: request.member?.avatarUrl)
         case .healthMember(let member, let issue):
             let name = member.fullName.trimmingCharacters(in: .whitespacesAndNewlines)
             return .init(icon: issue.asTab.icon, color: issue.asTab.color,
@@ -3553,6 +3561,57 @@ struct AdminAllRequestsView: View {
                let url = URL(string: loc.lowercased().hasPrefix("http") ? loc : "https://\(loc)") {
                 contactLinkCard(icon: "mappin.and.ellipse", label: L10n.t("الموقع الجغرافي", "Location"),
                                 value: L10n.t("فتح الخريطة", "Open map"), color: DS.Color.error, url: url)
+            }
+
+        case .treeEdit(let request, let action):
+            let payload = request.treeEditPayload
+            let memberName = payload?.targetMemberName
+                ?? request.member?.fullName
+                ?? L10n.t("عضو", "Member")
+            switch action {
+            case .editName:
+                comparisonCard(
+                    oldLabel: L10n.t("الاسم الحالي", "Current Name"),
+                    oldValue: request.member?.fullName ?? memberName,
+                    newLabel: L10n.t("الاسم الجديد", "New Name"),
+                    newValue: payload?.newName ?? "—",
+                    icon: "person.fill"
+                )
+            case .editPhone:
+                infoCard(icon: "person.fill", label: L10n.t("العضو", "Member"),
+                         value: memberName, color: DS.Color.primary)
+                comparisonCard(
+                    oldLabel: L10n.t("الرقم الحالي", "Current"),
+                    oldValue: KuwaitPhone.display(request.member?.phoneNumber),
+                    newLabel: L10n.t("الرقم الجديد", "New"),
+                    newValue: KuwaitPhone.display(payload?.newPhone),
+                    icon: "phone.fill"
+                )
+            case .deceased:
+                infoCard(icon: "person.fill", label: L10n.t("العضو", "Member"),
+                         value: memberName, color: DS.Color.primary)
+                if let death = payload?.deathDate, !death.isEmpty {
+                    infoCard(icon: "calendar", label: L10n.t("تاريخ الوفاة", "Death Date"),
+                             value: death, color: DS.Color.error)
+                }
+            case .add:
+                infoCard(icon: "person.fill", label: L10n.t("الاسم الجديد", "New Name"),
+                         value: payload?.newMemberName ?? memberName, color: DS.Color.success)
+                if let parent = payload?.parentMemberName, !parent.isEmpty {
+                    infoCard(icon: "person.2.fill", label: L10n.t("الأب", "Father"),
+                             value: parent, color: DS.Color.primary)
+                }
+            case .delete:
+                infoCard(icon: "person.fill", label: L10n.t("العضو", "Member"),
+                         value: memberName, color: DS.Color.error)
+            }
+            if let reason = payload?.reason, !reason.isEmpty {
+                longTextCard(icon: "text.bubble.fill",
+                             label: L10n.t("السبب", "Reason"), text: reason)
+            }
+            if let notes = payload?.notes, !notes.isEmpty {
+                longTextCard(icon: "note.text",
+                             label: L10n.t("ملاحظات", "Notes"), text: notes)
             }
 
         case .healthMember(let member, let issue):
@@ -3871,6 +3930,9 @@ struct AdminAllRequestsView: View {
                     await projectsVM.approveProject(id: project.id, approvedBy: adminId)
                 }
                 await MainActor.run { selectedDetail = nil }
+            case .treeEdit(let request, _):
+                await adminRequestVM.approveTreeEditRequest(request: request)
+                await MainActor.run { selectedDetail = nil }
             case .healthMember:
                 await MainActor.run { selectedDetail = nil }
             }
@@ -3900,6 +3962,8 @@ struct AdminAllRequestsView: View {
                 await adminRequestVM.rejectPhotoSuggestion(request: request)
             case .project(let project):
                 await projectsVM.rejectProject(id: project.id)
+            case .treeEdit(let request, _):
+                await adminRequestVM.rejectTreeEditRequest(request: request, reason: nil)
             case .healthMember:
                 break // لا إجراء رفض لعناصر الصحة
             }
@@ -3973,6 +4037,9 @@ struct AdminAllRequestsView: View {
                         await projectsVM.approveProject(id: project.id, approvedBy: adminId)
                     }
                     selectedDetail = nil
+                case .treeEdit(let request, _):
+                    await adminRequestVM.approveTreeEditRequest(request: request)
+                    selectedDetail = nil
                 case .healthMember:
                     selectedDetail = nil
                 }
@@ -4010,6 +4077,9 @@ struct AdminAllRequestsView: View {
                     selectedDetail = nil
                 case .project(let project):
                     await projectsVM.rejectProject(id: project.id)
+                    selectedDetail = nil
+                case .treeEdit(let request, _):
+                    await adminRequestVM.rejectTreeEditRequest(request: request, reason: nil)
                     selectedDetail = nil
                 case .healthMember:
                     selectedDetail = nil
