@@ -186,7 +186,7 @@ struct TreeView: View {
     private static func computeCache(from members: [FamilyMember]) -> TreeCache {
         // المعيار القانوني الموحّد لـ"عضو في العائلة" — نفسه في الويب وكل العدّادات
         let visible = members.filter(\.isCountable)
-        let byId = Dictionary(uniqueKeysWithValues: visible.map { ($0.id, $0) })
+        let byId = Dictionary(visible.map { ($0.id, $0) }, uniquingKeysWith: { _, new in new })
 
         // مجموعة الأعضاء اللي عندهم أبناء (آباء حقيقيين)
         let fatherIds = Set(visible.compactMap(\.fatherId))

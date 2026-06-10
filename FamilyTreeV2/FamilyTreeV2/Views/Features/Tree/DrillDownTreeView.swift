@@ -32,6 +32,10 @@ struct DrillDownTreeView: View {
     @State private var kinshipTargetId: UUID? = nil
     @State private var kinshipMeId: UUID? = nil
     @State private var kinshipCommonAncestorId: UUID? = nil
+    // مسارا الطرفين للجد المشترك (أو للجذر إن ما فيه جد مشترك) — أساس رسم الفرعين
+    @State private var kinshipPathA: [FamilyMember] = []   // [أنت → الجد المشترك]
+    @State private var kinshipPathB: [FamilyMember] = []   // [الهدف → الجد المشترك]
+    @State private var kinshipAboveCA: [FamilyMember] = [] // فوق المشترك: [الجذر → أبو المشترك] (الأعلى أولاً)
     @State private var kinshipDismissTask: Task<Void, Never>? = nil
     // لقطة سلسلة الشجرة قبل تفعيل القرابة — للرجوع لنفس المكان عند الانتهاء
     @State private var preKinshipChain: [FamilyMember]? = nil
@@ -58,7 +62,7 @@ struct DrillDownTreeView: View {
 
     private var roots: [FamilyMember] {
         let visible = memberVM.allMembers.filter(\.isCountable)
-        let byId = Dictionary(uniqueKeysWithValues: visible.map { ($0.id, $0) })
+        let byId = Dictionary(visible.map { ($0.id, $0) }, uniquingKeysWith: { _, new in new })
         let fatherIds = Set(visible.compactMap(\.fatherId))
         return visible.filter { m in
             guard let fid = m.fatherId else { return fatherIds.contains(m.id) }
@@ -67,9 +71,8 @@ struct DrillDownTreeView: View {
     }
 
     private func children(of memberId: UUID) -> [FamilyMember] {
-        memberVM.allMembers
-            .filter { $0.fatherId == memberId && $0.isCountable }
-            .sortedForDisplay()
+        // بحث O(1) من خريطة الأبناء المكاشة في الـViewModel (بدل فلترة كل الأعضاء)
+        memberVM.children(of: memberId)
     }
 
     /// ترتيب صفوف الأبناء: دائماً 3 لكل صف، الصف الأخير حسب الباقي.
@@ -106,8 +109,8 @@ struct DrillDownTreeView: View {
                         subtitle: L10n.t("تصفّح بالتفرّع", "Drill-down")
                     )
 
-                    // أزرار الإجراءات — تختفي عند فتح البحث (الإغلاق صار داخل مربع البحث)
-                    if !showSearchBar {
+                    // أزرار الإجراءات — تختفي عند فتح البحث أو وضع صلة القرابة
+                    if !showSearchBar && kinshipBanner == nil {
                         stickyActionsBar
                             .padding(.horizontal, DS.Spacing.lg)
                             .padding(.top, DS.Spacing.sm)
@@ -214,7 +217,7 @@ struct DrillDownTreeView: View {
         } label: {
             memberSquareContent(
                 member,
-                isActive: kinshipTargetId == member.id,
+                isActive: kinshipTargetId == member.id || kinshipMeId == member.id,
                 kidsCount: children(of: member.id).count
             )
         }
@@ -240,45 +243,51 @@ struct DrillDownTreeView: View {
         .frame(maxWidth: .infinity, alignment: .top)
     }
 
-    /// عرض سلسلة القرابة عموديًا — نفس مربعات ووصلات الشجرة العادية.
-    /// عند وجود جدّ مشترك: يتفرّع عنده لفرعين (أنت / الهدف) تمامًا مثل تفرّع الشجرة.
+    /// عرض القرابة — يعتمد مباشرة على مساري الطرفين (متين لأي عضوين).
+    /// • جد مشترك + الطرفان على فرعين  → الجد فوق ويتفرّع يمين/يسار (يلتقون عنده).
+    /// • خط مباشر (أب/جد/ابن)           → عمود واحد بخطوط واصلة.
+    /// • لا يوجد جد مشترك مباشر          → نعرض نسب الطرفين كفرعين مع تنبيه.
     private var verticalKinshipChain: some View {
-        let caIndex = kinshipCommonAncestorId.flatMap { caid in
-            chain.firstIndex(where: { $0.id == caid })
-        }
+        let ca = kinshipCommonAncestorId.flatMap { memberVM.member(byId: $0) }
+        // فرع كل طرف: من تحت الجد المشترك نزولاً للطرف (الأعلى = ابن الجد، الأسفل = الطرف)
+        let meBranch: [FamilyMember] = ca != nil
+            ? Array(kinshipPathA.dropLast().reversed())
+            : Array(kinshipPathA.reversed())
+        let targetBranch: [FamilyMember] = ca != nil
+            ? Array(kinshipPathB.dropLast().reversed())
+            : Array(kinshipPathB.reversed())
+        let canBranch = ca != nil && !meBranch.isEmpty && !targetBranch.isEmpty
+
         return ScrollViewReader { proxy in
             ScrollView(showsIndicators: false) {
-                Group {
-                    if let caIndex, caIndex > 0, caIndex < chain.count - 1 {
-                        // تفرّع حقيقي عند الجد المشترك
-                        let ca = chain[caIndex]
-                        let meBranch = Array(chain[0..<caIndex].reversed())   // ابن الجد ← ... ← أنت
-                        let targetBranch = Array(chain[(caIndex + 1)...])     // ابن الجد ← ... ← الهدف
-                        VStack(spacing: DS.Spacing.xs) {
-                            HStack { Spacer(); kinshipSquareButton(ca); Spacer() }
-
-                            // فرع على شكل الشجرة (قوس/زاوية حسب الإعداد)
-                            BranchConnector(branchCount: 2, style: drillBranchStyle)
-                                .stroke(
-                                    DS.Color.warning.opacity(0.85),
-                                    style: StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round)
-                                )
-                                .frame(height: 22)
-
-                            HStack(alignment: .top, spacing: DS.Spacing.sm) {
-                                kinshipBranchColumn(meBranch)
-                                kinshipBranchColumn(targetBranch)
-                            }
+                VStack(spacing: DS.Spacing.xs) {
+                    if let ca, canBranch {
+                        // فوق المشترك: من أول اسم بالشجرة (الجذر) نزولاً للمشترك
+                        ForEach(kinshipAboveCA) { ancestor in
+                            HStack { Spacer(); kinshipSquareButton(ancestor); Spacer() }
+                            chainConnector
                         }
+                        // الجد المشترك (نقطة الالتقاء) + تفرّع لطرفين يلتقون عنده
+                        HStack { Spacer(); kinshipSquareButton(ca); Spacer() }
+                        BranchConnector(branchCount: 2, style: drillBranchStyle)
+                            .stroke(
+                                DS.Color.warning.opacity(0.85),
+                                style: StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round)
+                            )
+                            .frame(height: 22)
+                        HStack(alignment: .top, spacing: DS.Spacing.sm) {
+                            kinshipBranchColumn(meBranch)
+                            kinshipBranchColumn(targetBranch)
+                        }
+                    } else if let ca {
+                        // خط مباشر — عمود واحد: الجذر → ... → المشترك → الطرف
+                        kinshipBranchColumn(kinshipAboveCA + [ca] + (meBranch.isEmpty ? targetBranch : meBranch))
                     } else {
-                        // fallback: سلسلة عمودية بسيطة (لا يوجد جد مشترك أو طرف هو الجد)
-                        VStack(spacing: DS.Spacing.xs) {
-                            ForEach(Array(chain.enumerated()), id: \.element.id) { idx, member in
-                                kinshipSquareButton(member)
-                                if idx != chain.count - 1 {
-                                    chainConnector
-                                }
-                            }
+                        // لا يوجد جد مشترك مباشر — نعرض نسب الطرفين كفرعين
+                        kinshipNoCommonAncestorNote
+                        HStack(alignment: .top, spacing: DS.Spacing.sm) {
+                            kinshipBranchColumn(meBranch)
+                            kinshipBranchColumn(targetBranch)
                         }
                     }
                 }
@@ -288,18 +297,32 @@ struct DrillDownTreeView: View {
             }
             .onChange(of: scrollTarget) { newId in
                 guard let id = newId else { return }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                    guard chain.contains(where: { $0.id == id }) else {
-                        scrollTarget = nil
-                        return
-                    }
-                    withAnimation(.easeInOut(duration: 0.5)) {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                    withAnimation(.easeInOut(duration: 0.3)) {
                         proxy.scrollTo(id, anchor: UnitPoint(x: 0.5, y: 0.3))
                     }
                     DispatchQueue.main.async { scrollTarget = nil }
                 }
             }
         }
+    }
+
+    /// تنبيه عند عدم وجود جد مشترك مباشر — يظهر فوق نسب الطرفين.
+    private var kinshipNoCommonAncestorNote: some View {
+        HStack(spacing: DS.Spacing.xs) {
+            Image(systemName: "info.circle.fill")
+                .font(DS.Font.scaled(11, weight: .bold))
+            Text(L10n.t(
+                "لا يوجد جد مشترك مباشر — هذي سلسلتا نسب الطرفين",
+                "No direct common ancestor — showing both lineages"
+            ))
+            .font(DS.Font.scaled(11, weight: .semibold))
+            .multilineTextAlignment(.center)
+        }
+        .foregroundColor(DS.Color.warning)
+        .padding(.horizontal, DS.Spacing.md)
+        .padding(.vertical, DS.Spacing.sm)
+        .frame(maxWidth: .infinity)
     }
 
     // MARK: - Kinship Banner + Handler
@@ -334,15 +357,26 @@ struct DrillDownTreeView: View {
     /// **أنت → ... → الجد المشترك → ... → الهدف**
     /// — كل أعضاء مسار القرابة يظهرون في سلسلة خطّية واحدة، الطرفان مميّزان.
     private func handleKinshipNotification(_ note: Notification) {
+        Log.error("🟣 [استقبال القرابة في الشجرة] وصل الإشعار")
         guard let info = note.userInfo,
               let memberId = info["memberId"] as? UUID,
-              let relationship = info["relationship"] as? String,
-              let target = memberVM.member(byId: memberId),
-              let meId = authVM.currentUser?.id,
-              let me = memberVM.member(byId: meId) else { return }
+              let relationship = info["relationship"] as? String else {
+            Log.error("🟣 [الشجرة] ❌ userInfo ناقص")
+            return
+        }
+        guard let me = authVM.currentUser else {
+            Log.error("🟣 [الشجرة] ❌ currentUser فاضي في الشجرة")
+            return
+        }
+        guard let target = memberVM.member(byId: memberId) else {
+            Log.error("🟣 [الشجرة] ❌ الهدف \(memberId.uuidString.prefix(8)) غير موجود في الأعضاء المحمّلين")
+            return
+        }
+        let meId = me.id
 
         let lookup = memberVM._memberById
         let result = KinshipCalculator.calculate(from: me, to: target, lookup: lookup)
+        Log.error("🟣 [الشجرة] الحساب: علاقة=«\(result.relationship)» CA=\(result.commonAncestor?.firstName ?? "nil") pathA=\(result.pathA.count) pathB=\(result.pathB.count)")
 
         // pathA = [me, ..., common_ancestor]
         // pathB = [target, ..., common_ancestor]
@@ -377,13 +411,23 @@ struct DrillDownTreeView: View {
             preKinshipChain = chain
         }
 
-        withAnimation(.easeInOut(duration: 0.4)) {
+        withAnimation(.easeInOut(duration: 0.22)) {
             chain = newChain
             kinshipBanner = relationship
             kinshipPathIds = pathSet
             kinshipTargetId = memberId
             kinshipMeId = meId
             kinshipCommonAncestorId = result.commonAncestor?.id
+            // خزّن المسارين الفعليين لرسم الفرعين بشكل متين لأي عضوين
+            kinshipPathA = result.pathA
+            kinshipPathB = result.pathB
+            // السلسلة فوق الجد المشترك حتى الجذر (أول اسم بالشجرة)
+            if let ca = result.commonAncestor {
+                let caPath = KinshipCalculator.ancestorPath(for: ca, lookup: lookup) // [المشترك, ..., الجذر]
+                kinshipAboveCA = Array(caPath.dropFirst().reversed())                // [الجذر, ..., أبو المشترك]
+            } else {
+                kinshipAboveCA = []
+            }
         }
 
         // التمرير للجد المشترك ليبيّن نقطة الوصل بين الطرفين
@@ -405,6 +449,9 @@ struct DrillDownTreeView: View {
             kinshipTargetId = nil
             kinshipMeId = nil
             kinshipCommonAncestorId = nil
+            kinshipPathA = []
+            kinshipPathB = []
+            kinshipAboveCA = []
             // الرجوع لنفس مكان الشجرة الذي ضُغطت منه القرابة (أو البداية كحل احتياطي)
             if let saved = preKinshipChain, !saved.isEmpty,
                memberVM.member(byId: saved[0].id) != nil {
