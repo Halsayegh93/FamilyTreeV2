@@ -64,7 +64,7 @@ serve(async (req) => {
     await adminClient
       .from("device_tokens")
       .delete()
-      .eq("user_id", memberId);
+      .eq("member_id", memberId);
 
     console.log(
       `✅ Phone unlinked for ${memberProfile.full_name} (${memberId})`

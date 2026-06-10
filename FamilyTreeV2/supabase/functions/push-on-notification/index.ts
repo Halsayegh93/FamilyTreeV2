@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
-import { handleCors, json } from "../_shared/cors.ts";
+import { handleCors, json, validatePost } from "../_shared/cors.ts";
 import { createServiceClient } from "../_shared/auth.ts";
 import { createApnsJwt, getApnsConfig, apnsHostFor } from "../_shared/apns.ts";
 
@@ -8,6 +8,19 @@ serve(async (req) => {
   if (cors) return cors;
 
   try {
+    const methodErr = validatePost(req);
+    if (methodErr) return methodErr;
+
+    const expectedSecret = Deno.env.get("NOTIFICATION_WEBHOOK_SECRET") ?? "";
+    const providedSecret = req.headers.get("x-webhook-secret") ?? "";
+    if (!expectedSecret) {
+      console.error("[push-on-notification] NOTIFICATION_WEBHOOK_SECRET is not configured");
+      return json(503, { ok: false, message: "Webhook authentication is not configured" });
+    }
+    if (providedSecret !== expectedSecret) {
+      return json(401, { ok: false, message: "Invalid webhook credentials" });
+    }
+
     const body = await req.json();
     const record = body.record || body;
     const targetMemberId = record.target_member_id;
