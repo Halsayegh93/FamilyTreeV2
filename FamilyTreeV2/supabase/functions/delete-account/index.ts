@@ -19,7 +19,7 @@ serve(async (req) => {
 
     // 3. Delete user's personal activity data
     await adminClient.from("news_poll_votes").delete().eq("member_id", userId);
-    await adminClient.from("news_posts").delete().eq("author_id", userId);
+    await adminClient.from("news").delete().eq("author_id", userId);
     // notifications يستخدم target_member_id (مو member_id) + created_by للمُرسِل
     await adminClient.from("notifications").delete().eq("target_member_id", userId);
     await adminClient.from("notifications").delete().eq("created_by", userId);

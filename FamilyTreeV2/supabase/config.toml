@@ -379,6 +379,9 @@ verify_jwt = false
 
 [functions.push-on-notification]
 verify_jwt = false
+# This database-webhook function authenticates with x-webhook-secret in code.
+# Before deploy, set NOTIFICATION_WEBHOOK_SECRET and configure the webhook to
+# send the same value. The function fails closed when the secret is missing.
 
 [functions.push-admins]
 verify_jwt = false
