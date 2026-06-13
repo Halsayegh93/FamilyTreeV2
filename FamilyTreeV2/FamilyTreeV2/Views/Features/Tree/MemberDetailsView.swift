@@ -5,6 +5,7 @@ struct MemberDetailsView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var memberVM: MemberViewModel
     @EnvironmentObject var adminRequestVM: AdminRequestViewModel
+    @EnvironmentObject var notificationVM: NotificationViewModel
     @Environment(\.dismiss) var dismiss
 
     private let initialMember: FamilyMember
@@ -35,6 +36,9 @@ struct MemberDetailsView: View {
 
     @State private var showActionSheet = false
     @State private var pendingEditAction: TreeEditAction? = nil
+    @State private var showReportConfirm = false
+    @State private var reportReason = ""
+    @State private var reportSent = false
     @State private var childrenExpanded = false
 
     // MARK: - Cached State (تحسب مرة عند تغيير العضو لتفادي إعادة الحساب O(n) في كل rebuild)
@@ -198,6 +202,32 @@ struct MemberDetailsView: View {
             Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { }
         } message: {
             Text(L10n.t("هل تريد حذف السيرة الذاتية؟", "Delete biography?"))
+        }
+        .alert(L10n.t("إبلاغ عن عضو", "Report Member"), isPresented: $showReportConfirm) {
+            TextField(L10n.t("سبب الإبلاغ (اختياري)", "Reason (optional)"), text: $reportReason)
+            Button(L10n.t("إبلاغ", "Report"), role: .destructive) {
+                let target = member
+                let reason = reportReason
+                reportReason = ""
+                Task {
+                    let ok = await notificationVM.reportContent(
+                        contentKind: L10n.t("ملف عضو", "member profile"),
+                        contentLabel: target.fullName,
+                        contentId: target.id,
+                        reason: reason
+                    )
+                    if ok { await MainActor.run { reportSent = true } }
+                }
+            }
+            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { reportReason = "" }
+        } message: {
+            Text(L10n.t("اكتب سبب الإبلاغ، وسيتم إرساله للإدارة لمراجعة ملف هذا العضو.",
+                       "Enter a reason; it will be sent to the admins to review this member's profile."))
+        }
+        .alert(L10n.t("تم الإبلاغ", "Reported"), isPresented: $reportSent) {
+            Button(L10n.t("حسناً", "OK"), role: .cancel) { }
+        } message: {
+            Text(L10n.t("شكراً لك، وصل بلاغك للإدارة.", "Thank you, your report reached the admins."))
         }
     }
 
@@ -906,6 +936,24 @@ struct MemberDetailsView: View {
                         .background(DS.Color.gradientPrimary)
                         .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
                         .dsSubtleShadow()
+                    }
+                    .buttonStyle(DSScaleButtonStyle())
+
+                    // إبلاغ عن العضو — متاح لغير صاحب الملف (سياسة Apple)
+                    Button {
+                        showReportConfirm = true
+                    } label: {
+                        HStack(spacing: DS.Spacing.sm) {
+                            Image(systemName: "exclamationmark.bubble")
+                                .font(DS.Font.scaled(14, weight: .semibold))
+                            Text(L10n.t("إبلاغ عن هذا العضو", "Report this member"))
+                                .font(DS.Font.calloutBold)
+                        }
+                        .foregroundColor(DS.Color.textSecondary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, DS.Spacing.md)
+                        .background(DS.Color.textTertiary.opacity(0.08))
+                        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
                     }
                     .buttonStyle(DSScaleButtonStyle())
                 }

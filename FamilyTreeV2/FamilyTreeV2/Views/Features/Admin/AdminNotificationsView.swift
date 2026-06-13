@@ -12,6 +12,10 @@ struct AdminNotificationsView: View {
     @State private var searchText = ""
     @State private var displayLimit = 20
 
+    // جدولة الإرسال
+    @State private var scheduleEnabled = false
+    @State private var scheduledDate = Date().addingTimeInterval(3600)
+
     private var activeMembers: [FamilyMember] {
         memberVM.allMembers
             .filter { $0.role != .pending }
@@ -87,6 +91,36 @@ struct AdminNotificationsView: View {
                         Text("\(bodyText.count)/500")
                             .font(DS.Font.caption2)
                             .foregroundColor(bodyText.count > 450 ? DS.Color.error : DS.Color.textTertiary)
+                    }
+                    .padding(DS.Spacing.md)
+                    .background(DS.Color.surface)
+                    .cornerRadius(DS.Radius.md)
+
+                    // جدولة الإرسال — وقت محدد للإرسال لاحقاً
+                    VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                        Toggle(isOn: $scheduleEnabled.animation(DS.Anim.snappy)) {
+                            HStack(spacing: DS.Spacing.sm) {
+                                Image(systemName: "clock.badge")
+                                    .foregroundColor(DS.Color.primary)
+                                    .font(DS.Font.scaled(14, weight: .medium))
+                                Text(L10n.t("جدولة الإرسال", "Schedule send"))
+                                    .font(DS.Font.callout)
+                                    .foregroundColor(DS.Color.textPrimary)
+                            }
+                        }
+                        .tint(DS.Color.primary)
+
+                        if scheduleEnabled {
+                            DatePicker(
+                                L10n.t("وقت الإرسال", "Send time"),
+                                selection: $scheduledDate,
+                                in: Date()...,
+                                displayedComponents: [.date, .hourAndMinute]
+                            )
+                            .font(DS.Font.callout)
+                            .tint(DS.Color.primary)
+                            .environment(\.locale, LanguageManager.shared.locale)
+                        }
                     }
                     .padding(DS.Spacing.md)
                     .background(DS.Color.surface)
@@ -206,8 +240,10 @@ struct AdminNotificationsView: View {
 
                 VStack(spacing: DS.Spacing.xs) {
                     DSPrimaryButton(
-                        L10n.t("إرسال الإشعار", "Send Notification"),
-                        icon: "paperplane.fill",
+                        scheduleEnabled
+                            ? L10n.t("جدولة الإشعار", "Schedule Notification")
+                            : L10n.t("إرسال الإشعار", "Send Notification"),
+                        icon: scheduleEnabled ? "clock.badge.checkmark" : "paperplane.fill",
                         isLoading: notificationVM.isLoading
                     ) {
                         Task { await sendNotification() }
@@ -216,17 +252,22 @@ struct AdminNotificationsView: View {
                         title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                     )
 
-                    if selectedMemberIds.isEmpty {
-                        Text(L10n.t("سيُرسل للجميع", "Will be sent to all"))
-                            .font(DS.Font.caption2)
-                            .foregroundColor(DS.Color.textTertiary)
-                    } else {
+                    let targetText = selectedMemberIds.isEmpty
+                        ? L10n.t("للجميع", "to all")
+                        : L10n.t("لـ \(selectedMemberIds.count) عضو محدد",
+                                 "to \(selectedMemberIds.count) selected members")
+                    if scheduleEnabled {
                         Text(L10n.t(
-                            "سيُرسل لـ \(selectedMemberIds.count) عضو محدد",
-                            "Will be sent to \(selectedMemberIds.count) selected members"
+                            "سيُجدول الإرسال \(targetText) في \(scheduledDateText)",
+                            "Will be scheduled \(targetText) at \(scheduledDateText)"
                         ))
                         .font(DS.Font.caption2)
                         .foregroundColor(DS.Color.textTertiary)
+                        .multilineTextAlignment(.center)
+                    } else {
+                        Text(L10n.t("سيُرسل \(targetText)", "Will be sent \(targetText)"))
+                            .font(DS.Font.caption2)
+                            .foregroundColor(DS.Color.textTertiary)
                     }
                 }
                 .padding(.horizontal, DS.Spacing.lg)
@@ -288,8 +329,18 @@ struct AdminNotificationsView: View {
         }
     }
 
+    /// وقت الجدولة منسّقاً حسب لغة الواجهة.
+    private var scheduledDateText: String {
+        let f = DateFormatter()
+        f.locale = LanguageManager.shared.locale
+        f.dateStyle = .medium
+        f.timeStyle = .short
+        return f.string(from: scheduledDate)
+    }
+
     private func sendNotification() async {
         let trimmedBody = bodyText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let finalBody = trimmedBody.isEmpty ? title : trimmedBody
 
         // إذا كل الأعضاء محددين، نرسل broadcast (nil) بدل إرسال كل الـ IDs
         let activeMemberIds = Set(activeMembers.map(\.id))
@@ -299,12 +350,24 @@ struct AdminNotificationsView: View {
             Array(selectedMemberIds)
         }
 
-        await notificationVM.sendNotification(
-            title: title,
-            body: trimmedBody.isEmpty ? title : trimmedBody,
-            targetMemberIds: targetIds,
-            kind: "admin_broadcast"
-        )
-        dismiss()
+        if scheduleEnabled {
+            // الإرسال المجدول — يتولّاه الخادم في الوقت المحدد
+            let ok = await notificationVM.scheduleNotification(
+                title: title,
+                body: finalBody,
+                targetMemberIds: targetIds,
+                scheduledFor: scheduledDate,
+                kind: "admin_broadcast"
+            )
+            if ok { dismiss() }
+        } else {
+            await notificationVM.sendNotification(
+                title: title,
+                body: finalBody,
+                targetMemberIds: targetIds,
+                kind: "admin_broadcast"
+            )
+            dismiss()
+        }
     }
 }

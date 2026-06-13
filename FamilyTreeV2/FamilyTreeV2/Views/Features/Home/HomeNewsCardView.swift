@@ -94,6 +94,15 @@ struct HomeNewsCardView: View {
 
                 Spacer()
 
+                // الوقت — انتقل للأعلى ليصير شريط الإجراءات أنظف
+                HStack(spacing: 3) {
+                    Image(systemName: "clock")
+                        .font(DS.Font.scaled(10))
+                    Text(time)
+                        .font(DS.Font.caption2)
+                }
+                .foregroundColor(DS.Color.textTertiary)
+
                 if approvalStatus == "pending" {
                     Text(L10n.t("مراجعة", "Review"))
                         .font(DS.Font.caption2)
@@ -195,6 +204,11 @@ struct HomeNewsCardView: View {
                             .transition(.scale.combined(with: .opacity))
                     }
                 }
+                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                        .stroke(DS.Color.textTertiary.opacity(0.12), lineWidth: 0.75)
+                )
                 .contentShape(Rectangle())
                 .onTapGesture(count: 2) {
                     if !isLiked { onLikeTap() }
@@ -208,6 +222,8 @@ struct HomeNewsCardView: View {
                         }
                     }
                 }
+                .padding(.horizontal, DS.Spacing.lg)
+                .padding(.top, DS.Spacing.xs)
             }
 
             // التصويت
@@ -230,9 +246,9 @@ struct HomeNewsCardView: View {
                 .padding(.vertical, DS.Spacing.xs)
         }
         .background(DS.Color.surface)
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xxl, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: DS.Radius.xxl, style: .continuous)
+            RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
                 .stroke(DS.Color.textTertiary.opacity(0.15), lineWidth: 0.75)
         )
         .dsCardShadow()
@@ -353,15 +369,6 @@ struct HomeNewsCardView: View {
             .accessibilityValue(commentCount > 0 ? "\(commentCount)" : "")
 
             Spacer()
-
-            // Time
-            HStack(spacing: DS.Spacing.xs) {
-                Image(systemName: "clock")
-                    .font(DS.Font.scaled(11))
-                Text(time)
-                    .font(DS.Font.caption2)
-            }
-            .foregroundColor(DS.Color.textTertiary)
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }

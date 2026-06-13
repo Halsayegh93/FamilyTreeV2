@@ -3,10 +3,15 @@ import SwiftUI
 struct NewsCommentsSheet: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var newsVM: NewsViewModel
+    @EnvironmentObject var notificationVM: NotificationViewModel
     let news: NewsPost
     @State private var commentInput = ""
     @State private var isLoadingComments = false
     @State private var isSendingComment = false
+    @State private var reportCommentId: UUID? = nil
+    @State private var reportCommentLabel = ""
+    @State private var reportReason = ""
+    @State private var reportSent = false
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -29,9 +34,40 @@ struct NewsCommentsSheet: View {
                                     Text(comment.content).font(DS.Font.callout)
                                 }
                                 Spacer()
-                                Text(relativeTimeFromISO(comment.created_at))
-                                    .font(DS.Font.caption2)
-                                    .foregroundColor(DS.Color.textSecondary)
+                                VStack(alignment: .trailing, spacing: 4) {
+                                    Text(relativeTimeFromISO(comment.created_at))
+                                        .font(DS.Font.caption2)
+                                        .foregroundColor(DS.Color.textSecondary)
+
+                                    // قائمة ظاهرة: إبلاغ / حذف
+                                    let canDeleteThis = authVM.canDeleteComments || comment.author_id == authVM.currentUser?.id
+                                    let canReportThis = comment.author_id != authVM.currentUser?.id
+                                    if canDeleteThis || canReportThis {
+                                        Menu {
+                                            if canReportThis {
+                                                Button {
+                                                    reportCommentId = comment.id
+                                                    reportCommentLabel = comment.author_name
+                                                } label: {
+                                                    Label(L10n.t("إبلاغ", "Report"), systemImage: "exclamationmark.bubble")
+                                                }
+                                            }
+                                            if canDeleteThis {
+                                                Button(role: .destructive) {
+                                                    Task { _ = await newsVM.deleteComment(commentId: comment.id, postId: news.id) }
+                                                } label: {
+                                                    Label(L10n.t("حذف", "Delete"), systemImage: "trash")
+                                                }
+                                            }
+                                        } label: {
+                                            Image(systemName: "ellipsis")
+                                                .font(DS.Font.scaled(13, weight: .bold))
+                                                .foregroundColor(DS.Color.textSecondary)
+                                                .frame(width: 28, height: 24)
+                                                .contentShape(Rectangle())
+                                        }
+                                    }
+                                }
                             }
                             .padding(.vertical, DS.Spacing.xs)
                             .listRowBackground(DS.Color.surface)
@@ -44,6 +80,16 @@ struct NewsCommentsSheet: View {
                                     } label: {
                                         Label(L10n.t("حذف", "Delete"), systemImage: "trash.fill")
                                     }
+                                }
+                                // إبلاغ — لكل تعليق ليس للمستخدم نفسه (سياسة Apple)
+                                if comment.author_id != authVM.currentUser?.id {
+                                    Button {
+                                        reportCommentId = comment.id
+                                        reportCommentLabel = comment.author_name
+                                    } label: {
+                                        Label(L10n.t("إبلاغ", "Report"), systemImage: "exclamationmark.bubble")
+                                    }
+                                    .tint(DS.Color.warning)
                                 }
                             }
                         }
@@ -113,6 +159,37 @@ struct NewsCommentsSheet: View {
                 isLoadingComments = true
                 await newsVM.fetchNewsComments(for: [news.id])
                 isLoadingComments = false
+            }
+            .alert(L10n.t("إبلاغ عن تعليق", "Report Comment"), isPresented: Binding(
+                get: { reportCommentId != nil },
+                set: { if !$0 { reportCommentId = nil } }
+            )) {
+                TextField(L10n.t("سبب الإبلاغ (اختياري)", "Reason (optional)"), text: $reportReason)
+                Button(L10n.t("إبلاغ", "Report"), role: .destructive) {
+                    let id = reportCommentId
+                    let label = reportCommentLabel
+                    let reason = reportReason
+                    reportCommentId = nil
+                    reportReason = ""
+                    Task {
+                        let ok = await notificationVM.reportContent(
+                            contentKind: L10n.t("تعليق", "comment"),
+                            contentLabel: label,
+                            contentId: id,
+                            reason: reason
+                        )
+                        if ok { await MainActor.run { reportSent = true } }
+                    }
+                }
+                Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { reportCommentId = nil; reportReason = "" }
+            } message: {
+                Text(L10n.t("اكتب سبب الإبلاغ، وسيتم إرساله للإدارة لمراجعة هذا التعليق.",
+                           "Enter a reason; it will be sent to the admins to review this comment."))
+            }
+            .alert(L10n.t("تم الإبلاغ", "Reported"), isPresented: $reportSent) {
+                Button(L10n.t("حسناً", "OK"), role: .cancel) {}
+            } message: {
+                Text(L10n.t("شكراً لك، وصل بلاغك للإدارة.", "Thank you, your report reached the admins."))
             }
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)

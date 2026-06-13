@@ -1020,7 +1020,7 @@ struct DSStatCard: View {
 
 /// زر عائم — Bold glass capsule مع gradient
 struct DSFloatingButton: View {
-    var icon: String
+    var icon: String? = nil
     var label: String? = nil
     var color: Color = DS.Color.primary
     var action: () -> Void
@@ -1028,7 +1028,7 @@ struct DSFloatingButton: View {
     @State private var appeared = false
 
     private var debouncedAction: () -> Void {
-        let key = "DSFloating_\(icon)_\(label ?? "")"
+        let key = "DSFloating_\(icon ?? "")_\(label ?? "")"
         let original = action
         return { if TapDebouncer.shared.canFire(key) { original() } }
     }
@@ -1036,19 +1036,29 @@ struct DSFloatingButton: View {
     var body: some View {
         Button(action: debouncedAction) {
             HStack(spacing: DS.Spacing.sm) {
-                Image(systemName: icon)
-                    .font(DS.Font.scaled(20, weight: .black))
+                if let icon, !icon.isEmpty {
+                    Image(systemName: icon)
+                        .font(DS.Font.scaled(20, weight: .black))
+                }
                 if let label {
                     Text(label).font(DS.Font.calloutBold)
                 }
             }
-            .foregroundColor(.white)
+            // نص غامق
+            .foregroundColor(DS.Color.textPrimary)
             .padding(.horizontal, label != nil ? DS.Spacing.xl : DS.Spacing.lg)
             .padding(.vertical, DS.Spacing.md + 2)
-            .background(DS.Color.gradientPrimary)
+            // معبّأ باللون بستايل زجاجي (frosted glass)
+            .background(
+                ZStack {
+                    Capsule().fill(.ultraThinMaterial)
+                    Capsule().fill(color.opacity(0.62))
+                }
+            )
             .clipShape(Capsule())
-            .overlay(Capsule().stroke(SwiftUI.Color.white.opacity(0.25), lineWidth: 0.7))
-            .dsGlowShadow()
+            .overlay(Capsule().strokeBorder(color.opacity(0.55), lineWidth: 1))
+            .shadow(color: SwiftUI.Color.black.opacity(0.14), radius: 12, x: 0, y: 5)
+            .shadow(color: color.opacity(0.22), radius: 8, x: 0, y: 3)
         }
         .buttonStyle(DSBoldButtonStyle())
         .scaleEffect(appeared ? 1 : 0.3)
@@ -1130,8 +1140,13 @@ struct DSApproveRejectButtons: View {
     var showReject: Bool = true
     /// عند true تكون الأزرار بحواف دائرية كاملة (capsule) بدل المستطيل المُدوّر
     var useCapsule: Bool = false
+    /// طلب تأكيد قبل تنفيذ الموافقة/الرفض (افتراضياً مُفعّل لكل الأماكن).
+    var confirmBeforeAction: Bool = true
     var onApprove: () -> Void
     var onReject: () -> Void
+
+    @State private var showApproveConfirm = false
+    @State private var showRejectConfirm = false
 
     private var cornerRadius: CGFloat { useCapsule ? DS.Radius.full : DS.Radius.md }
 
@@ -1146,10 +1161,17 @@ struct DSApproveRejectButtons: View {
         return { if TapDebouncer.shared.canFire(key) { original() } }
     }
 
+    private func approveTapped() {
+        if confirmBeforeAction { showApproveConfirm = true } else { debouncedApprove() }
+    }
+    private func rejectTapped() {
+        if confirmBeforeAction { showRejectConfirm = true } else { debouncedReject() }
+    }
+
     var body: some View {
         HStack(spacing: DS.Spacing.md) {
             if showReject {
-            Button(action: debouncedReject) {
+            Button(action: rejectTapped) {
                 Text(rejectTitle)
                     .font(DS.Font.calloutBold)
                     .foregroundColor(DS.Color.error)
@@ -1164,7 +1186,7 @@ struct DSApproveRejectButtons: View {
             }
             }
 
-            Button(action: debouncedApprove) {
+            Button(action: approveTapped) {
                 ZStack {
                     if isLoading {
                         ProgressView().tint(.white)
@@ -1180,6 +1202,18 @@ struct DSApproveRejectButtons: View {
                 .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
                 .dsGlowShadow()
             }
+        }
+        .alert(L10n.t("تأكيد الموافقة", "Confirm Approval"), isPresented: $showApproveConfirm) {
+            Button(approveTitle) { debouncedApprove() }
+            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
+        } message: {
+            Text(L10n.t("هل تريد المتابعة؟", "Do you want to proceed?"))
+        }
+        .alert(L10n.t("تأكيد الرفض", "Confirm Rejection"), isPresented: $showRejectConfirm) {
+            Button(rejectTitle, role: .destructive) { debouncedReject() }
+            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
+        } message: {
+            Text(L10n.t("هل تريد المتابعة؟", "Do you want to proceed?"))
         }
     }
 }

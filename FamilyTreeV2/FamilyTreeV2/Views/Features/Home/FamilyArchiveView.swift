@@ -7,6 +7,8 @@ import UniformTypeIdentifiers
 /// الرفع/الحذف للمدراء فقط (owner + admin).
 struct FamilyArchiveView: View {
     @EnvironmentObject private var authVM: AuthViewModel
+    @EnvironmentObject private var memberVM: MemberViewModel
+    @EnvironmentObject private var notificationVM: NotificationViewModel
     @StateObject private var archiveVM = FamilyArchiveViewModel()
 
     /// nil = الكل
@@ -15,6 +17,11 @@ struct FamilyArchiveView: View {
     @State private var selectedItem: ArchiveItem? = nil
     @State private var itemToDelete: ArchiveItem? = nil
     @State private var itemToEdit: ArchiveItem? = nil
+    @State private var itemToReport: ArchiveItem? = nil
+    @State private var itemToApprove: ArchiveItem? = nil
+    @State private var itemToReject: ArchiveItem? = nil
+    @State private var reportReason = ""
+    @State private var reportSent = false
 
     // وضع التحديد المتعدّد (للمدراء فقط)
     @State private var selectionMode = false
@@ -73,47 +80,22 @@ struct FamilyArchiveView: View {
                                         }
                                 }
                                 .buttonStyle(DSScaleButtonStyle())
+                                // زر قائمة ظاهر — كـ overlay على الزر نفسه حتى ما
+                                // يتعارض ضغطه مع ضغط البطاقة. الإدارة: تحكّم كامل،
+                                // غيرهم: إبلاغ فقط (لغير عناصرهم).
+                                .overlay(alignment: .topLeading) {
+                                    if !selectionMode && menuHasActions(for: item) {
+                                        Menu {
+                                            archiveActionsMenu(for: item)
+                                        } label: {
+                                            cardMenuBadge
+                                        }
+                                        .padding(6)
+                                    }
+                                }
                                 .contextMenu {
-                                    if authVM.isAdmin && !selectionMode {
-                                        // إجراءات الموافقة — فقط للعناصر المعلَّقة
-                                        if item.approvalStatus == .pending {
-                                            Button {
-                                                Task { await archiveVM.approveItem(item) }
-                                            } label: {
-                                                Label(L10n.t("موافقة", "Approve"),
-                                                      systemImage: "checkmark.circle.fill")
-                                            }
-                                            Button {
-                                                Task { await archiveVM.rejectItem(item) }
-                                            } label: {
-                                                Label(L10n.t("رفض", "Reject"),
-                                                      systemImage: "xmark.circle.fill")
-                                            }
-                                            Divider()
-                                        }
-                                        // إجراءات الإخفاء — فقط للموافق عليها
-                                        if item.approvalStatus == .approved {
-                                            Button {
-                                                Task { await archiveVM.toggleHidden(item) }
-                                            } label: {
-                                                Label(
-                                                    item.isHidden
-                                                        ? L10n.t("إظهار للجميع", "Show to all")
-                                                        : L10n.t("إخفاء من الأعضاء", "Hide from members"),
-                                                    systemImage: item.isHidden ? "eye.fill" : "eye.slash.fill"
-                                                )
-                                            }
-                                        }
-                                        Button {
-                                            itemToEdit = item
-                                        } label: {
-                                            Label(L10n.t("تعديل", "Edit"), systemImage: "pencil")
-                                        }
-                                        Button(role: .destructive) {
-                                            itemToDelete = item
-                                        } label: {
-                                            Label(L10n.t("حذف", "Delete"), systemImage: "trash")
-                                        }
+                                    if !selectionMode {
+                                        archiveActionsMenu(for: item)
                                     }
                                 }
                             }
@@ -129,7 +111,7 @@ struct FamilyArchiveView: View {
             if !selectionMode {
                 HStack {
                     Spacer()
-                    DSFloatingButton(icon: "plus") {
+                    DSFloatingButton(label: L10n.t("إضافة", "Add"), color: DS.Color.secondary) {
                         showingUpload = true
                     }
                     .padding(.trailing, DS.Spacing.xl)
@@ -154,12 +136,69 @@ struct FamilyArchiveView: View {
                 .presentationDragIndicator(.visible)
         }
         .sheet(item: $selectedItem) { item in
-            ArchiveItemViewer(item: item)
+            ArchiveItemViewer(item: item, uploaderName: uploaderName(for: item))
         }
         .sheet(item: $itemToEdit) { item in
             ArchiveEditSheet(archiveVM: archiveVM, item: item)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
+        }
+        .alert(L10n.t("إبلاغ عن عنصر", "Report Item"), isPresented: Binding(
+            get: { itemToReport != nil },
+            set: { if !$0 { itemToReport = nil } }
+        )) {
+            TextField(L10n.t("سبب الإبلاغ (اختياري)", "Reason (optional)"), text: $reportReason)
+            Button(L10n.t("إبلاغ", "Report"), role: .destructive) {
+                let target = itemToReport
+                let reason = reportReason
+                itemToReport = nil
+                reportReason = ""
+                if let target {
+                    Task {
+                        let ok = await notificationVM.reportContent(
+                            contentKind: L10n.t("عنصر أرشيف", "archive item"),
+                            contentLabel: target.title,
+                            contentId: target.id,
+                            reason: reason
+                        )
+                        if ok { await MainActor.run { reportSent = true } }
+                    }
+                }
+            }
+            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { itemToReport = nil; reportReason = "" }
+        } message: {
+            Text(L10n.t("اكتب سبب الإبلاغ، وسيتم إرساله للإدارة لمراجعة هذا العنصر.",
+                       "Enter a reason; it will be sent to the admins to review this item."))
+        }
+        .alert(L10n.t("تم الإبلاغ", "Reported"), isPresented: $reportSent) {
+            Button(L10n.t("حسناً", "OK"), role: .cancel) {}
+        } message: {
+            Text(L10n.t("شكراً لك، وصل بلاغك للإدارة.", "Thank you, your report reached the admins."))
+        }
+        .alert(L10n.t("تأكيد الموافقة", "Confirm Approval"), isPresented: Binding(
+            get: { itemToApprove != nil },
+            set: { if !$0 { itemToApprove = nil } }
+        )) {
+            Button(L10n.t("موافقة", "Approve")) {
+                if let target = itemToApprove { Task { await archiveVM.approveItem(target) } }
+                itemToApprove = nil
+            }
+            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { itemToApprove = nil }
+        } message: {
+            Text(L10n.t("هل تريد الموافقة على هذا العنصر؟ سيظهر لجميع الأعضاء.",
+                       "Approve this item? It will be visible to all members."))
+        }
+        .alert(L10n.t("تأكيد الرفض", "Confirm Rejection"), isPresented: Binding(
+            get: { itemToReject != nil },
+            set: { if !$0 { itemToReject = nil } }
+        )) {
+            Button(L10n.t("رفض", "Reject"), role: .destructive) {
+                if let target = itemToReject { Task { await archiveVM.rejectItem(target) } }
+                itemToReject = nil
+            }
+            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { itemToReject = nil }
+        } message: {
+            Text(L10n.t("هل تريد رفض هذا العنصر؟", "Reject this item?"))
         }
         .alert(L10n.t("حذف من الأرشيف", "Delete from archive"),
                isPresented: Binding(
@@ -518,6 +557,85 @@ struct FamilyArchiveView: View {
         }
     }
 
+    /// هل توجد إجراءات للمستخدم الحالي على هذا العنصر؟ (لإظهار/إخفاء زر القائمة)
+    private func menuHasActions(for item: ArchiveItem) -> Bool {
+        if authVM.isAdmin { return true }
+        // غير الإدارة: إبلاغ متاح فقط لعناصر غيرهم
+        return item.uploadedBy != authVM.currentUser?.id
+    }
+
+    /// محتوى قائمة إجراءات عنصر الأرشيف — للإدارة تحكّم كامل، لغيرهم إبلاغ فقط.
+    @ViewBuilder
+    private func archiveActionsMenu(for item: ArchiveItem) -> some View {
+        if authVM.isAdmin {
+            // إجراءات الموافقة — فقط للعناصر المعلَّقة (مع تأكيد)
+            if item.approvalStatus == .pending {
+                Button {
+                    itemToApprove = item
+                } label: {
+                    Label(L10n.t("موافقة", "Approve"), systemImage: "checkmark.circle.fill")
+                }
+                Button {
+                    itemToReject = item
+                } label: {
+                    Label(L10n.t("رفض", "Reject"), systemImage: "xmark.circle.fill")
+                }
+                Divider()
+            }
+            // إجراءات الإخفاء — فقط للموافق عليها
+            if item.approvalStatus == .approved {
+                Button {
+                    Task { await archiveVM.toggleHidden(item) }
+                } label: {
+                    Label(
+                        item.isHidden
+                            ? L10n.t("إظهار للجميع", "Show to all")
+                            : L10n.t("إخفاء من الأعضاء", "Hide from members"),
+                        systemImage: item.isHidden ? "eye.fill" : "eye.slash.fill"
+                    )
+                }
+            }
+            Button {
+                itemToEdit = item
+            } label: {
+                Label(L10n.t("تعديل", "Edit"), systemImage: "pencil")
+            }
+            Button(role: .destructive) {
+                itemToDelete = item
+            } label: {
+                Label(L10n.t("حذف", "Delete"), systemImage: "trash")
+            }
+            // إبلاغ متاح للإدارة أيضاً (لغير عناصرهم)
+            if item.uploadedBy != authVM.currentUser?.id {
+                Divider()
+                Button {
+                    itemToReport = item
+                } label: {
+                    Label(L10n.t("إبلاغ", "Report"), systemImage: "exclamationmark.bubble")
+                }
+            }
+        } else if item.uploadedBy != authVM.currentUser?.id {
+            // الأعضاء العاديون: إبلاغ فقط (لغير عناصرهم) — سياسة Apple
+            Button {
+                itemToReport = item
+            } label: {
+                Label(L10n.t("إبلاغ", "Report"), systemImage: "exclamationmark.bubble")
+            }
+        }
+    }
+
+    /// شارة زر القائمة الظاهر (•••) — دائرة زجاجية صغيرة.
+    private var cardMenuBadge: some View {
+        Image(systemName: "ellipsis")
+            .font(DS.Font.scaled(13, weight: .black))
+            .foregroundColor(.white)
+            .frame(width: 28, height: 28)
+            .background(Circle().fill(Color.black.opacity(0.35)))
+            .background(Circle().fill(.ultraThinMaterial))
+            .overlay(Circle().strokeBorder(Color.white.opacity(0.35), lineWidth: 1))
+            .shadow(color: .black.opacity(0.2), radius: 3, x: 0, y: 1)
+    }
+
     private func archiveCard(_ item: ArchiveItem) -> some View {
         VStack(alignment: .leading, spacing: DS.Spacing.xs) {
             // معاينة بصرية أو أيقونة
@@ -527,11 +645,14 @@ struct FamilyArchiveView: View {
                         .fill(DS.Color.primary.opacity(0.08))
 
                     if item.isImage, let url = URL(string: item.fileUrl) {
+                        // scaledToFit: الصور العريضة تظهر كاملة بدون قص مبالغ
+                        // (الخلفية الملوّنة خلفها تعبّئ الفراغ الجانبي/العلوي)
                         CachedAsyncImage(url: url) { image in
-                            image.resizable().scaledToFill()
+                            image.resizable().scaledToFit()
                         } placeholder: {
                             ProgressView().tint(DS.Color.primary)
                         }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                     } else if item.isPDF {
                         // معاينة أول صفحة من الـPDF — مصغّرة جاهزة أو نُولّدها
                         if let thumb = item.thumbnailUrl, let turl = URL(string: thumb) {
@@ -618,10 +739,16 @@ struct FamilyArchiveView: View {
                     .background(Capsule().fill(item.category.accentColor.opacity(0.12)))
                 }
 
-                if !item.formattedSize.isEmpty {
-                    Text(item.formattedSize)
-                        .font(DS.Font.scaled(10, weight: .medium))
-                        .foregroundColor(DS.Color.textTertiary)
+                // اسم من أضاف العنصر — صغير وخفيف
+                if let uploaderName = uploaderName(for: item) {
+                    HStack(spacing: 2) {
+                        Image(systemName: "person.fill")
+                            .font(DS.Font.scaled(7, weight: .bold))
+                        Text(uploaderName)
+                            .font(DS.Font.scaled(8, weight: .medium))
+                            .lineLimit(1)
+                    }
+                    .foregroundColor(DS.Color.textTertiary)
                 }
             }
 
@@ -629,7 +756,7 @@ struct FamilyArchiveView: View {
         }
         .padding(DS.Spacing.sm)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .frame(height: 226, alignment: .top)
+        .frame(height: 246, alignment: .top)
         .background(
             RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
                 .fill(DS.Color.surface)
@@ -640,6 +767,13 @@ struct FamilyArchiveView: View {
         )
         .opacity(item.approvalStatus == .rejected ? 0.55 : (item.isHidden || item.approvalStatus == .pending ? 0.75 : 1.0))
         .dsSubtleShadow()
+    }
+
+    /// اسم العضو الذي أضاف العنصر (من uploadedBy) — nil لو غير معروف.
+    private func uploaderName(for item: ArchiveItem) -> String? {
+        guard let member = memberVM.member(byId: item.uploadedBy) else { return nil }
+        let name = member.fullName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return name.isEmpty ? member.firstName : name
     }
 
     private func borderColor(for item: ArchiveItem) -> Color {
@@ -1115,6 +1249,7 @@ struct ArchiveEditSheet: View {
 /// زر مشاركة/تنزيل يفتح UIActivityViewController.
 struct ArchiveItemViewer: View {
     let item: ArchiveItem
+    var uploaderName: String? = nil
     @Environment(\.dismiss) private var dismiss
     @State private var showShare = false
     @State private var shareURL: URL? = nil
@@ -1177,6 +1312,17 @@ struct ArchiveItemViewer: View {
                             .font(DS.Font.scaled(12, weight: .medium))
                             .foregroundColor(DS.Color.textSecondary)
                             .multilineTextAlignment(.leading)
+                    }
+                    // اسم من أضاف العنصر
+                    if let uploaderName, !uploaderName.isEmpty {
+                        HStack(spacing: 4) {
+                            Image(systemName: "person.crop.circle.fill")
+                                .font(DS.Font.scaled(10, weight: .bold))
+                            Text(L10n.t("أضافه: ", "Added by: ") + uploaderName)
+                                .font(DS.Font.scaled(11, weight: .semibold))
+                                .lineLimit(1)
+                        }
+                        .foregroundColor(DS.Color.textTertiary)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)

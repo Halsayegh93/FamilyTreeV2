@@ -42,6 +42,7 @@ enum RequestType: String {
     case childAdd = "child_add"
     case deceasedReport = "deceased_report"
     case photoSuggestion = "photo_suggestion"
+    case contentReport = "content_report"
 }
 
 /// أنواع الإشعارات — بدل strings سحرية
@@ -98,6 +99,8 @@ enum NotificationKind: String {
     // تواصل
     case contactMessage = "contact_message"
     case contactReply = "contact_reply"
+    // بلاغات المحتوى (سياسة Apple UGC)
+    case contentReport = "content_report"
     case test = "test"
 }
 

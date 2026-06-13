@@ -294,8 +294,40 @@ class ProjectsViewModel: ObservableObject {
         }
     }
     
+    // MARK: - Toggle Hidden (soft hide / show — admin only)
+
+    /// إخفاء/إظهار مشروع دون حذف. متاح للإدارة فقط.
+    func toggleHidden(id: UUID) async {
+        guard NetworkMonitor.shared.requireOnline() else { return }
+        guard authVM?.isAdmin == true else {
+            Log.warning("إخفاء المشروع مرفوض: الصلاحية للمدير فقط"); return
+        }
+        guard let idx = projects.firstIndex(where: { $0.id == id }) else { return }
+
+        let newValue = !projects[idx].isHidden
+        // تحديث تفاؤلي
+        projects[idx].isHidden = newValue
+
+        do {
+            try await supabase
+                .from("projects")
+                .update(["is_hidden": newValue])
+                .eq("id", value: id.uuidString)
+                .execute()
+            CacheManager.shared.save(projects, for: .projects)
+            Log.info("[Projects] \(newValue ? "إخفاء" : "إظهار"): \(id.uuidString)")
+        } catch {
+            // استرجاع عند الفشل
+            if let i = projects.firstIndex(where: { $0.id == id }) {
+                projects[i].isHidden = !newValue
+            }
+            self.errorMessage = L10n.t("تعذر تغيير حالة الإخفاء.", "Failed to toggle visibility.")
+            Log.error("خطأ إخفاء المشروع: \(error.localizedDescription)")
+        }
+    }
+
     // MARK: - Delete
-    
+
     func deleteProject(id: UUID) async {
         guard NetworkMonitor.shared.requireOnline() else { return }
         guard authVM?.isAdmin == true else { Log.warning("حذف المشروع مرفوض: الصلاحية للمدير فقط"); return }

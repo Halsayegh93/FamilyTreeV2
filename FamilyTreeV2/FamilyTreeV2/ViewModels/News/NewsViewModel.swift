@@ -821,8 +821,8 @@ class NewsViewModel: ObservableObject {
     // MARK: - Report News Post
 
     func reportNewsPost(postId: UUID, reason: String = "بلاغ على محتوى خبر") async {
+        // الإبلاغ متاح لجميع المستخدمين (أعضاء وإدارة) — سياسة Apple
         guard let userId = currentUser?.id else { return }
-        guard currentUser?.role == .member else { return }
         self.isLoading = true
 
         do {

@@ -17,6 +17,8 @@ nonisolated struct Project: Identifiable, Codable, Sendable {
     var approvalStatus: String
     var approvedBy: UUID?
     var createdAt: String?
+    /// إخفاء soft من قِبَل الإدارة — العضو العادي ما يشوف، الإدارة تشوف بعلامة مميّزة.
+    var isHidden: Bool
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -35,6 +37,7 @@ nonisolated struct Project: Identifiable, Codable, Sendable {
         case approvalStatus = "approval_status"
         case approvedBy = "approved_by"
         case createdAt = "created_at"
+        case isHidden = "is_hidden"
     }
 
     init(from decoder: Decoder) throws {
@@ -55,6 +58,7 @@ nonisolated struct Project: Identifiable, Codable, Sendable {
         approvalStatus = try container.decode(String.self, forKey: .approvalStatus)
         approvedBy = try container.decodeIfPresent(UUID.self, forKey: .approvedBy)
         createdAt = try container.decodeIfPresent(String.self, forKey: .createdAt)
+        isHidden = try container.decodeIfPresent(Bool.self, forKey: .isHidden) ?? false
     }
 
     init(id: UUID = UUID(), ownerId: UUID, ownerName: String, title: String,
@@ -64,7 +68,8 @@ nonisolated struct Project: Identifiable, Codable, Sendable {
          snapchatUrl: String? = nil, whatsappNumber: String? = nil,
          phoneNumber: String? = nil, locationUrl: String? = nil,
          approvalStatus: String = "approved",
-         approvedBy: UUID? = nil, createdAt: String? = nil) {
+         approvedBy: UUID? = nil, createdAt: String? = nil,
+         isHidden: Bool = false) {
         self.id = id
         self.ownerId = ownerId
         self.ownerName = ownerName
@@ -81,6 +86,7 @@ nonisolated struct Project: Identifiable, Codable, Sendable {
         self.approvalStatus = approvalStatus
         self.approvedBy = approvedBy
         self.createdAt = createdAt
+        self.isHidden = isHidden
     }
 
     /// Whether this project has any social media links

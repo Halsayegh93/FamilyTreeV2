@@ -17,6 +17,7 @@ struct HomeNewsView: View {
     @State private var selectedNewsForComments: NewsPost? = nil
     @State private var postToDelete: NewsPost? = nil
     @State private var postToReport: NewsPost? = nil
+    @State private var newsReportReason = ""
     @State private var postToEdit: NewsPost? = nil
     @State private var showNewNewsAlert = false
     @State private var newNewsCount = 0
@@ -25,7 +26,6 @@ struct HomeNewsView: View {
     @State private var activeSubPage: HomeSubPage? = nil
     @State private var appeared = false
     @State private var showNewsSearch = false
-    @State private var shuffledTreeMembers: [FamilyMember] = []
     @State private var newsSearchText = ""
     @State private var debouncedNewsSearch = ""
     @State private var newsSearchTask: Task<Void, Never>?
@@ -74,10 +74,6 @@ struct HomeNewsView: View {
                                 .padding(.top, DS.Spacing.md)
                                 .padding(.bottom, DS.Spacing.xxxxl)
                                 .onAppear {
-                                    // shuffle مرة واحدة فقط — لا إعادة على كل تغيير عدد
-                                    if shuffledTreeMembers.isEmpty {
-                                        shuffledTreeMembers = memberVM.allMembers.shuffled()
-                                    }
                                     guard !appeared else { return }
                                     withAnimation(DS.Anim.smooth.delay(0.1)) { appeared = true }
                                 }
@@ -129,12 +125,23 @@ struct HomeNewsView: View {
                 get: { postToReport != nil },
                 set: { if !$0 { postToReport = nil } }
             )) {
-                Button(L10n.t("إبلاغ", "Report")) {
-                    if let post = postToReport { Task { await newsVM.reportNewsPost(postId: post.id) } }
+                TextField(L10n.t("سبب الإبلاغ (اختياري)", "Reason (optional)"), text: $newsReportReason)
+                Button(L10n.t("إبلاغ", "Report"), role: .destructive) {
+                    let reason = newsReportReason.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if let post = postToReport {
+                        Task {
+                            await newsVM.reportNewsPost(
+                                postId: post.id,
+                                reason: reason.isEmpty ? "بلاغ على محتوى خبر" : reason
+                            )
+                        }
+                    }
                     postToReport = nil
+                    newsReportReason = ""
                 }
-                Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { postToReport = nil }
-            } message: { Text(L10n.t("تم استلام البلاغ.", "Report received.")) }
+                Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { postToReport = nil; newsReportReason = "" }
+            } message: { Text(L10n.t("اكتب سبب الإبلاغ، وسيتم إرساله للإدارة لمراجعة هذا الخبر.",
+                                    "Enter a reason; it will be sent to the admins to review this post.")) }
             .alert(L10n.t("تنبيه الأخبار", "News Alert"), isPresented: $showNewNewsAlert) {
                 Button(L10n.t("حسناً", "OK"), role: .cancel) {}
             } message: { Text(L10n.t("تمت إضافة \(newNewsCount) خبر جديد.", "\(newNewsCount) new post(s) added.")) }
@@ -212,7 +219,7 @@ struct HomeNewsView: View {
                     Spacer()
                     HStack {
                         Spacer()
-                        DSFloatingButton(icon: "plus") {
+                        DSFloatingButton(label: L10n.t("إضافة خبر", "Add Post"), color: DS.Color.secondary) {
                             showingAddNews = true
                         }
                         .padding(.trailing, DS.Spacing.xl)
@@ -230,7 +237,7 @@ struct HomeNewsView: View {
             case .archive: return L10n.t("أرشيف العائلة", "Family Archive")
             case .projects: return L10n.t("مشاريع العائلة", "Family Projects")
             case .contact: return L10n.t("التواصل", "Contact")
-            case .news: return L10n.t("أخبار العائلة", "Family News")
+            case .news: return L10n.t("الأخبار والمناسبات", "News & Events")
             }
         }()
 
@@ -251,6 +258,21 @@ struct HomeNewsView: View {
                 .foregroundColor(DS.Color.textPrimary)
 
             Spacer()
+
+            // زر البحث — يظهر في صفحة الأخبار فقط (انتقل من الهيدر الداخلي)
+            if page == .news {
+                Button {
+                    withAnimation(DS.Anim.snappy) { showNewsSearch.toggle() }
+                } label: {
+                    Image(systemName: showNewsSearch ? "xmark.circle.fill" : "magnifyingglass")
+                        .font(DS.Font.scaled(16, weight: .semibold))
+                        .foregroundColor(DS.Color.textSecondary)
+                        .frame(width: 38, height: 38)
+                        .background(DS.Color.surface)
+                        .clipShape(Circle())
+                        .overlay(Circle().strokeBorder(DS.Color.primary.opacity(0.08), lineWidth: 1))
+                }
+            }
         }
         .padding(.horizontal, DS.Spacing.lg)
         .padding(.vertical, DS.Spacing.sm)
@@ -263,13 +285,13 @@ struct HomeNewsView: View {
             // 1) Hero ترحيب (يفتح حسابي عند الضغط)
             greetingCard
 
-            // 2) شجرة العائلة
-            familyTreeCard
+            // 2) الشجرة + الديوانيات — مربعين بنفس ستايل التايل
+            primaryTilesRow
 
             // 3) آخر الأخبار
             newsBentoCard
 
-            // 4) شبكة الوصول السريع — متجاوبة حسب الجهاز
+            // 4) شبكة الوصول السريع — أرشيف / مشاريع / تواصل
             quickAccessGrid
         }
         .padding(.horizontal, DS.Spacing.lg)
@@ -279,28 +301,50 @@ struct HomeNewsView: View {
         .animation(DS.Anim.smooth, value: layout)
     }
 
-    // MARK: - Quick Access Grid (2×2 موحّد بنمط فاخر)
+    // MARK: - Primary Tiles Row — الشجرة + الديوانيات
 
-    /// شبكة 2×2 موحّدة: ديوانيات / أرشيف / تواصل / مشاريع — كلها بنفس التصميم وأحجام متطابقة.
-    private var quickAccessGrid: some View {
-        let projectImageURL: String? = projectsVM.projects.first?.logoUrl
-
-        return LazyVGrid(
-            columns: Array(
-                repeating: GridItem(.flexible(), spacing: layout.gridSpacing),
-                count: layout.gridColumns
-            ),
-            spacing: layout.gridSpacing
-        ) {
-            // 4 مربعات ثابتة لضمان تساوي الشبكة (2×2)
+    /// صف علوي: مربّع الشجرة + مربّع الديوانيات — بنفس ستايل التايل الموحّد،
+    /// وبارتفاع أكبر قليلاً ليكونا عنصري الوصول الأساسيين.
+    private var primaryTilesRow: some View {
+        HStack(spacing: layout.gridSpacing) {
+            unifiedTile(
+                title: L10n.t("شجرة العائلة", "Family Tree"),
+                icon: "tree.fill",
+                color: DS.Color.secondary,
+                imageURL: nil,
+                count: nil,
+                height: primaryTileHeight,
+                action: { selectedTab = 1 }
+            )
             unifiedTile(
                 title: L10n.t("الديوانيات", "Diwaniyas"),
                 icon: "map.fill",
                 color: DS.Color.accent,
                 imageURL: nil,
                 count: nil,
+                height: primaryTileHeight,
                 action: { selectedTab = 2 }
             )
+        }
+    }
+
+    /// ارتفاع المربّعين العلويين — أطول قليلاً من تايلات الوصول السريع.
+    private var primaryTileHeight: CGFloat { layout.tileHeight + 6 }
+
+    // MARK: - Quick Access Grid — أرشيف / مشاريع / تواصل
+
+    /// صف من 3 مربعات موحّدة: أرشيف العائلة / مشاريع العائلة / التواصل
+    /// — كلها بنفس التصميم وأحجام متطابقة.
+    private var quickAccessGrid: some View {
+        let projectImageURL: String? = projectsVM.projects.first?.logoUrl
+
+        return LazyVGrid(
+            columns: Array(
+                repeating: GridItem(.flexible(), spacing: layout.gridSpacing),
+                count: 3
+            ),
+            spacing: layout.gridSpacing
+        ) {
             unifiedTile(
                 title: L10n.t("أرشيف العائلة", "Family Archive"),
                 icon: "archivebox.fill",
@@ -310,20 +354,20 @@ struct HomeNewsView: View {
                 action: { withAnimation(DS.Anim.snappy) { activeSubPage = .archive } }
             )
             unifiedTile(
-                title: L10n.t("التواصل", "Contact"),
-                icon: "envelope.fill",
-                color: DS.Color.gridMessaging,
-                imageURL: nil,
-                count: nil,
-                action: { withAnimation(DS.Anim.snappy) { activeSubPage = .contact } }
-            )
-            unifiedTile(
                 title: L10n.t("مشاريع العائلة", "Family Projects"),
                 icon: "briefcase.fill",
                 color: DS.Color.warning,
                 imageURL: projectImageURL,
                 count: projectsVM.projects.count,
                 action: { withAnimation(DS.Anim.snappy) { activeSubPage = .projects } }
+            )
+            unifiedTile(
+                title: L10n.t("التواصل", "Contact"),
+                icon: "envelope.fill",
+                color: DS.Color.gridMessaging,
+                imageURL: nil,
+                count: nil,
+                action: { withAnimation(DS.Anim.snappy) { activeSubPage = .contact } }
             )
         }
     }
@@ -335,6 +379,7 @@ struct HomeNewsView: View {
         color: Color,
         imageURL: String?,
         count: Int?,
+        height: CGFloat? = nil,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: {
@@ -388,10 +433,10 @@ struct HomeNewsView: View {
                     .padding(8)
             }
             .frame(maxWidth: .infinity)
-            .frame(height: layout.tileHeight)
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+            .frame(height: height ?? layout.tileHeight)
+            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous)
                     .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
             )
             .shadow(color: .black.opacity(0.07), radius: 5, x: 0, y: 2)
@@ -421,12 +466,18 @@ struct HomeNewsView: View {
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
-            // زخرفة خفيفة
+            // زخرفة خفيفة — مقيّدة في صندوق ثابت ومثبّتة أسفل-يمين حتى
+            // تبقى في نفس المكان لكل الأيقونات مهما اختلف ارتفاع الرمز
+            // (مثلاً tree.fill الطويلة كانت تطلع فوق مقارنةً بـ map.fill)
             Image(systemName: icon)
-                .font(.system(size: 80, weight: .light))
+                .resizable()
+                .scaledToFit()
+                .frame(width: 78, height: 78)
                 .foregroundColor(.white.opacity(0.13))
-                .offset(x: 30, y: 15)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                .offset(x: 16, y: 12)
         }
+        .clipped()
     }
 
     // MARK: - Legacy (لم يعد مستخدماً بعد توحيد الشبكة)
@@ -636,19 +687,21 @@ struct HomeNewsView: View {
                     )
                     .overlay(
                         Circle()
-                            .strokeBorder(DS.Color.primary.opacity(0.20), lineWidth: 2)
+                            .strokeBorder(Color.white.opacity(0.55), lineWidth: 2)
                     )
+                    .shadow(color: .black.opacity(0.15), radius: 4, x: 0, y: 2)
                 }
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(timeBasedGreeting)
                         .font(DS.Font.scaled(11, weight: .heavy))
-                        .foregroundColor(DS.Color.primary)
+                        .foregroundColor(.white.opacity(0.90))
                         .tracking(0.6)
                     Text(authVM.currentUser?.firstName ?? L10n.t("أهلاً بك", "Welcome"))
                         .font(DS.Font.scaled(20, weight: .black))
-                        .foregroundColor(DS.Color.textPrimary)
+                        .foregroundColor(.white)
                         .lineLimit(1)
+                        .shadow(color: .black.opacity(0.20), radius: 3, x: 0, y: 1)
                 }
 
                 Spacer(minLength: 0)
@@ -657,34 +710,26 @@ struct HomeNewsView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 ZStack {
-                    DS.Color.surface
+                    // تدرّج أزرق فاتح
                     LinearGradient(
-                        colors: [
-                            DS.Color.primary.opacity(0.05),
-                            DS.Color.secondary.opacity(0.03)
-                        ],
+                        colors: [DS.Color.primaryLight, DS.Color.primary],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
+                    // زخرفة أيقونة الملف الشخصي الباهتة بالخلفية
+                    Image(systemName: "person.crop.circle.fill")
+                        .font(.system(size: 92, weight: .light))
+                        .foregroundColor(.white.opacity(0.12))
+                        .offset(x: L10n.isArabic ? 120 : -120, y: 14)
                     Circle()
-                        .fill(DS.Color.primary.opacity(0.10))
-                        .frame(width: 200, height: 200)
-                        .blur(radius: 50)
-                        .offset(x: 130, y: -80)
-                    Circle()
-                        .fill(DS.Color.secondary.opacity(0.07))
-                        .frame(width: 120, height: 120)
+                        .fill(Color.white.opacity(0.10))
+                        .frame(width: 150, height: 150)
                         .blur(radius: 40)
-                        .offset(x: -50, y: 70)
-                    Circle()
-                        .fill(DS.Color.primary.opacity(0.13))
-                        .frame(width: 120, height: 120)
-                        .blur(radius: 35)
-                        .offset(x: -90, y: -50)
+                        .offset(x: 120, y: -70)
                 }
             )
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xxl))
-            .shadow(color: .black.opacity(0.045), radius: 14, x: 0, y: 4)
+            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm))
+            .shadow(color: DS.Color.primary.opacity(0.25), radius: 12, x: 0, y: 5)
         }
         .buttonStyle(DSScaleButtonStyle())
     }
@@ -743,77 +788,6 @@ struct HomeNewsView: View {
         .shadow(color: .black.opacity(0.035), radius: 8, x: 0, y: 2)
     }
 
-    // مربع شجرة العائلة — يحوي avatars حقيقية للأعضاء (إحساس عائلي)
-    private var familyTreeCard: some View {
-        Button {
-            selectedTab = 1
-        } label: {
-            VStack(alignment: .leading, spacing: DS.Spacing.md) {
-                HStack(alignment: .center, spacing: DS.Spacing.sm) {
-                    premiumIcon("tree.fill", color: DS.Color.secondary)
-
-                    Text(L10n.t("شجرة العائلة", "Family Tree"))
-                        .font(DS.Font.scaled(18, weight: .bold))
-                        .foregroundColor(DS.Color.textPrimary)
-
-                    Spacer()
-                }
-
-                familyAvatarsRow
-            }
-            .padding(DS.Spacing.lg)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                ZStack {
-                    DS.Color.surface
-                    Circle()
-                        .fill(DS.Color.secondary.opacity(0.10))
-                        .frame(width: 200, height: 200)
-                        .blur(radius: 55)
-                        .offset(x: 110, y: -70)
-                    Circle()
-                        .fill(DS.Color.primary.opacity(0.07))
-                        .frame(width: 130, height: 130)
-                        .blur(radius: 42)
-                        .offset(x: -70, y: 80)
-                    Circle()
-                        .fill(DS.Color.primary.opacity(0.12))
-                        .frame(width: 110, height: 110)
-                        .blur(radius: 33)
-                        .offset(x: -90, y: -50)
-                }
-            )
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xxl))
-            .shadow(color: .black.opacity(0.045), radius: 14, x: 0, y: 4)
-        }
-        .buttonStyle(DSScaleButtonStyle())
-    }
-
-    // صف avatars متراكبة لأعضاء العائلة (بدون badge عدد)
-    // يأخذ من القائمة المخلوطة (shuffled) ليتغير كل مرة تُفتح الصفحة
-    private var familyAvatarsRow: some View {
-        let source = shuffledTreeMembers.isEmpty ? memberVM.allMembers : shuffledTreeMembers
-        // أجهزة أعرض (iPad/أفقي) تعرض وجوهاً أكثر
-        let maxAvatars = hSizeClass == .regular ? 8 : 5
-        let visible = Array(source.prefix(maxAvatars))
-        return HStack(spacing: -8) {
-            ForEach(Array(visible.enumerated()), id: \.element.id) { index, member in
-                DSMemberAvatar(
-                    name: member.firstName,
-                    avatarUrl: member.avatarUrl,
-                    size: 42 * layout.scale,
-                    roleColor: member.roleColor
-                )
-                .overlay(
-                    Circle()
-                        .strokeBorder(DS.Color.surface, lineWidth: 2.5)
-                )
-                .zIndex(Double(visible.count - index))
-            }
-            Spacer()
-        }
-    }
-
     // pill أفقي مدمج للأكشن الثانوي (التواصل / مشاريع العائلة)
     private func actionPill(icon: String, title: String, color: Color, action: @escaping () -> Void) -> some View {
         Button(action: action) {
@@ -854,7 +828,7 @@ struct HomeNewsView: View {
                     premiumIcon("newspaper.fill", color: DS.Color.primary)
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(L10n.t("آخر الأخبار", "Latest News"))
+                        Text(L10n.t("الأخبار والمناسبات", "News & Events"))
                             .font(DS.Font.scaled(18, weight: .bold))
                             .foregroundColor(DS.Color.textPrimary)
                         if !newsVM.allNews.isEmpty {
@@ -948,7 +922,7 @@ struct HomeNewsView: View {
                         .offset(x: -30, y: -60)
                 }
             )
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xxl))
+            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm))
             .shadow(color: .black.opacity(0.045), radius: 14, x: 0, y: 4)
         }
         .buttonStyle(DSScaleButtonStyle())
@@ -1359,51 +1333,26 @@ struct HomeNewsView: View {
     // MARK: - News Feed Section
     private var newsFeedSection: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Section header + بحث
-            VStack(spacing: DS.Spacing.xs) {
+            // حقل البحث فقط — العنوان موجود في هيدر الصفحة بالأعلى (بدون تكرار)
+            if showNewsSearch {
                 HStack(spacing: DS.Spacing.sm) {
-                    Image(systemName: "newspaper.fill")
-                        .font(DS.Font.scaled(14, weight: .semibold))
-                        .foregroundColor(DS.Color.textOnPrimary)
-                        .frame(width: 30, height: 30)
-                        .background(DS.Color.gradientPrimary)
-                        .clipShape(Circle())
-
-                    Text(L10n.t("أخبار العائلة", "Family News"))
-                        .font(DS.Font.headline)
-                        .foregroundColor(DS.Color.textPrimary)
-
-                    Spacer()
-
-                    Button {
-                        withAnimation(DS.Anim.snappy) { showNewsSearch.toggle() }
-                    } label: {
-                        Image(systemName: showNewsSearch ? "xmark.circle.fill" : "magnifyingglass")
-                            .font(DS.Font.scaled(16, weight: .semibold))
-                            .foregroundColor(DS.Color.textSecondary)
-                    }
-                }
-
-                if showNewsSearch {
-                    HStack(spacing: DS.Spacing.sm) {
-                        Image(systemName: "magnifyingglass")
-                            .foregroundColor(DS.Color.textTertiary)
-                        TextField(L10n.t("بحث بالأخبار...", "Search news..."), text: $newsSearchText)
-                            .font(DS.Font.body)
-                        if !newsSearchText.isEmpty {
-                            Button { newsSearchText = "" } label: {
-                                Image(systemName: "xmark.circle.fill")
-                                    .foregroundColor(DS.Color.textTertiary)
-                            }
+                    Image(systemName: "magnifyingglass")
+                        .foregroundColor(DS.Color.textTertiary)
+                    TextField(L10n.t("بحث بالأخبار...", "Search news..."), text: $newsSearchText)
+                        .font(DS.Font.body)
+                    if !newsSearchText.isEmpty {
+                        Button { newsSearchText = "" } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundColor(DS.Color.textTertiary)
                         }
                     }
-                    .padding(DS.Spacing.sm)
-                    .background(DS.Color.surface)
-                    .cornerRadius(DS.Radius.md)
                 }
+                .padding(DS.Spacing.sm)
+                .background(DS.Color.surface)
+                .cornerRadius(DS.Radius.md)
+                .padding(.horizontal, DS.Spacing.lg)
+                .padding(.vertical, DS.Spacing.sm)
             }
-            .padding(.horizontal, DS.Spacing.lg)
-            .padding(.vertical, DS.Spacing.sm)
 
             if newsVM.isLoading && newsVM.allNews.isEmpty {
                 newsLoadingSkeleton(count: 3)
@@ -1525,7 +1474,8 @@ struct HomeNewsView: View {
                 Task { await newsVM.submitNewsPollVote(postId: news.id, optionIndex: optionIndex) }
             },
             canDelete: authVM.canDeleteNews,
-            canReport: authVM.currentUser?.role == .member,
+            // الإبلاغ متاح للجميع (أعضاء وإدارة) لغير منشوراتهم — سياسة Apple
+            canReport: authVM.currentUser?.id != news.author_id,
             canEdit: authVM.canModerate || authVM.currentUser?.id == news.author_id,
             onDeleteTap: { postToDelete = news },
             onReportTap: { postToReport = news },

@@ -10,6 +10,9 @@ struct DiwaniyasView: View {
     @State private var showingAddRequest = false
     @State private var diwaniyaToEdit: Diwaniya? = nil
     @State private var diwaniyaToDelete: Diwaniya? = nil
+    @State private var diwaniyaToReport: Diwaniya? = nil
+    @State private var reportReason = ""
+    @State private var reportSent = false
     @State private var appeared = false
     @State private var cachedFilteredDiwaniyas: [Diwaniya] = []
 
@@ -27,20 +30,7 @@ struct DiwaniyasView: View {
                         subtitle: "\(filteredDiwaniyas.count) " + L10n.t("موقع ومجلس", "places"),
                         icon: "map.fill",
                         backgroundGradient: DS.Color.gradientPrimary
-                    ) {
-                        Button(action: { showingAddRequest = true }) {
-                            ZStack {
-                                Circle()
-                                    .fill(DS.Color.overlayIcon)
-                                    .frame(width: 44, height: 44)
-                                    .overlay(Circle().stroke(DS.Color.overlayIconBorder, lineWidth: 1.5))
-                                Image(systemName: "plus")
-                                    .font(DS.Font.scaled(16, weight: .bold))
-                                    .foregroundColor(DS.Color.textOnPrimary)
-                            }
-                            .contentShape(Circle())
-                        }
-                    }
+                    )
 
                     if viewModel.isLoading && filteredDiwaniyas.isEmpty {
                         Spacer()
@@ -70,6 +60,17 @@ struct DiwaniyasView: View {
                         }
                     }
                 }
+
+                // زر الإضافة السفلي (FAB) — مثل بقية الصفحات
+                HStack {
+                    Spacer()
+                    DSFloatingButton(label: L10n.t("إضافة", "Add"), color: DS.Color.secondary) {
+                        showingAddRequest = true
+                    }
+                    .padding(.trailing, DS.Spacing.xl)
+                    .padding(.bottom, DS.Spacing.lg)
+                }
+                .frame(maxHeight: .infinity, alignment: .bottom)
             }
             .toolbar(.hidden, for: .navigationBar)
             .sheet(isPresented: $showingAddRequest) {
@@ -81,6 +82,38 @@ struct DiwaniyasView: View {
                 EditDiwaniyaView(diwaniya: diwaniya)
                     .environmentObject(viewModel)
                     .environmentObject(authVM)
+            }
+            .alert(L10n.t("إبلاغ عن ديوانية", "Report Diwaniya"), isPresented: .init(
+                get: { diwaniyaToReport != nil },
+                set: { if !$0 { diwaniyaToReport = nil } }
+            )) {
+                TextField(L10n.t("سبب الإبلاغ (اختياري)", "Reason (optional)"), text: $reportReason)
+                Button(L10n.t("إبلاغ", "Report"), role: .destructive) {
+                    let target = diwaniyaToReport
+                    let reason = reportReason
+                    diwaniyaToReport = nil
+                    reportReason = ""
+                    if let target {
+                        Task {
+                            let ok = await notificationVM.reportContent(
+                                contentKind: L10n.t("ديوانية", "diwaniya"),
+                                contentLabel: target.title,
+                                contentId: target.id,
+                                reason: reason
+                            )
+                            if ok { await MainActor.run { reportSent = true } }
+                        }
+                    }
+                }
+                Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { diwaniyaToReport = nil; reportReason = "" }
+            } message: {
+                Text(L10n.t("اكتب سبب الإبلاغ، وسيتم إرساله للإدارة لمراجعة هذه الديوانية.",
+                           "Enter a reason; it will be sent to the admins to review this diwaniya."))
+            }
+            .alert(L10n.t("تم الإبلاغ", "Reported"), isPresented: $reportSent) {
+                Button(L10n.t("حسناً", "OK"), role: .cancel) {}
+            } message: {
+                Text(L10n.t("شكراً لك، وصل بلاغك للإدارة.", "Thank you, your report reached the admins."))
             }
             .alert(
                 L10n.t("حذف الديوانية", "Delete Diwaniya"),
@@ -266,13 +299,24 @@ struct DiwaniyasView: View {
 
                     Spacer()
 
-                    if authVM.canDeleteDiwaniyas || authVM.currentUser?.id == item.ownerId {
+                    let canManageThis = authVM.canDeleteDiwaniyas || authVM.currentUser?.id == item.ownerId
+                    let canReportThis = authVM.currentUser?.id != item.ownerId
+                    if canManageThis || canReportThis {
                         Menu {
-                            Button(action: { diwaniyaToEdit = item }) {
-                                Label(L10n.t("تعديل", "Edit"), systemImage: "pencil")
+                            if canManageThis {
+                                Button(action: { diwaniyaToEdit = item }) {
+                                    Label(L10n.t("تعديل", "Edit"), systemImage: "pencil")
+                                }
+                                Button(role: .destructive, action: { diwaniyaToDelete = item }) {
+                                    Label(L10n.t("حذف", "Delete"), systemImage: "trash")
+                                }
                             }
-                            Button(role: .destructive, action: { diwaniyaToDelete = item }) {
-                                Label(L10n.t("حذف", "Delete"), systemImage: "trash")
+                            // إبلاغ متاح للجميع (أعضاء وإدارة) لغير ديوانياتهم — سياسة Apple
+                            if canReportThis {
+                                if canManageThis { Divider() }
+                                Button(action: { diwaniyaToReport = item }) {
+                                    Label(L10n.t("إبلاغ", "Report"), systemImage: "exclamationmark.bubble")
+                                }
                             }
                         } label: {
                             Image(systemName: "ellipsis")

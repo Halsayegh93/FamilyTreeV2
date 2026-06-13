@@ -1044,6 +1044,106 @@ class NotificationViewModel: ObservableObject {
         self.isLoading = false
     }
 
+    /// إبلاغ عام عن محتوى (مشروع/أرشيف/ديوانية/عضو/تعليق…) — سياسة Apple للمحتوى
+    /// الذي ينشئه المستخدمون. يُدرج طلب إداري ويُشعر الإدارة فوراً بـ push + إشعار داخلي.
+    /// - Parameters:
+    ///   - contentKind: نوع المحتوى المقروء (مثلاً "مشروع"، "عنصر أرشيف").
+    ///   - contentLabel: وصف مختصر يعرّف المحتوى (عنوان/اسم).
+    ///   - contentId: معرّف المحتوى (يُحفظ في new_value لمرجعية الإدارة).
+    @discardableResult
+    func reportContent(
+        contentKind: String,
+        contentLabel: String,
+        contentId: UUID?,
+        reason: String = ""
+    ) async -> Bool {
+        guard let userId = currentUser?.id else { return false }
+        let reporterName = currentUser?.fullName ?? ""
+        let trimmedReason = reason.trimmingCharacters(in: .whitespacesAndNewlines)
+        let details = trimmedReason.isEmpty
+            ? "[\(contentKind)] \(contentLabel)"
+            : "[\(contentKind)] \(contentLabel) — \(L10n.t("السبب", "Reason")): \(trimmedReason)"
+
+        do {
+            var payload: [String: AnyEncodable] = [
+                "member_id":    AnyEncodable(userId.uuidString),
+                "requester_id": AnyEncodable(userId.uuidString),
+                "request_type": AnyEncodable(RequestType.contentReport.rawValue),
+                "status":       AnyEncodable(ApprovalStatus.pending.rawValue),
+                "details":      AnyEncodable(details)
+            ]
+            if let contentId { payload["new_value"] = AnyEncodable(contentId.uuidString) }
+
+            let inserted: AdminRequest = try await supabase
+                .from("admin_requests")
+                .insert(payload)
+                .select()
+                .single()
+                .execute()
+                .value
+
+            let reasonSuffix = trimmedReason.isEmpty ? "" : " — \(trimmedReason)"
+            await notifyAdminsWithPush(
+                title: L10n.t("بلاغ على محتوى", "Content Report"),
+                body: L10n.t(
+                    "\(reporterName) أبلغ عن \(contentKind): \(contentLabel)\(reasonSuffix)",
+                    "\(reporterName) reported a \(contentKind): \(contentLabel)\(reasonSuffix)"
+                ),
+                kind: NotificationKind.contentReport.rawValue,
+                requestId: inserted.id,
+                requestType: RequestType.contentReport.rawValue
+            )
+            return true
+        } catch {
+            Log.error("[REPORT] تعذّر إرسال البلاغ: \(error.localizedDescription)")
+            return false
+        }
+    }
+
+    /// جدولة إشعار يُرسل في وقت محدد لاحقاً (من الخادم عبر pg_cron).
+    /// يُدرج صفاً في scheduled_notifications؛ المهمة المجدولة تتكفّل بالإرسال الفعلي
+    /// حتى لو كان جوال المدير مقفولاً. يرجع true عند النجاح.
+    /// - Returns: false إذا الميزة غير متاحة (الجدول غير موجود) أو فشل الإدراج.
+    @discardableResult
+    func scheduleNotification(
+        title: String,
+        body: String,
+        targetMemberIds: [UUID]?,
+        scheduledFor: Date,
+        kind: String = "admin_broadcast"
+    ) async -> Bool {
+        guard authVM?.isAdmin == true, let creator = currentUser?.id else { return false }
+        self.isLoading = true
+        defer { self.isLoading = false }
+
+        let iso = ISO8601DateFormatter().string(from: scheduledFor)
+        var payload: [String: AnyEncodable] = [
+            "title":         AnyEncodable(title),
+            "body":          AnyEncodable(body),
+            "kind":          AnyEncodable(kind),
+            "scheduled_for": AnyEncodable(iso),
+            "status":        AnyEncodable("pending"),
+            "created_by":    AnyEncodable(creator.uuidString)
+        ]
+        // أعضاء محددون → مصفوفة UUID؛ الجميع → نتركه NULL (broadcast)
+        if let ids = targetMemberIds, !ids.isEmpty {
+            payload["target_member_ids"] = AnyEncodable(ids.map { $0.uuidString })
+        }
+
+        do {
+            try await supabase.from("scheduled_notifications").insert(payload).execute()
+            Log.info("[SCHEDULE] تمت جدولة إشعار لـ \(iso)")
+            return true
+        } catch {
+            if ErrorHelper.isMissingTable(error, table: "scheduled_notifications") {
+                Log.warning("[SCHEDULE] جدول scheduled_notifications غير موجود — تجاهُل")
+            } else {
+                Log.error("[SCHEDULE] تعذّر جدولة الإشعار: \(error.localizedDescription)")
+            }
+            return false
+        }
+    }
+
     /// إرسال إشعار واحد في مركز الإشعارات (broadcast) يراه المدراء والمشرفون
     /// target_member_id = NULL يعني broadcast — الـ RLS يتكفل بإظهاره للمدراء فقط
     func notifyAdmins(

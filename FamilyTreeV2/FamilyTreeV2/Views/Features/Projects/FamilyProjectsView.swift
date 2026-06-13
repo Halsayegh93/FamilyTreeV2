@@ -4,6 +4,7 @@ struct FamilyProjectsView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var projectsVM: ProjectsViewModel
     @EnvironmentObject var memberVM: MemberViewModel
+    @EnvironmentObject var notificationVM: NotificationViewModel
 
     @State private var showingAddProject = false
     @State private var selectedProject: Project?
@@ -17,6 +18,11 @@ struct FamilyProjectsView: View {
     @State private var selectedIDs: Set<UUID> = []
     @State private var showBatchDeleteAlert = false
     @State private var projectToDelete: Project? = nil
+    @State private var projectToEdit: Project? = nil
+    @State private var didEditProject = false
+    @State private var projectToReport: Project? = nil
+    @State private var reportReason = ""
+    @State private var reportSent = false
 
     private let gridColumns: [GridItem] = [
         GridItem(.flexible(), spacing: DS.Spacing.md),
@@ -53,7 +59,7 @@ struct FamilyProjectsView: View {
             if !selectionMode {
                 HStack {
                     Spacer()
-                    DSFloatingButton(icon: "plus") {
+                    DSFloatingButton(label: L10n.t("إضافة مشروع", "Add Project"), color: DS.Color.secondary) {
                         showingAddProject = true
                     }
                     .padding(.trailing, DS.Spacing.xl)
@@ -98,6 +104,45 @@ struct FamilyProjectsView: View {
             ProjectDetailView(project: project)
                 .environmentObject(projectsVM)
                 .environmentObject(authVM)
+        }
+        .sheet(item: $projectToEdit) { project in
+            NavigationStack {
+                EditProjectView(project: project, didEdit: $didEditProject)
+                    .environmentObject(projectsVM)
+                    .environmentObject(authVM)
+            }
+        }
+        .alert(L10n.t("إبلاغ عن مشروع", "Report Project"), isPresented: Binding(
+            get: { projectToReport != nil },
+            set: { if !$0 { projectToReport = nil } }
+        )) {
+            TextField(L10n.t("سبب الإبلاغ (اختياري)", "Reason (optional)"), text: $reportReason)
+            Button(L10n.t("إبلاغ", "Report"), role: .destructive) {
+                let target = projectToReport
+                let reason = reportReason
+                projectToReport = nil
+                reportReason = ""
+                if let target {
+                    Task {
+                        let ok = await notificationVM.reportContent(
+                            contentKind: L10n.t("مشروع", "project"),
+                            contentLabel: target.title,
+                            contentId: target.id,
+                            reason: reason
+                        )
+                        if ok { await MainActor.run { reportSent = true } }
+                    }
+                }
+            }
+            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { projectToReport = nil; reportReason = "" }
+        } message: {
+            Text(L10n.t("اكتب سبب الإبلاغ، وسيتم إرساله للإدارة لمراجعة هذا المشروع.",
+                       "Enter a reason; it will be sent to the admins to review this project."))
+        }
+        .alert(L10n.t("تم الإبلاغ", "Reported"), isPresented: $reportSent) {
+            Button(L10n.t("حسناً", "OK"), role: .cancel) {}
+        } message: {
+            Text(L10n.t("شكراً لك، وصل بلاغك للإدارة.", "Thank you, your report reached the admins."))
         }
         .alert(L10n.t("حذف المشروع", "Delete project"),
                isPresented: Binding(
@@ -165,13 +210,21 @@ struct FamilyProjectsView: View {
                                 }
                         }
                         .buttonStyle(DSScaleButtonStyle())
-                        .contextMenu {
-                            if authVM.isAdmin && !selectionMode {
-                                Button(role: .destructive) {
-                                    projectToDelete = project
+                        // زر قائمة ظاهر — كـ overlay على الزر نفسه. الإدارة: تحكّم
+                        // كامل، غيرهم: إبلاغ فقط (لغير مشاريعهم).
+                        .overlay(alignment: .topLeading) {
+                            if !selectionMode && projectMenuHasActions(for: project) {
+                                Menu {
+                                    projectActionsMenu(for: project)
                                 } label: {
-                                    Label(L10n.t("حذف", "Delete"), systemImage: "trash")
+                                    cardMenuBadge
                                 }
+                                .padding(6)
+                            }
+                        }
+                        .contextMenu {
+                            if !selectionMode {
+                                projectActionsMenu(for: project)
                             }
                         }
                     }
@@ -181,6 +234,67 @@ struct FamilyProjectsView: View {
             }
             .refreshable { await refreshAll() }
         }
+    }
+
+    /// هل توجد إجراءات للمستخدم الحالي على هذا المشروع؟
+    private func projectMenuHasActions(for project: Project) -> Bool {
+        if authVM.isAdmin { return true }
+        return project.ownerId != authVM.currentUser?.id
+    }
+
+    /// محتوى قائمة إجراءات المشروع — للإدارة تحكّم كامل، لغيرهم إبلاغ فقط.
+    @ViewBuilder
+    private func projectActionsMenu(for project: Project) -> some View {
+        if authVM.isAdmin {
+            Button {
+                projectToEdit = project
+            } label: {
+                Label(L10n.t("تعديل", "Edit"), systemImage: "pencil")
+            }
+            Button {
+                Task { await projectsVM.toggleHidden(id: project.id) }
+            } label: {
+                Label(
+                    project.isHidden
+                        ? L10n.t("إظهار للجميع", "Show to all")
+                        : L10n.t("إخفاء من الأعضاء", "Hide from members"),
+                    systemImage: project.isHidden ? "eye.fill" : "eye.slash.fill"
+                )
+            }
+            Button(role: .destructive) {
+                projectToDelete = project
+            } label: {
+                Label(L10n.t("حذف", "Delete"), systemImage: "trash")
+            }
+            // إبلاغ متاح للإدارة أيضاً (لغير مشاريعهم)
+            if project.ownerId != authVM.currentUser?.id {
+                Divider()
+                Button {
+                    projectToReport = project
+                } label: {
+                    Label(L10n.t("إبلاغ", "Report"), systemImage: "exclamationmark.bubble")
+                }
+            }
+        } else if project.ownerId != authVM.currentUser?.id {
+            // الأعضاء العاديون: إبلاغ فقط (لغير مشاريعهم) — سياسة Apple
+            Button {
+                projectToReport = project
+            } label: {
+                Label(L10n.t("إبلاغ", "Report"), systemImage: "exclamationmark.bubble")
+            }
+        }
+    }
+
+    /// شارة زر القائمة الظاهر (•••) — دائرة زجاجية صغيرة.
+    private var cardMenuBadge: some View {
+        Image(systemName: "ellipsis")
+            .font(DS.Font.scaled(13, weight: .black))
+            .foregroundColor(.white)
+            .frame(width: 28, height: 28)
+            .background(Circle().fill(Color.black.opacity(0.35)))
+            .background(Circle().fill(.ultraThinMaterial))
+            .overlay(Circle().strokeBorder(Color.white.opacity(0.35), lineWidth: 1))
+            .shadow(color: .black.opacity(0.2), radius: 3, x: 0, y: 1)
     }
 
     private var currentItems: [Project] {
@@ -461,9 +575,18 @@ struct FamilyProjectsView: View {
                 .padding(.horizontal, 6).padding(.vertical, 3)
                 .background(Capsule().fill(DS.Color.warning))
                 .padding(DS.Spacing.sm)
+            } else if project.isHidden {
+                HStack(spacing: 3) {
+                    Image(systemName: "eye.slash.fill").font(DS.Font.scaled(9, weight: .bold))
+                    Text(L10n.t("مخفي", "Hidden")).font(DS.Font.scaled(9, weight: .bold))
+                }
+                .foregroundColor(.white)
+                .padding(.horizontal, 6).padding(.vertical, 3)
+                .background(Capsule().fill(DS.Color.textTertiary))
+                .padding(DS.Spacing.sm)
             }
         }
-        .opacity(project.approvalStatus == "pending" ? 0.85 : 1.0)
+        .opacity(project.approvalStatus == "pending" || project.isHidden ? 0.85 : 1.0)
         .dsSubtleShadow()
     }
 
