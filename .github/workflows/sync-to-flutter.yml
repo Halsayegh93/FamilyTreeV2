@@ -1,0 +1,147 @@
+name: Sync iOS changes → Flutter (AI port)
+
+# عند كل دمج لـ main في مشروع iOS (المرجع)، يشغّل Claude Code آلياً لينقل
+# تعديلات الواجهة/السلوك المكافئة إلى مشروع Flutter ويفتح Pull Request تُراجعه.
+#
+# ⚙️ يتطلب إعداد أسرار المستودع (انظر SYNC_SETUP.md):
+#   ANTHROPIC_API_KEY  — مفتاح Anthropic API (لتشغيل Claude في CI)
+#   FLUTTER_REPO_PAT   — GitHub PAT بصلاحية repo على Halsayegh93/FamilyTreeV2-Flutter
+#
+# يمكن تشغيله يدوياً من تبويب Actions (workflow_dispatch) لاختبار آخر commit.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'FamilyTreeV2/**/*.swift'
+      - 'FamilyTreeV2/supabase/migrations/**'
+  workflow_dispatch:
+
+concurrency:
+  group: sync-to-flutter
+  cancel-in-progress: false
+
+jobs:
+  port:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout iOS repo (reference)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Compute iOS diff for this push
+        id: diff
+        run: |
+          mkdir -p /tmp/sync
+          # ديف آخر دفعة (push) — السطر الأساسي before..after
+          BEFORE='${{ github.event.before }}'
+          if [ -z "$BEFORE" ] || ! git cat-file -e "$BEFORE" 2>/dev/null; then BEFORE='HEAD~1'; fi
+          git diff "$BEFORE" '${{ github.sha }}' -- \
+            'FamilyTreeV2/**/*.swift' \
+            'FamilyTreeV2/supabase/migrations/**' > /tmp/sync/ios.diff || true
+          echo "lines=$(wc -l < /tmp/sync/ios.diff)" >> "$GITHUB_OUTPUT"
+          echo "----- iOS diff (first 60 lines) -----"
+          head -60 /tmp/sync/ios.diff || true
+
+      - name: Stop if no relevant changes
+        if: steps.diff.outputs.lines == '0'
+        run: echo "No iOS Swift/migration changes in this push — nothing to port." && exit 0
+
+      - name: Checkout Flutter repo
+        if: steps.diff.outputs.lines != '0'
+        uses: actions/checkout@v4
+        with:
+          repository: Halsayegh93/FamilyTreeV2-Flutter
+          token: ${{ secrets.FLUTTER_REPO_PAT }}
+          path: flutter-app
+          fetch-depth: 0
+
+      - name: Set up Flutter
+        if: steps.diff.outputs.lines != '0'
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: flutter pub get
+        if: steps.diff.outputs.lines != '0'
+        working-directory: flutter-app
+        run: flutter pub get
+
+      - name: Install Claude Code CLI
+        if: steps.diff.outputs.lines != '0'
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Create sync branch
+        if: steps.diff.outputs.lines != '0'
+        working-directory: flutter-app
+        run: |
+          git config user.name  "ios-flutter-sync[bot]"
+          git config user.email "noreply@anthropic.com"
+          git checkout -b "sync/ios-${GITHUB_SHA::8}"
+
+      - name: Run Claude Code to port the diff
+        if: steps.diff.outputs.lines != '0'
+        working-directory: flutter-app
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          claude -p "$(cat <<'PROMPT'
+          You are porting changes from the iOS (SwiftUI) app — the design source of truth —
+          to this Flutter app (the current working directory is the Flutter repo root).
+
+          The iOS diff that was just merged is at /tmp/sync/ios.diff. Read it.
+
+          For each user-facing UI/behavior change in that diff, apply the EQUIVALENT change to the
+          Flutter app under lib/, matching existing Flutter patterns, the design system in
+          lib/core/theme/ (DsColors, Insets, Corners, ds_widgets), and Arabic/RTL.
+          - Reuse existing providers/repositories in lib/core/data/. Only add a repo method if
+            genuinely missing, and keep column/table/enum names matching the SHARED Supabase schema
+            (same as iOS CodingKeys / SQL).
+          - Migration changes in the diff are backend (shared DB) and usually need NO Flutter code,
+            EXCEPT updating the Dart data layer if a column was added/renamed that Flutter reads/writes.
+          - Do NOT invent features not in the diff. If something can't be cleanly ported, leave a
+            // TODO(parity): ... comment and note it in the PR body.
+
+          After editing, run:  flutter analyze lib
+          and fix every error/warning you introduced (ignore pre-existing info-level hints).
+
+          Do not commit or push — the workflow handles git. When done, write a concise summary of
+          what you ported and any gaps to /tmp/sync/summary.md.
+          PROMPT
+          )" --dangerously-skip-permissions --allowedTools "Read,Edit,Write,Bash,Grep,Glob"
+
+      - name: Verify analyze is clean
+        if: steps.diff.outputs.lines != '0'
+        working-directory: flutter-app
+        run: |
+          flutter analyze lib 2>&1 | tee /tmp/sync/analyze.txt
+          if grep -E "error •|warning •" /tmp/sync/analyze.txt; then
+            echo "::warning::flutter analyze reported errors/warnings — review the PR carefully."
+          fi
+
+      - name: Commit & open PR
+        if: steps.diff.outputs.lines != '0'
+        working-directory: flutter-app
+        env:
+          GH_TOKEN: ${{ secrets.FLUTTER_REPO_PAT }}
+        run: |
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "Claude made no changes — nothing to PR." && exit 0
+          fi
+          git add -A
+          git commit -m "Sync from iOS ${GITHUB_SHA::8}
+
+          Auto-ported iOS changes to Flutter. Review before merge.
+          Co-Authored-By: Claude <noreply@anthropic.com>"
+          git push origin "sync/ios-${GITHUB_SHA::8}"
+          BODY="$( [ -f /tmp/sync/summary.md ] && cat /tmp/sync/summary.md || echo 'Auto-ported from iOS.' )"
+          gh pr create \
+            --repo Halsayegh93/FamilyTreeV2-Flutter \
+            --base main \
+            --head "sync/ios-${GITHUB_SHA::8}" \
+            --title "Sync from iOS ${GITHUB_SHA::8}" \
+            --body "$BODY
+
+          > 🤖 Auto-generated from iOS commit ${{ github.sha }}. **Review before merging.**"
