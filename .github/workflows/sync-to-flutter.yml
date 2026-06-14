@@ -10,11 +10,12 @@ name: Sync iOS changes → Flutter (AI port)
 # يمكن تشغيله يدوياً من تبويب Actions (workflow_dispatch) لاختبار آخر commit.
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'FamilyTreeV2/**/*.swift'
-      - 'FamilyTreeV2/supabase/migrations/**'
+  # تشغيل يدوي فقط — يتطلّب سرّين: FLUTTER_REPO_PAT + ANTHROPIC_API_KEY (انظر
+  # SYNC_SETUP.md). لتفعيل التشغيل التلقائي على push لـ main بعد إضافة السرّين،
+  # ارجع كتلة push:
+  #   push:
+  #     branches: [main]
+  #     paths: ['FamilyTreeV2/**/*.swift', 'FamilyTreeV2/supabase/migrations/**']
   workflow_dispatch:
 
 concurrency:
