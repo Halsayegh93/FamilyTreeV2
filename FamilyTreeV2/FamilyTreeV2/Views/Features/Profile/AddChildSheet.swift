@@ -20,6 +20,7 @@ struct AddChildSheet: View {
     @State private var showSuccessAlert = false
     @State private var showErrorAlert = false
     @State private var errorMessage = ""
+    @State private var sheetHeight: CGFloat = 520
 
     var body: some View {
         NavigationStack {
@@ -36,6 +37,11 @@ struct AddChildSheet: View {
                             .padding(.horizontal, DS.Spacing.lg)
                     }
                     .padding(.vertical, DS.Spacing.xs)
+                    .background(
+                        GeometryReader { proxy in
+                            Color.clear.preference(key: SheetContentHeightKey.self, value: proxy.size.height)
+                        }
+                    )
                 }
             }
             .navigationTitle(L10n.t("إضافة ابن", "Add Child"))
@@ -48,6 +54,11 @@ struct AddChildSheet: View {
                 }
             }
         }
+        .onPreferenceChange(SheetContentHeightKey.self) { h in
+            if h > 0 { sheetHeight = h + 72 }
+        }
+        .presentationDetents([.height(sheetHeight)])
+        .presentationDragIndicator(.visible)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .alert(L10n.t("تمت الإضافة", "Added Successfully"), isPresented: $showSuccessAlert) {
             Button(L10n.t("موافق", "OK")) { dismiss() }
@@ -86,74 +97,52 @@ struct AddChildSheet: View {
             )
 
                 VStack(spacing: 0) {
-                    // Name field
-                    HStack(spacing: DS.Spacing.md) {
-                        DSIcon("person.fill", color: DS.Color.primary)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(L10n.t("الاسم الأول", "First Name"))
-                                .font(DS.Font.caption1)
-                                .foregroundColor(DS.Color.textSecondary)
-                            TextField(L10n.t("اسم الابن", "Child's name"), text: $firstName)
-                                .font(DS.Font.callout)
-                                .foregroundColor(DS.Color.textPrimary)
-                                .onChange(of: firstName) { _ in
-                                    if firstName.count > 50 {
-                                        firstName = String(firstName.prefix(50))
-                                    }
+                    // Name field — العنوان فوق الحقل
+                    DSLabeledFieldRow(icon: "person.fill", iconColor: DS.Color.primary,
+                                      label: L10n.t("الاسم الأول", "First Name")) {
+                        TextField(L10n.t("اسم الابن", "Child's name"), text: $firstName)
+                            .font(DS.Font.callout)
+                            .foregroundColor(DS.Color.textPrimary)
+                            .onChange(of: firstName) { _ in
+                                if firstName.count > 50 {
+                                    firstName = String(firstName.prefix(50))
                                 }
-                        }
-                        Spacer()
+                            }
                     }
-                    .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.vertical, DS.Spacing.xs)
 
                     DSDivider()
 
-                    // TODO: gender — re-enable when needed
-
-                    // Phone field — بدون رمز الدولة
-                    HStack(spacing: DS.Spacing.md) {
-                        DSIcon("phone.fill", color: DS.Color.success)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(L10n.t("رقم الهاتف", "Phone Number"))
-                                .font(DS.Font.caption1)
-                                .foregroundColor(DS.Color.textSecondary)
-                            PhoneNumberTextField(
-                                text: $phoneNumber,
-                                placeholder: L10n.t("اختياري", "Optional"),
-                                font: .systemFont(ofSize: 15),
-                                keyboardType: .phonePad,
-                                maxLength: selectedPhoneCountry.maxDigits
-                            )
-                            .frame(height: 30)
-                        }
-                        Spacer()
+                    // Phone field — العنوان فوق الحقل، الحقل بدون إطار
+                    DSLabeledFieldRow(icon: "phone.fill", iconColor: DS.Color.success,
+                                      label: L10n.t("رقم الهاتف", "Phone Number")) {
+                        DSPhoneField(
+                            country: $selectedPhoneCountry,
+                            digits: $phoneNumber,
+                            placeholder: L10n.t("اختياري", "Optional"),
+                            compact: true,
+                            bordered: false
+                        )
                     }
-                    .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.vertical, DS.Spacing.xs)
 
                     DSDivider()
 
-                    // Birth date
+                    // Birth date — صف موحّد
                     DSDateField(
                         label: L10n.t("تاريخ الميلاد", "Birth Date"),
                         date: $birthDate,
-                        range: ...Date()
+                        range: ...Date(),
+                        labelAbove: true
                     )
-                    .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.vertical, DS.Spacing.xs)
 
                     DSDivider()
 
-                    // Deceased toggle
-                    HStack(spacing: DS.Spacing.md) {
-                        DSIcon("leaf.fill", color: DS.Color.error)
-                        Toggle(L10n.t("متوفى", "Deceased"), isOn: $isDeceased)
-                            .font(DS.Font.callout)
+                    // Deceased toggle — صف موحّد
+                    DSFormRow(icon: "leaf.fill", iconColor: DS.Color.error,
+                              label: L10n.t("متوفى", "Deceased")) {
+                        Toggle("", isOn: $isDeceased)
+                            .labelsHidden()
                             .tint(DS.Color.error)
                     }
-                    .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.vertical, DS.Spacing.xs)
                     .animation(.default, value: isDeceased)
 
                     if isDeceased {

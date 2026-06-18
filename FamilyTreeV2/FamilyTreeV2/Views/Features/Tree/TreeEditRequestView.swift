@@ -212,46 +212,11 @@ struct TreeEditRequestView: View {
                 .font(DS.Font.calloutBold)
                 .foregroundColor(DS.Color.textPrimary)
 
-            HStack(spacing: DS.Spacing.sm) {
-                Button { showCountrySheet = true } label: {
-                    HStack(spacing: DS.Spacing.xs) {
-                        Text(phoneCountry.flag)
-                            .font(DS.Font.scaled(16))
-                        Text(phoneCountry.dialingCode)
-                            .font(DS.Font.calloutBold)
-                            .foregroundColor(DS.Color.textPrimary)
-                        Image(systemName: "chevron.down")
-                            .font(DS.Font.scaled(10, weight: .semibold))
-                            .foregroundColor(DS.Color.textTertiary)
-                    }
-                    .padding(.horizontal, DS.Spacing.sm)
-                    .padding(.vertical, DS.Spacing.sm)
-                    .background(DS.Color.surface)
-                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: DS.Radius.md)
-                            .stroke(DS.Color.textTertiary.opacity(0.15), lineWidth: 1)
-                    )
-                }
-                .buttonStyle(DSScaleButtonStyle())
-
-                TextField(L10n.t("رقم الهاتف", "Phone number"), text: $localPhoneDigits)
-                    .keyboardType(.numberPad)
-                    .font(DS.Font.body)
-                    .foregroundColor(DS.Color.textPrimary)
-                    .focused($isPrimaryFieldFocused)
-                    .padding(.horizontal, DS.Spacing.md)
-                    .padding(.vertical, DS.Spacing.md)
-                    .background(DS.Color.surface)
-                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: DS.Radius.lg)
-                            .stroke(
-                                isPrimaryFieldFocused ? DS.Color.primary.opacity(0.4) : DS.Color.textTertiary.opacity(0.15),
-                                lineWidth: isPrimaryFieldFocused ? 1.5 : 1
-                            )
-                    )
-            }
+            DSPhoneField(
+                country: $phoneCountry,
+                digits: $localPhoneDigits,
+                placeholder: L10n.t("رقم الهاتف", "Phone number")
+            )
         }
     }
 

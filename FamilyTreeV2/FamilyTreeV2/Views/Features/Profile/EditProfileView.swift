@@ -122,15 +122,12 @@ struct EditProfileView: View {
                             )
 
                                     VStack(spacing: 0) {
-                                        HStack(spacing: DS.Spacing.md) {
-                                            DSIcon("heart.fill", color: DS.Color.neonPink)
-                                            Toggle(L10n.t("متزوج", "Married"), isOn: $isMarried)
-                                                .font(DS.Font.callout)
-                                                .foregroundColor(DS.Color.textPrimary)
+                                        DSFormRow(icon: "heart.fill", iconColor: DS.Color.neonPink,
+                                                  label: L10n.t("متزوج", "Married")) {
+                                            Toggle("", isOn: $isMarried)
+                                                .labelsHidden()
                                                 .tint(DS.Color.primary)
                                         }
-                                        .padding(.horizontal, DS.Spacing.lg)
-                                        .padding(.vertical, DS.Spacing.xs)
                                         .cooldownGuarded(.isMarried, cooldown: cooldown)
 
                                         cooldownLabel(.isMarried)
@@ -245,14 +242,15 @@ struct EditProfileView: View {
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(L10n.t("الاسم الكامل", "Full Name"))
-                            .font(DS.Font.caption2)
-                            .foregroundColor(DS.Color.textTertiary)
+                            .font(DS.Font.caption1)
+                            .foregroundColor(DS.Color.textSecondary)
                         Text(fullName)
                             .font(DS.Font.callout)
                             .foregroundColor(DS.Color.textPrimary)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
                     }
-
-                    Spacer()
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
                     if cooldown.canEdit(.fullName) {
                         Image(systemName: "pencil.circle.fill")
@@ -266,6 +264,7 @@ struct EditProfileView: View {
                 }
                 .padding(.horizontal, DS.Spacing.lg)
                 .padding(.vertical, DS.Spacing.xs)
+                .contentShape(Rectangle())
                 .cooldownGuarded(.fullName, cooldown: cooldown)
             }
             .buttonStyle(.plain)
@@ -394,27 +393,18 @@ struct EditProfileView: View {
         let trimmed = email.trimmingCharacters(in: .whitespacesAndNewlines)
         let isInvalid = !trimmed.isEmpty && !isValidEmail(trimmed)
         return VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-            HStack(spacing: DS.Spacing.md) {
-                DSIcon("envelope.fill", color: DS.Color.info)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(L10n.t("البريد الإلكتروني (اختياري)", "Email (optional)"))
-                        .font(DS.Font.caption1)
-                        .foregroundColor(DS.Color.textSecondary)
-                    TextField("name@example.com", text: $email)
-                        .font(DS.Font.callout)
-                        .foregroundColor(DS.Color.textPrimary)
-                        .textInputAutocapitalization(.never)
-                        .keyboardType(.emailAddress)
-                        .textContentType(.emailAddress)
-                        .autocorrectionDisabled()
-                        .focused($isEmailFocused)
-                        .environment(\.layoutDirection, .leftToRight)
-                }
-                Spacer()
+            DSLabeledFieldRow(icon: "envelope.fill", iconColor: DS.Color.info,
+                              label: L10n.t("البريد الإلكتروني", "Email")) {
+                TextField("name@example.com", text: $email)
+                    .font(DS.Font.callout)
+                    .foregroundColor(DS.Color.textPrimary)
+                    .textInputAutocapitalization(.never)
+                    .keyboardType(.emailAddress)
+                    .textContentType(.emailAddress)
+                    .autocorrectionDisabled()
+                    .focused($isEmailFocused)
+                    .environment(\.layoutDirection, .leftToRight)
             }
-            .padding(.horizontal, DS.Spacing.lg)
-            .padding(.vertical, DS.Spacing.xs)
 
             if isInvalid {
                 HStack(spacing: DS.Spacing.xs) {
@@ -443,32 +433,16 @@ struct EditProfileView: View {
     }
 
     private var modernPhoneField: some View {
-        HStack(spacing: DS.Spacing.sm) {
-            DSIcon("phone.fill", color: DS.Color.success)
-
-            Text(L10n.t("رقم الهاتف", "Phone Number"))
-                .font(DS.Font.caption2)
-                .foregroundColor(DS.Color.textTertiary)
-
-            Spacer()
-
-            PhoneNumberTextField(
-                text: $phoneNumber,
+        DSLabeledFieldRow(icon: "phone.fill", iconColor: DS.Color.success,
+                          label: L10n.t("رقم الهاتف", "Phone Number")) {
+            DSPhoneField(
+                country: $selectedPhoneCountry,
+                digits: $phoneNumber,
                 placeholder: "9xxxxxxx",
-                font: .monospacedDigitSystemFont(ofSize: 15, weight: .regular),
-                keyboardType: .phonePad,
-                textAlignment: .left,
-                maxLength: selectedPhoneCountry.maxDigits
+                compact: true,
+                bordered: false
             )
-            .frame(height: DS.Spacing.xxxl - 2)
-            .frame(maxWidth: DS.Spacing.xxxl * 4 + DS.Spacing.sm)
-
-            Text("\(selectedPhoneCountry.flag) \(selectedPhoneCountry.dialingCode)")
-                .font(DS.Font.scaled(13, weight: .medium))
-                .foregroundColor(DS.Color.textSecondary)
         }
-        .padding(.horizontal, DS.Spacing.lg)
-        .padding(.vertical, DS.Spacing.xs)
     }
 
     private func modernDatePicker(label: String, selection: Binding<Date>, icon: String) -> some View {
@@ -476,10 +450,9 @@ struct EditProfileView: View {
             label: label,
             date: selection,
             icon: icon,
-            range: ...Date()
+            range: ...Date(),
+            labelAbove: true
         )
-        .padding(.horizontal, DS.Spacing.lg)
-        .padding(.vertical, DS.Spacing.xs)
     }
 
     private var bioStationsSection: some View {

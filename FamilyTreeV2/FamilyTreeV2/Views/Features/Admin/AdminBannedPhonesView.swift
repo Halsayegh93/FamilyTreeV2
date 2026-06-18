@@ -247,16 +247,24 @@ struct AddBanSheet: View {
     private func t(_ ar: String, _ en: String) -> String { L10n.t(ar, en) }
 
     @State private var phoneNumber = ""
+    @State private var selectedPhoneCountry: KuwaitPhone.Country = KuwaitPhone.defaultCountry
     @State private var reason = ""
     @State private var isLoading = false
     @State private var errorMessage: String?
 
-    private var cleanPhone: String {
+    /// الرقم المحلي (أرقام فقط) كما أُدخل.
+    private var localDigits: String {
         KuwaitPhone.normalizeDigits(phoneNumber).filter(\.isNumber)
     }
 
+    /// الرقم النهائي بصيغة E.164 (كود الدولة + المحلي) للحظر.
+    private var cleanPhone: String {
+        KuwaitPhone.normalizedForStorage(country: selectedPhoneCountry, rawLocalDigits: phoneNumber)
+            ?? "\(selectedPhoneCountry.dialingCode)\(localDigits)"
+    }
+
     private var isValid: Bool {
-        cleanPhone.count >= 6
+        localDigits.count >= 6
     }
 
     var body: some View {
@@ -280,19 +288,11 @@ struct AddBanSheet: View {
                                 .font(DS.Font.caption1)
                                 .foregroundColor(DS.Color.textSecondary)
 
-                            TextField(t("مثال: 99123456", "e.g. 99123456"), text: $phoneNumber)
-                                .keyboardType(.numberPad)
-                                .font(DS.Font.scaled(18, weight: .bold))
-                                .foregroundStyle(DS.Color.textPrimary)
-                                .multilineTextAlignment(.leading)
-                                .padding(DS.Spacing.md)
-                                .background(DS.Color.surface)
-                                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                                        .stroke(DS.Color.textSecondary.opacity(0.15), lineWidth: 1)
-                                )
-                                .environment(\.layoutDirection, .leftToRight)
+                            DSPhoneField(
+                                country: $selectedPhoneCountry,
+                                digits: $phoneNumber,
+                                placeholder: t("مثال: 99123456", "e.g. 99123456")
+                            )
                         }
 
                         // سبب الحظر

@@ -371,7 +371,8 @@ struct AdminActivateAccountsView: View {
             Text(genderUpdateResult ?? "")
         }
         .sheet(item: $memberToEditPhone) { member in
-            EditPhoneSheet(member: member, memberVM: memberVM)
+            PendingMemberPhoneSheet(member: member, activateOnSave: true)
+                .environmentObject(adminRequestVM)
         }
         .sheet(item: $memberToEditBirthDate) { member in
             EditBirthDateSheet(member: member, memberVM: memberVM)
@@ -759,12 +760,15 @@ struct EditPhoneSheet: View {
     let memberVM: MemberViewModel
     @Environment(\.dismiss) var dismiss
     @State private var phoneInput: String
+    @State private var selectedPhoneCountry: KuwaitPhone.Country
     @State private var isSaving = false
 
     init(member: FamilyMember, memberVM: MemberViewModel) {
         self.member = member
         self.memberVM = memberVM
-        _phoneInput = State(initialValue: member.phoneNumber ?? "")
+        let detected = KuwaitPhone.detectCountryAndLocal(member.phoneNumber)
+        _selectedPhoneCountry = State(initialValue: detected.country)
+        _phoneInput = State(initialValue: detected.localDigits)
     }
 
     var body: some View {
@@ -789,35 +793,16 @@ struct EditPhoneSheet: View {
                         .font(DS.Font.headline)
                         .foregroundColor(DS.Color.textPrimary)
 
-                    // Phone field
+                    // Phone field — حقل موحّد مع كود الدولة على الجهة المقابلة
                     VStack(alignment: .leading, spacing: DS.Spacing.sm) {
                         Text(L10n.t("رقم الجوال", "Phone Number"))
                             .font(DS.Font.caption1)
                             .foregroundColor(DS.Color.textSecondary)
 
-                        HStack(spacing: DS.Spacing.md) {
-                            Image(systemName: "phone.fill")
-                                .foregroundColor(DS.Color.textOnPrimary)
-                                .font(DS.Font.scaled(14))
-                                .frame(width: DS.Icon.sizeSm, height: DS.Icon.sizeSm)
-                                .background(DS.Color.info)
-                                .cornerRadius(DS.Radius.sm)
-
-                            PhoneNumberTextField(
-                                text: $phoneInput,
-                                placeholder: L10n.t("أدخل رقم الجوال", "Enter phone number"),
-                                font: .monospacedDigitSystemFont(ofSize: 17, weight: .regular),
-                                keyboardType: .phonePad,
-                                maxLength: 15
-                            )
-                            .frame(height: 30)
-                        }
-                        .padding(DS.Spacing.md)
-                        .background(DS.Color.surface)
-                        .cornerRadius(DS.Radius.lg)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: DS.Radius.lg)
-                                .stroke(DS.Color.info.opacity(0.2), lineWidth: 1)
+                        DSPhoneField(
+                            country: $selectedPhoneCountry,
+                            digits: $phoneInput,
+                            placeholder: L10n.t("أدخل رقم الجوال", "Enter phone number")
                         )
                     }
                     .padding(.horizontal, DS.Spacing.lg)
@@ -826,7 +811,7 @@ struct EditPhoneSheet: View {
                     Button {
                         isSaving = true
                         Task {
-                            await memberVM.updateMemberPhone(memberId: member.id, newPhone: phoneInput.trimmingCharacters(in: .whitespacesAndNewlines))
+                            await memberVM.updateMemberPhone(memberId: member.id, country: selectedPhoneCountry, localPhone: phoneInput.trimmingCharacters(in: .whitespacesAndNewlines))
                             isSaving = false
                             dismiss()
                         }

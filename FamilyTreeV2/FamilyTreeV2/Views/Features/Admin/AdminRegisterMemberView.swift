@@ -196,33 +196,22 @@ struct AdminRegisterMemberView: View {
         )
     }
 
-    // MARK: - Phone Section — بدون رمز الدولة
+    // MARK: - Phone Section — حقل موحّد مع كود الدولة على الجهة المقابلة
     private var phoneSection: some View {
-        HStack(spacing: DS.Spacing.md) {
-            DSIcon("phone.fill", color: DS.Color.success)
-            VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+            HStack(spacing: DS.Spacing.md) {
+                DSIcon("phone.fill", color: DS.Color.success)
                 Text(L10n.t("رقم الهاتف (اختياري)", "Phone Number (Optional)"))
                     .font(DS.Font.caption1)
                     .foregroundColor(DS.Color.textSecondary)
-                PhoneNumberTextField(
-                    text: $phoneNumber,
-                    placeholder: L10n.t("رقم الهاتف", "Phone Number"),
-                    font: .systemFont(ofSize: 15),
-                    keyboardType: .phonePad,
-                    maxLength: selectedPhoneCountry.maxDigits
-                )
-                .frame(height: 30)
+                Spacer()
             }
-            Spacer()
+            DSPhoneField(
+                country: $selectedPhoneCountry,
+                digits: $phoneNumber,
+                placeholder: L10n.t("رقم الهاتف", "Phone Number")
+            )
         }
-        .padding(.horizontal, DS.Spacing.lg)
-        .padding(.vertical, DS.Spacing.md)
-        .background(DS.Color.surface)
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                .stroke(DS.Color.inactiveBorder, lineWidth: 1)
-        )
     }
 
     // MARK: - Submit Button

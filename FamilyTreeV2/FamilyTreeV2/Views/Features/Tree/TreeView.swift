@@ -127,6 +127,8 @@ struct TreeView: View {
     @State private var locationHighlightTask: Task<Void, Never>?
 
     @State private var scale: CGFloat = TreeConst.closeNodeScale
+    /// إظهار حقل البحث (مخفي افتراضياً خلف زر — العرض الكلاسيكي).
+    @State private var showSearch = false
     @State private var treeID = UUID()
     @State private var currentAnchor: UnitPoint = .center
     @State private var baseScale: CGFloat = TreeConst.closeNodeScale
@@ -315,27 +317,21 @@ struct TreeView: View {
                             subtitle: "\(cachedVisibleMembers.count) " + L10n.t("فرد", "members"),
                             icon: "leaf.fill",
                             backgroundGradient: DS.Color.gradientPrimary
-                        ) {
-                            DSIconButton(icon: "location.fill", iconColor: DS.Color.textOnPrimary, borderWidth: 1) {
-                                if let currentUserID = authVM.currentUser?.id,
-                                   let userMember = cachedMemberById[currentUserID] ?? memberVM.member(byId: currentUserID) {
-                                    currentLocationMemberID = userMember.id
-                                    centerOnMember(userMember, highlight: true, includeFocusedMemberInPath: false)
-                                    locationHighlightTask?.cancel()
-                                    locationHighlightTask = Task {
-                                        try? await Task.sleep(nanoseconds: TreeConst.highlightDuration)
-                                        guard !Task.isCancelled else { return }
-                                        withAnimation { currentLocationMemberID = nil }
-                                    }
-                                }
+                        )
+
+                        // تحت الهيدر: إمّا البحث (مع الفلاتر) أو صف الأدوات (إعادة موضع + موقعي).
+                        Group {
+                            if showSearch {
+                                TreeSearchOverlay(
+                                    onSelect: { member in selectMemberFromSearch(member) },
+                                    autoFocus: true,
+                                    onClose: { withAnimation(DS.Anim.snappy) { showSearch = false } },
+                                    showFiltersWhenEmpty: true
+                                )
+                            } else {
+                                classicToolbarRow
                             }
-                            .accessibilityLabel(L10n.t("موقعي في الشجرة", "My location in tree"))
-
                         }
-
-                        TreeSearchOverlay(onSelect: { member in
-                            selectMemberFromSearch(member)
-                        })
                         .padding(.horizontal, DS.Spacing.sm)
                     }
                     .zIndex(101)
@@ -621,34 +617,72 @@ struct TreeView: View {
         }
     }
 
-    // MARK: - أدوات التكبير والتصغير — Glassy
+    // MARK: - صف الأدوات تحت الهيدر — مطابق للتفرّع (بحث / البداية / موقعي) أيقونات فقط
+    private var classicToolbarRow: some View {
+        HStack(spacing: DS.Spacing.sm) {
+            Button {
+                withAnimation(DS.Anim.smooth) { showSearch = true }
+            } label: {
+                toolbarIconButton(icon: "magnifyingglass")
+            }
+            .buttonStyle(DSScaleButtonStyle())
+            .accessibilityLabel(L10n.t("بحث", "Search"))
+
+            Button {
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    scale = TreeConst.defaultScale
+                    baseScale = TreeConst.defaultScale
+                }
+                resetToTopRoot()
+            } label: {
+                toolbarIconButton(icon: "house.fill")
+            }
+            .buttonStyle(DSScaleButtonStyle())
+            .accessibilityLabel(L10n.t("البداية", "Start"))
+
+            Spacer()
+
+            if authVM.currentUser != nil {
+                Button {
+                    if let currentUserID = authVM.currentUser?.id,
+                       let userMember = cachedMemberById[currentUserID] ?? memberVM.member(byId: currentUserID) {
+                        currentLocationMemberID = userMember.id
+                        centerOnMember(userMember, highlight: true, includeFocusedMemberInPath: false)
+                        locationHighlightTask?.cancel()
+                        locationHighlightTask = Task {
+                            try? await Task.sleep(nanoseconds: TreeConst.highlightDuration)
+                            guard !Task.isCancelled else { return }
+                            withAnimation { currentLocationMemberID = nil }
+                        }
+                    }
+                } label: {
+                    toolbarIconButton(icon: "location.fill")
+                }
+                .buttonStyle(DSScaleButtonStyle())
+                .accessibilityLabel(L10n.t("موقعي", "Me"))
+            }
+        }
+    }
+
+    /// زر دائري بأيقونة فقط — نفس ستايل التفرّع.
+    private func toolbarIconButton(icon: String, color: Color = DS.Color.primary) -> some View {
+        Image(systemName: icon)
+            .font(DS.Font.scaled(16, weight: .bold))
+            .foregroundColor(color)
+            .frame(width: 40, height: 40)
+            .background(Circle().fill(color.opacity(0.12)))
+    }
+
+    // MARK: - أدوات التحديث — Glassy (أُزيلت أدوات الزوم؛ التكبير باللمس)
     private var overlayTools: some View {
         VStack {
             Spacer()
             HStack {
                 Spacer()
                 VStack(spacing: 0) {
-                    Text(currentZoomPercentText)
-                        .font(DS.Font.scaled(13, weight: .bold))
-                        .foregroundColor(DS.Color.primary)
-                        .frame(width: TreeConst.toolButtonSize, height: TreeConst.toolButtonSize)
-
-                    Divider().frame(width: TreeConst.dividerWidth)
-
-                    Button(action: {
-                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                        withAnimation(.easeInOut(duration: 0.2)) { scale = min(scale + TreeConst.zoomStep, TreeConst.maxScale); baseScale = scale }
-                    }) {
-                        Image(systemName: "plus")
-                            .font(DS.Font.scaled(16, weight: .bold))
-                            .foregroundColor(DS.Color.primary)
-                            .frame(width: TreeConst.toolButtonSize, height: TreeConst.toolButtonSize)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(L10n.t("تكبير", "Zoom in"))
-
-                    Divider().frame(width: TreeConst.dividerWidth)
-
+                    // أُزيلت أدوات الزوم (+/−/%) — التكبير يبقى باللمس/الإيماءة.
+                    // نُبقي زر التحديث فقط.
                     Button(action: {
                         guard !isRefreshing else { return }
                         isRefreshing = true
@@ -675,20 +709,6 @@ struct TreeView: View {
                     .buttonStyle(.plain)
                     .disabled(isRefreshing)
                     .accessibilityLabel(L10n.t("تحديث الشجرة", "Refresh tree"))
-
-                    Divider().frame(width: TreeConst.dividerWidth)
-
-                    Button(action: {
-                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                        withAnimation(.easeInOut(duration: 0.2)) { scale = max(scale - TreeConst.zoomStep, TreeConst.minScale); baseScale = scale }
-                    }) {
-                        Image(systemName: "minus")
-                            .font(DS.Font.scaled(16, weight: .bold))
-                            .foregroundColor(DS.Color.primary)
-                            .frame(width: TreeConst.toolButtonSize, height: TreeConst.toolButtonSize)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(L10n.t("تصغير", "Zoom out"))
                 }
                 .background(.ultraThinMaterial)
                 .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))

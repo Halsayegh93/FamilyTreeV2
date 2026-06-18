@@ -112,6 +112,8 @@ struct NotificationsCenterView: View {
     @State private var isSelecting = false
     @State private var selectedIds: Set<UUID> = []
     @State private var selectedNotification: AppNotification? = nil
+    /// العضو المختار لفتح تفاصيله من داخل الإشعار (مثل الشجرة).
+    @State private var selectedMember: FamilyMember? = nil
     /// detent المختار حالياً — يُحدَّث ديناميكياً ليتطابق مع ارتفاع المحتوى
     @State private var detailSheetDetent: PresentationDetent = .height(450)
     /// آخر ارتفاع تم قياسه للمحتوى
@@ -1105,6 +1107,13 @@ struct NotificationsCenterView: View {
     /// - للطلبات: مقدّم الطلب (createdBy) لو معروف وموجود
     /// - للإشعارات الشخصية: المرسل (createdBy) لو معروف وليس مدير
     private func relatedMemberForNotification(_ n: AppNotification) -> FamilyMember? {
+        // إشعار تحديث صورة عضو في «المستجدات» — نعرض العضو صاحب الصورة (الاسم + الصورة
+        // المحدّثة): العضو الهدف لو موجود (تعديل المدير)، وإلا المُنفّذ (العضو حدّث صورته بنفسه).
+        if n.kind == NotificationKind.adminEditAvatar.rawValue {
+            if let tid = n.targetMemberId, let m = memberVM.member(byId: tid) { return m }
+            if let cid = n.createdBy, let m = memberVM.member(byId: cid) { return m }
+            return nil
+        }
         // استبعاد إشعارات الإدارة المُعمَّمة — اسم الشخص لا يهم
         if adminOnlyKinds.contains(n.kind) { return nil }
         guard let creatorId = n.createdBy,
@@ -1164,6 +1173,21 @@ struct NotificationsCenterView: View {
 
     // MARK: - Detail: Member Card (صورة + اسم + دور)
     private func detailMemberCard(member: FamilyMember, iconInfo: NotificationKindStyle) -> some View {
+        Button {
+            selectedMember = member
+        } label: {
+            detailMemberCardBody(member: member, iconInfo: iconInfo)
+        }
+        .buttonStyle(.plain)
+        .sheet(item: $selectedMember) { m in
+            NavigationStack { MemberDetailsView(member: m) }
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+                .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+        }
+    }
+
+    private func detailMemberCardBody(member: FamilyMember, iconInfo: NotificationKindStyle) -> some View {
         HStack(spacing: DS.Spacing.md) {
             // صورة العضو (دائرية)
             ZStack {
@@ -1206,6 +1230,11 @@ struct NotificationsCenterView: View {
 
             Spacer(minLength: 0)
 
+            // سهم — إشارة أن الكرت يفتح تفاصيل العضو
+            Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
+                .font(DS.Font.scaled(12, weight: .bold))
+                .foregroundColor(DS.Color.textTertiary.opacity(0.6))
+
             // أيقونة صغيرة تشير لنوع الإشعار
             Image(systemName: iconInfo.icon)
                 .font(DS.Font.scaled(14, weight: .semibold))
@@ -1234,8 +1263,11 @@ struct NotificationsCenterView: View {
     ) -> some View {
         let date = notification.createdDate
         // اسم المدير المنفّذ — يظهر داخل تفاصيل الإشعار حتى للأنواع المُعمَّمة (admin_edit_*)
+        // لكن إشعارات الإدارة المُرسَلة (admin_broadcast/admin) تظهر باسم «الإدارة» لا باسم شخصي.
+        let isAdminSender = adminOnlyKinds.contains(notification.kind)
         let actualCreator: FamilyMember? = {
-            guard authVM.isAdmin, let creatorId = notification.createdBy else { return nil }
+            guard !isAdminSender, authVM.isAdmin,
+                  let creatorId = notification.createdBy else { return nil }
             return memberVM.member(byId: creatorId)
         }()
 
@@ -1255,6 +1287,22 @@ struct NotificationsCenterView: View {
                 .background(iconInfo.color.opacity(0.12))
                 .clipShape(Capsule())
                 .overlay(Capsule().stroke(iconInfo.color.opacity(0.20), lineWidth: 0.5))
+
+                // chip «الإدارة» — لإشعارات الإدارة المُرسَلة (بدون اسم شخصي)
+                if isAdminSender {
+                    HStack(spacing: 3) {
+                        Image(systemName: "shield.lefthalf.filled")
+                            .font(DS.Font.scaled(9, weight: .bold))
+                        Text(L10n.t("الإدارة", "Admin"))
+                            .font(DS.Font.scaled(10, weight: .bold))
+                    }
+                    .foregroundColor(DS.Color.primary)
+                    .padding(.horizontal, DS.Spacing.sm)
+                    .padding(.vertical, 3)
+                    .background(DS.Color.primary.opacity(0.10))
+                    .clipShape(Capsule())
+                    .overlay(Capsule().stroke(DS.Color.primary.opacity(0.20), lineWidth: 0.5))
+                }
 
                 // chip المدير المنفّذ — للأدمن فقط، اسم حقيقي مو "الإدارة"
                 if let creator = actualCreator {

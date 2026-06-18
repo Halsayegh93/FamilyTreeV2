@@ -8,6 +8,7 @@ struct AdminAllRequestsView: View {
     @EnvironmentObject var notificationVM: NotificationViewModel
     @EnvironmentObject var projectsVM: ProjectsViewModel
     @StateObject private var diwaniyaVM = DiwaniyasViewModel()
+    @StateObject private var archiveVM = FamilyArchiveViewModel()
     @State private var nameEditRequest: AdminRequest? = nil
     @State private var editedName: String = ""
     @State private var phoneEditRequest: PhoneChangeRequest? = nil
@@ -18,6 +19,16 @@ struct AdminAllRequestsView: View {
     @State private var showRejectReason = false
     @State private var rejectReasonText: String = ""
     @State private var rejectReasonDetail: RequestDetail? = nil
+    // حذف نهائي لأي طلب — للمالك/المدير فقط
+    @State private var deleteConfirmDetail: RequestDetail? = nil
+    // تعديل/إضافة رقم فعلي لعضو معلّق (طلب انضمام)
+    @State private var phoneEditPendingMember: FamilyMember? = nil
+    // إضافة رقم + تفعيل لعضو من «صحة الشجرة»
+    @State private var healthPhoneMember: FamilyMember? = nil
+    // سحب (الكل): رفض مع سبب — وحذف مع تأكيد
+    @State private var swipeRejectDetail: RequestDetail? = nil
+    @State private var swipeRejectReason: String = ""
+    @State private var swipeDeleteDetail: RequestDetail? = nil
 
     /// نوع الطلب المحدد لعرض التفاصيل
     enum RequestDetail: Identifiable {
@@ -31,6 +42,7 @@ struct AdminAllRequestsView: View {
         case child(AdminRequest)
         case photo(AdminRequest)
         case project(Project)
+        case archive(ArchiveItem)
         /// طلب تعديل على الشجرة (إضافة/تعديل اسم/تعديل رقم/وفاة/حذف).
         case treeEdit(AdminRequest, TreeEditAction)
         /// عنصر صحة الشجرة — للعرض فقط (بدون موافقة/رفض)، يعرض معلومات العضو + واتساب.
@@ -48,6 +60,7 @@ struct AdminAllRequestsView: View {
             case .child(let r): return "child-\(r.id)"
             case .photo(let r): return "photo-\(r.id)"
             case .project(let p): return "proj-\(p.id)"
+            case .archive(let a): return "arch-\(a.id)"
             case .treeEdit(let r, _): return "tree-\(r.id)"
             case .healthMember(let m, _): return "health-\(m.id)"
             }
@@ -98,7 +111,7 @@ struct AdminAllRequestsView: View {
         // الشجرة — كل أنواع طلبات تعديل الشجرة + إضافة الأبناء التقليدية
         case children, treeAdd, treeEditName, treeEditPhone, treeDeceased, treeDelete
         // محتوى ونشاط
-        case news, reports, photos, diwaniya, projects
+        case news, reports, photos, diwaniya, projects, archive
         // صحة الشجرة (audit issues)
         case healthOrphan, healthNoName, healthBrokenParent, healthHidden, healthDupPhone
 
@@ -113,6 +126,7 @@ struct AdminAllRequestsView: View {
             case .phone: return L10n.t("جوال", "Phone")
             case .nameChange: return L10n.t("أسماء", "Names")
             case .diwaniya: return L10n.t("ديوانيات", "Diwaniyas")
+            case .archive: return L10n.t("أرشيف", "Archive")
             case .deceased: return L10n.t("وفاة", "Deceased")
             case .children: return L10n.t("أبناء", "Children")
             case .treeAdd: return L10n.t("إضافة (شجرة)", "Tree · Add")
@@ -139,6 +153,7 @@ struct AdminAllRequestsView: View {
             case .phone: return "phone.badge.checkmark"
             case .nameChange: return "rectangle.and.pencil.and.ellipsis"
             case .diwaniya: return "tent.fill"
+            case .archive: return "archivebox.fill"
             case .deceased: return "bolt.heart.fill"
             case .children: return "person.badge.plus"
             case .treeAdd: return "person.crop.circle.badge.plus"
@@ -165,6 +180,7 @@ struct AdminAllRequestsView: View {
             case .phone: return DS.Color.primary
             case .nameChange: return DS.Color.neonPurple
             case .diwaniya: return DS.Color.gridDiwaniya
+            case .archive: return DS.Color.warning
             case .deceased: return DS.Color.error
             case .children: return DS.Color.info
             case .treeAdd: return DS.Color.success
@@ -188,7 +204,7 @@ struct AdminAllRequestsView: View {
             case .all: return nil
             case .joinRequests, .nameChange, .phone, .deceased: return .members
             case .children, .treeAdd, .treeEditName, .treeEditPhone, .treeDeceased, .treeDelete: return .tree
-            case .news, .reports, .photos, .diwaniya, .projects: return .content
+            case .news, .reports, .photos, .diwaniya, .projects, .archive: return .content
             case .healthOrphan, .healthNoName, .healthBrokenParent, .healthHidden, .healthDupPhone: return .treeHealth
             }
         }
@@ -224,6 +240,11 @@ struct AdminAllRequestsView: View {
 
     @State private var cachedPendingMembers: [FamilyMember] = []
     private var pendingMembers: [FamilyMember] { cachedPendingMembers }
+
+    /// عناصر الأرشيف المعلّقة (بانتظار اعتماد الإدارة).
+    private var pendingArchiveItems: [ArchiveItem] {
+        archiveVM.items.filter { $0.approvalStatus == .pending }
+    }
 
     // MARK: - Tree Health Caches
     @State private var cachedHealthIssueMembers: [FamilyMember] = []
@@ -455,6 +476,7 @@ struct AdminAllRequestsView: View {
             diwaniyaVM.notificationVM = notificationVM
             diwaniyaVM.canModerate = authVM.canModerate
             diwaniyaVM.authVM = authVM
+            archiveVM.configure(authVM: authVM)
             // تحميل متوازي لجميع الطلبات — أسرع بكثير
             await withTaskGroup(of: Void.self) { group in
                 group.addTask { @MainActor in await memberVM.fetchAllMembers() }
@@ -462,6 +484,7 @@ struct AdminAllRequestsView: View {
                 group.addTask { @MainActor in await adminRequestVM.fetchNewsReportRequests() }
                 group.addTask { @MainActor in await adminRequestVM.fetchPhoneChangeRequests() }
                 group.addTask { @MainActor in await diwaniyaVM.fetchPendingDiwaniyas() }
+                group.addTask { @MainActor in await archiveVM.fetchItems() }
                 group.addTask { @MainActor in await adminRequestVM.fetchDeceasedRequests() }
                 group.addTask { @MainActor in await adminRequestVM.fetchChildAddRequests() }
                 group.addTask { @MainActor in await adminRequestVM.fetchPhotoSuggestionRequests() }
@@ -593,6 +616,49 @@ struct AdminAllRequestsView: View {
                                 "The reason will be sent as a message to the requester."))
                 }
         }
+        .sheet(item: $healthPhoneMember) { member in
+            PendingMemberPhoneSheet(member: member, activateOnSave: true)
+                .environmentObject(adminRequestVM)
+        }
+        // رفض عبر السحب (الكل) — تأكيد + سبب الرفض
+        .alert(
+            L10n.t("سبب الرفض", "Rejection Reason"),
+            isPresented: Binding(
+                get: { swipeRejectDetail != nil },
+                set: { if !$0 { swipeRejectDetail = nil } }
+            )
+        ) {
+            TextField(L10n.t("اكتب السبب (اختياري)", "Reason (optional)"), text: $swipeRejectReason)
+            Button(L10n.t("تأكيد الرفض", "Confirm Reject"), role: .destructive) {
+                if let d = swipeRejectDetail {
+                    let trimmed = swipeRejectReason.trimmingCharacters(in: .whitespacesAndNewlines)
+                    rejectDetail(d, reason: trimmed.isEmpty ? nil : trimmed)
+                }
+                swipeRejectDetail = nil
+            }
+            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { swipeRejectDetail = nil }
+        } message: {
+            Text(L10n.t("سيُرفَض الطلب ويبقى في السجل.", "The request will be rejected and kept in the log."))
+        }
+        // حذف عبر السحب (الكل) — تأكيد نهائي بالمنتصف (Alert)
+        .alert(
+            L10n.t("حذف الطلب نهائياً؟", "Delete request permanently?"),
+            isPresented: Binding(
+                get: { swipeDeleteDetail != nil },
+                set: { if !$0 { swipeDeleteDetail = nil } }
+            )
+        ) {
+            Button(L10n.t("حذف نهائي", "Delete Permanently"), role: .destructive) {
+                if let d = swipeDeleteDetail { hardDeleteDetail(d) }
+                swipeDeleteDetail = nil
+            }
+            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { swipeDeleteDetail = nil }
+        } message: {
+            Text(L10n.t(
+                "سيُحذف الطلب نهائياً من قاعدة البيانات ولا يمكن التراجع.",
+                "This request will be permanently removed and cannot be undone."
+            ))
+        }
         .sheet(item: $memberToLink) { member in
             LinkToExistingMemberSheet(pendingMember: member)
                 .environmentObject(memberVM)
@@ -672,6 +738,7 @@ struct AdminAllRequestsView: View {
         case .treeDelete: return treeEditCount(action: .delete)
         case .photos: return adminRequestVM.photoSuggestionRequests.count
         case .projects: return projectsVM.pendingProjects.count
+        case .archive: return pendingArchiveItems.count
         case .healthOrphan: return cachedHealthCounts[.orphan] ?? 0
         case .healthNoName: return cachedHealthCounts[.noName] ?? 0
         case .healthBrokenParent: return cachedHealthCounts[.brokenParent] ?? 0
@@ -991,6 +1058,7 @@ struct AdminAllRequestsView: View {
                 + adminRequestVM.treeEditRequests.map { $0.id }
                 + adminRequestVM.photoSuggestionRequests.map { $0.id }
                 + projectsVM.pendingProjects.map { $0.id }
+                + pendingArchiveItems.map { $0.id }
         case .joinRequests: return pendingMembers.map { $0.id }
         case .news:         return newsVM.pendingNewsRequests.map { $0.id }
         case .reports:      return adminRequestVM.newsReportRequests.map { $0.id }
@@ -1006,6 +1074,7 @@ struct AdminAllRequestsView: View {
         case .treeDelete:   return treeEdits(action: .delete).map { $0.id }
         case .photos:       return adminRequestVM.photoSuggestionRequests.map { $0.id }
         case .projects:     return projectsVM.pendingProjects.map { $0.id }
+        case .archive:      return pendingArchiveItems.map { $0.id }
         // الصحة لا تدعم التحديد المتعدّد (الإجراءات تفصيلية)
         case .healthOrphan, .healthNoName, .healthBrokenParent, .healthHidden, .healthDupPhone:
             return []
@@ -1172,7 +1241,7 @@ struct AdminAllRequestsView: View {
                         approveLabel: L10n.t("ربط", "Link"),
                         approveIcon: "link.badge.plus",
                         onApprove: { memberToLink = member },
-                        onReject: { Task { await adminRequestVM.rejectOrDeleteMember(memberId: member.id) } },
+                        onReject: { swipeRejectReason = ""; swipeRejectDetail = .join(member) },
                         onTap: { selectedDetail = .join(member) }
                     ) {
                         joinRequestRow(for: member)
@@ -1185,7 +1254,7 @@ struct AdminAllRequestsView: View {
                         id: post.id,
                         accentColor: RequestTab.news.color,
                         onApprove: { Task { await newsVM.approveNewsPost(postId: post.id) } },
-                        onReject: { Task { await newsVM.rejectNewsPost(postId: post.id) } },
+                        onReject: { swipeRejectReason = ""; swipeRejectDetail = .news(post) },
                         onTap: { selectedDetail = .news(post) }
                     ) {
                         newsRow(for: post)
@@ -1198,7 +1267,7 @@ struct AdminAllRequestsView: View {
                         id: request.id,
                         accentColor: RequestTab.reports.color,
                         onApprove: { Task { await adminRequestVM.approveNewsReport(request: request) } },
-                        onReject: { Task { await adminRequestVM.rejectNewsReport(request: request) } },
+                        onReject: { swipeRejectReason = ""; swipeRejectDetail = .report(request) },
                         onTap: { selectedDetail = .report(request) }
                     ) {
                         reportRow(for: request)
@@ -1210,7 +1279,7 @@ struct AdminAllRequestsView: View {
                         id: request.id,
                         accentColor: RequestTab.phone.color,
                         onApprove: { Task { await adminRequestVM.approvePhoneChangeRequest(request: request) } },
-                        onReject: { Task { await adminRequestVM.rejectPhoneChangeRequest(request: request) } },
+                        onReject: { swipeRejectReason = ""; swipeRejectDetail = .phone(request) },
                         onTap: { selectedDetail = .phone(request) }
                     ) {
                         phoneRow(for: request)
@@ -1225,7 +1294,7 @@ struct AdminAllRequestsView: View {
                         id: request.id,
                         accentColor: RequestTab.nameChange.color,
                         onApprove: { Task { await adminRequestVM.approveNameChangeRequest(request: request) } },
-                        onReject: { Task { await adminRequestVM.rejectNameChangeRequest(request: request) } },
+                        onReject: { swipeRejectReason = ""; swipeRejectDetail = .nameChange(request) },
                         onTap: { selectedDetail = .nameChange(request) }
                     ) {
                         nameChangeRow(for: request)
@@ -1245,7 +1314,7 @@ struct AdminAllRequestsView: View {
                                 Task { await diwaniyaVM.approveDiwaniya(id: diwaniya.id, adminId: adminId) }
                             }
                         },
-                        onReject: { Task { await diwaniyaVM.rejectDiwaniya(id: diwaniya.id) } },
+                        onReject: { swipeRejectReason = ""; swipeRejectDetail = .diwaniya(diwaniya) },
                         onTap: { selectedDetail = .diwaniya(diwaniya) }
                     ) {
                         diwaniyaRow(for: diwaniya)
@@ -1258,7 +1327,7 @@ struct AdminAllRequestsView: View {
                         id: request.id,
                         accentColor: RequestTab.deceased.color,
                         onApprove: { Task { await adminRequestVM.approveDeceasedRequest(request: request) } },
-                        onReject: { Task { await adminRequestVM.rejectDeceasedRequest(request: request) } },
+                        onReject: { swipeRejectReason = ""; swipeRejectDetail = .deceased(request) },
                         onTap: { selectedDetail = .deceased(request) }
                     ) {
                         deceasedRow(for: request)
@@ -1272,7 +1341,7 @@ struct AdminAllRequestsView: View {
                         accentColor: RequestTab.children.color,
                         approveLabel: L10n.t("تأكيد", "Confirm"),
                         onApprove: { Task { await adminRequestVM.acknowledgeChildAddRequest(request: request) } },
-                        onReject: { Task { await adminRequestVM.rejectChildAddRequest(request: request) } },
+                        onReject: { swipeRejectReason = ""; swipeRejectDetail = .child(request) },
                         onTap: { selectedDetail = .child(request) }
                     ) {
                         childRow(for: request)
@@ -1285,7 +1354,7 @@ struct AdminAllRequestsView: View {
                         id: request.id,
                         accentColor: RequestTab.photos.color,
                         onApprove: { Task { await adminRequestVM.approvePhotoSuggestion(request: request) } },
-                        onReject: { Task { await adminRequestVM.rejectPhotoSuggestion(request: request) } },
+                        onReject: { swipeRejectReason = ""; swipeRejectDetail = .photo(request) },
                         onTap: { selectedDetail = .photo(request) }
                     ) {
                         photoRow(for: request)
@@ -1302,10 +1371,23 @@ struct AdminAllRequestsView: View {
                                 Task { await projectsVM.approveProject(id: project.id, approvedBy: adminId) }
                             }
                         },
-                        onReject: { Task { await projectsVM.rejectProject(id: project.id) } },
+                        onReject: { swipeRejectReason = ""; swipeRejectDetail = .project(project) },
                         onTap: { selectedDetail = .project(project) }
                     ) {
                         projectRow(for: project)
+                    }
+                }
+            case .archive:
+                selectAllButton(ids: pendingArchiveItems.map { $0.id })
+                ForEach(pendingArchiveItems) { item in
+                    selectableRow(
+                        id: item.id,
+                        accentColor: RequestTab.archive.color,
+                        onApprove: { Task { await archiveVM.approveItem(item) } },
+                        onReject: { swipeRejectReason = ""; swipeRejectDetail = .archive(item) },
+                        onTap: { selectedDetail = .archive(item) }
+                    ) {
+                        archiveRow(for: item)
                     }
                 }
             case .treeAdd:
@@ -1388,6 +1470,7 @@ struct AdminAllRequestsView: View {
         approveColor: Color = DS.Color.success,
         onApprove: (() -> Void)? = nil,
         onReject: (() -> Void)? = nil,
+        onDelete: (() -> Void)? = nil,
         onTap: @escaping () -> Void,
         @ViewBuilder content: () -> Content
     ) -> some View {
@@ -1460,7 +1543,14 @@ struct AdminAllRequestsView: View {
         .swipeActions(edge: .leading, allowsFullSwipe: false) {
             if !isSelectMode, let onReject, authVM.canRejectRequests {
                 Button(action: onReject) {
-                    Label(L10n.t("رفض", "Reject"), systemImage: "xmark")
+                    Label(L10n.t("رفض", "Reject"), systemImage: "xmark.circle.fill")
+                }
+                .tint(DS.Color.warning)
+            }
+            // حذف نهائي — جنب الرفض (للمالك/المدير)
+            if !isSelectMode, let onDelete, authVM.canDeleteMembers {
+                Button(role: .destructive, action: onDelete) {
+                    Label(L10n.t("حذف", "Delete"), systemImage: "trash.fill")
                 }
                 .tint(DS.Color.error)
             }
@@ -1541,6 +1631,13 @@ struct AdminAllRequestsView: View {
                         await projectsVM.approveProject(id: proj.id, approvedBy: adminId)
                         count += 1
                     }
+                }
+            }
+        case .archive:
+            for id in ids {
+                if let item = pendingArchiveItems.first(where: { $0.id == id }) {
+                    await archiveVM.approveItem(item)
+                    count += 1
                 }
             }
         case .treeAdd, .treeEditName, .treeEditPhone, .treeDeceased, .treeDelete:
@@ -1630,6 +1727,13 @@ struct AdminAllRequestsView: View {
                     count += 1
                 }
             }
+        case .archive:
+            for id in ids {
+                if let item = pendingArchiveItems.first(where: { $0.id == id }) {
+                    await archiveVM.rejectItem(item)
+                    count += 1
+                }
+            }
         case .treeAdd, .treeEditName, .treeEditPhone, .treeDeceased, .treeDelete:
             for id in ids {
                 if let req = adminRequestVM.treeEditRequests.first(where: { $0.id == id }) {
@@ -1655,6 +1759,41 @@ struct AdminAllRequestsView: View {
                 onTap: { selectedDetail = .healthMember(member, issue) }
             ) {
                 treeHealthRow(member: member, issue: issue, color: color)
+            }
+            // أزرار سحب: تفعيل + إضافة رقم (يمين) — حذف (يسار)
+            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                if authVM.canModerate {
+                    // ربط/دمج العضو المعلّق بعضو موجود بالشجرة (يربط ويفعّل حسابه).
+                    Button {
+                        memberToLink = member
+                    } label: {
+                        Label(L10n.t("ربط", "Link"), systemImage: "link.badge.plus")
+                    }
+                    .tint(DS.Color.info)
+
+                    Button {
+                        healthPhoneMember = member
+                    } label: {
+                        Label(L10n.t("رقم", "Number"), systemImage: "phone.badge.plus")
+                    }
+                    .tint(DS.Color.primary)
+
+                    Button {
+                        Task { await adminRequestVM.activateAccount(memberId: member.id) }
+                    } label: {
+                        Label(L10n.t("تفعيل", "Activate"), systemImage: "checkmark.circle.fill")
+                    }
+                    .tint(DS.Color.success)
+                }
+            }
+            .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                if authVM.canDeleteMembers {
+                    Button(role: .destructive) {
+                        Task { await adminRequestVM.rejectOrDeleteMember(memberId: member.id) }
+                    } label: {
+                        Label(L10n.t("حذف", "Delete"), systemImage: "trash")
+                    }
+                }
             }
         }
     }
@@ -1683,9 +1822,6 @@ struct AdminAllRequestsView: View {
                 }
             }
             Spacer()
-            Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
-                .font(DS.Font.scaled(11, weight: .bold))
-                .foregroundColor(DS.Color.textTertiary)
         }
     }
 
@@ -1709,7 +1845,7 @@ struct AdminAllRequestsView: View {
                 id: request.id,
                 accentColor: color,
                 onApprove: { Task { await adminRequestVM.approveTreeEditRequest(request: request) } },
-                onReject: { Task { await adminRequestVM.rejectTreeEditRequest(request: request, reason: nil) } },
+                onReject: { swipeRejectReason = ""; swipeRejectDetail = .treeEdit(request, action) },
                 onTap: { selectedDetail = .treeEdit(request, action) }
             ) {
                 treeEditRow(request: request, action: action, color: color)
@@ -1771,6 +1907,7 @@ struct AdminAllRequestsView: View {
         case child(AdminRequest)
         case photo(AdminRequest)
         case project(Project)
+        case archive(ArchiveItem)
         case treeEdit(AdminRequest, TreeEditAction)
         case health(FamilyMember, TreeHealthIssue)
 
@@ -1786,6 +1923,7 @@ struct AdminAllRequestsView: View {
             case .child(let r): return "child-\(r.id)"
             case .photo(let r): return "photo-\(r.id)"
             case .project(let p): return "proj-\(p.id)"
+            case .archive(let a): return "arch-\(a.id)"
             case .treeEdit(let r, _): return "tree-\(r.id)"
             case .health(let m, let i): return "health-\(i)-\(m.id)"
             }
@@ -1811,6 +1949,7 @@ struct AdminAllRequestsView: View {
         case .phone(let r): return parseISODate(r.createdAt)
         case .diwaniya: return .distantPast
         case .project(let p): return parseISODate(p.createdAt)
+        case .archive(let a): return a.createdAt
         case .health(let m, _): return parseISODate(m.createdAt)
         }
     }
@@ -1828,6 +1967,7 @@ struct AdminAllRequestsView: View {
         items += adminRequestVM.childAddRequests.map { .child($0) }
         items += adminRequestVM.photoSuggestionRequests.map { .photo($0) }
         items += projectsVM.pendingProjects.map { .project($0) }
+        items += pendingArchiveItems.map { .archive($0) }
         items += adminRequestVM.treeEditRequests.map {
             AllItem.treeEdit($0, $0.treeEditPayload?.resolvedAction ?? .add)
         }
@@ -1863,35 +2003,39 @@ struct AdminAllRequestsView: View {
                 id: member.id, accentColor: RequestTab.joinRequests.color,
                 approveLabel: L10n.t("ربط", "Link"), approveIcon: "link.badge.plus",
                 onApprove: { memberToLink = member },
-                onReject: { Task { await adminRequestVM.rejectOrDeleteMember(memberId: member.id) } },
+                onReject: { swipeRejectReason = ""; swipeRejectDetail = .join(member) },
                 onTap: { selectedDetail = .join(member) }
             ) { joinRequestRow(for: member) }
         case .news(let post):
             selectableRow(
                 id: post.id, accentColor: RequestTab.news.color,
                 onApprove: { Task { await newsVM.approveNewsPost(postId: post.id) } },
-                onReject: { Task { await newsVM.rejectNewsPost(postId: post.id) } },
+                onReject: { swipeRejectReason = ""; swipeRejectDetail = .news(post) },
+                onDelete: { swipeDeleteDetail = .news(post) },
                 onTap: { selectedDetail = .news(post) }
             ) { newsRow(for: post) }
         case .report(let request):
             selectableRow(
                 id: request.id, accentColor: RequestTab.reports.color,
                 onApprove: { Task { await adminRequestVM.approveNewsReport(request: request) } },
-                onReject: { Task { await adminRequestVM.rejectNewsReport(request: request) } },
+                onReject: { swipeRejectReason = ""; swipeRejectDetail = .report(request) },
+                onDelete: { swipeDeleteDetail = .report(request) },
                 onTap: { selectedDetail = .report(request) }
             ) { reportRow(for: request) }
         case .phone(let request):
             selectableRow(
                 id: request.id, accentColor: RequestTab.phone.color,
                 onApprove: { Task { await adminRequestVM.approvePhoneChangeRequest(request: request) } },
-                onReject: { Task { await adminRequestVM.rejectPhoneChangeRequest(request: request) } },
+                onReject: { swipeRejectReason = ""; swipeRejectDetail = .phone(request) },
+                onDelete: { swipeDeleteDetail = .phone(request) },
                 onTap: { selectedDetail = .phone(request) }
             ) { phoneRow(for: request) }
         case .nameChange(let request):
             selectableRow(
                 id: request.id, accentColor: RequestTab.nameChange.color,
                 onApprove: { Task { await adminRequestVM.approveNameChangeRequest(request: request) } },
-                onReject: { Task { await adminRequestVM.rejectNameChangeRequest(request: request) } },
+                onReject: { swipeRejectReason = ""; swipeRejectDetail = .nameChange(request) },
+                onDelete: { swipeDeleteDetail = .nameChange(request) },
                 onTap: { selectedDetail = .nameChange(request) }
             ) { nameChangeRow(for: request) }
         case .diwaniya(let diwaniya):
@@ -1902,14 +2046,16 @@ struct AdminAllRequestsView: View {
                         Task { await diwaniyaVM.approveDiwaniya(id: diwaniya.id, adminId: adminId) }
                     }
                 },
-                onReject: { Task { await diwaniyaVM.rejectDiwaniya(id: diwaniya.id) } },
+                onReject: { swipeRejectReason = ""; swipeRejectDetail = .diwaniya(diwaniya) },
+                onDelete: { swipeDeleteDetail = .diwaniya(diwaniya) },
                 onTap: { selectedDetail = .diwaniya(diwaniya) }
             ) { diwaniyaRow(for: diwaniya) }
         case .deceased(let request):
             selectableRow(
                 id: request.id, accentColor: RequestTab.deceased.color,
                 onApprove: { Task { await adminRequestVM.approveDeceasedRequest(request: request) } },
-                onReject: { Task { await adminRequestVM.rejectDeceasedRequest(request: request) } },
+                onReject: { swipeRejectReason = ""; swipeRejectDetail = .deceased(request) },
+                onDelete: { swipeDeleteDetail = .deceased(request) },
                 onTap: { selectedDetail = .deceased(request) }
             ) { deceasedRow(for: request) }
         case .child(let request):
@@ -1917,14 +2063,16 @@ struct AdminAllRequestsView: View {
                 id: request.id, accentColor: RequestTab.children.color,
                 approveLabel: L10n.t("تأكيد", "Confirm"),
                 onApprove: { Task { await adminRequestVM.acknowledgeChildAddRequest(request: request) } },
-                onReject: { Task { await adminRequestVM.rejectChildAddRequest(request: request) } },
+                onReject: { swipeRejectReason = ""; swipeRejectDetail = .child(request) },
+                onDelete: { swipeDeleteDetail = .child(request) },
                 onTap: { selectedDetail = .child(request) }
             ) { childRow(for: request) }
         case .photo(let request):
             selectableRow(
                 id: request.id, accentColor: RequestTab.photos.color,
                 onApprove: { Task { await adminRequestVM.approvePhotoSuggestion(request: request) } },
-                onReject: { Task { await adminRequestVM.rejectPhotoSuggestion(request: request) } },
+                onReject: { swipeRejectReason = ""; swipeRejectDetail = .photo(request) },
+                onDelete: { swipeDeleteDetail = .photo(request) },
                 onTap: { selectedDetail = .photo(request) }
             ) { photoRow(for: request) }
         case .project(let project):
@@ -1935,15 +2083,25 @@ struct AdminAllRequestsView: View {
                         Task { await projectsVM.approveProject(id: project.id, approvedBy: adminId) }
                     }
                 },
-                onReject: { Task { await projectsVM.rejectProject(id: project.id) } },
+                onReject: { swipeRejectReason = ""; swipeRejectDetail = .project(project) },
+                onDelete: { swipeDeleteDetail = .project(project) },
                 onTap: { selectedDetail = .project(project) }
             ) { projectRow(for: project) }
+        case .archive(let item):
+            selectableRow(
+                id: item.id, accentColor: RequestTab.archive.color,
+                onApprove: { Task { await archiveVM.approveItem(item) } },
+                onReject: { swipeRejectReason = ""; swipeRejectDetail = .archive(item) },
+                onDelete: { swipeDeleteDetail = .archive(item) },
+                onTap: { selectedDetail = .archive(item) }
+            ) { archiveRow(for: item) }
         case .treeEdit(let request, let action):
             let color = treeEditColor(action)
             selectableRow(
                 id: request.id, accentColor: color,
                 onApprove: { Task { await adminRequestVM.approveTreeEditRequest(request: request) } },
-                onReject: { Task { await adminRequestVM.rejectTreeEditRequest(request: request, reason: nil) } },
+                onReject: { swipeRejectReason = ""; swipeRejectDetail = .treeEdit(request, action) },
+                onDelete: { swipeDeleteDetail = .treeEdit(request, action) },
                 onTap: { selectedDetail = .treeEdit(request, action) }
             ) { treeEditRow(request: request, action: action, color: color) }
         case .health(let member, let issue):
@@ -1952,6 +2110,41 @@ struct AdminAllRequestsView: View {
                 onApprove: nil, onReject: nil,
                 onTap: { selectedDetail = .healthMember(member, issue) }
             ) { treeHealthRow(member: member, issue: issue, color: issue.asTab.color) }
+            // أزرار سحب: تفعيل + إضافة رقم (يمين) — حذف (يسار)
+            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                if authVM.canModerate {
+                    // ربط/دمج العضو المعلّق بعضو موجود بالشجرة (يربط ويفعّل حسابه).
+                    Button {
+                        memberToLink = member
+                    } label: {
+                        Label(L10n.t("ربط", "Link"), systemImage: "link.badge.plus")
+                    }
+                    .tint(DS.Color.info)
+
+                    Button {
+                        healthPhoneMember = member
+                    } label: {
+                        Label(L10n.t("رقم", "Number"), systemImage: "phone.badge.plus")
+                    }
+                    .tint(DS.Color.primary)
+
+                    Button {
+                        Task { await adminRequestVM.activateAccount(memberId: member.id) }
+                    } label: {
+                        Label(L10n.t("تفعيل", "Activate"), systemImage: "checkmark.circle.fill")
+                    }
+                    .tint(DS.Color.success)
+                }
+            }
+            .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                if authVM.canDeleteMembers {
+                    Button(role: .destructive) {
+                        Task { await adminRequestVM.rejectOrDeleteMember(memberId: member.id) }
+                    } label: {
+                        Label(L10n.t("حذف", "Delete"), systemImage: "trash")
+                    }
+                }
+            }
         }
     }
 
@@ -1984,6 +2177,8 @@ struct AdminAllRequestsView: View {
             } else if let proj = projectsVM.pendingProjects.first(where: { $0.id == id }),
                       let adminId = authVM.currentUser?.id {
                 await projectsVM.approveProject(id: proj.id, approvedBy: adminId); count += 1
+            } else if let item = pendingArchiveItems.first(where: { $0.id == id }) {
+                await archiveVM.approveItem(item); count += 1
             } else if let req = adminRequestVM.treeEditRequests.first(where: { $0.id == id }) {
                 await adminRequestVM.approveTreeEditRequest(request: req); count += 1
             }
@@ -2017,6 +2212,8 @@ struct AdminAllRequestsView: View {
                 await adminRequestVM.rejectPhotoSuggestion(request: req); count += 1
             } else if projectsVM.pendingProjects.contains(where: { $0.id == id }) {
                 await projectsVM.rejectProject(id: id); count += 1
+            } else if let item = pendingArchiveItems.first(where: { $0.id == id }) {
+                await archiveVM.rejectItem(item); count += 1
             } else if let req = adminRequestVM.treeEditRequests.first(where: { $0.id == id }) {
                 await adminRequestVM.rejectTreeEditRequest(request: req, reason: nil); count += 1
             }
@@ -2702,6 +2899,39 @@ struct AdminAllRequestsView: View {
         }
     }
 
+    // MARK: - Archive Row
+
+    private func archiveRow(for item: ArchiveItem) -> some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            HStack(spacing: DS.Spacing.sm) {
+                iconCircle(icon: item.category.iconName, color: DS.Color.warning, size: 36)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(L10n.t("عنصر أرشيف", "Archive Item"))
+                        .font(DS.Font.calloutBold)
+                        .foregroundColor(DS.Color.textPrimary)
+                        .lineLimit(1)
+
+                    Text(item.title)
+                        .font(DS.Font.caption1)
+                        .fontWeight(.semibold)
+                        .foregroundColor(DS.Color.textSecondary)
+                        .lineLimit(1)
+                }
+
+                Spacer()
+            }
+
+            detailRow(
+                icon: item.category.iconName,
+                text: L10n.isArabic ? item.category.displayName : item.category.displayNameEn
+            )
+            if let year = item.year {
+                detailRow(icon: "calendar", text: "\(year)")
+            }
+        }
+    }
+
     // MARK: - Deceased Row
 
     private func deceasedRow(for request: AdminRequest) -> some View {
@@ -3223,6 +3453,30 @@ struct AdminAllRequestsView: View {
                         .foregroundColor(DS.Color.primary)
                 }
             }
+            .alert(
+                L10n.t("حذف الطلب نهائياً؟", "Delete request permanently?"),
+                isPresented: Binding(
+                    get: { deleteConfirmDetail != nil },
+                    set: { if !$0 { deleteConfirmDetail = nil } }
+                )
+            ) {
+                Button(L10n.t("حذف نهائي", "Delete Permanently"), role: .destructive) {
+                    if let d = deleteConfirmDetail {
+                        hardDeleteDetail(d)
+                    }
+                    deleteConfirmDetail = nil
+                }
+                Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { deleteConfirmDetail = nil }
+            } message: {
+                Text(L10n.t(
+                    "سيُحذف هذا الطلب نهائياً من قاعدة البيانات ولا يمكن التراجع.",
+                    "This request will be permanently removed and cannot be undone."
+                ))
+            }
+            .sheet(item: $phoneEditPendingMember) { member in
+                PendingMemberPhoneSheet(member: member)
+                    .environmentObject(adminRequestVM)
+            }
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
@@ -3282,6 +3536,11 @@ struct AdminAllRequestsView: View {
                          title: L10n.t("طلب مشروع", "Project Request"),
                          timestamp: p.createdAt.map { formatRegistrationDate($0) },
                          imageUrl: p.logoUrl)
+        case .archive(let a):
+            return .init(icon: a.category.iconName, color: DS.Color.warning,
+                         title: L10n.t("عنصر أرشيف", "Archive Item"),
+                         timestamp: nil,
+                         imageUrl: a.thumbnailUrl)
         case .treeEdit(let request, let action):
             return .init(icon: action.iconName, color: treeEditColor(action),
                          title: L10n.t(action.arabicLabel, action.englishLabel),
@@ -3365,6 +3624,34 @@ struct AdminAllRequestsView: View {
             if let phone = member.phoneNumber, !phone.isEmpty {
                 infoCard(icon: "phone.fill", label: L10n.t("رقم الهاتف", "Phone"),
                          value: KuwaitPhone.display(phone), color: DS.Color.success)
+            }
+            // تعديل / إضافة رقم فعلي قبل الربط
+            if authVM.canModerate {
+                Button {
+                    phoneEditPendingMember = member
+                } label: {
+                    HStack(spacing: DS.Spacing.sm) {
+                        Image(systemName: "phone.badge.plus")
+                            .font(DS.Font.scaled(13, weight: .semibold))
+                        Text(L10n.t("تعديل / إضافة رقم فعلي", "Edit / Add real number"))
+                            .font(DS.Font.scaled(13, weight: .bold))
+                        Spacer()
+                        Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
+                            .font(DS.Font.scaled(11, weight: .bold))
+                            .foregroundColor(DS.Color.textTertiary)
+                    }
+                    .foregroundColor(DS.Color.primary)
+                    .padding(.horizontal, DS.Spacing.md)
+                    .padding(.vertical, DS.Spacing.sm)
+                    .frame(maxWidth: .infinity)
+                    .background(DS.Color.primary.opacity(0.08))
+                    .cornerRadius(DS.Radius.md)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: DS.Radius.md)
+                            .stroke(DS.Color.primary.opacity(0.2), lineWidth: 1)
+                    )
+                }
+                .buttonStyle(.plain)
             }
 
         case .news(let post):
@@ -3486,6 +3773,22 @@ struct AdminAllRequestsView: View {
                let url = URL(string: loc.lowercased().hasPrefix("http") ? loc : "https://\(loc)") {
                 contactLinkCard(icon: "mappin.and.ellipse", label: L10n.t("الموقع الجغرافي", "Location"),
                                 value: L10n.t("فتح الخريطة", "Open map"), color: DS.Color.error, url: url)
+            }
+
+        case .archive(let item):
+            infoCard(icon: "textformat", label: L10n.t("العنوان", "Title"),
+                     value: item.title, color: DS.Color.warning)
+            infoCard(icon: item.category.iconName, label: L10n.t("القسم", "Category"),
+                     value: L10n.isArabic ? item.category.displayName : item.category.displayNameEn,
+                     color: DS.Color.info)
+            if let year = item.year {
+                infoCard(icon: "calendar", label: L10n.t("السنة", "Year"),
+                         value: "\(year)", color: DS.Color.primary)
+            }
+            if let desc = item.description, !desc.isEmpty {
+                longTextCard(icon: "doc.text.fill",
+                             label: L10n.t("الوصف", "Description"),
+                             text: desc)
             }
 
         case .treeEdit(let request, let action):
@@ -3762,13 +4065,9 @@ struct AdminAllRequestsView: View {
                 HStack(spacing: DS.Spacing.sm) {
                     if authVM.canRejectRequests {
                         Button {
-                            if case .treeEdit = detail {
-                                rejectReasonText = ""
-                                rejectReasonDetail = detail
-                                showRejectReason = true
-                            } else {
-                                rejectDetail(detail)
-                            }
+                            rejectReasonText = ""
+                            rejectReasonDetail = detail
+                            showRejectReason = true
                         } label: {
                             HStack(spacing: 5) {
                                 Image(systemName: "xmark").font(DS.Font.scaled(12, weight: .bold))
@@ -3806,6 +4105,27 @@ struct AdminAllRequestsView: View {
                         .shadow(color: DS.Color.success.opacity(0.35), radius: 6, x: 0, y: 3)
                     }
                     .buttonStyle(.plain)
+                    .disabled(adminRequestVM.isLoading)
+                }
+
+                // حذف نهائي — يمسح الطلب كلياً (للمالك/المدير فقط)
+                if authVM.canDeleteMembers {
+                    Button {
+                        deleteConfirmDetail = detail
+                    } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: "trash").font(DS.Font.scaled(11, weight: .bold))
+                            Text(L10n.t("حذف نهائي", "Delete Permanently"))
+                                .font(DS.Font.scaled(13, weight: .bold))
+                        }
+                        .foregroundColor(DS.Color.error)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(Capsule().fill(DS.Color.error.opacity(0.08)))
+                        .overlay(Capsule().strokeBorder(DS.Color.error.opacity(0.20), lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, DS.Spacing.sm)
                     .disabled(adminRequestVM.isLoading)
                 }
             }
@@ -3866,6 +4186,9 @@ struct AdminAllRequestsView: View {
                     await projectsVM.approveProject(id: project.id, approvedBy: adminId)
                 }
                 await MainActor.run { selectedDetail = nil }
+            case .archive(let item):
+                await archiveVM.approveItem(item)
+                await MainActor.run { selectedDetail = nil }
             case .treeEdit(let request, _):
                 await adminRequestVM.approveTreeEditRequest(request: request)
                 await MainActor.run { selectedDetail = nil }
@@ -3877,6 +4200,9 @@ struct AdminAllRequestsView: View {
 
     private func rejectDetail(_ detail: RequestDetail, reason: String? = nil) {
         Task {
+            // سبب الرفض (مُهذّب) يُمرَّر لإشعار صاحب الطلب في كل الأنواع.
+            let trimmedReason = reason?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let r: String? = (trimmedReason?.isEmpty == false) ? trimmedReason : nil
             switch detail {
             case .join(let member):
                 await adminRequestVM.rejectOrDeleteMember(memberId: member.id)
@@ -3885,27 +4211,60 @@ struct AdminAllRequestsView: View {
             case .report(let request):
                 await adminRequestVM.rejectNewsReport(request: request)
             case .phone(let request):
-                await adminRequestVM.rejectPhoneChangeRequest(request: request)
+                await adminRequestVM.rejectPhoneChangeRequest(request: request, reason: r)
             case .nameChange(let request):
-                await adminRequestVM.rejectNameChangeRequest(request: request)
+                await adminRequestVM.rejectNameChangeRequest(request: request, reason: r)
             case .diwaniya(let diwaniya):
                 await diwaniyaVM.rejectDiwaniya(id: diwaniya.id)
             case .deceased(let request):
-                await adminRequestVM.rejectDeceasedRequest(request: request)
+                await adminRequestVM.rejectDeceasedRequest(request: request, reason: r)
             case .child(let request):
-                await adminRequestVM.rejectChildAddRequest(request: request)
+                await adminRequestVM.rejectChildAddRequest(request: request, reason: r)
             case .photo(let request):
-                await adminRequestVM.rejectPhotoSuggestion(request: request)
+                await adminRequestVM.rejectPhotoSuggestion(request: request, reason: r)
             case .project(let project):
                 await projectsVM.rejectProject(id: project.id)
+            case .archive(let item):
+                await archiveVM.rejectItem(item)
             case .treeEdit(let request, _):
-                let trimmed = reason?.trimmingCharacters(in: .whitespacesAndNewlines)
-                await adminRequestVM.rejectTreeEditRequest(
-                    request: request,
-                    reason: (trimmed?.isEmpty == false) ? trimmed : nil
-                )
+                await adminRequestVM.rejectTreeEditRequest(request: request, reason: r)
             case .healthMember:
                 break // لا إجراء رفض لعناصر الصحة
+            }
+            await MainActor.run { selectedDetail = nil }
+        }
+    }
+
+    /// حذف نهائي لأي طلب — يمسح العنصر كلياً من قاعدة البيانات (مختلف عن «رفض»).
+    private func hardDeleteDetail(_ detail: RequestDetail) {
+        Task {
+            switch detail {
+            case .join(let member):
+                await adminRequestVM.rejectOrDeleteMember(memberId: member.id)
+            case .news(let post):
+                await newsVM.deleteNewsPost(postId: post.id)
+            case .report(let request):
+                await adminRequestVM.deleteAdminRequestRow(requestId: request.id)
+            case .phone(let request):
+                await adminRequestVM.deleteAdminRequestRow(requestId: request.id)
+            case .nameChange(let request):
+                await adminRequestVM.deleteAdminRequestRow(requestId: request.id)
+            case .diwaniya(let diwaniya):
+                await diwaniyaVM.deleteDiwaniya(id: diwaniya.id)
+            case .deceased(let request):
+                await adminRequestVM.deleteAdminRequestRow(requestId: request.id)
+            case .child(let request):
+                await adminRequestVM.deleteAdminRequestRow(requestId: request.id)
+            case .photo(let request):
+                await adminRequestVM.deleteAdminRequestRow(requestId: request.id)
+            case .project(let project):
+                await projectsVM.deleteProject(id: project.id)
+            case .archive(let item):
+                await archiveVM.deleteItem(item)
+            case .treeEdit(let request, _):
+                await adminRequestVM.deleteAdminRequestRow(requestId: request.id)
+            case .healthMember:
+                break // عناصر الصحة ليست طلبات — لا حذف
             }
             await MainActor.run { selectedDetail = nil }
         }
@@ -3977,6 +4336,9 @@ struct AdminAllRequestsView: View {
                         await projectsVM.approveProject(id: project.id, approvedBy: adminId)
                     }
                     selectedDetail = nil
+                case .archive(let item):
+                    await archiveVM.approveItem(item)
+                    selectedDetail = nil
                 case .treeEdit(let request, _):
                     await adminRequestVM.approveTreeEditRequest(request: request)
                     selectedDetail = nil
@@ -4017,6 +4379,9 @@ struct AdminAllRequestsView: View {
                     selectedDetail = nil
                 case .project(let project):
                     await projectsVM.rejectProject(id: project.id)
+                    selectedDetail = nil
+                case .archive(let item):
+                    await archiveVM.rejectItem(item)
                     selectedDetail = nil
                 case .treeEdit(let request, _):
                     await adminRequestVM.rejectTreeEditRequest(request: request, reason: nil)

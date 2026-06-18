@@ -529,6 +529,12 @@ class AdminRequestViewModel: ObservableObject {
         }
     }
 
+    /// لاحقة «السبب: …» تُضاف لنص إشعار الرفض إذا كتب المدير سبباً.
+    static func rejectReasonSuffix(_ reason: String?, arabic: Bool) -> String {
+        guard let r = reason?.trimmingCharacters(in: .whitespacesAndNewlines), !r.isEmpty else { return "" }
+        return arabic ? "\nالسبب: \(r)" : "\nReason: \(r)"
+    }
+
     func rejectTreeEditRequest(request: AdminRequest, reason: String? = nil) async {
         guard NetworkMonitor.shared.requireOnline() else { return }
         guard authVM?.canRejectRequests == true else { Log.warning("رفض الطلب مرفوض: الصلاحية للإدارة فقط"); return }
@@ -691,7 +697,7 @@ class AdminRequestViewModel: ObservableObject {
         })
     }
 
-    func rejectDeceasedRequest(request: AdminRequest) async {
+    func rejectDeceasedRequest(request: AdminRequest, reason: String? = nil) async {
         guard NetworkMonitor.shared.requireOnline() else { return }
         // المراقب يقدر يرفض حسب CLAUDE.md (المشرف فقط ممنوع من الرفض)
         guard canRejectRequests else { Log.warning("رفض الطلب مرفوض: لا صلاحية"); return }
@@ -707,8 +713,8 @@ class AdminRequestViewModel: ObservableObject {
                 await self?.broadcastCompletedAction(
                     titleAr: "تم رفض طلب وفاة",
                     titleEn: "Deceased Request Rejected",
-                    bodyAr: memberName.isEmpty ? "تم رفض طلب تأكيد وفاة" : "تم رفض طلب تأكيد وفاة «\(memberName)»",
-                    bodyEn: memberName.isEmpty ? "Deceased request rejected" : "Deceased request for «\(memberName)» rejected",
+                    bodyAr: (memberName.isEmpty ? "تم رفض طلب تأكيد وفاة" : "تم رفض طلب تأكيد وفاة «\(memberName)»") + Self.rejectReasonSuffix(reason, arabic: true),
+                    bodyEn: (memberName.isEmpty ? "Deceased request rejected" : "Deceased request for «\(memberName)» rejected") + Self.rejectReasonSuffix(reason, arabic: false),
                     kind: .deceasedReport
                 )
                 Log.info("تم رفض طلب تأكيد الوفاة")
@@ -740,7 +746,7 @@ class AdminRequestViewModel: ObservableObject {
         }
     }
 
-    func rejectChildAddRequest(request: AdminRequest) async {
+    func rejectChildAddRequest(request: AdminRequest, reason: String? = nil) async {
         // المراقب يقدر يرفض حسب CLAUDE.md (المشرف فقط ممنوع من الرفض)
         guard canRejectRequests else { Log.warning("رفض الطلب مرفوض: لا صلاحية"); return }
         let childName = request.member?.firstName ?? ""
@@ -763,8 +769,8 @@ class AdminRequestViewModel: ObservableObject {
                 await self?.broadcastCompletedAction(
                     titleAr: "تم رفض طلب إضافة ابن",
                     titleEn: "Child Add Rejected",
-                    bodyAr: childName.isEmpty ? "تم رفض طلب إضافة ابن" : "تم رفض طلب إضافة «\(childName)»",
-                    bodyEn: childName.isEmpty ? "Child add request rejected" : "Add request for «\(childName)» rejected",
+                    bodyAr: (childName.isEmpty ? "تم رفض طلب إضافة ابن" : "تم رفض طلب إضافة «\(childName)»") + Self.rejectReasonSuffix(reason, arabic: true),
+                    bodyEn: (childName.isEmpty ? "Child add request rejected" : "Add request for «\(childName)» rejected") + Self.rejectReasonSuffix(reason, arabic: false),
                     kind: .childAdd
                 )
                 Log.info("تم رفض طلب إضافة الابن وحذفه من الشجرة")
@@ -936,6 +942,103 @@ class AdminRequestViewModel: ObservableObject {
 
     func updateMemberPhone(memberId: UUID, newPhone: String) async {
         await updateMemberPhone(memberId: memberId, country: KuwaitPhone.defaultCountry, localPhone: newPhone)
+    }
+
+    /// تعديل/إضافة رقم جوال فعلي لعضو معلّق — إدخال حر يدعم الأرقام الدولية عبر الكشف التلقائي.
+    /// - `activate`: عند true يفعّل الحساب أيضاً (status=active + role=member للمعلّق + اعتماد طلب الانضمام).
+    /// يرجع true عند النجاح.
+    @discardableResult
+    func updatePendingMemberPhone(memberId: UUID, rawInput: String, activate: Bool = false) async -> Bool {
+        guard let normalizedPhone = KuwaitPhone.normalizeForStorageFromInput(rawInput) else {
+            self.errorMessage = L10n.t("رقم الجوال غير صالح.", "Invalid phone number.")
+            return false
+        }
+        return await applyMemberPhone(memberId: memberId, normalizedPhone: normalizedPhone, activate: activate)
+    }
+
+    /// تعديل/إضافة رقم جوال فعلي لعضو معلّق — باختيار الدولة + الرقم المحلي.
+    @discardableResult
+    func updatePendingMemberPhone(memberId: UUID, country: KuwaitPhone.Country, localDigits: String, activate: Bool = false) async -> Bool {
+        guard let normalizedPhone = KuwaitPhone.normalizedForStorage(country: country, rawLocalDigits: localDigits) else {
+            self.errorMessage = L10n.t(
+                "رقم غير صالح لـ \(country.nameArabic).",
+                "Invalid number for \(country.nameArabic)."
+            )
+            return false
+        }
+        return await applyMemberPhone(memberId: memberId, normalizedPhone: normalizedPhone, activate: activate)
+    }
+
+    /// النواة المشتركة: تحقق صلاحية + منع تكرار + حفظ على السيرفر + تفعيل اختياري.
+    @discardableResult
+    private func applyMemberPhone(memberId: UUID, normalizedPhone: String, activate: Bool) async -> Bool {
+        guard NetworkMonitor.shared.requireOnline() else { return false }
+        guard canModerate else {
+            self.errorMessage = L10n.t("ليس لديك صلاحية لتعديل الأرقام.", "You don't have permission to edit numbers.")
+            return false
+        }
+        // منع تكرار الرقم
+        if let memberVM = memberVM {
+            let check = memberVM.isPhoneDuplicate(normalizedPhone, excludingMemberId: memberId)
+            if check.isDuplicate {
+                self.errorMessage = L10n.t(
+                    "الرقم مستخدم من عضو آخر: \(check.existingMember?.fullName ?? "")",
+                    "Number already used by: \(check.existingMember?.fullName ?? "")"
+                )
+                return false
+            }
+        }
+        self.isLoading = true
+        defer { self.isLoading = false }
+        do {
+            try await supabase
+                .from("profiles")
+                .update(["phone_number": AnyEncodable(normalizedPhone)])
+                .eq("id", value: memberId.uuidString)
+                .execute()
+
+            if activate {
+                // تفعيل العضو: status=active + role=member للمعلّق + اعتماد طلب الانضمام
+                let profiles: [FamilyMember] = (try? await supabase
+                    .from("profiles")
+                    .select()
+                    .eq("id", value: memberId.uuidString)
+                    .limit(1)
+                    .execute()
+                    .value) ?? []
+
+                var payload: [String: AnyEncodable] = ["status": AnyEncodable("active")]
+                if profiles.first?.role == .pending {
+                    payload["role"] = AnyEncodable("member")
+                }
+                try await supabase
+                    .from("profiles")
+                    .update(payload)
+                    .eq("id", value: memberId.uuidString)
+                    .execute()
+
+                _ = try? await supabase
+                    .from("admin_requests")
+                    .update(["status": AnyEncodable(ApprovalStatus.approved.rawValue)])
+                    .eq("member_id", value: memberId.uuidString)
+                    .eq("request_type", value: RequestType.joinRequest.rawValue)
+                    .eq("status", value: ApprovalStatus.pending.rawValue)
+                    .execute()
+            }
+
+            await memberVM?.fetchAllMembers(force: true)
+            Log.info(activate ? "تم تحديث الرقم وتفعيل العضو" : "تم تحديث رقم العضو المعلّق")
+            return true
+        } catch {
+            Log.error("خطأ تحديث رقم العضو المعلّق: \(error.localizedDescription)")
+            await MainActor.run {
+                self.errorMessage = L10n.t(
+                    "فشل تحديث الرقم: \(error.localizedDescription)",
+                    "Failed to update number: \(error.localizedDescription)"
+                )
+            }
+            return false
+        }
     }
 
     func updateMemberPhone(memberId: UUID, country: KuwaitPhone.Country, localPhone: String) async {
@@ -1170,7 +1273,7 @@ class AdminRequestViewModel: ObservableObject {
         })
     }
 
-    func rejectNameChangeRequest(request: AdminRequest) async {
+    func rejectNameChangeRequest(request: AdminRequest, reason: String? = nil) async {
         // كان isAdmin (يستبعد المراقب). حسب CLAUDE.md المراقب يقدر يرفض.
         guard canRejectRequests else { Log.warning("رفض الطلب مرفوض: لا صلاحية"); return }
         optimisticRemove(from: &nameChangeRequests, id: request.id, apiWork: { [weak self] in
@@ -1183,7 +1286,10 @@ class AdminRequestViewModel: ObservableObject {
 
                 await self?.notificationVM?.sendNotification(
                     title: L10n.t("لم يتم قبول طلبك", "Your Request Was Declined"),
-                    body: L10n.t("طلب تغيير الاسم لم تتم الموافقة عليه", "Your name change request was not approved"),
+                    body: L10n.t(
+                        "طلب تغيير الاسم لم تتم الموافقة عليه" + Self.rejectReasonSuffix(reason, arabic: true),
+                        "Your name change request was not approved" + Self.rejectReasonSuffix(reason, arabic: false)
+                    ),
                     targetMemberIds: [request.requesterId],
                     kind: "request_rejected"
                 )
@@ -1280,7 +1386,7 @@ class AdminRequestViewModel: ObservableObject {
         })
     }
 
-    func rejectPhoneChangeRequest(request: PhoneChangeRequest) async {
+    func rejectPhoneChangeRequest(request: PhoneChangeRequest, reason: String? = nil) async {
         // كان isAdmin (يستبعد المراقب). حسب CLAUDE.md المراقب يقدر يرفض.
         guard canRejectRequests else { Log.warning("رفض الطلب مرفوض: لا صلاحية"); return }
 
@@ -1295,7 +1401,10 @@ class AdminRequestViewModel: ObservableObject {
                 if let requesterId = request.requesterId {
                     await self?.notificationVM?.sendNotification(
                         title: L10n.t("لم يتم قبول طلبك", "Your Request Was Declined"),
-                        body: L10n.t("طلب تغيير رقم الهاتف لم تتم الموافقة عليه", "Your phone change request was not approved"),
+                        body: L10n.t(
+                            "طلب تغيير رقم الهاتف لم تتم الموافقة عليه" + Self.rejectReasonSuffix(reason, arabic: true),
+                            "Your phone change request was not approved" + Self.rejectReasonSuffix(reason, arabic: false)
+                        ),
                         targetMemberIds: [requesterId],
                         kind: "request_rejected"
                     )
@@ -1670,6 +1779,45 @@ class AdminRequestViewModel: ObservableObject {
         }
     }
 
+    /// حذف نهائي لصف طلب من جدول admin_requests — يمسح الطلب كلياً من قاعدة البيانات
+    /// (مختلف عن «رفض» الذي يغيّر الحالة فقط). للمالك/المدير فقط.
+    func deleteAdminRequestRow(requestId: UUID) async {
+        guard NetworkMonitor.shared.requireOnline() else { return }
+        guard authVM?.canDeleteMembers == true else {
+            Log.error("تم رفض حذف الطلب: الصلاحية للمالك/المدير فقط")
+            self.errorMessage = L10n.t("ليس لديك صلاحية لحذف الطلبات نهائياً.", "You don't have permission to permanently delete requests.")
+            return
+        }
+
+        // إزالة فورية محلياً من كل القوائم — ثم API بالخلفية
+        withAnimation(.snappy(duration: 0.25)) {
+            deceasedRequests.removeAll { $0.id == requestId }
+            childAddRequests.removeAll { $0.id == requestId }
+            newsReportRequests.removeAll { $0.id == requestId }
+            treeEditRequests.removeAll { $0.id == requestId }
+            nameChangeRequests.removeAll { $0.id == requestId }
+            photoSuggestionRequests.removeAll { $0.id == requestId }
+            phoneChangeRequests.removeAll { $0.id == requestId }
+        }
+
+        do {
+            try await supabase
+                .from("admin_requests")
+                .delete()
+                .eq("id", value: requestId.uuidString)
+                .execute()
+            Log.info("تم حذف الطلب نهائياً من admin_requests")
+        } catch {
+            Log.error("خطأ في حذف الطلب: \(error.localizedDescription)")
+            await MainActor.run {
+                self.errorMessage = L10n.t(
+                    "فشل حذف الطلب: \(error.localizedDescription)",
+                    "Failed to delete request: \(error.localizedDescription)"
+                )
+            }
+        }
+    }
+
     // MARK: - News Report Requests
 
     func fetchNewsReportRequests(force: Bool = false) async {
@@ -1681,10 +1829,15 @@ class AdminRequestViewModel: ObservableObject {
         }
 
         do {
+            // تبويب «البلاغات» يجمع بلاغات الأخبار + بلاغات المحتوى العام (Apple UGC):
+            // التعليقات/الأرشيف/المشاريع/الديوانيات/تفاصيل العضو تُدرَج بـ content_report.
             let requests: [AdminRequest] = try await supabase
                 .from("admin_requests")
                 .select("*, member:profiles!member_id(*)")
-                .eq("request_type", value: RequestType.newsReport.rawValue)
+                .in("request_type", values: [
+                    RequestType.newsReport.rawValue,
+                    RequestType.contentReport.rawValue
+                ])
                 .eq("status", value: ApprovalStatus.pending.rawValue)
                 .order("created_at", ascending: false)
                 .execute()
@@ -1692,7 +1845,7 @@ class AdminRequestViewModel: ObservableObject {
 
             self.newsReportRequests = requests
         } catch {
-            Log.fetchError("خطأ جلب بلاغات الأخبار", error)
+            Log.fetchError("خطأ جلب البلاغات", error)
         }
     }
 
@@ -1885,7 +2038,7 @@ class AdminRequestViewModel: ObservableObject {
     }
 
     /// رفض اقتراح صورة — حذف الصورة من التخزين
-    func rejectPhotoSuggestion(request: AdminRequest) async {
+    func rejectPhotoSuggestion(request: AdminRequest, reason: String? = nil) async {
         // المراقب يقدر يرفض حسب CLAUDE.md (المشرف فقط ممنوع من الرفض)
         guard canRejectRequests else { Log.warning("رفض الطلب مرفوض: لا صلاحية"); return }
 
@@ -1905,6 +2058,16 @@ class AdminRequestViewModel: ObservableObject {
                     .update(["status": AnyEncodable(ApprovalStatus.rejected.rawValue)])
                     .eq("id", value: request.id.uuidString)
                     .execute()
+
+                await self?.notificationVM?.sendNotification(
+                    title: L10n.t("لم يتم قبول طلبك", "Your Request Was Declined"),
+                    body: L10n.t(
+                        "اقتراح الصورة لم تتم الموافقة عليه" + Self.rejectReasonSuffix(reason, arabic: true),
+                        "Your photo suggestion was not approved" + Self.rejectReasonSuffix(reason, arabic: false)
+                    ),
+                    targetMemberIds: [request.requesterId],
+                    kind: "request_rejected"
+                )
                 Log.info("[PhotoSuggestion] تم رفض اقتراح الصورة")
             } catch {
                 Log.error("[PhotoSuggestion] خطأ رفض اقتراح الصورة: \(error.localizedDescription)")

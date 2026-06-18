@@ -15,6 +15,8 @@ struct AdminPendingRequestsView: View {
     @State private var expandedMatches: Set<UUID> = []
     /// الربط المباشر بعضو موجود (swipe right)
     @State private var memberToLink: FamilyMember? = nil
+    /// تعديل/إضافة رقم فعلي لعضو معلّق
+    @State private var phoneEditMember: FamilyMember? = nil
 
     // تصفية الأعضاء الذين حالتهم "Pending"
     var pendingMembers: [FamilyMember] {
@@ -158,6 +160,10 @@ struct AdminPendingRequestsView: View {
         .sheet(item: $memberToLink) { member in
             LinkToExistingMemberSheet(pendingMember: member)
                 .environmentObject(memberVM)
+                .environmentObject(adminRequestVM)
+        }
+        .sheet(item: $phoneEditMember) { member in
+            PendingMemberPhoneSheet(member: member)
                 .environmentObject(adminRequestVM)
         }
         .alert(
@@ -480,6 +486,39 @@ struct AdminPendingRequestsView: View {
                     }
                 }
 
+                // تعديل / إضافة رقم فعلي للعضو المعلّق
+                Button {
+                    phoneEditMember = member
+                } label: {
+                    HStack(spacing: DS.Spacing.sm) {
+                        Image(systemName: "phone.badge.plus")
+                            .font(DS.Font.scaled(14, weight: .semibold))
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(L10n.t("تعديل / إضافة رقم فعلي", "Edit / Add real number"))
+                                .font(DS.Font.scaled(13, weight: .bold))
+                            Text(phoneSubtitle(for: member))
+                                .font(DS.Font.scaled(10, weight: .medium))
+                                .foregroundColor(DS.Color.textSecondary)
+                        }
+                        Spacer()
+                        Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
+                            .font(DS.Font.scaled(11, weight: .bold))
+                            .foregroundColor(DS.Color.textTertiary)
+                    }
+                    .foregroundColor(DS.Color.primary)
+                    .padding(.horizontal, DS.Spacing.md)
+                    .padding(.vertical, DS.Spacing.sm)
+                    .frame(maxWidth: .infinity)
+                    .background(DS.Color.primary.opacity(0.08))
+                    .cornerRadius(DS.Radius.md)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: DS.Radius.md)
+                            .stroke(DS.Color.primary.opacity(0.2), lineWidth: 1)
+                    )
+                }
+                .buttonStyle(DSScaleButtonStyle())
+                .disabled(adminRequestVM.isLoading)
+
                 DSSecondaryButton(
                     L10n.t("رفض الطلب", "Reject Request"),
                     icon: "xmark.circle",
@@ -617,6 +656,15 @@ struct AdminPendingRequestsView: View {
         }
         .lineLimit(2)
         .fixedSize(horizontal: false, vertical: true)
+    }
+
+    // MARK: - وصف رقم الجوال للعضو المعلّق
+    private func phoneSubtitle(for member: FamilyMember) -> String {
+        let phone = member.phoneNumber?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if phone.isEmpty {
+            return L10n.t("لا يوجد رقم — اضغط للإضافة", "No number — tap to add")
+        }
+        return L10n.t("الرقم الحالي: ", "Current: ") + KuwaitPhone.display(phone)
     }
 
     // MARK: - تنسيق تاريخ التسجيل مع الوقت
@@ -843,6 +891,131 @@ struct LinkToExistingMemberSheet: View {
                     "سيُربط حساب \(pendingMember.firstName) بسجل \(target.fullName) الموجود بالشجرة.\nسيحتفظ بموقعه وأبنائه وبياناته.",
                     "Account \(pendingMember.firstName) will be linked to \(target.fullName)'s existing tree record. Position, children and data will be preserved."
                 ))
+            }
+        }
+    }
+}
+
+// MARK: - شيت تعديل / إضافة رقم فعلي لعضو معلّق
+struct PendingMemberPhoneSheet: View {
+    @EnvironmentObject var adminRequestVM: AdminRequestViewModel
+    @Environment(\.dismiss) private var dismiss
+    @FocusState private var focused: Bool
+
+    let member: FamilyMember
+    /// عند true يفعّل العضو بعد حفظ الرقم (يُستخدم في «صحة الشجرة»)
+    var activateOnSave: Bool = false
+
+    @State private var selectedCountry: KuwaitPhone.Country = KuwaitPhone.defaultCountry
+    @State private var localDigits: String = ""
+    @State private var errorBanner: String? = nil
+
+    private var canSave: Bool {
+        !localDigits.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !adminRequestVM.isLoading
+    }
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                DS.Color.background.ignoresSafeArea()
+
+                VStack(alignment: .leading, spacing: DS.Spacing.lg) {
+                    // العضو
+                    HStack(spacing: DS.Spacing.md) {
+                        ZStack {
+                            Circle()
+                                .fill(DS.Color.warning.opacity(0.15))
+                                .frame(width: 46, height: 46)
+                            Text(member.fullName.prefix(1))
+                                .font(DS.Font.scaled(20, weight: .bold))
+                                .foregroundColor(DS.Color.warning)
+                        }
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(member.fullName)
+                                .font(DS.Font.calloutBold)
+                                .foregroundColor(DS.Color.textPrimary)
+                            Text(L10n.t("الرقم الحالي: ", "Current: ") + KuwaitPhone.display(member.phoneNumber))
+                                .font(DS.Font.caption1)
+                                .foregroundColor(DS.Color.textSecondary)
+                        }
+                        Spacer()
+                    }
+                    .padding(DS.Spacing.md)
+                    .background(DS.Color.surface)
+                    .cornerRadius(DS.Radius.lg)
+
+                    // الدولة + الرقم المحلي
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(L10n.t("الرقم الفعلي الجديد", "New real number"))
+                            .font(DS.Font.scaled(12, weight: .semibold))
+                            .foregroundColor(DS.Color.textSecondary)
+
+                        DSPhoneField(
+                            country: $selectedCountry,
+                            digits: $localDigits,
+                            placeholder: String(repeating: "X", count: selectedCountry.maxDigits)
+                        )
+                    }
+
+                    Text(activateOnSave
+                         ? L10n.t(
+                            "سيُضاف الرقم ويُفعّل الحساب مباشرة بعد الحفظ.",
+                            "The number will be added and the account activated right after saving.")
+                         : L10n.t(
+                            "يُحدَّث رقم العضو فقط — يبقى الطلب معلّقاً لتربطه بالشجرة أو ترفضه لاحقاً.",
+                            "Only updates the member's number — the request stays pending so you can link or reject it later."))
+                    .font(DS.Font.caption1)
+                    .foregroundColor(DS.Color.textTertiary)
+
+                    if let errorBanner {
+                        Text(errorBanner)
+                            .font(DS.Font.caption1)
+                            .foregroundColor(DS.Color.error)
+                    }
+
+                    Spacer()
+                }
+                .padding(DS.Spacing.lg)
+            }
+            .navigationTitle(L10n.t("رقم العضو", "Member Number"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(L10n.t("إلغاء", "Cancel")) { dismiss() }
+                        .disabled(adminRequestVM.isLoading)
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(L10n.t("حفظ", "Save")) { save() }
+                        .fontWeight(.bold)
+                        .disabled(!canSave)
+                }
+            }
+            .onAppear {
+                let detected = KuwaitPhone.detectCountryAndLocal(member.phoneNumber)
+                selectedCountry = detected.country
+                localDigits = detected.localDigits
+                focused = true
+            }
+        }
+        .presentationDetents([.medium])
+        .presentationDragIndicator(.visible)
+        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+    }
+
+    private func save() {
+        errorBanner = nil
+        Task {
+            let ok = await adminRequestVM.updatePendingMemberPhone(
+                memberId: member.id,
+                country: selectedCountry,
+                localDigits: localDigits,
+                activate: activateOnSave
+            )
+            if ok {
+                dismiss()
+            } else {
+                errorBanner = adminRequestVM.errorMessage
+                adminRequestVM.errorMessage = nil
             }
         }
     }

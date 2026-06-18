@@ -18,6 +18,10 @@ serve(async (req) => {
   const notPost = validatePost(req);
   if (notPost) return notPost;
 
+  // أمان: يتطلّب تسجيل دخول (يمنع البريد العشوائي من غير المسجّلين).
+  const auth = await authenticateRequest(req);
+  if (auth instanceof Response) return auth;
+
   const resendApiKey = (Deno.env.get("RESEND_API_KEY") ?? "").trim();
   const sendgridApiKey = (Deno.env.get("SENDGRID_API_KEY") ?? "").trim();
   const emailFrom = (Deno.env.get("CONTACT_EMAIL_FROM") ?? "").trim();

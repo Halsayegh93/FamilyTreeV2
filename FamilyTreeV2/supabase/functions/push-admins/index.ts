@@ -31,9 +31,8 @@ Deno.serve(async (req) => {
   // (طلبات الأعضاء العاديين تحتاج إشعارات للأدمن، فلا نقيّد بالأدوار)
   const auth = await authenticateRequest(req);
   if (auth instanceof Response) return auth;
-  // ملاحظة: لا نستثني المرسل من قائمة المدراء — لو هو نفسه مدير وأنشأ طلب
-  // (مثل اقتراح صورة/إضافة ابن/تغيير اسم) لازم يستلم push على جهازه/أجهزته الأخرى
-  // تأكيداً للعملية، خصوصاً في حالة وجود مدير واحد فقط.
+  // نستثني المُرسِل من المستلمين عند وجود أكثر من مدير (تجنّب إشعار الذات)،
+  // ونُبقيه فقط لو كان المدير الوحيد — انظر فلترة adminIds أدناه.
 
   // Parse body
   const parsed = await parseBody<PushRequest>(req);
@@ -70,9 +69,16 @@ Deno.serve(async (req) => {
     });
   }
 
-  const adminIds = (admins ?? []).map((a) => a.id as string);
+  let adminIds = (admins ?? []).map((a) => a.id as string);
   if (!adminIds.length) {
     return json(200, { ok: true, sent: 0, message: "No admins found" });
+  }
+
+  // استثناء المُرسِل لتجنّب «إشعار الذات» (سبب رئيسي لتكرار وصول نفس الإشعار
+  // للمدير المنفّذ). نُبقيه فقط لو كان المدير الوحيد — ليستلم تأكيداً على أجهزته.
+  const senderId = auth.user.id;
+  if (adminIds.length > 1) {
+    adminIds = adminIds.filter((id) => id !== senderId);
   }
 
   // جلب tokens الأجهزة (مع environment)

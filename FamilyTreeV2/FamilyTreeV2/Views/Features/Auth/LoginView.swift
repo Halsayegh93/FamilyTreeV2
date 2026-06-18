@@ -36,6 +36,14 @@ struct LoginView: View {
         )
     }
 
+    /// ربط كود الاتصال بـ KuwaitPhone.Country لاستخدام حقل الهاتف الموحّد.
+    private var countryBinding: Binding<KuwaitPhone.Country> {
+        Binding(
+            get: { KuwaitPhone.countryForDialingCode(authVM.dialingCode) },
+            set: { authVM.dialingCode = $0.dialingCode }
+        )
+    }
+
     @State private var otpText: String = ""
 
     var body: some View {
@@ -151,47 +159,12 @@ struct LoginView: View {
         let isDisabled = !isPhoneValid || isTimerActive || isLoading
 
         VStack(spacing: DS.Spacing.lg) {
-            // حقل الهاتف
-            HStack(spacing: 0) {
-                HStack(spacing: DS.Spacing.xs) {
-                    Text(flagEmoji(for: authVM.dialingCode)).font(DS.Font.scaled(20))
-                    TextField("+965", text: countryCodeBinding)
-                        .keyboardType(.phonePad)
-                        .font(DS.Font.scaled(16, weight: .bold))
-                        .multilineTextAlignment(.center)
-                        .foregroundStyle(DS.Color.textPrimary)
-                }
-                .frame(width: 80)
-
-                RoundedRectangle(cornerRadius: 1)
-                    .fill(DS.Color.textTertiary.opacity(0.3))
-                    .frame(width: 1, height: 24)
-                    .padding(.horizontal, DS.Spacing.xs)
-
-                PhoneNumberTextField(
-                    text: $authVM.phoneNumber,
-                    placeholder: L10n.t("رقم الهاتف المحمول", "Mobile Number"),
-                    font: .systemFont(ofSize: 20, weight: .bold),
-                    keyboardType: .numberPad,
-                    maxLength: 15
-                )
-                .frame(maxWidth: .infinity)
-                .frame(height: 40)
-            }
-            .environment(\.layoutDirection, .leftToRight)
-            .padding(.horizontal, DS.Spacing.md)
-            .frame(height: 56)
-            .background(DS.Color.surface)
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                    .stroke(
-                        isFieldFocused
-                            ? DS.Color.primary.opacity(0.5)
-                            : DS.Color.inactiveBorder,
-                        lineWidth: isFieldFocused ? 1.5 : 1
-                    )
-                    .animation(DS.Anim.quick, value: isFieldFocused)
+            // حقل الهاتف الموحّد — كود الدولة على الجهة المقابلة
+            DSPhoneField(
+                country: countryBinding,
+                digits: $authVM.phoneNumber,
+                placeholder: L10n.t("رقم الهاتف المحمول", "Mobile Number"),
+                isFocused: isFieldFocused
             )
 
             // زر الإرسال — DSPrimaryButton

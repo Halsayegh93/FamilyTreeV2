@@ -380,60 +380,18 @@ struct AdminMemberDetailSheet: View {
         }
     }
 
-    // MARK: - Phone Section
+    // MARK: - Phone Section — حقل موحّد مع كود الدولة على الجهة المقابلة
     private var phoneSection: some View {
         Section {
-            HStack(spacing: DS.Spacing.sm) {
-                Menu {
-                    Picker("", selection: $selectedPhoneCountry) {
-                        ForEach(KuwaitPhone.supportedCountries) { country in
-                            Text("\(country.flag) \(country.nameArabic) \(country.dialingCode)")
-                                .tag(country)
-                        }
-                    }
-                } label: {
-                    HStack(spacing: 4) {
-                        Text(selectedPhoneCountry.flag)
-                        Text(selectedPhoneCountry.dialingCode)
-                            .font(DS.Font.callout)
-                            .fontWeight(.semibold)
-                            .foregroundColor(DS.Color.textPrimary)
-                        Image(systemName: "chevron.down")
-                            .font(DS.Font.scaled(10, weight: .bold))
-                            .foregroundColor(DS.Color.textTertiary)
-                    }
-                    .padding(.horizontal, DS.Spacing.sm)
-                    .padding(.vertical, 6)
-                    .background(DS.Color.surfaceElevated)
-                    .clipShape(Capsule())
-                }
-
-                TextField(L10n.t("الرقم", "Number"), text: $phoneNumber)
-                    .font(DS.Font.callout)
-                    .keyboardType(.numberPad)
-                    .textContentType(.telephoneNumber)
-                    .multilineTextAlignment(.trailing)
-                    .environment(\.layoutDirection, .leftToRight)
-                    .onChange(of: phoneNumber) { newValue in
-                        phoneNumber = KuwaitPhone.userTypedDigits(newValue, maxDigits: selectedPhoneCountry.maxDigits)
-                        checkPhoneDuplicate()
-                    }
-                    .onChange(of: selectedPhoneCountry) { newCountry in
-                        phoneNumber = KuwaitPhone.userTypedDigits(phoneNumber, maxDigits: newCountry.maxDigits)
-                        checkPhoneDuplicate()
-                    }
-
-                if !phoneNumber.isEmpty {
-                    Button {
-                        phoneNumber = ""
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(DS.Font.scaled(16))
-                            .foregroundColor(DS.Color.textTertiary)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
+            DSPhoneField(
+                country: $selectedPhoneCountry,
+                digits: $phoneNumber,
+                placeholder: L10n.t("الرقم", "Number")
+            )
+            .listRowInsets(EdgeInsets())
+            .listRowBackground(Color.clear)
+            .onChange(of: phoneNumber) { _ in checkPhoneDuplicate() }
+            .onChange(of: selectedPhoneCountry) { _ in checkPhoneDuplicate() }
 
             if let warning = phoneDuplicateWarning {
                 Label(warning, systemImage: "exclamationmark.triangle.fill")

@@ -13,6 +13,8 @@ struct TreeSearchOverlay: View {
     /// عند توفّره: يظهر زر إغلاق (✕) داخل مربع البحث نفسه عندما يكون الحقل فارغاً
     /// — يُستخدم لإغلاق لوحة البحث (مثلاً في شجرة التفرّع).
     var onClose: (() -> Void)? = nil
+    /// عند `true` تظهر الفلاتر فور فتح البحث حتى لو الحقل فارغ (العرض الكلاسيكي).
+    var showFiltersWhenEmpty: Bool = false
 
     @State private var searchText = ""
     @State private var debouncedSearchText = ""
@@ -108,7 +110,7 @@ struct TreeSearchOverlay: View {
         VStack(spacing: 0) {
             searchBar
             filtersBar
-            recentSearchesSection
+            // أُزيل قسم «آخر عمليات البحث» بطلب المستخدم.
             resultsSection
         }
         .zIndex(100)
@@ -212,7 +214,7 @@ struct TreeSearchOverlay: View {
     /// حتى لو ما فيه نتائج لهذه التصفية.
     @ViewBuilder
     private var filtersBar: some View {
-        if usesFullHeight || !searchText.isEmpty {
+        if usesFullHeight || showFiltersWhenEmpty || !searchText.isEmpty {
             HStack(spacing: DS.Spacing.sm) {
                 Picker("", selection: $statusFilter) {
                     ForEach(StatusFilter.allCases, id: \.self) { filter in

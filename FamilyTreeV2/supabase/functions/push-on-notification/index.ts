@@ -7,6 +7,15 @@ serve(async (req) => {
   const cors = handleCors(req);
   if (cors) return cors;
 
+  // أمان: لا تُستدعى إلا من dispatch المجدول (cron) عبر سرّ مشترك.
+  // يمنع أي شخص على الإنترنت من بثّ إشعارات (verify_jwt=false في البوابة).
+  const expectedSecret = Deno.env.get("PUSH_WEBHOOK_SECRET");
+  const providedSecret = req.headers.get("x-webhook-secret");
+  if (!expectedSecret || providedSecret !== expectedSecret) {
+    console.warn("[push-on-notification] rejected: missing/invalid webhook secret");
+    return json(401, { ok: false, message: "Unauthorized" });
+  }
+
   try {
     const body = await req.json();
     const record = body.record || body;

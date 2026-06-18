@@ -438,6 +438,7 @@ private struct AddDiwaniyaRequestView: View {
     @State private var selectedDays: Set<Int> = []
     @State private var selectedTimes: Set<String> = []
     @State private var phoneNumber = ""
+    @State private var selectedPhoneCountry: KuwaitPhone.Country = KuwaitPhone.defaultCountry
     @State private var locationURL = ""
     @State private var address = ""
     @State private var isSubmitting = false
@@ -555,13 +556,21 @@ private struct AddDiwaniyaRequestView: View {
 
                             DSDivider()
 
-                            formField(
-                                icon: "phone.fill",
-                                iconColors: [DS.Color.success, DS.Color.success],
-                                placeholder: L10n.t("رقم الهاتف (اختياري)", "Phone Number (optional)"),
-                                text: $phoneNumber,
-                                keyboard: .phonePad
-                            )
+                            VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                                HStack(spacing: DS.Spacing.sm) {
+                                    DSIcon("phone.fill", color: DS.Color.success)
+                                    Text(L10n.t("رقم الهاتف (اختياري)", "Phone Number (optional)"))
+                                        .font(DS.Font.caption1)
+                                        .foregroundColor(DS.Color.textSecondary)
+                                    Spacer()
+                                }
+                                DSPhoneField(
+                                    country: $selectedPhoneCountry,
+                                    digits: $phoneNumber,
+                                    placeholder: L10n.t("اختياري", "Optional")
+                                )
+                            }
+                            .padding(.horizontal, DS.Spacing.lg)
 
                             DSDivider()
 
@@ -708,13 +717,16 @@ private struct AddDiwaniyaRequestView: View {
         defer { isSubmitting = false }
         let trimmedURL = locationURL.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedAddress = address.trimmingCharacters(in: .whitespacesAndNewlines)
+        let composedPhone = phoneNumber.isEmpty
+            ? ""
+            : (KuwaitPhone.normalizedForStorage(country: selectedPhoneCountry, rawLocalDigits: phoneNumber) ?? "")
         let canAutoApprove = user.role == .owner || user.role == .admin || user.role == .monitor || user.role == .supervisor
         let success = await viewModel.addDiwaniya(
             ownerId: user.id,
             ownerName: ownerName,
             title: name,
             scheduleText: selectedDays.isEmpty ? nil : scheduleText,
-            contactPhone: phoneNumber,
+            contactPhone: composedPhone,
             mapsUrl: trimmedURL.isEmpty ? nil : trimmedURL,
             address: trimmedAddress.isEmpty ? nil : trimmedAddress,
             autoApprove: canAutoApprove
@@ -754,6 +766,7 @@ private struct EditDiwaniyaView: View {
     @State private var selectedDays: Set<Int>
     @State private var selectedTimes: Set<String>
     @State private var phoneNumber: String
+    @State private var selectedPhoneCountry: KuwaitPhone.Country
     @State private var locationURL: String
     @State private var address: String
     @State private var isClosed: Bool
@@ -783,7 +796,9 @@ private struct EditDiwaniyaView: View {
         self.diwaniya = diwaniya
         _name = State(initialValue: diwaniya.title)
         _ownerName = State(initialValue: diwaniya.ownerName)
-        _phoneNumber = State(initialValue: diwaniya.contactPhone ?? "")
+        let detectedPhone = KuwaitPhone.detectCountryAndLocal(diwaniya.contactPhone)
+        _selectedPhoneCountry = State(initialValue: detectedPhone.country)
+        _phoneNumber = State(initialValue: detectedPhone.localDigits)
         _locationURL = State(initialValue: diwaniya.mapsUrl ?? "")
         _address = State(initialValue: diwaniya.address ?? "")
         _isClosed = State(initialValue: diwaniya.isClosed ?? false)
@@ -904,13 +919,21 @@ private struct EditDiwaniyaView: View {
 
                             DSDivider()
 
-                            formField(
-                                icon: "phone.fill",
-                                iconColors: [DS.Color.success, DS.Color.success],
-                                placeholder: L10n.t("رقم الهاتف (اختياري)", "Phone Number (optional)"),
-                                text: $phoneNumber,
-                                keyboard: .phonePad
-                            )
+                            VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                                HStack(spacing: DS.Spacing.sm) {
+                                    DSIcon("phone.fill", color: DS.Color.success)
+                                    Text(L10n.t("رقم الهاتف (اختياري)", "Phone Number (optional)"))
+                                        .font(DS.Font.caption1)
+                                        .foregroundColor(DS.Color.textSecondary)
+                                    Spacer()
+                                }
+                                DSPhoneField(
+                                    country: $selectedPhoneCountry,
+                                    digits: $phoneNumber,
+                                    placeholder: L10n.t("اختياري", "Optional")
+                                )
+                            }
+                            .padding(.horizontal, DS.Spacing.lg)
 
                             DSDivider()
 
@@ -1070,12 +1093,15 @@ private struct EditDiwaniyaView: View {
         defer { isSubmitting = false }
         let trimmedURL = locationURL.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedAddress = address.trimmingCharacters(in: .whitespacesAndNewlines)
+        let composedPhone = phoneNumber.isEmpty
+            ? nil
+            : KuwaitPhone.normalizedForStorage(country: selectedPhoneCountry, rawLocalDigits: phoneNumber)
         let success = await viewModel.updateDiwaniya(
             id: diwaniya.id,
             title: name,
             ownerName: ownerName,
             scheduleText: selectedDays.isEmpty ? nil : scheduleText,
-            contactPhone: phoneNumber.isEmpty ? nil : phoneNumber,
+            contactPhone: composedPhone,
             mapsUrl: trimmedURL.isEmpty ? nil : trimmedURL,
             address: trimmedAddress.isEmpty ? nil : trimmedAddress,
             isClosed: isClosed

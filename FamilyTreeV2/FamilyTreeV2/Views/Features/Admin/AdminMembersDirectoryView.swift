@@ -4,6 +4,7 @@ import SwiftUI
 struct AdminMembersDirectoryView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var memberVM: MemberViewModel
+    @EnvironmentObject var adminRequestVM: AdminRequestViewModel
 
     @State private var searchText = ""
     @State private var displayLimit = 20
@@ -11,6 +12,7 @@ struct AdminMembersDirectoryView: View {
     @State private var selectedFilter: RegistryFilter = .all
     @State private var memberToFreeze: FamilyMember?
     @State private var memberToActivate: FamilyMember?
+    @State private var memberToEditPhone: FamilyMember?
     @State private var branchRootId: UUID? = nil
     @State private var branchPickerOpen = false
 
@@ -191,6 +193,16 @@ struct AdminMembersDirectoryView: View {
                                     }
                                 }
                             }
+                            .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                                if authVM.canEditMembers && member.isDeceased != true {
+                                    Button {
+                                        memberToEditPhone = member
+                                    } label: {
+                                        Label(L10n.t("رقم", "Number"), systemImage: "phone.badge.plus")
+                                    }
+                                    .tint(DS.Color.primary)
+                                }
+                            }
                         }
 
                         // Load more
@@ -222,6 +234,11 @@ struct AdminMembersDirectoryView: View {
             .onAppear {
                 withAnimation(DS.Anim.smooth.delay(0.1)) { appeared = true }
             }
+        }
+        // تعديل / إضافة رقم — واجهة «رقم العضو» الموحّدة (تحفظ على السيرفر وتعتمد وتفعّل)
+        .sheet(item: $memberToEditPhone) { member in
+            PendingMemberPhoneSheet(member: member, activateOnSave: true)
+                .environmentObject(adminRequestVM)
         }
         // Freeze confirm
         .sheet(isPresented: $branchPickerOpen) {

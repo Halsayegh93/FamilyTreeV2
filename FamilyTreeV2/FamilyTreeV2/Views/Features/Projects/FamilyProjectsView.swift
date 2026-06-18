@@ -752,6 +752,8 @@ struct AddProjectView: View {
             .navigationTitle(L10n.t("مشروع جديد", "New Project"))
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
     }
 
     // MARK: - Hint card (للأعضاء العاديين)
@@ -789,26 +791,48 @@ struct AddProjectView: View {
 
     private var basicsCard: some View {
         VStack(spacing: DS.Spacing.md) {
-            // Logo (مدمج بداية البطاقة)
-            DSProfilePhotoPicker(
-                selectedImage: $logoImage,
-                enableCrop: true,
-                cropShape: .circle,
-                title: L10n.t("شعار المشروع", "Project Logo"),
-                trailing: L10n.t("اختياري", "Optional"),
-                compactEmptyState: true
-            )
+            // الشعار + الاسم بصف واحد
+            HStack(alignment: .center, spacing: DS.Spacing.md) {
+                DSProfilePhotoPicker(
+                    selectedImage: $logoImage,
+                    enableCrop: true,
+                    cropShape: .circle,
+                    title: "",
+                    trailing: nil,
+                    compactEmptyState: true,
+                    useOverlayActionsOnly: true,
+                    avatarSize: 60
+                )
+                .frame(width: 72)
 
-            Divider().opacity(0.4)
-
-            // الاسم — مطلوب
-            DSTextField(
-                label: L10n.t("اسم المشروع", "Project Name"),
-                placeholder: L10n.t("اكتب اسم المشروع هنا", "Enter project name"),
-                text: $title,
-                icon: "briefcase.fill",
-                required: true
-            )
+                // الاسم — مطلوب (نفس ستايل حقل الوصف)
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "briefcase.fill")
+                            .font(DS.Font.scaled(11, weight: .bold))
+                            .foregroundColor(DS.Color.textSecondary)
+                        Text(L10n.t("اسم المشروع", "Project Name"))
+                            .font(DS.Font.scaled(12, weight: .semibold))
+                            .foregroundColor(DS.Color.textSecondary)
+                        Text("*")
+                            .font(DS.Font.scaled(12, weight: .bold))
+                            .foregroundColor(DS.Color.error)
+                        Spacer()
+                    }
+                    TextField("", text: $title)
+                        .font(DS.Font.body)
+                        .padding(DS.Spacing.sm)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(
+                            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                                .fill(DS.Color.background)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                                .strokeBorder(DS.Color.textTertiary.opacity(0.20), lineWidth: 1)
+                        )
+                }
+            }
 
             // الوصف — اختياري
             VStack(alignment: .leading, spacing: 6) {
@@ -941,13 +965,19 @@ struct AddProjectView: View {
                 .font(DS.Font.scaled(11, weight: .medium))
                 .foregroundColor(DS.Color.textSecondary)
 
-            VStack(spacing: DS.Spacing.xs) {
+            LazyVGrid(
+                columns: [
+                    GridItem(.flexible(), spacing: DS.Spacing.sm),
+                    GridItem(.flexible(), spacing: DS.Spacing.sm)
+                ],
+                spacing: DS.Spacing.sm
+            ) {
                 socialRow(platform: .phone, placeholder: "+965...", text: $phoneNumber)
                 socialRow(platform: .whatsapp, placeholder: "+965...", text: $whatsappNumber)
                 socialRow(platform: .instagram, placeholder: "@username", text: $instagramUrl)
                 socialRow(platform: .twitter, placeholder: "@username", text: $twitterUrl)
                 socialRow(platform: .website, placeholder: "https://...", text: $websiteUrl)
-                socialRow(platform: .location, placeholder: L10n.t("رابط الموقع (Maps)", "Maps URL"), text: $locationUrl)
+                socialRow(platform: .location, placeholder: L10n.t("الموقع (Maps)", "Maps URL"), text: $locationUrl)
             }
         }
         .padding(DS.Spacing.md)
@@ -962,39 +992,33 @@ struct AddProjectView: View {
     }
 
     /// صف رابط تواصل مدمج وأنيق — أيقونة + label + textfield في سطر واحد.
+    /// حقل تواصل احترافي — عنوان فوق (أيقونة + اسم) وصندوق إدخال موحّد الارتفاع
+    /// بحيث تتحاذى الحقول بدقّة في شبكة العمودين.
     private func socialRow(platform: SocialPlatform, placeholder: String, text: Binding<String>) -> some View {
-        HStack(spacing: DS.Spacing.sm) {
-            platform.iconView(size: 26)
-
-            VStack(alignment: .leading, spacing: 1) {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: 5) {
+                platform.iconView(size: 18)
                 Text(platform.label)
-                    .font(DS.Font.scaled(10, weight: .semibold))
+                    .font(DS.Font.scaled(11, weight: .semibold))
                     .foregroundColor(DS.Color.textSecondary)
-                TextField(placeholder, text: text)
-                    .font(DS.Font.callout)
-                    .autocorrectionDisabled()
-                    .textInputAutocapitalization(.never)
+                    .lineLimit(1)
             }
-
-            if !text.wrappedValue.isEmpty {
-                Button { text.wrappedValue = "" } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(DS.Font.scaled(13))
-                        .foregroundColor(DS.Color.textTertiary)
-                }
-                .buttonStyle(.plain)
-            }
+            TextField(placeholder, text: text)
+                .font(DS.Font.scaled(13))
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, DS.Spacing.sm)
+                .frame(height: 42)
+                .background(
+                    RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                        .fill(DS.Color.background)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                        .strokeBorder(DS.Color.textTertiary.opacity(0.18), lineWidth: 1)
+                )
         }
-        .padding(.horizontal, DS.Spacing.md)
-        .padding(.vertical, 8)
-        .background(
-            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                .fill(DS.Color.background)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                .strokeBorder(DS.Color.textTertiary.opacity(0.18), lineWidth: 1)
-        )
     }
 
     private func socialTextField(platform: SocialPlatform, placeholder: String, text: Binding<String>) -> some View {

@@ -27,6 +27,8 @@ struct DSProfilePhotoPicker: View {
     /// When true, hides the pill buttons row under the photo. الإجراءات تظهر فقط
     /// عبر زر الكاميرا الصغير على زاوية الصورة (يفتح نفس قائمة الخيارات).
     var useOverlayActionsOnly: Bool = false
+    /// قطر الصورة الدائرية/المربعة — الافتراضي 110 (يمكن تصغيره للعرض المدمج بصف واحد)
+    var avatarSize: CGFloat = 110
 
     @State private var pickerItem: PhotosPickerItem? = nil
     @State private var isLoading = false
@@ -36,8 +38,6 @@ struct DSProfilePhotoPicker: View {
     @State private var showChangeOptions = false
     /// Stores the last raw (uncropped) image so user can re-edit crop
     @State private var lastRawImage: UIImage? = nil
-
-    private let avatarSize: CGFloat = 110
 
     var body: some View {
         VStack(spacing: DS.Spacing.sm) {

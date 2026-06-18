@@ -132,7 +132,7 @@ struct FamilyArchiveView: View {
         }
         .sheet(isPresented: $showingUpload) {
             ArchiveUploadSheet(archiveVM: archiveVM, defaultCategory: selectedCategory ?? .documents)
-                .presentationDetents([.large])
+                .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
         }
         .sheet(item: $selectedItem) { item in
@@ -140,7 +140,7 @@ struct FamilyArchiveView: View {
         }
         .sheet(item: $itemToEdit) { item in
             ArchiveEditSheet(archiveVM: archiveVM, item: item)
-                .presentationDetents([.large])
+                .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
         }
         .alert(L10n.t("إبلاغ عن عنصر", "Report Item"), isPresented: Binding(
@@ -857,7 +857,7 @@ struct ArchiveUploadSheet: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: DS.Spacing.lg) {
+                VStack(alignment: .leading, spacing: DS.Spacing.md) {
 
                     // اختيار الملف
                     fileSelectionSection
@@ -882,20 +882,19 @@ struct ArchiveUploadSheet: View {
                         )
                     }
 
-                    // السنة (اختياري)
-                    fieldGroup(label: L10n.t("السنة (اختياري)", "Year (optional)")) {
-                        DSTextField(
-                            label: "",
-                            placeholder: L10n.t("مثلاً: 1965", "e.g. 1965"),
-                            text: $yearText,
-                            icon: "calendar"
-                        )
-                        .keyboardType(.numberPad)
-                    }
+                    // السنة + القسم — عمودان متحاذيان
+                    HStack(alignment: .top, spacing: DS.Spacing.md) {
+                        fieldGroup(label: L10n.t("السنة", "Year")) {
+                            boxedField {
+                                TextField("1965", text: $yearText)
+                                    .keyboardType(.numberPad)
+                                    .font(DS.Font.scaled(14))
+                            }
+                        }
 
-                    // القسم
-                    fieldGroup(label: L10n.t("القسم", "Category")) {
-                        categorySegmented
+                        fieldGroup(label: L10n.t("القسم", "Category")) {
+                            categoryMenu
+                        }
                     }
 
                     if archiveVM.isUploading {
@@ -952,6 +951,8 @@ struct ArchiveUploadSheet: View {
                 handlePhotoPick(newItem)
             }
         }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
 
@@ -1035,27 +1036,49 @@ struct ArchiveUploadSheet: View {
         .buttonStyle(DSScaleButtonStyle())
     }
 
-    // MARK: - Category Segmented
+    // MARK: - Category Menu + Boxed Field
 
-    private var categorySegmented: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
-                ForEach(ArchiveItem.Category.allCases) { cat in
-                    Button {
-                        category = cat
-                    } label: {
-                        HStack(spacing: 5) {
-                            Image(systemName: cat.iconName)
-                                .font(DS.Font.scaled(11, weight: .bold))
-                            Text(L10n.t(cat.displayName, cat.displayNameEn))
-                                .font(DS.Font.scaled(12, weight: category == cat ? .bold : .medium))
-                        }
-                        .foregroundColor(category == cat ? .white : DS.Color.primary)
-                        .padding(.horizontal, DS.Spacing.sm)
-                        .padding(.vertical, 6)
-                        .background(Capsule().fill(category == cat ? DS.Color.primary : DS.Color.primary.opacity(0.10)))
-                    }
-                    .buttonStyle(DSScaleButtonStyle())
+    /// صندوق إدخال موحّد الارتفاع — لمحاذاة الحقول في صف عمودين.
+    @ViewBuilder
+    private func boxedField<C: View>(@ViewBuilder content: () -> C) -> some View {
+        content()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, DS.Spacing.sm)
+            .frame(height: 44)
+            .background(
+                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                    .fill(DS.Color.surface)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                    .strokeBorder(DS.Color.textTertiary.opacity(0.18), lineWidth: 1)
+            )
+    }
+
+    /// منيو اختيار القسم — يظهر كحقل أنيق بدل شريط الكبسولات.
+    private var categoryMenu: some View {
+        Menu {
+            ForEach(ArchiveItem.Category.allCases) { cat in
+                Button {
+                    category = cat
+                } label: {
+                    Label(L10n.isArabic ? cat.displayName : cat.displayNameEn, systemImage: cat.iconName)
+                }
+            }
+        } label: {
+            boxedField {
+                HStack(spacing: 6) {
+                    Image(systemName: category.iconName)
+                        .font(DS.Font.scaled(12, weight: .semibold))
+                        .foregroundColor(DS.Color.primary)
+                    Text(L10n.isArabic ? category.displayName : category.displayNameEn)
+                        .font(DS.Font.scaled(14))
+                        .foregroundColor(DS.Color.textPrimary)
+                        .lineLimit(1)
+                    Spacer(minLength: 2)
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(DS.Font.scaled(10, weight: .bold))
+                        .foregroundColor(DS.Color.textTertiary)
                 }
             }
         }
@@ -1178,28 +1201,28 @@ struct ArchiveEditSheet: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: DS.Spacing.lg) {
+                VStack(alignment: .leading, spacing: DS.Spacing.md) {
                     DSTextField(label: L10n.t("العنوان", "Title"), placeholder: "", text: $title, icon: "textformat")
                     DSTextField(label: L10n.t("الوصف (اختياري)", "Description (optional)"), placeholder: "", text: $description, icon: "text.alignleft")
-                    DSTextField(label: L10n.t("السنة (اختياري)", "Year (optional)"), placeholder: L10n.t("مثلاً: 1965", "e.g. 1965"), text: $yearText, icon: "calendar")
-                        .keyboardType(.numberPad)
 
-                    Text(L10n.t("القسم", "Category"))
-                        .font(DS.Font.scaled(12, weight: .semibold))
-                        .foregroundColor(DS.Color.textSecondary)
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: DS.Spacing.sm) {
-                            ForEach(ArchiveItem.Category.allCases) { cat in
-                                Button { category = cat } label: {
-                                    Text(L10n.isArabic ? cat.displayName : cat.displayNameEn)
-                                        .font(DS.Font.scaled(12, weight: category == cat ? .bold : .medium))
-                                        .foregroundColor(category == cat ? .white : DS.Color.primary)
-                                        .padding(.horizontal, DS.Spacing.md)
-                                        .padding(.vertical, DS.Spacing.sm)
-                                        .background(Capsule().fill(category == cat ? DS.Color.primary : DS.Color.primary.opacity(0.10)))
-                                }
-                                .buttonStyle(.plain)
+                    // السنة + القسم — عمودان متحاذيان
+                    HStack(alignment: .top, spacing: DS.Spacing.md) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(L10n.t("السنة", "Year"))
+                                .font(DS.Font.scaled(12, weight: .semibold))
+                                .foregroundColor(DS.Color.textSecondary)
+                            editBoxedField {
+                                TextField("1965", text: $yearText)
+                                    .keyboardType(.numberPad)
+                                    .font(DS.Font.scaled(14))
                             }
+                        }
+
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(L10n.t("القسم", "Category"))
+                                .font(DS.Font.scaled(12, weight: .semibold))
+                                .foregroundColor(DS.Color.textSecondary)
+                            editCategoryMenu
                         }
                     }
 
@@ -1222,6 +1245,55 @@ struct ArchiveEditSheet: View {
                     Button(L10n.t("حفظ", "Save")) { save() }
                         .fontWeight(.bold)
                         .disabled(!canSave)
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+    }
+
+    /// صندوق إدخال موحّد الارتفاع — لمحاذاة الحقول في صف عمودين.
+    @ViewBuilder
+    private func editBoxedField<C: View>(@ViewBuilder content: () -> C) -> some View {
+        content()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, DS.Spacing.sm)
+            .frame(height: 44)
+            .background(
+                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                    .fill(DS.Color.surface)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                    .strokeBorder(DS.Color.textTertiary.opacity(0.18), lineWidth: 1)
+            )
+    }
+
+    /// منيو اختيار القسم — يظهر كحقل أنيق بدل شريط الكبسولات.
+    private var editCategoryMenu: some View {
+        Menu {
+            ForEach(ArchiveItem.Category.allCases) { cat in
+                Button {
+                    category = cat
+                } label: {
+                    Label(L10n.isArabic ? cat.displayName : cat.displayNameEn, systemImage: cat.iconName)
+                }
+            }
+        } label: {
+            editBoxedField {
+                HStack(spacing: 6) {
+                    Image(systemName: category.iconName)
+                        .font(DS.Font.scaled(12, weight: .semibold))
+                        .foregroundColor(DS.Color.primary)
+                    Text(L10n.isArabic ? category.displayName : category.displayNameEn)
+                        .font(DS.Font.scaled(14))
+                        .foregroundColor(DS.Color.textPrimary)
+                        .lineLimit(1)
+                    Spacer(minLength: 2)
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(DS.Font.scaled(10, weight: .bold))
+                        .foregroundColor(DS.Color.textTertiary)
                 }
             }
         }

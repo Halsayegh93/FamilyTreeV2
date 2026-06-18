@@ -995,9 +995,29 @@ class NotificationViewModel: ObservableObject {
         }
     }
     
+    // منع تكرار الإشعار الناتج عن النقر المزدوج على زر الموافقة/الرفض —
+    // نتجاهل أي إشعار بنفس المحتوى/الهدف خلال نافذة قصيرة (5 ثوانٍ).
+    private var recentNotificationKeys: [String: Date] = [:]
+    private func isDuplicateNotification(_ key: String, window: TimeInterval = 5) -> Bool {
+        let now = Date()
+        recentNotificationKeys = recentNotificationKeys.filter { now.timeIntervalSince($0.value) < window }
+        if let last = recentNotificationKeys[key], now.timeIntervalSince(last) < window {
+            return true
+        }
+        recentNotificationKeys[key] = now
+        return false
+    }
+
     func sendNotification(title: String, body: String, targetMemberIds: [UUID]?, sendPush: Bool = true, kind: String = "admin") async {
         guard authVM?.isAdmin == true, let creator = currentUser?.id else { return }
         guard notificationsFeatureAvailable else { return }
+
+        let dedupKey = "T|\(kind)|\(title)|\(body)|\(targetMemberIds?.map { $0.uuidString }.sorted().joined(separator: ",") ?? "ALL")"
+        if isDuplicateNotification(dedupKey) {
+            Log.warning("[Notif] تجاهل إشعار مكرر (نقرة مزدوجة محتملة)")
+            return
+        }
+
         self.isLoading = true
 
         do {
@@ -1195,6 +1215,11 @@ class NotificationViewModel: ObservableObject {
         requestId: UUID? = nil,
         requestType: String? = nil
     ) async {
+        let dedupKey = "A|\(kind)|\(title)|\(body)|\(requestId?.uuidString ?? "")"
+        if isDuplicateNotification(dedupKey) {
+            Log.warning("[Notif] تجاهل إشعار إدارة مكرر (نقرة مزدوجة محتملة)")
+            return
+        }
         async let push: Void = sendExternalAdminPush(title: title, body: body, kind: kind, requestId: requestId, requestType: requestType)
         async let inApp: Void = notifyAdmins(title: title, body: body, kind: kind, requestId: requestId, requestType: requestType)
         _ = await (push, inApp)

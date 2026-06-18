@@ -765,7 +765,7 @@ class AuthViewModel: ObservableObject {
 
         // محاولة واحدة فقط — تجنب استهلاك attempts من Twilio Verify
         do {
-            Log.info("[OTP] إرسال OTP عبر \(channelEn) لـ \(finalPhone)")
+            Log.info("[OTP] إرسال OTP عبر \(channelEn) لـ \(Log.masked(finalPhone))")
             try await supabase.auth.signInWithOTP(
                 phone: finalPhone,
                 channel: channel.supabaseChannel,

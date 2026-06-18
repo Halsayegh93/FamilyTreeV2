@@ -62,6 +62,10 @@ struct DSDateField: View {
     var range: PartialRangeThrough<Date>? = nil
     /// نمط مدمج لصفوف الـ Form (أيقونة SF صغيرة بدل DSIcon الكبيرة)
     var compact: Bool = false
+    /// خط اسم الحقل — لتوحيد حجم العناوين مع DSFormRow.
+    var labelFont: Font = DS.Font.callout
+    /// العنوان فوق القيمة (مثل DSLabeledFieldRow) بدل سطر واحد.
+    var labelAbove: Bool = false
 
     @State private var showSheet = false
 
@@ -87,11 +91,33 @@ struct DSDateField: View {
                         .foregroundColor(DS.Color.primary)
                 }
                 .contentShape(Rectangle())
+            } else if labelAbove {
+                HStack(spacing: DS.Spacing.md) {
+                    DSIcon(icon, color: iconColor)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(label)
+                            .font(DS.Font.caption1)
+                            .foregroundColor(DS.Color.textSecondary)
+                        HStack(spacing: DS.Spacing.xs) {
+                            Text(formatted)
+                                .font(DS.Font.calloutBold)
+                                .foregroundColor(DS.Color.primary)
+                            Image(systemName: "chevron.up.chevron.down")
+                                .font(DS.Font.caption1)
+                                .foregroundColor(DS.Color.textTertiary)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .padding(.horizontal, DS.Spacing.lg)
+                .padding(.vertical, DS.Spacing.xs)
+                .contentShape(Rectangle())
             } else {
                 HStack(spacing: DS.Spacing.md) {
                     DSIcon(icon, color: iconColor)
                     Text(label)
-                        .font(DS.Font.callout)
+                        .font(labelFont)
                         .foregroundColor(DS.Color.textPrimary)
                     Spacer()
                     Text(formatted)

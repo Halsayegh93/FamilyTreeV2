@@ -496,50 +496,93 @@ struct EditProjectView: View {
                 
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: DS.Spacing.md) {
-                        // Logo picker
-                        DSProfilePhotoPicker(
-                            selectedImage: $logoImage,
-                            existingURL: project.logoUrl,
-                            enableCrop: true,
-                            cropShape: .circle,
-                            title: L10n.t("شعار المشروع", "Project Logo"),
-                            trailing: L10n.t("اختياري", "Optional"),
-                            compactEmptyState: true
-                        )
-                        
-                        DSSectionHeader(title: L10n.t("معلومات المشروع", "Project Info"), icon: "briefcase.fill")
-                        
-                        DSTextField(
-                            label: L10n.t("اسم المشروع", "Project Name"),
-                            placeholder: L10n.t("اسم المشروع", "Project Name"),
-                            text: $title,
-                            icon: "briefcase.fill"
-                        )
-                        
-                        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                            Text(L10n.t("وصف المشروع", "Description"))
-                                .font(DS.Font.caption1)
-                                .foregroundColor(DS.Color.textSecondary)
+                        // الشعار + الاسم بصف واحد
+                        HStack(alignment: .center, spacing: DS.Spacing.md) {
+                            DSProfilePhotoPicker(
+                                selectedImage: $logoImage,
+                                existingURL: project.logoUrl,
+                                enableCrop: true,
+                                cropShape: .circle,
+                                title: "",
+                                trailing: nil,
+                                compactEmptyState: true,
+                                useOverlayActionsOnly: true,
+                                avatarSize: 60
+                            )
+                            .frame(width: 72)
+
+                            VStack(alignment: .leading, spacing: 6) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "briefcase.fill")
+                                        .font(DS.Font.scaled(11, weight: .bold))
+                                        .foregroundColor(DS.Color.textSecondary)
+                                    Text(L10n.t("اسم المشروع", "Project Name"))
+                                        .font(DS.Font.scaled(12, weight: .semibold))
+                                        .foregroundColor(DS.Color.textSecondary)
+                                    Text("*")
+                                        .font(DS.Font.scaled(12, weight: .bold))
+                                        .foregroundColor(DS.Color.error)
+                                    Spacer()
+                                }
+                                TextField("", text: $title)
+                                    .font(DS.Font.body)
+                                    .padding(DS.Spacing.sm)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                                            .fill(DS.Color.background)
+                                    )
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                                            .strokeBorder(DS.Color.textTertiary.opacity(0.20), lineWidth: 1)
+                                    )
+                            }
+                        }
+
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "text.alignleft")
+                                    .font(DS.Font.scaled(11, weight: .bold))
+                                    .foregroundColor(DS.Color.textSecondary)
+                                Text(L10n.t("وصف المشروع", "Description"))
+                                    .font(DS.Font.scaled(12, weight: .semibold))
+                                    .foregroundColor(DS.Color.textSecondary)
+                                Spacer()
+                                Text(L10n.t("اختياري", "Optional"))
+                                    .font(DS.Font.scaled(10, weight: .semibold))
+                                    .foregroundColor(DS.Color.textTertiary)
+                            }
                             TextEditor(text: $description)
                                 .font(DS.Font.body)
-                                .frame(minHeight: 80)
+                                .scrollContentBackground(.hidden)
+                                .frame(minHeight: 70)
                                 .padding(DS.Spacing.sm)
-                                .background(DS.Color.surface)
-                                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+                                .background(
+                                    RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                                        .fill(DS.Color.background)
+                                )
                                 .overlay(
                                     RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                                        .stroke(DS.Color.textTertiary.opacity(0.3), lineWidth: 1)
+                                        .strokeBorder(DS.Color.textTertiary.opacity(0.20), lineWidth: 1)
                                 )
                         }
-                        
+
                         DSSectionHeader(title: L10n.t("حسابات التواصل", "Social Accounts"), icon: "link")
-                        
-                        socialTextField(platform: .phone, placeholder: "+965...", text: $phoneNumber)
-                        socialTextField(platform: .whatsapp, placeholder: "+965...", text: $whatsappNumber)
-                        socialTextField(platform: .instagram, placeholder: "@username", text: $instagramUrl)
-                        socialTextField(platform: .twitter, placeholder: "@username", text: $twitterUrl)
-                        socialTextField(platform: .website, placeholder: "https://...", text: $websiteUrl)
-                        socialTextField(platform: .location, placeholder: L10n.t("رابط الموقع (Maps)", "Maps URL"), text: $locationUrl)
+
+                        LazyVGrid(
+                            columns: [
+                                GridItem(.flexible(), spacing: DS.Spacing.sm),
+                                GridItem(.flexible(), spacing: DS.Spacing.sm)
+                            ],
+                            spacing: DS.Spacing.sm
+                        ) {
+                            socialTextField(platform: .phone, placeholder: "+965...", text: $phoneNumber)
+                            socialTextField(platform: .whatsapp, placeholder: "+965...", text: $whatsappNumber)
+                            socialTextField(platform: .instagram, placeholder: "@username", text: $instagramUrl)
+                            socialTextField(platform: .twitter, placeholder: "@username", text: $twitterUrl)
+                            socialTextField(platform: .website, placeholder: "https://...", text: $websiteUrl)
+                            socialTextField(platform: .location, placeholder: L10n.t("الموقع (Maps)", "Maps URL"), text: $locationUrl)
+                        }
                         
                         DSPrimaryButton(
                             L10n.t("حفظ التعديلات", "Save Changes"),
@@ -564,27 +607,37 @@ struct EditProjectView: View {
             .navigationTitle(L10n.t("تعديل المشروع", "Edit Project"))
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
     }
     
+    /// حقل تواصل احترافي — عنوان فوق (أيقونة + اسم) وصندوق إدخال موحّد الارتفاع
+    /// بحيث تتحاذى الحقول بدقّة في شبكة العمودين.
     private func socialTextField(platform: SocialPlatform, placeholder: String, text: Binding<String>) -> some View {
-        HStack(spacing: DS.Spacing.md) {
-            platform.iconView(size: 28)
-
-            VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: 5) {
+                platform.iconView(size: 18)
                 Text(platform.label)
-                    .font(DS.Font.caption1)
+                    .font(DS.Font.scaled(11, weight: .semibold))
                     .foregroundColor(DS.Color.textSecondary)
-                TextField(placeholder, text: text)
-                    .font(DS.Font.body)
+                    .lineLimit(1)
             }
+            TextField(placeholder, text: text)
+                .font(DS.Font.scaled(13))
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, DS.Spacing.sm)
+                .frame(height: 42)
+                .background(
+                    RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                        .fill(DS.Color.background)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                        .strokeBorder(DS.Color.textTertiary.opacity(0.18), lineWidth: 1)
+                )
         }
-        .padding(DS.Spacing.md)
-        .background(DS.Color.surface)
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                .stroke(DS.Color.textTertiary.opacity(0.15), lineWidth: 1)
-        )
     }
     
     private func saveChanges() async {
