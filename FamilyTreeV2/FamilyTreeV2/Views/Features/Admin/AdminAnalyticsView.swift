@@ -48,11 +48,22 @@ struct AdminAnalyticsView: View {
                     // توزيع الأدوار
                     rolesSection
 
-                    // TODO: gender — re-enable when needed
-                    // genderSection
+                    // توزيع الجنس
+                    genderSection
+
+                    // الحالة الاجتماعية
+                    maritalSection
 
                     // الفئات العمرية
                     ageGroupsSection
+
+                    // نظرة على الشجرة (أجيال، متوسط الأبناء، أكبر عائلة)
+                    treeInsightsSection
+
+                    // إحصائيات الوفيات (متوسط العمر عند الوفاة)
+                    if deceasedMembers.count > 0 {
+                        deceasedInsightsSection
+                    }
 
                     // نمو الأعضاء الشهري
                     monthlyGrowthSection
@@ -210,6 +221,154 @@ struct AdminAnalyticsView: View {
                 }
             }
             .padding(DS.Spacing.lg)
+        }
+        .padding(.horizontal, DS.Spacing.lg)
+    }
+
+    // MARK: - Marital Status — الحالة الاجتماعية
+    private var maritalSection: some View {
+        let pool = activeMembers
+        let married = pool.filter { $0.isMarried == true }.count
+        let single = pool.filter { $0.isMarried == false }.count
+        let unknown = pool.count - married - single
+        let total = max(pool.count, 1)
+
+        return DSCard(padding: 0) {
+            DSSectionHeader(
+                title: L10n.t("الحالة الاجتماعية", "Marital Status"),
+                icon: "heart.circle.fill",
+                iconColor: DS.Color.neonPink
+            )
+            VStack(spacing: DS.Spacing.md) {
+                barRow(label: L10n.t("متزوج", "Married"), count: married, total: total, color: DS.Color.success)
+                barRow(label: L10n.t("أعزب", "Single"), count: single, total: total, color: DS.Color.info)
+                if unknown > 0 {
+                    barRow(label: L10n.t("غير محدد", "Unspecified"), count: unknown, total: total, color: DS.Color.textTertiary)
+                }
+            }
+            .padding(DS.Spacing.lg)
+        }
+        .padding(.horizontal, DS.Spacing.lg)
+    }
+
+    // MARK: - Tree Insights — نظرة على الشجرة
+    private var treeInsightsSection: some View {
+        // بنية الشجرة محسوبة على كل الأعضاء للحفاظ على سلاسل النسب كاملة.
+        let all = memberVM.allMembers
+        let ids = Set(all.map(\.id))
+
+        // الأبناء حسب الأب.
+        var childrenByFather: [UUID: Int] = [:]
+        for m in all {
+            if let f = m.fatherId { childrenByFather[f, default: 0] += 1 }
+        }
+        let parentsCount = childrenByFather.count
+        let totalChildren = childrenByFather.values.reduce(0, +)
+        let avgChildren = parentsCount > 0 ? Double(totalChildren) / Double(parentsCount) : 0
+        let maxChildren = childrenByFather.values.max() ?? 0
+
+        // أعضاء بلا أبناء (countable فقط — أوراق فعلية في العائلة).
+        let leaves = countableMembers.filter { childrenByFather[$0.id] == nil }.count
+
+        // عدد الأجيال = أقصى عمق من الجذور للأسفل (memoized).
+        let generations = treeDepth(all: all, ids: ids, childIndex: buildChildIndex(all))
+
+        return DSCard(padding: 0) {
+            DSSectionHeader(
+                title: L10n.t("نظرة على الشجرة", "Tree Insights"),
+                icon: "tree.fill",
+                iconColor: DS.Color.success
+            )
+            let columns = [GridItem(.flexible()), GridItem(.flexible())]
+            LazyVGrid(columns: columns, spacing: DS.Spacing.md) {
+                overviewCell(value: "\(generations)", label: L10n.t("عدد الأجيال", "Generations"), icon: "square.stack.3d.up.fill", color: DS.Color.accent)
+                overviewCell(value: "\(parentsCount)", label: L10n.t("لديهم أبناء", "Parents"), icon: "person.2.fill", color: DS.Color.info)
+                overviewCell(value: String(format: "%.1f", avgChildren), label: L10n.t("متوسط الأبناء", "Avg. children"), icon: "chart.bar.fill", color: DS.Color.warning)
+                overviewCell(value: "\(maxChildren)", label: L10n.t("أكبر عائلة", "Largest family"), icon: "crown.fill", color: DS.Color.secondary)
+                overviewCell(value: "\(leaves)", label: L10n.t("بدون أبناء", "No children"), icon: "leaf.fill", color: DS.Color.success)
+                overviewCell(value: "\(totalChildren)", label: L10n.t("روابط نسب", "Parent links"), icon: "arrow.triangle.branch", color: DS.Color.primary)
+            }
+            .padding(DS.Spacing.md)
+        }
+        .padding(.horizontal, DS.Spacing.lg)
+    }
+
+    /// فهرس الأبناء (أب → معرّفات أبنائه) لحساب العمق.
+    private func buildChildIndex(_ all: [FamilyMember]) -> [UUID: [UUID]] {
+        var index: [UUID: [UUID]] = [:]
+        for m in all {
+            if let f = m.fatherId { index[f, default: []].append(m.id) }
+        }
+        return index
+    }
+
+    /// أقصى عمق للشجرة بدءاً من الجذور (عضو بلا أب أو أبوه خارج المجموعة).
+    private func treeDepth(all: [FamilyMember], ids: Set<UUID>, childIndex: [UUID: [UUID]]) -> Int {
+        var memo: [UUID: Int] = [:]
+        var visiting: Set<UUID> = []
+
+        func depth(_ id: UUID) -> Int {
+            if let d = memo[id] { return d }
+            if visiting.contains(id) { return 1 } // حماية ضد الدوائر
+            visiting.insert(id)
+            let kids = childIndex[id] ?? []
+            let d = kids.isEmpty ? 1 : 1 + (kids.map(depth).max() ?? 0)
+            visiting.remove(id)
+            memo[id] = d
+            return d
+        }
+
+        let roots = all.filter { m in
+            guard let f = m.fatherId else { return true }
+            return !ids.contains(f)
+        }
+        return roots.map { depth($0.id) }.max() ?? 0
+    }
+
+    // MARK: - Deceased Insights — إحصائيات الوفيات
+    private var deceasedInsightsSection: some View {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        let calendar = Calendar.current
+
+        // الأعمار عند الوفاة (لمن عنده تاريخ ميلاد ووفاة).
+        let lifespans: [Int] = deceasedMembers.compactMap { m in
+            guard let bStr = m.birthDate, let dStr = m.deathDate,
+                  let b = formatter.date(from: String(bStr.prefix(10))),
+                  let d = formatter.date(from: String(dStr.prefix(10))),
+                  d >= b else { return nil }
+            return calendar.dateComponents([.year], from: b, to: d).year
+        }
+        let avgLifespan = lifespans.isEmpty ? 0 : lifespans.reduce(0, +) / lifespans.count
+        let oldest = lifespans.max() ?? 0
+        let ratio = totalMembers > 0
+            ? Int((Double(deceasedMembers.count) / Double(totalMembers) * 100).rounded())
+            : 0
+
+        return DSCard(padding: 0) {
+            DSSectionHeader(
+                title: L10n.t("إحصائيات الوفيات", "Deceased Insights"),
+                icon: "hourglass",
+                iconColor: DS.Color.error
+            )
+            let columns = [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())]
+            LazyVGrid(columns: columns, spacing: DS.Spacing.md) {
+                miniStat(value: avgLifespan > 0 ? "\(avgLifespan)" : "—", label: L10n.t("متوسط العمر", "Avg. lifespan"), color: DS.Color.warning)
+                miniStat(value: oldest > 0 ? "\(oldest)" : "—", label: L10n.t("أطول عمر", "Longest life"), color: DS.Color.success)
+                miniStat(value: "\(ratio)%", label: L10n.t("نسبة المتوفين", "Deceased %"), color: DS.Color.error)
+            }
+            .padding(DS.Spacing.lg)
+
+            if lifespans.count < deceasedMembers.count {
+                Text(L10n.t(
+                    "محسوبة من \(lifespans.count) متوفّى لديهم تاريخ ميلاد ووفاة",
+                    "Based on \(lifespans.count) deceased with both birth & death dates"
+                ))
+                .font(DS.Font.caption2)
+                .foregroundColor(DS.Color.textTertiary)
+                .padding(.horizontal, DS.Spacing.lg)
+                .padding(.bottom, DS.Spacing.md)
+            }
         }
         .padding(.horizontal, DS.Spacing.lg)
     }

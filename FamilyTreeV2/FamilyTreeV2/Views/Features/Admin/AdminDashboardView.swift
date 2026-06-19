@@ -210,6 +210,10 @@ struct AdminDashboardView: View {
                                             NavigationLink(destination: AdminReportsView()) {
                                                 DSActionRow(title: L10n.t("تقارير PDF", "PDF Reports"), subtitle: L10n.t("تقرير إحصائيات الأعضاء", "Member stats report"), icon: "doc.text.fill", color: DS.Color.primary)
                                             }
+                                            DSDivider()
+                                            NavigationLink(destination: AdminAnalyticsView()) {
+                                                DSActionRow(title: L10n.t("إحصائيات متقدمة", "Advanced Analytics"), subtitle: L10n.t("الأدوار، الأعمار، الأجيال والنمو", "Roles, ages, generations & growth"), icon: "chart.bar.xaxis", color: DS.Color.accent)
+                                            }
                                         }
 
                                         // الأمان والإعدادات — المدير يتصفّح، المالك يعدّل
