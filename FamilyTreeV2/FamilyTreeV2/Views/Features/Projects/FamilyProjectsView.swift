@@ -698,6 +698,8 @@ struct AddProjectView: View {
     @State private var selectedOwnerId: UUID?
     @State private var showMemberPicker = false
     @State private var memberSearchText = ""
+    // طي/فتح قسم روابط التواصل (محتوى كبير) لإبقاء الشيت مضغوطاً.
+    @State private var contactsOpen = false
 
     private var canSubmit: Bool {
         !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isSaving
@@ -711,26 +713,27 @@ struct AddProjectView: View {
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: DS.Spacing.md) {
 
+                        // ── شعار المشروع — صورة دائرية بالأعلى (مطابق إضافة ابن) ──
+                        heroHeader
+
                         // ── إرشاد للأعضاء العاديين ──
                         if !authVM.isAdmin {
                             approvalHintCard
                         }
 
-                        // ── البطاقة 1: الأساسيات (شعار + اسم + وصف) ──
+                        // ── البطاقة 1: الأساسيات (اسم + وصف) ──
                         basicsCard
 
-                        // ── البطاقة 2: صاحب المشروع (للإدارة فقط) ──
-                        if authVM.canModerate {
-                            ownerCard
-                                .sheet(isPresented: $showMemberPicker) { memberPickerSheet }
-                        }
+                        // صاحب المشروع أُزيل من الإضافة — يُعيَّن فقط في تعديل
+                        // المشروع (للإدارة). المنشئ يصبح صاحب المشروع تلقائياً.
 
-                        // ── البطاقة 3: روابط التواصل (اختيارية، مجموعة) ──
+                        // ── البطاقة 2: روابط التواصل (اختيارية، مجموعة) ──
                         contactLinksCard
 
                         // ── زر الإضافة ──
                         DSPrimaryButton(
                             L10n.t("إرسال المشروع", "Submit Project"),
+                            icon: "checkmark.circle.fill",
                             isLoading: isSaving
                         ) {
                             Task { await saveProject() }
@@ -752,7 +755,7 @@ struct AddProjectView: View {
             .navigationTitle(L10n.t("مشروع جديد", "New Project"))
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         }
-        .presentationDetents([.medium, .large])
+        .presentationDetents([.fraction(0.62)])
         .presentationDragIndicator(.visible)
     }
 
@@ -787,258 +790,161 @@ struct AddProjectView: View {
         )
     }
 
+    // MARK: - Hero photo (شعار المشروع — مطابق صورة إضافة ابن)
+
+    private var heroHeader: some View {
+        DSProfilePhotoPicker(
+            selectedImage: $logoImage,
+            enableCrop: true,
+            cropShape: .circle,
+            trailing: L10n.t("شعار (اختياري)", "Logo (Optional)"),
+            compactEmptyState: true,
+            useOverlayActionsOnly: true,
+            avatarSize: 54
+        )
+    }
+
     // MARK: - Card: Basics
 
     private var basicsCard: some View {
-        VStack(spacing: DS.Spacing.md) {
-            // الشعار + الاسم بصف واحد
-            HStack(alignment: .center, spacing: DS.Spacing.md) {
-                DSProfilePhotoPicker(
-                    selectedImage: $logoImage,
-                    enableCrop: true,
-                    cropShape: .circle,
-                    title: "",
-                    trailing: nil,
-                    compactEmptyState: true,
-                    useOverlayActionsOnly: true,
-                    avatarSize: 60
-                )
-                .frame(width: 72)
+        DSCard(padding: 0) {
+            DSSectionHeader(
+                title: L10n.t("معلومات المشروع", "Project Info"),
+                icon: "briefcase.fill",
+                iconColor: DS.Color.primary
+            )
 
-                // الاسم — مطلوب (نفس ستايل حقل الوصف)
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "briefcase.fill")
-                            .font(DS.Font.scaled(11, weight: .bold))
-                            .foregroundColor(DS.Color.textSecondary)
-                        Text(L10n.t("اسم المشروع", "Project Name"))
-                            .font(DS.Font.scaled(12, weight: .semibold))
-                            .foregroundColor(DS.Color.textSecondary)
-                        Text("*")
-                            .font(DS.Font.scaled(12, weight: .bold))
-                            .foregroundColor(DS.Color.error)
-                        Spacer()
-                    }
-                    TextField("", text: $title)
-                        .font(DS.Font.body)
-                        .padding(DS.Spacing.sm)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(
-                            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                                .fill(DS.Color.background)
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                                .strokeBorder(DS.Color.textTertiary.opacity(0.20), lineWidth: 1)
-                        )
+            VStack(spacing: 0) {
+                DSLabeledFieldRow(icon: "textformat", iconColor: DS.Color.primary,
+                                  label: L10n.t("اسم المشروع *", "Project Name *")) {
+                    TextField(L10n.t("اسم المشروع", "Project name"), text: $title)
+                        .font(DS.Font.callout)
+                        .foregroundColor(DS.Color.textPrimary)
                 }
-            }
 
-            // الوصف — اختياري
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 4) {
-                    Image(systemName: "text.alignleft")
-                        .font(DS.Font.scaled(11, weight: .bold))
-                        .foregroundColor(DS.Color.textSecondary)
-                    Text(L10n.t("وصف مختصر", "Short Description"))
-                        .font(DS.Font.scaled(12, weight: .semibold))
-                        .foregroundColor(DS.Color.textSecondary)
-                    Spacer()
-                    Text(L10n.t("اختياري", "Optional"))
-                        .font(DS.Font.scaled(10, weight: .semibold))
-                        .foregroundColor(DS.Color.textTertiary)
+                DSDivider()
+
+                DSLabeledFieldRow(icon: "text.alignleft", iconColor: DS.Color.accent,
+                                  label: L10n.t("وصف مختصر", "Short Description")) {
+                    TextField(L10n.t("اختياري", "Optional"), text: $description, axis: .vertical)
+                        .font(DS.Font.callout)
+                        .foregroundColor(DS.Color.textPrimary)
+                        .lineLimit(1...2)
                 }
-                TextEditor(text: $description)
-                    .font(DS.Font.body)
-                    .scrollContentBackground(.hidden)
-                    .frame(minHeight: 70)
-                    .padding(DS.Spacing.sm)
-                    .background(
-                        RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                            .fill(DS.Color.background)
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                            .strokeBorder(DS.Color.textTertiary.opacity(0.20), lineWidth: 1)
-                    )
             }
         }
-        .padding(DS.Spacing.md)
-        .background(
-            RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                .fill(DS.Color.surface)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                .strokeBorder(DS.Color.primary.opacity(0.08), lineWidth: 1)
-        )
     }
 
     // MARK: - Card: Owner
 
     private var ownerCard: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            HStack(spacing: 6) {
-                Image(systemName: "person.crop.circle.badge.checkmark")
-                    .font(DS.Font.scaled(13, weight: .bold))
-                    .foregroundColor(DS.Color.primary)
-                Text(L10n.t("صاحب المشروع", "Project Owner"))
-                    .font(DS.Font.scaled(13, weight: .bold))
-                    .foregroundColor(DS.Color.textPrimary)
-                Spacer()
-            }
+        DSCard(padding: 0) {
+            DSSectionHeader(
+                title: L10n.t("صاحب المشروع", "Project Owner"),
+                icon: "person.crop.circle.badge.checkmark",
+                iconColor: DS.Color.primary
+            )
 
-            Button { showMemberPicker = true } label: {
-                HStack(spacing: DS.Spacing.sm) {
-                    Image(systemName: "person.fill")
-                        .font(DS.Font.body)
-                        .foregroundColor(DS.Color.primary)
-                        .frame(width: 28, height: 28)
-                        .background(Circle().fill(DS.Color.primary.opacity(0.10)))
-
-                    if let ownerId = selectedOwnerId,
-                       let member = memberVM.member(byId: ownerId) {
-                        Text(member.fullName)
-                            .font(DS.Font.body)
-                            .foregroundColor(DS.Color.textPrimary)
-                            .lineLimit(1)
-                    } else {
-                        HStack(spacing: 4) {
-                            Text(authVM.currentUser?.fullName ?? "")
-                                .font(DS.Font.body)
+            DSLabeledFieldRow(icon: "person.fill", iconColor: DS.Color.primary,
+                              label: L10n.t("العضو", "Member")) {
+                Button { showMemberPicker = true } label: {
+                    HStack(spacing: DS.Spacing.sm) {
+                        if let ownerId = selectedOwnerId,
+                           let member = memberVM.member(byId: ownerId) {
+                            Text(member.fullName)
+                                .font(DS.Font.callout)
                                 .foregroundColor(DS.Color.textPrimary)
                                 .lineLimit(1)
-                            Text(L10n.t("(أنت)", "(You)"))
-                                .font(DS.Font.caption1)
-                                .foregroundColor(DS.Color.textTertiary)
+                        } else {
+                            Text((authVM.currentUser?.fullName ?? "") + L10n.t(" (أنت)", " (You)"))
+                                .font(DS.Font.callout)
+                                .foregroundColor(DS.Color.textPrimary)
+                                .lineLimit(1)
                         }
+                        Spacer()
+                        Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
+                            .font(DS.Font.caption1)
+                            .foregroundColor(DS.Color.textTertiary)
                     }
-
-                    Spacer()
-
-                    Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
-                        .font(DS.Font.caption1)
-                        .foregroundColor(DS.Color.textTertiary)
+                    .contentShape(Rectangle())
                 }
-                .padding(DS.Spacing.md)
-                .background(
-                    RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                        .fill(DS.Color.background)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                        .strokeBorder(DS.Color.textTertiary.opacity(0.20), lineWidth: 1)
-                )
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
         }
-        .padding(DS.Spacing.md)
-        .background(
-            RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                .fill(DS.Color.surface)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                .strokeBorder(DS.Color.primary.opacity(0.08), lineWidth: 1)
-        )
     }
 
     // MARK: - Card: Contact Links
 
     private var contactLinksCard: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            HStack(spacing: 6) {
-                Image(systemName: "link")
-                    .font(DS.Font.scaled(13, weight: .bold))
-                    .foregroundColor(DS.Color.success)
-                Text(L10n.t("روابط التواصل", "Contact Links"))
-                    .font(DS.Font.scaled(13, weight: .bold))
-                    .foregroundColor(DS.Color.textPrimary)
-                Spacer()
-                Text(L10n.t("اختياري", "Optional"))
-                    .font(DS.Font.scaled(10, weight: .semibold))
-                    .foregroundColor(DS.Color.textTertiary)
+        let filled = [phoneNumber, whatsappNumber, instagramUrl, twitterUrl, websiteUrl, locationUrl]
+            .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && $0 != "+965 " }.count
+        return DSCard(padding: 0) {
+            // رأس قابل للطي.
+            Button {
+                withAnimation(DS.Anim.quick) { contactsOpen.toggle() }
+            } label: {
+                HStack(spacing: DS.Spacing.sm) {
+                    Image(systemName: "link")
+                        .font(DS.Font.scaled(13, weight: .bold))
+                        .foregroundColor(DS.Color.success)
+                    Text(L10n.t("روابط التواصل", "Contact Links"))
+                        .font(DS.Font.scaled(13, weight: .bold))
+                        .foregroundColor(DS.Color.textPrimary)
+                    Spacer()
+                    Text(filled > 0 ? "\(filled)" : L10n.t("اختياري", "Optional"))
+                        .font(DS.Font.scaled(11, weight: .semibold))
+                        .foregroundColor(filled > 0 ? DS.Color.success : DS.Color.textTertiary)
+                    Image(systemName: contactsOpen ? "chevron.up" : "chevron.down")
+                        .font(DS.Font.caption1)
+                        .foregroundColor(DS.Color.textTertiary)
+                }
+                .padding(DS.Spacing.md)
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
 
-            Text(L10n.t("أضف الروابط التي تريد عرضها للزوار",
-                       "Add links to share with visitors"))
-                .font(DS.Font.scaled(11, weight: .medium))
-                .foregroundColor(DS.Color.textSecondary)
-
-            LazyVGrid(
-                columns: [
-                    GridItem(.flexible(), spacing: DS.Spacing.sm),
-                    GridItem(.flexible(), spacing: DS.Spacing.sm)
-                ],
-                spacing: DS.Spacing.sm
-            ) {
-                socialRow(platform: .phone, placeholder: "+965...", text: $phoneNumber)
-                socialRow(platform: .whatsapp, placeholder: "+965...", text: $whatsappNumber)
-                socialRow(platform: .instagram, placeholder: "@username", text: $instagramUrl)
-                socialRow(platform: .twitter, placeholder: "@username", text: $twitterUrl)
-                socialRow(platform: .website, placeholder: "https://...", text: $websiteUrl)
-                socialRow(platform: .location, placeholder: L10n.t("الموقع (Maps)", "Maps URL"), text: $locationUrl)
+            if contactsOpen {
+                // شبكة مدمجة بعمودين لتقليص الارتفاع (تتسع داخل الشيت).
+                LazyVGrid(
+                    columns: [
+                        GridItem(.flexible(), spacing: DS.Spacing.sm),
+                        GridItem(.flexible(), spacing: DS.Spacing.sm)
+                    ],
+                    spacing: DS.Spacing.sm
+                ) {
+                    compactLink(icon: "phone.fill", color: DS.Color.success, placeholder: "+965...", text: $phoneNumber)
+                    compactLink(icon: "message.fill", color: DS.Color.success, placeholder: L10n.t("واتساب", "WhatsApp"), text: $whatsappNumber)
+                    compactLink(icon: "camera.fill", color: DS.Color.accent, placeholder: L10n.t("إنستغرام", "Instagram"), text: $instagramUrl)
+                    compactLink(icon: "at", color: DS.Color.info, placeholder: L10n.t("إكس", "X"), text: $twitterUrl)
+                    compactLink(icon: "globe", color: DS.Color.primary, placeholder: L10n.t("موقع", "Website"), text: $websiteUrl)
+                    compactLink(icon: "mappin.and.ellipse", color: DS.Color.error, placeholder: L10n.t("الموقع", "Maps"), text: $locationUrl)
+                }
+                .padding([.horizontal, .bottom], DS.Spacing.md)
             }
         }
-        .padding(DS.Spacing.md)
-        .background(
-            RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                .fill(DS.Color.surface)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                .strokeBorder(DS.Color.primary.opacity(0.08), lineWidth: 1)
-        )
     }
 
-    /// صف رابط تواصل مدمج وأنيق — أيقونة + label + textfield في سطر واحد.
-    /// حقل تواصل احترافي — عنوان فوق (أيقونة + اسم) وصندوق إدخال موحّد الارتفاع
-    /// بحيث تتحاذى الحقول بدقّة في شبكة العمودين.
-    private func socialRow(platform: SocialPlatform, placeholder: String, text: Binding<String>) -> some View {
-        VStack(alignment: .leading, spacing: 5) {
-            HStack(spacing: 5) {
-                platform.iconView(size: 18)
-                Text(platform.label)
-                    .font(DS.Font.scaled(11, weight: .semibold))
-                    .foregroundColor(DS.Color.textSecondary)
-                    .lineLimit(1)
-            }
+    /// حقل رابط مدمج (أيقونة + إدخال) لشبكة العمودين — يقلّص الارتفاع.
+    private func compactLink(icon: String, color: Color, placeholder: String, text: Binding<String>) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(DS.Font.scaled(13, weight: .semibold))
+                .foregroundColor(color)
             TextField(placeholder, text: text)
                 .font(DS.Font.scaled(13))
+                .foregroundColor(DS.Color.textPrimary)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, DS.Spacing.sm)
-                .frame(height: 42)
-                .background(
-                    RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                        .fill(DS.Color.background)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                        .strokeBorder(DS.Color.textTertiary.opacity(0.18), lineWidth: 1)
-                )
         }
-    }
-
-    private func socialTextField(platform: SocialPlatform, placeholder: String, text: Binding<String>) -> some View {
-        HStack(spacing: DS.Spacing.md) {
-            platform.iconView(size: 28)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(platform.label)
-                    .font(DS.Font.caption1)
-                    .foregroundColor(DS.Color.textSecondary)
-                TextField(placeholder, text: text)
-                    .font(DS.Font.body)
-            }
-        }
-        .padding(DS.Spacing.md)
-        .background(DS.Color.surface)
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+        .padding(.horizontal, DS.Spacing.sm)
+        .frame(height: 42)
+        .background(
+            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                .fill(DS.Color.background)
+        )
         .overlay(
-            RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                .stroke(DS.Color.textTertiary.opacity(0.15), lineWidth: 1)
+            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                .strokeBorder(DS.Color.textTertiary.opacity(0.18), lineWidth: 1)
         )
     }
 
@@ -1153,17 +1059,9 @@ struct AddProjectView: View {
         guard let currentUser = authVM.currentUser else { return }
         isSaving = true
 
-        // owner_id لازم يكون المستخدم الحالي (RLS: owner_id = auth.uid())
-        // لو اختار عضو ثاني نحفظ اسمه بس الـ owner_id يبقى المستخدم الحالي
+        // المنشئ هو صاحب المشروع (تعيين صاحب آخر صار في تعديل المشروع للإدارة).
         let ownerId = currentUser.id
-        let ownerName: String
-
-        if let selectedId = selectedOwnerId,
-           let selectedMember = memberVM.member(byId: selectedId) {
-            ownerName = selectedMember.fullName
-        } else {
-            ownerName = currentUser.fullName
-        }
+        let ownerName = currentUser.fullName
 
         // Upload logo if selected
         var uploadedLogoUrl: String? = nil

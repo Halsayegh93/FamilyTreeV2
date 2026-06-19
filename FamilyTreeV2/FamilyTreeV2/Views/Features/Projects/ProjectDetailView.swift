@@ -463,8 +463,9 @@ struct EditProjectView: View {
     @Binding var didEdit: Bool
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var projectsVM: ProjectsViewModel
+    @EnvironmentObject var memberVM: MemberViewModel
     @Environment(\.dismiss) private var dismiss
-    
+
     @State private var title: String
     @State private var description: String
     @State private var websiteUrl: String
@@ -475,6 +476,11 @@ struct EditProjectView: View {
     @State private var locationUrl: String
     @State private var logoImage: UIImage? = nil
     @State private var isSaving = false
+    // صاحب المشروع — يُعدَّل في التعديل للإدارة فقط.
+    @State private var ownerName: String
+    @State private var selectedOwnerId: UUID?
+    @State private var showOwnerPicker = false
+    @State private var ownerSearch = ""
 
     init(project: Project, didEdit: Binding<Bool>) {
         self.project = project
@@ -487,6 +493,8 @@ struct EditProjectView: View {
         _whatsappNumber = State(initialValue: project.whatsappNumber ?? "")
         _phoneNumber = State(initialValue: project.phoneNumber ?? "")
         _locationUrl = State(initialValue: project.locationUrl ?? "")
+        _ownerName = State(initialValue: project.ownerName)
+        _selectedOwnerId = State(initialValue: project.ownerId)
     }
     
     var body: some View {
@@ -496,6 +504,39 @@ struct EditProjectView: View {
                 
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: DS.Spacing.md) {
+                        // صاحب المشروع — للإدارة فقط (العضو العادي لا يراه).
+                        if authVM.canModerate {
+                            Button { showOwnerPicker = true } label: {
+                                HStack(spacing: DS.Spacing.sm) {
+                                    Image(systemName: "person.crop.circle.badge.checkmark")
+                                        .font(DS.Font.scaled(14, weight: .bold))
+                                        .foregroundColor(DS.Color.primary)
+                                    Text(L10n.t("صاحب المشروع:", "Owner:"))
+                                        .font(DS.Font.scaled(13))
+                                        .foregroundColor(DS.Color.textSecondary)
+                                    Text(ownerName)
+                                        .font(DS.Font.scaled(14, weight: .semibold))
+                                        .foregroundColor(DS.Color.textPrimary)
+                                        .lineLimit(1)
+                                    Spacer()
+                                    Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
+                                        .font(DS.Font.caption1)
+                                        .foregroundColor(DS.Color.textTertiary)
+                                }
+                                .padding(DS.Spacing.md)
+                                .background(
+                                    RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                                        .fill(DS.Color.surface)
+                                )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                                        .strokeBorder(DS.Color.primary.opacity(0.12), lineWidth: 1)
+                                )
+                            }
+                            .buttonStyle(.plain)
+                            .sheet(isPresented: $showOwnerPicker) { ownerPickerSheet }
+                        }
+
                         // الشعار + الاسم بصف واحد
                         HStack(alignment: .center, spacing: DS.Spacing.md) {
                             DSProfilePhotoPicker(
@@ -640,9 +681,62 @@ struct EditProjectView: View {
         }
     }
     
+    /// منتقي صاحب المشروع — للإدارة فقط.
+    private var ownerPickerSheet: some View {
+        let q = ownerSearch.trimmingCharacters(in: .whitespacesAndNewlines)
+        let candidates = memberVM.allMembers
+            .filter { $0.isCountable }
+            .filter { q.isEmpty || $0.fullName.localizedCaseInsensitiveContains(q) }
+            .sorted { $0.fullName < $1.fullName }
+        return NavigationStack {
+            ZStack {
+                DS.Color.background.ignoresSafeArea()
+                VStack(spacing: 0) {
+                    HStack(spacing: DS.Spacing.sm) {
+                        Image(systemName: "magnifyingglass").foregroundColor(DS.Color.textTertiary)
+                        TextField(L10n.t("بحث عن عضو...", "Search member..."), text: $ownerSearch)
+                            .font(DS.Font.body)
+                    }
+                    .padding(DS.Spacing.md)
+                    .background(DS.Color.surface)
+                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+                    .padding(.horizontal, DS.Spacing.lg)
+                    .padding(.top, DS.Spacing.sm)
+                    List {
+                        ForEach(candidates) { m in
+                            Button {
+                                selectedOwnerId = m.id
+                                ownerName = m.fullName
+                                ownerSearch = ""
+                                showOwnerPicker = false
+                            } label: {
+                                HStack {
+                                    Text(m.fullName)
+                                        .font(DS.Font.body)
+                                        .foregroundColor(DS.Color.textPrimary)
+                                    Spacer()
+                                    if selectedOwnerId == m.id {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .foregroundColor(DS.Color.primary)
+                                    }
+                                }
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .listStyle(.plain)
+                }
+            }
+            .navigationTitle(L10n.t("اختيار صاحب المشروع", "Select Owner"))
+            .navigationBarTitleDisplayMode(.inline)
+            .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+        }
+    }
+
     private func saveChanges() async {
         isSaving = true
-        
+
         // Upload new logo if selected
         var finalLogoUrl = project.logoUrl
         if let logoImage {
@@ -652,7 +746,11 @@ struct EditProjectView: View {
                 }
             }
         }
-        
+
+        // تغيير صاحب المشروع متاح للإدارة فقط.
+        let editedOwnerName = authVM.canModerate ? ownerName : nil
+        let editedOwnerId = authVM.canModerate ? selectedOwnerId?.uuidString : nil
+
         let success = await projectsVM.updateProject(
             id: project.id,
             title: title.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -664,7 +762,9 @@ struct EditProjectView: View {
             snapchatUrl: nil,
             whatsappNumber: whatsappNumber.isEmpty ? nil : whatsappNumber,
             phoneNumber: phoneNumber.isEmpty ? nil : phoneNumber,
-            locationUrl: locationUrl.isEmpty ? nil : locationUrl
+            locationUrl: locationUrl.isEmpty ? nil : locationUrl,
+            ownerName: editedOwnerName,
+            ownerId: editedOwnerId
         )
 
         if success {

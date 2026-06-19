@@ -132,7 +132,7 @@ struct FamilyArchiveView: View {
         }
         .sheet(isPresented: $showingUpload) {
             ArchiveUploadSheet(archiveVM: archiveVM, defaultCategory: selectedCategory ?? .documents)
-                .presentationDetents([.medium, .large])
+                .presentationDetents([.fraction(0.62)])
                 .presentationDragIndicator(.visible)
         }
         .sheet(item: $selectedItem) { item in
@@ -140,7 +140,7 @@ struct FamilyArchiveView: View {
         }
         .sheet(item: $itemToEdit) { item in
             ArchiveEditSheet(archiveVM: archiveVM, item: item)
-                .presentationDetents([.medium, .large])
+                .presentationDetents([.fraction(0.62)])
                 .presentationDragIndicator(.visible)
         }
         .alert(L10n.t("إبلاغ عن عنصر", "Report Item"), isPresented: Binding(
@@ -859,41 +859,51 @@ struct ArchiveUploadSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: DS.Spacing.md) {
 
-                    // اختيار الملف
+                    // اختيار الملف — الـ"hero" بالأعلى
                     fileSelectionSection
 
-                    // العنوان
-                    fieldGroup(label: L10n.t("العنوان", "Title"), required: true) {
-                        DSTextField(
-                            label: "",
-                            placeholder: L10n.t("مثلاً: شجرة العائلة 1965", "e.g. Family Tree 1965"),
-                            text: $title,
-                            icon: "textformat"
+                    // بطاقة موحّدة بنمط إضافة ابن
+                    DSCard(padding: 0) {
+                        DSSectionHeader(
+                            title: L10n.t("تفاصيل العنصر", "Item Details"),
+                            icon: "tray.full.fill",
+                            iconColor: DS.Color.primary
                         )
-                    }
 
-                    // الوصف
-                    fieldGroup(label: L10n.t("الوصف (اختياري)", "Description (optional)")) {
-                        DSTextField(
-                            label: "",
-                            placeholder: L10n.t("ملاحظات أو سياق", "Notes or context"),
-                            text: $description,
-                            icon: "text.alignleft"
-                        )
-                    }
+                        VStack(spacing: 0) {
+                            DSLabeledFieldRow(icon: "textformat", iconColor: DS.Color.primary,
+                                              label: L10n.t("العنوان *", "Title *")) {
+                                TextField(L10n.t("مثلاً: شجرة العائلة 1965", "e.g. Family Tree 1965"), text: $title)
+                                    .font(DS.Font.callout)
+                                    .foregroundColor(DS.Color.textPrimary)
+                            }
 
-                    // السنة + القسم — عمودان متحاذيان
-                    HStack(alignment: .top, spacing: DS.Spacing.md) {
-                        fieldGroup(label: L10n.t("السنة", "Year")) {
-                            boxedField {
+                            DSDivider()
+
+                            DSLabeledFieldRow(icon: "calendar", iconColor: DS.Color.success,
+                                              label: L10n.t("السنة", "Year")) {
                                 TextField("1965", text: $yearText)
                                     .keyboardType(.numberPad)
-                                    .font(DS.Font.scaled(14))
+                                    .font(DS.Font.callout)
+                                    .foregroundColor(DS.Color.textPrimary)
                             }
-                        }
 
-                        fieldGroup(label: L10n.t("القسم", "Category")) {
-                            categoryMenu
+                            DSDivider()
+
+                            DSLabeledFieldRow(icon: "text.alignleft", iconColor: DS.Color.accent,
+                                              label: L10n.t("الوصف", "Description")) {
+                                TextField(L10n.t("ملاحظات أو سياق", "Notes or context"), text: $description, axis: .vertical)
+                                    .font(DS.Font.callout)
+                                    .foregroundColor(DS.Color.textPrimary)
+                                    .lineLimit(2...4)
+                            }
+
+                            DSDivider()
+
+                            DSLabeledFieldRow(icon: "folder.fill", iconColor: DS.Color.warning,
+                                              label: L10n.t("القسم", "Category")) {
+                                categoryMenu
+                            }
                         }
                     }
 
@@ -916,6 +926,15 @@ struct ArchiveUploadSheet: View {
                             .padding(.top, DS.Spacing.xs)
                     }
 
+                    DSPrimaryButton(
+                        L10n.t("رفع", "Upload"),
+                        icon: "icloud.and.arrow.up.fill",
+                        isLoading: archiveVM.isUploading
+                    ) { submit() }
+                        .disabled(!canSubmit)
+                        .opacity(canSubmit ? 1 : 0.5)
+                        .padding(.top, DS.Spacing.sm)
+
                     Spacer(minLength: DS.Spacing.xxxl)
                 }
                 .padding(.horizontal, DS.Spacing.lg)
@@ -927,12 +946,9 @@ struct ArchiveUploadSheet: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button(L10n.t("إلغاء", "Cancel")) { dismiss() }
+                        .font(DS.Font.calloutBold)
+                        .foregroundColor(DS.Color.error)
                         .disabled(archiveVM.isUploading)
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button(L10n.t("رفع", "Upload")) { submit() }
-                        .fontWeight(.bold)
-                        .disabled(!canSubmit)
                 }
             }
             .fileImporter(
@@ -951,7 +967,7 @@ struct ArchiveUploadSheet: View {
                 handlePhotoPick(newItem)
             }
         }
-        .presentationDetents([.medium, .large])
+        .presentationDetents([.fraction(0.62)])
         .presentationDragIndicator(.visible)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
@@ -1081,23 +1097,6 @@ struct ArchiveUploadSheet: View {
                         .foregroundColor(DS.Color.textTertiary)
                 }
             }
-        }
-    }
-
-    @ViewBuilder
-    private func fieldGroup<C: View>(label: String, required: Bool = false, @ViewBuilder content: () -> C) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 4) {
-                Text(label)
-                    .font(DS.Font.scaled(12, weight: .semibold))
-                    .foregroundColor(DS.Color.textSecondary)
-                if required {
-                    Text("*")
-                        .font(DS.Font.scaled(12, weight: .bold))
-                        .foregroundColor(DS.Color.error)
-                }
-            }
-            content()
         }
     }
 
@@ -1248,7 +1247,7 @@ struct ArchiveEditSheet: View {
                 }
             }
         }
-        .presentationDetents([.medium, .large])
+        .presentationDetents([.fraction(0.62)])
         .presentationDragIndicator(.visible)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }

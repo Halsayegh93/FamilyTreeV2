@@ -260,25 +260,30 @@ class ProjectsViewModel: ObservableObject {
                        instagramUrl: String?, twitterUrl: String?,
                        snapchatUrl: String?,
                        whatsappNumber: String?, phoneNumber: String?,
-                       locationUrl: String? = nil) async -> Bool {
+                       locationUrl: String? = nil,
+                       ownerName: String? = nil, ownerId: String? = nil) async -> Bool {
         guard NetworkMonitor.shared.requireOnline() else { return false }
         isLoading = true
         errorMessage = nil
         do {
+            var payload: [String: String] = [
+                "title": title,
+                "description": description ?? "",
+                "logo_url": logoUrl ?? "",
+                "website_url": websiteUrl ?? "",
+                "instagram_url": instagramUrl ?? "",
+                "twitter_url": twitterUrl ?? "",
+                "snapchat_url": snapchatUrl ?? "",
+                "whatsapp_number": whatsappNumber ?? "",
+                "phone_number": phoneNumber ?? "",
+                "location_url": locationUrl ?? ""
+            ]
+            // تغيير صاحب المشروع — للإدارة فقط (يُمرَّر من شاشة التعديل).
+            if let ownerName, !ownerName.isEmpty { payload["owner_name"] = ownerName }
+            if let ownerId, !ownerId.isEmpty { payload["owner_id"] = ownerId }
             try await supabase
                 .from("projects")
-                .update([
-                    "title": title,
-                    "description": description ?? "",
-                    "logo_url": logoUrl ?? "",
-                    "website_url": websiteUrl ?? "",
-                    "instagram_url": instagramUrl ?? "",
-                    "twitter_url": twitterUrl ?? "",
-                    "snapchat_url": snapchatUrl ?? "",
-                    "whatsapp_number": whatsappNumber ?? "",
-                    "phone_number": phoneNumber ?? "",
-                    "location_url": locationUrl ?? ""
-                ])
+                .update(payload)
                 .eq("id", value: id.uuidString)
                 .execute()
             

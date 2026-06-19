@@ -437,6 +437,8 @@ private struct AddDiwaniyaRequestView: View {
     @State private var ownerName = ""
     @State private var selectedDays: Set<Int> = []
     @State private var selectedTimes: Set<String> = []
+    @State private var daysOpen = false
+    @State private var timesOpen = false
     @State private var phoneNumber = ""
     @State private var selectedPhoneCountry: KuwaitPhone.Country = KuwaitPhone.defaultCountry
     @State private var locationURL = ""
@@ -506,24 +508,8 @@ private struct AddDiwaniyaRequestView: View {
                 DS.Color.background.ignoresSafeArea()
 
                 ScrollView(showsIndicators: false) {
-                    VStack(spacing: DS.Spacing.xxl) {
-
-                        // Header icon
-                        ZStack {
-                            Circle()
-                                .fill(
-                                    LinearGradient(
-                                        colors: [DS.Color.gridDiwaniya.opacity(0.20), DS.Color.primary.opacity(0.10)],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )
-                                )
-                                .frame(width: DS.Spacing.xxxxl * 2, height: DS.Spacing.xxxxl * 2)
-                            Image(systemName: "map.fill")
-                                .font(DS.Font.scaled(32, weight: .bold))
-                                .foregroundColor(DS.Color.gridDiwaniya)
-                        }
-                        .padding(.top, DS.Spacing.lg)
+                    VStack(spacing: DS.Spacing.md) {
+                        // (حُذفت الأيقونة العلوية لتقليص الارتفاع — يتسع المحتوى بلا تمرير.)
 
                         // Basic info section
                         DSCard(padding: 0) {
@@ -567,7 +553,9 @@ private struct AddDiwaniyaRequestView: View {
                                 DSPhoneField(
                                     country: $selectedPhoneCountry,
                                     digits: $phoneNumber,
-                                    placeholder: L10n.t("اختياري", "Optional")
+                                    placeholder: L10n.t("اختياري", "Optional"),
+                                    compact: true,
+                                    bordered: false
                                 )
                             }
                             .padding(.horizontal, DS.Spacing.lg)
@@ -576,32 +564,50 @@ private struct AddDiwaniyaRequestView: View {
 
                             // Schedule - Days
                             VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                                HStack(spacing: DS.Spacing.sm) {
-                                    DSIcon("calendar", color: DS.Color.warning)
-                                    Text(L10n.t("أيام الديوانية", "Diwaniya Days"))
-                                        .font(DS.Font.callout)
-                                        .foregroundColor(DS.Color.textSecondary)
-                                }
-
-                                LazyVGrid(columns: [GridItem(.adaptive(minimum: 75), spacing: DS.Spacing.xs)], spacing: DS.Spacing.xs) {
-                                    ForEach(Self.weekDays, id: \.id) { day in
-                                        let isOn = selectedDays.contains(day.id)
-                                        Button {
-                                            withAnimation(DS.Anim.snappy) {
-                                                if isOn { selectedDays.remove(day.id) }
-                                                else { selectedDays.insert(day.id) }
-                                            }
-                                        } label: {
-                                            Text(L10n.t(day.ar, day.en))
-                                                .font(DS.Font.scaled(13, weight: isOn ? .bold : .medium))
-                                                .foregroundColor(isOn ? DS.Color.textOnPrimary : DS.Color.textSecondary)
-                                                .frame(maxWidth: .infinity)
-                                                .padding(.vertical, DS.Spacing.sm)
-                                                .background(isOn ? DS.Color.warning : DS.Color.surface)
-                                                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm))
-                                                .overlay(RoundedRectangle(cornerRadius: DS.Radius.sm).stroke(isOn ? Color.clear : DS.Color.textTertiary.opacity(0.25), lineWidth: 1))
+                                Button {
+                                    withAnimation(DS.Anim.quick) { daysOpen.toggle() }
+                                } label: {
+                                    HStack(spacing: DS.Spacing.sm) {
+                                        DSIcon("calendar", color: DS.Color.warning)
+                                        Text(L10n.t("أيام الديوانية", "Diwaniya Days"))
+                                            .font(DS.Font.callout)
+                                            .foregroundColor(DS.Color.textSecondary)
+                                        Spacer()
+                                        if !daysOpen && !daysDisplayText.isEmpty {
+                                            Text(daysDisplayText)
+                                                .font(DS.Font.scaled(11, weight: .semibold))
+                                                .foregroundColor(DS.Color.warning)
+                                                .lineLimit(1)
                                         }
-                                        .buttonStyle(.plain)
+                                        Image(systemName: daysOpen ? "chevron.up" : "chevron.down")
+                                            .font(DS.Font.caption1)
+                                            .foregroundColor(DS.Color.textTertiary)
+                                    }
+                                    .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+
+                                if daysOpen {
+                                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 75), spacing: DS.Spacing.xs)], spacing: DS.Spacing.xs) {
+                                        ForEach(Self.weekDays, id: \.id) { day in
+                                            let isOn = selectedDays.contains(day.id)
+                                            Button {
+                                                withAnimation(DS.Anim.snappy) {
+                                                    if isOn { selectedDays.remove(day.id) }
+                                                    else { selectedDays.insert(day.id) }
+                                                }
+                                            } label: {
+                                                Text(L10n.t(day.ar, day.en))
+                                                    .font(DS.Font.scaled(13, weight: isOn ? .bold : .medium))
+                                                    .foregroundColor(isOn ? DS.Color.textOnPrimary : DS.Color.textSecondary)
+                                                    .frame(maxWidth: .infinity)
+                                                    .padding(.vertical, DS.Spacing.sm)
+                                                    .background(isOn ? DS.Color.warning : DS.Color.surface)
+                                                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm))
+                                                    .overlay(RoundedRectangle(cornerRadius: DS.Radius.sm).stroke(isOn ? Color.clear : DS.Color.textTertiary.opacity(0.25), lineWidth: 1))
+                                            }
+                                            .buttonStyle(.plain)
+                                        }
                                     }
                                 }
                             }
@@ -612,32 +618,50 @@ private struct AddDiwaniyaRequestView: View {
 
                             // Schedule - Time
                             VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                                HStack(spacing: DS.Spacing.sm) {
-                                    DSIcon("clock.fill", color: DS.Color.warning)
-                                    Text(L10n.t("أوقات الديوانية", "Diwaniya Times"))
-                                        .font(DS.Font.callout)
-                                        .foregroundColor(DS.Color.textSecondary)
-                                }
-
-                                LazyVGrid(columns: [GridItem(.adaptive(minimum: 72), spacing: DS.Spacing.xs)], spacing: DS.Spacing.xs) {
-                                    ForEach(Self.timeSlots, id: \.self) { time in
-                                        let isOn = selectedTimes.contains(time)
-                                        Button {
-                                            withAnimation(DS.Anim.snappy) {
-                                                if isOn { selectedTimes.remove(time) }
-                                                else { selectedTimes.insert(time) }
-                                            }
-                                        } label: {
-                                            Text(L10n.t("\(time) م", "\(time) PM"))
-                                                .font(DS.Font.scaled(13, weight: isOn ? .bold : .medium))
-                                                .foregroundColor(isOn ? DS.Color.textOnPrimary : DS.Color.textSecondary)
-                                                .frame(maxWidth: .infinity)
-                                                .padding(.vertical, DS.Spacing.sm)
-                                                .background(isOn ? DS.Color.warning : DS.Color.surface)
-                                                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm))
-                                                .overlay(RoundedRectangle(cornerRadius: DS.Radius.sm).stroke(isOn ? Color.clear : DS.Color.textTertiary.opacity(0.25), lineWidth: 1))
+                                Button {
+                                    withAnimation(DS.Anim.quick) { timesOpen.toggle() }
+                                } label: {
+                                    HStack(spacing: DS.Spacing.sm) {
+                                        DSIcon("clock.fill", color: DS.Color.warning)
+                                        Text(L10n.t("أوقات الديوانية", "Diwaniya Times"))
+                                            .font(DS.Font.callout)
+                                            .foregroundColor(DS.Color.textSecondary)
+                                        Spacer()
+                                        if !timesOpen && !timeDisplayText.isEmpty {
+                                            Text(timeDisplayText)
+                                                .font(DS.Font.scaled(11, weight: .semibold))
+                                                .foregroundColor(DS.Color.warning)
+                                                .lineLimit(1)
                                         }
-                                        .buttonStyle(.plain)
+                                        Image(systemName: timesOpen ? "chevron.up" : "chevron.down")
+                                            .font(DS.Font.caption1)
+                                            .foregroundColor(DS.Color.textTertiary)
+                                    }
+                                    .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+
+                                if timesOpen {
+                                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 72), spacing: DS.Spacing.xs)], spacing: DS.Spacing.xs) {
+                                        ForEach(Self.timeSlots, id: \.self) { time in
+                                            let isOn = selectedTimes.contains(time)
+                                            Button {
+                                                withAnimation(DS.Anim.snappy) {
+                                                    if isOn { selectedTimes.remove(time) }
+                                                    else { selectedTimes.insert(time) }
+                                                }
+                                            } label: {
+                                                Text(L10n.t("\(time) م", "\(time) PM"))
+                                                    .font(DS.Font.scaled(13, weight: isOn ? .bold : .medium))
+                                                    .foregroundColor(isOn ? DS.Color.textOnPrimary : DS.Color.textSecondary)
+                                                    .frame(maxWidth: .infinity)
+                                                    .padding(.vertical, DS.Spacing.sm)
+                                                    .background(isOn ? DS.Color.warning : DS.Color.surface)
+                                                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm))
+                                                    .overlay(RoundedRectangle(cornerRadius: DS.Radius.sm).stroke(isOn ? Color.clear : DS.Color.textTertiary.opacity(0.25), lineWidth: 1))
+                                            }
+                                            .buttonStyle(.plain)
+                                        }
                                     }
                                 }
                             }
@@ -708,6 +732,8 @@ private struct AddDiwaniyaRequestView: View {
                 Text(viewModel.errorMessage ?? L10n.t("فشل إضافة الديوانية", "Failed to add diwaniya."))
             }
         }
+        .presentationDetents([.fraction(0.62)])
+        .presentationDragIndicator(.visible)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
 
@@ -765,6 +791,8 @@ private struct EditDiwaniyaView: View {
     @State private var ownerName: String
     @State private var selectedDays: Set<Int>
     @State private var selectedTimes: Set<String>
+    @State private var daysOpen = false
+    @State private var timesOpen = false
     @State private var phoneNumber: String
     @State private var selectedPhoneCountry: KuwaitPhone.Country
     @State private var locationURL: String
@@ -875,24 +903,8 @@ private struct EditDiwaniyaView: View {
                 DS.Color.background.ignoresSafeArea()
 
                 ScrollView(showsIndicators: false) {
-                    VStack(spacing: DS.Spacing.xxl) {
-
-                        // Header icon
-                        ZStack {
-                            Circle()
-                                .fill(
-                                    LinearGradient(
-                                        colors: [DS.Color.gridDiwaniya.opacity(0.20), DS.Color.primary.opacity(0.10)],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )
-                                )
-                                .frame(width: DS.Spacing.xxxxl * 2, height: DS.Spacing.xxxxl * 2)
-                            Image(systemName: "pencil.circle.fill")
-                                .font(DS.Font.scaled(32, weight: .bold))
-                                .foregroundColor(DS.Color.gridDiwaniya)
-                        }
-                        .padding(.top, DS.Spacing.lg)
+                    VStack(spacing: DS.Spacing.md) {
+                        // (حُذفت الأيقونة العلوية لتقليص الارتفاع — يتسع المحتوى بلا تمرير.)
 
                         // Basic info section
                         DSCard(padding: 0) {
@@ -930,7 +942,9 @@ private struct EditDiwaniyaView: View {
                                 DSPhoneField(
                                     country: $selectedPhoneCountry,
                                     digits: $phoneNumber,
-                                    placeholder: L10n.t("اختياري", "Optional")
+                                    placeholder: L10n.t("اختياري", "Optional"),
+                                    compact: true,
+                                    bordered: false
                                 )
                             }
                             .padding(.horizontal, DS.Spacing.lg)
@@ -939,32 +953,50 @@ private struct EditDiwaniyaView: View {
 
                             // Schedule - Days
                             VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                                HStack(spacing: DS.Spacing.sm) {
-                                    DSIcon("calendar", color: DS.Color.warning)
-                                    Text(L10n.t("أيام الديوانية", "Diwaniya Days"))
-                                        .font(DS.Font.callout)
-                                        .foregroundColor(DS.Color.textSecondary)
-                                }
-
-                                LazyVGrid(columns: [GridItem(.adaptive(minimum: 75), spacing: DS.Spacing.xs)], spacing: DS.Spacing.xs) {
-                                    ForEach(Self.weekDays, id: \.id) { day in
-                                        let isOn = selectedDays.contains(day.id)
-                                        Button {
-                                            withAnimation(DS.Anim.snappy) {
-                                                if isOn { selectedDays.remove(day.id) }
-                                                else { selectedDays.insert(day.id) }
-                                            }
-                                        } label: {
-                                            Text(L10n.t(day.ar, day.en))
-                                                .font(DS.Font.scaled(13, weight: isOn ? .bold : .medium))
-                                                .foregroundColor(isOn ? DS.Color.textOnPrimary : DS.Color.textSecondary)
-                                                .frame(maxWidth: .infinity)
-                                                .padding(.vertical, DS.Spacing.sm)
-                                                .background(isOn ? DS.Color.warning : DS.Color.surface)
-                                                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm))
-                                                .overlay(RoundedRectangle(cornerRadius: DS.Radius.sm).stroke(isOn ? Color.clear : DS.Color.textTertiary.opacity(0.25), lineWidth: 1))
+                                Button {
+                                    withAnimation(DS.Anim.quick) { daysOpen.toggle() }
+                                } label: {
+                                    HStack(spacing: DS.Spacing.sm) {
+                                        DSIcon("calendar", color: DS.Color.warning)
+                                        Text(L10n.t("أيام الديوانية", "Diwaniya Days"))
+                                            .font(DS.Font.callout)
+                                            .foregroundColor(DS.Color.textSecondary)
+                                        Spacer()
+                                        if !daysOpen && !daysDisplayText.isEmpty {
+                                            Text(daysDisplayText)
+                                                .font(DS.Font.scaled(11, weight: .semibold))
+                                                .foregroundColor(DS.Color.warning)
+                                                .lineLimit(1)
                                         }
-                                        .buttonStyle(.plain)
+                                        Image(systemName: daysOpen ? "chevron.up" : "chevron.down")
+                                            .font(DS.Font.caption1)
+                                            .foregroundColor(DS.Color.textTertiary)
+                                    }
+                                    .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+
+                                if daysOpen {
+                                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 75), spacing: DS.Spacing.xs)], spacing: DS.Spacing.xs) {
+                                        ForEach(Self.weekDays, id: \.id) { day in
+                                            let isOn = selectedDays.contains(day.id)
+                                            Button {
+                                                withAnimation(DS.Anim.snappy) {
+                                                    if isOn { selectedDays.remove(day.id) }
+                                                    else { selectedDays.insert(day.id) }
+                                                }
+                                            } label: {
+                                                Text(L10n.t(day.ar, day.en))
+                                                    .font(DS.Font.scaled(13, weight: isOn ? .bold : .medium))
+                                                    .foregroundColor(isOn ? DS.Color.textOnPrimary : DS.Color.textSecondary)
+                                                    .frame(maxWidth: .infinity)
+                                                    .padding(.vertical, DS.Spacing.sm)
+                                                    .background(isOn ? DS.Color.warning : DS.Color.surface)
+                                                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm))
+                                                    .overlay(RoundedRectangle(cornerRadius: DS.Radius.sm).stroke(isOn ? Color.clear : DS.Color.textTertiary.opacity(0.25), lineWidth: 1))
+                                            }
+                                            .buttonStyle(.plain)
+                                        }
                                     }
                                 }
                             }
@@ -975,32 +1007,50 @@ private struct EditDiwaniyaView: View {
 
                             // Schedule - Time
                             VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                                HStack(spacing: DS.Spacing.sm) {
-                                    DSIcon("clock.fill", color: DS.Color.warning)
-                                    Text(L10n.t("أوقات الديوانية", "Diwaniya Times"))
-                                        .font(DS.Font.callout)
-                                        .foregroundColor(DS.Color.textSecondary)
-                                }
-
-                                LazyVGrid(columns: [GridItem(.adaptive(minimum: 72), spacing: DS.Spacing.xs)], spacing: DS.Spacing.xs) {
-                                    ForEach(Self.timeSlots, id: \.self) { time in
-                                        let isOn = selectedTimes.contains(time)
-                                        Button {
-                                            withAnimation(DS.Anim.snappy) {
-                                                if isOn { selectedTimes.remove(time) }
-                                                else { selectedTimes.insert(time) }
-                                            }
-                                        } label: {
-                                            Text(L10n.t("\(time) م", "\(time) PM"))
-                                                .font(DS.Font.scaled(13, weight: isOn ? .bold : .medium))
-                                                .foregroundColor(isOn ? DS.Color.textOnPrimary : DS.Color.textSecondary)
-                                                .frame(maxWidth: .infinity)
-                                                .padding(.vertical, DS.Spacing.sm)
-                                                .background(isOn ? DS.Color.warning : DS.Color.surface)
-                                                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm))
-                                                .overlay(RoundedRectangle(cornerRadius: DS.Radius.sm).stroke(isOn ? Color.clear : DS.Color.textTertiary.opacity(0.25), lineWidth: 1))
+                                Button {
+                                    withAnimation(DS.Anim.quick) { timesOpen.toggle() }
+                                } label: {
+                                    HStack(spacing: DS.Spacing.sm) {
+                                        DSIcon("clock.fill", color: DS.Color.warning)
+                                        Text(L10n.t("أوقات الديوانية", "Diwaniya Times"))
+                                            .font(DS.Font.callout)
+                                            .foregroundColor(DS.Color.textSecondary)
+                                        Spacer()
+                                        if !timesOpen && !timeDisplayText.isEmpty {
+                                            Text(timeDisplayText)
+                                                .font(DS.Font.scaled(11, weight: .semibold))
+                                                .foregroundColor(DS.Color.warning)
+                                                .lineLimit(1)
                                         }
-                                        .buttonStyle(.plain)
+                                        Image(systemName: timesOpen ? "chevron.up" : "chevron.down")
+                                            .font(DS.Font.caption1)
+                                            .foregroundColor(DS.Color.textTertiary)
+                                    }
+                                    .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+
+                                if timesOpen {
+                                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 72), spacing: DS.Spacing.xs)], spacing: DS.Spacing.xs) {
+                                        ForEach(Self.timeSlots, id: \.self) { time in
+                                            let isOn = selectedTimes.contains(time)
+                                            Button {
+                                                withAnimation(DS.Anim.snappy) {
+                                                    if isOn { selectedTimes.remove(time) }
+                                                    else { selectedTimes.insert(time) }
+                                                }
+                                            } label: {
+                                                Text(L10n.t("\(time) م", "\(time) PM"))
+                                                    .font(DS.Font.scaled(13, weight: isOn ? .bold : .medium))
+                                                    .foregroundColor(isOn ? DS.Color.textOnPrimary : DS.Color.textSecondary)
+                                                    .frame(maxWidth: .infinity)
+                                                    .padding(.vertical, DS.Spacing.sm)
+                                                    .background(isOn ? DS.Color.warning : DS.Color.surface)
+                                                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm))
+                                                    .overlay(RoundedRectangle(cornerRadius: DS.Radius.sm).stroke(isOn ? Color.clear : DS.Color.textTertiary.opacity(0.25), lineWidth: 1))
+                                            }
+                                            .buttonStyle(.plain)
+                                        }
                                     }
                                 }
                             }
@@ -1084,6 +1134,8 @@ private struct EditDiwaniyaView: View {
                 Text(viewModel.errorMessage ?? L10n.t("فشل تحديث الديوانية", "Failed to update diwaniya."))
             }
         }
+        .presentationDetents([.fraction(0.62)])
+        .presentationDragIndicator(.visible)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
 
