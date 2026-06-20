@@ -130,7 +130,7 @@ struct MemberDetailsView: View {
                 }
                 .presentationDetents([.medium, .large])
             }
-            .fullScreenCover(item: $pendingEditAction) { action in
+            .sheet(item: $pendingEditAction) { action in
                 TreeEditRequestView(member: member, action: action)
             }
         }

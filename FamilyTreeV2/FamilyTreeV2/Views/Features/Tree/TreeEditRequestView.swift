@@ -24,6 +24,10 @@ struct TreeEditRequestView: View {
     @State private var errorMessage: String? = nil
     @State private var showCountrySheet = false
 
+    /// ارتفاع الشيت — يُقاس من المحتوى ليكون الشيت بحجم المحتوى عند الكتابة
+    /// (نفس نمط AddChildSheet / EditChildSheet).
+    @State private var sheetHeight: CGFloat = 360
+
     private var actionColor: Color {
         switch action {
         case .add: return DS.Color.success
@@ -82,7 +86,15 @@ struct TreeEditRequestView: View {
                     }
                     .padding(.horizontal, DS.Spacing.lg)
                     .padding(.top, DS.Spacing.lg)
-                    .padding(.bottom, DS.Spacing.xxxxl)
+                    .padding(.bottom, DS.Spacing.xl)
+                    .background(
+                        GeometryReader { geo in
+                            Color.clear.preference(
+                                key: SheetContentHeightKey.self,
+                                value: geo.size.height
+                            )
+                        }
+                    )
                 }
             }
             .navigationTitle(screenTitle)
@@ -116,6 +128,11 @@ struct TreeEditRequestView: View {
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
             .onAppear { prefillFromMember() }
         }
+        .onPreferenceChange(SheetContentHeightKey.self) { h in
+            if h > 0 { sheetHeight = h + 72 }
+        }
+        .presentationDetents([.height(sheetHeight)])
+        .presentationDragIndicator(.visible)
     }
 
     // MARK: - Member Card
