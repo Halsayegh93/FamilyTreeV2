@@ -10,9 +10,9 @@ struct MemberActionSheet: View {
 
     private var availableActions: [TreeEditAction] {
         if member.isDeceased == true {
-            return [.add, .editName, .editBirth, .addDeathDate, .addPhoto, .delete, .other]
+            return [.add, .editName, .editBirth, .addDeathDate, .addPhoto, .delete]
         }
-        return [.add, .editName, .editPhone, .editBirth, .addPhoto, .deceased, .delete, .other]
+        return [.add, .editName, .editPhone, .editBirth, .addPhoto, .deceased, .delete]
     }
 
     private func color(for action: TreeEditAction) -> Color {

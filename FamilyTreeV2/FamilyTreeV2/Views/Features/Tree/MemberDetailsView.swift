@@ -528,10 +528,10 @@ struct MemberDetailsView: View {
         }
     }
 
-    /// شبكة الأبناء inline — اسم أول فقط مع avatar مدوّر، 3 أعمدة
+    /// شبكة الأبناء inline — اسم أول فقط مع avatar مدوّر، 4 أعمدة (مدمجة)
     private var childrenInlineGrid: some View {
-        let columns = Array(repeating: GridItem(.flexible(), spacing: DS.Spacing.sm), count: 3)
-        return LazyVGrid(columns: columns, spacing: DS.Spacing.md) {
+        let columns = Array(repeating: GridItem(.flexible(), spacing: DS.Spacing.sm), count: 4)
+        return LazyVGrid(columns: columns, spacing: DS.Spacing.sm) {
             ForEach(cachedChildren) { child in
                 Button {
                     // الشيت يبقى مفتوح — يتحدث محتواه + الشجرة تتزامن خلفه
@@ -561,16 +561,16 @@ struct MemberDetailsView: View {
                     } placeholder: {
                         Circle().fill(DS.Color.primary.opacity(0.12))
                     }
-                    .frame(width: 56, height: 56)
+                    .frame(width: 46, height: 46)
                     .clipShape(Circle())
                     .overlay(Circle().stroke(DS.Color.primary.opacity(0.18), lineWidth: 1))
                 } else {
                     ZStack {
                         Circle()
                             .fill(DS.Color.primary.opacity(0.12))
-                            .frame(width: 56, height: 56)
+                            .frame(width: 46, height: 46)
                         Text(String(child.firstName.prefix(1)))
-                            .font(DS.Font.title3)
+                            .font(DS.Font.headline)
                             .fontWeight(.bold)
                             .foregroundColor(DS.Color.primary)
                     }
@@ -580,18 +580,18 @@ struct MemberDetailsView: View {
                 if child.isDeceased == true {
                     Circle()
                         .fill(DS.Color.background)
-                        .frame(width: 18, height: 18)
+                        .frame(width: 16, height: 16)
                         .overlay(
                             Image(systemName: "heart.slash.fill")
-                                .font(DS.Font.scaled(10, weight: .bold))
+                                .font(DS.Font.scaled(9, weight: .bold))
                                 .foregroundColor(DS.Color.textTertiary)
                         )
-                        .offset(x: 22, y: 22)
+                        .offset(x: 18, y: 18)
                 }
             }
 
             Text(child.firstName)
-                .font(DS.Font.caption1)
+                .font(DS.Font.caption2)
                 .fontWeight(.semibold)
                 .foregroundColor(DS.Color.textPrimary)
                 .lineLimit(1)
@@ -842,69 +842,71 @@ struct MemberDetailsView: View {
     @ViewBuilder
     private var actionButtonsSection: some View {
         if !member.isDeleted {
-            VStack(spacing: DS.Spacing.sm) {
+            HStack(alignment: .top, spacing: DS.Spacing.xxl) {
                 if !isViewingSelf {
-                    Button {
-                        showActionSheet = true
-                    } label: {
-                        HStack(spacing: DS.Spacing.sm) {
-                            Image(systemName: "pencil.and.list.clipboard")
-                                .font(DS.Font.scaled(15, weight: .semibold))
-                            Text(L10n.t("طلب تعديل لهذا العضو", "Request edit for this member"))
-                                .font(DS.Font.calloutBold)
-                        }
-                        .foregroundColor(DS.Color.textOnPrimary)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, DS.Spacing.md)
-                        .background(DS.Color.gradientPrimary)
-                        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
-                        .dsSubtleShadow()
-                    }
-                    .buttonStyle(DSScaleButtonStyle())
+                    circleActionButton(
+                        icon: "pencil.and.list.clipboard",
+                        label: L10n.t("طلب تعديل", "Request Edit"),
+                        tint: DS.Color.primary,
+                        filled: true
+                    ) { showActionSheet = true }
 
                     // إبلاغ عن العضو — متاح لغير صاحب الملف (سياسة Apple)
-                    Button {
-                        showReportConfirm = true
-                    } label: {
-                        HStack(spacing: DS.Spacing.sm) {
-                            Image(systemName: "exclamationmark.bubble")
-                                .font(DS.Font.scaled(14, weight: .semibold))
-                            Text(L10n.t("إبلاغ عن هذا العضو", "Report this member"))
-                                .font(DS.Font.calloutBold)
-                        }
-                        .foregroundColor(DS.Color.textSecondary)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, DS.Spacing.md)
-                        .background(DS.Color.textTertiary.opacity(0.08))
-                        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
-                    }
-                    .buttonStyle(DSScaleButtonStyle())
+                    circleActionButton(
+                        icon: "exclamationmark.bubble",
+                        label: L10n.t("إبلاغ", "Report"),
+                        tint: DS.Color.warning
+                    ) { showReportConfirm = true }
                 }
 
                 if authVM.canEditMembers {
-                    Button {
-                        showAdminControl = true
-                    } label: {
-                        HStack(spacing: DS.Spacing.sm) {
-                            Image(systemName: "pencil")
-                                .font(DS.Font.scaled(15, weight: .semibold))
-                            Text(L10n.t("تعديل مباشر (إدارة)", "Direct Edit (Admin)"))
-                                .font(DS.Font.calloutBold)
-                        }
-                        .foregroundColor(DS.Color.primary)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, DS.Spacing.md)
-                        .background(DS.Color.primary.opacity(0.10))
-                        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                                .stroke(DS.Color.primary.opacity(0.35), lineWidth: 1.5)
-                        )
-                    }
-                    .buttonStyle(DSScaleButtonStyle())
+                    circleActionButton(
+                        icon: "pencil",
+                        label: L10n.t("تعديل مباشر", "Direct Edit"),
+                        tint: DS.Color.primary
+                    ) { showAdminControl = true }
                 }
             }
+            .frame(maxWidth: .infinity)
         }
+    }
+
+    /// زر دائري بأيقونة + تسمية قصيرة (بديل الأزرار الممتدة في الأسفل).
+    private func circleActionButton(
+        icon: String,
+        label: String,
+        tint: Color,
+        filled: Bool = false,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            VStack(spacing: DS.Spacing.xs) {
+                ZStack {
+                    if filled {
+                        Circle()
+                            .fill(DS.Color.gradientPrimary)
+                            .frame(width: 62, height: 62)
+                            .dsSubtleShadow()
+                        Image(systemName: icon)
+                            .font(DS.Font.scaled(22, weight: .semibold))
+                            .foregroundColor(DS.Color.textOnPrimary)
+                    } else {
+                        Circle()
+                            .fill(tint.opacity(0.12))
+                            .frame(width: 62, height: 62)
+                            .overlay(Circle().stroke(tint.opacity(0.30), lineWidth: 1.5))
+                        Image(systemName: icon)
+                            .font(DS.Font.scaled(22, weight: .semibold))
+                            .foregroundColor(tint)
+                    }
+                }
+                Text(label)
+                    .font(DS.Font.caption1)
+                    .fontWeight(.semibold)
+                    .foregroundColor(DS.Color.textSecondary)
+            }
+        }
+        .buttonStyle(DSScaleButtonStyle())
     }
 
     // MARK: - Floating Close Button
