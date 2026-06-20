@@ -14,6 +14,9 @@ struct TreeEditRequestView: View {
     @State private var primaryText: String = ""
     @State private var notes: String = ""
     @State private var deathDate: Date = Date()
+    @State private var birthDate: Date = Date()
+    @State private var selectedPhoto: UIImage? = nil
+    @State private var isUploadingPhoto = false
     @State private var phoneCountry: KuwaitPhone.Country = KuwaitPhone.defaultCountry
     @State private var localPhoneDigits: String = ""
     @State private var showSuccessAlert = false
@@ -26,8 +29,12 @@ struct TreeEditRequestView: View {
         case .add: return DS.Color.success
         case .editName: return DS.Color.info
         case .editPhone: return DS.Color.primary
+        case .editBirth: return DS.Color.warning
         case .deceased: return DS.Color.textTertiary
+        case .addDeathDate: return DS.Color.textTertiary
+        case .addPhoto: return DS.Color.primary
         case .delete: return DS.Color.error
+        case .other: return DS.Color.accent
         }
     }
 
@@ -36,21 +43,27 @@ struct TreeEditRequestView: View {
         case .add: return L10n.t("طلب إضافة ابن", "Add Son Request")
         case .editName: return L10n.t("طلب تعديل اسم", "Edit Name Request")
         case .editPhone: return L10n.t("طلب تعديل رقم", "Edit Phone Request")
+        case .editBirth: return L10n.t("طلب تعديل تاريخ الميلاد", "Edit Birth Date Request")
         case .deceased: return L10n.t("طلب تسجيل وفاة", "Mark Deceased Request")
+        case .addDeathDate: return L10n.t("طلب إضافة تاريخ وفاة", "Add Death Date Request")
+        case .addPhoto: return L10n.t("طلب إضافة صورة", "Add Photo Request")
         case .delete: return L10n.t("طلب حذف", "Delete Request")
+        case .other: return L10n.t("طلب آخر", "Other Request")
         }
     }
 
     private var canSubmit: Bool {
-        guard !adminRequestVM.isLoading else { return false }
+        guard !adminRequestVM.isLoading, !isUploadingPhoto else { return false }
         switch action {
         case .add, .editName:
             return !primaryText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         case .editPhone:
             return KuwaitPhone.normalizedForStorage(country: phoneCountry, rawLocalDigits: localPhoneDigits) != nil
-        case .deceased:
+        case .editBirth, .deceased, .addDeathDate:
             return true
-        case .delete:
+        case .addPhoto:
+            return selectedPhoto != nil
+        case .delete, .other:
             return !notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         }
     }
@@ -158,12 +171,70 @@ struct TreeEditRequestView: View {
                 icon: "pencil",
                 text: $primaryText
             )
+        case .editBirth:
+            dateSection(
+                title: L10n.t("تاريخ الميلاد الصحيح", "Correct Birth Date"),
+                label: L10n.t("تاريخ الميلاد", "Birth Date"),
+                date: $birthDate,
+                iconColor: DS.Color.warning
+            )
         case .editPhone:
             phoneInputSection
         case .deceased:
             deceasedDateSection
-        case .delete:
+        case .addDeathDate:
+            dateSection(
+                title: L10n.t("تاريخ الوفاة", "Date of Death"),
+                label: L10n.t("تاريخ الوفاة", "Date of Death"),
+                date: $deathDate,
+                iconColor: DS.Color.error
+            )
+        case .addPhoto:
+            photoPickerSection
+        case .delete, .other:
             EmptyView()
+        }
+    }
+
+    /// قسم اختيار تاريخ عام — يُستخدم لتعديل الميلاد وإضافة تاريخ الوفاة.
+    private func dateSection(title: String, label: String, date: Binding<Date>, iconColor: Color) -> some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.md) {
+            Text(title)
+                .font(DS.Font.calloutBold)
+                .foregroundColor(DS.Color.textPrimary)
+
+            DSDateField(
+                label: label,
+                date: date,
+                iconColor: iconColor,
+                range: ...Date()
+            )
+            .padding(.horizontal, DS.Spacing.md)
+            .padding(.vertical, DS.Spacing.md)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(DS.Color.surface)
+            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Radius.lg)
+                    .stroke(DS.Color.textTertiary.opacity(0.15), lineWidth: 1)
+            )
+        }
+    }
+
+    /// قسم اختيار صورة — لطلب «إضافة صورة».
+    private var photoPickerSection: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.md) {
+            Text(L10n.t("الصورة المقترحة", "Suggested Photo"))
+                .font(DS.Font.calloutBold)
+                .foregroundColor(DS.Color.textPrimary)
+
+            DSProfilePhotoPicker(
+                selectedImage: $selectedPhoto,
+                title: L10n.t("اضغط لاختيار صورة", "Tap to choose a photo"),
+                trailing: nil,
+                compactEmptyState: true
+            )
+            .frame(maxWidth: .infinity)
         }
     }
 
@@ -313,15 +384,25 @@ struct TreeEditRequestView: View {
     }
 
     private var notesLabel: String {
-        action == .delete
-            ? L10n.t("سبب الحذف (مطلوب)", "Removal Reason (required)")
-            : L10n.t("ملاحظات إضافية (اختياري)", "Additional Notes (optional)")
+        switch action {
+        case .delete:
+            return L10n.t("سبب الحذف (مطلوب)", "Removal Reason (required)")
+        case .other:
+            return L10n.t("تفاصيل الطلب (مطلوب)", "Request Details (required)")
+        default:
+            return L10n.t("ملاحظات إضافية (اختياري)", "Additional Notes (optional)")
+        }
     }
 
     private var notesPlaceholder: String {
-        action == .delete
-            ? L10n.t("اكتب سبب طلب الحذف...", "Write the removal reason...")
-            : L10n.t("أي ملاحظات إضافية...", "Any additional notes...")
+        switch action {
+        case .delete:
+            return L10n.t("اكتب سبب طلب الحذف...", "Write the removal reason...")
+        case .other:
+            return L10n.t("اكتب طلبك أو ملاحظتك للإدارة...", "Write your request to admin...")
+        default:
+            return L10n.t("أي ملاحظات إضافية...", "Any additional notes...")
+        }
     }
 
     // MARK: - Submit
@@ -413,6 +494,67 @@ struct TreeEditRequestView: View {
                 targetMemberId: member.id.uuidString,
                 targetMemberName: member.fullName,
                 reason: cleanNotes
+            )
+
+        case .editBirth:
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withFullDate]
+            payload = TreeEditPayload.make(
+                action: .editBirth,
+                targetMemberId: member.id.uuidString,
+                targetMemberName: member.fullName,
+                newBirthDate: formatter.string(from: birthDate),
+                notes: cleanNotes.isEmpty ? nil : cleanNotes
+            )
+
+        case .addDeathDate:
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withFullDate]
+            payload = TreeEditPayload.make(
+                action: .addDeathDate,
+                targetMemberId: member.id.uuidString,
+                targetMemberName: member.fullName,
+                deathDate: formatter.string(from: deathDate),
+                notes: cleanNotes.isEmpty ? nil : cleanNotes
+            )
+
+        case .addPhoto:
+            // الرفع غير متزامن — نُنفّذه في Task مستقل ثم نرسل الطلب.
+            guard let image = selectedPhoto else { return }
+            isUploadingPhoto = true
+            Task {
+                let url = await adminRequestVM.uploadPhotoSuggestion(image)
+                isUploadingPhoto = false
+                guard let url = url else {
+                    UINotificationFeedbackGenerator().notificationOccurred(.error)
+                    errorMessage = L10n.t("تعذر رفع الصورة", "Photo upload failed")
+                    showErrorAlert = true
+                    return
+                }
+                let photoPayload = TreeEditPayload.make(
+                    action: .addPhoto,
+                    targetMemberId: member.id.uuidString,
+                    targetMemberName: member.fullName,
+                    newPhotoUrl: url,
+                    notes: cleanNotes.isEmpty ? nil : cleanNotes
+                )
+                let sent = await adminRequestVM.submitTreeEditRequest(payload: photoPayload)
+                if sent {
+                    UINotificationFeedbackGenerator().notificationOccurred(.success)
+                    showSuccessAlert = true
+                } else {
+                    UINotificationFeedbackGenerator().notificationOccurred(.error)
+                    showErrorAlert = true
+                }
+            }
+            return
+
+        case .other:
+            payload = TreeEditPayload.make(
+                action: .other,
+                targetMemberId: member.id.uuidString,
+                targetMemberName: member.fullName,
+                notes: cleanNotes
             )
         }
 

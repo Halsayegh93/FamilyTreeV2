@@ -13,15 +13,19 @@ struct AdminTreeEditRequestsView: View {
     @State private var rejectReasonText: String = ""
     @State private var showRejectAlert: Bool = false
 
-    private let allActions: [TreeEditAction] = [.add, .editName, .editPhone, .deceased, .delete]
+    private let allActions: [TreeEditAction] = [.add, .editName, .editPhone, .editBirth, .deceased, .delete, .other]
 
     private func color(for action: TreeEditAction) -> Color {
         switch action {
         case .add: return DS.Color.success
         case .editName: return DS.Color.info
         case .editPhone: return DS.Color.primary
+        case .editBirth: return DS.Color.warning
         case .deceased: return DS.Color.textTertiary
+        case .addDeathDate: return DS.Color.textTertiary
+        case .addPhoto: return DS.Color.primary
         case .delete: return DS.Color.error
+        case .other: return DS.Color.accent
         }
     }
 
@@ -335,9 +339,27 @@ struct AdminTreeEditRequestsView: View {
                 detailRow(icon: "calendar", label: L10n.t("تاريخ الوفاة", "Date of death"), value: deathDate)
             }
 
+        case .addDeathDate:
+            if let deathDate = payload?.deathDate, !deathDate.isEmpty {
+                detailRow(icon: "calendar.badge.exclamationmark", label: L10n.t("تاريخ الوفاة", "Date of death"), value: deathDate)
+            }
+
+        case .addPhoto:
+            detailRow(icon: "photo.badge.plus", label: L10n.t("الصورة المقترحة", "Suggested photo"), value: L10n.t("صورة مرفقة", "Attached"), valueColor: DS.Color.primary)
+
         case .delete:
             if let reason = payload?.reason, !reason.isEmpty {
                 detailRow(icon: "exclamationmark.triangle", label: L10n.t("السبب", "Reason"), value: reason, valueColor: DS.Color.error)
+            }
+
+        case .editBirth:
+            if let newDate = (payload?.newBirthDate ?? payload?.newName), !newDate.isEmpty {
+                detailRow(icon: "birthday.cake", label: L10n.t("تاريخ الميلاد الجديد", "New birth date"), value: newDate, valueColor: DS.Color.warning)
+            }
+
+        case .other:
+            if let note = payload?.notes, !note.isEmpty {
+                detailRow(icon: "square.and.pencil", label: L10n.t("الطلب", "Request"), value: note, valueColor: DS.Color.accent)
             }
         }
     }

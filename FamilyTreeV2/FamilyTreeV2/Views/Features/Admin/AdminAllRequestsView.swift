@@ -1831,9 +1831,15 @@ struct AdminAllRequestsView: View {
         switch action {
         case .editName: return (payload.newName?.isEmpty == false) ? payload.newName : nil
         case .editPhone: return (payload.newPhone?.isEmpty == false) ? payload.newPhone : nil
+        case .editBirth:
+            let date = payload.newBirthDate ?? payload.newName
+            return (date?.isEmpty == false) ? date : nil
         case .deceased: return (payload.deathDate?.isEmpty == false) ? payload.deathDate : nil
+        case .addDeathDate: return (payload.deathDate?.isEmpty == false) ? payload.deathDate : nil
+        case .addPhoto: return L10n.t("صورة مرفقة", "Attached photo")
         case .add: return (payload.newMemberName?.isEmpty == false) ? payload.newMemberName : nil
         case .delete: return nil
+        case .other: return (payload.notes?.isEmpty == false) ? payload.notes : nil
         }
     }
 
@@ -1982,8 +1988,12 @@ struct AdminAllRequestsView: View {
         case .add: return RequestTab.treeAdd.color
         case .editName: return RequestTab.treeEditName.color
         case .editPhone: return RequestTab.treeEditPhone.color
+        case .editBirth: return DS.Color.warning
         case .deceased: return RequestTab.treeDeceased.color
+        case .addDeathDate: return DS.Color.textTertiary
+        case .addPhoto: return DS.Color.primary
         case .delete: return RequestTab.treeDelete.color
+        case .other: return DS.Color.accent
         }
     }
 
@@ -3822,6 +3832,18 @@ struct AdminAllRequestsView: View {
                     infoCard(icon: "calendar", label: L10n.t("تاريخ الوفاة", "Death Date"),
                              value: death, color: DS.Color.error)
                 }
+            case .addDeathDate:
+                infoCard(icon: "person.fill", label: L10n.t("العضو", "Member"),
+                         value: memberName, color: DS.Color.primary)
+                if let death = payload?.deathDate, !death.isEmpty {
+                    infoCard(icon: "calendar.badge.exclamationmark", label: L10n.t("تاريخ الوفاة", "Death Date"),
+                             value: death, color: DS.Color.error)
+                }
+            case .addPhoto:
+                infoCard(icon: "person.fill", label: L10n.t("العضو", "Member"),
+                         value: memberName, color: DS.Color.primary)
+                infoCard(icon: "photo.badge.plus", label: L10n.t("الصورة المقترحة", "Suggested Photo"),
+                         value: L10n.t("صورة مرفقة", "Attached"), color: DS.Color.primary)
             case .add:
                 infoCard(icon: "person.fill", label: L10n.t("الاسم الجديد", "New Name"),
                          value: payload?.newMemberName ?? memberName, color: DS.Color.success)
@@ -3832,6 +3854,16 @@ struct AdminAllRequestsView: View {
             case .delete:
                 infoCard(icon: "person.fill", label: L10n.t("العضو", "Member"),
                          value: memberName, color: DS.Color.error)
+            case .editBirth:
+                infoCard(icon: "person.fill", label: L10n.t("العضو", "Member"),
+                         value: memberName, color: DS.Color.primary)
+                if let newDate = (payload?.newBirthDate ?? payload?.newName), !newDate.isEmpty {
+                    infoCard(icon: "birthday.cake", label: L10n.t("تاريخ الميلاد الجديد", "New Birth Date"),
+                             value: newDate, color: DS.Color.warning)
+                }
+            case .other:
+                infoCard(icon: "person.fill", label: L10n.t("العضو", "Member"),
+                         value: memberName, color: DS.Color.accent)
             }
             if let requester = memberVM.allMembers.first(where: { $0.id == request.requesterId }) {
                 infoCard(icon: "person.crop.circle.badge.checkmark",

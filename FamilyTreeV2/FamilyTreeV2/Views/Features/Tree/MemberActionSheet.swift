@@ -10,9 +10,9 @@ struct MemberActionSheet: View {
 
     private var availableActions: [TreeEditAction] {
         if member.isDeceased == true {
-            return [.add, .editName, .delete]
+            return [.add, .editName, .editBirth, .addDeathDate, .addPhoto, .delete, .other]
         }
-        return [.add, .editName, .editPhone, .deceased, .delete]
+        return [.add, .editName, .editPhone, .editBirth, .addPhoto, .deceased, .delete, .other]
     }
 
     private func color(for action: TreeEditAction) -> Color {
@@ -20,39 +20,26 @@ struct MemberActionSheet: View {
         case .add: return DS.Color.success
         case .editName: return DS.Color.info
         case .editPhone: return DS.Color.primary
+        case .editBirth: return DS.Color.warning
         case .deceased: return DS.Color.textTertiary
+        case .addDeathDate: return DS.Color.textTertiary
+        case .addPhoto: return DS.Color.primary
         case .delete: return DS.Color.error
+        case .other: return DS.Color.accent
         }
     }
 
-    private func label(for action: TreeEditAction) -> String {
-        let firstName = member.firstName
+    private func shortLabel(for action: TreeEditAction) -> String {
         switch action {
-        case .add:
-            return L10n.t("إضافة ابن لـ \(firstName)", "Add son to \(firstName)")
-        case .editName:
-            return L10n.t("تعديل اسم \(firstName)", "Edit \(firstName)'s name")
-        case .editPhone:
-            return L10n.t("تعديل رقم \(firstName)", "Edit \(firstName)'s phone")
-        case .deceased:
-            return L10n.t("تسجيل وفاة \(firstName)", "Mark \(firstName) deceased")
-        case .delete:
-            return L10n.t("طلب حذف \(firstName)", "Request to delete \(firstName)")
-        }
-    }
-
-    private func subtitle(for action: TreeEditAction) -> String {
-        switch action {
-        case .add:
-            return L10n.t("إضافة ابن جديد تحت هذا العضو", "Add a new son under this member")
-        case .editName:
-            return L10n.t("طلب تعديل الاسم الكامل", "Request a full name correction")
-        case .editPhone:
-            return L10n.t("طلب تعديل رقم الهاتف", "Request a phone number change")
-        case .deceased:
-            return L10n.t("تسجيل وفاة مع تاريخ", "Record death with date")
-        case .delete:
-            return L10n.t("إخفاء العضو من الشجرة", "Hide member from the tree")
+        case .add: return L10n.t("إضافة ابن", "Add Son")
+        case .editName: return L10n.t("تعديل اسم", "Edit Name")
+        case .editPhone: return L10n.t("تعديل رقم", "Edit Phone")
+        case .editBirth: return L10n.t("تعديل ميلاد", "Edit Birth")
+        case .deceased: return L10n.t("تسجيل وفاة", "Deceased")
+        case .addDeathDate: return L10n.t("تاريخ وفاة", "Death Date")
+        case .addPhoto: return L10n.t("إضافة صورة", "Add Photo")
+        case .delete: return L10n.t("حذف", "Delete")
+        case .other: return L10n.t("طلب آخر", "Other")
         }
     }
 
@@ -66,12 +53,19 @@ struct MemberActionSheet: View {
                         memberHeader
                             .padding(.top, DS.Spacing.md)
 
-                        VStack(spacing: DS.Spacing.sm) {
+                        // الطلبات كأزرار دائرية في شبكة (٣ بالصف) بدل قائمة عمودية.
+                        LazyVGrid(
+                            columns: Array(
+                                repeating: GridItem(.flexible(), spacing: DS.Spacing.md),
+                                count: 3
+                            ),
+                            spacing: DS.Spacing.lg
+                        ) {
                             ForEach(availableActions, id: \.rawValue) { action in
-                                actionRow(for: action)
+                                actionCircle(for: action)
                             }
                         }
-                        .padding(.top, DS.Spacing.sm)
+                        .padding(.top, DS.Spacing.md)
                     }
                     .padding(.horizontal, DS.Spacing.lg)
                     .padding(.bottom, DS.Spacing.xxxl)
@@ -118,7 +112,7 @@ struct MemberActionSheet: View {
         .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
     }
 
-    private func actionRow(for action: TreeEditAction) -> some View {
+    private func actionCircle(for action: TreeEditAction) -> some View {
         let tint = color(for: action)
         return Button {
             dismiss()
@@ -126,42 +120,24 @@ struct MemberActionSheet: View {
                 onSelect(action)
             }
         } label: {
-            HStack(spacing: DS.Spacing.md) {
+            VStack(spacing: DS.Spacing.xs) {
                 ZStack {
                     Circle()
                         .fill(tint.opacity(0.12))
-                        .frame(width: 44, height: 44)
+                        .overlay(Circle().stroke(tint.opacity(0.28), lineWidth: 1))
+                        .frame(width: 64, height: 64)
                     Image(systemName: action.iconName)
-                        .font(DS.Font.scaled(18, weight: .semibold))
+                        .font(DS.Font.scaled(24, weight: .semibold))
                         .foregroundColor(tint)
                 }
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(label(for: action))
-                        .font(DS.Font.calloutBold)
-                        .foregroundColor(DS.Color.textPrimary)
-                        .lineLimit(1)
-                    Text(subtitle(for: action))
-                        .font(DS.Font.caption1)
-                        .foregroundColor(DS.Color.textSecondary)
-                        .lineLimit(2)
-                        .multilineTextAlignment(.leading)
-                }
-
-                Spacer()
-
-                Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
-                    .font(DS.Font.scaled(12, weight: .semibold))
-                    .foregroundColor(DS.Color.textTertiary)
+                Text(shortLabel(for: action))
+                    .font(DS.Font.caption1)
+                    .fontWeight(.semibold)
+                    .foregroundColor(DS.Color.textSecondary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.center)
             }
-            .padding(DS.Spacing.md)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(DS.Color.surface)
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.lg)
-                    .stroke(tint.opacity(0.18), lineWidth: 1)
-            )
+            .frame(maxWidth: .infinity)
         }
         .buttonStyle(DSScaleButtonStyle())
     }

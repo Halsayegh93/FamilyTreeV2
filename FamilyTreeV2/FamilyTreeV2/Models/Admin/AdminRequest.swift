@@ -5,8 +5,12 @@ enum TreeEditAction: String, Codable, CaseIterable, Identifiable {
     case add = "add"
     case editName = "edit_name"
     case editPhone = "edit_phone"
+    case editBirth = "edit_birth"
     case deceased = "deceased"
+    case addDeathDate = "add_death_date"
+    case addPhoto = "add_photo"
     case delete = "delete"
+    case other = "other"
 
     var id: String { rawValue }
 
@@ -15,8 +19,12 @@ enum TreeEditAction: String, Codable, CaseIterable, Identifiable {
         case .add: return "إضافة"
         case .editName: return "تعديل اسم"
         case .editPhone: return "تعديل رقم"
+        case .editBirth: return "تعديل ميلاد"
         case .deceased: return "تسجيل وفاة"
+        case .addDeathDate: return "إضافة تاريخ وفاة"
+        case .addPhoto: return "إضافة صورة"
         case .delete: return "حذف"
+        case .other: return "طلب آخر"
         }
     }
 
@@ -25,8 +33,12 @@ enum TreeEditAction: String, Codable, CaseIterable, Identifiable {
         case .add: return "Add"
         case .editName: return "Edit Name"
         case .editPhone: return "Edit Phone"
+        case .editBirth: return "Edit Birth Date"
         case .deceased: return "Mark Deceased"
+        case .addDeathDate: return "Add Death Date"
+        case .addPhoto: return "Add Photo"
         case .delete: return "Delete"
+        case .other: return "Other"
         }
     }
 
@@ -35,8 +47,12 @@ enum TreeEditAction: String, Codable, CaseIterable, Identifiable {
         case .add: return "person.badge.plus"
         case .editName: return "pencil.line"
         case .editPhone: return "phone.arrow.up.right"
+        case .editBirth: return "birthday.cake"
         case .deceased: return "heart.slash"
+        case .addDeathDate: return "calendar.badge.exclamationmark"
+        case .addPhoto: return "photo.badge.plus"
         case .delete: return "person.badge.minus"
+        case .other: return "square.and.pencil"
         }
     }
 
@@ -60,7 +76,9 @@ nonisolated struct TreeEditPayload: Codable {
 
     let newName: String?
     let newPhone: String?
+    let newBirthDate: String?
     let deathDate: String?
+    let newPhotoUrl: String?
 
     let parentMemberId: String?
     let parentMemberName: String?
@@ -80,7 +98,9 @@ nonisolated struct TreeEditPayload: Codable {
         targetMemberName: String? = nil,
         newName: String? = nil,
         newPhone: String? = nil,
+        newBirthDate: String? = nil,
         deathDate: String? = nil,
+        newPhotoUrl: String? = nil,
         parentMemberId: String? = nil,
         parentMemberName: String? = nil,
         newMemberName: String? = nil,
@@ -95,7 +115,9 @@ nonisolated struct TreeEditPayload: Codable {
             targetMemberName: targetMemberName,
             newName: newName,
             newPhone: newPhone,
+            newBirthDate: newBirthDate,
             deathDate: deathDate,
+            newPhotoUrl: newPhotoUrl,
             parentMemberId: parentMemberId,
             parentMemberName: parentMemberName,
             newMemberName: newMemberName,

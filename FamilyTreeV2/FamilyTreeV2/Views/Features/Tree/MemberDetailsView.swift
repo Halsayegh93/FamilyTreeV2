@@ -878,8 +878,12 @@ struct MemberDetailsView: View {
             case .add: return DS.Color.success
             case .editName: return DS.Color.info
             case .editPhone: return DS.Color.primary
+            case .editBirth: return DS.Color.warning
             case .deceased: return DS.Color.textTertiary
+            case .addDeathDate: return DS.Color.textTertiary
+            case .addPhoto: return DS.Color.primary
             case .delete: return DS.Color.error
+            case .other: return DS.Color.accent
             case .none: return DS.Color.warning
             }
         }()

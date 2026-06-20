@@ -159,6 +159,26 @@ class AdminRequestViewModel: ObservableObject {
     // MARK: - Tree Edit Requests
 
     /// إرسال طلب تعديل الشجرة (إضافة / تعديل اسم / حذف) — v2 structured payload
+    /// رفع صورة مقترحة لطلب «إضافة صورة» — تُخزَّن تحت suggestions/<uuid>.jpg في
+    /// bucket الأفاتار (عام) ولا تُطبَّق على الملف إلا بعد موافقة الإدارة.
+    /// تُعيد الرابط العام لتضمينه في حمولة الطلب، أو nil عند الفشل.
+    func uploadPhotoSuggestion(_ image: UIImage) async -> String? {
+        guard let imageData = ImageProcessor.process(image, for: .avatar) else { return nil }
+        let fileName = "suggestions/\(UUID().uuidString.lowercased()).jpg"
+        do {
+            try await supabase.storage
+                .from("avatars")
+                .upload(fileName, data: imageData, options: FileOptions(contentType: "image/jpeg", upsert: true))
+            let publicUrl = try supabase.storage
+                .from("avatars")
+                .getPublicURL(path: fileName)
+            return publicUrl.absoluteString
+        } catch {
+            Log.error("[TreeEdit] Photo suggestion upload failed: \(error)")
+            return nil
+        }
+    }
+
     func submitTreeEditRequest(payload: TreeEditPayload) async -> Bool {
         guard NetworkMonitor.shared.requireOnline() else { return false }
         guard let user = currentUser else { return false }
@@ -422,6 +442,75 @@ class AdminRequestViewModel: ObservableObject {
                             )
                             Log.info("[TreeEdit] Member added: \(combinedFullName)")
                         }
+
+                    case .editBirth:
+                        // تاريخ الميلاد الجديد في newBirthDate (مع دعم newName للطلبات القديمة).
+                        if let targetId = payload.targetMemberId,
+                           let newDate = (payload.newBirthDate ?? payload.newName)?
+                               .trimmingCharacters(in: .whitespacesAndNewlines),
+                           !newDate.isEmpty {
+                            try await self.supabase
+                                .from("profiles")
+                                .update(["birth_date": AnyEncodable(newDate)])
+                                .eq("id", value: targetId)
+                                .execute()
+                            notifBody = L10n.t(
+                                "تم تحديث تاريخ الميلاد إلى: «\(newDate)»",
+                                "Birth date updated to: «\(newDate)»"
+                            )
+                            Log.info("[TreeEdit] Birth date updated: \(newDate)")
+                        }
+
+                    case .addDeathDate:
+                        // إضافة تاريخ وفاة لمتوفى — يضبط is_deceased + death_date.
+                        if let targetId = payload.targetMemberId,
+                           let dateStr = payload.deathDate?.trimmingCharacters(in: .whitespacesAndNewlines),
+                           !dateStr.isEmpty {
+                            try await self.supabase
+                                .from("profiles")
+                                .update([
+                                    "is_deceased": AnyEncodable(true),
+                                    "death_date": AnyEncodable(dateStr)
+                                ])
+                                .eq("id", value: targetId)
+                                .execute()
+                            let target = memberName.isEmpty ? "" : " لـ «\(memberName)»"
+                            let targetEn = memberName.isEmpty ? "" : " for «\(memberName)»"
+                            notifBody = L10n.t(
+                                "تم إضافة تاريخ الوفاة\(target)",
+                                "Death date added\(targetEn)"
+                            )
+                            Log.info("[TreeEdit] Death date added: \(dateStr)")
+                        }
+
+                    case .addPhoto:
+                        // اعتماد صورة مقترحة — تُضبط avatar_url على رابط الصورة المرفوعة.
+                        if let targetId = payload.targetMemberId,
+                           let url = payload.newPhotoUrl?.trimmingCharacters(in: .whitespacesAndNewlines),
+                           !url.isEmpty {
+                            try await self.supabase
+                                .from("profiles")
+                                .update(["avatar_url": AnyEncodable(url)])
+                                .eq("id", value: targetId)
+                                .execute()
+                            let target = memberName.isEmpty ? "" : " لـ «\(memberName)»"
+                            let targetEn = memberName.isEmpty ? "" : " for «\(memberName)»"
+                            notifBody = L10n.t(
+                                "تم اعتماد الصورة\(target)",
+                                "Photo approved\(targetEn)"
+                            )
+                            Log.info("[TreeEdit] Photo approved for: \(memberName)")
+                        }
+
+                    case .other:
+                        // طلب حر — لا تعديل تلقائي؛ القبول يُعلِم العضو فقط.
+                        let target = memberName.isEmpty ? "" : " «\(memberName)»"
+                        let targetEn = memberName.isEmpty ? "" : " «\(memberName)»"
+                        notifBody = L10n.t(
+                            "تم قبول طلبك\(target)",
+                            "Your request\(targetEn) was approved"
+                        )
+                        Log.info("[TreeEdit] Other request approved: \(memberName)")
                     }
                 } else if let legacyAction = payload?.action {
                     // Backwards compat for v2 strings without resolved action
@@ -484,7 +573,9 @@ class AdminRequestViewModel: ObservableObject {
                     targetMemberName: payload.targetMemberName,
                     newName: payload.newName,
                     newPhone: payload.newPhone,
+                    newBirthDate: payload.newBirthDate,
                     deathDate: payload.deathDate,
+                    newPhotoUrl: payload.newPhotoUrl,
                     parentMemberId: payload.parentMemberId,
                     parentMemberName: payload.parentMemberName,
                     newMemberName: payload.newMemberName,
