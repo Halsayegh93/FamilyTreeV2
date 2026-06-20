@@ -3870,8 +3870,9 @@ struct AdminAllRequestsView: View {
             case .addPhoto:
                 infoCard(icon: "person.fill", label: L10n.t("العضو", "Member"),
                          value: memberName, color: DS.Color.primary)
-                infoCard(icon: "photo.badge.plus", label: L10n.t("الصورة المقترحة", "Suggested Photo"),
-                         value: L10n.t("صورة مرفقة", "Attached"), color: DS.Color.primary)
+                if let photoStr = payload?.newPhotoUrl, let url = URL(string: photoStr) {
+                    photoCard(url: url)
+                }
             case .add:
                 infoCard(icon: "person.fill", label: L10n.t("الاسم الجديد", "New Name"),
                          value: payload?.newMemberName ?? memberName, color: DS.Color.success)

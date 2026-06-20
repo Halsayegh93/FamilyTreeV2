@@ -345,7 +345,17 @@ struct AdminTreeEditRequestsView: View {
             }
 
         case .addPhoto:
-            detailRow(icon: "photo.badge.plus", label: L10n.t("الصورة المقترحة", "Suggested photo"), value: L10n.t("صورة مرفقة", "Attached"), valueColor: DS.Color.primary)
+            if let photoStr = payload?.newPhotoUrl, let url = URL(string: photoStr) {
+                detailRow(icon: "photo.badge.plus", label: L10n.t("الصورة المقترحة", "Suggested photo"), value: "", valueColor: DS.Color.primary)
+                CachedAsyncImage(url: url) { image in
+                    image.resizable().scaledToFill()
+                } placeholder: {
+                    ProgressView().tint(DS.Color.primary)
+                }
+                .frame(maxWidth: .infinity)
+                .frame(height: 160)
+                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
+            }
 
         case .delete:
             if let reason = payload?.reason, !reason.isEmpty {
