@@ -196,7 +196,7 @@ struct DrillDownTreeView: View {
             }
             .sheet(item: $selectedMemberForDetails) { m in
                 NavigationStack { MemberDetailsView(member: m) }
-                    .presentationDetents([.medium, .large])
+                    .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
             }
             .animation(DS.Anim.smooth, value: showSearchBar)
