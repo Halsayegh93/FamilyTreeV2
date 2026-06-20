@@ -364,14 +364,13 @@ struct MemberDetailsView: View {
                         icon: "person.text.rectangle.fill",
                         iconColor: DS.Color.primary
                     )
-                    // مينيمال: وسوم صغيرة بسطر أفقي قابل للتمرير.
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: DS.Spacing.sm) {
-                            ForEach(chips) { c in chipView(c) }
-                        }
-                        .padding(.horizontal, DS.Spacing.lg)
-                        .padding(.bottom, DS.Spacing.md)
+                    // دوائر صغيرة: الحالة · الميلاد · العمر · الهاتف.
+                    HStack(alignment: .top, spacing: DS.Spacing.md) {
+                        ForEach(chips) { c in circleView(c) }
                     }
+                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal, DS.Spacing.md)
+                    .padding(.bottom, DS.Spacing.md)
                 }
             }
         }
@@ -381,6 +380,7 @@ struct MemberDetailsView: View {
         let id = UUID()
         let icon: String
         let text: String
+        let label: String
         let color: Color
         var ltr: Bool = false
     }
@@ -388,47 +388,58 @@ struct MemberDetailsView: View {
     private func buildChips(isDeceased: Bool, birthYear: String?, deathYear: String?, phone: String, phoneHidden: Bool) -> [ChipData] {
         var c: [ChipData] = []
         c.append(.init(
-            icon: isDeceased ? "moon.zzz.fill" : "circle.fill",
+            icon: isDeceased ? "moon.zzz.fill" : "checkmark.circle.fill",
             text: isDeceased ? L10n.t("متوفّى", "Deceased") : L10n.t("نشِط", "Active"),
+            label: L10n.t("الحالة", "Status"),
             color: isDeceased ? DS.Color.textSecondary : DS.Color.success
         ))
         if let by = birthYear {
-            c.append(.init(icon: "birthday.cake", text: by, color: DS.Color.primary))
+            c.append(.init(icon: "birthday.cake", text: by, label: L10n.t("الميلاد", "Birth"), color: DS.Color.primary))
         }
         if let byStr = birthYear, let by = Int(byStr) {
             let end = isDeceased ? Int(deathYear ?? "") : Calendar.current.component(.year, from: Date())
             if let end = end, end >= by, end - by < 130 {
-                c.append(.init(icon: "hourglass", text: "\(end - by) " + L10n.t("سنة", "yr"), color: DS.Color.warning))
+                c.append(.init(icon: "hourglass", text: "\(end - by)", label: L10n.t("العمر", "Age"), color: DS.Color.warning))
             }
         }
         if isDeceased, let dy = deathYear {
-            c.append(.init(icon: "calendar.badge.exclamationmark", text: dy, color: DS.Color.error))
+            c.append(.init(icon: "calendar.badge.exclamationmark", text: dy, label: L10n.t("الوفاة", "Death"), color: DS.Color.error))
         }
         if !isDeceased, !phone.isEmpty {
             c.append(.init(
                 icon: "phone.fill",
                 text: phoneHidden ? L10n.t("مخفي", "Hidden") : KuwaitPhone.display(phone),
+                label: L10n.t("الهاتف", "Phone"),
                 color: DS.Color.success, ltr: !phoneHidden
             ))
         }
         return c
     }
 
-    private func chipView(_ c: ChipData) -> some View {
-        HStack(spacing: 5) {
-            Image(systemName: c.icon)
-                .font(DS.Font.scaled(11, weight: .semibold))
-                .foregroundColor(c.color)
+    /// دائرة معلومة صغيرة: أيقونة في دائرة ملوّنة + قيمة + تسمية.
+    private func circleView(_ c: ChipData) -> some View {
+        VStack(spacing: 5) {
+            ZStack {
+                Circle()
+                    .fill(c.color.opacity(0.12))
+                    .frame(width: 42, height: 42)
+                Image(systemName: c.icon)
+                    .font(DS.Font.scaled(18, weight: .semibold))
+                    .foregroundColor(c.color)
+            }
             Text(c.text)
                 .font(DS.Font.caption1)
-                .fontWeight(.semibold)
-                .foregroundColor(c.color)
+                .fontWeight(.bold)
+                .foregroundColor(DS.Color.textPrimary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
                 .environment(\.layoutDirection, c.ltr ? .leftToRight : LanguageManager.shared.layoutDirection)
+            Text(c.label)
+                .font(DS.Font.caption2)
+                .foregroundColor(DS.Color.textSecondary)
+                .lineLimit(1)
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(c.color.opacity(0.12))
-        .clipShape(Capsule())
+        .frame(width: 64)
     }
 
     /// خانة إحصائية: رقم بارز + تسمية صغيرة.
