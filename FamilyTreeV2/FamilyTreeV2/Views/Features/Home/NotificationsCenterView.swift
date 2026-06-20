@@ -816,13 +816,8 @@ struct NotificationsCenterView: View {
                         }
 
                         Spacer(minLength: 0)
-
-                        // ⚡ موافقة/رفض سريع — للأدمن على الطلبات المعلقة فقط
-                        if !isSelecting,
-                           authVM.isAdmin,
-                           item.isActionableRequest || Self.pendingApprovalKinds.contains(item.kind) {
-                            rowQuickActions(notification: item)
-                        }
+                        // أزرار الموافقة/الرفض السريعة أُزيلت من صف الإشعار —
+                        // الإجراءات تتم من شاشة تفاصيل الإشعار أو من لوحة الإدارة.
                     }
                 }
 
@@ -864,50 +859,6 @@ struct NotificationsCenterView: View {
                     Label(L10n.t("حذف", "Delete"), systemImage: "trash")
                 }
             }
-        }
-    }
-
-    /// زرّان دائريّان صغيران لموافقة/رفض سريع داخل صف الإشعار
-    @ViewBuilder
-    private func rowQuickActions(notification: AppNotification) -> some View {
-        HStack(spacing: 6) {
-            // موافقة
-            Button {
-                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                Task {
-                    _ = await notificationVM.approveRequestFromNotification(notification)
-                    await notificationVM.markNotificationAsRead(id: notification.id)
-                }
-            } label: {
-                Image(systemName: "checkmark")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundColor(DS.Color.secondary)
-                    .frame(width: 26, height: 26)
-                    .background(DS.Color.secondary.opacity(0.12))
-                    .clipShape(Circle())
-                    .overlay(Circle().stroke(DS.Color.secondary.opacity(0.25), lineWidth: 1))
-            }
-            .buttonStyle(DSScaleButtonStyle())
-            .accessibilityLabel(L10n.t("موافقة", "Approve"))
-
-            // رفض
-            Button {
-                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                Task {
-                    _ = await notificationVM.rejectRequestFromNotification(notification)
-                    await notificationVM.markNotificationAsRead(id: notification.id)
-                }
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundColor(DS.Color.error)
-                    .frame(width: 26, height: 26)
-                    .background(DS.Color.error.opacity(0.12))
-                    .clipShape(Circle())
-                    .overlay(Circle().stroke(DS.Color.error.opacity(0.25), lineWidth: 1))
-            }
-            .buttonStyle(DSScaleButtonStyle())
-            .accessibilityLabel(L10n.t("رفض", "Reject"))
         }
     }
 
