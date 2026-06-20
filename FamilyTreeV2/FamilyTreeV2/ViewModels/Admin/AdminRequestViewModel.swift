@@ -159,12 +159,18 @@ class AdminRequestViewModel: ObservableObject {
     // MARK: - Tree Edit Requests
 
     /// إرسال طلب تعديل الشجرة (إضافة / تعديل اسم / حذف) — v2 structured payload
-    /// رفع صورة مقترحة لطلب «إضافة صورة» — تُخزَّن تحت suggestions/<uuid>.jpg في
-    /// bucket الأفاتار (عام) ولا تُطبَّق على الملف إلا بعد موافقة الإدارة.
+    /// رفع صورة مقترحة لطلب «إضافة صورة» — تُخزَّن باسم
+    /// photo_suggestion_<callerUid>_<uuid>.jpg في bucket الأفاتار (عام). الاسم
+    /// يطابق سياسة RLS (`photo_suggestion_<auth.uid>_%`) فيُسمح لأي عضو مسجّل
+    /// برفعه؛ ولا يُطبَّق على الملف إلا بعد موافقة الإدارة.
     /// تُعيد الرابط العام لتضمينه في حمولة الطلب، أو nil عند الفشل.
     func uploadPhotoSuggestion(_ image: UIImage) async -> String? {
         guard let imageData = ImageProcessor.process(image, for: .avatar) else { return nil }
-        let fileName = "suggestions/\(UUID().uuidString.lowercased()).jpg"
+        guard let uid = currentUser?.id.uuidString.lowercased() else {
+            Log.error("[TreeEdit] Photo suggestion: no current user")
+            return nil
+        }
+        let fileName = "photo_suggestion_\(uid)_\(UUID().uuidString.lowercased()).jpg"
         do {
             try await supabase.storage
                 .from("avatars")
@@ -487,7 +493,10 @@ class AdminRequestViewModel: ObservableObject {
                         // اعتماد صورة مقترحة — تُضبط avatar_url على رابط الصورة المرفوعة.
                         if let targetId = payload.targetMemberId,
                            let url = payload.newPhotoUrl?.trimmingCharacters(in: .whitespacesAndNewlines),
-                           !url.isEmpty {
+                           !url.isEmpty,
+                           // أمان: لا نقبل إلا رابطاً من تخزين المشروع (bucket avatars)
+                           // — نمنع حقن رابط خارجي يتحوّل لصورة العضو بعد الاعتماد.
+                           url.contains("/storage/v1/object/public/avatars/") {
                             try await self.supabase
                                 .from("profiles")
                                 .update(["avatar_url": AnyEncodable(url)])
