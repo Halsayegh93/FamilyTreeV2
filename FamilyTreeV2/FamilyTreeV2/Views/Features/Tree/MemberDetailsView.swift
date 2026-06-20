@@ -316,49 +316,47 @@ struct MemberDetailsView: View {
                         iconColor: DS.Color.primary
                     )
 
-                    // تايلز إحصائية في شبكة عمودين — أوضح وأسرع قراءة من الصفوف.
-                    LazyVGrid(
-                        columns: [
-                            GridItem(.flexible(), spacing: DS.Spacing.sm),
-                            GridItem(.flexible(), spacing: DS.Spacing.sm)
-                        ],
-                        spacing: DS.Spacing.sm
-                    ) {
+                    // شريط إحصائي أفقي مدمج (صغير) بفواصل رفيعة — تصميم أصغر.
+                    HStack(spacing: 0) {
                         ForEach(rows.indices, id: \.self) { index in
-                            statTile(row: rows[index])
+                            compactStat(row: rows[index])
+                            if index < rows.count - 1 {
+                                Rectangle()
+                                    .fill(DS.Color.textTertiary.opacity(0.15))
+                                    .frame(width: 1, height: 32)
+                            }
                         }
                     }
                     .padding(.horizontal, DS.Spacing.md)
-                    .padding(.bottom, DS.Spacing.md)
+                    .padding(.bottom, DS.Spacing.sm)
                 }
             }
         }
     }
 
-    /// تايل إحصائي: أيقونة دائرية + قيمة بارزة + label، بخلفية مرتفعة داخل شبكة.
-    private func statTile(row: InfoRowData) -> some View {
-        VStack(spacing: DS.Spacing.xs) {
+    /// عنصر إحصائي مدمج (صغير): أيقونة دائرية 30 + قيمة + label صغيرة، داخل شريط.
+    private func compactStat(row: InfoRowData) -> some View {
+        VStack(spacing: 3) {
             ZStack {
                 Circle()
                     .fill(row.color.opacity(0.12))
-                    .frame(width: 38, height: 38)
+                    .frame(width: 30, height: 30)
                 Image(systemName: row.icon)
-                    .font(DS.Font.scaled(15, weight: .semibold))
+                    .font(DS.Font.scaled(12, weight: .semibold))
                     .foregroundColor(row.color)
             }
             Text(row.value)
-                .font(DS.Font.calloutBold)
+                .font(DS.Font.subheadline)
+                .fontWeight(.bold)
                 .foregroundColor(DS.Color.textPrimary)
                 .lineLimit(1)
-                .minimumScaleFactor(0.7)
+                .minimumScaleFactor(0.6)
             Text(row.label)
                 .font(DS.Font.caption2)
                 .foregroundColor(DS.Color.textSecondary)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, DS.Spacing.md)
-        .background(DS.Color.surfaceElevated)
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+        .padding(.vertical, DS.Spacing.sm)
     }
 
     /// خانة إيقونة + قيمة + label عمودياً — للتخطيط الأفقي ثنائي الأعمدة
@@ -538,9 +536,9 @@ struct MemberDetailsView: View {
         }
     }
 
-    /// شبكة الأبناء inline — اسم أول فقط مع avatar مدوّر، 4 أعمدة (مدمجة)
+    /// شبكة الأبناء inline — اسم أول فقط مع avatar مدوّر، 5 أعمدة (أصغر)
     private var childrenInlineGrid: some View {
-        let columns = Array(repeating: GridItem(.flexible(), spacing: DS.Spacing.sm), count: 4)
+        let columns = Array(repeating: GridItem(.flexible(), spacing: DS.Spacing.xs), count: 5)
         return LazyVGrid(columns: columns, spacing: DS.Spacing.sm) {
             ForEach(cachedChildren) { child in
                 Button {
@@ -571,16 +569,16 @@ struct MemberDetailsView: View {
                     } placeholder: {
                         Circle().fill(DS.Color.primary.opacity(0.12))
                     }
-                    .frame(width: 46, height: 46)
+                    .frame(width: 38, height: 38)
                     .clipShape(Circle())
                     .overlay(Circle().stroke(DS.Color.primary.opacity(0.18), lineWidth: 1))
                 } else {
                     ZStack {
                         Circle()
                             .fill(DS.Color.primary.opacity(0.12))
-                            .frame(width: 46, height: 46)
+                            .frame(width: 38, height: 38)
                         Text(String(child.firstName.prefix(1)))
-                            .font(DS.Font.headline)
+                            .font(DS.Font.subheadline)
                             .fontWeight(.bold)
                             .foregroundColor(DS.Color.primary)
                     }
@@ -590,13 +588,13 @@ struct MemberDetailsView: View {
                 if child.isDeceased == true {
                     Circle()
                         .fill(DS.Color.background)
-                        .frame(width: 16, height: 16)
+                        .frame(width: 14, height: 14)
                         .overlay(
                             Image(systemName: "heart.slash.fill")
-                                .font(DS.Font.scaled(9, weight: .bold))
+                                .font(DS.Font.scaled(8, weight: .bold))
                                 .foregroundColor(DS.Color.textTertiary)
                         )
-                        .offset(x: 18, y: 18)
+                        .offset(x: 15, y: 15)
                 }
             }
 
