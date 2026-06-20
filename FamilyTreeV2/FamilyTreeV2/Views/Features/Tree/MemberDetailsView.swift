@@ -316,43 +316,49 @@ struct MemberDetailsView: View {
                         iconColor: DS.Color.primary
                     )
 
-                    // للمتوفى مع ميلاد + وفاة فقط → تخطيط جنب بعض (يمين/يسار)
-                    let isDeceasedTwoCol = member.isDeceased == true
-                        && rows.count == 2
-                        && rows.contains(where: { $0.icon == "calendar" })
-                        && rows.contains(where: { $0.icon == "heart.slash.fill" })
-
-                    if isDeceasedTwoCol {
-                        HStack(spacing: 0) {
-                            if let birthRow = rows.first(where: { $0.icon == "calendar" }) {
-                                infoTile(row: birthRow)
-                            }
-                            Rectangle()
-                                .fill(DS.Color.textTertiary.opacity(0.2))
-                                .frame(width: 1, height: 64)
-                            if let deathRow = rows.first(where: { $0.icon == "heart.slash.fill" }) {
-                                infoTile(row: deathRow)
-                            }
+                    // تايلز إحصائية في شبكة عمودين — أوضح وأسرع قراءة من الصفوف.
+                    LazyVGrid(
+                        columns: [
+                            GridItem(.flexible(), spacing: DS.Spacing.sm),
+                            GridItem(.flexible(), spacing: DS.Spacing.sm)
+                        ],
+                        spacing: DS.Spacing.sm
+                    ) {
+                        ForEach(rows.indices, id: \.self) { index in
+                            statTile(row: rows[index])
                         }
-                        .padding(.horizontal, DS.Spacing.md)
-                        .padding(.bottom, DS.Spacing.md)
-                    } else {
-                        VStack(spacing: 0) {
-                            ForEach(rows.indices, id: \.self) { index in
-                                let row = rows[index]
-                                infoRow(icon: row.icon, label: row.label, value: row.value, color: row.color)
-                                if index < rows.count - 1 {
-                                    Divider()
-                                        .padding(.leading, 56)
-                                }
-                            }
-                        }
-                        .padding(.horizontal, DS.Spacing.md)
-                        .padding(.bottom, DS.Spacing.md)
                     }
+                    .padding(.horizontal, DS.Spacing.md)
+                    .padding(.bottom, DS.Spacing.md)
                 }
             }
         }
+    }
+
+    /// تايل إحصائي: أيقونة دائرية + قيمة بارزة + label، بخلفية مرتفعة داخل شبكة.
+    private func statTile(row: InfoRowData) -> some View {
+        VStack(spacing: DS.Spacing.xs) {
+            ZStack {
+                Circle()
+                    .fill(row.color.opacity(0.12))
+                    .frame(width: 38, height: 38)
+                Image(systemName: row.icon)
+                    .font(DS.Font.scaled(15, weight: .semibold))
+                    .foregroundColor(row.color)
+            }
+            Text(row.value)
+                .font(DS.Font.calloutBold)
+                .foregroundColor(DS.Color.textPrimary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            Text(row.label)
+                .font(DS.Font.caption2)
+                .foregroundColor(DS.Color.textSecondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, DS.Spacing.md)
+        .background(DS.Color.surfaceElevated)
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
     }
 
     /// خانة إيقونة + قيمة + label عمودياً — للتخطيط الأفقي ثنائي الأعمدة
@@ -501,24 +507,28 @@ struct MemberDetailsView: View {
                         }
 
                         if !cachedChildren.isEmpty {
-                            Button {
-                                withAnimation(DS.Anim.snappy) {
-                                    childrenExpanded.toggle()
+                            // عنوان الأبناء + العدد (بدون طي) ثم الشبكة المدمجة مباشرة.
+                            HStack(spacing: DS.Spacing.md) {
+                                ZStack {
+                                    Circle()
+                                        .fill(DS.Color.info.opacity(0.12))
+                                        .frame(width: 32, height: 32)
+                                    Image(systemName: "person.3.fill")
+                                        .font(DS.Font.scaled(13, weight: .semibold))
+                                        .foregroundColor(DS.Color.info)
                                 }
-                            } label: {
-                                childrenRow(
-                                    label: L10n.t("الأبناء", "Children"),
-                                    value: childrenCountText,
-                                    color: DS.Color.info,
-                                    expanded: childrenExpanded
-                                )
+                                Text(L10n.t("الأبناء", "Children"))
+                                    .font(DS.Font.callout)
+                                    .foregroundColor(DS.Color.textSecondary)
+                                Spacer()
+                                Text(childrenCountText)
+                                    .font(DS.Font.calloutBold)
+                                    .foregroundColor(DS.Color.textPrimary)
+                                    .lineLimit(1)
                             }
-                            .buttonStyle(.plain)
+                            .padding(.vertical, DS.Spacing.sm + 2)
 
-                            if childrenExpanded {
-                                childrenInlineGrid
-                                    .transition(.opacity.combined(with: .move(edge: .top)))
-                            }
+                            childrenInlineGrid
                         }
                     }
                     .padding(.horizontal, DS.Spacing.md)
