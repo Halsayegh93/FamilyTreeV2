@@ -109,7 +109,7 @@ struct AdminAllRequestsView: View {
         // أعضاء
         case joinRequests, nameChange, phone, deceased
         // الشجرة — كل أنواع طلبات تعديل الشجرة + إضافة الأبناء التقليدية
-        case children, treeAdd, treeEditName, treeEditPhone, treeDeceased, treeDelete
+        case children, treeAdd, treeEditName, treeEditPhone, treeEditBirth, treeDeceased, treeAddDeathDate, treeAddPhoto, treeDelete, treeOther
         // محتوى ونشاط
         case news, reports, photos, diwaniya, projects, archive
         // صحة الشجرة (audit issues)
@@ -132,8 +132,12 @@ struct AdminAllRequestsView: View {
             case .treeAdd: return L10n.t("إضافة (شجرة)", "Tree · Add")
             case .treeEditName: return L10n.t("تعديل اسم (شجرة)", "Tree · Name")
             case .treeEditPhone: return L10n.t("تعديل رقم (شجرة)", "Tree · Phone")
+            case .treeEditBirth: return L10n.t("تعديل ميلاد (شجرة)", "Tree · Birth")
             case .treeDeceased: return L10n.t("وفاة (شجرة)", "Tree · Deceased")
+            case .treeAddDeathDate: return L10n.t("تاريخ وفاة (شجرة)", "Tree · Death Date")
+            case .treeAddPhoto: return L10n.t("صورة (شجرة)", "Tree · Photo")
             case .treeDelete: return L10n.t("حذف", "Delete")
+            case .treeOther: return L10n.t("طلب آخر (شجرة)", "Tree · Other")
             case .photos: return L10n.t("صور مقترحة", "Suggested Photos")
             case .projects: return L10n.t("مشاريع", "Projects")
             case .healthOrphan: return L10n.t("معلّق", "Unlinked")
@@ -159,8 +163,12 @@ struct AdminAllRequestsView: View {
             case .treeAdd: return "person.crop.circle.badge.plus"
             case .treeEditName: return "pencil.line"
             case .treeEditPhone: return "phone.arrow.up.right"
+            case .treeEditBirth: return "birthday.cake"
             case .treeDeceased: return "heart.slash"
+            case .treeAddDeathDate: return "calendar.badge.exclamationmark"
+            case .treeAddPhoto: return "photo.badge.plus"
             case .treeDelete: return "person.badge.minus"
+            case .treeOther: return "square.and.pencil"
             case .photos: return "camera.badge.ellipsis"
             case .projects: return "briefcase.fill"
             case .healthOrphan: return "person.fill.xmark"
@@ -186,8 +194,12 @@ struct AdminAllRequestsView: View {
             case .treeAdd: return DS.Color.success
             case .treeEditName: return DS.Color.neonPurple
             case .treeEditPhone: return DS.Color.primary
+            case .treeEditBirth: return DS.Color.warning
             case .treeDeceased: return DS.Color.error
+            case .treeAddDeathDate: return DS.Color.error
+            case .treeAddPhoto: return DS.Color.primary
             case .treeDelete: return DS.Color.error
+            case .treeOther: return DS.Color.accent
             case .photos: return DS.Color.neonBlue
             case .projects: return DS.Color.neonPurple
             case .healthOrphan: return DS.Color.error
@@ -203,7 +215,7 @@ struct AdminAllRequestsView: View {
             switch self {
             case .all: return nil
             case .joinRequests, .nameChange, .phone, .deceased: return .members
-            case .children, .treeAdd, .treeEditName, .treeEditPhone, .treeDeceased, .treeDelete: return .tree
+            case .children, .treeAdd, .treeEditName, .treeEditPhone, .treeEditBirth, .treeDeceased, .treeAddDeathDate, .treeAddPhoto, .treeDelete, .treeOther: return .tree
             case .news, .reports, .photos, .diwaniya, .projects, .archive: return .content
             case .healthOrphan, .healthNoName, .healthBrokenParent, .healthHidden, .healthDupPhone: return .treeHealth
             }
@@ -734,8 +746,12 @@ struct AdminAllRequestsView: View {
         case .treeAdd: return treeEditCount(action: .add)
         case .treeEditName: return treeEditCount(action: .editName)
         case .treeEditPhone: return treeEditCount(action: .editPhone)
+        case .treeEditBirth: return treeEditCount(action: .editBirth)
         case .treeDeceased: return treeEditCount(action: .deceased)
+        case .treeAddDeathDate: return treeEditCount(action: .addDeathDate)
+        case .treeAddPhoto: return treeEditCount(action: .addPhoto)
         case .treeDelete: return treeEditCount(action: .delete)
+        case .treeOther: return treeEditCount(action: .other)
         case .photos: return adminRequestVM.photoSuggestionRequests.count
         case .projects: return projectsVM.pendingProjects.count
         case .archive: return pendingArchiveItems.count
@@ -1070,8 +1086,12 @@ struct AdminAllRequestsView: View {
         case .treeAdd:      return treeEdits(action: .add).map { $0.id }
         case .treeEditName: return treeEdits(action: .editName).map { $0.id }
         case .treeEditPhone: return treeEdits(action: .editPhone).map { $0.id }
+        case .treeEditBirth: return treeEdits(action: .editBirth).map { $0.id }
         case .treeDeceased: return treeEdits(action: .deceased).map { $0.id }
+        case .treeAddDeathDate: return treeEdits(action: .addDeathDate).map { $0.id }
+        case .treeAddPhoto: return treeEdits(action: .addPhoto).map { $0.id }
         case .treeDelete:   return treeEdits(action: .delete).map { $0.id }
+        case .treeOther:    return treeEdits(action: .other).map { $0.id }
         case .photos:       return adminRequestVM.photoSuggestionRequests.map { $0.id }
         case .projects:     return projectsVM.pendingProjects.map { $0.id }
         case .archive:      return pendingArchiveItems.map { $0.id }
@@ -1396,10 +1416,18 @@ struct AdminAllRequestsView: View {
                 treeEditList(action: .editName, color: RequestTab.treeEditName.color)
             case .treeEditPhone:
                 treeEditList(action: .editPhone, color: RequestTab.treeEditPhone.color)
+            case .treeEditBirth:
+                treeEditList(action: .editBirth, color: RequestTab.treeEditBirth.color)
             case .treeDeceased:
                 treeEditList(action: .deceased, color: RequestTab.treeDeceased.color)
+            case .treeAddDeathDate:
+                treeEditList(action: .addDeathDate, color: RequestTab.treeAddDeathDate.color)
+            case .treeAddPhoto:
+                treeEditList(action: .addPhoto, color: RequestTab.treeAddPhoto.color)
             case .treeDelete:
                 treeEditList(action: .delete, color: RequestTab.treeDelete.color)
+            case .treeOther:
+                treeEditList(action: .other, color: RequestTab.treeOther.color)
             case .healthOrphan:
                 treeHealthList(issue: .orphan, color: RequestTab.healthOrphan.color)
             case .healthNoName:
@@ -1640,7 +1668,7 @@ struct AdminAllRequestsView: View {
                     count += 1
                 }
             }
-        case .treeAdd, .treeEditName, .treeEditPhone, .treeDeceased, .treeDelete:
+        case .treeAdd, .treeEditName, .treeEditPhone, .treeEditBirth, .treeDeceased, .treeAddDeathDate, .treeAddPhoto, .treeDelete, .treeOther:
             for id in ids {
                 if let req = adminRequestVM.treeEditRequests.first(where: { $0.id == id }) {
                     await adminRequestVM.approveTreeEditRequest(request: req)
@@ -1734,7 +1762,7 @@ struct AdminAllRequestsView: View {
                     count += 1
                 }
             }
-        case .treeAdd, .treeEditName, .treeEditPhone, .treeDeceased, .treeDelete:
+        case .treeAdd, .treeEditName, .treeEditPhone, .treeEditBirth, .treeDeceased, .treeAddDeathDate, .treeAddPhoto, .treeDelete, .treeOther:
             for id in ids {
                 if let req = adminRequestVM.treeEditRequests.first(where: { $0.id == id }) {
                     await adminRequestVM.rejectTreeEditRequest(request: req, reason: nil)

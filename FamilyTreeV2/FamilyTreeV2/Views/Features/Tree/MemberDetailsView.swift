@@ -26,12 +26,6 @@ struct MemberDetailsView: View {
     @State private var lastAvatarPreviewScale: CGFloat = 1.0
     @State private var showAvatarPreview = false
 
-    @State private var photoPickerItem: PhotosPickerItem? = nil
-    @State private var rawPickedImage: UIImage? = nil
-    @State private var showCropper = false
-    @State private var isSubmittingPhotoSuggestion = false
-    @State private var showPhotoSuggestionSuccess = false
-
     @State private var showDeleteBioAlert = false
 
     @State private var showActionSheet = false
@@ -141,55 +135,6 @@ struct MemberDetailsView: View {
         }
         .fullScreenCover(isPresented: $showAvatarPreview) {
             avatarPreviewOverlay
-        }
-        .onChange(of: photoPickerItem) { newItem in
-            guard let newItem else { return }
-            Task {
-                if let data = try? await newItem.loadTransferable(type: Data.self),
-                   let uiImage = UIImage(data: data) {
-                    rawPickedImage = uiImage
-                    showCropper = true
-                }
-                photoPickerItem = nil
-            }
-        }
-        .fullScreenCover(isPresented: $showCropper) {
-            if let rawPickedImage {
-                ImageCropperView(
-                    image: rawPickedImage,
-                    cropShape: .circle,
-                    onCrop: { croppedImage in
-                        showCropper = false
-                        self.rawPickedImage = nil
-                        isSubmittingPhotoSuggestion = true
-                        Task {
-                            let success = await adminRequestVM.submitPhotoSuggestion(
-                                image: croppedImage,
-                                for: member.id
-                            )
-                            isSubmittingPhotoSuggestion = false
-                            if success {
-                                showPhotoSuggestionSuccess = true
-                            }
-                        }
-                    },
-                    onCancel: {
-                        showCropper = false
-                        self.rawPickedImage = nil
-                    }
-                )
-            }
-        }
-        .alert(
-            L10n.t("تم إرسال الاقتراح ✓", "Suggestion Sent ✓"),
-            isPresented: $showPhotoSuggestionSuccess
-        ) {
-            Button(L10n.t("حسناً", "OK"), role: .cancel) { }
-        } message: {
-            Text(L10n.t(
-                "وصل اقتراح الصورة للإدارة وسيظهر في الملف الشخصي بعد الموافقة.",
-                "Your photo suggestion was sent to admins. It will appear on the profile after approval."
-            ))
         }
         .alert(
             L10n.t("حذف السيرة", "Delete Biography"),
@@ -324,44 +269,18 @@ struct MemberDetailsView: View {
 
     @ViewBuilder
     private var quickActionsRow: some View {
+        // «إضافة صورة» انتقل إلى «طلب تعديل لهذا العضو» (addPhoto) ويظهر في
+        // طلبات المراجعة كبقية طلبات الشجرة — فلم يعد زراً مباشراً هنا.
         let showKinship = !isViewingSelf && !member.isDeleted
-        let showPhotoAdd = member.isDeceased == true
-            && (member.avatarUrl == nil || (member.avatarUrl ?? "").isEmpty)
-            && !isViewingSelf
 
-        if showKinship || showPhotoAdd {
+        if showKinship {
             HStack(spacing: DS.Spacing.sm) {
-                if showKinship {
-                    quickPill(
-                        icon: "point.3.connected.trianglepath.dotted",
-                        label: L10n.t("صلة القرابة", "Kinship"),
-                        color: DS.Color.warning,
-                        action: showKinshipPath
-                    )
-                }
-
-                if showPhotoAdd {
-                    if isSubmittingPhotoSuggestion {
-                        ProgressView()
-                            .tint(DS.Color.primary)
-                            .frame(height: 28)
-                    } else {
-                        PhotosPicker(selection: $photoPickerItem, matching: .images) {
-                            HStack(spacing: DS.Spacing.xs) {
-                                Image(systemName: "camera.badge.ellipsis")
-                                    .font(DS.Font.scaled(11, weight: .semibold))
-                                Text(L10n.t("إضافة صورة", "Add Photo"))
-                                    .font(DS.Font.scaled(12, weight: .bold))
-                            }
-                            .foregroundColor(DS.Color.primary)
-                            .padding(.horizontal, DS.Spacing.md)
-                            .padding(.vertical, DS.Spacing.xs + 2)
-                            .background(DS.Color.primary.opacity(0.12))
-                            .clipShape(Capsule())
-                        }
-                        .buttonStyle(DSScaleButtonStyle())
-                    }
-                }
+                quickPill(
+                    icon: "point.3.connected.trianglepath.dotted",
+                    label: L10n.t("صلة القرابة", "Kinship"),
+                    color: DS.Color.warning,
+                    action: showKinshipPath
+                )
             }
         }
     }
