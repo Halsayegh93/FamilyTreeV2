@@ -351,11 +351,12 @@ struct MemberDetailsView: View {
         let birthYear: String? = (!birth.isEmpty && !birthHidden) ? Self.yearOnly(birth) : nil
         let deathYear: String? = !death.isEmpty ? Self.yearOnly(death) : nil
 
-        let stats = computeStats(isDeceased: isDeceased, birthYear: birthYear, deathYear: deathYear)
-        let showPhone = !isDeceased && !phone.isEmpty
-        let showBirthRow = !isDeceased && !birth.isEmpty && !birthHidden
+        let chips = buildChips(
+            isDeceased: isDeceased, birthYear: birthYear, deathYear: deathYear,
+            phone: phone, phoneHidden: phoneHidden
+        )
 
-        if !stats.isEmpty || showPhone || showBirthRow {
+        if !chips.isEmpty {
             DSCard(padding: 0) {
                 VStack(spacing: 0) {
                     DSSectionHeader(
@@ -363,45 +364,10 @@ struct MemberDetailsView: View {
                         icon: "person.text.rectangle.fill",
                         iconColor: DS.Color.primary
                     )
-
-                    // شريط إحصائي علوي: العمر · سنة الميلاد · الحالة/الوفاة.
-                    if !stats.isEmpty {
-                        HStack(spacing: 0) {
-                            ForEach(stats.indices, id: \.self) { i in
-                                statCell(stats[i])
-                                if i < stats.count - 1 {
-                                    Rectangle()
-                                        .fill(DS.Color.textTertiary.opacity(0.18))
-                                        .frame(width: 0.5, height: 34)
-                                }
-                            }
-                        }
-                        .padding(.vertical, DS.Spacing.md)
-                        .background(DS.Color.surfaceElevated)
-                        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
-                        .padding(.horizontal, DS.Spacing.md)
-                        .padding(.bottom, DS.Spacing.md)
-                    }
-
-                    // صفوف التفاصيل (الهاتف · تاريخ الميلاد الكامل).
-                    if showPhone || showBirthRow {
-                        VStack(spacing: 0) {
-                            if showPhone {
-                                detailRow(
-                                    icon: "phone.fill", color: DS.Color.success,
-                                    label: L10n.t("رقم الهاتف", "Phone"),
-                                    value: phoneHidden ? L10n.t("مخفي", "Hidden") : KuwaitPhone.display(phone)
-                                )
-                            }
-                            if showPhone && showBirthRow {
-                                Divider().padding(.leading, 50)
-                            }
-                            if showBirthRow {
-                                detailRow(
-                                    icon: "calendar", color: DS.Color.primary,
-                                    label: L10n.t("تاريخ الميلاد", "Birth date"), value: birth
-                                )
-                            }
+                    // مينيمال: وسوم صغيرة بسطر أفقي قابل للتمرير.
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: DS.Spacing.sm) {
+                            ForEach(chips) { c in chipView(c) }
                         }
                         .padding(.horizontal, DS.Spacing.lg)
                         .padding(.bottom, DS.Spacing.md)
@@ -409,6 +375,60 @@ struct MemberDetailsView: View {
                 }
             }
         }
+    }
+
+    private struct ChipData: Identifiable {
+        let id = UUID()
+        let icon: String
+        let text: String
+        let color: Color
+        var ltr: Bool = false
+    }
+
+    private func buildChips(isDeceased: Bool, birthYear: String?, deathYear: String?, phone: String, phoneHidden: Bool) -> [ChipData] {
+        var c: [ChipData] = []
+        c.append(.init(
+            icon: isDeceased ? "moon.zzz.fill" : "circle.fill",
+            text: isDeceased ? L10n.t("متوفّى", "Deceased") : L10n.t("نشِط", "Active"),
+            color: isDeceased ? DS.Color.textSecondary : DS.Color.success
+        ))
+        if let by = birthYear {
+            c.append(.init(icon: "birthday.cake", text: by, color: DS.Color.primary))
+        }
+        if let byStr = birthYear, let by = Int(byStr) {
+            let end = isDeceased ? Int(deathYear ?? "") : Calendar.current.component(.year, from: Date())
+            if let end = end, end >= by, end - by < 130 {
+                c.append(.init(icon: "hourglass", text: "\(end - by) " + L10n.t("سنة", "yr"), color: DS.Color.warning))
+            }
+        }
+        if isDeceased, let dy = deathYear {
+            c.append(.init(icon: "calendar.badge.exclamationmark", text: dy, color: DS.Color.error))
+        }
+        if !isDeceased, !phone.isEmpty {
+            c.append(.init(
+                icon: "phone.fill",
+                text: phoneHidden ? L10n.t("مخفي", "Hidden") : KuwaitPhone.display(phone),
+                color: DS.Color.success, ltr: !phoneHidden
+            ))
+        }
+        return c
+    }
+
+    private func chipView(_ c: ChipData) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: c.icon)
+                .font(DS.Font.scaled(11, weight: .semibold))
+                .foregroundColor(c.color)
+            Text(c.text)
+                .font(DS.Font.caption1)
+                .fontWeight(.semibold)
+                .foregroundColor(c.color)
+                .environment(\.layoutDirection, c.ltr ? .leftToRight : LanguageManager.shared.layoutDirection)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(c.color.opacity(0.12))
+        .clipShape(Capsule())
     }
 
     /// خانة إحصائية: رقم بارز + تسمية صغيرة.
@@ -647,7 +667,7 @@ struct MemberDetailsView: View {
                         )
                     } label: {
                         childTileFirstName(child)
-                            .frame(width: 54)
+                            .frame(width: 46)
                     }
                     .buttonStyle(DSScaleButtonStyle())
                 }

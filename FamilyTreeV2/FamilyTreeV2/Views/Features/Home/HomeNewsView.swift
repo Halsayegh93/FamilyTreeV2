@@ -150,7 +150,7 @@ struct HomeNewsView: View {
                 NavigationStack {
                     MemberDetailsView(member: member)
                 }
-                .presentationDetents([.large])
+                .presentationDetents([.fraction(0.42), .large])
                 .presentationDragIndicator(.visible)
             }
         }

@@ -385,7 +385,7 @@ struct TreeView: View {
             .toolbar(.hidden, for: .navigationBar)
             .sheet(item: $selectedMember) { member in
                 MemberDetailsView(member: member)
-                    .presentationDetents([.large])
+                    .presentationDetents([.fraction(0.42), .large])
                     .presentationDragIndicator(.visible)
             }
             .task {

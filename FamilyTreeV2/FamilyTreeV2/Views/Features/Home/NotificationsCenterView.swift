@@ -1132,7 +1132,7 @@ struct NotificationsCenterView: View {
         .buttonStyle(.plain)
         .sheet(item: $selectedMember) { m in
             NavigationStack { MemberDetailsView(member: m) }
-                .presentationDetents([.large])
+                .presentationDetents([.fraction(0.42), .large])
                 .presentationDragIndicator(.visible)
                 .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         }
