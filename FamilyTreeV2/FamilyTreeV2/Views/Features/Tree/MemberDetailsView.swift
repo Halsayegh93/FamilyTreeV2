@@ -304,10 +304,58 @@ struct MemberDetailsView: View {
 
     // MARK: - Basic Info Card
 
+    private struct StatItem: Identifiable {
+        let id = UUID()
+        let value: String
+        let label: String
+        let color: Color
+    }
+
+    private func computeStats(isDeceased: Bool, birthYear: String?, deathYear: String?) -> [StatItem] {
+        var s: [StatItem] = []
+        if let byStr = birthYear, let by = Int(byStr) {
+            let end: Int? = isDeceased
+                ? Int(deathYear ?? "")
+                : Calendar.current.component(.year, from: Date())
+            if let end = end, end >= by, end - by < 130 {
+                s.append(.init(
+                    value: "\(end - by)",
+                    label: isDeceased ? L10n.t("العمر عند الوفاة", "Age at death") : L10n.t("العمر", "Age"),
+                    color: DS.Color.textPrimary
+                ))
+            }
+            s.append(.init(value: byStr, label: L10n.t("سنة الميلاد", "Birth year"), color: DS.Color.textPrimary))
+        }
+        if isDeceased {
+            if let dy = deathYear {
+                s.append(.init(value: dy, label: L10n.t("سنة الوفاة", "Death year"), color: DS.Color.error))
+            } else {
+                s.append(.init(value: L10n.t("متوفّى", "Deceased"), label: L10n.t("الحالة", "Status"), color: DS.Color.textSecondary))
+            }
+        } else {
+            s.append(.init(value: L10n.t("نشِط", "Active"), label: L10n.t("الحالة", "Status"), color: DS.Color.success))
+        }
+        return s
+    }
+
     @ViewBuilder
     private var basicInfoCard: some View {
-        let rows = cachedBasicInfoRows
-        if !rows.isEmpty {
+        let isDeceased = member.isDeceased == true
+        let isSelf = member.id == authVM.currentUser?.id
+        let canMod = authVM.canModerate
+        let birth = (member.birthDate ?? "").trimmingCharacters(in: .whitespaces)
+        let death = (member.deathDate ?? "").trimmingCharacters(in: .whitespaces)
+        let phone = (member.phoneNumber ?? "").trimmingCharacters(in: .whitespaces)
+        let birthHidden = (member.isBirthDateHidden == true) && !isSelf && !canMod
+        let phoneHidden = (member.isPhoneHidden == true) && !isSelf && !canMod
+        let birthYear: String? = (!birth.isEmpty && !birthHidden) ? Self.yearOnly(birth) : nil
+        let deathYear: String? = !death.isEmpty ? Self.yearOnly(death) : nil
+
+        let stats = computeStats(isDeceased: isDeceased, birthYear: birthYear, deathYear: deathYear)
+        let showPhone = !isDeceased && !phone.isEmpty
+        let showBirthRow = !isDeceased && !birth.isEmpty && !birthHidden
+
+        if !stats.isEmpty || showPhone || showBirthRow {
             DSCard(padding: 0) {
                 VStack(spacing: 0) {
                     DSSectionHeader(
@@ -316,47 +364,94 @@ struct MemberDetailsView: View {
                         iconColor: DS.Color.primary
                     )
 
-                    // شريط إحصائي أفقي مدمج (صغير) بفواصل رفيعة — تصميم أصغر.
-                    HStack(spacing: 0) {
-                        ForEach(rows.indices, id: \.self) { index in
-                            compactStat(row: rows[index])
-                            if index < rows.count - 1 {
-                                Rectangle()
-                                    .fill(DS.Color.textTertiary.opacity(0.15))
-                                    .frame(width: 1, height: 32)
+                    // شريط إحصائي علوي: العمر · سنة الميلاد · الحالة/الوفاة.
+                    if !stats.isEmpty {
+                        HStack(spacing: 0) {
+                            ForEach(stats.indices, id: \.self) { i in
+                                statCell(stats[i])
+                                if i < stats.count - 1 {
+                                    Rectangle()
+                                        .fill(DS.Color.textTertiary.opacity(0.18))
+                                        .frame(width: 0.5, height: 34)
+                                }
                             }
                         }
+                        .padding(.vertical, DS.Spacing.md)
+                        .background(DS.Color.surfaceElevated)
+                        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+                        .padding(.horizontal, DS.Spacing.md)
+                        .padding(.bottom, DS.Spacing.md)
                     }
-                    .padding(.horizontal, DS.Spacing.md)
-                    .padding(.bottom, DS.Spacing.sm)
+
+                    // صفوف التفاصيل (الهاتف · تاريخ الميلاد الكامل).
+                    if showPhone || showBirthRow {
+                        VStack(spacing: 0) {
+                            if showPhone {
+                                detailRow(
+                                    icon: "phone.fill", color: DS.Color.success,
+                                    label: L10n.t("رقم الهاتف", "Phone"),
+                                    value: phoneHidden ? L10n.t("مخفي", "Hidden") : KuwaitPhone.display(phone)
+                                )
+                            }
+                            if showPhone && showBirthRow {
+                                Divider().padding(.leading, 50)
+                            }
+                            if showBirthRow {
+                                detailRow(
+                                    icon: "calendar", color: DS.Color.primary,
+                                    label: L10n.t("تاريخ الميلاد", "Birth date"), value: birth
+                                )
+                            }
+                        }
+                        .padding(.horizontal, DS.Spacing.lg)
+                        .padding(.bottom, DS.Spacing.md)
+                    }
                 }
             }
         }
     }
 
-    /// عنصر إحصائي مدمج (صغير): أيقونة دائرية 30 + قيمة + label صغيرة، داخل شريط.
-    private func compactStat(row: InfoRowData) -> some View {
+    /// خانة إحصائية: رقم بارز + تسمية صغيرة.
+    private func statCell(_ s: StatItem) -> some View {
         VStack(spacing: 3) {
-            ZStack {
-                Circle()
-                    .fill(row.color.opacity(0.12))
-                    .frame(width: 30, height: 30)
-                Image(systemName: row.icon)
-                    .font(DS.Font.scaled(12, weight: .semibold))
-                    .foregroundColor(row.color)
-            }
-            Text(row.value)
-                .font(DS.Font.subheadline)
-                .fontWeight(.bold)
-                .foregroundColor(DS.Color.textPrimary)
+            Text(s.value)
+                .font(DS.Font.title3)
+                .fontWeight(.semibold)
+                .foregroundColor(s.color)
                 .lineLimit(1)
-                .minimumScaleFactor(0.6)
-            Text(row.label)
+                .minimumScaleFactor(0.5)
+            Text(s.label)
                 .font(DS.Font.caption2)
                 .foregroundColor(DS.Color.textSecondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, DS.Spacing.sm)
+        .padding(.horizontal, 2)
+    }
+
+    /// صف تفصيلي احترافي: أيقونة دائرية ملوّنة + تسمية + قيمة بمحاذاة النهاية.
+    private func detailRow(icon: String, color: Color, label: String, value: String) -> some View {
+        HStack(spacing: DS.Spacing.md) {
+            ZStack {
+                Circle()
+                    .fill(color.opacity(0.12))
+                    .frame(width: 34, height: 34)
+                Image(systemName: icon)
+                    .font(DS.Font.scaled(15, weight: .semibold))
+                    .foregroundColor(color)
+            }
+            Text(label)
+                .font(DS.Font.callout)
+                .foregroundColor(DS.Color.textSecondary)
+            Spacer()
+            Text(value)
+                .font(DS.Font.calloutBold)
+                .foregroundColor(DS.Color.textPrimary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+        .padding(.vertical, DS.Spacing.sm + 2)
     }
 
     /// خانة إيقونة + قيمة + label عمودياً — للتخطيط الأفقي ثنائي الأعمدة
@@ -536,25 +631,28 @@ struct MemberDetailsView: View {
         }
     }
 
-    /// شبكة الأبناء inline — اسم أول فقط مع avatar مدوّر، 5 أعمدة (أصغر)
+    /// شريط أفقي قابل للتمرير من صور الأبناء — تصميم احترافي مثل الآيفون.
     private var childrenInlineGrid: some View {
-        let columns = Array(repeating: GridItem(.flexible(), spacing: DS.Spacing.xs), count: 5)
-        return LazyVGrid(columns: columns, spacing: DS.Spacing.sm) {
-            ForEach(cachedChildren) { child in
-                Button {
-                    // الشيت يبقى مفتوح — يتحدث محتواه + الشجرة تتزامن خلفه
-                    let childId = child.id
-                    currentMemberId = childId
-                    NotificationCenter.default.post(
-                        name: .openMemberInTree,
-                        object: nil,
-                        userInfo: ["memberId": childId]
-                    )
-                } label: {
-                    childTileFirstName(child)
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(alignment: .top, spacing: DS.Spacing.md) {
+                ForEach(cachedChildren) { child in
+                    Button {
+                        // الشيت يبقى مفتوح — يتحدث محتواه + الشجرة تتزامن خلفه
+                        let childId = child.id
+                        currentMemberId = childId
+                        NotificationCenter.default.post(
+                            name: .openMemberInTree,
+                            object: nil,
+                            userInfo: ["memberId": childId]
+                        )
+                    } label: {
+                        childTileFirstName(child)
+                            .frame(width: 54)
+                    }
+                    .buttonStyle(DSScaleButtonStyle())
                 }
-                .buttonStyle(DSScaleButtonStyle())
             }
+            .padding(.vertical, DS.Spacing.xs)
         }
         .padding(.top, DS.Spacing.sm)
         .padding(.bottom, DS.Spacing.xs)
