@@ -226,6 +226,11 @@ struct AdminMemberDetailSheet: View {
     private var heroSection: some View {
         Section {
             VStack(spacing: DS.Spacing.sm) {
+                if selectedGender == "female" {
+                    // قاعدة التطبيق: الأنثى بلا صورة شخصية — لا اختيار صورة.
+                    FemaleAvatarView()
+                        .frame(width: 96, height: 96)
+                } else {
                 DSProfilePhotoPicker(
                     selectedImage: $localAvatarPreview,
                     existingURL: currentAvatarURL,
@@ -267,6 +272,7 @@ struct AdminMemberDetailSheet: View {
                         )
                         Log.info("[Admin] \(adminName) عدّل صورة \(member.firstName)")
                     }
+                }
                 }
 
                 VStack(spacing: 4) {

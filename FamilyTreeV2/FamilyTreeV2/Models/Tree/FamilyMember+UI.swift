@@ -37,4 +37,14 @@ extension FamilyMember {
         let phone = (phoneNumber ?? "").trimmingCharacters(in: .whitespaces)
         return !phone.isEmpty
     }
+
+    /// أنثى — التخزين: gender == "female" (الافتراضي ذكر).
+    var isFemale: Bool { (gender ?? "").lowercased() == "female" }
+
+    /// أيقونة بديلة محايدة (للذكور عند غياب الصورة). الإناث يُعرض لهنّ
+    /// `FemaleAvatarView` بدلاً من أي صورة/أيقونة.
+    var fallbackSymbol: String { "person.fill" }
+
+    /// قاعدة التطبيق: الأنثى لا تُعرض لها صورة شخصية إطلاقاً — دائماً البديل.
+    var displayAvatarUrl: String? { isFemale ? nil : avatarUrl }
 }

@@ -77,15 +77,24 @@ struct AddChildSheet: View {
         }
     }
 
+    @ViewBuilder
     private var heroHeader: some View {
-        DSProfilePhotoPicker(
-            selectedImage: $selectedUIImage,
-            enableCrop: true,
-            cropShape: .circle,
-            trailing: L10n.t("اختياري", "Optional"),
-            compactEmptyState: true
-        )
-        .padding(.horizontal, DS.Spacing.lg)
+        if selectedGender == "female" {
+            // قاعدة التطبيق: الأنثى بلا صورة شخصية.
+            FemaleAvatarView()
+                .frame(width: 96, height: 96)
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, DS.Spacing.lg)
+        } else {
+            DSProfilePhotoPicker(
+                selectedImage: $selectedUIImage,
+                enableCrop: true,
+                cropShape: .circle,
+                trailing: L10n.t("اختياري", "Optional"),
+                compactEmptyState: true
+            )
+            .padding(.horizontal, DS.Spacing.lg)
+        }
     }
 
     private var basicInfoCard: some View {

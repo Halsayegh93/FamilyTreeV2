@@ -547,8 +547,95 @@ class MemberViewModel: ObservableObject {
         return nil
     }
     
+    // MARK: - Wife / Mother (Phase 3)
+
+    /// إضافة زوجة لرجل — عضوة أنثى husband_id = الرجل (بلا نسب/صورة).
+    /// مثل addChild: إدراج مباشر + طلب إداري (إشعار) عند !silent.
+    func addWife(husband: FamilyMember, firstName: String, silent: Bool = false) async -> UUID? {
+        guard NetworkMonitor.shared.requireOnline() else { return nil }
+        let trimmed = firstName.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return nil }
+        self.isLoading = true
+        let newId = UUID()
+        var data: [String: AnyEncodable] = [
+            "id": AnyEncodable(newId.uuidString),
+            "first_name": AnyEncodable(trimmed),
+            "full_name": AnyEncodable(trimmed),
+            "husband_id": AnyEncodable(husband.id.uuidString),
+            "gender": AnyEncodable("female"),
+            "role": AnyEncodable("member"),
+            "status": AnyEncodable("active"),
+            "is_deceased": AnyEncodable(false),
+            "is_married": AnyEncodable(true),
+            "sort_order": AnyEncodable(allMembers.filter { $0.husbandId == husband.id }.count)
+        ]
+        if canModerate, let adminId = currentUser?.id {
+            let iso = ISO8601DateFormatter(); iso.formatOptions = [.withInternetDateTime]
+            data["updated_by"] = AnyEncodable(adminId.uuidString)
+            data["updated_at"] = AnyEncodable(iso.string(from: Date()))
+        }
+        do {
+            try await supabase.from("profiles").insert(data).execute()
+            let wife = FamilyMember(
+                id: newId, firstName: trimmed, fullName: trimmed,
+                role: .member, husbandId: husband.id, status: .active,
+                isMarried: true, gender: "female"
+            )
+            self.allMembers.append(wife)
+            if !silent {
+                let requester = currentUser?.id ?? husband.id
+                let reqId = UUID()
+                let requestData: [String: AnyEncodable] = [
+                    "id": AnyEncodable(reqId.uuidString),
+                    "member_id": AnyEncodable(husband.id.uuidString),
+                    "requester_id": AnyEncodable(requester.uuidString),
+                    "request_type": AnyEncodable(RequestType.childAdd.rawValue),
+                    "new_value": AnyEncodable(newId.uuidString),
+                    "status": AnyEncodable(ApprovalStatus.pending.rawValue),
+                    "details": AnyEncodable("تمت إضافة زوجة: \(trimmed) لـ \(husband.fullName).")
+                ]
+                do {
+                    try await supabase.from("admin_requests").insert(requestData).execute()
+                    await notificationVM?.notifyAdminsWithPush(
+                        title: L10n.t("طلب إضافة زوجة", "Wife Add Request"),
+                        body: "\(trimmed) لـ: \(husband.fullName)",
+                        kind: RequestType.childAdd.rawValue,
+                        requestId: reqId,
+                        requestType: RequestType.childAdd.rawValue
+                    )
+                } catch {
+                    Log.warning("لم يُدرج طلب إضافة الزوجة: \(error.localizedDescription)")
+                }
+            }
+            await fetchSingleMember(id: newId)
+            self.isLoading = false
+            return newId
+        } catch {
+            Log.error("خطأ إضافة الزوجة: \(error)")
+        }
+        self.isLoading = false
+        return nil
+    }
+
+    /// تعيين/تغيير أمّ ابن (mother_id) — الأم من زوجات أبيه.
+    func setMother(childId: UUID, motherId: UUID?) async {
+        guard NetworkMonitor.shared.requireOnline() else { return }
+        do {
+            let payload: [String: AnyEncodable] = [
+                "mother_id": AnyEncodable(motherId?.uuidString ?? Optional<String>.none)
+            ]
+            try await supabase.from("profiles")
+                .update(payload)
+                .eq("id", value: childId.uuidString)
+                .execute()
+            await fetchSingleMember(id: childId)
+        } catch {
+            Log.error("خطأ تعيين الأم: \(error)")
+        }
+    }
+
     // MARK: - Avatar Upload/Delete
-    
+
     // رفع صورة العضو
     func uploadAvatar(image: UIImage, for memberId: UUID) async {
         guard NetworkMonitor.shared.requireOnline() else { return }

@@ -9,10 +9,11 @@ struct MemberActionSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     private var availableActions: [TreeEditAction] {
-        if member.isDeceased == true {
-            return [.add, .editName, .editBirth, .addDeathDate, .addPhoto, .delete]
-        }
-        return [.add, .editName, .editPhone, .editBirth, .addPhoto, .deceased, .delete]
+        let base: [TreeEditAction] = member.isDeceased == true
+            ? [.add, .editName, .editBirth, .addDeathDate, .addPhoto, .delete]
+            : [.add, .editName, .editPhone, .editBirth, .addPhoto, .deceased, .delete]
+        // قاعدة: الأنثى لا تُضاف لها صورة شخصية — نخفي خيار «إضافة صورة».
+        return member.isFemale ? base.filter { $0 != .addPhoto } : base
     }
 
     private func color(for action: TreeEditAction) -> Color {

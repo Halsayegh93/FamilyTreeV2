@@ -512,9 +512,10 @@ struct DrillDownTreeView: View {
             ZStack(alignment: .topTrailing) {
                 DSMemberAvatar(
                     name: member.firstName,
-                    avatarUrl: member.avatarUrl,
+                    avatarUrl: member.displayAvatarUrl,
                     size: isActive ? 46 : 42,
-                    roleColor: member.roleColor
+                    roleColor: member.roleColor,
+                    isFemale: member.isFemale
                 )
                 .overlay(
                     Circle().strokeBorder(

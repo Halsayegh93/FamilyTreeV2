@@ -210,22 +210,31 @@ struct EditProfileView: View {
 
     // MARK: - المكونات المصممة (Custom Components)
 
+    @ViewBuilder
     private var imagePickerHeader: some View {
-        DSProfilePhotoPicker(
-            selectedImage: $localPreviewImage,
-            existingURL: member.avatarUrl,
-            enableCrop: true,
-            cropShape: .circle,
-            trailing: nil,
-            showDeleteForExisting: member.avatarUrl != nil,
-            onDeleteExisting: {
-                Task {
-                    await memberVM.deleteAvatar(for: member.id)
-                }
-            },
-            compactEmptyState: true
-        )
-        .padding(.horizontal, DS.Spacing.lg)
+        if member.isFemale {
+            // قاعدة التطبيق: الأنثى بلا صورة شخصية — صورة أنثى ثابتة غير قابلة للتغيير.
+            FemaleAvatarView()
+                .frame(width: 96, height: 96)
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, DS.Spacing.lg)
+        } else {
+            DSProfilePhotoPicker(
+                selectedImage: $localPreviewImage,
+                existingURL: member.avatarUrl,
+                enableCrop: true,
+                cropShape: .circle,
+                trailing: nil,
+                showDeleteForExisting: member.avatarUrl != nil,
+                onDeleteExisting: {
+                    Task {
+                        await memberVM.deleteAvatar(for: member.id)
+                    }
+                },
+                compactEmptyState: true
+            )
+            .padding(.horizontal, DS.Spacing.lg)
+        }
     }
 
     // MARK: - Name with Change Request

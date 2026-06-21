@@ -1422,10 +1422,15 @@ struct DSMemberAvatar: View {
     let avatarUrl: String?
     var size: CGFloat = 44
     var roleColor: Color = DS.Color.primary
+    /// قاعدة التطبيق: الأنثى بلا صورة — تُعرض FemaleAvatarView بدلاً من الصورة/الحرف.
+    var isFemale: Bool = false
 
     var body: some View {
         ZStack {
-            if let urlStr = avatarUrl, let url = URL(string: urlStr) {
+            if isFemale {
+                FemaleAvatarView()
+                    .frame(width: size, height: size)
+            } else if let urlStr = avatarUrl, let url = URL(string: urlStr) {
                 Circle()
                     .fill(
                         LinearGradient(
@@ -1454,6 +1459,29 @@ struct DSMemberAvatar: View {
                     .foregroundColor(roleColor)
             }
         }
+    }
+}
+
+/// صورة بديلة للأنثى (قاعدة التطبيق: الأنثى بلا صورة شخصية).
+/// نفس شكل أيقونة الذكر (person.fill) بيضاء، على خلفية وردية.
+struct FemaleAvatarView: View {
+    /// الوردي المعتمد لخلفية رمز الأنثى في كل التطبيق (وردي فاتح/خفيف).
+    static let pink = Color(hex: "#EF9BC2")
+
+    var body: some View {
+        GeometryReader { geo in
+            let s = min(geo.size.width, geo.size.height)
+            ZStack {
+                Circle().fill(FemaleAvatarView.pink)
+                Image(systemName: "person.fill")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: s * 0.55, height: s * 0.55)
+                    .foregroundColor(.white)
+            }
+            .frame(width: s, height: s)
+        }
+        .aspectRatio(1, contentMode: .fit)
     }
 }
 

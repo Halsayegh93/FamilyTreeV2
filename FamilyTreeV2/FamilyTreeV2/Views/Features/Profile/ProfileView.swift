@@ -425,7 +425,7 @@ struct ProfileView: View {
                         ForEach(favMembers, id: \.id) { member in
                             NavigationLink(destination: MemberDetailsView(member: member)) {
                                 VStack(spacing: DS.Spacing.xs) {
-                                    DSMemberAvatar(name: member.firstName, avatarUrl: member.avatarUrl, size: 50, roleColor: member.roleColor)
+                                    DSMemberAvatar(name: member.firstName, avatarUrl: member.displayAvatarUrl, size: 50, roleColor: member.roleColor, isFemale: member.isFemale)
 
                                     Text(member.firstName)
                                         .font(DS.Font.caption2)

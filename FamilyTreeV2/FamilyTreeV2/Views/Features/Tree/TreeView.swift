@@ -147,6 +147,7 @@ struct TreeView: View {
     @State private var cachedRootMembers: [FamilyMember] = []
     @State private var cachedChildrenByFatherId: [UUID: [FamilyMember]] = [:]
     @State private var cachedMemberIds: Set<UUID> = []
+    @State private var cachedHusbandsWithWives: Set<UUID> = []
 
     private var lightweightFullTree: Bool {
         cachedVisibleMembers.count > 90
@@ -182,6 +183,7 @@ struct TreeView: View {
         let roots: [FamilyMember]
         let childrenMap: [UUID: [FamilyMember]]
         let ids: Set<UUID>
+        let husbandsWithWives: Set<UUID>
     }
 
     /// حساب الكاش — pure function، تشتغل على أي thread.
@@ -206,12 +208,18 @@ struct TreeView: View {
             by: { $0.1 }
         ).mapValues { pairs in pairs.map(\.0).sortedForDisplay() }
 
+        // الرجال الذين لهم زوجات (لإظهار شارة الزوجة) — من كل الأعضاء لا المرئيين فقط.
+        let husbandsWithWives = Set(members.compactMap { m -> UUID? in
+            (m.isFemale && m.husbandId != nil) ? m.husbandId : nil
+        })
+
         return TreeCache(
             visible: visible,
             byId: byId,
             roots: roots,
             childrenMap: childrenMap,
-            ids: Set(visible.map(\.id))
+            ids: Set(visible.map(\.id)),
+            husbandsWithWives: husbandsWithWives
         )
     }
 
@@ -222,6 +230,7 @@ struct TreeView: View {
         cachedRootMembers = cache.roots
         cachedChildrenByFatherId = cache.childrenMap
         cachedMemberIds = cache.ids
+        cachedHusbandsWithWives = cache.husbandsWithWives
     }
 
     /// إعادة بناء سريعة (synchronous) — للتحميل الأول.
@@ -768,7 +777,8 @@ struct TreeView: View {
             currentLocationMemberID: currentLocationMemberID,
             renderedCount: .constant(0),
             maxRendered: maxRenderedNodes,
-            kinshipHighlightedIds: kinshipHighlightedIds
+            kinshipHighlightedIds: kinshipHighlightedIds,
+            husbandsWithWives: cachedHusbandsWithWives
         )
     }
 
@@ -840,13 +850,14 @@ struct RecursiveTreeBranch: View {
     @Binding var renderedCount: Int
     let maxRendered: Int
     var kinshipHighlightedIds: Set<UUID> = []
+    var husbandsWithWives: Set<UUID> = []
 
     /// الفتح يعتمد على activePath كمصدر وحيد للحقيقة
     private var isExpanded: Bool {
         activePath.contains(member.id)
     }
 
-    init(member: FamilyMember, childrenByFatherId: [UUID: [FamilyMember]], ancestorIDs: Set<UUID>, activePath: Binding<Set<UUID>>, searchedMemberID: Binding<UUID?>, selectedMember: Binding<FamilyMember?>, scrollTarget: Binding<UUID?>, scrollAnchor: Binding<UnitPoint>, scrollCounter: Binding<Int>, scale: Binding<CGFloat>, baseScale: Binding<CGFloat>, level: Int, viewMode: TreeDisplayMode, lightweightFullTree: Bool, currentLocationMemberID: UUID?, renderedCount: Binding<Int>, maxRendered: Int, kinshipHighlightedIds: Set<UUID> = []) {
+    init(member: FamilyMember, childrenByFatherId: [UUID: [FamilyMember]], ancestorIDs: Set<UUID>, activePath: Binding<Set<UUID>>, searchedMemberID: Binding<UUID?>, selectedMember: Binding<FamilyMember?>, scrollTarget: Binding<UUID?>, scrollAnchor: Binding<UnitPoint>, scrollCounter: Binding<Int>, scale: Binding<CGFloat>, baseScale: Binding<CGFloat>, level: Int, viewMode: TreeDisplayMode, lightweightFullTree: Bool, currentLocationMemberID: UUID?, renderedCount: Binding<Int>, maxRendered: Int, kinshipHighlightedIds: Set<UUID> = [], husbandsWithWives: Set<UUID> = []) {
         self.member = member
         self.childrenByFatherId = childrenByFatherId
         self.ancestorIDs = ancestorIDs
@@ -865,6 +876,7 @@ struct RecursiveTreeBranch: View {
         self._renderedCount = renderedCount
         self.maxRendered = maxRendered
         self.kinshipHighlightedIds = kinshipHighlightedIds
+        self.husbandsWithWives = husbandsWithWives
     }
 
     private var visibleChildren: [FamilyMember] {
@@ -914,7 +926,8 @@ struct RecursiveTreeBranch: View {
                 lightweightFullTree: lightweightFullTree,
                 level: level,
                 currentLocationMemberID: currentLocationMemberID,
-                isKinshipHighlighted: isKinshipPath
+                isKinshipHighlighted: isKinshipPath,
+                hasWives: husbandsWithWives.contains(member.id)
             ) {
                 selectedMember = member
             } onToggle: {
@@ -1008,7 +1021,8 @@ struct RecursiveTreeBranch: View {
                                         currentLocationMemberID: currentLocationMemberID,
                                         renderedCount: $renderedCount,
                                         maxRendered: maxRendered,
-                                        kinshipHighlightedIds: kinshipHighlightedIds
+                                        kinshipHighlightedIds: kinshipHighlightedIds,
+                                        husbandsWithWives: husbandsWithWives
                                     )
                                 }
                             }
@@ -1034,6 +1048,7 @@ struct TreeMemberNode: View {
     var level: Int = 0
     let currentLocationMemberID: UUID?
     var isKinshipHighlighted: Bool = false
+    var hasWives: Bool = false
     let onTap: () -> Void
     let onToggle: () -> Void
     @State private var shouldLoadImage = false
@@ -1209,19 +1224,23 @@ struct TreeMemberNode: View {
                             .frame(width: interactiveNodeSize, height: interactiveNodeSize)
                             .dsSubtleShadow()
 
-                        // الصورة أو الأيقونة
-                        if shouldLoadImage, let urlStr = member.avatarUrl, let url = URL(string: urlStr) {
+                        // الصورة أو الأيقونة (قاعدة: الأنثى بلا صورة → FemaleAvatarView)
+                        if member.isFemale {
+                            FemaleAvatarView()
+                                .frame(width: interactiveNodeSize, height: interactiveNodeSize)
+                                .clipShape(Circle())
+                        } else if shouldLoadImage, let urlStr = member.avatarUrl, let url = URL(string: urlStr) {
                             CachedAsyncImage(url: url) { image in
                                 image.resizable().scaledToFill()
                             } placeholder: {
-                                Image(systemName: "person.fill")
+                                Image(systemName: member.fallbackSymbol)
                                     .font(DS.Font.scaled(30))
                                     .foregroundColor(DS.Color.overlayTextMuted)
                             }
                             .frame(width: interactiveNodeSize, height: interactiveNodeSize)
                             .clipShape(Circle())
                         } else {
-                            Image(systemName: "person.fill")
+                            Image(systemName: member.fallbackSymbol)
                                 .resizable()
                                 .scaledToFit()
                                 .frame(width: 44)
@@ -1256,6 +1275,18 @@ struct TreeMemberNode: View {
                             .shadow(color: DS.Color.currentLocation.opacity(0.5), radius: 12)
                             .animation(Animation.easeOut(duration: 1.25).repeatCount(4, autoreverses: false), value: isPulsing)
                             .onAppear { isPulsing = true }
+                    }
+                }
+                .overlay(alignment: .topLeading) {
+                    // شارة الزواج — أيقونة زوجين ذهبية أكبر وأوضح لمن له زوجة.
+                    if hasWives {
+                        Image(systemName: "person.2.fill")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundColor(.white)
+                            .padding(6)
+                            .background(Circle().fill(Color(hex: "#E0A93B")))
+                            .overlay(Circle().stroke(Color.white, lineWidth: 2))
+                            .shadow(color: Color.black.opacity(0.18), radius: 3, x: 0, y: 1)
                     }
                 }
                 .overlay {

@@ -245,6 +245,23 @@ struct TreeEditRequestView: View {
                 .font(DS.Font.calloutBold)
                 .foregroundColor(DS.Color.textPrimary)
 
+            HStack(alignment: .top, spacing: DS.Spacing.xs) {
+                Image(systemName: "info.circle.fill")
+                    .font(DS.Font.scaled(12, weight: .semibold))
+                    .foregroundColor(DS.Color.info)
+                Text(L10n.t(
+                    "العضو الذي لديه حساب يمكنه إضافة صورة لنفسه مباشرةً من ملفه الشخصي.",
+                    "A member with an account can add a photo to their own profile directly."
+                ))
+                .font(DS.Font.footnote)
+                .foregroundColor(DS.Color.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(DS.Spacing.sm)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(DS.Color.info.opacity(0.08))
+            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
+
             DSProfilePhotoPicker(
                 selectedImage: $selectedPhoto,
                 title: L10n.t("اضغط لاختيار صورة", "Tap to choose a photo"),

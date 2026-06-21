@@ -19,6 +19,7 @@ struct EditChildSheet: View {
     @State private var showErrorAlert = false
     @State private var errorMessage = ""
     @State private var sheetHeight: CGFloat = 520
+    @State private var selectedMotherId: UUID? = nil
 
     var body: some View {
         NavigationStack {
@@ -30,6 +31,8 @@ struct EditChildSheet: View {
                     VStack(spacing: DS.Spacing.md) {
                         heroHeader
                         basicInfoCard
+                            .padding(.horizontal, DS.Spacing.lg)
+                        motherPicker
                             .padding(.horizontal, DS.Spacing.lg)
                         submitButton
                             .padding(.horizontal, DS.Spacing.lg)
@@ -71,22 +74,31 @@ struct EditChildSheet: View {
         }
     }
 
+    @ViewBuilder
     private var heroHeader: some View {
-        DSProfilePhotoPicker(
-            selectedImage: $selectedUIImage,
-            existingURL: member.avatarUrl,
-            enableCrop: true,
-            cropShape: .circle,
-            trailing: nil,
-            showDeleteForExisting: member.avatarUrl != nil,
-            onDeleteExisting: {
-                Task {
-                    await memberVM.deleteAvatar(for: member.id)
-                }
-            },
-            compactEmptyState: true
-        )
-        .padding(.horizontal, DS.Spacing.lg)
+        if selectedGender == "female" {
+            // قاعدة التطبيق: الأنثى بلا صورة شخصية.
+            FemaleAvatarView()
+                .frame(width: 96, height: 96)
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, DS.Spacing.lg)
+        } else {
+            DSProfilePhotoPicker(
+                selectedImage: $selectedUIImage,
+                existingURL: member.avatarUrl,
+                enableCrop: true,
+                cropShape: .circle,
+                trailing: nil,
+                showDeleteForExisting: member.avatarUrl != nil,
+                onDeleteExisting: {
+                    Task {
+                        await memberVM.deleteAvatar(for: member.id)
+                    }
+                },
+                compactEmptyState: true
+            )
+            .padding(.horizontal, DS.Spacing.lg)
+        }
     }
 
     private var basicInfoCard: some View {
@@ -176,6 +188,7 @@ struct EditChildSheet: View {
     private func setupData() {
         firstName = member.firstName
         selectedGender = member.gender ?? "male"
+        selectedMotherId = member.motherId
         let detectedPhone = KuwaitPhone.detectCountryAndLocal(member.phoneNumber)
         selectedPhoneCountry = detectedPhone.country
         phoneNumber = detectedPhone.localDigits
@@ -195,6 +208,40 @@ struct EditChildSheet: View {
     }
 
     @State private var isSaving = false
+
+    /// زوجات أبي الابن (للاختيار كأم).
+    private var fatherWives: [FamilyMember] {
+        guard let fid = member.fatherId else { return [] }
+        return memberVM.allMembers
+            .filter { $0.husbandId == fid && $0.isFemale }
+            .sorted { $0.sortOrder < $1.sortOrder }
+    }
+
+    /// منتقي الأم — يظهر فقط لو فيه زوجات مسجّلات لأب الابن.
+    @ViewBuilder
+    private var motherPicker: some View {
+        let wives = fatherWives
+        if !wives.isEmpty {
+            DSCard {
+                HStack {
+                    Image(systemName: "person.fill")
+                        .foregroundColor(DS.Color.accent)
+                    Text(L10n.t("الأم", "Mother"))
+                        .font(DS.Font.callout)
+                        .foregroundColor(DS.Color.textSecondary)
+                    Spacer()
+                    Picker(L10n.t("الأم", "Mother"), selection: $selectedMotherId) {
+                        Text(L10n.t("بدون", "None")).tag(UUID?.none)
+                        ForEach(wives) { w in
+                            Text(w.firstName).tag(UUID?.some(w.id))
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .tint(DS.Color.primary)
+                }
+            }
+        }
+    }
 
     private func saveChanges() {
         guard !isSaving else { return }
@@ -234,6 +281,11 @@ struct EditChildSheet: View {
 
             if let image = selectedUIImage {
                 await memberVM.uploadAvatar(image: image, for: member.id)
+            }
+
+            // تعيين الأم (إحدى زوجات الأب) — لا يؤثّر على نجاح بقية الحفظ.
+            if selectedMotherId != member.motherId {
+                await memberVM.setMother(childId: member.id, motherId: selectedMotherId)
             }
 
             isSaving = false

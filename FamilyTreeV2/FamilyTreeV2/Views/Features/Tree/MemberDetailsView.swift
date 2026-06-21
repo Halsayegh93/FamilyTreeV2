@@ -33,15 +33,20 @@ struct MemberDetailsView: View {
     @State private var showReportConfirm = false
     @State private var reportReason = ""
     @State private var reportSent = false
-    @State private var childrenExpanded = false
-    @State private var showChildrenSheet = false
+    @State private var familyExpanded = false
+    @State private var showAddWife = false
+    @State private var newWifeName = ""
+    @State private var showAssignChildren = false
+    @State private var assignSelection: Set<UUID> = []
 
     // MARK: - Cached State (تحسب مرة عند تغيير العضو لتفادي إعادة الحساب O(n) في كل rebuild)
 
     @State private var cachedFather: FamilyMember? = nil
+    @State private var cachedMother: FamilyMember? = nil
+    @State private var cachedHusband: FamilyMember? = nil
+    @State private var cachedWives: [FamilyMember] = []
     @State private var cachedChildren: [FamilyMember] = []
     @State private var cachedPendingRequests: [AdminRequest] = []
-    @State private var cachedBasicInfoRows: [InfoRowData] = []
 
     private var isViewingSelf: Bool {
         member.id == authVM.currentUser?.id
@@ -58,11 +63,18 @@ struct MemberDetailsView: View {
     private func recomputeCache() {
         let m = member
         cachedFather = m.fatherId.flatMap { memberVM.member(byId: $0) }
+        cachedMother = m.motherId.flatMap { memberVM.member(byId: $0) }
+        cachedHusband = m.husbandId.flatMap { memberVM.member(byId: $0) }
+        cachedWives = memberVM.allMembers
+            .filter { $0.husbandId == m.id && $0.isFemale }
+            .sorted(by: { $0.sortOrder < $1.sortOrder })
+        // الأنثى: أبناؤها = من motherId = هي. الذكر: من fatherId = هو.
         cachedChildren = memberVM.allMembers
-            .filter { $0.fatherId == m.id && $0.isCountable }
+            .filter {
+                (m.isFemale ? $0.motherId == m.id : $0.fatherId == m.id) && $0.isCountable
+            }
             .sorted(by: { $0.sortOrder < $1.sortOrder })
         cachedPendingRequests = adminRequestVM.treeEditRequests.filter { $0.memberId == m.id }
-        cachedBasicInfoRows = computeBasicInfoRows(for: m)
     }
 
     var body: some View {
@@ -81,10 +93,7 @@ struct MemberDetailsView: View {
                             quickActionsRow
                                 .padding(.horizontal, DS.Spacing.lg)
 
-                            basicInfoCard
-                                .padding(.horizontal, DS.Spacing.lg)
-
-                            familyCard
+                            overviewCard
                                 .padding(.horizontal, DS.Spacing.lg)
 
                             bioCard
@@ -273,17 +282,40 @@ struct MemberDetailsView: View {
         // «إضافة صورة» انتقل إلى «طلب تعديل لهذا العضو» (addPhoto) ويظهر في
         // طلبات المراجعة كبقية طلبات الشجرة — فلم يعد زراً مباشراً هنا.
         let showKinship = !isViewingSelf && !member.isDeleted
+        let age = ageText
 
-        if showKinship {
+        if age != nil || showKinship {
             HStack(spacing: DS.Spacing.sm) {
-                quickPill(
-                    icon: "point.3.connected.trianglepath.dotted",
-                    label: L10n.t("صلة القرابة", "Kinship"),
-                    color: DS.Color.warning,
-                    action: showKinshipPath
-                )
+                Spacer(minLength: 0)
+                if let age = age {
+                    agePill(age)
+                }
+                if showKinship {
+                    quickPill(
+                        icon: "point.3.connected.trianglepath.dotted",
+                        label: L10n.t("صلة القرابة", "Kinship"),
+                        color: DS.Color.warning,
+                        action: showKinshipPath
+                    )
+                }
+                Spacer(minLength: 0)
             }
         }
+    }
+
+    /// شارة العمر بجانب «صلة القرابة».
+    private func agePill(_ age: String) -> some View {
+        HStack(spacing: DS.Spacing.xs) {
+            Text(L10n.t("العمر", "Age"))
+                .font(DS.Font.scaled(12, weight: .bold))
+            Text(age)
+                .font(DS.Font.scaled(12, weight: .bold))
+        }
+        .foregroundColor(DS.Color.primary)
+        .padding(.horizontal, DS.Spacing.md)
+        .padding(.vertical, DS.Spacing.xs + 2)
+        .background(DS.Color.primary.opacity(0.12))
+        .clipShape(Capsule())
     }
 
     private func quickPill(icon: String, label: String, color: Color, action: @escaping () -> Void) -> some View {
@@ -339,8 +371,9 @@ struct MemberDetailsView: View {
         return s
     }
 
+    /// بطاقة موحّدة: المعلومات الأساسية + العائلة في مربع واحد.
     @ViewBuilder
-    private var basicInfoCard: some View {
+    private var overviewCard: some View {
         let isDeceased = member.isDeceased == true
         let isSelf = member.id == authVM.currentUser?.id
         let canMod = authVM.canModerate
@@ -356,85 +389,435 @@ struct MemberDetailsView: View {
             isDeceased: isDeceased, birthYear: birthYear, deathYear: deathYear,
             phone: phone, phoneHidden: phoneHidden
         )
+        let hasFamily = cachedFather != nil || cachedMother != nil
+            || cachedHusband != nil || !cachedWives.isEmpty || !cachedChildren.isEmpty
 
-        if !chips.isEmpty {
+        if !chips.isEmpty || hasFamily {
             DSCard(padding: 0) {
                 VStack(spacing: 0) {
-                    DSSectionHeader(
-                        title: L10n.t("المعلومات الأساسية", "Basic Info"),
-                        icon: "person.text.rectangle.fill",
-                        iconColor: DS.Color.primary
-                    )
-                    // دوائر صغيرة: الحالة · الميلاد · العمر · الهاتف.
-                    HStack(alignment: .top, spacing: DS.Spacing.md) {
-                        ForEach(chips) { c in circleView(c) }
+                    // دوائر صغيرة: الميلاد · الوفاة · الهاتف.
+                    if !chips.isEmpty {
+                        HStack(alignment: .top, spacing: DS.Spacing.md) {
+                            ForEach(chips) { c in circleView(c) }
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.horizontal, DS.Spacing.md)
+                        .padding(.top, DS.Spacing.lg)
+                        .padding(.bottom, DS.Spacing.md)
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding(.horizontal, DS.Spacing.md)
-                    .padding(.bottom, DS.Spacing.md)
+
+                    // العائلة — مدمجة داخل نفس المربع.
+                    if hasFamily {
+                        if !chips.isEmpty {
+                            DSDivider()
+                                .padding(.bottom, DS.Spacing.sm)
+                        }
+                        familyInline
+                            .padding(.horizontal, DS.Spacing.md)
+                            .padding(.top, chips.isEmpty ? DS.Spacing.lg : 0)
+                            .padding(.bottom, DS.Spacing.md)
+                    }
                 }
             }
         }
     }
 
+    /// العائلة المدمجة: عنقود (الزوجة | الأب | الأم) + الأبناء (يظهرون/يختفون).
+    /// مسموح بتحديد أبناء الزوجة: العضو أنثى + لها زوج + (مدير أو هي نفسها).
+    private var canAssignChildren: Bool {
+        member.isFemale && member.husbandId != nil
+            && (authVM.canEditMembers || isViewingSelf)
+    }
+
+    /// أبناء زوج الزوجة (المرشّحون لتحديد أمّهم).
+    private var husbandChildren: [FamilyMember] {
+        guard let hid = member.husbandId else { return [] }
+        return memberVM.allMembers
+            .filter { $0.fatherId == hid && $0.isCountable }
+            .sorted { $0.sortOrder < $1.sortOrder }
+    }
+
+    @ViewBuilder
+    private var familyInline: some View {
+        VStack(spacing: DS.Spacing.md) {
+            relationsCluster
+
+            if canAssignChildren {
+                Button {
+                    assignSelection = Set(husbandChildren.filter { $0.motherId == member.id }.map(\.id))
+                    showAssignChildren = true
+                } label: {
+                    HStack(spacing: DS.Spacing.xs) {
+                        Image(systemName: "checklist")
+                            .font(DS.Font.scaled(13, weight: .semibold))
+                        Text(L10n.t("تحديد أبنائها", "Assign her children"))
+                            .font(DS.Font.calloutBold)
+                    }
+                    .foregroundColor(DS.Color.primary)
+                    .frame(maxWidth: .infinity)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(DSScaleButtonStyle())
+                .sheet(isPresented: $showAssignChildren) { assignChildrenSheet }
+            }
+
+            // الأبناء — بالمنتصف مع سهم، يظهرون/يختفون
+            if !cachedChildren.isEmpty {
+                Button {
+                    withAnimation(DS.Anim.snappy) { familyExpanded.toggle() }
+                } label: {
+                    HStack(spacing: DS.Spacing.xs) {
+                        Text(L10n.t("الأبناء", "Children"))
+                            .font(DS.Font.calloutBold)
+                            .foregroundColor(DS.Color.primary)
+                        Image(systemName: "chevron.down")
+                            .font(DS.Font.scaled(12, weight: .semibold))
+                            .foregroundColor(DS.Color.primary)
+                            .rotationEffect(.degrees(familyExpanded ? 180 : 0))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(DSScaleButtonStyle())
+
+                if familyExpanded {
+                    childrenCenteredWrap
+                }
+            }
+        }
+    }
+
+    /// عنقود العلاقات: الزوجة/الزوجات (يسار) | الأم (يمين) بينهما خط عمودي.
+    /// يعرض البيانات الحقيقية (motherId / husbandId)؛ ومكان محجوز (+) عند الغياب.
+    private var relationsCluster: some View {
+        let circle: CGFloat = 48
+        return HStack(alignment: .top, spacing: DS.Spacing.xl) {
+            // RTL: الأم يميناً.
+            if let mother = cachedMother {
+                relReal(member: mother, label: L10n.t("الأم", "Mother"), size: circle)
+            } else {
+                relPlaceholder(label: L10n.t("الأم", "Mother"), color: DS.Color.warning, size: circle)
+            }
+            Rectangle()
+                .fill(DS.Color.textTertiary.opacity(0.30))
+                .frame(width: 1.5, height: circle)
+            // الأنثى: تعرض «الزوج». الذكر: تعرض «الزوجة/الزوجات» (يسار).
+            if member.isFemale {
+                if let husband = cachedHusband {
+                    relReal(member: husband, label: L10n.t("الزوج", "Husband"), size: circle)
+                } else {
+                    relPlaceholder(label: L10n.t("الزوج", "Husband"), color: DS.Color.accent, size: circle)
+                }
+            } else if cachedWives.isEmpty {
+                relPlaceholder(label: L10n.t("الزوجة", "Wife"), color: DS.Color.accent, size: circle,
+                               action: canAddWife ? { showAddWife = true } : nil)
+            } else {
+                HStack(alignment: .top, spacing: DS.Spacing.md) {
+                    ForEach(cachedWives) { wife in
+                        relReal(member: wife, label: L10n.t("الزوجة", "Wife"), size: circle)
+                    }
+                    if canAddWife {
+                        Button { showAddWife = true } label: {
+                            Image(systemName: "plus.circle.fill")
+                                .font(DS.Font.scaled(22))
+                                .foregroundColor(DS.Color.accent)
+                        }
+                        .buttonStyle(DSScaleButtonStyle())
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .alert(L10n.t("إضافة زوجة", "Add Wife"), isPresented: $showAddWife) {
+            TextField(L10n.t("اسم الزوجة", "Wife name"), text: $newWifeName)
+            Button(L10n.t("إضافة", "Add")) {
+                let name = newWifeName
+                newWifeName = ""
+                Task {
+                    _ = await memberVM.addWife(husband: member, firstName: name)
+                    recomputeCache()
+                }
+            }
+            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { newWifeName = "" }
+        }
+    }
+
+    /// مسموح بإضافة زوجة: العضو رجل + (مدير يعدّل أو هو نفسه).
+    private var canAddWife: Bool {
+        !member.isFemale && (authVM.canEditMembers || isViewingSelf)
+    }
+
+    /// شيت تحديد أبناء الزوجة — اختيار متعدّد من أبناء زوجها، ثم ضبط mother_id.
+    private var assignChildrenSheet: some View {
+        NavigationStack {
+            List {
+                ForEach(husbandChildren) { child in
+                    Button {
+                        if assignSelection.contains(child.id) {
+                            assignSelection.remove(child.id)
+                        } else {
+                            assignSelection.insert(child.id)
+                        }
+                    } label: {
+                        HStack(spacing: DS.Spacing.md) {
+                            Image(systemName: assignSelection.contains(child.id)
+                                  ? "checkmark.circle.fill" : "circle")
+                                .foregroundColor(assignSelection.contains(child.id)
+                                                 ? DS.Color.primary : DS.Color.textTertiary)
+                            Text(child.firstName)
+                                .foregroundColor(DS.Color.textPrimary)
+                            if child.isFemale {
+                                Text(L10n.t("بنت", "Daughter"))
+                                    .font(DS.Font.caption2)
+                                    .foregroundColor(DS.Color.textTertiary)
+                            }
+                            Spacer()
+                        }
+                        .contentShape(Rectangle())
+                    }
+                }
+            }
+            .navigationTitle(L10n.t("أبناء ", "Children of ") + member.firstName)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(L10n.t("إلغاء", "Cancel")) { showAssignChildren = false }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(L10n.t("حفظ", "Save")) {
+                        let sel = assignSelection
+                        let candidates = husbandChildren
+                        showAssignChildren = false
+                        Task {
+                            for c in candidates {
+                                let wantHer = sel.contains(c.id)
+                                let isHer = c.motherId == member.id
+                                if wantHer && !isHer {
+                                    await memberVM.setMother(childId: c.id, motherId: member.id)
+                                } else if !wantHer && isHer {
+                                    await memberVM.setMother(childId: c.id, motherId: nil)
+                                }
+                            }
+                            recomputeCache()
+                        }
+                    }
+                    .fontWeight(.bold)
+                }
+            }
+            .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+        }
+        .presentationDetents([.medium, .large])
+    }
+
+    /// عنصر علاقة حقيقي (الأم/الزوجة) — صورة + تسمية + اسم، قابل للضغط.
+    private func relReal(member m: FamilyMember, label: String, size: CGFloat) -> some View {
+        Button { openMemberInTree(m.id) } label: {
+            VStack(spacing: 5) {
+                Group {
+                    if m.isFemale {
+                        FemaleAvatarView().frame(width: size, height: size)
+                    } else if let urlStr = m.avatarUrl, let url = URL(string: urlStr) {
+                        CachedAsyncImage(url: url) { img in
+                            img.resizable().scaledToFill()
+                        } placeholder: {
+                            Circle().fill(DS.Color.primary.opacity(0.12))
+                        }
+                        .frame(width: size, height: size)
+                        .clipShape(Circle())
+                    } else {
+                        ZStack {
+                            Circle().fill(DS.Color.primary.opacity(0.12)).frame(width: size, height: size)
+                            Text(String(m.firstName.prefix(1)))
+                                .font(DS.Font.headline).fontWeight(.bold).foregroundColor(DS.Color.primary)
+                        }
+                    }
+                }
+                Text(label)
+                    .font(DS.Font.caption2)
+                    .foregroundColor(DS.Color.textSecondary)
+                    .lineLimit(1)
+                Text(m.firstName)
+                    .font(DS.Font.caption1)
+                    .fontWeight(.semibold)
+                    .foregroundColor(DS.Color.textPrimary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+            }
+            .frame(width: 72)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(DSScaleButtonStyle())
+    }
+
+    /// مكان محجوز لعلاقة (الأم/الزوجة): دائرة متقطّعة فيها زر إضافة (+) + تسمية.
+    /// لو [action] متوفّر → قابل للضغط لإضافة العلاقة.
+    @ViewBuilder
+    private func relPlaceholder(label: String, color: Color, size: CGFloat,
+                               action: (() -> Void)? = nil) -> some View {
+        let content = VStack(spacing: 5) {
+            ZStack {
+                Circle()
+                    .fill(color.opacity(0.06))
+                    .frame(width: size, height: size)
+                    .overlay(
+                        Circle().strokeBorder(
+                            color.opacity(0.40),
+                            style: StrokeStyle(lineWidth: 1.5, dash: [4, 3])
+                        )
+                    )
+                Image(systemName: "plus")
+                    .font(DS.Font.scaled(18, weight: .bold))
+                    .foregroundColor(color.opacity(0.6))
+            }
+            Text(label)
+                .font(DS.Font.caption2)
+                .foregroundColor(DS.Color.textSecondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+        .frame(width: 70)
+        .contentShape(Rectangle())
+
+        if let action {
+            Button(action: action) { content }
+                .buttonStyle(DSScaleButtonStyle())
+        } else {
+            content
+        }
+    }
+
+    private var sonsList: [FamilyMember] { cachedChildren.filter { !$0.isFemale } }
+    private var daughtersList: [FamilyMember] { cachedChildren.filter { $0.isFemale } }
+
+    /// لو فيه زوجات وبعض الأبناء معرّف أمّهم → تجميع تحت كل أم؛
+    /// غير ذلك → الأبناء يمين والبنات يسار (بلا تسميات).
+    @ViewBuilder
+    private var childrenCenteredWrap: some View {
+        if !cachedWives.isEmpty && cachedChildren.contains(where: { $0.motherId != nil }) {
+            childrenByMother
+        } else if sonsList.isEmpty || daughtersList.isEmpty {
+            childrenWrap(cachedChildren, perRow: 5)
+        } else {
+            // RTL: الأبناء يميناً (أول)، خط عمودي، ثم البنات يساراً.
+            HStack(alignment: .top, spacing: DS.Spacing.md) {
+                childrenWrap(sonsList, perRow: 3)
+                    .frame(maxWidth: .infinity)
+                Rectangle()
+                    .fill(DS.Color.textTertiary.opacity(0.25))
+                    .frame(width: 1)
+                childrenWrap(daughtersList, perRow: 3)
+                    .frame(maxWidth: .infinity)
+            }
+        }
+    }
+
+    /// الأبناء مجمّعين تحت كل أم (زوجة) + مجموعة «أبناء آخرون».
+    private var childrenByMother: some View {
+        let wifeIds = Set(cachedWives.map { $0.id })
+        let others = cachedChildren.filter { $0.motherId == nil || !wifeIds.contains($0.motherId!) }
+        return VStack(spacing: DS.Spacing.lg) {
+            ForEach(cachedWives) { wife in
+                let kids = cachedChildren.filter { $0.motherId == wife.id }
+                if !kids.isEmpty {
+                    VStack(spacing: DS.Spacing.sm) {
+                        Text(L10n.t("أبناء ", "Children of ") + wife.firstName)
+                            .font(DS.Font.caption1).fontWeight(.semibold)
+                            .foregroundColor(DS.Color.textSecondary)
+                        childrenWrap(kids, perRow: 5)
+                    }
+                }
+            }
+            if !others.isEmpty {
+                VStack(spacing: DS.Spacing.sm) {
+                    Text(L10n.t("أبناء آخرون", "Other children"))
+                        .font(DS.Font.caption1).fontWeight(.semibold)
+                        .foregroundColor(DS.Color.textSecondary)
+                    childrenWrap(others, perRow: 5)
+                }
+            }
+        }
+    }
+
+    /// شبكة أبناء تلتفّ على عدة صفوف.
+    private func childrenWrap(_ members: [FamilyMember], perRow: Int) -> some View {
+        let rows: [[FamilyMember]] = stride(from: 0, to: members.count, by: perRow).map {
+            Array(members[$0..<min($0 + perRow, members.count)])
+        }
+        return VStack(spacing: DS.Spacing.md) {
+            ForEach(rows.indices, id: \.self) { r in
+                HStack(spacing: DS.Spacing.md) {
+                    ForEach(rows[r]) { child in
+                        Button { openMemberInTree(child.id) } label: {
+                            childTileFirstName(child)
+                                .frame(width: 50)
+                        }
+                        .buttonStyle(DSScaleButtonStyle())
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
     private struct ChipData: Identifiable {
         let id = UUID()
-        let icon: String
         let text: String
         let label: String
         let color: Color
         var ltr: Bool = false
+        var big: Bool = false
     }
 
     private func buildChips(isDeceased: Bool, birthYear: String?, deathYear: String?, phone: String, phoneHidden: Bool) -> [ChipData] {
         var c: [ChipData] = []
         if let by = birthYear {
-            c.append(.init(icon: "birthday.cake", text: by, label: L10n.t("الميلاد", "Birth"), color: DS.Color.primary))
+            c.append(.init(text: by, label: L10n.t("الميلاد", "Birth"), color: DS.Color.primary))
         }
-        if let byStr = birthYear, let by = Int(byStr) {
-            let end = isDeceased ? Int(deathYear ?? "") : Calendar.current.component(.year, from: Date())
-            if let end = end, end >= by, end - by < 130 {
-                c.append(.init(icon: "timelapse", text: "\(end - by)", label: L10n.t("العمر", "Age"), color: DS.Color.warning))
-            }
-        }
+        // العمر انتقل إلى شريط «صلة القرابة» أعلى البطاقة.
         if isDeceased, let dy = deathYear {
-            c.append(.init(icon: "calendar.badge.exclamationmark", text: dy, label: L10n.t("الوفاة", "Death"), color: DS.Color.error))
+            c.append(.init(text: dy, label: L10n.t("الوفاة", "Death"), color: DS.Color.error))
         }
         if !isDeceased, !phone.isEmpty {
             c.append(.init(
-                icon: "phone.fill",
                 text: phoneHidden ? L10n.t("مخفي", "Hidden") : KuwaitPhone.display(phone),
                 label: L10n.t("الهاتف", "Phone"),
-                color: DS.Color.success, ltr: !phoneHidden
+                color: DS.Color.primaryDark, ltr: !phoneHidden, big: true
             ))
         }
         return c
     }
 
-    /// دائرة معلومة صغيرة: أيقونة في دائرة ملوّنة + قيمة + تسمية.
+    /// عمر العضو كنص (يحترم إخفاء الميلاد) — يُعرض بجانب «صلة القرابة».
+    private var ageText: String? {
+        let isSelf = member.id == authVM.currentUser?.id
+        let canMod = authVM.canModerate
+        let birth = (member.birthDate ?? "").trimmingCharacters(in: .whitespaces)
+        let birthHidden = (member.isBirthDateHidden == true) && !isSelf && !canMod
+        guard !birth.isEmpty, !birthHidden, let by = Int(Self.yearOnly(birth)) else { return nil }
+        let isDeceased = member.isDeceased == true
+        let death = (member.deathDate ?? "").trimmingCharacters(in: .whitespaces)
+        let end = isDeceased ? Int(Self.yearOnly(death)) : Calendar.current.component(.year, from: Date())
+        guard let end = end, end >= by, end - by < 130 else { return nil }
+        return "\(end - by)"
+    }
+
+    /// خانة معلومة بدون أيقونة: قيمة ملوّنة بارزة + تسمية صغيرة.
     private func circleView(_ c: ChipData) -> some View {
-        VStack(spacing: 5) {
-            ZStack {
-                Circle()
-                    .fill(c.color.opacity(0.12))
-                    .frame(width: 42, height: 42)
-                Image(systemName: c.icon)
-                    .font(DS.Font.scaled(18, weight: .semibold))
-                    .foregroundColor(c.color)
-            }
+        VStack(spacing: 3) {
             Text(c.text)
-                .font(DS.Font.caption1)
+                .font(c.big ? DS.Font.headline : DS.Font.callout)
                 .fontWeight(.bold)
-                .foregroundColor(DS.Color.textPrimary)
+                .foregroundColor(c.color)
                 .lineLimit(1)
-                .minimumScaleFactor(0.6)
+                .minimumScaleFactor(0.5)
                 .environment(\.layoutDirection, c.ltr ? .leftToRight : LanguageManager.shared.layoutDirection)
             Text(c.label)
                 .font(DS.Font.caption2)
                 .foregroundColor(DS.Color.textSecondary)
                 .lineLimit(1)
         }
-        .frame(width: 64)
+        // الهاتف عريض ومقيّد؛ الميلاد/الوفاة بحجم محتواهما ليقتربا من بعض.
+        .frame(maxWidth: c.big ? 150 : nil)
     }
 
     /// خانة إحصائية: رقم بارز + تسمية صغيرة.
@@ -456,105 +839,6 @@ struct MemberDetailsView: View {
         .padding(.horizontal, 2)
     }
 
-    /// صف تفصيلي احترافي: أيقونة دائرية ملوّنة + تسمية + قيمة بمحاذاة النهاية.
-    private func detailRow(icon: String, color: Color, label: String, value: String) -> some View {
-        HStack(spacing: DS.Spacing.md) {
-            ZStack {
-                Circle()
-                    .fill(color.opacity(0.12))
-                    .frame(width: 34, height: 34)
-                Image(systemName: icon)
-                    .font(DS.Font.scaled(15, weight: .semibold))
-                    .foregroundColor(color)
-            }
-            Text(label)
-                .font(DS.Font.callout)
-                .foregroundColor(DS.Color.textSecondary)
-            Spacer()
-            Text(value)
-                .font(DS.Font.calloutBold)
-                .foregroundColor(DS.Color.textPrimary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-        }
-        .padding(.vertical, DS.Spacing.sm + 2)
-    }
-
-    /// خانة إيقونة + قيمة + label عمودياً — للتخطيط الأفقي ثنائي الأعمدة
-    private func infoTile(row: InfoRowData) -> some View {
-        VStack(spacing: DS.Spacing.xs) {
-            ZStack {
-                Circle()
-                    .fill(row.color.opacity(0.12))
-                    .frame(width: 38, height: 38)
-                Image(systemName: row.icon)
-                    .font(DS.Font.scaled(15, weight: .semibold))
-                    .foregroundColor(row.color)
-            }
-            Text(row.label)
-                .font(DS.Font.caption1)
-                .foregroundColor(DS.Color.textSecondary)
-            Text(row.value)
-                .font(DS.Font.calloutBold)
-                .foregroundColor(DS.Color.textPrimary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, DS.Spacing.md)
-    }
-
-    private struct InfoRowData {
-        let icon: String
-        let label: String
-        let value: String
-        let color: Color
-    }
-
-    private func computeBasicInfoRows(for m: FamilyMember) -> [InfoRowData] {
-        var rows: [InfoRowData] = []
-        let isSelf = m.id == authVM.currentUser?.id
-        let canMod = authVM.canModerate
-        let isDeceased = m.isDeceased == true
-
-        if let birth = m.birthDate, !birth.isEmpty {
-            let shouldHide = (m.isBirthDateHidden == true) && !isSelf && !canMod
-            // للمتوفى: السنة فقط بدل التاريخ الكامل
-            let displayValue = shouldHide
-                ? L10n.t("مخفي", "Hidden")
-                : (isDeceased ? Self.yearOnly(birth) : birth)
-            rows.append(.init(
-                icon: "calendar",
-                label: L10n.t("الميلاد", "Birth"),
-                value: displayValue,
-                color: shouldHide ? DS.Color.textTertiary : DS.Color.primary
-            ))
-        }
-
-        if !isDeceased,
-           let phone = m.phoneNumber, !phone.isEmpty {
-            let shouldHide = (m.isPhoneHidden == true) && !isSelf && !canMod
-            rows.append(.init(
-                icon: "phone.fill",
-                label: L10n.t("الهاتف", "Phone"),
-                value: shouldHide ? L10n.t("مخفي", "Hidden") : KuwaitPhone.display(phone),
-                color: shouldHide ? DS.Color.textTertiary : DS.Color.success
-            ))
-        }
-
-        if isDeceased,
-           let death = m.deathDate, !death.isEmpty {
-            rows.append(.init(
-                icon: "heart.slash.fill",
-                label: L10n.t("الوفاة", "Death"),
-                value: Self.yearOnly(death),
-                color: DS.Color.textTertiary
-            ))
-        }
-
-        return rows
-    }
-
     /// استخراج السنة فقط من تاريخ بصيغة "yyyy-MM-dd" أو "yyyy/MM/dd" — fallback للنص الأصلي.
     private static func yearOnly(_ date: String) -> String {
         let trimmed = date.trimmingCharacters(in: .whitespaces)
@@ -563,77 +847,8 @@ struct MemberDetailsView: View {
         return prefix.allSatisfy(\.isNumber) ? prefix : trimmed
     }
 
-    private func infoRow(icon: String, label: String, value: String, color: Color) -> some View {
-        HStack(spacing: DS.Spacing.md) {
-            ZStack {
-                Circle()
-                    .fill(color.opacity(0.12))
-                    .frame(width: 32, height: 32)
-                Image(systemName: icon)
-                    .font(DS.Font.scaled(13, weight: .semibold))
-                    .foregroundColor(color)
-            }
-            Text(label)
-                .font(DS.Font.callout)
-                .foregroundColor(DS.Color.textSecondary)
-            Spacer()
-            Text(value)
-                .font(DS.Font.calloutBold)
-                .foregroundColor(DS.Color.textPrimary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-        }
-        .padding(.vertical, DS.Spacing.sm + 2)
-    }
 
-    // MARK: - Family Card
-
-    @ViewBuilder
-    private var familyCard: some View {
-        if cachedFather != nil || !cachedChildren.isEmpty {
-            DSCard(padding: 0) {
-                VStack(spacing: 0) {
-                    DSSectionHeader(
-                        title: L10n.t("العائلة", "Family"),
-                        icon: "person.2.fill",
-                        iconColor: DS.Color.success
-                    )
-
-                    // دائرتان قابلتان للضغط: «الأب» + «الأبناء (N)».
-                    HStack(alignment: .top, spacing: DS.Spacing.xxxl) {
-                        if let father = cachedFather {
-                            Button { openMemberInTree(father.id) } label: {
-                                familyCircle(
-                                    member: father,
-                                    label: L10n.t("الأب", "Father"),
-                                    sub: father.firstName,
-                                    count: nil,
-                                    color: DS.Color.success
-                                )
-                            }
-                            .buttonStyle(DSScaleButtonStyle())
-                        }
-                        if !cachedChildren.isEmpty {
-                            Button { showChildrenSheet = true } label: {
-                                familyCircle(
-                                    member: nil,
-                                    label: L10n.t("الأبناء", "Children"),
-                                    sub: childrenCountText,
-                                    count: cachedChildren.count,
-                                    color: DS.Color.primary
-                                )
-                            }
-                            .buttonStyle(DSScaleButtonStyle())
-                        }
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, DS.Spacing.md)
-                    .padding(.horizontal, DS.Spacing.md)
-                }
-            }
-            .sheet(isPresented: $showChildrenSheet) { childrenSheet }
-        }
-    }
+    // MARK: - Family (inline inside overview card)
 
     private func openMemberInTree(_ id: UUID) {
         // الشيت يبقى مفتوح — يتحدث محتواه + الشجرة تتزامن خلفه.
@@ -643,108 +858,17 @@ struct MemberDetailsView: View {
         )
     }
 
-    /// دائرة عائلة: صورة الأب أو عدد الأبناء + تسمية تحتها.
-    private func familyCircle(member: FamilyMember?, label: String, sub: String, count: Int?, color: Color) -> some View {
-        VStack(spacing: 6) {
-            ZStack {
-                Circle()
-                    .fill(color.opacity(0.12))
-                    .frame(width: 64, height: 64)
-                    .overlay(Circle().stroke(color.opacity(0.35), lineWidth: 1.5))
-                if let m = member {
-                    if let urlStr = m.avatarUrl, let url = URL(string: urlStr) {
-                        CachedAsyncImage(url: url) { img in
-                            img.resizable().scaledToFill()
-                        } placeholder: {
-                            Text(String(m.firstName.prefix(1)))
-                                .font(DS.Font.title2).fontWeight(.bold).foregroundColor(color)
-                        }
-                        .frame(width: 64, height: 64)
-                        .clipShape(Circle())
-                    } else {
-                        Text(String(m.firstName.prefix(1)))
-                            .font(DS.Font.title2).fontWeight(.bold).foregroundColor(color)
-                    }
-                } else {
-                    Text("\(count ?? 0)")
-                        .font(DS.Font.title1)
-                        .fontWeight(.bold)
-                        .foregroundColor(color)
-                }
-            }
-            Text(label)
-                .font(DS.Font.caption1)
-                .foregroundColor(DS.Color.textSecondary)
-            Text(sub)
-                .font(DS.Font.footnote)
-                .fontWeight(.semibold)
-                .foregroundColor(DS.Color.textPrimary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-        }
-        .frame(width: 92)
-    }
-
-    /// شيت قائمة الأبناء — شبكة صور تُفتح عند الضغط على دائرة «الأبناء».
-    private var childrenSheet: some View {
-        NavigationStack {
-            ScrollView(showsIndicators: false) {
-                LazyVGrid(
-                    columns: Array(repeating: GridItem(.flexible(), spacing: DS.Spacing.sm), count: 4),
-                    spacing: DS.Spacing.md
-                ) {
-                    ForEach(cachedChildren) { child in
-                        Button {
-                            showChildrenSheet = false
-                            openMemberInTree(child.id)
-                        } label: {
-                            childTileFirstName(child)
-                        }
-                        .buttonStyle(DSScaleButtonStyle())
-                    }
-                }
-                .padding(DS.Spacing.lg)
-            }
-            .background(DS.Color.background.ignoresSafeArea())
-            .navigationTitle(L10n.t("الأبناء", "Children") + " (\(cachedChildren.count))")
-            .navigationBarTitleDisplayMode(.inline)
-            .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-        }
-        .presentationDetents([.medium, .large])
-        .presentationDragIndicator(.visible)
-    }
-
-    /// شريط أفقي قابل للتمرير من صور الأبناء — تصميم احترافي مثل الآيفون.
-    private var childrenInlineGrid: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(alignment: .top, spacing: DS.Spacing.md) {
-                ForEach(cachedChildren) { child in
-                    Button {
-                        // الشيت يبقى مفتوح — يتحدث محتواه + الشجرة تتزامن خلفه
-                        let childId = child.id
-                        currentMemberId = childId
-                        NotificationCenter.default.post(
-                            name: .openMemberInTree,
-                            object: nil,
-                            userInfo: ["memberId": childId]
-                        )
-                    } label: {
-                        childTileFirstName(child)
-                            .frame(width: 46)
-                    }
-                    .buttonStyle(DSScaleButtonStyle())
-                }
-            }
-            .padding(.vertical, DS.Spacing.xs)
-        }
-        .padding(.top, DS.Spacing.sm)
-        .padding(.bottom, DS.Spacing.xs)
-    }
 
     private func childTileFirstName(_ child: FamilyMember) -> some View {
         VStack(spacing: DS.Spacing.xs) {
             ZStack {
-                if let url = child.avatarUrl, let imgUrl = URL(string: url) {
+                if child.isFemale {
+                    // قاعدة: الأنثى بلا صورة شخصية — صورة أنثى مرسومة.
+                    FemaleAvatarView()
+                        .frame(width: 38, height: 38)
+                        .clipShape(Circle())
+                        .overlay(Circle().stroke(DS.Color.primary.opacity(0.18), lineWidth: 1))
+                } else if let url = child.avatarUrl, let imgUrl = URL(string: url) {
                     CachedAsyncImage(url: imgUrl) { img in
                         img.resizable().scaledToFill()
                     } placeholder: {
@@ -787,69 +911,6 @@ struct MemberDetailsView: View {
                 .minimumScaleFactor(0.8)
         }
         .frame(maxWidth: .infinity)
-    }
-
-    /// صف الأبناء مع chevron قابل للتوسعة
-    private func childrenRow(label: String, value: String, color: Color, expanded: Bool) -> some View {
-        HStack(spacing: DS.Spacing.md) {
-            ZStack {
-                Circle()
-                    .fill(color.opacity(0.12))
-                    .frame(width: 32, height: 32)
-                Image(systemName: "person.3.fill")
-                    .font(DS.Font.scaled(13, weight: .semibold))
-                    .foregroundColor(color)
-            }
-            Text(label)
-                .font(DS.Font.callout)
-                .foregroundColor(DS.Color.textSecondary)
-            Spacer()
-            Text(value)
-                .font(DS.Font.calloutBold)
-                .foregroundColor(DS.Color.textPrimary)
-                .lineLimit(1)
-            Image(systemName: "chevron.down")
-                .font(DS.Font.scaled(11, weight: .semibold))
-                .foregroundColor(DS.Color.textTertiary)
-                .rotationEffect(.degrees(expanded ? 180 : 0))
-        }
-        .padding(.vertical, DS.Spacing.sm + 2)
-    }
-
-    private var childrenCountText: String {
-        let n = cachedChildren.count
-        if L10n.isArabic {
-            if n == 1 { return "ابن واحد" }
-            if n == 2 { return "ابنان" }
-            if n <= 10 { return "\(n) أبناء" }
-            return "\(n) ابن"
-        }
-        return n == 1 ? "1 child" : "\(n) children"
-    }
-
-    private func familyRow(icon: String, label: String, value: String, color: Color) -> some View {
-        HStack(spacing: DS.Spacing.md) {
-            ZStack {
-                Circle()
-                    .fill(color.opacity(0.12))
-                    .frame(width: 32, height: 32)
-                Image(systemName: icon)
-                    .font(DS.Font.scaled(13, weight: .semibold))
-                    .foregroundColor(color)
-            }
-            Text(label)
-                .font(DS.Font.callout)
-                .foregroundColor(DS.Color.textSecondary)
-            Spacer()
-            Text(value)
-                .font(DS.Font.calloutBold)
-                .foregroundColor(DS.Color.textPrimary)
-                .lineLimit(1)
-            Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
-                .font(DS.Font.scaled(11, weight: .semibold))
-                .foregroundColor(DS.Color.textTertiary)
-        }
-        .padding(.vertical, DS.Spacing.sm + 2)
     }
 
     // MARK: - Bio Card
@@ -1153,7 +1214,10 @@ struct MemberDetailsView: View {
 
     private var avatarContent: some View {
         ZStack {
-            if let url = member.avatarUrl, let imageUrl = URL(string: url) {
+            if member.isFemale {
+                // قاعدة: الأنثى بلا صورة شخصية — صورة أنثى مرسومة.
+                FemaleAvatarView()
+            } else if let url = member.avatarUrl, let imageUrl = URL(string: url) {
                 CachedAsyncImage(url: imageUrl) { img in
                     img.resizable().scaledToFill()
                 } placeholder: {
@@ -1166,7 +1230,7 @@ struct MemberDetailsView: View {
                     endPoint: .bottomTrailing
                 )
                 .overlay(
-                    Image(systemName: "person.fill")
+                    Image(systemName: member.fallbackSymbol)
                         .font(DS.Font.scaled(50))
                         .foregroundColor(DS.Color.primary.opacity(0.5))
                 )

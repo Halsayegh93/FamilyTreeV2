@@ -111,23 +111,34 @@ struct AdminRegisterMemberView: View {
     }
 
     // MARK: - Photo Section — كاميرا على الصورة مباشرة (نفس فورم التسجيل)
+    @ViewBuilder
     private var photoSection: some View {
         VStack(spacing: DS.Spacing.xs) {
-            DSProfilePhotoPicker(
-                selectedImage: $selectedImage,
-                enableCrop: true,
-                cropShape: .circle,
-                title: L10n.t("الصورة الشخصية", "Profile Photo"),
-                trailing: L10n.t("اختياري", "Optional"),
-                compactEmptyState: true
-            )
+            if selectedGender == "female" {
+                // قاعدة التطبيق: الأنثى بلا صورة شخصية.
+                FemaleAvatarView()
+                    .frame(width: 96, height: 96)
+                Text(L10n.t("لا تُضاف صورة شخصية للأنثى",
+                            "No personal photo for females"))
+                    .font(DS.Font.caption1)
+                    .foregroundColor(DS.Color.textTertiary)
+            } else {
+                DSProfilePhotoPicker(
+                    selectedImage: $selectedImage,
+                    enableCrop: true,
+                    cropShape: .circle,
+                    title: L10n.t("الصورة الشخصية", "Profile Photo"),
+                    trailing: L10n.t("اختياري", "Optional"),
+                    compactEmptyState: true
+                )
 
-            Text(L10n.t(
-                "سوف تُستخدم كصورة في شجرة العائلة",
-                "Will be used as the member's photo in the family tree"
-            ))
-            .font(DS.Font.caption1)
-            .foregroundColor(DS.Color.textTertiary)
+                Text(L10n.t(
+                    "سوف تُستخدم كصورة في شجرة العائلة",
+                    "Will be used as the member's photo in the family tree"
+                ))
+                .font(DS.Font.caption1)
+                .foregroundColor(DS.Color.textTertiary)
+            }
         }
         .padding(.top, DS.Spacing.xl)
     }
