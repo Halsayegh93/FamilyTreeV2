@@ -34,6 +34,7 @@ struct MemberDetailsView: View {
     @State private var reportReason = ""
     @State private var reportSent = false
     @State private var childrenExpanded = false
+    @State private var showChildrenSheet = false
 
     // MARK: - Cached State (تحسب مرة عند تغيير العضو لتفادي إعادة الحساب O(n) في كل rebuild)
 
@@ -387,19 +388,13 @@ struct MemberDetailsView: View {
 
     private func buildChips(isDeceased: Bool, birthYear: String?, deathYear: String?, phone: String, phoneHidden: Bool) -> [ChipData] {
         var c: [ChipData] = []
-        c.append(.init(
-            icon: isDeceased ? "moon.zzz.fill" : "checkmark.circle.fill",
-            text: isDeceased ? L10n.t("متوفّى", "Deceased") : L10n.t("نشِط", "Active"),
-            label: L10n.t("الحالة", "Status"),
-            color: isDeceased ? DS.Color.textSecondary : DS.Color.success
-        ))
         if let by = birthYear {
             c.append(.init(icon: "birthday.cake", text: by, label: L10n.t("الميلاد", "Birth"), color: DS.Color.primary))
         }
         if let byStr = birthYear, let by = Int(byStr) {
             let end = isDeceased ? Int(deathYear ?? "") : Calendar.current.component(.year, from: Date())
             if let end = end, end >= by, end - by < 130 {
-                c.append(.init(icon: "hourglass", text: "\(end - by)", label: L10n.t("العمر", "Age"), color: DS.Color.warning))
+                c.append(.init(icon: "timelapse", text: "\(end - by)", label: L10n.t("العمر", "Age"), color: DS.Color.warning))
             }
         }
         if isDeceased, let dy = deathYear {
@@ -604,62 +599,119 @@ struct MemberDetailsView: View {
                         iconColor: DS.Color.success
                     )
 
-                    VStack(spacing: 0) {
+                    // دائرتان قابلتان للضغط: «الأب» + «الأبناء (N)».
+                    HStack(alignment: .top, spacing: DS.Spacing.xxxl) {
                         if let father = cachedFather {
-                            Button {
-                                // الشيت يبقى مفتوح — يتحدث محتواه + الشجرة تتزامن خلفه
-                                let fatherId = father.id
-                                currentMemberId = fatherId
-                                NotificationCenter.default.post(
-                                    name: .openMemberInTree,
-                                    object: nil,
-                                    userInfo: ["memberId": fatherId]
-                                )
-                            } label: {
-                                familyRow(
-                                    icon: "person.fill",
+                            Button { openMemberInTree(father.id) } label: {
+                                familyCircle(
+                                    member: father,
                                     label: L10n.t("الأب", "Father"),
-                                    value: father.firstName,
+                                    sub: father.firstName,
+                                    count: nil,
                                     color: DS.Color.success
                                 )
                             }
-                            .buttonStyle(.plain)
-
-                            if !cachedChildren.isEmpty {
-                                Divider().padding(.leading, 56)
-                            }
+                            .buttonStyle(DSScaleButtonStyle())
                         }
-
                         if !cachedChildren.isEmpty {
-                            // عنوان الأبناء + العدد (بدون طي) ثم الشبكة المدمجة مباشرة.
-                            HStack(spacing: DS.Spacing.md) {
-                                ZStack {
-                                    Circle()
-                                        .fill(DS.Color.info.opacity(0.12))
-                                        .frame(width: 32, height: 32)
-                                    Image(systemName: "person.3.fill")
-                                        .font(DS.Font.scaled(13, weight: .semibold))
-                                        .foregroundColor(DS.Color.info)
-                                }
-                                Text(L10n.t("الأبناء", "Children"))
-                                    .font(DS.Font.callout)
-                                    .foregroundColor(DS.Color.textSecondary)
-                                Spacer()
-                                Text(childrenCountText)
-                                    .font(DS.Font.calloutBold)
-                                    .foregroundColor(DS.Color.textPrimary)
-                                    .lineLimit(1)
+                            Button { showChildrenSheet = true } label: {
+                                familyCircle(
+                                    member: nil,
+                                    label: L10n.t("الأبناء", "Children"),
+                                    sub: childrenCountText,
+                                    count: cachedChildren.count,
+                                    color: DS.Color.primary
+                                )
                             }
-                            .padding(.vertical, DS.Spacing.sm + 2)
-
-                            childrenInlineGrid
+                            .buttonStyle(DSScaleButtonStyle())
                         }
                     }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, DS.Spacing.md)
                     .padding(.horizontal, DS.Spacing.md)
-                    .padding(.bottom, DS.Spacing.md)
                 }
             }
+            .sheet(isPresented: $showChildrenSheet) { childrenSheet }
         }
+    }
+
+    private func openMemberInTree(_ id: UUID) {
+        // الشيت يبقى مفتوح — يتحدث محتواه + الشجرة تتزامن خلفه.
+        currentMemberId = id
+        NotificationCenter.default.post(
+            name: .openMemberInTree, object: nil, userInfo: ["memberId": id]
+        )
+    }
+
+    /// دائرة عائلة: صورة الأب أو عدد الأبناء + تسمية تحتها.
+    private func familyCircle(member: FamilyMember?, label: String, sub: String, count: Int?, color: Color) -> some View {
+        VStack(spacing: 6) {
+            ZStack {
+                Circle()
+                    .fill(color.opacity(0.12))
+                    .frame(width: 64, height: 64)
+                    .overlay(Circle().stroke(color.opacity(0.35), lineWidth: 1.5))
+                if let m = member {
+                    if let urlStr = m.avatarUrl, let url = URL(string: urlStr) {
+                        CachedAsyncImage(url: url) { img in
+                            img.resizable().scaledToFill()
+                        } placeholder: {
+                            Text(String(m.firstName.prefix(1)))
+                                .font(DS.Font.title2).fontWeight(.bold).foregroundColor(color)
+                        }
+                        .frame(width: 64, height: 64)
+                        .clipShape(Circle())
+                    } else {
+                        Text(String(m.firstName.prefix(1)))
+                            .font(DS.Font.title2).fontWeight(.bold).foregroundColor(color)
+                    }
+                } else {
+                    Text("\(count ?? 0)")
+                        .font(DS.Font.title1)
+                        .fontWeight(.bold)
+                        .foregroundColor(color)
+                }
+            }
+            Text(label)
+                .font(DS.Font.caption1)
+                .foregroundColor(DS.Color.textSecondary)
+            Text(sub)
+                .font(DS.Font.footnote)
+                .fontWeight(.semibold)
+                .foregroundColor(DS.Color.textPrimary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+        .frame(width: 92)
+    }
+
+    /// شيت قائمة الأبناء — شبكة صور تُفتح عند الضغط على دائرة «الأبناء».
+    private var childrenSheet: some View {
+        NavigationStack {
+            ScrollView(showsIndicators: false) {
+                LazyVGrid(
+                    columns: Array(repeating: GridItem(.flexible(), spacing: DS.Spacing.sm), count: 4),
+                    spacing: DS.Spacing.md
+                ) {
+                    ForEach(cachedChildren) { child in
+                        Button {
+                            showChildrenSheet = false
+                            openMemberInTree(child.id)
+                        } label: {
+                            childTileFirstName(child)
+                        }
+                        .buttonStyle(DSScaleButtonStyle())
+                    }
+                }
+                .padding(DS.Spacing.lg)
+            }
+            .background(DS.Color.background.ignoresSafeArea())
+            .navigationTitle(L10n.t("الأبناء", "Children") + " (\(cachedChildren.count))")
+            .navigationBarTitleDisplayMode(.inline)
+            .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+        }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
     }
 
     /// شريط أفقي قابل للتمرير من صور الأبناء — تصميم احترافي مثل الآيفون.
