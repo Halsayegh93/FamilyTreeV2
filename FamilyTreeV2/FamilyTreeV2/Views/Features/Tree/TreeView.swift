@@ -1,5 +1,6 @@
 import SwiftUI
 import Foundation
+import Supabase
 
 // MARK: - Notification Names
 extension Notification.Name {
@@ -148,6 +149,7 @@ struct TreeView: View {
     @State private var cachedChildrenByFatherId: [UUID: [FamilyMember]] = [:]
     @State private var cachedMemberIds: Set<UUID> = []
     @State private var cachedHusbandsWithWives: Set<UUID> = []
+    @State private var cachedHusbandsAllWivesDeceased: Set<UUID> = []
 
     private var lightweightFullTree: Bool {
         cachedVisibleMembers.count > 90
@@ -184,6 +186,7 @@ struct TreeView: View {
         let childrenMap: [UUID: [FamilyMember]]
         let ids: Set<UUID>
         let husbandsWithWives: Set<UUID>
+        let husbandsAllWivesDeceased: Set<UUID>
     }
 
     /// حساب الكاش — pure function، تشتغل على أي thread.
@@ -209,9 +212,15 @@ struct TreeView: View {
         ).mapValues { pairs in pairs.map(\.0).sortedForDisplay() }
 
         // الرجال الذين لهم زوجات (لإظهار شارة الزوجة) — من كل الأعضاء لا المرئيين فقط.
-        let husbandsWithWives = Set(members.compactMap { m -> UUID? in
-            (m.isFemale && m.husbandId != nil) ? m.husbandId : nil
-        })
+        var wivesByHusband: [UUID: [FamilyMember]] = [:]
+        for m in members where m.isFemale && m.husbandId != nil {
+            wivesByHusband[m.husbandId!, default: []].append(m)
+        }
+        let husbandsWithWives = Set(wivesByHusband.keys)
+        // الرجال الذين كل زوجاتهم متوفّيات (لإظهار حالة الوفاة على الشارة).
+        let husbandsAllWivesDeceased = Set(
+            wivesByHusband.filter { $0.value.allSatisfy { $0.isDeceased == true } }.keys
+        )
 
         return TreeCache(
             visible: visible,
@@ -219,7 +228,8 @@ struct TreeView: View {
             roots: roots,
             childrenMap: childrenMap,
             ids: Set(visible.map(\.id)),
-            husbandsWithWives: husbandsWithWives
+            husbandsWithWives: husbandsWithWives,
+            husbandsAllWivesDeceased: husbandsAllWivesDeceased
         )
     }
 
@@ -231,6 +241,7 @@ struct TreeView: View {
         cachedChildrenByFatherId = cache.childrenMap
         cachedMemberIds = cache.ids
         cachedHusbandsWithWives = cache.husbandsWithWives
+        cachedHusbandsAllWivesDeceased = cache.husbandsAllWivesDeceased
     }
 
     /// إعادة بناء سريعة (synchronous) — للتحميل الأول.
@@ -591,6 +602,11 @@ struct TreeView: View {
             currentAnchor = .center
             scrollTarget = member.id
             scrollCounter += 1
+            // إعادة توسيط بعد استقرار التوسّع — يضبط الموضع عند الذهاب لموقعي.
+            try? await Task.sleep(nanoseconds: 350_000_000)
+            guard !Task.isCancelled else { return }
+            currentAnchor = .center
+            scrollCounter += 1
         }
 
         // Remove highlight after 5 seconds
@@ -778,7 +794,8 @@ struct TreeView: View {
             renderedCount: .constant(0),
             maxRendered: maxRenderedNodes,
             kinshipHighlightedIds: kinshipHighlightedIds,
-            husbandsWithWives: cachedHusbandsWithWives
+            husbandsWithWives: cachedHusbandsWithWives,
+            husbandsAllWivesDeceased: cachedHusbandsAllWivesDeceased
         )
     }
 
@@ -851,13 +868,14 @@ struct RecursiveTreeBranch: View {
     let maxRendered: Int
     var kinshipHighlightedIds: Set<UUID> = []
     var husbandsWithWives: Set<UUID> = []
+    var husbandsAllWivesDeceased: Set<UUID> = []
 
     /// الفتح يعتمد على activePath كمصدر وحيد للحقيقة
     private var isExpanded: Bool {
         activePath.contains(member.id)
     }
 
-    init(member: FamilyMember, childrenByFatherId: [UUID: [FamilyMember]], ancestorIDs: Set<UUID>, activePath: Binding<Set<UUID>>, searchedMemberID: Binding<UUID?>, selectedMember: Binding<FamilyMember?>, scrollTarget: Binding<UUID?>, scrollAnchor: Binding<UnitPoint>, scrollCounter: Binding<Int>, scale: Binding<CGFloat>, baseScale: Binding<CGFloat>, level: Int, viewMode: TreeDisplayMode, lightweightFullTree: Bool, currentLocationMemberID: UUID?, renderedCount: Binding<Int>, maxRendered: Int, kinshipHighlightedIds: Set<UUID> = [], husbandsWithWives: Set<UUID> = []) {
+    init(member: FamilyMember, childrenByFatherId: [UUID: [FamilyMember]], ancestorIDs: Set<UUID>, activePath: Binding<Set<UUID>>, searchedMemberID: Binding<UUID?>, selectedMember: Binding<FamilyMember?>, scrollTarget: Binding<UUID?>, scrollAnchor: Binding<UnitPoint>, scrollCounter: Binding<Int>, scale: Binding<CGFloat>, baseScale: Binding<CGFloat>, level: Int, viewMode: TreeDisplayMode, lightweightFullTree: Bool, currentLocationMemberID: UUID?, renderedCount: Binding<Int>, maxRendered: Int, kinshipHighlightedIds: Set<UUID> = [], husbandsWithWives: Set<UUID> = [], husbandsAllWivesDeceased: Set<UUID> = []) {
         self.member = member
         self.childrenByFatherId = childrenByFatherId
         self.ancestorIDs = ancestorIDs
@@ -877,6 +895,7 @@ struct RecursiveTreeBranch: View {
         self.maxRendered = maxRendered
         self.kinshipHighlightedIds = kinshipHighlightedIds
         self.husbandsWithWives = husbandsWithWives
+        self.husbandsAllWivesDeceased = husbandsAllWivesDeceased
     }
 
     private var visibleChildren: [FamilyMember] {
@@ -927,7 +946,8 @@ struct RecursiveTreeBranch: View {
                 level: level,
                 currentLocationMemberID: currentLocationMemberID,
                 isKinshipHighlighted: isKinshipPath,
-                hasWives: husbandsWithWives.contains(member.id)
+                hasWives: husbandsWithWives.contains(member.id),
+                wifeDeceased: husbandsAllWivesDeceased.contains(member.id)
             ) {
                 selectedMember = member
             } onToggle: {
@@ -1022,7 +1042,8 @@ struct RecursiveTreeBranch: View {
                                         renderedCount: $renderedCount,
                                         maxRendered: maxRendered,
                                         kinshipHighlightedIds: kinshipHighlightedIds,
-                                        husbandsWithWives: husbandsWithWives
+                                        husbandsWithWives: husbandsWithWives,
+                                        husbandsAllWivesDeceased: husbandsAllWivesDeceased
                                     )
                                 }
                             }
@@ -1049,6 +1070,7 @@ struct TreeMemberNode: View {
     let currentLocationMemberID: UUID?
     var isKinshipHighlighted: Bool = false
     var hasWives: Bool = false
+    var wifeDeceased: Bool = false
     let onTap: () -> Void
     let onToggle: () -> Void
     @State private var shouldLoadImage = false
@@ -1278,15 +1300,26 @@ struct TreeMemberNode: View {
                     }
                 }
                 .overlay(alignment: .topLeading) {
-                    // شارة الزواج — أيقونة زوجين ذهبية أكبر وأوضح لمن له زوجة.
+                    // شارة الزوجة — بنفسجي (نفس أيقونة العضو) + أيقونة متوفّى حمراء صغيرة عليها لو متوفّاة.
                     if hasWives {
-                        Image(systemName: "person.2.fill")
+                        Image(systemName: "person.fill")
                             .font(.system(size: 12, weight: .bold))
                             .foregroundColor(.white)
                             .padding(6)
-                            .background(Circle().fill(Color(hex: "#E0A93B")))
+                            .background(Circle().fill(Color(hex: "#8E5BD0")))
                             .overlay(Circle().stroke(Color.white, lineWidth: 2))
                             .shadow(color: Color.black.opacity(0.18), radius: 3, x: 0, y: 1)
+                            .overlay(alignment: .bottomTrailing) {
+                                if wifeDeceased {
+                                    Image(systemName: "heart.slash.fill")
+                                        .font(.system(size: 8, weight: .bold))
+                                        .foregroundColor(.white)
+                                        .padding(3)
+                                        .background(Circle().fill(Color(hex: "#8C2A2A")))
+                                        .overlay(Circle().stroke(Color.white, lineWidth: 1.2))
+                                        .offset(x: 3, y: 3)
+                                }
+                            }
                     }
                 }
                 .overlay {
@@ -1475,5 +1508,382 @@ private struct HexagonShape: Shape {
         }
         path.closeSubpath()
         return path
+    }
+}
+
+// MARK: - شجرة العائلة (النساء)
+
+/// صفّ جدول women_members (منفصل عن profiles).
+private struct WomenRow: Decodable {
+    let id: UUID
+    let firstName: String?
+    let fullName: String?
+    let parentId: UUID?
+    let sortOrder: Int?
+    let isDeceased: Bool?
+    let birthDate: String?
+    let deathDate: String?
+    let isHiddenFromTree: Bool?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case firstName = "first_name"
+        case fullName = "full_name"
+        case parentId = "parent_id"
+        case sortOrder = "sort_order"
+        case isDeceased = "is_deceased"
+        case birthDate = "birth_date"
+        case deathDate = "death_date"
+        case isHiddenFromTree = "is_hidden_from_tree"
+    }
+}
+
+/// طبقة بيانات شجرة النساء — قراءة/إضافة/تعديل/حذف (الكتابة للإدارة عبر RLS).
+enum WomenStore {
+    static func fetch() async throws -> [FamilyMember] {
+        let rows: [WomenRow] = try await SupabaseConfig.client
+            .from("women_members")
+            .select()
+            .order("sort_order", ascending: true)
+            .execute()
+            .value
+        return rows.map { r in
+            FamilyMember(
+                id: r.id,
+                firstName: r.firstName ?? "",
+                fullName: (r.fullName?.isEmpty == false ? r.fullName! : (r.firstName ?? "")),
+                deathDate: r.deathDate,
+                isDeceased: r.isDeceased,
+                role: .member,
+                fatherId: r.parentId,                 // parent → father لإعادة استخدام الشجرة
+                isHiddenFromTree: r.isHiddenFromTree ?? false,
+                sortOrder: r.sortOrder ?? 0,
+                status: .active,
+                gender: "male"                        // شكل العقدة بالأصلي (رجالي)
+            )
+        }
+    }
+
+    static func addChild(parentId: UUID, name: String, sortOrder: Int) async throws {
+        let payload: [String: AnyEncodable] = [
+            "first_name": AnyEncodable(name),
+            "full_name": AnyEncodable(name),
+            "parent_id": AnyEncodable(parentId.uuidString),
+            "sort_order": AnyEncodable(sortOrder),
+            "gender": AnyEncodable("female")
+        ]
+        try await SupabaseConfig.client.from("women_members").insert(payload).execute()
+    }
+
+    static func update(id: UUID, fullName: String, isDeceased: Bool, deathDate: String?, isHidden: Bool) async throws {
+        let first = fullName.components(separatedBy: " ").first ?? fullName
+        let payload: [String: AnyEncodable] = [
+            "full_name": AnyEncodable(fullName),
+            "first_name": AnyEncodable(first),
+            "is_deceased": AnyEncodable(isDeceased),
+            "death_date": AnyEncodable(isDeceased ? deathDate : Optional<String>.none),
+            "is_hidden_from_tree": AnyEncodable(isHidden)
+        ]
+        try await SupabaseConfig.client.from("women_members").update(payload).eq("id", value: id.uuidString).execute()
+    }
+
+    static func delete(id: UUID) async throws {
+        try await SupabaseConfig.client.from("women_members").delete().eq("id", value: id.uuidString).execute()
+    }
+}
+
+/// شاشة «شجرة العائلة (النساء)» — تُفتح من اختصار الرئيسية، تعيد استخدام
+/// RecursiveTreeBranch ببيانات women_members. التعديل للإدارة فقط.
+struct WomenTreeView: View {
+    @EnvironmentObject var authVM: AuthViewModel
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var allMembers: [FamilyMember] = []
+    @State private var childrenByParent: [UUID: [FamilyMember]] = [:]
+    @State private var roots: [FamilyMember] = []
+    @State private var isLoading = true
+
+    @State private var activePath: Set<UUID> = []
+    @State private var searchedMemberID: UUID? = nil
+    @State private var selectedWoman: FamilyMember? = nil
+    @State private var scrollTarget: UUID? = nil
+    @State private var currentAnchor: UnitPoint = .center
+    @State private var scrollCounter = 0
+    @State private var scale: CGFloat = 1.0
+    @State private var baseScale: CGFloat = 1.0
+    @State private var zoomAnchor: UnitPoint = .center
+    @State private var treeContentSize: CGSize = .zero
+
+    @State private var showAdd = false
+    @State private var addName = ""
+    @State private var addParent: FamilyMember? = nil
+    @State private var editTarget: FamilyMember? = nil
+
+    private var canEdit: Bool { authVM.canEditMembers }
+
+    var body: some View {
+        ZStack(alignment: .top) {
+            DS.Color.background.ignoresSafeArea()
+            GeometryReader { geometry in
+                Group {
+                    if isLoading {
+                        ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+                    } else if roots.isEmpty {
+                        Text(L10n.t("لا توجد بيانات", "No data"))
+                            .foregroundColor(DS.Color.textSecondary)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    } else {
+                        ScrollViewReader { proxy in
+                            ScrollView([.horizontal, .vertical], showsIndicators: false) {
+                                VStack(spacing: DS.Spacing.xxl) {
+                                    ForEach(roots) { root in
+                                        branch(for: root)
+                                            .frame(maxWidth: .infinity, alignment: .center)
+                                    }
+                                }
+                                .background(GeometryReader { g in
+                                    SwiftUI.Color.clear
+                                        .preference(key: TreeContentSizeKey.self, value: g.size)
+                                })
+                                .onPreferenceChange(TreeContentSizeKey.self) { treeContentSize = $0 }
+                                .scaleEffect(scale, anchor: zoomAnchor)
+                                .frame(minWidth: geometry.size.width,
+                                       minHeight: geometry.size.height, alignment: .center)
+                                .padding(.top, DS.Spacing.xxxxl * 3)
+                                .padding(.bottom, DS.Spacing.xxxxl * 3)
+                                .padding(.horizontal, DS.Spacing.xxxxl)
+                            }
+                            .simultaneousGesture(
+                                MagnificationGesture()
+                                    .onChanged { v in
+                                        zoomAnchor = .center
+                                        scale = min(max(baseScale * v, TreeConst.minScale), TreeConst.maxScale)
+                                    }
+                                    .onEnded { v in
+                                        scale = min(max(baseScale * v, TreeConst.minScale), TreeConst.maxScale)
+                                        baseScale = scale
+                                    }
+                            )
+                            .onChange(of: scrollCounter) { _ in
+                                if let id = scrollTarget {
+                                    withAnimation(.easeInOut(duration: 0.3)) {
+                                        proxy.scrollTo(id, anchor: currentAnchor)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            header
+        }
+        .navigationBarHidden(true)
+        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+        .task { await load() }
+        .sheet(item: $selectedWoman) { w in actionSheet(for: w) }
+        .sheet(item: $editTarget) { w in
+            WomenEditView(member: w) { Task { await load() } }
+        }
+        .alert(L10n.t("إضافة فرع", "Add branch"), isPresented: $showAdd) {
+            TextField(L10n.t("الاسم", "Name"), text: $addName)
+            Button(L10n.t("إضافة", "Add")) {
+                let name = addName.trimmingCharacters(in: .whitespaces)
+                addName = ""
+                guard !name.isEmpty, let p = addParent else { return }
+                let siblings = allMembers.filter { $0.fatherId == p.id }.count
+                Task {
+                    try? await WomenStore.addChild(parentId: p.id, name: name, sortOrder: siblings)
+                    await load()
+                }
+            }
+            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { addName = "" }
+        }
+    }
+
+    private var header: some View {
+        HStack(spacing: DS.Spacing.sm) {
+            Button { dismiss() } label: {
+                Image(systemName: L10n.isArabic ? "chevron.right" : "chevron.left")
+                    .font(DS.Font.scaled(18, weight: .bold))
+                    .foregroundColor(.white)
+            }
+            ZStack {
+                Circle().fill(Color.white.opacity(0.18)).frame(width: 40, height: 40)
+                Image(systemName: "person.2.fill").foregroundColor(.white)
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text(L10n.t("شجرة العائلة (النساء)", "Family Tree (Women)"))
+                    .font(DS.Font.headline).foregroundColor(.white)
+                Text(L10n.t("فرع النساء", "Women branch"))
+                    .font(DS.Font.caption1).foregroundColor(.white.opacity(0.8))
+            }
+            Spacer()
+        }
+        .padding(.horizontal, DS.Spacing.lg)
+        .padding(.vertical, DS.Spacing.md)
+        .frame(maxWidth: .infinity)
+        .background(DS.Color.gradientPrimary.ignoresSafeArea(edges: .top))
+    }
+
+    private func branch(for root: FamilyMember) -> some View {
+        RecursiveTreeBranch(
+            member: root,
+            childrenByFatherId: childrenByParent,
+            ancestorIDs: [],
+            activePath: $activePath,
+            searchedMemberID: $searchedMemberID,
+            selectedMember: $selectedWoman,
+            scrollTarget: $scrollTarget,
+            scrollAnchor: $currentAnchor,
+            scrollCounter: $scrollCounter,
+            scale: $scale,
+            baseScale: $baseScale,
+            level: 0,
+            viewMode: .interactive,
+            lightweightFullTree: false,
+            currentLocationMemberID: nil,
+            renderedCount: .constant(0),
+            maxRendered: 4000
+        )
+    }
+
+    @ViewBuilder
+    private func actionSheet(for w: FamilyMember) -> some View {
+        NavigationStack {
+            List {
+                if canEdit {
+                    Button {
+                        addParent = w
+                        selectedWoman = nil
+                        showAdd = true
+                    } label: {
+                        Label(L10n.t("إضافة فرع", "Add branch"), systemImage: "person.badge.plus")
+                    }
+                    Button {
+                        let t = w
+                        selectedWoman = nil
+                        editTarget = t
+                    } label: {
+                        Label(L10n.t("تعديل", "Edit"), systemImage: "pencil")
+                    }
+                    if w.fatherId != nil {
+                        Button(role: .destructive) {
+                            selectedWoman = nil
+                            Task { try? await WomenStore.delete(id: w.id); await load() }
+                        } label: {
+                            Label(L10n.t("حذف", "Delete"), systemImage: "trash")
+                        }
+                    }
+                } else {
+                    Text(L10n.t("للعرض فقط", "View only"))
+                        .foregroundColor(DS.Color.textSecondary)
+                }
+            }
+            .navigationTitle(w.fullName.isEmpty ? w.firstName : w.fullName)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(L10n.t("إغلاق", "Close")) { selectedWoman = nil }
+                }
+            }
+            .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+        }
+        .presentationDetents([.medium])
+    }
+
+    private func load() async {
+        do {
+            let fetched = try await WomenStore.fetch()
+            let visible = fetched.filter { !$0.isHiddenFromTree && !$0.fullName.isEmpty }
+            let ids = Set(visible.map(\.id))
+            var byParent: [UUID: [FamilyMember]] = [:]
+            for m in visible {
+                if let p = m.fatherId { byParent[p, default: []].append(m) }
+            }
+            for k in byParent.keys { byParent[k]?.sort { $0.sortOrder < $1.sortOrder } }
+            let rootList = visible
+                .filter { $0.fatherId == nil || !ids.contains($0.fatherId!) }
+                .sorted { $0.sortOrder < $1.sortOrder }
+            await MainActor.run {
+                self.allMembers = visible
+                self.childrenByParent = byParent
+                self.roots = rootList
+                if let first = rootList.first { self.activePath = [first.id] }
+                self.isLoading = false
+            }
+        } catch {
+            Log.error("خطأ تحميل شجرة النساء: \(error)")
+            await MainActor.run { self.isLoading = false }
+        }
+    }
+}
+
+/// محرّر عضوة شجرة النساء — الاسم الكامل + متوفّاة (تاريخ) + إظهار/إخفاء.
+struct WomenEditView: View {
+    let member: FamilyMember
+    let onSaved: () -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var fullName: String = ""
+    @State private var isDeceased = false
+    @State private var deathDate = Date()
+    @State private var isHidden = false
+    @State private var isSaving = false
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section(L10n.t("الاسم الكامل", "Full name")) {
+                    TextField(L10n.t("الاسم الكامل", "Full name"), text: $fullName)
+                }
+                Section {
+                    Toggle(isOn: $isDeceased.animation()) {
+                        Label(L10n.t("متوفّاة", "Deceased"), systemImage: "leaf.fill")
+                    }.tint(DS.Color.error)
+                    if isDeceased {
+                        DatePicker(L10n.t("تاريخ الوفاة", "Death date"),
+                                   selection: $deathDate, in: ...Date(), displayedComponents: .date)
+                    }
+                }
+                Section {
+                    Toggle(isOn: Binding(get: { !isHidden }, set: { isHidden = !$0 })) {
+                        Label(L10n.t("إظهار في الشجرة", "Show in tree"),
+                              systemImage: isHidden ? "eye.slash" : "eye")
+                    }.tint(DS.Color.primary)
+                }
+            }
+            .navigationTitle(L10n.t("تعديل", "Edit"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(L10n.t("إلغاء", "Cancel")) { dismiss() }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(L10n.t("حفظ", "Save")) { save() }
+                        .disabled(fullName.trimmingCharacters(in: .whitespaces).isEmpty || isSaving)
+                }
+            }
+            .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+        }
+        .onAppear {
+            fullName = member.fullName.isEmpty ? member.firstName : member.fullName
+            isDeceased = member.isDeceased ?? false
+            isHidden = member.isHiddenFromTree
+            let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"
+            if let d = member.deathDate, let parsed = f.date(from: String(d.prefix(10))) { deathDate = parsed }
+        }
+    }
+
+    private func save() {
+        let name = fullName.trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty else { return }
+        isSaving = true
+        let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"
+        let dStr = isDeceased ? f.string(from: deathDate) : nil
+        Task {
+            try? await WomenStore.update(id: member.id, fullName: name,
+                                         isDeceased: isDeceased, deathDate: dStr, isHidden: isHidden)
+            await MainActor.run { isSaving = false; onSaved(); dismiss() }
+        }
     }
 }

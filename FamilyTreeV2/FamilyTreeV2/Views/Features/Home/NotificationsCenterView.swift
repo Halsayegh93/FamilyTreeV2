@@ -24,6 +24,8 @@ private struct NotificationKindStyle {
         "admin_request":     .init(icon: "shield.fill",                              gradient: DS.Color.gradientAccent,  color: DS.Color.accent,      labelAr: "إدارة",           labelEn: "Admin"),
         "deceased_report":   .init(icon: "heart.fill",                               gradient: DS.Color.gradientAccent,  color: DS.Color.accent,      labelAr: "وفاة",            labelEn: "Deceased"),
         "child_add":         .init(icon: "person.badge.plus",                        gradient: DS.Color.gradientPrimary, color: DS.Color.secondary,   labelAr: "إضافة ابن",       labelEn: "Child Add"),
+        "wife_add":          .init(icon: "person.badge.plus",                        gradient: DS.Color.gradientPrimary, color: DS.Color.secondary,   labelAr: "إضافة زوجة",      labelEn: "Wife Add"),
+        "mother_add":        .init(icon: "person.badge.plus",                        gradient: DS.Color.gradientPrimary, color: DS.Color.secondary,   labelAr: "إضافة أم",        labelEn: "Mother Add"),
         "admin_edit_child_add":   .init(icon: "person.badge.plus",                   gradient: DS.Color.gradientPrimary, color: DS.Color.secondary,   labelAr: "إضافة ابن",       labelEn: "Child Add"),
         "admin_edit_child_remove":.init(icon: "person.badge.minus",                  gradient: DS.Color.gradientPrimary, color: DS.Color.error,       labelAr: "حذف ابن",         labelEn: "Child Removed"),
         "member_delete":     .init(icon: "trash.fill",                               gradient: DS.Color.gradientAccent,  color: DS.Color.error,       labelAr: "حذف عضو",         labelEn: "Member Removed"),

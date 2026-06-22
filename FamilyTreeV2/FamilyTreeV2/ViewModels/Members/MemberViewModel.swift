@@ -497,10 +497,11 @@ class MemberViewModel: ObservableObject {
             )
             self.allMembers.append(optimisticChild)
             
-            // تسجيل طلب إداري + إشعار فقط إذا الإضافة من حسابي (وليس من تعديل المدير)
-            if !silent {
+            // تسجيل طلب إداري + إشعار فقط إذا الإضافة من حسابي (وليس من تعديل المدير).
+            // المتوفّى سجلّ تاريخي — لا يُنشئ طلب مراجعة «معلّق».
+            if !silent && !isDeceased {
                 let requester = currentUser?.id ?? fatherId
-                let details = "تمت إضافة ابن جديد: \(firstNameOnly) (\(isDeceased ? "متوفى" : "حي"))."
+                let details = "تمت إضافة ابن جديد: \(firstNameOnly)."
                 let childRequestId = UUID()
                 let requestData: [String: AnyEncodable] = [
                     "id": AnyEncodable(childRequestId.uuidString),
@@ -599,7 +600,7 @@ class MemberViewModel: ObservableObject {
                     await notificationVM?.notifyAdminsWithPush(
                         title: L10n.t("طلب إضافة زوجة", "Wife Add Request"),
                         body: "\(trimmed) لـ: \(husband.fullName)",
-                        kind: RequestType.childAdd.rawValue,
+                        kind: "wife_add",
                         requestId: reqId,
                         requestType: RequestType.childAdd.rawValue
                     )
@@ -617,8 +618,80 @@ class MemberViewModel: ObservableObject {
         return nil
     }
 
+    /// ربط عضوة موجودة بالشجرة كزوجة لرجل (نفس العائلة) — husband_id + أنثى.
+    /// إشعار الإدارة بـ«إضافة زوجة» عند طلب العضو (غير صامت).
+    func linkWife(wifeId: UUID, husbandId: UUID,
+                  wifeName: String? = nil, husbandName: String? = nil,
+                  silent: Bool = false) async {
+        guard NetworkMonitor.shared.requireOnline() else { return }
+        do {
+            let payload: [String: AnyEncodable] = [
+                "husband_id": AnyEncodable(husbandId.uuidString),
+                "gender": AnyEncodable("female")
+            ]
+            try await supabase.from("profiles")
+                .update(payload)
+                .eq("id", value: wifeId.uuidString)
+                .execute()
+            await fetchSingleMember(id: wifeId)
+            if !silent {
+                await notificationVM?.notifyAdminsWithPush(
+                    title: L10n.t("إضافة زوجة", "Wife Added"),
+                    body: "\(wifeName ?? "زوجة") لـ: \(husbandName ?? "عضو")",
+                    kind: "wife_add"
+                )
+            }
+        } catch {
+            Log.error("خطأ ربط الزوجة: \(error)")
+        }
+    }
+
+    /// ضبط حالة الوفاة + تاريخها مباشرة (للزوجة/الأم — محرّر مبسّط).
+    func setDeceased(memberId: UUID, isDeceased: Bool, deathDate: Date?) async {
+        guard NetworkMonitor.shared.requireOnline() else { return }
+        do {
+            let payload: [String: AnyEncodable] = [
+                "is_deceased": AnyEncodable(isDeceased),
+                "death_date": AnyEncodable(
+                    (isDeceased && deathDate != nil) ? DateHelper.format(deathDate!) : Optional<String>.none)
+            ]
+            try await supabase.from("profiles")
+                .update(payload)
+                .eq("id", value: memberId.uuidString)
+                .execute()
+            if let idx = allMembers.firstIndex(where: { $0.id == memberId }) {
+                allMembers[idx].isDeceased = isDeceased
+                membersVersion += 1
+            }
+            await fetchSingleMember(id: memberId)
+        } catch {
+            Log.error("خطأ ضبط الوفاة: \(error)")
+        }
+    }
+
+    /// إظهار/إخفاء عضو من الشجرة مباشرة (is_hidden_from_tree).
+    func setHiddenFromTree(memberId: UUID, hidden: Bool) async {
+        guard NetworkMonitor.shared.requireOnline() else { return }
+        do {
+            try await supabase.from("profiles")
+                .update(["is_hidden_from_tree": AnyEncodable(hidden)])
+                .eq("id", value: memberId.uuidString)
+                .execute()
+            if let idx = allMembers.firstIndex(where: { $0.id == memberId }) {
+                allMembers[idx].isHiddenFromTree = hidden
+                membersVersion += 1
+            }
+            await fetchSingleMember(id: memberId)
+        } catch {
+            Log.error("خطأ إظهار/إخفاء العضو: \(error)")
+        }
+    }
+
     /// تعيين/تغيير أمّ ابن (mother_id) — الأم من زوجات أبيه.
-    func setMother(childId: UUID, motherId: UUID?) async {
+    /// إشعار الإدارة بـ«إضافة أم» عند طلب العضو (غير صامت).
+    func setMother(childId: UUID, motherId: UUID?,
+                   motherName: String? = nil, childName: String? = nil,
+                   silent: Bool = false) async {
         guard NetworkMonitor.shared.requireOnline() else { return }
         do {
             let payload: [String: AnyEncodable] = [
@@ -629,6 +702,13 @@ class MemberViewModel: ObservableObject {
                 .eq("id", value: childId.uuidString)
                 .execute()
             await fetchSingleMember(id: childId)
+            if !silent, motherId != nil {
+                await notificationVM?.notifyAdminsWithPush(
+                    title: L10n.t("إضافة أم", "Mother Added"),
+                    body: "\(motherName ?? "أم") لـ: \(childName ?? "عضو")",
+                    kind: "mother_add"
+                )
+            }
         } catch {
             Log.error("خطأ تعيين الأم: \(error)")
         }

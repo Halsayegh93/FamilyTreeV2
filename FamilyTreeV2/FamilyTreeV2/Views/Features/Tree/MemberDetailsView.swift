@@ -38,6 +38,10 @@ struct MemberDetailsView: View {
     @State private var newWifeName = ""
     @State private var showAssignChildren = false
     @State private var assignSelection: Set<UUID> = []
+    @State private var showAssignMother = false
+    @State private var showWifeChooser = false
+    @State private var showPickFamily = false
+    @State private var familyQuery = ""
 
     // MARK: - Cached State (تحسب مرة عند تغيير العضو لتفادي إعادة الحساب O(n) في كل rebuild)
 
@@ -496,7 +500,8 @@ struct MemberDetailsView: View {
             if let mother = cachedMother {
                 relReal(member: mother, label: L10n.t("الأم", "Mother"), size: circle)
             } else {
-                relPlaceholder(label: L10n.t("الأم", "Mother"), color: DS.Color.warning, size: circle)
+                relPlaceholder(label: L10n.t("الأم", "Mother"), color: DS.Color.warning, size: circle,
+                               action: canAddMother ? { showAssignMother = true } : nil)
             }
             Rectangle()
                 .fill(DS.Color.textTertiary.opacity(0.30))
@@ -510,17 +515,18 @@ struct MemberDetailsView: View {
                 }
             } else if cachedWives.isEmpty {
                 relPlaceholder(label: L10n.t("الزوجة", "Wife"), color: DS.Color.accent, size: circle,
-                               action: canAddWife ? { showAddWife = true } : nil)
+                               action: canAddWife ? { showWifeChooser = true } : nil)
             } else {
                 HStack(alignment: .top, spacing: DS.Spacing.md) {
                     ForEach(cachedWives) { wife in
                         relReal(member: wife, label: L10n.t("الزوجة", "Wife"), size: circle)
                     }
                     if canAddWife {
-                        Button { showAddWife = true } label: {
+                        Button { showWifeChooser = true } label: {
                             Image(systemName: "plus.circle.fill")
                                 .font(DS.Font.scaled(22))
                                 .foregroundColor(DS.Color.accent)
+                                .frame(width: circle, height: circle)
                         }
                         .buttonStyle(DSScaleButtonStyle())
                     }
@@ -528,6 +534,13 @@ struct MemberDetailsView: View {
             }
         }
         .frame(maxWidth: .infinity)
+        .confirmationDialog(L10n.t("إضافة زوجة", "Add wife"),
+                            isPresented: $showWifeChooser, titleVisibility: .visible) {
+            Button(L10n.t("اسم جديد", "New name")) { showAddWife = true }
+            Button(L10n.t("من العائلة (عضو موجود)", "From family")) { showPickFamily = true }
+            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
+        }
+        .sheet(isPresented: $showPickFamily) { pickFamilySheet }
         .alert(L10n.t("إضافة زوجة", "Add Wife"), isPresented: $showAddWife) {
             TextField(L10n.t("اسم الزوجة", "Wife name"), text: $newWifeName)
             Button(L10n.t("إضافة", "Add")) {
@@ -540,11 +553,130 @@ struct MemberDetailsView: View {
             }
             Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { newWifeName = "" }
         }
+        .sheet(isPresented: $showAssignMother) { assignMotherSheet }
     }
 
     /// مسموح بإضافة زوجة: العضو رجل + (مدير يعدّل أو هو نفسه).
     private var canAddWife: Bool {
         !member.isFemale && (authVM.canEditMembers || isViewingSelf)
+    }
+
+    /// مسموح بتعيين الأم: ما لها أم + لها أب + (مدير أو هي نفسه).
+    private var canAddMother: Bool {
+        member.motherId == nil && member.fatherId != nil
+            && (authVM.canEditMembers || isViewingSelf)
+    }
+
+    /// زوجات أب العضو (للاختيار كأم).
+    private var fatherWivesForMother: [FamilyMember] {
+        guard let fid = member.fatherId else { return [] }
+        return memberVM.allMembers
+            .filter { $0.husbandId == fid && $0.isFemale }
+            .sorted { $0.sortOrder < $1.sortOrder }
+    }
+
+    /// شيت اختيار أمّ العضو من زوجات أبيه.
+    private var assignMotherSheet: some View {
+        NavigationStack {
+            Group {
+                if fatherWivesForMother.isEmpty {
+                    VStack(spacing: DS.Spacing.md) {
+                        Image(systemName: "person.crop.circle.badge.questionmark")
+                            .font(DS.Font.scaled(40))
+                            .foregroundColor(DS.Color.textTertiary)
+                        Text(L10n.t("أضف زوجة لوالده أولاً (من تفاصيل الأب).",
+                                    "Add a wife to his father first."))
+                            .font(DS.Font.callout)
+                            .foregroundColor(DS.Color.textSecondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, DS.Spacing.xl)
+                    }
+                } else {
+                    List(fatherWivesForMother) { wife in
+                        Button {
+                            showAssignMother = false
+                            Task {
+                                await memberVM.setMother(
+                                    childId: member.id, motherId: wife.id,
+                                    motherName: wife.fullName.isEmpty ? wife.firstName : wife.fullName,
+                                    childName: member.fullName.isEmpty ? member.firstName : member.fullName)
+                                recomputeCache()
+                            }
+                        } label: {
+                            HStack(spacing: DS.Spacing.md) {
+                                Image(systemName: "person.fill")
+                                    .foregroundColor(FemaleAvatarView.pinkIcon)
+                                Text(wife.fullName.isEmpty ? wife.firstName : wife.fullName)
+                                    .foregroundColor(DS.Color.textPrimary)
+                                Spacer()
+                            }
+                            .contentShape(Rectangle())
+                        }
+                    }
+                }
+            }
+            .navigationTitle(L10n.t("اختر الأم", "Choose Mother"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(L10n.t("إلغاء", "Cancel")) { showAssignMother = false }
+                }
+            }
+            .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+        }
+        .presentationDetents([.medium])
+    }
+
+    /// شيت اختيار عضوة من العائلة (بحث بالاسم) لربطها كزوجة.
+    private var pickFamilySheet: some View {
+        // نستبعد المحارم: الأم، الأخوات (نفس الأب)، العمّات (بنات الجد)، البنات.
+        let fatherId = member.fatherId
+        let grandfatherId = fatherId.flatMap { fid in
+            memberVM.allMembers.first(where: { $0.id == fid })?.fatherId
+        }
+        func isMahram(_ m: FamilyMember) -> Bool {
+            if let mid = member.motherId, m.id == mid { return true }       // أمه
+            if let fid = fatherId, m.fatherId == fid { return true }        // أخته
+            if let gid = grandfatherId, m.fatherId == gid { return true }   // عمّته
+            if m.fatherId == member.id { return true }                      // ابنته
+            return false
+        }
+        let all = memberVM.allMembers
+            .filter { $0.id != member.id && $0.isFemale && $0.husbandId == nil && $0.isCountable && !isMahram($0) }
+            .sorted { $0.fullName < $1.fullName }
+        let q = familyQuery.trimmingCharacters(in: .whitespaces)
+        let filtered: [FamilyMember] = q.isEmpty
+            ? Array(all.prefix(40))
+            : all.filter { $0.fullName.contains(q) || $0.firstName.contains(q) }
+        return NavigationStack {
+            List(filtered) { m in
+                Button {
+                    showPickFamily = false
+                    Task {
+                        await memberVM.linkWife(
+                            wifeId: m.id, husbandId: member.id,
+                            wifeName: m.fullName.isEmpty ? m.firstName : m.fullName,
+                            husbandName: member.fullName.isEmpty ? member.firstName : member.fullName)
+                        recomputeCache()
+                    }
+                } label: {
+                    Text(m.fullName.isEmpty ? m.firstName : m.fullName)
+                        .foregroundColor(DS.Color.textPrimary)
+                        .lineLimit(1)
+                }
+            }
+            .searchable(text: $familyQuery,
+                        prompt: L10n.t("ابحث بالاسم...", "Search by name..."))
+            .navigationTitle(L10n.t("اختر من العائلة", "From family"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(L10n.t("إلغاء", "Cancel")) { showPickFamily = false }
+                }
+            }
+            .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+        }
+        .presentationDetents([.large])
     }
 
     /// شيت تحديد أبناء الزوجة — اختيار متعدّد من أبناء زوجها، ثم ضبط mother_id.
@@ -593,9 +725,9 @@ struct MemberDetailsView: View {
                                 let wantHer = sel.contains(c.id)
                                 let isHer = c.motherId == member.id
                                 if wantHer && !isHer {
-                                    await memberVM.setMother(childId: c.id, motherId: member.id)
+                                    await memberVM.setMother(childId: c.id, motherId: member.id, silent: true)
                                 } else if !wantHer && isHer {
-                                    await memberVM.setMother(childId: c.id, motherId: nil)
+                                    await memberVM.setMother(childId: c.id, motherId: nil, silent: true)
                                 }
                             }
                             recomputeCache()
@@ -611,11 +743,17 @@ struct MemberDetailsView: View {
 
     /// عنصر علاقة حقيقي (الأم/الزوجة) — صورة + تسمية + اسم، قابل للضغط.
     private func relReal(member m: FamilyMember, label: String, size: CGFloat) -> some View {
-        Button { openMemberInTree(m.id) } label: {
+        // نفس أيقونة الشخص — اللون يميّز الدور (زوجة/أم/بنت).
+        let isWife = label == L10n.t("الزوجة", "Wife")
+        let isMother = label == L10n.t("الأم", "Mother")
+        let fbg = isWife ? FemaleAvatarView.wifeBg : (isMother ? FemaleAvatarView.motherBg : FemaleAvatarView.pink)
+        let ficon = isWife ? FemaleAvatarView.wifeIcon : (isMother ? FemaleAvatarView.motherIcon : FemaleAvatarView.pinkIcon)
+        return Button { openMemberInTree(m.id) } label: {
             VStack(spacing: 5) {
                 Group {
                     if m.isFemale {
-                        FemaleAvatarView().frame(width: size, height: size)
+                        FemaleAvatarView(bg: fbg, iconColor: ficon, isDeceased: m.isDeceased == true)
+                            .frame(width: size, height: size)
                     } else if let urlStr = m.avatarUrl, let url = URL(string: urlStr) {
                         CachedAsyncImage(url: url) { img in
                             img.resizable().scaledToFill()
@@ -636,17 +774,44 @@ struct MemberDetailsView: View {
                     .font(DS.Font.caption2)
                     .foregroundColor(DS.Color.textSecondary)
                     .lineLimit(1)
-                Text(m.firstName)
+                // الاسم كامل (مهم للزوجة) — حتى سطرين.
+                Text(m.fullName.isEmpty ? m.firstName : m.fullName)
                     .font(DS.Font.caption1)
                     .fontWeight(.semibold)
                     .foregroundColor(DS.Color.textPrimary)
-                    .lineLimit(1)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
                     .minimumScaleFactor(0.6)
+                // تاريخ وفاة الزوجة/الأم (إن وُجدت متوفّاة).
+                if m.isDeceased == true {
+                    Text(deceasedDateLabel(for: m))
+                        .font(DS.Font.caption2)
+                        .foregroundColor(DS.Color.error)
+                        .multilineTextAlignment(.center)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+                }
             }
             .frame(width: 72)
             .contentShape(Rectangle())
         }
         .buttonStyle(DSScaleButtonStyle())
+    }
+
+    /// نص «متوفّاة • التاريخ» لعلاقة أنثى متوفّاة.
+    private func deceasedDateLabel(for m: FamilyMember) -> String {
+        let prefix = L10n.t("متوفّاة", "Deceased")
+        guard let raw = m.deathDate, !raw.isEmpty else { return prefix }
+        let inFmt = DateFormatter()
+        inFmt.locale = Locale(identifier: "en_US_POSIX")
+        inFmt.dateFormat = "yyyy-MM-dd"
+        if let date = inFmt.date(from: String(raw.prefix(10))) {
+            let out = DateFormatter()
+            out.locale = LanguageManager.shared.locale
+            out.dateStyle = .medium
+            return "\(prefix) • \(out.string(from: date))"
+        }
+        return "\(prefix) • \(raw)"
     }
 
     /// مكان محجوز لعلاقة (الأم/الزوجة): دائرة متقطّعة فيها زر إضافة (+) + تسمية.
@@ -693,9 +858,7 @@ struct MemberDetailsView: View {
     /// غير ذلك → الأبناء يمين والبنات يسار (بلا تسميات).
     @ViewBuilder
     private var childrenCenteredWrap: some View {
-        if !cachedWives.isEmpty && cachedChildren.contains(where: { $0.motherId != nil }) {
-            childrenByMother
-        } else if sonsList.isEmpty || daughtersList.isEmpty {
+        if sonsList.isEmpty || daughtersList.isEmpty {
             childrenWrap(cachedChildren, perRow: 5)
         } else {
             // RTL: الأبناء يميناً (أول)، خط عمودي، ثم البنات يساراً.
@@ -707,33 +870,6 @@ struct MemberDetailsView: View {
                     .frame(width: 1)
                 childrenWrap(daughtersList, perRow: 3)
                     .frame(maxWidth: .infinity)
-            }
-        }
-    }
-
-    /// الأبناء مجمّعين تحت كل أم (زوجة) + مجموعة «أبناء آخرون».
-    private var childrenByMother: some View {
-        let wifeIds = Set(cachedWives.map { $0.id })
-        let others = cachedChildren.filter { $0.motherId == nil || !wifeIds.contains($0.motherId!) }
-        return VStack(spacing: DS.Spacing.lg) {
-            ForEach(cachedWives) { wife in
-                let kids = cachedChildren.filter { $0.motherId == wife.id }
-                if !kids.isEmpty {
-                    VStack(spacing: DS.Spacing.sm) {
-                        Text(L10n.t("أبناء ", "Children of ") + wife.firstName)
-                            .font(DS.Font.caption1).fontWeight(.semibold)
-                            .foregroundColor(DS.Color.textSecondary)
-                        childrenWrap(kids, perRow: 5)
-                    }
-                }
-            }
-            if !others.isEmpty {
-                VStack(spacing: DS.Spacing.sm) {
-                    Text(L10n.t("أبناء آخرون", "Other children"))
-                        .font(DS.Font.caption1).fontWeight(.semibold)
-                        .foregroundColor(DS.Color.textSecondary)
-                    childrenWrap(others, perRow: 5)
-                }
             }
         }
     }
@@ -1216,7 +1352,7 @@ struct MemberDetailsView: View {
         ZStack {
             if member.isFemale {
                 // قاعدة: الأنثى بلا صورة شخصية — صورة أنثى مرسومة.
-                FemaleAvatarView()
+                FemaleAvatarView(isDeceased: member.isDeceased == true)
             } else if let url = member.avatarUrl, let imageUrl = URL(string: url) {
                 CachedAsyncImage(url: imageUrl) { img in
                     img.resizable().scaledToFill()

@@ -14,6 +14,7 @@ struct HomeNewsView: View {
     @Binding var selectedTab: Int
     @State private var showingAddNews = false
     @State private var showingNotifications = false
+    @State private var showWomenTree = false
     @State private var selectedNewsForComments: NewsPost? = nil
     @State private var postToDelete: NewsPost? = nil
     @State private var postToReport: NewsPost? = nil
@@ -181,6 +182,9 @@ struct HomeNewsView: View {
             }
             .presentationDragIndicator(.visible)
         }
+        .fullScreenCover(isPresented: $showWomenTree) {
+            WomenTreeView()
+        }
         .task {
             // جلب المشاريع لعرض البطاقة الفاخرة بأحدث مشروع (مع كاش داخلي)
             if (appSettingsVM.settings.projectsEnabled ?? true), projectsVM.projects.isEmpty {
@@ -315,6 +319,16 @@ struct HomeNewsView: View {
                 count: nil,
                 height: primaryTileHeight,
                 action: { selectedTab = 1 }
+            )
+            // شجرة العائلة (النساء) — شاشة منفصلة (مو تبويب).
+            unifiedTile(
+                title: L10n.t("شجرة النساء", "Women's Tree"),
+                icon: "person.2.fill",
+                color: DS.Color.primary,
+                imageURL: nil,
+                count: nil,
+                height: primaryTileHeight,
+                action: { showWomenTree = true }
             )
             unifiedTile(
                 title: L10n.t("الديوانيات", "Diwaniyas"),

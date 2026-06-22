@@ -15,6 +15,8 @@ struct ProfileView: View {
 
     @State private var showAddChild = false
     @State private var editingChild: FamilyMember? = nil
+    @State private var editingRelative: FamilyMember? = nil
+    @State private var editingRelativeLabel: String = ""
     @State private var isReorderingChildren = false
     @State private var appeared = false
     @State private var isLoadingChildren = true
@@ -119,6 +121,14 @@ struct ProfileView: View {
                 Text(L10n.t("هل تريد الخروج من حسابك على هذا الجهاز؟", "Do you want to sign out of your account on this device?"))
             }
             .sheet(item: $editingChild) { child in EditChildSheet(member: child).presentationDragIndicator(.visible) }
+            .sheet(item: $editingRelative) { rel in
+                EditRelativeSheet(member: rel, roleLabel: editingRelativeLabel)
+                    .presentationDragIndicator(.visible)
+            }
+            .onChange(of: editingRelative) { newValue in
+                guard newValue == nil, let currentUser = user else { return }
+                Task { await memberVM.fetchChildren(for: currentUser.id) }
+            }
             .onChange(of: showAddChild) { isPresented in
                 guard !isPresented, let currentUser = user else { return }
                 Task { await memberVM.fetchChildren(for: currentUser.id) }
@@ -451,7 +461,7 @@ struct ProfileView: View {
                 // Header مع زر الترتيب
                 HStack {
                     DSSectionHeader(
-                        title: L10n.t("الأبناء", "Children"),
+                        title: L10n.t("العائلة", "Family"),
                         icon: "person.2.fill",
                         iconColor: DS.Color.textSecondary
                     )
@@ -483,6 +493,21 @@ struct ProfileView: View {
                     }
                 }
 
+                // الأم (بالأعلى) ثم الزوجة — نفس تعديلات الأبناء (نقر → تعديل).
+                if let u = user {
+                    let mom = u.motherId.flatMap { memberVM.member(byId: $0) }
+                    let wives = memberVM.allMembers
+                        .filter { $0.husbandId == u.id && $0.isFemale }
+                        .sorted { $0.sortOrder < $1.sortOrder }
+                    if let mom { familyRelRow(member: mom, label: L10n.t("الأم", "Mother")) }
+                    ForEach(wives, id: \.id) { wife in
+                        familyRelRow(member: wife, label: L10n.t("الزوجة", "Wife"))
+                    }
+                    if mom != nil || !wives.isEmpty {
+                        DSDivider().padding(.vertical, DS.Spacing.xs)
+                    }
+                }
+
                 if isLoadingChildren && memberVM.currentMemberChildren.isEmpty {
                     VStack(spacing: DS.Spacing.sm) {
                         ForEach(0..<3, id: \.self) { _ in
@@ -503,6 +528,47 @@ struct ProfileView: View {
             .animation(DS.Anim.medium, value: isLoadingChildren)
         }
         .padding(.horizontal, DS.Spacing.lg)
+    }
+
+    // MARK: - صف الأم/الزوجة داخل «العائلة» — نقر → نفس تعديلات الأبناء
+    private func familyRelRow(member: FamilyMember, label: String) -> some View {
+        let isWife = label == L10n.t("الزوجة", "Wife")
+        let isMother = label == L10n.t("الأم", "Mother")
+        let fbg = isWife ? FemaleAvatarView.wifeBg : (isMother ? FemaleAvatarView.motherBg : FemaleAvatarView.pink)
+        let ficon = isWife ? FemaleAvatarView.wifeIcon : (isMother ? FemaleAvatarView.motherIcon : FemaleAvatarView.pinkIcon)
+        return Button {
+            editingRelativeLabel = label
+            editingRelative = member
+        } label: {
+            HStack(spacing: DS.Spacing.md) {
+                DSMemberAvatar(
+                    name: member.firstName,
+                    avatarUrl: member.displayAvatarUrl,
+                    size: 40,
+                    isFemale: member.isFemale,
+                    femaleBg: fbg,
+                    femaleIcon: ficon,
+                    isDeceased: member.isDeceased == true
+                )
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(member.fullName.isEmpty ? member.firstName : member.fullName)
+                        .font(DS.Font.calloutBold)
+                        .foregroundColor(DS.Color.textPrimary)
+                        .lineLimit(1)
+                    Text(label)
+                        .font(DS.Font.caption1)
+                        .foregroundColor(DS.Color.textSecondary)
+                }
+                Spacer()
+                Image(systemName: "pencil")
+                    .font(DS.Font.scaled(13, weight: .semibold))
+                    .foregroundColor(DS.Color.textTertiary)
+            }
+            .padding(.horizontal, DS.Spacing.lg)
+            .padding(.vertical, DS.Spacing.sm)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Grid View (الوضع العادي)
@@ -734,5 +800,92 @@ struct ProfileView: View {
         .buttonStyle(DSScaleButtonStyle())
         .padding(.horizontal, DS.Spacing.lg)
         .padding(.top, DS.Spacing.md)
+    }
+}
+
+// MARK: - تعديل الزوجة/الأم (محرّر مختلف عن الابن — الاسم الكامل + متوفّاة + إخفاء)
+struct EditRelativeSheet: View {
+    @EnvironmentObject var memberVM: MemberViewModel
+    @Environment(\.dismiss) private var dismiss
+
+    let member: FamilyMember
+    let roleLabel: String
+
+    @State private var fullName: String = ""
+    @State private var isDeceased: Bool = false
+    @State private var deathDate: Date = Date()
+    @State private var isHidden: Bool = false
+    @State private var isSaving = false
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextField(L10n.t("الاسم الكامل", "Full name"), text: $fullName)
+                } header: {
+                    Text(L10n.t("الاسم الكامل", "Full name"))
+                }
+
+                Section {
+                    Toggle(isOn: $isDeceased.animation(DS.Anim.snappy)) {
+                        Label(L10n.t("متوفّاة", "Deceased"), systemImage: "leaf.fill")
+                    }
+                    .tint(DS.Color.error)
+                    if isDeceased {
+                        DatePicker(L10n.t("تاريخ الوفاة", "Death date"),
+                                   selection: $deathDate, in: ...Date(),
+                                   displayedComponents: .date)
+                    }
+                }
+
+                Section {
+                    Toggle(isOn: Binding(get: { !isHidden }, set: { isHidden = !$0 })) {
+                        Label(L10n.t("إظهار في الشجرة", "Show in tree"),
+                              systemImage: isHidden ? "eye.slash" : "eye")
+                    }
+                    .tint(DS.Color.primary)
+                }
+            }
+            .navigationTitle(L10n.t("تعديل \(roleLabel)", "Edit \(roleLabel)"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(L10n.t("إلغاء", "Cancel")) { dismiss() }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(L10n.t("حفظ", "Save")) { save() }
+                        .disabled(fullName.trimmingCharacters(in: .whitespaces).isEmpty || isSaving)
+                }
+            }
+            .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+        }
+        .onAppear {
+            fullName = member.fullName.isEmpty ? member.firstName : member.fullName
+            isDeceased = member.isDeceased ?? false
+            isHidden = member.isHiddenFromTree
+            let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"
+            if let d = member.deathDate, let parsed = f.date(from: String(d.prefix(10))) {
+                deathDate = parsed
+            }
+        }
+    }
+
+    private func save() {
+        let name = fullName.trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty else { return }
+        isSaving = true
+        Task {
+            // الاسم الكامل كما هو (بدون إلحاق/تكرار).
+            await memberVM.updateMemberName(memberId: member.id, fullName: name, silent: true)
+            if isDeceased != (member.isDeceased ?? false) || isDeceased {
+                await memberVM.setDeceased(memberId: member.id, isDeceased: isDeceased,
+                                           deathDate: isDeceased ? deathDate : nil)
+            }
+            if isHidden != member.isHiddenFromTree {
+                await memberVM.setHiddenFromTree(memberId: member.id, hidden: isHidden)
+            }
+            isSaving = false
+            dismiss()
+        }
     }
 }

@@ -1424,11 +1424,15 @@ struct DSMemberAvatar: View {
     var roleColor: Color = DS.Color.primary
     /// قاعدة التطبيق: الأنثى بلا صورة — تُعرض FemaleAvatarView بدلاً من الصورة/الحرف.
     var isFemale: Bool = false
+    /// لون أنثوي حسب الدور (زوجة/أم/بنت) + علامة متوفّاة.
+    var femaleBg: Color = FemaleAvatarView.pink
+    var femaleIcon: Color = FemaleAvatarView.pinkIcon
+    var isDeceased: Bool = false
 
     var body: some View {
         ZStack {
             if isFemale {
-                FemaleAvatarView()
+                FemaleAvatarView(bg: femaleBg, iconColor: femaleIcon, isDeceased: isDeceased)
                     .frame(width: size, height: size)
             } else if let urlStr = avatarUrl, let url = URL(string: urlStr) {
                 Circle()
@@ -1463,21 +1467,47 @@ struct DSMemberAvatar: View {
 }
 
 /// صورة بديلة للأنثى (قاعدة التطبيق: الأنثى بلا صورة شخصية).
-/// نفس شكل أيقونة الذكر (person.fill) بيضاء، على خلفية وردية.
+/// أيقونة شخص بلون وردي غامق على خلفية وردية فاتحة جداً.
 struct FemaleAvatarView: View {
-    /// الوردي المعتمد لخلفية رمز الأنثى في كل التطبيق (وردي فاتح/خفيف).
-    static let pink = Color(hex: "#EF9BC2")
+    /// نفس أيقونة الشخص — اللون يميّز الدور. + علامة متوفّاة عند اللزوم.
+    var bg: Color = FemaleAvatarView.pink
+    var iconColor: Color = FemaleAvatarView.pinkIcon
+    var isDeceased: Bool = false
+
+    // بنت / أنثى عامة — وردي.
+    static let pink = Color(hex: "#F7CFE2")
+    static let pinkIcon = Color(hex: "#CF5E97")
+    // زوجة — بنفسجي (نفس لون شارة الشجرة).
+    static let wifeBg = Color(hex: "#E7DAF7")
+    static let wifeIcon = Color(hex: "#8E5BD0")
+    // أم — أخضر مزرق.
+    static let motherBg = Color(hex: "#CFEDE5")
+    static let motherIcon = Color(hex: "#2E9E86")
 
     var body: some View {
         GeometryReader { geo in
             let s = min(geo.size.width, geo.size.height)
-            ZStack {
-                Circle().fill(FemaleAvatarView.pink)
-                Image(systemName: "person.fill")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: s * 0.55, height: s * 0.55)
-                    .foregroundColor(.white)
+            ZStack(alignment: .bottomTrailing) {
+                ZStack {
+                    Circle().fill(bg)
+                    Image(systemName: "person.fill")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: s * 0.55, height: s * 0.55)
+                        .foregroundColor(iconColor)
+                }
+                .frame(width: s, height: s)
+
+                if isDeceased {
+                    ZStack {
+                        Circle().fill(Color.white)
+                        Image(systemName: "heart.slash.fill")
+                            .resizable().scaledToFit()
+                            .frame(width: s * 0.24, height: s * 0.24)
+                            .foregroundColor(DS.Color.error)
+                    }
+                    .frame(width: s * 0.4, height: s * 0.4)
+                }
             }
             .frame(width: s, height: s)
         }

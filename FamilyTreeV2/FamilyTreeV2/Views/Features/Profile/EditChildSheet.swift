@@ -20,6 +20,7 @@ struct EditChildSheet: View {
     @State private var errorMessage = ""
     @State private var sheetHeight: CGFloat = 520
     @State private var selectedMotherId: UUID? = nil
+    @State private var isHiddenFromTree: Bool = false
 
     var body: some View {
         NavigationStack {
@@ -170,6 +171,20 @@ struct EditChildSheet: View {
                         .padding(.horizontal, DS.Spacing.lg)
                         .padding(.vertical, DS.Spacing.xs)
                     }
+
+                    DSDivider()
+
+                    // إظهار/إخفاء من الشجرة
+                    DSFormRow(icon: isHiddenFromTree ? "eye.slash" : "eye",
+                              iconColor: DS.Color.primary,
+                              label: L10n.t("إظهار في الشجرة", "Show in tree")) {
+                        Toggle("", isOn: Binding(
+                            get: { !isHiddenFromTree },
+                            set: { isHiddenFromTree = !$0 }
+                        ))
+                        .labelsHidden()
+                        .tint(DS.Color.primary)
+                    }
                 }
             }
     }
@@ -193,6 +208,7 @@ struct EditChildSheet: View {
         selectedPhoneCountry = detectedPhone.country
         phoneNumber = detectedPhone.localDigits
         isDeceased = member.isDeceased ?? false
+        isHiddenFromTree = member.isHiddenFromTree
 
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
@@ -285,7 +301,12 @@ struct EditChildSheet: View {
 
             // تعيين الأم (إحدى زوجات الأب) — لا يؤثّر على نجاح بقية الحفظ.
             if selectedMotherId != member.motherId {
-                await memberVM.setMother(childId: member.id, motherId: selectedMotherId)
+                await memberVM.setMother(childId: member.id, motherId: selectedMotherId, silent: true)
+            }
+
+            // إظهار/إخفاء من الشجرة.
+            if isHiddenFromTree != member.isHiddenFromTree {
+                await memberVM.setHiddenFromTree(memberId: member.id, hidden: isHiddenFromTree)
             }
 
             isSaving = false

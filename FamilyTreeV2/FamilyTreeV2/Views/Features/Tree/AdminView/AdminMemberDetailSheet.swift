@@ -29,6 +29,7 @@ struct AdminMemberDetailSheet: View {
     @State private var deathDate: Date
     @State private var hasDeathDate: Bool
     @State private var selectedGender: String
+    @State private var isHiddenFromTree: Bool = false
 
     @State private var localChildren: [FamilyMember] = []
     @State private var editMode: EditMode = .inactive
@@ -78,6 +79,7 @@ struct AdminMemberDetailSheet: View {
 
         self._bioStations = State(initialValue: member.bio ?? [])
         self._selectedGender = State(initialValue: member.gender ?? "male")
+        self._isHiddenFromTree = State(initialValue: member.isHiddenFromTree)
         self._isDeceased = State(initialValue: member.isDeceased ?? false)
         if let dDateStr = member.deathDate, !dDateStr.isEmpty, let date = formatter.date(from: dDateStr) {
             self._deathDate = State(initialValue: date)
@@ -95,6 +97,7 @@ struct AdminMemberDetailSheet: View {
                 heroSection
                 identitySection
                 genderSection
+                if selectedGender == "female" { visibilitySection }
                 datesSection
                 phoneSection
                 bioSection
@@ -336,6 +339,27 @@ struct AdminMemberDetailSheet: View {
             .padding(.vertical, DS.Spacing.xs)
         } header: {
             sectionHeader(L10n.t("الجنس", "Gender"), icon: "person.crop.circle", color: DS.Color.accent)
+        }
+    }
+
+    // MARK: - Visibility Section (إظهار/إخفاء الأنثى من الشجرة)
+    private var visibilitySection: some View {
+        Section {
+            Toggle(isOn: Binding(
+                get: { !isHiddenFromTree },
+                set: { show in
+                    isHiddenFromTree = !show
+                    Task { await memberVM.setHiddenFromTree(memberId: member.id, hidden: !show) }
+                }
+            ).animation(DS.Anim.snappy)) {
+                Label(L10n.t("إظهار في الشجرة", "Show in tree"),
+                      systemImage: isHiddenFromTree ? "eye.slash" : "eye")
+                    .foregroundColor(DS.Color.textPrimary)
+            }
+            .tint(DS.Color.primary)
+        } header: {
+            sectionHeader(L10n.t("الظهور في الشجرة", "Tree Visibility"),
+                          icon: "eye", color: DS.Color.accent)
         }
     }
 

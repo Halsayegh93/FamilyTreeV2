@@ -35,6 +35,8 @@ struct EditProfileView: View {
     @State private var phoneNumber: String = ""
     @State private var birthDate: Date = Date()
     @State private var isMarried: Bool = false
+    @State private var showAddWifeMarried = false
+    @State private var marriedWifeName = ""
     @State private var isDeceased: Bool = false
     @State private var deathDate: Date = Date()
     @State private var isPhoneHidden: Bool = false
@@ -127,6 +129,12 @@ struct EditProfileView: View {
                                             Toggle("", isOn: $isMarried)
                                                 .labelsHidden()
                                                 .tint(DS.Color.primary)
+                                                .onChange(of: isMarried) { newVal in
+                                                    // تشغيل «متزوج» → يفتح إضافة زوجة (للرجل بلا زوجة).
+                                                    if newVal && !member.isFemale {
+                                                        showAddWifeMarried = true
+                                                    }
+                                                }
                                         }
                                         .cooldownGuarded(.isMarried, cooldown: cooldown)
 
@@ -134,6 +142,19 @@ struct EditProfileView: View {
                                     }
                         }
                         .padding(.horizontal, DS.Spacing.lg)
+                        .alert(L10n.t("إضافة زوجة", "Add Wife"), isPresented: $showAddWifeMarried) {
+                            TextField(L10n.t("اسم الزوجة", "Wife name"), text: $marriedWifeName)
+                            Button(L10n.t("إضافة", "Add")) {
+                                let name = marriedWifeName
+                                marriedWifeName = ""
+                                guard !name.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+                                Task { _ = await memberVM.addWife(husband: member, firstName: name) }
+                            }
+                            Button(L10n.t("لاحقاً", "Later"), role: .cancel) { marriedWifeName = "" }
+                        } message: {
+                            Text(L10n.t("أضف زوجتك الآن، وتقدر تربط أبناءها لاحقاً من العائلة.",
+                                        "Add your wife now; link her children later from Family."))
+                        }
 
                         // 4. المحطات الحياتية
                         bioStationsSection
