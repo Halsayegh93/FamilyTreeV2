@@ -124,20 +124,39 @@ struct EditProfileView: View {
                             )
 
                                     VStack(spacing: 0) {
-                                        DSFormRow(icon: "heart.fill", iconColor: DS.Color.neonPink,
-                                                  label: L10n.t("متزوج", "Married")) {
-                                            Toggle("", isOn: $isMarried)
-                                                .labelsHidden()
-                                                .tint(DS.Color.primary)
-                                                .onChange(of: isMarried) { newVal in
-                                                    // تشغيل «متزوج» → يفتح إضافة زوجة (للرجل بلا زوجة).
-                                                    // تأجيل التنبيه دورة واحدة حتى لا يرجع الزر لوضعه السابق
-                                                    // (خلل SwiftUI: عرض Alert داخل onChange يلغي تبديل الـToggle).
-                                                    guard newVal && !member.isFemale else { return }
-                                                    DispatchQueue.main.async { showAddWifeMarried = true }
+                                        // مفتاح «متزوج» — زر صريح (يضمن الاستجابة للنقر).
+                                        Button {
+                                            let newVal = !isMarried
+                                            withAnimation(.easeInOut(duration: 0.2)) { isMarried = newVal }
+                                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                            if newVal && !member.isFemale {
+                                                DispatchQueue.main.async { showAddWifeMarried = true }
+                                            }
+                                        } label: {
+                                            HStack(spacing: DS.Spacing.md) {
+                                                DSIcon("heart.fill", color: DS.Color.neonPink)
+                                                Text(L10n.t("متزوج", "Married"))
+                                                    .font(DS.Font.footnote)
+                                                    .foregroundColor(DS.Color.textPrimary)
+                                                Spacer()
+                                                // مظهر مفتاح ثابت الاتجاه (LTR) — المقبض يمين عند التفعيل.
+                                                ZStack(alignment: isMarried ? .trailing : .leading) {
+                                                    Capsule()
+                                                        .fill(isMarried ? DS.Color.primary : DS.Color.textTertiary.opacity(0.35))
+                                                        .frame(width: 51, height: 31)
+                                                    Circle()
+                                                        .fill(Color.white)
+                                                        .frame(width: 27, height: 27)
+                                                        .shadow(color: .black.opacity(0.2), radius: 1, y: 1)
+                                                        .padding(2)
                                                 }
+                                                .environment(\.layoutDirection, .leftToRight)
+                                            }
+                                            .frame(height: dsFormRowHeight)
+                                            .padding(.horizontal, DS.Spacing.lg)
+                                            .contentShape(Rectangle())
                                         }
-                                        // الحالة الاجتماعية حرّة التبديل (بلا تقييد cooldown).
+                                        .buttonStyle(.plain)
                                     }
                         }
                         .padding(.horizontal, DS.Spacing.lg)

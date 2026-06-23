@@ -1563,6 +1563,7 @@ enum WomenStore {
                 isDeceased: r.isDeceased,
                 role: .member,
                 fatherId: r.parentId,                 // parent → father لإعادة استخدام الشجرة
+                motherId: r.motherId,
                 husbandId: r.husbandId,
                 isHiddenFromTree: r.isHiddenFromTree ?? false,
                 sortOrder: r.sortOrder ?? 0,
