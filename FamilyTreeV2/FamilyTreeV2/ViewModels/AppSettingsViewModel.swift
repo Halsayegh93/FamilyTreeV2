@@ -109,6 +109,44 @@ func homeSectionSFSymbol(_ key: String) -> String {
     }
 }
 
+/// حظر المستخدمين (Guideline 1.2) — يخفي محتوى المحظور عن الحاظر.
+enum BlocksStore {
+    private struct Row: Decodable { let blocked_id: UUID }
+
+    static func fetchBlockedIds() async -> Set<UUID> {
+        guard let uid = SupabaseConfig.client.auth.currentUser?.id else { return [] }
+        do {
+            let rows: [Row] = try await SupabaseConfig.client.from("blocked_users")
+                .select("blocked_id").eq("blocker_id", value: uid.uuidString)
+                .execute().value
+            return Set(rows.map(\.blocked_id))
+        } catch { return [] }
+    }
+
+    static func block(_ id: UUID) async {
+        guard let uid = SupabaseConfig.client.auth.currentUser?.id, uid != id else { return }
+        let payload: [String: AnyEncodable] = [
+            "blocker_id": AnyEncodable(uid.uuidString),
+            "blocked_id": AnyEncodable(id.uuidString)
+        ]
+        try? await SupabaseConfig.client.from("blocked_users").upsert(payload).execute()
+    }
+
+    static func unblock(_ id: UUID) async {
+        guard let uid = SupabaseConfig.client.auth.currentUser?.id else { return }
+        try? await SupabaseConfig.client.from("blocked_users").delete()
+            .eq("blocker_id", value: uid.uuidString)
+            .eq("blocked_id", value: id.uuidString).execute()
+    }
+
+    static func acceptTerms() async {
+        guard let uid = SupabaseConfig.client.auth.currentUser?.id else { return }
+        let iso = ISO8601DateFormatter()
+        let payload: [String: AnyEncodable] = ["terms_accepted_at": AnyEncodable(iso.string(from: Date()))]
+        try? await SupabaseConfig.client.from("profiles").update(payload).eq("id", value: uid.uuidString).execute()
+    }
+}
+
 /// طبقة بيانات أقسام الرئيسية — قراءة/كتابة (الكتابة للإدارة عبر RLS).
 enum HomeSectionsStore {
     static func fetchActive() async throws -> [HomeSection] {

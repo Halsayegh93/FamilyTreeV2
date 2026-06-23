@@ -41,6 +41,9 @@ struct RootView: View {
             case .fullyAuthenticated:
                 if appSettingsVM.settings.maintenanceMode && !authVM.canModerate {
                     MaintenanceModeView()
+                } else if (authVM.currentUser?.termsAcceptedAt ?? "").isEmpty {
+                    // الموافقة على شروط الاستخدام (EULA) — مطلوبة لمحتوى المستخدمين.
+                    TermsAcceptView()
                 } else {
                     MainTabView()
                 }
@@ -185,5 +188,47 @@ struct DeviceRevokedView: View {
         .task {
             await notificationVM.fetchLinkedDevices()
         }
+    }
+}
+
+// MARK: - شروط الاستخدام (EULA) — مطلوبة قبل استخدام المحتوى (Guideline 1.2)
+struct TermsAcceptView: View {
+    @EnvironmentObject var authVM: AuthViewModel
+    @State private var isSaving = false
+
+    var body: some View {
+        ZStack {
+            DS.Color.background.ignoresSafeArea()
+            VStack(spacing: DS.Spacing.lg) {
+                Spacer()
+                Image(systemName: "checkmark.shield.fill")
+                    .font(.system(size: 56)).foregroundColor(DS.Color.primary)
+                Text(L10n.t("شروط الاستخدام", "Terms of Use"))
+                    .font(DS.Font.title2).foregroundColor(DS.Color.textPrimary)
+                ScrollView {
+                    Text(L10n.t(
+                        "باستخدامك التطبيق فأنت توافق على:\n\n• عدم نشر أي محتوى مسيء أو مخالف أو ينتهك خصوصية الآخرين.\n• احترام أفراد العائلة وعدم التحرّش أو الإساءة.\n• يحق لنا حذف أي محتوى مخالف وحظر المخالفين دون إشعار.\n• تتم مراجعة البلاغات واتخاذ الإجراء خلال ٢٤ ساعة.\n\nالمحتوى الذي تنشره مسؤوليتك، ويمكنك حظر أي مستخدم والإبلاغ عن أي محتوى من داخل التطبيق.",
+                        "By using this app you agree to:\n\n• Not post offensive, abusive or privacy-violating content.\n• Respect family members; no harassment or abuse.\n• We may remove violating content and block offenders without notice.\n• Reports are reviewed and acted on within 24 hours.\n\nYou are responsible for content you post. You can block any user and report any content inside the app."))
+                        .font(DS.Font.body)
+                        .foregroundColor(DS.Color.textSecondary)
+                        .padding(.horizontal, DS.Spacing.lg)
+                }
+                DSPrimaryButton(L10n.t("أوافق وأتابع", "Agree & Continue"),
+                                icon: "checkmark.circle.fill", isLoading: isSaving) {
+                    isSaving = true
+                    Task {
+                        await BlocksStore.acceptTerms()
+                        let iso = ISO8601DateFormatter()
+                        await MainActor.run {
+                            authVM.currentUser?.termsAcceptedAt = iso.string(from: Date())
+                            isSaving = false
+                        }
+                    }
+                }
+                .padding(.horizontal, DS.Spacing.lg)
+                .padding(.bottom, DS.Spacing.lg)
+            }
+        }
+        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
 }

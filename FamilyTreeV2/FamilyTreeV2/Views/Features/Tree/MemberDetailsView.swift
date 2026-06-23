@@ -31,6 +31,7 @@ struct MemberDetailsView: View {
     @State private var showActionSheet = false
     @State private var pendingEditAction: TreeEditAction? = nil
     @State private var showReportConfirm = false
+    @State private var blockedIds: Set<UUID> = []
     @State private var reportReason = ""
     @State private var reportSent = false
     @State private var familyExpanded = false
@@ -118,6 +119,7 @@ struct MemberDetailsView: View {
                 floatingCloseButton
             }
             .onAppear { recomputeCache() }
+            .task { blockedIds = await BlocksStore.fetchBlockedIds() }
             .onChange(of: currentMemberId) { _ in recomputeCache() }
             .onChange(of: memberVM.membersVersion) { _ in recomputeCache() }
             .onChange(of: adminRequestVM.treeEditRequests.count) { _ in recomputeCache() }
@@ -1243,6 +1245,20 @@ struct MemberDetailsView: View {
                         label: L10n.t("إبلاغ", "Report"),
                         tint: DS.Color.warning
                     ) { showReportConfirm = true }
+
+                    // حظر/إلغاء حظر المستخدم (Guideline 1.2)
+                    let isBlocked = blockedIds.contains(member.id)
+                    circleActionButton(
+                        icon: isBlocked ? "hand.raised.slash" : "hand.raised",
+                        label: isBlocked ? L10n.t("إلغاء الحظر", "Unblock") : L10n.t("حظر", "Block"),
+                        tint: DS.Color.error
+                    ) {
+                        Task {
+                            if isBlocked { await BlocksStore.unblock(member.id) }
+                            else { await BlocksStore.block(member.id) }
+                            blockedIds = await BlocksStore.fetchBlockedIds()
+                        }
+                    }
                 }
 
                 if authVM.canEditMembers {

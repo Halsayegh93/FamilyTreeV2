@@ -18,6 +18,7 @@ struct HomeNewsView: View {
     @State private var updateBannerDismissed = false
     @State private var homeSections: [HomeSection] = []
     @State private var selectedSection: HomeSection? = nil
+    @State private var blockedIds: Set<UUID> = []
     @State private var selectedNewsForComments: NewsPost? = nil
     @State private var postToDelete: NewsPost? = nil
     @State private var postToReport: NewsPost? = nil
@@ -197,6 +198,7 @@ struct HomeNewsView: View {
                 await projectsVM.fetchProjects()
             }
             await loadHomeSections()
+            blockedIds = await BlocksStore.fetchBlockedIds()
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
@@ -966,7 +968,7 @@ struct HomeNewsView: View {
                     .padding(.vertical, DS.Spacing.md)
                 } else {
                     VStack(spacing: 0) {
-                        let preview = Array(newsVM.allNews.prefix(3))
+                        let preview = Array(newsVM.allNews.filter(notBlocked).prefix(3))
                         ForEach(Array(preview.enumerated()), id: \.element.id) { index, news in
                             newsPreviewRow(for: news)
                                 .padding(.vertical, DS.Spacing.sm)
@@ -1512,10 +1514,17 @@ struct HomeNewsView: View {
         }
     }
 
+    /// إخفاء منشورات المستخدمين المحظورين (Guideline 1.2).
+    private func notBlocked(_ post: NewsPost) -> Bool {
+        guard let aid = post.author_id else { return true }
+        return !blockedIds.contains(aid)
+    }
+
     private var filteredNews: [NewsPost] {
-        if debouncedNewsSearch.isEmpty { return newsVM.allNews }
+        let base = newsVM.allNews.filter(notBlocked)
+        if debouncedNewsSearch.isEmpty { return base }
         let query = debouncedNewsSearch.lowercased()
-        return newsVM.allNews.filter {
+        return base.filter {
             $0.content.lowercased().contains(query) ||
             $0.author_name.lowercased().contains(query)
         }

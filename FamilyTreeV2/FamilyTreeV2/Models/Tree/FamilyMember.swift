@@ -28,6 +28,7 @@ nonisolated struct FamilyMember: Identifiable, Codable, Equatable, Sendable {
     let registrationPlatform: String?
     let username: String?
     var email: String?
+    var termsAcceptedAt: String?
 
     init(
         id: UUID = UUID(),
@@ -56,7 +57,8 @@ nonisolated struct FamilyMember: Identifiable, Codable, Equatable, Sendable {
         createdAt: String? = nil,
         registrationPlatform: String? = nil,
         username: String? = nil,
-        email: String? = nil
+        email: String? = nil,
+        termsAcceptedAt: String? = nil
     ) {
         self.id = id
         self.firstName = firstName
@@ -85,6 +87,7 @@ nonisolated struct FamilyMember: Identifiable, Codable, Equatable, Sendable {
         self.registrationPlatform = registrationPlatform
         self.username = username
         self.email = email
+        self.termsAcceptedAt = termsAcceptedAt
     }
 
     init(from decoder: Decoder) throws {
@@ -135,6 +138,7 @@ nonisolated struct FamilyMember: Identifiable, Codable, Equatable, Sendable {
         self.registrationPlatform = try container.decodeIfPresent(String.self, forKey: .registrationPlatform)
         self.username = try container.decodeIfPresent(String.self, forKey: .username)
         self.email = try container.decodeIfPresent(String.self, forKey: .email)
+        self.termsAcceptedAt = try container.decodeIfPresent(String.self, forKey: .termsAcceptedAt)
     }
     
     static func == (lhs: FamilyMember, rhs: FamilyMember) -> Bool {
@@ -285,6 +289,7 @@ nonisolated struct FamilyMember: Identifiable, Codable, Equatable, Sendable {
         case registrationPlatform = "registration_platform"
         case username
         case email
+        case termsAcceptedAt = "terms_accepted_at"
     }
 }
 
