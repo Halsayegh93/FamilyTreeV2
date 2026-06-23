@@ -10,6 +10,10 @@ struct AdminAppSettingsView: View {
     @State private var showResetConfirmation = false
     @State private var showResetCooldownAlert = false
     @State private var cooldownDisabled = ProfileEditCooldown.shared.isDisabled
+    @State private var showUpdateMessageEditor = false
+    @State private var editingUpdateMessage = ""
+    @State private var showUpdateURLEditor = false
+    @State private var editingUpdateURL = ""
 
     /// المالك يعدّل، باقي المدراء يتصفّحون فقط.
     private var canEdit: Bool { authVM.canManageSettings }
@@ -39,6 +43,8 @@ struct AdminAppSettingsView: View {
 
                     // الميزات
                     featuresSection
+
+                    updateSection
 
                     // عداد التعديل
                     cooldownSection
@@ -245,8 +251,117 @@ struct AdminAppSettingsView: View {
                 isOn: appSettingsVM.settings.albumsEnabled ?? true,
                 key: "albums_enabled"
             )
+
+            DSDivider()
+
+            settingToggle(
+                icon: "person.2.fill",
+                color: DS.Color.secondary,
+                title: L10n.t("شجرة النساء", "Women's Tree"),
+                subtitle: L10n.t("إظهار اختصار شجرة العائلة (النساء) في الرئيسية",
+                                 "Show Women's Tree shortcut on Home"),
+                isOn: appSettingsVM.settings.womenTreeEnabled ?? true,
+                key: "women_tree_enabled"
+            )
         }
         .padding(.horizontal, DS.Spacing.lg)
+    }
+
+    // MARK: - التحديث (server-driven)
+    private var updateSection: some View {
+        DSCard(padding: 0) {
+            DSSectionHeader(
+                title: L10n.t("التحديث", "Update"),
+                icon: "arrow.down.circle.fill",
+                iconColor: DS.Color.primary
+            )
+
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(L10n.t("أحدث رقم بناء", "Latest build"))
+                        .font(DS.Font.calloutBold).foregroundColor(DS.Color.textPrimary)
+                    Text(L10n.t("بناء التطبيق الحالي: \(kAppBuild)", "Current build: \(kAppBuild)"))
+                        .font(DS.Font.caption1).foregroundColor(DS.Color.textSecondary)
+                }
+                Spacer()
+                Button {
+                    let v = max(0, (appSettingsVM.settings.latestBuild ?? 0) - 1)
+                    Task { await appSettingsVM.updateSetting("latest_build", value: v, updatedBy: authVM.currentUser?.id) }
+                } label: { Image(systemName: "minus.circle").foregroundColor(DS.Color.textTertiary) }
+                Text("\(appSettingsVM.settings.latestBuild ?? 0)")
+                    .font(DS.Font.bodyBold).foregroundColor(DS.Color.textPrimary)
+                    .frame(minWidth: 28)
+                Button {
+                    let v = (appSettingsVM.settings.latestBuild ?? 0) + 1
+                    Task { await appSettingsVM.updateSetting("latest_build", value: v, updatedBy: authVM.currentUser?.id) }
+                } label: { Image(systemName: "plus.circle").foregroundColor(DS.Color.primary) }
+            }
+            .padding(DS.Spacing.md)
+
+            DSDivider()
+
+            settingToggle(
+                icon: "lock.fill",
+                color: DS.Color.error,
+                title: L10n.t("تحديث إجباري", "Force update"),
+                subtitle: L10n.t("يوقف الاستخدام حتى التحديث", "Blocks the app until updated"),
+                isOn: appSettingsVM.settings.forceUpdate ?? false,
+                key: "force_update"
+            )
+
+            DSDivider()
+
+            Button { editingUpdateMessage = appSettingsVM.settings.updateMessage ?? ""; showUpdateMessageEditor = true } label: {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(L10n.t("رسالة التحديث", "Update message"))
+                            .font(DS.Font.calloutBold).foregroundColor(DS.Color.textPrimary)
+                        Text((appSettingsVM.settings.updateMessage?.isEmpty == false)
+                             ? appSettingsVM.settings.updateMessage!
+                             : L10n.t("غير محددة", "Not set"))
+                            .font(DS.Font.caption1).foregroundColor(DS.Color.textSecondary).lineLimit(1)
+                    }
+                    Spacer()
+                    Image(systemName: "pencil").foregroundColor(DS.Color.textTertiary)
+                }
+                .padding(DS.Spacing.md)
+            }
+            .buttonStyle(.plain)
+
+            DSDivider()
+
+            Button { editingUpdateURL = appSettingsVM.settings.updateUrl ?? ""; showUpdateURLEditor = true } label: {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(L10n.t("رابط التحديث", "Update URL"))
+                            .font(DS.Font.calloutBold).foregroundColor(DS.Color.textPrimary)
+                        Text((appSettingsVM.settings.updateUrl?.isEmpty == false)
+                             ? appSettingsVM.settings.updateUrl!
+                             : L10n.t("غير محدد", "Not set"))
+                            .font(DS.Font.caption1).foregroundColor(DS.Color.textSecondary).lineLimit(1)
+                    }
+                    Spacer()
+                    Image(systemName: "pencil").foregroundColor(DS.Color.textTertiary)
+                }
+                .padding(DS.Spacing.md)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, DS.Spacing.lg)
+        .alert(L10n.t("رسالة التحديث", "Update message"), isPresented: $showUpdateMessageEditor) {
+            TextField(L10n.t("الرسالة", "Message"), text: $editingUpdateMessage)
+            Button(L10n.t("حفظ", "Save")) {
+                Task { await appSettingsVM.updateSetting("update_message", value: editingUpdateMessage, updatedBy: authVM.currentUser?.id) }
+            }
+            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
+        }
+        .alert(L10n.t("رابط التحديث", "Update URL"), isPresented: $showUpdateURLEditor) {
+            TextField("https://...", text: $editingUpdateURL)
+            Button(L10n.t("حفظ", "Save")) {
+                Task { await appSettingsVM.updateSetting("update_url", value: editingUpdateURL, updatedBy: authVM.currentUser?.id) }
+            }
+            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
+        }
     }
 
     // MARK: - Security

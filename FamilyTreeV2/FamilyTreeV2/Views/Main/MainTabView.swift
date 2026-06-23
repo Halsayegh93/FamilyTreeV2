@@ -30,6 +30,12 @@ struct MainTabView: View {
     }
     
     var body: some View {
+        // تحديث إجباري (server-driven) — يحجب التطبيق حتى التحديث.
+        if (appSettingsVM.settings.forceUpdate ?? false),
+           (appSettingsVM.settings.latestBuild ?? 0) > kAppBuild {
+            ForceUpdateView(message: appSettingsVM.settings.updateMessage,
+                            urlString: appSettingsVM.settings.updateUrl)
+        } else {
         ZStack(alignment: .bottomLeading) {
         TabView(selection: tabSelection) {
             HomeNewsView(selectedTab: $selectedTab)
@@ -124,6 +130,7 @@ struct MainTabView: View {
                 "Enable notifications to receive family news and important updates"
             ))
         }
+        } // نهاية else لحارس التحديث الإجباري
     }
 }
 
@@ -134,4 +141,45 @@ extension Notification.Name {
     static let openAdminReviewForKind = Notification.Name("openAdminReviewForKind")
     /// يفتح تاب الرئيسية ويدفع مركز الإشعارات + يفتح شيت تفاصيل الطلب لو فيه deep-link
     static let openHomeNotificationsCenter = Notification.Name("openHomeNotificationsCenter")
+}
+
+// MARK: - شاشة التحديث الإجباري (server-driven)
+struct ForceUpdateView: View {
+    let message: String?
+    let urlString: String?
+
+    var body: some View {
+        ZStack {
+            DS.Color.background.ignoresSafeArea()
+            VStack(spacing: DS.Spacing.lg) {
+                Image(systemName: "arrow.down.circle.fill")
+                    .font(.system(size: 64))
+                    .foregroundColor(DS.Color.primary)
+                Text(L10n.t("تحديث مطلوب", "Update Required"))
+                    .font(DS.Font.title2)
+                    .foregroundColor(DS.Color.textPrimary)
+                Text((message?.isEmpty == false)
+                     ? message!
+                     : L10n.t("يتوفّر إصدار جديد. حدّث التطبيق للمتابعة.",
+                              "A new version is available. Update to continue."))
+                    .font(DS.Font.body)
+                    .foregroundColor(DS.Color.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, DS.Spacing.xl)
+                if let urlStr = urlString, !urlStr.isEmpty, let url = URL(string: urlStr) {
+                    Button { UIApplication.shared.open(url) } label: {
+                        Label(L10n.t("تحديث الآن", "Update Now"), systemImage: "square.and.arrow.down")
+                            .font(DS.Font.bodyBold)
+                            .foregroundColor(DS.Color.textOnPrimary)
+                            .padding(.horizontal, DS.Spacing.xl)
+                            .padding(.vertical, DS.Spacing.md)
+                            .background(DS.Color.primary)
+                            .clipShape(Capsule())
+                    }
+                }
+            }
+            .padding(DS.Spacing.xl)
+        }
+        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+    }
 }

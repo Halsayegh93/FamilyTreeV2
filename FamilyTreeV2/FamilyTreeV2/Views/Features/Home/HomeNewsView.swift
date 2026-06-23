@@ -15,6 +15,7 @@ struct HomeNewsView: View {
     @State private var showingAddNews = false
     @State private var showingNotifications = false
     @State private var showWomenTree = false
+    @State private var updateBannerDismissed = false
     @State private var selectedNewsForComments: NewsPost? = nil
     @State private var postToDelete: NewsPost? = nil
     @State private var postToReport: NewsPost? = nil
@@ -283,9 +284,52 @@ struct HomeNewsView: View {
         .background(DS.Color.background)
     }
 
+    // MARK: - بانر التحديث (server-driven) — اختياري قابل للتجاوز
+    @ViewBuilder
+    private var updateBanner: some View {
+        let s = appSettingsVM.settings
+        let hasUpdate = (s.latestBuild ?? 0) > kAppBuild
+        if hasUpdate && !(s.forceUpdate ?? false) && !updateBannerDismissed {
+            Button {
+                if let urlStr = s.updateUrl, let url = URL(string: urlStr) {
+                    UIApplication.shared.open(url)
+                }
+            } label: {
+                HStack(spacing: DS.Spacing.md) {
+                    Image(systemName: "arrow.down.circle.fill")
+                        .font(DS.Font.scaled(20))
+                        .foregroundColor(DS.Color.primary)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(L10n.t("يوجد تحديث", "Update available"))
+                            .font(DS.Font.calloutBold)
+                            .foregroundColor(DS.Color.textPrimary)
+                        if let msg = s.updateMessage, !msg.isEmpty {
+                            Text(msg).font(DS.Font.caption1)
+                                .foregroundColor(DS.Color.textSecondary)
+                                .lineLimit(2)
+                        }
+                    }
+                    Spacer()
+                    Button { updateBannerDismissed = true } label: {
+                        Image(systemName: "xmark").font(DS.Font.scaled(13))
+                            .foregroundColor(DS.Color.textTertiary)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(DS.Spacing.md)
+                .background(DS.Color.primary.opacity(0.12))
+                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
     // MARK: - Bento Grid Section — توزيع عائلي احترافي
     private var bentoSection: some View {
         VStack(spacing: DS.Spacing.sm) {
+            // بانر التحديث (اختياري) — يظهر لما السيرفر يحدّد بناء أحدث.
+            updateBanner
+
             // 1) Hero ترحيب (يفتح حسابي عند الضغط)
             greetingCard
 
@@ -320,16 +364,18 @@ struct HomeNewsView: View {
                 height: primaryTileHeight,
                 action: { selectedTab = 1 }
             )
-            // شجرة العائلة (النساء) — شاشة منفصلة (مو تبويب).
-            unifiedTile(
-                title: L10n.t("شجرة النساء", "Women's Tree"),
-                icon: "person.2.fill",
-                color: DS.Color.primary,
-                imageURL: nil,
-                count: nil,
-                height: primaryTileHeight,
-                action: { showWomenTree = true }
-            )
+            // شجرة العائلة (النساء) — شاشة منفصلة، يتحكم بإظهارها السيرفر.
+            if appSettingsVM.settings.womenTreeEnabled ?? true {
+                unifiedTile(
+                    title: L10n.t("شجرة النساء", "Women's Tree"),
+                    icon: "person.2.fill",
+                    color: DS.Color.primary,
+                    imageURL: nil,
+                    count: nil,
+                    height: primaryTileHeight,
+                    action: { showWomenTree = true }
+                )
+            }
             unifiedTile(
                 title: L10n.t("الديوانيات", "Diwaniyas"),
                 icon: "map.fill",

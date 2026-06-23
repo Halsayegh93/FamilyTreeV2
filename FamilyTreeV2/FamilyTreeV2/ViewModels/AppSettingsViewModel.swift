@@ -16,6 +16,11 @@ struct AppSettings: Codable {
     var diwaniyasEnabled: Bool?
     var projectsEnabled: Bool?
     var albumsEnabled: Bool?
+    var womenTreeEnabled: Bool?
+    var latestBuild: Int?
+    var updateMessage: String?
+    var forceUpdate: Bool?
+    var updateUrl: String?
     var updatedAt: String?
     var updatedBy: UUID?
 
@@ -30,10 +35,18 @@ struct AppSettings: Codable {
         case diwaniyasEnabled = "diwaniyas_enabled"
         case projectsEnabled = "projects_enabled"
         case albumsEnabled = "albums_enabled"
+        case womenTreeEnabled = "women_tree_enabled"
+        case latestBuild = "latest_build"
+        case updateMessage = "update_message"
+        case forceUpdate = "force_update"
+        case updateUrl = "update_url"
         case updatedAt = "updated_at"
         case updatedBy = "updated_by"
     }
 }
+
+/// رقم بناء التطبيق الحالي — يُقارن بـ latest_build لإظهار بانر/شاشة التحديث.
+let kAppBuild = 1
 
 // MARK: - App Settings ViewModel
 
