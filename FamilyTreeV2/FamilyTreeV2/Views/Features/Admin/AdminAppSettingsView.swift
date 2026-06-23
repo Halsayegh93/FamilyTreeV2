@@ -15,6 +15,7 @@ struct AdminAppSettingsView: View {
     @State private var showUpdateURLEditor = false
     @State private var editingUpdateURL = ""
     @State private var showHomeSections = false
+    @State private var showSendUpdateConfirm = false
 
     /// المالك يعدّل، باقي المدراء يتصفّحون فقط.
     private var canEdit: Bool { authVM.canManageSettings }
@@ -368,8 +369,45 @@ struct AdminAppSettingsView: View {
                 .padding(DS.Spacing.md)
             }
             .buttonStyle(.plain)
+
+            DSDivider()
+
+            // دفع إشعار التحديث لكل الأجهزة (push) — «نرسل للأجهزة إن في تحديث».
+            Button { showSendUpdateConfirm = true } label: {
+                HStack(spacing: DS.Spacing.md) {
+                    DSIcon("bell.badge.fill", color: DS.Color.primary)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(L10n.t("إرسال إشعار التحديث", "Send update notification"))
+                            .font(DS.Font.calloutBold).foregroundColor(DS.Color.textPrimary)
+                        Text(L10n.t("يدفع إشعاراً لكل الأجهزة بوجود تحديث",
+                                    "Pushes an update alert to all devices"))
+                            .font(DS.Font.caption1).foregroundColor(DS.Color.textSecondary)
+                    }
+                    Spacer()
+                    Image(systemName: "paperplane.fill").foregroundColor(DS.Color.primary)
+                }
+                .padding(DS.Spacing.md)
+            }
+            .buttonStyle(.plain)
         }
         .padding(.horizontal, DS.Spacing.lg)
+        .alert(L10n.t("إرسال إشعار التحديث", "Send update notification"), isPresented: $showSendUpdateConfirm) {
+            Button(L10n.t("إرسال", "Send")) {
+                let msg = appSettingsVM.settings.updateMessage
+                let body = (msg?.isEmpty == false) ? msg! :
+                    L10n.t("يتوفّر تحديث جديد للتطبيق. حدّثه للحصول على أحدث الميزات.",
+                           "A new app update is available. Update for the latest features.")
+                Task {
+                    await notificationVM.sendNotification(
+                        title: L10n.t("يوجد تحديث", "Update available"),
+                        body: body, targetMemberIds: nil, sendPush: true, kind: "app_update")
+                }
+            }
+            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
+        } message: {
+            Text(L10n.t("سيصل إشعار لكل الأعضاء بأن هناك تحديثاً للتطبيق.",
+                        "All members will receive an alert that an app update is available."))
+        }
         .alert(L10n.t("رسالة التحديث", "Update message"), isPresented: $showUpdateMessageEditor) {
             TextField(L10n.t("الرسالة", "Message"), text: $editingUpdateMessage)
             Button(L10n.t("حفظ", "Save")) {
