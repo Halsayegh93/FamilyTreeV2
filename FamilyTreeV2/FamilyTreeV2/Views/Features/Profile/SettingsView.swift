@@ -805,7 +805,7 @@ struct PrivacyPolicyView: View {
                             color: DS.Color.error,
                             title: t("المحتوى والسلوك", "Content & Conduct"),
                             points: [
-                                t("لا نتسامح مع المحتوى المسيء أو المخالف أو التحرّش إطلاقاً.", "Zero tolerance for objectionable, abusive content or harassment."),
+                                t("لا نتسامح مع المحتوى المسيء أو المخالف إطلاقاً.", "Zero tolerance for objectionable or abusive content."),
                                 t("يمكنك الإبلاغ عن أي محتوى وحظر أي مستخدم من داخل التطبيق.", "You can report any content and block any user inside the app."),
                                 t("تُراجَع البلاغات ويُتّخذ الإجراء (حذف/حظر) خلال ٢٤ ساعة.", "Reports are reviewed and acted on (remove/ban) within 24 hours."),
                                 t("قد تُضاف معلومات أفراد العائلة (الاسم/الميلاد) من أقاربهم لبناء الشجرة.", "Family members' info (name/birth) may be added by relatives to build the tree.")

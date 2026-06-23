@@ -207,8 +207,8 @@ struct TermsAcceptView: View {
                     .font(DS.Font.title2).foregroundColor(DS.Color.textPrimary)
                 ScrollView {
                     Text(L10n.t(
-                        "باستخدامك التطبيق فأنت توافق على:\n\n• عدم نشر أي محتوى مسيء أو مخالف أو ينتهك خصوصية الآخرين.\n• احترام أفراد العائلة وعدم التحرّش أو الإساءة.\n• يحق لنا حذف أي محتوى مخالف وحظر المخالفين دون إشعار.\n• تتم مراجعة البلاغات واتخاذ الإجراء خلال ٢٤ ساعة.\n\nالمحتوى الذي تنشره مسؤوليتك، ويمكنك حظر أي مستخدم والإبلاغ عن أي محتوى من داخل التطبيق.",
-                        "By using this app you agree to:\n\n• Not post offensive, abusive or privacy-violating content.\n• Respect family members; no harassment or abuse.\n• We may remove violating content and block offenders without notice.\n• Reports are reviewed and acted on within 24 hours.\n\nYou are responsible for content you post. You can block any user and report any content inside the app."))
+                        "باستخدامك التطبيق فأنت توافق على:\n\n• عدم نشر أي محتوى مسيء أو مخالف أو ينتهك خصوصية الآخرين.\n• احترام أفراد العائلة وعدم الإساءة.\n• يحق لنا حذف أي محتوى مخالف وحظر المخالفين دون إشعار.\n• تتم مراجعة البلاغات واتخاذ الإجراء خلال ٢٤ ساعة.\n\nالمحتوى الذي تنشره مسؤوليتك، ويمكنك حظر أي مستخدم والإبلاغ عن أي محتوى من داخل التطبيق.",
+                        "By using this app you agree to:\n\n• Not post offensive, abusive or privacy-violating content.\n• Respect family members; no abuse.\n• We may remove violating content and block offenders without notice.\n• Reports are reviewed and acted on within 24 hours.\n\nYou are responsible for content you post. You can block any user and report any content inside the app."))
                         .font(DS.Font.body)
                         .foregroundColor(DS.Color.textSecondary)
                         .padding(.horizontal, DS.Spacing.lg)
