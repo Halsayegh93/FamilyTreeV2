@@ -1656,6 +1656,7 @@ enum WomenStore {
 /// شاشة «شجرة العائلة (النساء)» — تُفتح من اختصار الرئيسية، تعيد استخدام
 /// RecursiveTreeBranch ببيانات women_members. التعديل للإدارة فقط.
 struct WomenTreeView: View {
+    var onClose: (() -> Void)? = nil
     @EnvironmentObject var authVM: AuthViewModel
     @Environment(\.dismiss) private var dismiss
 
@@ -1672,8 +1673,9 @@ struct WomenTreeView: View {
     @State private var scrollTarget: UUID? = nil
     @State private var currentAnchor: UnitPoint = .center
     @State private var scrollCounter = 0
-    @State private var scale: CGFloat = 1.0
-    @State private var baseScale: CGFloat = 1.0
+    // نفس بُعد/تكبير الشجرة العادية.
+    @State private var scale: CGFloat = TreeConst.closeNodeScale
+    @State private var baseScale: CGFloat = TreeConst.closeNodeScale
     @State private var zoomAnchor: UnitPoint = .center
     @State private var treeContentSize: CGSize = .zero
 
@@ -1803,15 +1805,15 @@ struct WomenTreeView: View {
 
     private var header: some View {
         HStack(spacing: DS.Spacing.sm) {
-            Button { dismiss() } label: {
+            Button { if let onClose { onClose() } else { dismiss() } } label: {
                 Image(systemName: L10n.isArabic ? "chevron.right" : "chevron.left")
                     .font(DS.Font.scaled(18, weight: .bold))
                     .foregroundColor(.white)
             }
-            ZStack {
-                Circle().fill(Color.white.opacity(0.18)).frame(width: 40, height: 40)
-                Image(systemName: "person.2.fill").foregroundColor(.white)
-            }
+            FemaleAvatarView()
+                .frame(width: 40, height: 40)
+                .clipShape(Circle())
+                .overlay(Circle().strokeBorder(Color.white.opacity(0.4), lineWidth: 1))
             VStack(alignment: .leading, spacing: 2) {
                 Text(L10n.t("شجرة العائلة (النساء)", "Family Tree (Women)"))
                     .font(DS.Font.headline).foregroundColor(.white)
@@ -1890,83 +1892,104 @@ struct WomenTreeView: View {
     private func actionSheet(for w: FamilyMember) -> some View {
         let mother = w.motherId.flatMap { mid in allMembers.first(where: { $0.id == mid }) }
         let wives = allMembers.filter { $0.husbandId == w.id }
+        let name = w.fullName.isEmpty ? w.firstName : w.fullName
         NavigationStack {
-            List {
-                // العلاقات (عرض للجميع): الأم + الزوجات.
-                if mother != nil || !wives.isEmpty {
-                    Section(L10n.t("العلاقات", "Relations")) {
-                        if let mom = mother {
-                            Button { selectedWoman = mom } label: {
-                                Label("\(L10n.t("الأم", "Mother")): \(mom.fullName.isEmpty ? mom.firstName : mom.fullName)",
-                                      systemImage: "figure.2.and.child.holdinghands")
-                                    .foregroundColor(DS.Color.textPrimary)
-                            }
-                        }
-                        ForEach(wives) { wife in
-                            HStack {
-                                Label("\(L10n.t("الزوجة", "Wife")): \(wife.fullName.isEmpty ? wife.firstName : wife.fullName)" + ((wife.isDeceased ?? false) ? " (\(L10n.t("متوفّاة","Deceased")))" : ""),
-                                      systemImage: "figure.dress.line.vertical.figure")
-                                    .foregroundColor(DS.Color.textPrimary)
-                                if canEdit {
-                                    Spacer()
-                                    Button { selectedWoman = nil; editTarget = wife } label: {
-                                        Image(systemName: "pencil").foregroundColor(DS.Color.textTertiary)
-                                    }.buttonStyle(.plain)
+            ScrollView {
+                VStack(spacing: DS.Spacing.lg) {
+                    // بطاقة الهوية
+                    VStack(spacing: DS.Spacing.sm) {
+                        womenHeaderAvatar(w).frame(width: 84, height: 84)
+                        Text(name)
+                            .font(DS.Font.title3).fontWeight(.bold)
+                            .foregroundColor(DS.Color.textPrimary)
+                            .multilineTextAlignment(.center)
+                        womenDateChips(w)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, DS.Spacing.xl)
+                    .padding(.horizontal, DS.Spacing.lg)
+                    .background(DS.Color.surfaceElevated)
+                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
+
+                    // العلاقات (عرض للجميع): الأم + الزوجات
+                    if mother != nil || !wives.isEmpty {
+                        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                            DSSectionHeader(title: L10n.t("العلاقات", "Relations"),
+                                            icon: "heart.fill", iconColor: DS.Color.neonPink)
+                            VStack(spacing: 0) {
+                                if let mom = mother {
+                                    womenRelationRow(member: mom, label: L10n.t("الأم", "Mother"),
+                                                     bg: FemaleAvatarView.motherBg,
+                                                     iconColor: FemaleAvatarView.motherIcon,
+                                                     onTap: { selectedWoman = mom })
+                                }
+                                ForEach(Array(wives.enumerated()), id: \.element.id) { idx, wife in
+                                    if idx > 0 || mother != nil { DSDivider() }
+                                    womenRelationRow(member: wife, label: L10n.t("الزوجة", "Wife"),
+                                                     bg: FemaleAvatarView.wifeBg,
+                                                     iconColor: FemaleAvatarView.wifeIcon,
+                                                     onTap: canEdit ? { selectedWoman = nil; editTarget = wife } : nil)
                                 }
                             }
+                            .padding(DS.Spacing.sm)
+                            .background(DS.Color.surface)
+                            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
                         }
                     }
-                }
-                if canEdit {
-                    Button {
-                        selectedWoman = nil
-                        addKind = .child
-                        addParent = w
-                    } label: {
-                        Label(L10n.t("إضافة فرع", "Add branch"), systemImage: "person.badge.plus")
-                    }
-                    Button {
-                        selectedWoman = nil
-                        addKind = .wife
-                        addParent = w
-                    } label: {
-                        Label(L10n.t("إضافة زوجة", "Add wife"), systemImage: "figure.dress.line.vertical.figure")
-                    }
-                    Button {
-                        selectedWoman = nil
-                        addKind = .mother
-                        addParent = w
-                    } label: {
-                        Label(L10n.t("إضافة أم", "Add mother"), systemImage: "figure.2.and.child.holdinghands")
-                    }
-                    Button {
-                        selectedWoman = nil
-                        pickMotherFor = w
-                    } label: {
-                        Label(L10n.t("اختيار الأم", "Choose mother"), systemImage: "rectangle.stack.person.crop")
-                    }
-                    Button {
-                        let t = w
-                        selectedWoman = nil
-                        editTarget = t
-                    } label: {
-                        Label(L10n.t("تعديل", "Edit"), systemImage: "pencil")
-                    }
-                    // الجذر «المحمدعلي» لا يُحذف؛ غيره يُحذف.
-                    if !(w.fatherId == nil && w.husbandId == nil && w.motherId == nil) {
-                        Button(role: .destructive) {
-                            selectedWoman = nil
-                            Task { try? await WomenStore.delete(id: w.id); await load() }
-                        } label: {
-                            Label(L10n.t("حذف", "Delete"), systemImage: "trash")
+
+                    // الإجراءات
+                    if canEdit {
+                        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                            DSSectionHeader(title: L10n.t("إجراءات", "Actions"),
+                                            icon: "slider.horizontal.3", iconColor: DS.Color.primary)
+                            VStack(spacing: 0) {
+                                womenActionRow(icon: "person.badge.plus", color: DS.Color.primary,
+                                               title: L10n.t("إضافة فرع", "Add branch")) {
+                                    selectedWoman = nil; addKind = .child; addParent = w
+                                }
+                                DSDivider()
+                                womenActionRow(icon: "heart.circle.fill", color: FemaleAvatarView.wifeIcon,
+                                               title: L10n.t("إضافة زوجة", "Add wife")) {
+                                    selectedWoman = nil; addKind = .wife; addParent = w
+                                }
+                                DSDivider()
+                                womenActionRow(icon: "figure.2.and.child.holdinghands", color: FemaleAvatarView.motherIcon,
+                                               title: L10n.t("إضافة أم", "Add mother")) {
+                                    selectedWoman = nil; addKind = .mother; addParent = w
+                                }
+                                DSDivider()
+                                womenActionRow(icon: "rectangle.stack.person.crop", color: DS.Color.accent,
+                                               title: L10n.t("اختيار الأم", "Choose mother")) {
+                                    selectedWoman = nil; pickMotherFor = w
+                                }
+                                DSDivider()
+                                womenActionRow(icon: "pencil", color: DS.Color.info,
+                                               title: L10n.t("تعديل", "Edit")) {
+                                    let t = w; selectedWoman = nil; editTarget = t
+                                }
+                                // الجذر «المحمدعلي» لا يُحذف؛ غيره يُحذف.
+                                if !(w.fatherId == nil && w.husbandId == nil && w.motherId == nil) {
+                                    DSDivider()
+                                    womenActionRow(icon: "trash", color: DS.Color.error,
+                                                   title: L10n.t("حذف", "Delete"), destructive: true) {
+                                        selectedWoman = nil
+                                        Task { try? await WomenStore.delete(id: w.id); await load() }
+                                    }
+                                }
+                            }
+                            .background(DS.Color.surface)
+                            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
                         }
+                    } else {
+                        Text(L10n.t("للعرض فقط", "View only"))
+                            .font(DS.Font.footnote)
+                            .foregroundColor(DS.Color.textSecondary)
                     }
-                } else {
-                    Text(L10n.t("للعرض فقط", "View only"))
-                        .foregroundColor(DS.Color.textSecondary)
                 }
+                .padding(DS.Spacing.lg)
             }
-            .navigationTitle(w.fullName.isEmpty ? w.firstName : w.fullName)
+            .background(DS.Color.background)
+            .navigationTitle(name)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -1975,7 +1998,85 @@ struct WomenTreeView: View {
             }
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         }
-        .presentationDetents([.medium])
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+    }
+
+    // أفاتار رأس البطاقة — أنثى → أفاتار أنثى، غيره دائرة متدرّجة + الحرف.
+    @ViewBuilder
+    private func womenHeaderAvatar(_ m: FamilyMember) -> some View {
+        if m.isFemale {
+            FemaleAvatarView(isDeceased: m.isDeceased ?? false).clipShape(Circle())
+        } else {
+            ZStack {
+                Circle().fill(DS.Color.gradientPrimary)
+                Text(String((m.fullName.isEmpty ? m.firstName : m.fullName).prefix(1)))
+                    .font(DS.Font.title1).fontWeight(.bold).foregroundColor(.white)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func womenDateChips(_ m: FamilyMember) -> some View {
+        let b = (m.birthDate.map { String($0.prefix(4)) }) ?? ""
+        let d = (m.deathDate.map { String($0.prefix(4)) }) ?? ""
+        HStack(spacing: DS.Spacing.sm) {
+            if !b.isEmpty { womenChip(icon: "calendar", text: b, color: DS.Color.primary) }
+            if (m.isDeceased ?? false) {
+                womenChip(icon: "leaf.fill", text: d.isEmpty ? L10n.t("متوفّى", "Deceased") : d, color: DS.Color.error)
+            }
+        }
+    }
+
+    private func womenChip(icon: String, text: String, color: Color) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: icon).font(DS.Font.scaled(11, weight: .bold))
+            Text(text).font(DS.Font.caption1)
+        }
+        .foregroundColor(color)
+        .padding(.horizontal, DS.Spacing.sm).padding(.vertical, 4)
+        .background(color.opacity(0.12)).clipShape(Capsule())
+    }
+
+    private func womenRelationRow(member: FamilyMember, label: String, bg: Color, iconColor: Color,
+                                  onTap: (() -> Void)?) -> some View {
+        HStack(spacing: DS.Spacing.md) {
+            FemaleAvatarView(bg: bg, iconColor: iconColor, isDeceased: member.isDeceased ?? false)
+                .frame(width: 44, height: 44).clipShape(Circle())
+            VStack(alignment: .leading, spacing: 2) {
+                Text(label).font(DS.Font.caption1).foregroundColor(DS.Color.textSecondary)
+                Text((member.fullName.isEmpty ? member.firstName : member.fullName)
+                     + ((member.isDeceased ?? false) ? " · \(L10n.t("متوفّاة", "Deceased"))" : ""))
+                    .font(DS.Font.callout).foregroundColor(DS.Color.textPrimary)
+            }
+            Spacer()
+            if onTap != nil {
+                Image(systemName: canEdit ? "pencil" : (L10n.isArabic ? "chevron.left" : "chevron.right"))
+                    .font(DS.Font.scaled(13, weight: .semibold))
+                    .foregroundColor(DS.Color.textTertiary)
+            }
+        }
+        .padding(.vertical, DS.Spacing.xs)
+        .contentShape(Rectangle())
+        .onTapGesture { onTap?() }
+    }
+
+    private func womenActionRow(icon: String, color: Color, title: String,
+                                destructive: Bool = false, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: DS.Spacing.md) {
+                Image(systemName: icon).font(DS.Font.scaled(15, weight: .semibold)).foregroundColor(color)
+                    .frame(width: 34, height: 34).background(color.opacity(0.12)).clipShape(Circle())
+                Text(title).font(DS.Font.callout)
+                    .foregroundColor(destructive ? DS.Color.error : DS.Color.textPrimary)
+                Spacer()
+                Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
+                    .font(DS.Font.scaled(12, weight: .bold)).foregroundColor(DS.Color.textTertiary)
+            }
+            .padding(.vertical, DS.Spacing.sm).padding(.horizontal, DS.Spacing.sm)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     private func load() async {

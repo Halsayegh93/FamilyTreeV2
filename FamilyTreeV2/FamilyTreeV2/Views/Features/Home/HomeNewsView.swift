@@ -50,7 +50,11 @@ struct HomeNewsView: View {
             ZStack {
                 DS.Color.background.ignoresSafeArea()
 
-                if let subPage = activeSubPage {
+                if showWomenTree {
+                    // شجرة النساء داخل تبويب الرئيسية — يبقى البار السفلي شغّالاً.
+                    WomenTreeView(onClose: { withAnimation(DS.Anim.snappy) { showWomenTree = false } })
+                        .transition(.move(edge: L10n.isArabic ? .leading : .trailing))
+                } else if let subPage = activeSubPage {
                     subPageContent(for: subPage)
                         .transition(.move(edge: L10n.isArabic ? .leading : .trailing))
                 } else {
@@ -185,9 +189,6 @@ struct HomeNewsView: View {
                 NotificationsCenterView()
             }
             .presentationDragIndicator(.visible)
-        }
-        .fullScreenCover(isPresented: $showWomenTree) {
-            WomenTreeView()
         }
         .sheet(item: $selectedSection) { s in
             HomeSectionContentView(section: s)
@@ -384,6 +385,7 @@ struct HomeNewsView: View {
                     imageURL: nil,
                     count: nil,
                     height: primaryTileHeight,
+                    iconView: AnyView(FemaleAvatarView()),
                     action: { showWomenTree = true }
                 )
             }
@@ -486,6 +488,7 @@ struct HomeNewsView: View {
         imageURL: String?,
         count: Int?,
         height: CGFloat? = nil,
+        iconView: AnyView? = nil,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: {
@@ -504,11 +507,19 @@ struct HomeNewsView: View {
                 // أيقونة دائرية أكبر + عدّاد
                 VStack {
                     HStack {
-                        Image(systemName: icon)
-                            .font(DS.Font.scaled(15, weight: .bold))
-                            .foregroundColor(.white)
-                            .frame(width: 36 * layout.scale, height: 36 * layout.scale)
-                            .background(Circle().fill(.ultraThinMaterial))
+                        Group {
+                            if let iconView {
+                                iconView
+                                    .frame(width: 36 * layout.scale, height: 36 * layout.scale)
+                                    .clipShape(Circle())
+                            } else {
+                                Image(systemName: icon)
+                                    .font(DS.Font.scaled(15, weight: .bold))
+                                    .foregroundColor(.white)
+                                    .frame(width: 36 * layout.scale, height: 36 * layout.scale)
+                                    .background(Circle().fill(.ultraThinMaterial))
+                            }
+                        }
                             .overlay(Circle().strokeBorder(Color.white.opacity(0.30), lineWidth: 1))
                             .shadow(color: .black.opacity(0.15), radius: 3, x: 0, y: 1)
 

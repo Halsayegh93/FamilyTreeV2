@@ -131,9 +131,10 @@ struct EditProfileView: View {
                                                 .tint(DS.Color.primary)
                                                 .onChange(of: isMarried) { newVal in
                                                     // تشغيل «متزوج» → يفتح إضافة زوجة (للرجل بلا زوجة).
-                                                    if newVal && !member.isFemale {
-                                                        showAddWifeMarried = true
-                                                    }
+                                                    // تأجيل التنبيه دورة واحدة حتى لا يرجع الزر لوضعه السابق
+                                                    // (خلل SwiftUI: عرض Alert داخل onChange يلغي تبديل الـToggle).
+                                                    guard newVal && !member.isFemale else { return }
+                                                    DispatchQueue.main.async { showAddWifeMarried = true }
                                                 }
                                         }
                                         // الحالة الاجتماعية حرّة التبديل (بلا تقييد cooldown).
