@@ -1515,6 +1515,40 @@ struct FemaleAvatarView: View {
     }
 }
 
+/// مثلّث (فستان) — لرسم رمز «مجموعة نساء».
+struct DSTriangleShape: Shape {
+    func path(in r: CGRect) -> Path {
+        var p = Path()
+        p.move(to: CGPoint(x: r.midX, y: r.minY))
+        p.addLine(to: CGPoint(x: r.minX, y: r.maxY))
+        p.addLine(to: CGPoint(x: r.maxX, y: r.maxY))
+        p.closeSubpath()
+        return p
+    }
+}
+
+/// رمز «مجموعة نساء» — ثلاث شخصيات أنثوية (رأس + فستان) أبيض، لاستخدامه
+/// داخل دائرة زجاجية مثل بقية أيقونات المربعات.
+struct WomenGroupGlyph: View {
+    var color: Color = .white
+    var body: some View {
+        HStack(alignment: .bottom, spacing: -2) {
+            figure(scale: 0.82)
+            figure(scale: 1.0)
+            figure(scale: 0.82)
+        }
+    }
+    private func figure(scale: CGFloat) -> some View {
+        VStack(spacing: 1 * scale) {
+            Circle()
+                .frame(width: 6 * scale, height: 6 * scale)
+            DSTriangleShape()
+                .frame(width: 11 * scale, height: 12 * scale)
+        }
+        .foregroundColor(color)
+    }
+}
+
 /// حالة فارغة موحدة — أيقونة + عنوان + زر اختياري (بدل 31 تكرار)
 struct DSEmptyState: View {
     enum Style { case simple, halo }

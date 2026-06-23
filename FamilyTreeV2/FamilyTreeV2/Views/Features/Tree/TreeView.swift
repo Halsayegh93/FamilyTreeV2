@@ -1677,9 +1677,9 @@ struct WomenTreeView: View {
     @State private var scrollTarget: UUID? = nil
     @State private var currentAnchor: UnitPoint = .center
     @State private var scrollCounter = 0
-    // نفس بُعد/تكبير الشجرة العادية.
-    @State private var scale: CGFloat = TreeConst.closeNodeScale
-    @State private var baseScale: CGFloat = TreeConst.closeNodeScale
+    // نفس بُعد/تكبير الشجرة العادية (defaultScale = 0.60).
+    @State private var scale: CGFloat = TreeConst.defaultScale
+    @State private var baseScale: CGFloat = TreeConst.defaultScale
     @State private var zoomAnchor: UnitPoint = .center
     @State private var treeContentSize: CGSize = .zero
 
@@ -1826,10 +1826,12 @@ struct WomenTreeView: View {
                     .font(DS.Font.scaled(18, weight: .bold))
                     .foregroundColor(.white)
             }
-            FemaleAvatarView()
-                .frame(width: 40, height: 40)
-                .clipShape(Circle())
-                .overlay(Circle().strokeBorder(Color.white.opacity(0.4), lineWidth: 1))
+            ZStack {
+                Circle().fill(Color.white.opacity(0.18))
+                WomenGroupGlyph()
+            }
+            .frame(width: 40, height: 40)
+            .overlay(Circle().strokeBorder(Color.white.opacity(0.4), lineWidth: 1))
             VStack(alignment: .leading, spacing: 2) {
                 Text(L10n.t("شجرة العائلة (النساء)", "Family Tree (Women)"))
                     .font(DS.Font.headline).foregroundColor(.white)
@@ -1847,7 +1849,11 @@ struct WomenTreeView: View {
     // بار الأدوات تحت الهيدر — مطابق لشجرة العائلة (البداية + تحديث).
     private var womenToolsBar: some View {
         HStack(spacing: DS.Spacing.sm) {
-            womenToolButton(icon: "house.fill", label: L10n.t("البداية", "Home")) {
+            // الرئيسية — يرجع لشاشة الرئيسية (خروج من شجرة النساء).
+            womenToolButton(icon: "house.fill", label: L10n.t("الرئيسية", "Home")) {
+                if let onClose { onClose() } else { dismiss() }
+            }
+            womenToolButton(icon: "scope", label: L10n.t("توسيط", "Center")) {
                 resetToRoot()
             }
             womenToolButton(icon: "arrow.clockwise", label: L10n.t("تحديث", "Refresh")) {
@@ -1911,84 +1917,68 @@ struct WomenTreeView: View {
         let name = w.fullName.isEmpty ? w.firstName : w.fullName
         NavigationStack {
             ScrollView {
-                VStack(spacing: DS.Spacing.lg) {
-                    // بطاقة الهوية
+                VStack(spacing: DS.Spacing.xl) {
+                    // الهوية — على خلفية الشيت مباشرة (موحّدة)
                     VStack(spacing: DS.Spacing.sm) {
-                        womenHeaderAvatar(w).frame(width: 84, height: 84)
+                        womenHeaderAvatar(w).frame(width: 96, height: 96)
                         Text(name)
                             .font(DS.Font.title3).fontWeight(.bold)
                             .foregroundColor(DS.Color.textPrimary)
                             .multilineTextAlignment(.center)
                         womenDateChips(w)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, DS.Spacing.xl)
-                    .padding(.horizontal, DS.Spacing.lg)
-                    .background(DS.Color.surfaceElevated)
-                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
 
-                    // العلاقات (عرض للجميع): الأم + الزوجات
-                    if mother != nil || !wives.isEmpty {
-                        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                            DSSectionHeader(title: L10n.t("العلاقات", "Relations"),
-                                            icon: "heart.fill", iconColor: DS.Color.neonPink)
-                            VStack(spacing: 0) {
+                        // الأم والزوجة تحت «متوفّى» مباشرة (بدون عنوان العلاقات)
+                        if mother != nil || !wives.isEmpty {
+                            VStack(spacing: DS.Spacing.sm) {
                                 if let mom = mother {
                                     womenRelationRow(member: mom, label: L10n.t("الأم", "Mother"),
                                                      bg: FemaleAvatarView.motherBg,
                                                      iconColor: FemaleAvatarView.motherIcon,
+                                                     sfIcon: "figure.2.and.child.holdinghands",
                                                      onTap: { selectedWoman = mom })
                                 }
-                                ForEach(Array(wives.enumerated()), id: \.element.id) { idx, wife in
-                                    if idx > 0 || mother != nil { DSDivider() }
+                                ForEach(wives, id: \.id) { wife in
                                     womenRelationRow(member: wife, label: L10n.t("الزوجة", "Wife"),
                                                      bg: FemaleAvatarView.wifeBg,
                                                      iconColor: FemaleAvatarView.wifeIcon,
+                                                     sfIcon: nil,
                                                      onTap: canEdit ? { selectedWoman = nil; editTarget = wife } : nil)
                                 }
                             }
-                            .padding(DS.Spacing.sm)
-                            .background(DS.Color.surface)
-                            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+                            .padding(.top, DS.Spacing.xs)
                         }
                     }
+                    .frame(maxWidth: .infinity)
 
-                    // الإجراءات — أزرار دائرية
+                    // الإجراءات — أزرار دائرية على خلفية الشيت
                     if canEdit {
-                        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                            DSSectionHeader(title: L10n.t("إجراءات", "Actions"),
-                                            icon: "slider.horizontal.3", iconColor: DS.Color.primary)
-                            LazyVGrid(columns: [GridItem(.adaptive(minimum: 74), spacing: DS.Spacing.md)],
-                                      spacing: DS.Spacing.lg) {
-                                womenCircleAction(icon: "person.badge.plus", color: DS.Color.primary,
-                                                  title: L10n.t("إضافة فرع", "Branch")) {
-                                    selectedWoman = nil; addKind = .child; addParent = w
-                                }
-                                womenCircleAction(icon: "heart.circle.fill", color: FemaleAvatarView.wifeIcon,
-                                                  title: L10n.t("إضافة زوجة", "Wife")) {
-                                    selectedWoman = nil; addKind = .wife; addParent = w
-                                }
-                                // الأم — مدمج: إضافة جديدة أو اختيار موجودة.
-                                womenCircleAction(icon: "figure.2.and.child.holdinghands", color: FemaleAvatarView.motherIcon,
-                                                  title: L10n.t("الأم", "Mother")) {
-                                    selectedWoman = nil; pickMotherFor = w
-                                }
-                                womenCircleAction(icon: "pencil", color: DS.Color.info,
-                                                  title: L10n.t("تعديل", "Edit")) {
-                                    let t = w; selectedWoman = nil; editTarget = t
-                                }
-                                // الجذر «المحمدعلي» لا يُحذف؛ غيره يُحذف.
-                                if !(w.fatherId == nil && w.husbandId == nil && w.motherId == nil) {
-                                    womenCircleAction(icon: "trash", color: DS.Color.error,
-                                                      title: L10n.t("حذف", "Delete")) {
-                                        selectedWoman = nil
-                                        Task { try? await WomenStore.delete(id: w.id); await load() }
-                                    }
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 74), spacing: DS.Spacing.md)],
+                                  spacing: DS.Spacing.lg) {
+                            womenCircleAction(icon: "person.badge.plus", color: DS.Color.primary,
+                                              title: L10n.t("إضافة فرع", "Branch")) {
+                                selectedWoman = nil; addKind = .child; addParent = w
+                            }
+                            womenCircleAction(icon: "heart.circle.fill", color: FemaleAvatarView.wifeIcon,
+                                              title: L10n.t("إضافة زوجة", "Wife")) {
+                                selectedWoman = nil; addKind = .wife; addParent = w
+                            }
+                            // الأم — مدمج: إضافة جديدة أو اختيار موجودة.
+                            womenCircleAction(icon: "figure.2.and.child.holdinghands", color: FemaleAvatarView.motherIcon,
+                                              title: L10n.t("الأم", "Mother")) {
+                                selectedWoman = nil; pickMotherFor = w
+                            }
+                            womenCircleAction(icon: "pencil", color: DS.Color.info,
+                                              title: L10n.t("تعديل", "Edit")) {
+                                let t = w; selectedWoman = nil; editTarget = t
+                            }
+                            // الجذر لا يُحذف؛ غيره يُحذف.
+                            if !(w.fatherId == nil && w.husbandId == nil && w.motherId == nil) {
+                                womenCircleAction(icon: "trash", color: DS.Color.error,
+                                                  title: L10n.t("حذف", "Delete")) {
+                                    selectedWoman = nil
+                                    Task { try? await WomenStore.delete(id: w.id); await load() }
                                 }
                             }
-                            .padding(DS.Spacing.md)
-                            .background(DS.Color.surface)
-                            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
                         }
                     } else {
                         Text(L10n.t("للعرض فقط", "View only"))
@@ -1999,7 +1989,7 @@ struct WomenTreeView: View {
                 .padding(DS.Spacing.lg)
             }
             .background(DS.Color.background)
-            .navigationTitle(name)
+            .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -2016,12 +2006,24 @@ struct WomenTreeView: View {
     @ViewBuilder
     private func womenHeaderAvatar(_ m: FamilyMember) -> some View {
         if m.isFemale {
+            // FemaleAvatarView يضع علامة المتوفّاة على الصورة تلقائياً.
             FemaleAvatarView(isDeceased: m.isDeceased ?? false).clipShape(Circle())
         } else {
-            ZStack {
-                Circle().fill(DS.Color.gradientPrimary)
-                Text(String((m.fullName.isEmpty ? m.firstName : m.fullName).prefix(1)))
-                    .font(DS.Font.title1).fontWeight(.bold).foregroundColor(.white)
+            ZStack(alignment: .bottomTrailing) {
+                ZStack {
+                    Circle().fill(DS.Color.gradientPrimary)
+                    Text(String((m.fullName.isEmpty ? m.firstName : m.fullName).prefix(1)))
+                        .font(DS.Font.title1).fontWeight(.bold).foregroundColor(.white)
+                }
+                // علامة «متوفّى» على الصورة.
+                if m.isDeceased ?? false {
+                    Image(systemName: "leaf.fill")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundColor(DS.Color.error)
+                        .padding(5)
+                        .background(Circle().fill(Color.white))
+                        .overlay(Circle().strokeBorder(DS.Color.error.opacity(0.3), lineWidth: 1))
+                }
             }
         }
     }
@@ -2049,12 +2051,30 @@ struct WomenTreeView: View {
     }
 
     private func womenRelationRow(member: FamilyMember, label: String, bg: Color, iconColor: Color,
-                                  onTap: (() -> Void)?) -> some View {
+                                  sfIcon: String?, onTap: (() -> Void)?) -> some View {
         HStack(spacing: DS.Spacing.md) {
-            FemaleAvatarView(bg: bg, iconColor: iconColor, isDeceased: member.isDeceased ?? false)
-                .frame(width: 44, height: 44).clipShape(Circle())
+            // أيقونة العلاقة — رمز مخصّص (الأم) أو أفاتار أنثى (الزوجة).
+            ZStack(alignment: .bottomTrailing) {
+                if let sfIcon {
+                    Image(systemName: sfIcon)
+                        .font(DS.Font.scaled(20, weight: .semibold))
+                        .foregroundColor(iconColor)
+                        .frame(width: 44, height: 44)
+                        .background(Circle().fill(bg))
+                    if member.isDeceased ?? false {
+                        Image(systemName: "heart.slash.fill")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundColor(DS.Color.error)
+                            .padding(3)
+                            .background(Circle().fill(Color.white))
+                    }
+                } else {
+                    FemaleAvatarView(bg: bg, iconColor: iconColor, isDeceased: member.isDeceased ?? false)
+                        .frame(width: 44, height: 44).clipShape(Circle())
+                }
+            }
             VStack(alignment: .leading, spacing: 2) {
-                Text(label).font(DS.Font.caption1).foregroundColor(DS.Color.textSecondary)
+                Text(label).font(DS.Font.caption1).foregroundColor(iconColor)
                 Text((member.fullName.isEmpty ? member.firstName : member.fullName)
                      + ((member.isDeceased ?? false) ? " · \(L10n.t("متوفّاة", "Deceased"))" : ""))
                     .font(DS.Font.callout).foregroundColor(DS.Color.textPrimary)
@@ -2066,7 +2086,13 @@ struct WomenTreeView: View {
                     .foregroundColor(DS.Color.textTertiary)
             }
         }
-        .padding(.vertical, DS.Spacing.xs)
+        .padding(DS.Spacing.sm)
+        .background(
+            RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                .fill(DS.Color.background)
+                .overlay(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                    .strokeBorder(DS.Color.textTertiary.opacity(0.15), lineWidth: 1))
+        )
         .contentShape(Rectangle())
         .onTapGesture { onTap?() }
     }

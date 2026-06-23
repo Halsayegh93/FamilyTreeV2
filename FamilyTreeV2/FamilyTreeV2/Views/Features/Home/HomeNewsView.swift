@@ -385,7 +385,7 @@ struct HomeNewsView: View {
                     imageURL: nil,
                     count: nil,
                     height: primaryTileHeight,
-                    iconView: AnyView(FemaleAvatarView()),
+                    iconView: AnyView(WomenGroupGlyph()),
                     action: { showWomenTree = true }
                 )
             }
