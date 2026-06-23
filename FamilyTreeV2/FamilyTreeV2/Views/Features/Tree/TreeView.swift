@@ -1575,12 +1575,15 @@ enum WomenStore {
     }
 
     static func addChild(parentId: UUID, name: String, sortOrder: Int,
-                         gender: String = "male",
+                         gender: String = "male", parentFullName: String = "",
                          birthDate: String? = nil, isDeceased: Bool = false,
                          deathDate: String? = nil) async throws {
+        // تسلسل الاسم: «الاسم + اسم الأب الكامل» (مثل الشجرة العامة).
+        let chained = parentFullName.trimmingCharacters(in: .whitespaces).isEmpty
+            ? name : "\(name) \(parentFullName)"
         let payload: [String: AnyEncodable] = [
             "first_name": AnyEncodable(name),
-            "full_name": AnyEncodable(name),
+            "full_name": AnyEncodable(chained),
             "parent_id": AnyEncodable(parentId.uuidString),
             "sort_order": AnyEncodable(sortOrder),
             "gender": AnyEncodable(gender),
@@ -1769,12 +1772,24 @@ struct WomenTreeView: View {
             .sorted { $0.fullName < $1.fullName }
         NavigationStack {
             List {
+                // إضافة أم جديدة (مدمج مع الاختيار).
+                Button {
+                    pickMotherFor = nil
+                    DispatchQueue.main.async { addKind = .mother; addParent = node }
+                } label: {
+                    Label(L10n.t("إضافة أم جديدة", "Add new mother"), systemImage: "plus.circle.fill")
+                        .foregroundColor(DS.Color.primary)
+                }
                 Button {
                     pickMotherFor = nil
                     Task { try? await WomenStore.setMotherId(childId: node.id, motherId: nil); await load() }
                 } label: {
                     Label(L10n.t("بدون أم", "No mother"), systemImage: "xmark.circle")
                         .foregroundColor(DS.Color.textSecondary)
+                }
+                if !candidates.isEmpty {
+                    Text(L10n.t("أو اختر من الموجودات:", "Or choose existing:"))
+                        .font(DS.Font.caption1).foregroundColor(DS.Color.textSecondary)
                 }
                 if candidates.isEmpty {
                     Text(L10n.t("لا توجد إناث للاختيار — أضف زوجة/أنثى أولاً.",
@@ -1792,7 +1807,7 @@ struct WomenTreeView: View {
                     }
                 }
             }
-            .navigationTitle(L10n.t("اختيار الأم", "Choose mother"))
+            .navigationTitle(L10n.t("الأم", "Mother"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -1938,46 +1953,40 @@ struct WomenTreeView: View {
                         }
                     }
 
-                    // الإجراءات
+                    // الإجراءات — أزرار دائرية
                     if canEdit {
                         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
                             DSSectionHeader(title: L10n.t("إجراءات", "Actions"),
                                             icon: "slider.horizontal.3", iconColor: DS.Color.primary)
-                            VStack(spacing: 0) {
-                                womenActionRow(icon: "person.badge.plus", color: DS.Color.primary,
-                                               title: L10n.t("إضافة فرع", "Add branch")) {
+                            LazyVGrid(columns: [GridItem(.adaptive(minimum: 74), spacing: DS.Spacing.md)],
+                                      spacing: DS.Spacing.lg) {
+                                womenCircleAction(icon: "person.badge.plus", color: DS.Color.primary,
+                                                  title: L10n.t("إضافة فرع", "Branch")) {
                                     selectedWoman = nil; addKind = .child; addParent = w
                                 }
-                                DSDivider()
-                                womenActionRow(icon: "heart.circle.fill", color: FemaleAvatarView.wifeIcon,
-                                               title: L10n.t("إضافة زوجة", "Add wife")) {
+                                womenCircleAction(icon: "heart.circle.fill", color: FemaleAvatarView.wifeIcon,
+                                                  title: L10n.t("إضافة زوجة", "Wife")) {
                                     selectedWoman = nil; addKind = .wife; addParent = w
                                 }
-                                DSDivider()
-                                womenActionRow(icon: "figure.2.and.child.holdinghands", color: FemaleAvatarView.motherIcon,
-                                               title: L10n.t("إضافة أم", "Add mother")) {
-                                    selectedWoman = nil; addKind = .mother; addParent = w
-                                }
-                                DSDivider()
-                                womenActionRow(icon: "rectangle.stack.person.crop", color: DS.Color.accent,
-                                               title: L10n.t("اختيار الأم", "Choose mother")) {
+                                // الأم — مدمج: إضافة جديدة أو اختيار موجودة.
+                                womenCircleAction(icon: "figure.2.and.child.holdinghands", color: FemaleAvatarView.motherIcon,
+                                                  title: L10n.t("الأم", "Mother")) {
                                     selectedWoman = nil; pickMotherFor = w
                                 }
-                                DSDivider()
-                                womenActionRow(icon: "pencil", color: DS.Color.info,
-                                               title: L10n.t("تعديل", "Edit")) {
+                                womenCircleAction(icon: "pencil", color: DS.Color.info,
+                                                  title: L10n.t("تعديل", "Edit")) {
                                     let t = w; selectedWoman = nil; editTarget = t
                                 }
                                 // الجذر «المحمدعلي» لا يُحذف؛ غيره يُحذف.
                                 if !(w.fatherId == nil && w.husbandId == nil && w.motherId == nil) {
-                                    DSDivider()
-                                    womenActionRow(icon: "trash", color: DS.Color.error,
-                                                   title: L10n.t("حذف", "Delete"), destructive: true) {
+                                    womenCircleAction(icon: "trash", color: DS.Color.error,
+                                                      title: L10n.t("حذف", "Delete")) {
                                         selectedWoman = nil
                                         Task { try? await WomenStore.delete(id: w.id); await load() }
                                     }
                                 }
                             }
+                            .padding(DS.Spacing.md)
                             .background(DS.Color.surface)
                             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
                         }
@@ -2062,19 +2071,23 @@ struct WomenTreeView: View {
         .onTapGesture { onTap?() }
     }
 
-    private func womenActionRow(icon: String, color: Color, title: String,
-                                destructive: Bool = false, action: @escaping () -> Void) -> some View {
+    // زر إجراء دائري — أيقونة في دائرة ملوّنة + عنوان أسفلها.
+    private func womenCircleAction(icon: String, color: Color, title: String,
+                                  action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            HStack(spacing: DS.Spacing.md) {
-                Image(systemName: icon).font(DS.Font.scaled(15, weight: .semibold)).foregroundColor(color)
-                    .frame(width: 34, height: 34).background(color.opacity(0.12)).clipShape(Circle())
-                Text(title).font(DS.Font.callout)
-                    .foregroundColor(destructive ? DS.Color.error : DS.Color.textPrimary)
-                Spacer()
-                Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
-                    .font(DS.Font.scaled(12, weight: .bold)).foregroundColor(DS.Color.textTertiary)
+            VStack(spacing: DS.Spacing.xs) {
+                Image(systemName: icon)
+                    .font(DS.Font.scaled(20, weight: .semibold))
+                    .foregroundColor(color)
+                    .frame(width: 56, height: 56)
+                    .background(Circle().fill(color.opacity(0.12)))
+                    .overlay(Circle().strokeBorder(color.opacity(0.25), lineWidth: 1))
+                Text(title)
+                    .font(DS.Font.caption1)
+                    .foregroundColor(DS.Color.textPrimary)
+                    .lineLimit(1).minimumScaleFactor(0.7)
             }
-            .padding(.vertical, DS.Spacing.sm).padding(.horizontal, DS.Spacing.sm)
+            .frame(maxWidth: .infinity)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -2257,8 +2270,10 @@ struct WomenEditView: View {
         Task {
             switch kind {
             case .child:
+                let parentFull = node.fullName.isEmpty ? node.firstName : node.fullName
                 try? await WomenStore.addChild(parentId: node.id, name: name, sortOrder: siblingCount,
-                                               gender: gender, birthDate: bStr, isDeceased: isDeceased, deathDate: dStr)
+                                               gender: gender, parentFullName: parentFull,
+                                               birthDate: bStr, isDeceased: isDeceased, deathDate: dStr)
             case .wife:
                 try? await WomenStore.addWife(husbandId: node.id, name: name,
                                               birthDate: bStr, isDeceased: isDeceased, deathDate: dStr)
