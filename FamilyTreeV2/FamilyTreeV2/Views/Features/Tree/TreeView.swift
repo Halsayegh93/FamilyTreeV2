@@ -1567,7 +1567,8 @@ enum WomenStore {
                 isHiddenFromTree: r.isHiddenFromTree ?? false,
                 sortOrder: r.sortOrder ?? 0,
                 status: .active,
-                gender: (r.gender ?? "male")
+                // العقد المعروضة بالستايل الأزرق؛ الزوجة تبقى أنثى للشارة فقط.
+                gender: (r.husbandId != nil ? "female" : "male")
             )
         }
     }
