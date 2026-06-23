@@ -150,6 +150,7 @@ struct TreeView: View {
     @State private var cachedMemberIds: Set<UUID> = []
     @State private var cachedHusbandsWithWives: Set<UUID> = []
     @State private var cachedHusbandsAllWivesDeceased: Set<UUID> = []
+    @State private var cachedWifeStatesByHusband: [UUID: [Bool]] = [:]
 
     private var lightweightFullTree: Bool {
         cachedVisibleMembers.count > 90
@@ -187,6 +188,7 @@ struct TreeView: View {
         let ids: Set<UUID>
         let husbandsWithWives: Set<UUID>
         let husbandsAllWivesDeceased: Set<UUID>
+        let wifeStatesByHusband: [UUID: [Bool]]
     }
 
     /// حساب الكاش — pure function، تشتغل على أي thread.
@@ -221,6 +223,10 @@ struct TreeView: View {
         let husbandsAllWivesDeceased = Set(
             wivesByHusband.filter { $0.value.allSatisfy { $0.isDeceased == true } }.keys
         )
+        // حالات الزوجات لكل زوج (مرتّبة) — لإظهار عدّة شارات.
+        let wifeStatesByHusband = wivesByHusband.mapValues { wives in
+            wives.sorted { $0.sortOrder < $1.sortOrder }.map { $0.isDeceased == true }
+        }
 
         return TreeCache(
             visible: visible,
@@ -229,7 +235,8 @@ struct TreeView: View {
             childrenMap: childrenMap,
             ids: Set(visible.map(\.id)),
             husbandsWithWives: husbandsWithWives,
-            husbandsAllWivesDeceased: husbandsAllWivesDeceased
+            husbandsAllWivesDeceased: husbandsAllWivesDeceased,
+            wifeStatesByHusband: wifeStatesByHusband
         )
     }
 
@@ -242,6 +249,7 @@ struct TreeView: View {
         cachedMemberIds = cache.ids
         cachedHusbandsWithWives = cache.husbandsWithWives
         cachedHusbandsAllWivesDeceased = cache.husbandsAllWivesDeceased
+        cachedWifeStatesByHusband = cache.wifeStatesByHusband
     }
 
     /// إعادة بناء سريعة (synchronous) — للتحميل الأول.
@@ -795,7 +803,8 @@ struct TreeView: View {
             maxRendered: maxRenderedNodes,
             kinshipHighlightedIds: kinshipHighlightedIds,
             husbandsWithWives: cachedHusbandsWithWives,
-            husbandsAllWivesDeceased: cachedHusbandsAllWivesDeceased
+            husbandsAllWivesDeceased: cachedHusbandsAllWivesDeceased,
+            wifeStatesByHusband: cachedWifeStatesByHusband
         )
     }
 
@@ -869,13 +878,14 @@ struct RecursiveTreeBranch: View {
     var kinshipHighlightedIds: Set<UUID> = []
     var husbandsWithWives: Set<UUID> = []
     var husbandsAllWivesDeceased: Set<UUID> = []
+    var wifeStatesByHusband: [UUID: [Bool]] = [:]
 
     /// الفتح يعتمد على activePath كمصدر وحيد للحقيقة
     private var isExpanded: Bool {
         activePath.contains(member.id)
     }
 
-    init(member: FamilyMember, childrenByFatherId: [UUID: [FamilyMember]], ancestorIDs: Set<UUID>, activePath: Binding<Set<UUID>>, searchedMemberID: Binding<UUID?>, selectedMember: Binding<FamilyMember?>, scrollTarget: Binding<UUID?>, scrollAnchor: Binding<UnitPoint>, scrollCounter: Binding<Int>, scale: Binding<CGFloat>, baseScale: Binding<CGFloat>, level: Int, viewMode: TreeDisplayMode, lightweightFullTree: Bool, currentLocationMemberID: UUID?, renderedCount: Binding<Int>, maxRendered: Int, kinshipHighlightedIds: Set<UUID> = [], husbandsWithWives: Set<UUID> = [], husbandsAllWivesDeceased: Set<UUID> = []) {
+    init(member: FamilyMember, childrenByFatherId: [UUID: [FamilyMember]], ancestorIDs: Set<UUID>, activePath: Binding<Set<UUID>>, searchedMemberID: Binding<UUID?>, selectedMember: Binding<FamilyMember?>, scrollTarget: Binding<UUID?>, scrollAnchor: Binding<UnitPoint>, scrollCounter: Binding<Int>, scale: Binding<CGFloat>, baseScale: Binding<CGFloat>, level: Int, viewMode: TreeDisplayMode, lightweightFullTree: Bool, currentLocationMemberID: UUID?, renderedCount: Binding<Int>, maxRendered: Int, kinshipHighlightedIds: Set<UUID> = [], husbandsWithWives: Set<UUID> = [], husbandsAllWivesDeceased: Set<UUID> = [], wifeStatesByHusband: [UUID: [Bool]] = [:]) {
         self.member = member
         self.childrenByFatherId = childrenByFatherId
         self.ancestorIDs = ancestorIDs
@@ -896,6 +906,7 @@ struct RecursiveTreeBranch: View {
         self.kinshipHighlightedIds = kinshipHighlightedIds
         self.husbandsWithWives = husbandsWithWives
         self.husbandsAllWivesDeceased = husbandsAllWivesDeceased
+        self.wifeStatesByHusband = wifeStatesByHusband
     }
 
     private var visibleChildren: [FamilyMember] {
@@ -947,7 +958,8 @@ struct RecursiveTreeBranch: View {
                 currentLocationMemberID: currentLocationMemberID,
                 isKinshipHighlighted: isKinshipPath,
                 hasWives: husbandsWithWives.contains(member.id),
-                wifeDeceased: husbandsAllWivesDeceased.contains(member.id)
+                wifeDeceased: husbandsAllWivesDeceased.contains(member.id),
+                wifeStates: wifeStatesByHusband[member.id] ?? []
             ) {
                 selectedMember = member
             } onToggle: {
@@ -1043,7 +1055,8 @@ struct RecursiveTreeBranch: View {
                                         maxRendered: maxRendered,
                                         kinshipHighlightedIds: kinshipHighlightedIds,
                                         husbandsWithWives: husbandsWithWives,
-                                        husbandsAllWivesDeceased: husbandsAllWivesDeceased
+                                        husbandsAllWivesDeceased: husbandsAllWivesDeceased,
+                                        wifeStatesByHusband: wifeStatesByHusband
                                     )
                                 }
                             }
@@ -1071,6 +1084,8 @@ struct TreeMemberNode: View {
     var isKinshipHighlighted: Bool = false
     var hasWives: Bool = false
     var wifeDeceased: Bool = false
+    /// حالات الزوجات (متوفّاة لكل زوجة) — لإظهار عدّة شارات مكدّسة.
+    var wifeStates: [Bool] = []
     let onTap: () -> Void
     let onToggle: () -> Void
     @State private var shouldLoadImage = false
@@ -1300,26 +1315,14 @@ struct TreeMemberNode: View {
                     }
                 }
                 .overlay(alignment: .topLeading) {
-                    // شارة الزوجة — بنفسجي (نفس أيقونة العضو) + أيقونة متوفّى حمراء صغيرة عليها لو متوفّاة.
-                    if hasWives {
-                        Image(systemName: "person.fill")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundColor(.white)
-                            .padding(6)
-                            .background(Circle().fill(Color(hex: "#8E5BD0")))
-                            .overlay(Circle().stroke(Color.white, lineWidth: 2))
-                            .shadow(color: Color.black.opacity(0.18), radius: 3, x: 0, y: 1)
-                            .overlay(alignment: .bottomTrailing) {
-                                if wifeDeceased {
-                                    Image(systemName: "heart.slash.fill")
-                                        .font(.system(size: 8, weight: .bold))
-                                        .foregroundColor(.white)
-                                        .padding(3)
-                                        .background(Circle().fill(Color(hex: "#8C2A2A")))
-                                        .overlay(Circle().stroke(Color.white, lineWidth: 1.2))
-                                        .offset(x: 3, y: 3)
-                                }
+                    // شارات الزوجات — واحدة لكل زوجة، مكدّسة عمودياً (الأولى فوق).
+                    let states: [Bool] = !wifeStates.isEmpty ? wifeStates : (hasWives ? [wifeDeceased] : [])
+                    if !states.isEmpty {
+                        VStack(spacing: 3) {
+                            ForEach(Array(states.enumerated()), id: \.offset) { _, dec in
+                                wifeBadge(deceased: dec)
                             }
+                        }
                     }
                 }
                 .overlay {
@@ -1394,6 +1397,28 @@ struct TreeMemberNode: View {
                 }
             }.fixedSize()
         }
+    }
+
+    // شارة زوجة واحدة — بنفسجي + علامة متوفّاة عند اللزوم.
+    private func wifeBadge(deceased: Bool) -> some View {
+        Image(systemName: "person.fill")
+            .font(.system(size: 12, weight: .bold))
+            .foregroundColor(.white)
+            .padding(6)
+            .background(Circle().fill(Color(hex: "#8E5BD0")))
+            .overlay(Circle().stroke(Color.white, lineWidth: 2))
+            .shadow(color: Color.black.opacity(0.18), radius: 3, x: 0, y: 1)
+            .overlay(alignment: .bottomTrailing) {
+                if deceased {
+                    Image(systemName: "heart.slash.fill")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundColor(.white)
+                        .padding(3)
+                        .background(Circle().fill(Color(hex: "#8C2A2A")))
+                        .overlay(Circle().stroke(Color.white, lineWidth: 1.2))
+                        .offset(x: 3, y: 3)
+                }
+            }
     }
 
     private var deathTag: some View {
@@ -1669,6 +1694,7 @@ struct WomenTreeView: View {
     @State private var roots: [FamilyMember] = []
     @State private var husbandsWithWives: Set<UUID> = []
     @State private var husbandsAllWivesDeceased: Set<UUID> = []
+    @State private var wifeStatesByHusband: [UUID: [Bool]] = [:]
     @State private var isLoading = true
 
     @State private var activePath: Set<UUID> = []
@@ -1752,17 +1778,26 @@ struct WomenTreeView: View {
         .navigationBarHidden(true)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .task { await load() }
+        // شيت تفاصيل العضو — وشيتات التعديل/الإضافة تظهر فوقه (متداخلة).
         .sheet(item: $selectedWoman) { w in actionSheet(for: w) }
-        .sheet(item: $editTarget) { w in
-            WomenEditView(kind: .edit, node: w) { Task { await load() } }
-        }
-        .sheet(item: $addParent) { p in
-            WomenEditView(kind: addKind, node: p,
-                          siblingCount: allMembers.filter { $0.fatherId == p.id }.count) {
-                Task { await load() }
+    }
+
+    // شيتات فرعية (تعديل/إضافة/اختيار الأم) — تُرفق داخل شيت التفاصيل لتظهر فوقه.
+    @ViewBuilder
+    private func womenSubSheets() -> some View {
+        EmptyView()
+            .sheet(item: $editTarget) { w in
+                WomenEditView(kind: .edit, node: w) { Task { await load() } }
+                    .presentationDetents([.medium, .large])
             }
-        }
-        .sheet(item: $pickMotherFor) { node in motherPicker(for: node) }
+            .sheet(item: $addParent) { p in
+                WomenEditView(kind: addKind, node: p,
+                              siblingCount: allMembers.filter { $0.fatherId == p.id }.count) {
+                    Task { await load() }
+                }
+                .presentationDetents([.medium, .large])
+            }
+            .sheet(item: $pickMotherFor) { node in motherPicker(for: node) }
     }
 
     @ViewBuilder
@@ -1859,7 +1894,8 @@ struct WomenTreeView: View {
         }
         .padding(.horizontal, DS.Spacing.lg)
         .padding(.top, DS.Spacing.sm)
-        .background(DS.Color.background)
+        .padding(.bottom, DS.Spacing.xs)
+        .background(Color.clear)
     }
 
     private func womenToolButton(icon: String, label: String, action: @escaping () -> Void) -> some View {
@@ -1902,7 +1938,8 @@ struct WomenTreeView: View {
             renderedCount: .constant(0),
             maxRendered: 4000,
             husbandsWithWives: husbandsWithWives,
-            husbandsAllWivesDeceased: husbandsAllWivesDeceased
+            husbandsAllWivesDeceased: husbandsAllWivesDeceased,
+            wifeStatesByHusband: wifeStatesByHusband
         )
     }
 
@@ -1923,28 +1960,26 @@ struct WomenTreeView: View {
                             .multilineTextAlignment(.center)
                         womenDateChips(w)
 
-                        // الأم والزوجة تحت «متوفّى» — صندوقان صغيران جنب بعض.
+                        // الأم ثم الزوجات — كلهم على نفس السطر (تمرير أفقي عند الزيادة).
                         if mother != nil || !wives.isEmpty {
-                            HStack(alignment: .top, spacing: DS.Spacing.sm) {
-                                if let mom = mother {
-                                    womenRelationChip(member: mom, label: L10n.t("الأم", "Mother"),
-                                                      bg: FemaleAvatarView.motherBg,
-                                                      iconColor: FemaleAvatarView.motherIcon,
-                                                      sfIcon: "figure.2.and.child.holdinghands",
-                                                      onTap: { selectedWoman = mom })
-                                }
-                                if !wives.isEmpty {
-                                    VStack(spacing: DS.Spacing.sm) {
-                                        ForEach(wives, id: \.id) { wife in
-                                            womenRelationChip(member: wife, label: L10n.t("الزوجة", "Wife"),
-                                                              bg: FemaleAvatarView.wifeBg,
-                                                              iconColor: FemaleAvatarView.wifeIcon,
-                                                              sfIcon: nil,
-                                                              onTap: canEdit ? { selectedWoman = nil; editTarget = wife } : nil)
-                                        }
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: DS.Spacing.sm) {
+                                    if let mom = mother {
+                                        womenRelationChip(member: mom, label: L10n.t("الأم", "Mother"),
+                                                          bg: FemaleAvatarView.motherBg,
+                                                          iconColor: FemaleAvatarView.motherIcon,
+                                                          sfIcon: "figure.2.and.child.holdinghands",
+                                                          onTap: { selectedWoman = mom })
                                     }
-                                    .frame(maxWidth: .infinity)
+                                    ForEach(wives, id: \.id) { wife in
+                                        womenRelationChip(member: wife, label: L10n.t("الزوجة", "Wife"),
+                                                          bg: FemaleAvatarView.wifeBg,
+                                                          iconColor: FemaleAvatarView.wifeIcon,
+                                                          sfIcon: nil,
+                                                          onTap: canEdit ? { editTarget = wife } : nil)
+                                    }
                                 }
+                                .padding(.horizontal, 2)
                             }
                             .padding(.top, DS.Spacing.sm)
                         }
@@ -1957,20 +1992,20 @@ struct WomenTreeView: View {
                                   spacing: DS.Spacing.lg) {
                             womenCircleAction(icon: "person.badge.plus", color: DS.Color.primary,
                                               title: L10n.t("إضافة فرع", "Branch")) {
-                                selectedWoman = nil; addKind = .child; addParent = w
+                                addKind = .child; addParent = w
                             }
                             womenCircleAction(icon: "heart.circle.fill", color: FemaleAvatarView.wifeIcon,
                                               title: L10n.t("إضافة زوجة", "Wife")) {
-                                selectedWoman = nil; addKind = .wife; addParent = w
+                                addKind = .wife; addParent = w
                             }
                             // الأم — مدمج: إضافة جديدة أو اختيار موجودة.
                             womenCircleAction(icon: "figure.2.and.child.holdinghands", color: FemaleAvatarView.motherIcon,
                                               title: L10n.t("الأم", "Mother")) {
-                                selectedWoman = nil; pickMotherFor = w
+                                pickMotherFor = w
                             }
                             womenCircleAction(icon: "pencil", color: DS.Color.info,
                                               title: L10n.t("تعديل", "Edit")) {
-                                let t = w; selectedWoman = nil; editTarget = t
+                                editTarget = w
                             }
                             // الجذر لا يُحذف؛ غيره يُحذف.
                             if !(w.fatherId == nil && w.husbandId == nil && w.motherId == nil) {
@@ -1999,6 +2034,7 @@ struct WomenTreeView: View {
             }
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         }
+        .background(womenSubSheets())   // شيتات التعديل/الإضافة فوق التفاصيل
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
     }
@@ -2075,16 +2111,17 @@ struct WomenTreeView: View {
                 }
             }
             VStack(alignment: .leading, spacing: 1) {
-                Text(label).font(DS.Font.caption2).foregroundColor(iconColor)
+                Text(label).font(DS.Font.caption1).foregroundColor(iconColor)
                 Text(member.fullName.isEmpty ? member.firstName : member.fullName)
-                    .font(DS.Font.caption1).foregroundColor(DS.Color.textPrimary)
-                    .lineLimit(1).minimumScaleFactor(0.8)
+                    .font(DS.Font.subheadline).fontWeight(.semibold)
+                    .foregroundColor(DS.Color.textPrimary)
+                    .lineLimit(1)
             }
             Spacer(minLength: 0)
         }
-        .padding(.vertical, DS.Spacing.xs + 2)
-        .padding(.horizontal, DS.Spacing.sm)
-        .frame(maxWidth: .infinity)
+        .padding(.vertical, DS.Spacing.sm)
+        .padding(.horizontal, DS.Spacing.md)
+        .frame(minWidth: 150, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
                 .fill(DS.Color.background)
@@ -2141,12 +2178,16 @@ struct WomenTreeView: View {
             }
             let withWives = Set(wivesByHusband.keys)
             let allDeceased = Set(wivesByHusband.filter { $0.value.allSatisfy { $0.isDeceased == true } }.keys)
+            let wifeStates = wivesByHusband.mapValues { wives in
+                wives.sorted { $0.sortOrder < $1.sortOrder }.map { $0.isDeceased == true }
+            }
             await MainActor.run {
                 self.allMembers = visible
                 self.childrenByParent = byParent
                 self.roots = rootList
                 self.husbandsWithWives = withWives
                 self.husbandsAllWivesDeceased = allDeceased
+                self.wifeStatesByHusband = wifeStates
                 if let first = rootList.first { self.activePath = [first.id] }
                 self.isLoading = false
             }
