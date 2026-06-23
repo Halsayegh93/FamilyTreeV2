@@ -38,28 +38,18 @@
         }
       }
     },
-    "%@ %@ %@" : {
+    "%@ %@ (%@)" : {
       "localizations" : {
         "ar" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "%1$@ %2$@ %3$@"
+            "value" : "%1$@ %2$@ (%3$@)"
           }
         }
       }
     },
     "%lld" : {
 
-    },
-    "%lld / %lld" : {
-      "localizations" : {
-        "ar" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$lld / %2$lld"
-          }
-        }
-      }
     },
     "%lld عضو في الفرع" : {
 
@@ -98,13 +88,16 @@
     "→" : {
 
     },
-    "+965" : {
-
-    },
     "99+" : {
 
     },
+    "1965" : {
+
+    },
     "English" : {
+
+    },
+    "https://..." : {
 
     },
     "name@example.com" : {

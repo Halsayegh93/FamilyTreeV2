@@ -16,6 +16,8 @@ struct HomeNewsView: View {
     @State private var showingNotifications = false
     @State private var showWomenTree = false
     @State private var updateBannerDismissed = false
+    @State private var homeSections: [HomeSection] = []
+    @State private var selectedSection: HomeSection? = nil
     @State private var selectedNewsForComments: NewsPost? = nil
     @State private var postToDelete: NewsPost? = nil
     @State private var postToReport: NewsPost? = nil
@@ -186,11 +188,15 @@ struct HomeNewsView: View {
         .fullScreenCover(isPresented: $showWomenTree) {
             WomenTreeView()
         }
+        .sheet(item: $selectedSection) { s in
+            HomeSectionContentView(section: s)
+        }
         .task {
             // جلب المشاريع لعرض البطاقة الفاخرة بأحدث مشروع (مع كاش داخلي)
             if (appSettingsVM.settings.projectsEnabled ?? true), projectsVM.projects.isEmpty {
                 await projectsVM.fetchProjects()
             }
+            await loadHomeSections()
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
@@ -341,6 +347,9 @@ struct HomeNewsView: View {
 
             // 4) شبكة الوصول السريع — أرشيف / مشاريع / تواصل
             quickAccessGrid
+
+            // 5) أقسام ديناميكية مضافة من الإدارة (server-driven)
+            dynamicSectionsGrid
         }
         .padding(.horizontal, DS.Spacing.lg)
         // حد أقصى للعرض على الأجهزة الواسعة (iPad) حتى لا تتمدد الكروت بشكل مبالغ
@@ -390,6 +399,41 @@ struct HomeNewsView: View {
 
     /// ارتفاع المربّعين العلويين — أطول قليلاً من تايلات الوصول السريع.
     private var primaryTileHeight: CGFloat { layout.tileHeight + 6 }
+
+    // MARK: - أقسام ديناميكية (server-driven) — تظهر مع الوصول السريع
+    @ViewBuilder
+    private var dynamicSectionsGrid: some View {
+        if !homeSections.isEmpty {
+            let cols = [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())]
+            LazyVGrid(columns: cols, spacing: layout.gridSpacing) {
+                ForEach(homeSections) { s in
+                    unifiedTile(
+                        title: s.title,
+                        icon: homeSectionSFSymbol(s.icon),
+                        color: Color(hex: s.color),
+                        imageURL: nil,
+                        count: nil,
+                        height: layout.tileHeight,
+                        action: { openSection(s) }
+                    )
+                }
+            }
+        }
+    }
+
+    private func openSection(_ s: HomeSection) {
+        if s.type == "link" {
+            if let urlStr = s.url, let url = URL(string: urlStr) {
+                UIApplication.shared.open(url)
+            }
+        } else {
+            selectedSection = s
+        }
+    }
+
+    private func loadHomeSections() async {
+        homeSections = (try? await HomeSectionsStore.fetchActive()) ?? []
+    }
 
     // MARK: - Quick Access Grid — أرشيف / مشاريع / تواصل
 
@@ -1659,5 +1703,46 @@ struct HeaderIconView: View {
             .background(color.opacity(0.12))
             .clipShape(Circle())
             .overlay(Circle().stroke(color.opacity(0.15), lineWidth: 1))
+    }
+}
+
+// MARK: - عرض محتوى قسم رئيسي ديناميكي (نوع content)
+struct HomeSectionContentView: View {
+    let section: HomeSection
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: DS.Spacing.md) {
+                    if let urlStr = section.imageUrl, !urlStr.isEmpty, let url = URL(string: urlStr) {
+                        CachedAsyncImage(url: url) { img in
+                            img.resizable().scaledToFit()
+                        } placeholder: {
+                            RoundedRectangle(cornerRadius: DS.Radius.lg)
+                                .fill(DS.Color.surfaceElevated)
+                                .frame(height: 180)
+                        }
+                        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
+                    }
+                    if let text = section.contentText, !text.isEmpty {
+                        Text(text)
+                            .font(DS.Font.body)
+                            .foregroundColor(DS.Color.textSecondary)
+                    }
+                }
+                .padding(DS.Spacing.lg)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .background(DS.Color.background)
+            .navigationTitle(section.title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(L10n.t("إغلاق", "Close")) { dismiss() }
+                }
+            }
+            .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+        }
     }
 }

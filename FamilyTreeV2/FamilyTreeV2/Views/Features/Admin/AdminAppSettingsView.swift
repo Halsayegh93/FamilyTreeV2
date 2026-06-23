@@ -14,6 +14,7 @@ struct AdminAppSettingsView: View {
     @State private var editingUpdateMessage = ""
     @State private var showUpdateURLEditor = false
     @State private var editingUpdateURL = ""
+    @State private var showHomeSections = false
 
     /// المالك يعدّل، باقي المدراء يتصفّحون فقط.
     private var canEdit: Bool { authVM.canManageSettings }
@@ -263,8 +264,29 @@ struct AdminAppSettingsView: View {
                 isOn: appSettingsVM.settings.womenTreeEnabled ?? true,
                 key: "women_tree_enabled"
             )
+
+            DSDivider()
+
+            Button { showHomeSections = true } label: {
+                HStack(spacing: DS.Spacing.md) {
+                    DSIcon("square.grid.2x2.fill", color: DS.Color.primary)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(L10n.t("أقسام الرئيسية", "Home Sections"))
+                            .font(DS.Font.calloutBold).foregroundColor(DS.Color.textPrimary)
+                        Text(L10n.t("إضافة/تعديل أقسام تظهر مع الوصول السريع",
+                                    "Add/edit sections shown with quick access"))
+                            .font(DS.Font.caption1).foregroundColor(DS.Color.textSecondary)
+                    }
+                    Spacer()
+                    Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
+                        .foregroundColor(DS.Color.textTertiary)
+                }
+                .padding(DS.Spacing.md)
+            }
+            .buttonStyle(.plain)
         }
         .padding(.horizontal, DS.Spacing.lg)
+        .sheet(isPresented: $showHomeSections) { AdminHomeSectionsView() }
     }
 
     // MARK: - التحديث (server-driven)
@@ -627,5 +649,182 @@ struct AdminAppSettingsView: View {
         df.dateStyle = .medium
         df.timeStyle = .short
         return df.string(from: date)
+    }
+}
+
+// MARK: - إدارة أقسام الرئيسية الديناميكية
+struct AdminHomeSectionsView: View {
+    @EnvironmentObject var authVM: AuthViewModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var sections: [HomeSection] = []
+    @State private var isLoading = true
+    @State private var editing: HomeSection? = nil
+    @State private var showNew = false
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if isLoading {
+                    ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if sections.isEmpty {
+                    DSEmptyState(icon: "square.grid.2x2",
+                                 title: L10n.t("لا توجد أقسام مضافة", "No sections yet"))
+                } else {
+                    List {
+                        ForEach(sections) { s in
+                            Button { editing = s } label: {
+                                HStack(spacing: DS.Spacing.md) {
+                                    Image(systemName: homeSectionSFSymbol(s.icon))
+                                        .foregroundColor(Color(hex: s.color))
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(s.title).foregroundColor(DS.Color.textPrimary)
+                                        Text((s.type == "link" ? L10n.t("رابط","Link") : L10n.t("محتوى","Content"))
+                                             + (s.isActive ? "" : " • " + L10n.t("مخفي","Hidden")))
+                                            .font(DS.Font.caption1).foregroundColor(DS.Color.textSecondary)
+                                    }
+                                    Spacer()
+                                    Image(systemName: "pencil").foregroundColor(DS.Color.textTertiary)
+                                }
+                            }
+                        }
+                        .onDelete { idx in
+                            Task {
+                                for i in idx { try? await HomeSectionsStore.delete(id: sections[i].id) }
+                                await load()
+                            }
+                        }
+                    }
+                }
+            }
+            .navigationTitle(L10n.t("أقسام الرئيسية", "Home Sections"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(L10n.t("إغلاق", "Close")) { dismiss() }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { showNew = true } label: { Image(systemName: "plus") }
+                }
+            }
+            .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+        }
+        .task { await load() }
+        .sheet(item: $editing) { s in
+            AdminHomeSectionEditView(section: s) { Task { await load() } }
+        }
+        .sheet(isPresented: $showNew) {
+            AdminHomeSectionEditView(section: nil) { Task { await load() } }
+        }
+    }
+
+    private func load() async {
+        isLoading = true
+        sections = (try? await HomeSectionsStore.fetchAll()) ?? []
+        isLoading = false
+    }
+}
+
+struct AdminHomeSectionEditView: View {
+    let section: HomeSection?
+    let onSaved: () -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var title = ""
+    @State private var type = "link"
+    @State private var url = ""
+    @State private var contentText = ""
+    @State private var imageUrl = ""
+    @State private var icon = "link"
+    @State private var color = "#2B7A9F"
+    @State private var sortOrder = 0
+    @State private var isActive = true
+    @State private var isSaving = false
+
+    private let presetColors = ["#2B7A9F","#516F80","#B88E33","#2F5C3E","#8C2A2A","#89A6B1"]
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section { TextField(L10n.t("العنوان","Title"), text: $title) }
+                Section {
+                    Picker(L10n.t("النوع","Type"), selection: $type) {
+                        Text(L10n.t("رابط","Link")).tag("link")
+                        Text(L10n.t("محتوى","Content")).tag("content")
+                    }.pickerStyle(.segmented)
+                    if type == "link" {
+                        TextField(L10n.t("الرابط","URL (https://...)"), text: $url)
+                            .keyboardType(.URL).autocapitalization(.none)
+                    } else {
+                        TextField(L10n.t("النص","Text"), text: $contentText, axis: .vertical).lineLimit(3...6)
+                        TextField(L10n.t("رابط الصورة (اختياري)","Image URL (optional)"), text: $imageUrl)
+                            .keyboardType(.URL).autocapitalization(.none)
+                    }
+                }
+                Section(L10n.t("الأيقونة","Icon")) {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: DS.Spacing.md) {
+                            ForEach(kHomeSectionIconKeys, id: \.self) { k in
+                                Image(systemName: homeSectionSFSymbol(k))
+                                    .frame(width: 38, height: 38)
+                                    .background(Circle().fill((icon == k ? DS.Color.primary : DS.Color.textTertiary).opacity(0.15)))
+                                    .foregroundColor(icon == k ? DS.Color.primary : DS.Color.textSecondary)
+                                    .onTapGesture { icon = k }
+                            }
+                        }
+                    }
+                }
+                Section(L10n.t("اللون","Color")) {
+                    HStack(spacing: DS.Spacing.md) {
+                        ForEach(presetColors, id: \.self) { c in
+                            Circle().fill(Color(hex: c)).frame(width: 30, height: 30)
+                                .overlay(Circle().stroke(color == c ? DS.Color.textPrimary : .clear, lineWidth: 2))
+                                .onTapGesture { color = c }
+                        }
+                    }
+                }
+                Section {
+                    Stepper(L10n.t("الترتيب: \(sortOrder)", "Order: \(sortOrder)"), value: $sortOrder, in: 0...99)
+                    Toggle(L10n.t("ظاهر","Visible"), isOn: $isActive).tint(DS.Color.primary)
+                }
+            }
+            .navigationTitle(section == nil ? L10n.t("إضافة قسم","Add Section") : L10n.t("تعديل القسم","Edit Section"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) { Button(L10n.t("إلغاء","Cancel")) { dismiss() } }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(L10n.t("حفظ","Save")) { save() }
+                        .disabled(title.trimmingCharacters(in: .whitespaces).isEmpty || isSaving)
+                }
+            }
+            .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+        }
+        .onAppear {
+            if let s = section {
+                title = s.title; type = s.type; url = s.url ?? ""
+                contentText = s.contentText ?? ""; imageUrl = s.imageUrl ?? ""
+                icon = s.icon; color = s.color; sortOrder = s.sortOrder; isActive = s.isActive
+            }
+        }
+    }
+
+    private func save() {
+        let t = title.trimmingCharacters(in: .whitespaces)
+        guard !t.isEmpty else { return }
+        isSaving = true
+        let payload: [String: AnyEncodable] = [
+            "title": AnyEncodable(t),
+            "icon": AnyEncodable(icon),
+            "color": AnyEncodable(color),
+            "type": AnyEncodable(type),
+            "url": AnyEncodable(type == "link" ? url : Optional<String>.none),
+            "content_text": AnyEncodable(type == "content" ? contentText : Optional<String>.none),
+            "image_url": AnyEncodable(type == "content" ? imageUrl : Optional<String>.none),
+            "sort_order": AnyEncodable(sortOrder),
+            "is_active": AnyEncodable(isActive)
+        ]
+        Task {
+            try? await HomeSectionsStore.upsert(payload, id: section?.id)
+            await MainActor.run { isSaving = false; onSaved(); dismiss() }
+        }
     }
 }

@@ -1675,7 +1675,10 @@ struct WomenTreeView: View {
                     }
                 }
             }
-            header
+            VStack(spacing: 0) {
+                header
+                womenToolsBar
+            }
         }
         .navigationBarHidden(true)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
@@ -1723,6 +1726,42 @@ struct WomenTreeView: View {
         .padding(.vertical, DS.Spacing.md)
         .frame(maxWidth: .infinity)
         .background(DS.Color.gradientPrimary.ignoresSafeArea(edges: .top))
+    }
+
+    // بار الأدوات تحت الهيدر — مطابق لشجرة العائلة (البداية + تحديث).
+    private var womenToolsBar: some View {
+        HStack(spacing: DS.Spacing.sm) {
+            womenToolButton(icon: "house.fill", label: L10n.t("البداية", "Home")) {
+                resetToRoot()
+            }
+            womenToolButton(icon: "arrow.clockwise", label: L10n.t("تحديث", "Refresh")) {
+                Task { await load() }
+            }
+            Spacer()
+        }
+        .padding(.horizontal, DS.Spacing.lg)
+        .padding(.top, DS.Spacing.sm)
+        .background(DS.Color.background)
+    }
+
+    private func womenToolButton(icon: String, label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(DS.Font.scaled(16, weight: .semibold))
+                .foregroundColor(DS.Color.primary)
+                .frame(width: 40, height: 40)
+                .background(Circle().fill(DS.Color.primary.opacity(0.12)))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+    }
+
+    private func resetToRoot() {
+        guard let first = roots.first else { return }
+        withAnimation(DS.Anim.snappy) { activePath = [first.id] }
+        currentAnchor = .center
+        scrollTarget = first.id
+        scrollCounter += 1
     }
 
     private func branch(for root: FamilyMember) -> some View {
@@ -1826,6 +1865,7 @@ struct WomenEditView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var fullName: String = ""
     @State private var isDeceased = false
+    @State private var hasDeathDate = false
     @State private var deathDate = Date()
     @State private var isHidden = false
     @State private var isSaving = false
@@ -1841,8 +1881,13 @@ struct WomenEditView: View {
                         Label(L10n.t("متوفّاة", "Deceased"), systemImage: "leaf.fill")
                     }.tint(DS.Color.error)
                     if isDeceased {
-                        DatePicker(L10n.t("تاريخ الوفاة", "Death date"),
-                                   selection: $deathDate, in: ...Date(), displayedComponents: .date)
+                        Toggle(isOn: $hasDeathDate.animation()) {
+                            Label(L10n.t("أعرف تاريخ الوفاة", "Death date known"), systemImage: "calendar")
+                        }.tint(DS.Color.primary)
+                        if hasDeathDate {
+                            DatePicker(L10n.t("تاريخ الوفاة", "Death date"),
+                                       selection: $deathDate, in: ...Date(), displayedComponents: .date)
+                        }
                     }
                 }
                 Section {
@@ -1870,7 +1915,10 @@ struct WomenEditView: View {
             isDeceased = member.isDeceased ?? false
             isHidden = member.isHiddenFromTree
             let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"
-            if let d = member.deathDate, let parsed = f.date(from: String(d.prefix(10))) { deathDate = parsed }
+            if let d = member.deathDate, let parsed = f.date(from: String(d.prefix(10))) {
+                deathDate = parsed
+                hasDeathDate = true
+            }
         }
     }
 
@@ -1879,7 +1927,7 @@ struct WomenEditView: View {
         guard !name.isEmpty else { return }
         isSaving = true
         let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"
-        let dStr = isDeceased ? f.string(from: deathDate) : nil
+        let dStr = (isDeceased && hasDeathDate) ? f.string(from: deathDate) : nil
         Task {
             try? await WomenStore.update(id: member.id, fullName: name,
                                          isDeceased: isDeceased, deathDate: dStr, isHidden: isHidden)

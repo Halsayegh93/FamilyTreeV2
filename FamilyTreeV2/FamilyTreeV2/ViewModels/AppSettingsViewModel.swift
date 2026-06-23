@@ -48,6 +48,90 @@ struct AppSettings: Codable {
 /// رقم بناء التطبيق الحالي — يُقارن بـ latest_build لإظهار بانر/شاشة التحديث.
 let kAppBuild = 1
 
+// MARK: - أقسام الرئيسية الديناميكية (server-driven)
+
+struct HomeSection: Identifiable, Decodable, Equatable {
+    let id: UUID
+    var title: String
+    var subtitle: String?
+    var icon: String
+    var color: String
+    var type: String        // 'link' | 'content'
+    var url: String?
+    var contentText: String?
+    var imageUrl: String?
+    var sortOrder: Int
+    var isActive: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case id, title, subtitle, icon, color, type, url
+        case contentText = "content_text"
+        case imageUrl = "image_url"
+        case sortOrder = "sort_order"
+        case isActive = "is_active"
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = (try? c.decode(UUID.self, forKey: .id)) ?? UUID()
+        title = (try? c.decodeIfPresent(String.self, forKey: .title)) ?? "" ?? ""
+        subtitle = try? c.decodeIfPresent(String.self, forKey: .subtitle)
+        icon = (try? c.decodeIfPresent(String.self, forKey: .icon)) ?? "link" ?? "link"
+        color = (try? c.decodeIfPresent(String.self, forKey: .color)) ?? "#2B7A9F" ?? "#2B7A9F"
+        type = (try? c.decodeIfPresent(String.self, forKey: .type)) ?? "link" ?? "link"
+        url = try? c.decodeIfPresent(String.self, forKey: .url)
+        contentText = try? c.decodeIfPresent(String.self, forKey: .contentText)
+        imageUrl = try? c.decodeIfPresent(String.self, forKey: .imageUrl)
+        sortOrder = (try? c.decodeIfPresent(Int.self, forKey: .sortOrder)) ?? 0 ?? 0
+        isActive = (try? c.decodeIfPresent(Bool.self, forKey: .isActive)) ?? true ?? true
+    }
+}
+
+/// مفاتيح أيقونات موحّدة بين المنصّتين.
+let kHomeSectionIconKeys = ["link","info","star","calendar","location","phone",
+                           "whatsapp","gift","book","heart","image","people","megaphone"]
+
+func homeSectionSFSymbol(_ key: String) -> String {
+    switch key {
+    case "info": return "info.circle.fill"
+    case "star": return "star.fill"
+    case "calendar": return "calendar"
+    case "location": return "mappin.circle.fill"
+    case "phone": return "phone.fill"
+    case "whatsapp": return "message.fill"
+    case "gift": return "gift.fill"
+    case "book": return "book.fill"
+    case "heart": return "heart.fill"
+    case "image": return "photo.fill"
+    case "people": return "person.3.fill"
+    case "megaphone": return "megaphone.fill"
+    default: return "link"
+    }
+}
+
+/// طبقة بيانات أقسام الرئيسية — قراءة/كتابة (الكتابة للإدارة عبر RLS).
+enum HomeSectionsStore {
+    static func fetchActive() async throws -> [HomeSection] {
+        try await SupabaseConfig.client.from("home_sections")
+            .select().eq("is_active", value: true)
+            .order("sort_order", ascending: true).execute().value
+    }
+    static func fetchAll() async throws -> [HomeSection] {
+        try await SupabaseConfig.client.from("home_sections")
+            .select().order("sort_order", ascending: true).execute().value
+    }
+    static func upsert(_ payload: [String: AnyEncodable], id: UUID?) async throws {
+        if let id {
+            try await SupabaseConfig.client.from("home_sections").update(payload).eq("id", value: id.uuidString).execute()
+        } else {
+            try await SupabaseConfig.client.from("home_sections").insert(payload).execute()
+        }
+    }
+    static func delete(id: UUID) async throws {
+        try await SupabaseConfig.client.from("home_sections").delete().eq("id", value: id.uuidString).execute()
+    }
+}
+
 // MARK: - App Settings ViewModel
 
 @MainActor

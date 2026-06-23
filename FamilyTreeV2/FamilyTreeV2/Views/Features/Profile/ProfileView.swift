@@ -813,6 +813,7 @@ struct EditRelativeSheet: View {
 
     @State private var fullName: String = ""
     @State private var isDeceased: Bool = false
+    @State private var hasDeathDate: Bool = false
     @State private var deathDate: Date = Date()
     @State private var isHidden: Bool = false
     @State private var isSaving = false
@@ -832,9 +833,15 @@ struct EditRelativeSheet: View {
                     }
                     .tint(DS.Color.error)
                     if isDeceased {
-                        DatePicker(L10n.t("تاريخ الوفاة", "Death date"),
-                                   selection: $deathDate, in: ...Date(),
-                                   displayedComponents: .date)
+                        Toggle(isOn: $hasDeathDate.animation(DS.Anim.snappy)) {
+                            Label(L10n.t("أعرف تاريخ الوفاة", "Death date known"), systemImage: "calendar")
+                        }
+                        .tint(DS.Color.primary)
+                        if hasDeathDate {
+                            DatePicker(L10n.t("تاريخ الوفاة", "Death date"),
+                                       selection: $deathDate, in: ...Date(),
+                                       displayedComponents: .date)
+                        }
                     }
                 }
 
@@ -866,6 +873,7 @@ struct EditRelativeSheet: View {
             let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"
             if let d = member.deathDate, let parsed = f.date(from: String(d.prefix(10))) {
                 deathDate = parsed
+                hasDeathDate = true
             }
         }
     }
@@ -879,7 +887,7 @@ struct EditRelativeSheet: View {
             await memberVM.updateMemberName(memberId: member.id, fullName: name, silent: true)
             if isDeceased != (member.isDeceased ?? false) || isDeceased {
                 await memberVM.setDeceased(memberId: member.id, isDeceased: isDeceased,
-                                           deathDate: isDeceased ? deathDate : nil)
+                                           deathDate: (isDeceased && hasDeathDate) ? deathDate : nil)
             }
             if isHidden != member.isHiddenFromTree {
                 await memberVM.setHiddenFromTree(memberId: member.id, hidden: isHidden)
