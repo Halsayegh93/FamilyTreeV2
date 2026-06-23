@@ -1988,9 +1988,12 @@ struct WomenTreeView: View {
                 if let p = m.fatherId { byParent[p, default: []].append(m) }
             }
             for k in byParent.keys { byParent[k]?.sort { $0.sortOrder < $1.sortOrder } }
-            // الزوجة ليست جذراً — تظهر كشارة فقط.
+            // الأمهات المُشار إليها — تظهر بالتفاصيل فقط لا كعقدة.
+            let motherIds = Set(visible.compactMap { $0.motherId })
+            // الزوجة/الأم ليست جذراً — تظهر كشارة/بالتفاصيل فقط.
             let rootList = visible
-                .filter { $0.husbandId == nil && ($0.fatherId == nil || !ids.contains($0.fatherId!)) }
+                .filter { $0.husbandId == nil && !motherIds.contains($0.id)
+                    && ($0.fatherId == nil || !ids.contains($0.fatherId!)) }
                 .sorted { $0.sortOrder < $1.sortOrder }
             // شارات الزوجة (مثل الشجرة العامة).
             var wivesByHusband: [UUID: [FamilyMember]] = [:]

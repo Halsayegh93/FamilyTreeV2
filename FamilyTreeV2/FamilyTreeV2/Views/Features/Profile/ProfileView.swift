@@ -455,7 +455,12 @@ struct ProfileView: View {
         }
     }
 
+    @ViewBuilder
     private var serverSonsSection: some View {
+        // العائلة (زوجة + أبناء) تظهر فقط للمتزوج؛ الأم تظهر دائماً.
+        let isMarried = user?.isMarried ?? false
+        let mom = user?.motherId.flatMap { memberVM.member(byId: $0) }
+        if isMarried || mom != nil {
         VStack(alignment: .leading, spacing: 0) {
             DSCard(padding: 0) {
                 // Header مع زر الترتيب
@@ -468,7 +473,7 @@ struct ProfileView: View {
 
                     Spacer()
 
-                    if memberVM.currentMemberChildren.count > 1 {
+                    if isMarried && memberVM.currentMemberChildren.count > 1 {
                         Button {
                             withAnimation(DS.Anim.snappy) {
                                 isReorderingChildren.toggle()
@@ -495,10 +500,9 @@ struct ProfileView: View {
 
                 // الأم (بالأعلى) ثم الزوجة — نفس تعديلات الأبناء (نقر → تعديل).
                 if let u = user {
-                    let mom = u.motherId.flatMap { memberVM.member(byId: $0) }
-                    let wives = memberVM.allMembers
+                    let wives = isMarried ? memberVM.allMembers
                         .filter { $0.husbandId == u.id && $0.isFemale }
-                        .sorted { $0.sortOrder < $1.sortOrder }
+                        .sorted { $0.sortOrder < $1.sortOrder } : []
                     if let mom { familyRelRow(member: mom, label: L10n.t("الأم", "Mother")) }
                     ForEach(wives, id: \.id) { wife in
                         familyRelRow(member: wife, label: L10n.t("الزوجة", "Wife"))
@@ -508,26 +512,29 @@ struct ProfileView: View {
                     }
                 }
 
-                if isLoadingChildren && memberVM.currentMemberChildren.isEmpty {
-                    VStack(spacing: DS.Spacing.sm) {
-                        ForEach(0..<3, id: \.self) { _ in
-                            DSSkeletonRow(avatarSize: 44)
+                if isMarried {
+                    if isLoadingChildren && memberVM.currentMemberChildren.isEmpty {
+                        VStack(spacing: DS.Spacing.sm) {
+                            ForEach(0..<3, id: \.self) { _ in
+                                DSSkeletonRow(avatarSize: 44)
+                            }
                         }
-                    }
-                    .padding(DS.Spacing.md)
-                    .transition(.opacity)
-                } else if isReorderingChildren {
-                    // وضع الترتيب — قائمة عمودية مع أسهم
-                    childrenReorderView
-                } else {
-                    // الوضع العادي — شبكة
-                    childrenGridView
+                        .padding(DS.Spacing.md)
                         .transition(.opacity)
+                    } else if isReorderingChildren {
+                        // وضع الترتيب — قائمة عمودية مع أسهم
+                        childrenReorderView
+                    } else {
+                        // الوضع العادي — شبكة
+                        childrenGridView
+                            .transition(.opacity)
+                    }
                 }
             }
             .animation(DS.Anim.medium, value: isLoadingChildren)
         }
         .padding(.horizontal, DS.Spacing.lg)
+        }
     }
 
     // MARK: - صف الأم/الزوجة داخل «العائلة» — نقر → نفس تعديلات الأبناء
