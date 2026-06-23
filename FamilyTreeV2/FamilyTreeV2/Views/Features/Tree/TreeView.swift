@@ -1999,10 +1999,10 @@ struct WomenTreeView: View {
                     }
                     .frame(maxWidth: .infinity)
 
-                    // الإجراءات — أزرار دائرية على خلفية الشيت
+                    // الإجراءات — أزرار دائرية داخل مربع
                     if canEdit {
-                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 74), spacing: DS.Spacing.md)],
-                                  spacing: DS.Spacing.lg) {
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 64), spacing: DS.Spacing.sm)],
+                                  spacing: DS.Spacing.md) {
                             womenCircleAction(icon: "person.badge.plus", color: DS.Color.primary,
                                               title: L10n.t("إضافة ابن", "Son")) {
                                 addKind = .child; addParent = w
@@ -2029,6 +2029,14 @@ struct WomenTreeView: View {
                                 }
                             }
                         }
+                        .padding(DS.Spacing.md)
+                        .frame(maxWidth: .infinity)
+                        .background(
+                            RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
+                                .fill(DS.Color.surface)
+                                .overlay(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
+                                    .strokeBorder(DS.Color.textTertiary.opacity(0.12), lineWidth: 1))
+                        )
                     } else {
                         Text(L10n.t("للعرض فقط", "View only"))
                             .font(DS.Font.footnote)
@@ -2140,13 +2148,13 @@ struct WomenTreeView: View {
         Button(action: action) {
             VStack(spacing: DS.Spacing.xs) {
                 Image(systemName: icon)
-                    .font(DS.Font.scaled(20, weight: .semibold))
+                    .font(DS.Font.scaled(16, weight: .semibold))
                     .foregroundColor(color)
-                    .frame(width: 56, height: 56)
+                    .frame(width: 44, height: 44)
                     .background(Circle().fill(color.opacity(0.12)))
                     .overlay(Circle().strokeBorder(color.opacity(0.25), lineWidth: 1))
                 Text(title)
-                    .font(DS.Font.caption1)
+                    .font(DS.Font.caption2)
                     .foregroundColor(DS.Color.textPrimary)
                     .lineLimit(1).minimumScaleFactor(0.7)
             }
