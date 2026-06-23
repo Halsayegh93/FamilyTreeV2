@@ -1314,15 +1314,21 @@ struct TreeMemberNode: View {
                             .onAppear { isPulsing = true }
                     }
                 }
-                .overlay(alignment: .topLeading) {
-                    // شارات الزوجات — واحدة لكل زوجة، مكدّسة عمودياً (الأولى فوق).
+                .overlay {
+                    // شارات الزوجات — موزّعة على إطار العقدة (قوس يسار): الأولى فوق ثم تحت.
                     let states: [Bool] = !wifeStates.isEmpty ? wifeStates : (hasWives ? [wifeDeceased] : [])
                     if !states.isEmpty {
-                        VStack(spacing: 3) {
-                            ForEach(Array(states.enumerated()), id: \.offset) { _, dec in
+                        let r = interactiveNodeSize / 2
+                        let spread: CGFloat = states.count > 1 ? 78 : 0
+                        ZStack {
+                            ForEach(Array(states.enumerated()), id: \.offset) { idx, dec in
+                                let f = states.count == 1 ? 0 : (CGFloat(idx) / CGFloat(states.count - 1) - 0.5)
+                                let theta = (180 - f * spread) * .pi / 180
                                 wifeBadge(deceased: dec)
+                                    .offset(x: r * cos(theta), y: r * sin(theta))
                             }
                         }
+                        .frame(width: interactiveNodeSize, height: interactiveNodeSize)
                     }
                 }
                 .overlay {
@@ -1802,8 +1808,10 @@ struct WomenTreeView: View {
 
     @ViewBuilder
     private func motherPicker(for node: FamilyMember) -> some View {
+        // الأمهات المرتبطات بعضو آخر — مستبعدات (لا تُربط الأم مرتين).
+        let linkedMothers = Set(allMembers.filter { $0.id != node.id }.compactMap { $0.motherId })
         let candidates = allMembers
-            .filter { $0.id != node.id && $0.isFemale }
+            .filter { $0.id != node.id && $0.isFemale && !linkedMothers.contains($0.id) }
             .sorted { $0.fullName < $1.fullName }
         NavigationStack {
             List {
@@ -1960,26 +1968,25 @@ struct WomenTreeView: View {
                             .multilineTextAlignment(.center)
                         womenDateChips(w)
 
-                        // الأم ثم الزوجات — كلهم على نفس السطر (تمرير أفقي عند الزيادة).
+                        // الأم ثم الزوجات — ثابتون جنب بعض (شبكة، بدون تمرير).
                         if mother != nil || !wives.isEmpty {
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                HStack(spacing: DS.Spacing.sm) {
-                                    if let mom = mother {
-                                        womenRelationChip(member: mom, label: L10n.t("الأم", "Mother"),
-                                                          bg: FemaleAvatarView.motherBg,
-                                                          iconColor: FemaleAvatarView.motherIcon,
-                                                          sfIcon: "figure.2.and.child.holdinghands",
-                                                          onTap: { selectedWoman = mom })
-                                    }
-                                    ForEach(wives, id: \.id) { wife in
-                                        womenRelationChip(member: wife, label: L10n.t("الزوجة", "Wife"),
-                                                          bg: FemaleAvatarView.wifeBg,
-                                                          iconColor: FemaleAvatarView.wifeIcon,
-                                                          sfIcon: nil,
-                                                          onTap: canEdit ? { editTarget = wife } : nil)
-                                    }
+                            LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: DS.Spacing.sm)],
+                                      spacing: DS.Spacing.sm) {
+                                if let mom = mother {
+                                    womenRelationChip(member: mom, label: L10n.t("الأم", "Mother"),
+                                                      bg: FemaleAvatarView.motherBg,
+                                                      iconColor: FemaleAvatarView.motherIcon,
+                                                      sfIcon: "figure.2.and.child.holdinghands",
+                                                      onTap: { selectedWoman = mom })
                                 }
-                                .padding(.horizontal, 2)
+                                ForEach(wives, id: \.id) { wife in
+                                    // الزوجة بنفس شكل الأم (أيقونة في دائرة + نفس شارة المتوفّاة).
+                                    womenRelationChip(member: wife, label: L10n.t("الزوجة", "Wife"),
+                                                      bg: FemaleAvatarView.wifeBg,
+                                                      iconColor: FemaleAvatarView.wifeIcon,
+                                                      sfIcon: "person.fill",
+                                                      onTap: canEdit ? { editTarget = wife } : nil)
+                                }
                             }
                             .padding(.top, DS.Spacing.sm)
                         }
@@ -1991,7 +1998,7 @@ struct WomenTreeView: View {
                         LazyVGrid(columns: [GridItem(.adaptive(minimum: 74), spacing: DS.Spacing.md)],
                                   spacing: DS.Spacing.lg) {
                             womenCircleAction(icon: "person.badge.plus", color: DS.Color.primary,
-                                              title: L10n.t("إضافة فرع", "Branch")) {
+                                              title: L10n.t("إضافة ابن", "Son")) {
                                 addKind = .child; addParent = w
                             }
                             womenCircleAction(icon: "heart.circle.fill", color: FemaleAvatarView.wifeIcon,
@@ -2121,7 +2128,7 @@ struct WomenTreeView: View {
         }
         .padding(.vertical, DS.Spacing.sm)
         .padding(.horizontal, DS.Spacing.md)
-        .frame(minWidth: 150, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
                 .fill(DS.Color.background)
@@ -2211,7 +2218,7 @@ struct WomenEditView: View {
     private var showGender: Bool { kind == .child || kind == .edit }
     private var titleText: String {
         switch kind {
-        case .child:  return L10n.t("إضافة فرع", "Add branch")
+        case .child:  return L10n.t("إضافة ابن", "Add son")
         case .wife:   return L10n.t("إضافة زوجة", "Add wife")
         case .mother: return L10n.t("إضافة أم", "Add mother")
         case .edit:   return L10n.t("تعديل", "Edit")
