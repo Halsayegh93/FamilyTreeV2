@@ -1975,20 +1975,19 @@ struct WomenTreeView: View {
                             .multilineTextAlignment(.center)
                         womenDateChips(w)
 
-                        // الأم ثم الزوجات — ثابتون جنب بعض (شبكة، بدون تمرير).
+                        // الأم ثم الزوجات — أيقونات دائرية جنب بعض (الاسم تحتها).
                         if mother != nil || !wives.isEmpty {
-                            LazyVGrid(columns: [GridItem(.adaptive(minimum: 124), spacing: DS.Spacing.sm)],
-                                      spacing: DS.Spacing.sm) {
+                            LazyVGrid(columns: [GridItem(.adaptive(minimum: 64), spacing: DS.Spacing.md)],
+                                      spacing: DS.Spacing.md) {
                                 if let mom = mother {
-                                    womenRelationChip(member: mom, label: L10n.t("الأم", "Mother"),
+                                    womenRelationIcon(member: mom, label: L10n.t("الأم", "Mother"),
                                                       bg: FemaleAvatarView.motherBg,
                                                       iconColor: FemaleAvatarView.motherIcon,
                                                       sfIcon: "figure.2.and.child.holdinghands",
                                                       onTap: { selectedWoman = mom })
                                 }
                                 ForEach(wives, id: \.id) { wife in
-                                    // الزوجة بنفس شكل الأم (أيقونة في دائرة + نفس شارة المتوفّاة).
-                                    womenRelationChip(member: wife, label: L10n.t("الزوجة", "Wife"),
+                                    womenRelationIcon(member: wife, label: L10n.t("الزوجة", "Wife"),
                                                       bg: FemaleAvatarView.wifeBg,
                                                       iconColor: FemaleAvatarView.wifeIcon,
                                                       sfIcon: "person.fill",
@@ -2101,47 +2100,36 @@ struct WomenTreeView: View {
         .background(color.opacity(0.12)).clipShape(Capsule())
     }
 
-    // صندوق علاقة مُصغّر (الأم/الزوجة) — أيقونة صغيرة + التسمية + الاسم.
-    private func womenRelationChip(member: FamilyMember, label: String, bg: Color, iconColor: Color,
+    // أيقونة علاقة دائرية (الأم/الزوجة) — دائرة + الاسم تحتها.
+    private func womenRelationIcon(member: FamilyMember, label: String, bg: Color, iconColor: Color,
                                   sfIcon: String?, onTap: (() -> Void)?) -> some View {
-        HStack(spacing: DS.Spacing.xs + 2) {
+        VStack(spacing: DS.Spacing.xs) {
             ZStack(alignment: .bottomTrailing) {
                 if let sfIcon {
                     Image(systemName: sfIcon)
-                        .font(DS.Font.scaled(13, weight: .semibold))
+                        .font(DS.Font.scaled(20, weight: .semibold))
                         .foregroundColor(iconColor)
-                        .frame(width: 28, height: 28)
+                        .frame(width: 52, height: 52)
                         .background(Circle().fill(bg))
                     if member.isDeceased ?? false {
                         Image(systemName: "heart.slash.fill")
-                            .font(.system(size: 7, weight: .bold))
+                            .font(.system(size: 9, weight: .bold))
                             .foregroundColor(DS.Color.error)
-                            .padding(2)
+                            .padding(3)
                             .background(Circle().fill(Color.white))
                     }
                 } else {
                     FemaleAvatarView(bg: bg, iconColor: iconColor, isDeceased: member.isDeceased ?? false)
-                        .frame(width: 28, height: 28).clipShape(Circle())
+                        .frame(width: 52, height: 52).clipShape(Circle())
                 }
             }
-            VStack(alignment: .leading, spacing: 0) {
-                Text(label).font(DS.Font.caption2).foregroundColor(iconColor)
-                Text(member.fullName.isEmpty ? member.firstName : member.fullName)
-                    .font(DS.Font.footnote).fontWeight(.semibold)
-                    .foregroundColor(DS.Color.textPrimary)
-                    .lineLimit(1)
-            }
-            Spacer(minLength: 0)
+            Text(member.firstName.isEmpty ? (member.fullName.components(separatedBy: " ").first ?? "") : member.firstName)
+                .font(DS.Font.caption2).fontWeight(.semibold)
+                .foregroundColor(DS.Color.textPrimary)
+                .lineLimit(1).minimumScaleFactor(0.7)
+            Text(label).font(DS.Font.caption2).foregroundColor(iconColor)
         }
-        .padding(.vertical, DS.Spacing.xs)
-        .padding(.horizontal, DS.Spacing.sm)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                .fill(DS.Color.background)
-                .overlay(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                    .strokeBorder(DS.Color.textTertiary.opacity(0.15), lineWidth: 1))
-        )
+        .frame(maxWidth: .infinity)
         .contentShape(Rectangle())
         .onTapGesture { onTap?() }
     }
