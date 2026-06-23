@@ -1552,6 +1552,7 @@ enum WomenStore {
                 id: r.id,
                 firstName: r.firstName ?? "",
                 fullName: (r.fullName?.isEmpty == false ? r.fullName! : (r.firstName ?? "")),
+                birthDate: r.birthDate,
                 deathDate: r.deathDate,
                 isDeceased: r.isDeceased,
                 role: .member,
@@ -1564,24 +1565,31 @@ enum WomenStore {
         }
     }
 
-    static func addChild(parentId: UUID, name: String, sortOrder: Int) async throws {
+    static func addChild(parentId: UUID, name: String, sortOrder: Int,
+                         birthDate: String? = nil, isDeceased: Bool = false,
+                         deathDate: String? = nil) async throws {
         let payload: [String: AnyEncodable] = [
             "first_name": AnyEncodable(name),
             "full_name": AnyEncodable(name),
             "parent_id": AnyEncodable(parentId.uuidString),
             "sort_order": AnyEncodable(sortOrder),
-            "gender": AnyEncodable("female")
+            "gender": AnyEncodable("female"),
+            "birth_date": AnyEncodable(birthDate),
+            "is_deceased": AnyEncodable(isDeceased),
+            "death_date": AnyEncodable(isDeceased ? deathDate : Optional<String>.none)
         ]
         try await SupabaseConfig.client.from("women_members").insert(payload).execute()
     }
 
-    static func update(id: UUID, fullName: String, isDeceased: Bool, deathDate: String?, isHidden: Bool) async throws {
+    static func update(id: UUID, fullName: String, isDeceased: Bool, deathDate: String?,
+                       birthDate: String?, isHidden: Bool) async throws {
         let first = fullName.components(separatedBy: " ").first ?? fullName
         let payload: [String: AnyEncodable] = [
             "full_name": AnyEncodable(fullName),
             "first_name": AnyEncodable(first),
             "is_deceased": AnyEncodable(isDeceased),
             "death_date": AnyEncodable(isDeceased ? deathDate : Optional<String>.none),
+            "birth_date": AnyEncodable(birthDate),
             "is_hidden_from_tree": AnyEncodable(isHidden)
         ]
         try await SupabaseConfig.client.from("women_members").update(payload).eq("id", value: id.uuidString).execute()
@@ -1614,8 +1622,6 @@ struct WomenTreeView: View {
     @State private var zoomAnchor: UnitPoint = .center
     @State private var treeContentSize: CGSize = .zero
 
-    @State private var showAdd = false
-    @State private var addName = ""
     @State private var addParent: FamilyMember? = nil
     @State private var editTarget: FamilyMember? = nil
 
@@ -1687,19 +1693,11 @@ struct WomenTreeView: View {
         .sheet(item: $editTarget) { w in
             WomenEditView(member: w) { Task { await load() } }
         }
-        .alert(L10n.t("إضافة فرع", "Add branch"), isPresented: $showAdd) {
-            TextField(L10n.t("الاسم", "Name"), text: $addName)
-            Button(L10n.t("إضافة", "Add")) {
-                let name = addName.trimmingCharacters(in: .whitespaces)
-                addName = ""
-                guard !name.isEmpty, let p = addParent else { return }
-                let siblings = allMembers.filter { $0.fatherId == p.id }.count
-                Task {
-                    try? await WomenStore.addChild(parentId: p.id, name: name, sortOrder: siblings)
-                    await load()
-                }
+        .sheet(item: $addParent) { p in
+            WomenEditView(member: nil, parentId: p.id,
+                          siblingCount: allMembers.filter { $0.fatherId == p.id }.count) {
+                Task { await load() }
             }
-            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { addName = "" }
         }
     }
 
@@ -1792,9 +1790,8 @@ struct WomenTreeView: View {
             List {
                 if canEdit {
                     Button {
-                        addParent = w
                         selectedWoman = nil
-                        showAdd = true
+                        addParent = w
                     } label: {
                         Label(L10n.t("إضافة فرع", "Add branch"), systemImage: "person.badge.plus")
                     }
@@ -1857,13 +1854,19 @@ struct WomenTreeView: View {
     }
 }
 
-/// محرّر عضوة شجرة النساء — الاسم الكامل + متوفّاة (تاريخ) + إظهار/إخفاء.
+/// نموذج إضافة/تعديل عضوة شجرة النساء — مثل الشجرة العامة (اسم + ميلاد + وفاة).
 struct WomenEditView: View {
-    let member: FamilyMember
+    let member: FamilyMember?          // وضع التعديل
+    var parentId: UUID? = nil          // وضع الإضافة (تحت هذا الأب)
+    var siblingCount: Int = 0
     let onSaved: () -> Void
+
+    private var isAdd: Bool { member == nil }
 
     @Environment(\.dismiss) private var dismiss
     @State private var fullName: String = ""
+    @State private var hasBirthDate = false
+    @State private var birthDate = Date()
     @State private var isDeceased = false
     @State private var hasDeathDate = false
     @State private var deathDate = Date()
@@ -1875,6 +1878,15 @@ struct WomenEditView: View {
             Form {
                 Section(L10n.t("الاسم الكامل", "Full name")) {
                     TextField(L10n.t("الاسم الكامل", "Full name"), text: $fullName)
+                }
+                Section {
+                    Toggle(isOn: $hasBirthDate.animation()) {
+                        Label(L10n.t("تاريخ الميلاد معروف", "Birth date known"), systemImage: "calendar")
+                    }.tint(DS.Color.primary)
+                    if hasBirthDate {
+                        DatePicker(L10n.t("تاريخ الميلاد", "Birth date"),
+                                   selection: $birthDate, in: ...Date(), displayedComponents: .date)
+                    }
                 }
                 Section {
                     Toggle(isOn: $isDeceased.animation()) {
@@ -1890,34 +1902,39 @@ struct WomenEditView: View {
                         }
                     }
                 }
-                Section {
-                    Toggle(isOn: Binding(get: { !isHidden }, set: { isHidden = !$0 })) {
-                        Label(L10n.t("إظهار في الشجرة", "Show in tree"),
-                              systemImage: isHidden ? "eye.slash" : "eye")
-                    }.tint(DS.Color.primary)
+                if !isAdd {
+                    Section {
+                        Toggle(isOn: Binding(get: { !isHidden }, set: { isHidden = !$0 })) {
+                            Label(L10n.t("إظهار في الشجرة", "Show in tree"),
+                                  systemImage: isHidden ? "eye.slash" : "eye")
+                        }.tint(DS.Color.primary)
+                    }
                 }
             }
-            .navigationTitle(L10n.t("تعديل", "Edit"))
+            .navigationTitle(isAdd ? L10n.t("إضافة فرع", "Add branch") : L10n.t("تعديل", "Edit"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button(L10n.t("إلغاء", "Cancel")) { dismiss() }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button(L10n.t("حفظ", "Save")) { save() }
+                    Button(isAdd ? L10n.t("إضافة", "Add") : L10n.t("حفظ", "Save")) { save() }
                         .disabled(fullName.trimmingCharacters(in: .whitespaces).isEmpty || isSaving)
                 }
             }
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         }
         .onAppear {
-            fullName = member.fullName.isEmpty ? member.firstName : member.fullName
-            isDeceased = member.isDeceased ?? false
-            isHidden = member.isHiddenFromTree
+            guard let m = member else { return }
+            fullName = m.fullName.isEmpty ? m.firstName : m.fullName
+            isDeceased = m.isDeceased ?? false
+            isHidden = m.isHiddenFromTree
             let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"
-            if let d = member.deathDate, let parsed = f.date(from: String(d.prefix(10))) {
-                deathDate = parsed
-                hasDeathDate = true
+            if let d = m.deathDate, let parsed = f.date(from: String(d.prefix(10))) {
+                deathDate = parsed; hasDeathDate = true
+            }
+            if let b = m.birthDate, let parsed = f.date(from: String(b.prefix(10))) {
+                birthDate = parsed; hasBirthDate = true
             }
         }
     }
@@ -1927,10 +1944,16 @@ struct WomenEditView: View {
         guard !name.isEmpty else { return }
         isSaving = true
         let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"
+        let bStr = hasBirthDate ? f.string(from: birthDate) : nil
         let dStr = (isDeceased && hasDeathDate) ? f.string(from: deathDate) : nil
         Task {
-            try? await WomenStore.update(id: member.id, fullName: name,
-                                         isDeceased: isDeceased, deathDate: dStr, isHidden: isHidden)
+            if let m = member {
+                try? await WomenStore.update(id: m.id, fullName: name, isDeceased: isDeceased,
+                                             deathDate: dStr, birthDate: bStr, isHidden: isHidden)
+            } else if let pid = parentId {
+                try? await WomenStore.addChild(parentId: pid, name: name, sortOrder: siblingCount,
+                                               birthDate: bStr, isDeceased: isDeceased, deathDate: dStr)
+            }
             await MainActor.run { isSaving = false; onSaved(); dismiss() }
         }
     }
