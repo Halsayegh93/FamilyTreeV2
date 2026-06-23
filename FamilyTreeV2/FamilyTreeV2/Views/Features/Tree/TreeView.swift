@@ -1519,6 +1519,9 @@ private struct WomenRow: Decodable {
     let firstName: String?
     let fullName: String?
     let parentId: UUID?
+    let motherId: UUID?
+    let husbandId: UUID?
+    let gender: String?
     let sortOrder: Int?
     let isDeceased: Bool?
     let birthDate: String?
@@ -1530,6 +1533,9 @@ private struct WomenRow: Decodable {
         case firstName = "first_name"
         case fullName = "full_name"
         case parentId = "parent_id"
+        case motherId = "mother_id"
+        case husbandId = "husband_id"
+        case gender
         case sortOrder = "sort_order"
         case isDeceased = "is_deceased"
         case birthDate = "birth_date"
@@ -1557,15 +1563,17 @@ enum WomenStore {
                 isDeceased: r.isDeceased,
                 role: .member,
                 fatherId: r.parentId,                 // parent → father لإعادة استخدام الشجرة
+                husbandId: r.husbandId,
                 isHiddenFromTree: r.isHiddenFromTree ?? false,
                 sortOrder: r.sortOrder ?? 0,
                 status: .active,
-                gender: "male"                        // شكل العقدة بالأصلي (رجالي)
+                gender: (r.gender ?? "male")
             )
         }
     }
 
     static func addChild(parentId: UUID, name: String, sortOrder: Int,
+                         gender: String = "male",
                          birthDate: String? = nil, isDeceased: Bool = false,
                          deathDate: String? = nil) async throws {
         let payload: [String: AnyEncodable] = [
@@ -1573,7 +1581,7 @@ enum WomenStore {
             "full_name": AnyEncodable(name),
             "parent_id": AnyEncodable(parentId.uuidString),
             "sort_order": AnyEncodable(sortOrder),
-            "gender": AnyEncodable("female"),
+            "gender": AnyEncodable(gender),
             "birth_date": AnyEncodable(birthDate),
             "is_deceased": AnyEncodable(isDeceased),
             "death_date": AnyEncodable(isDeceased ? deathDate : Optional<String>.none)
@@ -1581,10 +1589,47 @@ enum WomenStore {
         try await SupabaseConfig.client.from("women_members").insert(payload).execute()
     }
 
-    static func update(id: UUID, fullName: String, isDeceased: Bool, deathDate: String?,
-                       birthDate: String?, isHidden: Bool) async throws {
-        let first = fullName.components(separatedBy: " ").first ?? fullName
+    /// إضافة زوجة لعقدة (تظهر كشارة على الزوج) — أنثى husband_id = العقدة.
+    static func addWife(husbandId: UUID, name: String, birthDate: String? = nil,
+                        isDeceased: Bool = false, deathDate: String? = nil) async throws {
         let payload: [String: AnyEncodable] = [
+            "first_name": AnyEncodable(name),
+            "full_name": AnyEncodable(name),
+            "husband_id": AnyEncodable(husbandId.uuidString),
+            "gender": AnyEncodable("female"),
+            "sort_order": AnyEncodable(0),
+            "birth_date": AnyEncodable(birthDate),
+            "is_deceased": AnyEncodable(isDeceased),
+            "death_date": AnyEncodable(isDeceased ? deathDate : Optional<String>.none)
+        ]
+        try await SupabaseConfig.client.from("women_members").insert(payload).execute()
+    }
+
+    /// إضافة أمّ لعقدة — تُنشئ أنثى ثم تربطها mother_id بالعقدة.
+    static func addMother(childId: UUID, name: String, birthDate: String? = nil,
+                          isDeceased: Bool = false, deathDate: String? = nil) async throws {
+        struct InsertedRow: Decodable { let id: UUID }
+        let payload: [String: AnyEncodable] = [
+            "first_name": AnyEncodable(name),
+            "full_name": AnyEncodable(name),
+            "gender": AnyEncodable("female"),
+            "sort_order": AnyEncodable(0),
+            "birth_date": AnyEncodable(birthDate),
+            "is_deceased": AnyEncodable(isDeceased),
+            "death_date": AnyEncodable(isDeceased ? deathDate : Optional<String>.none)
+        ]
+        let rows: [InsertedRow] = try await SupabaseConfig.client.from("women_members")
+            .insert(payload).select("id").execute().value
+        guard let newId = rows.first?.id else { return }
+        try await SupabaseConfig.client.from("women_members")
+            .update(["mother_id": AnyEncodable(newId.uuidString)])
+            .eq("id", value: childId.uuidString).execute()
+    }
+
+    static func update(id: UUID, fullName: String, isDeceased: Bool, deathDate: String?,
+                       birthDate: String?, gender: String? = nil, isHidden: Bool) async throws {
+        let first = fullName.components(separatedBy: " ").first ?? fullName
+        var payload: [String: AnyEncodable] = [
             "full_name": AnyEncodable(fullName),
             "first_name": AnyEncodable(first),
             "is_deceased": AnyEncodable(isDeceased),
@@ -1592,6 +1637,7 @@ enum WomenStore {
             "birth_date": AnyEncodable(birthDate),
             "is_hidden_from_tree": AnyEncodable(isHidden)
         ]
+        if let gender { payload["gender"] = AnyEncodable(gender) }
         try await SupabaseConfig.client.from("women_members").update(payload).eq("id", value: id.uuidString).execute()
     }
 
@@ -1609,6 +1655,8 @@ struct WomenTreeView: View {
     @State private var allMembers: [FamilyMember] = []
     @State private var childrenByParent: [UUID: [FamilyMember]] = [:]
     @State private var roots: [FamilyMember] = []
+    @State private var husbandsWithWives: Set<UUID> = []
+    @State private var husbandsAllWivesDeceased: Set<UUID> = []
     @State private var isLoading = true
 
     @State private var activePath: Set<UUID> = []
@@ -1623,6 +1671,7 @@ struct WomenTreeView: View {
     @State private var treeContentSize: CGSize = .zero
 
     @State private var addParent: FamilyMember? = nil
+    @State private var addKind: WomenRelKind = .child
     @State private var editTarget: FamilyMember? = nil
 
     private var canEdit: Bool { authVM.canEditMembers }
@@ -1691,10 +1740,10 @@ struct WomenTreeView: View {
         .task { await load() }
         .sheet(item: $selectedWoman) { w in actionSheet(for: w) }
         .sheet(item: $editTarget) { w in
-            WomenEditView(member: w) { Task { await load() } }
+            WomenEditView(kind: .edit, node: w) { Task { await load() } }
         }
         .sheet(item: $addParent) { p in
-            WomenEditView(member: nil, parentId: p.id,
+            WomenEditView(kind: addKind, node: p,
                           siblingCount: allMembers.filter { $0.fatherId == p.id }.count) {
                 Task { await load() }
             }
@@ -1780,7 +1829,9 @@ struct WomenTreeView: View {
             lightweightFullTree: false,
             currentLocationMemberID: nil,
             renderedCount: .constant(0),
-            maxRendered: 4000
+            maxRendered: 4000,
+            husbandsWithWives: husbandsWithWives,
+            husbandsAllWivesDeceased: husbandsAllWivesDeceased
         )
     }
 
@@ -1791,9 +1842,24 @@ struct WomenTreeView: View {
                 if canEdit {
                     Button {
                         selectedWoman = nil
+                        addKind = .child
                         addParent = w
                     } label: {
                         Label(L10n.t("إضافة فرع", "Add branch"), systemImage: "person.badge.plus")
+                    }
+                    Button {
+                        selectedWoman = nil
+                        addKind = .wife
+                        addParent = w
+                    } label: {
+                        Label(L10n.t("إضافة زوجة", "Add wife"), systemImage: "figure.dress.line.vertical.figure")
+                    }
+                    Button {
+                        selectedWoman = nil
+                        addKind = .mother
+                        addParent = w
+                    } label: {
+                        Label(L10n.t("إضافة أم", "Add mother"), systemImage: "figure.2.and.child.holdinghands")
                     }
                     Button {
                         let t = w
@@ -1837,13 +1903,23 @@ struct WomenTreeView: View {
                 if let p = m.fatherId { byParent[p, default: []].append(m) }
             }
             for k in byParent.keys { byParent[k]?.sort { $0.sortOrder < $1.sortOrder } }
+            // الزوجة ليست جذراً — تظهر كشارة فقط.
             let rootList = visible
-                .filter { $0.fatherId == nil || !ids.contains($0.fatherId!) }
+                .filter { $0.husbandId == nil && ($0.fatherId == nil || !ids.contains($0.fatherId!)) }
                 .sorted { $0.sortOrder < $1.sortOrder }
+            // شارات الزوجة (مثل الشجرة العامة).
+            var wivesByHusband: [UUID: [FamilyMember]] = [:]
+            for m in visible where m.isFemale && m.husbandId != nil {
+                wivesByHusband[m.husbandId!, default: []].append(m)
+            }
+            let withWives = Set(wivesByHusband.keys)
+            let allDeceased = Set(wivesByHusband.filter { $0.value.allSatisfy { $0.isDeceased == true } }.keys)
             await MainActor.run {
                 self.allMembers = visible
                 self.childrenByParent = byParent
                 self.roots = rootList
+                self.husbandsWithWives = withWives
+                self.husbandsAllWivesDeceased = allDeceased
                 if let first = rootList.first { self.activePath = [first.id] }
                 self.isLoading = false
             }
@@ -1854,17 +1930,29 @@ struct WomenTreeView: View {
     }
 }
 
-/// نموذج إضافة/تعديل عضوة شجرة النساء — مثل الشجرة العامة (اسم + ميلاد + وفاة).
+enum WomenRelKind { case child, wife, mother, edit }
+
+/// نموذج إضافة/تعديل عضوة شجرة النساء — يدعم: ابن/زوجة/أم/تعديل.
 struct WomenEditView: View {
-    let member: FamilyMember?          // وضع التعديل
-    var parentId: UUID? = nil          // وضع الإضافة (تحت هذا الأب)
+    let kind: WomenRelKind
+    let node: FamilyMember      // هدف التعديل أو مرساة العلاقة
     var siblingCount: Int = 0
     let onSaved: () -> Void
 
-    private var isAdd: Bool { member == nil }
+    private var isEdit: Bool { kind == .edit }
+    private var showGender: Bool { kind == .child || kind == .edit }
+    private var titleText: String {
+        switch kind {
+        case .child:  return L10n.t("إضافة فرع", "Add branch")
+        case .wife:   return L10n.t("إضافة زوجة", "Add wife")
+        case .mother: return L10n.t("إضافة أم", "Add mother")
+        case .edit:   return L10n.t("تعديل", "Edit")
+        }
+    }
 
     @Environment(\.dismiss) private var dismiss
     @State private var fullName: String = ""
+    @State private var gender: String = "male"
     @State private var hasBirthDate = false
     @State private var birthDate = Date()
     @State private var isDeceased = false
@@ -1879,6 +1967,14 @@ struct WomenEditView: View {
                 Section(L10n.t("الاسم الكامل", "Full name")) {
                     TextField(L10n.t("الاسم الكامل", "Full name"), text: $fullName)
                 }
+                if showGender {
+                    Section {
+                        Picker(L10n.t("الجنس", "Gender"), selection: $gender) {
+                            Text(L10n.t("ذكر", "Male")).tag("male")
+                            Text(L10n.t("أنثى", "Female")).tag("female")
+                        }.pickerStyle(.segmented)
+                    }
+                }
                 Section {
                     Toggle(isOn: $hasBirthDate.animation()) {
                         Label(L10n.t("تاريخ الميلاد معروف", "Birth date known"), systemImage: "calendar")
@@ -1890,7 +1986,8 @@ struct WomenEditView: View {
                 }
                 Section {
                     Toggle(isOn: $isDeceased.animation()) {
-                        Label(L10n.t("متوفّاة", "Deceased"), systemImage: "leaf.fill")
+                        Label(gender == "female" ? L10n.t("متوفّاة", "Deceased") : L10n.t("متوفّى", "Deceased"),
+                              systemImage: "leaf.fill")
                     }.tint(DS.Color.error)
                     if isDeceased {
                         Toggle(isOn: $hasDeathDate.animation()) {
@@ -1902,7 +1999,7 @@ struct WomenEditView: View {
                         }
                     }
                 }
-                if !isAdd {
+                if isEdit {
                     Section {
                         Toggle(isOn: Binding(get: { !isHidden }, set: { isHidden = !$0 })) {
                             Label(L10n.t("إظهار في الشجرة", "Show in tree"),
@@ -1911,29 +2008,32 @@ struct WomenEditView: View {
                     }
                 }
             }
-            .navigationTitle(isAdd ? L10n.t("إضافة فرع", "Add branch") : L10n.t("تعديل", "Edit"))
+            .navigationTitle(titleText)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button(L10n.t("إلغاء", "Cancel")) { dismiss() }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button(isAdd ? L10n.t("إضافة", "Add") : L10n.t("حفظ", "Save")) { save() }
+                    Button(isEdit ? L10n.t("حفظ", "Save") : L10n.t("إضافة", "Add")) { save() }
                         .disabled(fullName.trimmingCharacters(in: .whitespaces).isEmpty || isSaving)
                 }
             }
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         }
         .onAppear {
-            guard let m = member else { return }
-            fullName = m.fullName.isEmpty ? m.firstName : m.fullName
-            isDeceased = m.isDeceased ?? false
-            isHidden = m.isHiddenFromTree
+            // الزوجة/الأم أنثى افتراضياً؛ الابن ذكر.
+            gender = (kind == .wife || kind == .mother) ? "female" : "male"
+            guard isEdit else { return }
+            fullName = node.fullName.isEmpty ? node.firstName : node.fullName
+            gender = (node.gender ?? "male").lowercased() == "female" ? "female" : "male"
+            isDeceased = node.isDeceased ?? false
+            isHidden = node.isHiddenFromTree
             let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"
-            if let d = m.deathDate, let parsed = f.date(from: String(d.prefix(10))) {
+            if let d = node.deathDate, let parsed = f.date(from: String(d.prefix(10))) {
                 deathDate = parsed; hasDeathDate = true
             }
-            if let b = m.birthDate, let parsed = f.date(from: String(b.prefix(10))) {
+            if let b = node.birthDate, let parsed = f.date(from: String(b.prefix(10))) {
                 birthDate = parsed; hasBirthDate = true
             }
         }
@@ -1947,12 +2047,19 @@ struct WomenEditView: View {
         let bStr = hasBirthDate ? f.string(from: birthDate) : nil
         let dStr = (isDeceased && hasDeathDate) ? f.string(from: deathDate) : nil
         Task {
-            if let m = member {
-                try? await WomenStore.update(id: m.id, fullName: name, isDeceased: isDeceased,
-                                             deathDate: dStr, birthDate: bStr, isHidden: isHidden)
-            } else if let pid = parentId {
-                try? await WomenStore.addChild(parentId: pid, name: name, sortOrder: siblingCount,
-                                               birthDate: bStr, isDeceased: isDeceased, deathDate: dStr)
+            switch kind {
+            case .child:
+                try? await WomenStore.addChild(parentId: node.id, name: name, sortOrder: siblingCount,
+                                               gender: gender, birthDate: bStr, isDeceased: isDeceased, deathDate: dStr)
+            case .wife:
+                try? await WomenStore.addWife(husbandId: node.id, name: name,
+                                              birthDate: bStr, isDeceased: isDeceased, deathDate: dStr)
+            case .mother:
+                try? await WomenStore.addMother(childId: node.id, name: name,
+                                                birthDate: bStr, isDeceased: isDeceased, deathDate: dStr)
+            case .edit:
+                try? await WomenStore.update(id: node.id, fullName: name, isDeceased: isDeceased,
+                                             deathDate: dStr, birthDate: bStr, gender: gender, isHidden: isHidden)
             }
             await MainActor.run { isSaving = false; onSaved(); dismiss() }
         }
