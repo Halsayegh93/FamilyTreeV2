@@ -1828,7 +1828,7 @@ struct WomenTreeView: View {
             }
             ZStack {
                 Circle().fill(Color.white.opacity(0.18))
-                WomenGroupGlyph()
+                Image(systemName: "tree.fill").foregroundColor(.white)
             }
             .frame(width: 40, height: 40)
             .overlay(Circle().strokeBorder(Color.white.opacity(0.4), lineWidth: 1))
@@ -1849,11 +1849,7 @@ struct WomenTreeView: View {
     // بار الأدوات تحت الهيدر — مطابق لشجرة العائلة (البداية + تحديث).
     private var womenToolsBar: some View {
         HStack(spacing: DS.Spacing.sm) {
-            // الرئيسية — يرجع لشاشة الرئيسية (خروج من شجرة النساء).
-            womenToolButton(icon: "house.fill", label: L10n.t("الرئيسية", "Home")) {
-                if let onClose { onClose() } else { dismiss() }
-            }
-            womenToolButton(icon: "scope", label: L10n.t("توسيط", "Center")) {
+            womenToolButton(icon: "scope", label: L10n.t("إعادة موضع", "Recenter")) {
                 resetToRoot()
             }
             womenToolButton(icon: "arrow.clockwise", label: L10n.t("تحديث", "Refresh")) {
@@ -1927,25 +1923,30 @@ struct WomenTreeView: View {
                             .multilineTextAlignment(.center)
                         womenDateChips(w)
 
-                        // الأم والزوجة تحت «متوفّى» مباشرة (بدون عنوان العلاقات)
+                        // الأم والزوجة تحت «متوفّى» — صندوقان صغيران جنب بعض.
                         if mother != nil || !wives.isEmpty {
-                            VStack(spacing: DS.Spacing.sm) {
+                            HStack(alignment: .top, spacing: DS.Spacing.sm) {
                                 if let mom = mother {
-                                    womenRelationRow(member: mom, label: L10n.t("الأم", "Mother"),
-                                                     bg: FemaleAvatarView.motherBg,
-                                                     iconColor: FemaleAvatarView.motherIcon,
-                                                     sfIcon: "figure.2.and.child.holdinghands",
-                                                     onTap: { selectedWoman = mom })
+                                    womenRelationChip(member: mom, label: L10n.t("الأم", "Mother"),
+                                                      bg: FemaleAvatarView.motherBg,
+                                                      iconColor: FemaleAvatarView.motherIcon,
+                                                      sfIcon: "figure.2.and.child.holdinghands",
+                                                      onTap: { selectedWoman = mom })
                                 }
-                                ForEach(wives, id: \.id) { wife in
-                                    womenRelationRow(member: wife, label: L10n.t("الزوجة", "Wife"),
-                                                     bg: FemaleAvatarView.wifeBg,
-                                                     iconColor: FemaleAvatarView.wifeIcon,
-                                                     sfIcon: nil,
-                                                     onTap: canEdit ? { selectedWoman = nil; editTarget = wife } : nil)
+                                if !wives.isEmpty {
+                                    VStack(spacing: DS.Spacing.sm) {
+                                        ForEach(wives, id: \.id) { wife in
+                                            womenRelationChip(member: wife, label: L10n.t("الزوجة", "Wife"),
+                                                              bg: FemaleAvatarView.wifeBg,
+                                                              iconColor: FemaleAvatarView.wifeIcon,
+                                                              sfIcon: nil,
+                                                              onTap: canEdit ? { selectedWoman = nil; editTarget = wife } : nil)
+                                        }
+                                    }
+                                    .frame(maxWidth: .infinity)
                                 }
                             }
-                            .padding(.top, DS.Spacing.xs)
+                            .padding(.top, DS.Spacing.sm)
                         }
                     }
                     .frame(maxWidth: .infinity)
@@ -2050,43 +2051,40 @@ struct WomenTreeView: View {
         .background(color.opacity(0.12)).clipShape(Capsule())
     }
 
-    private func womenRelationRow(member: FamilyMember, label: String, bg: Color, iconColor: Color,
+    // صندوق علاقة مُصغّر (الأم/الزوجة) — أيقونة صغيرة + التسمية + الاسم.
+    private func womenRelationChip(member: FamilyMember, label: String, bg: Color, iconColor: Color,
                                   sfIcon: String?, onTap: (() -> Void)?) -> some View {
-        HStack(spacing: DS.Spacing.md) {
-            // أيقونة العلاقة — رمز مخصّص (الأم) أو أفاتار أنثى (الزوجة).
+        HStack(spacing: DS.Spacing.sm) {
             ZStack(alignment: .bottomTrailing) {
                 if let sfIcon {
                     Image(systemName: sfIcon)
-                        .font(DS.Font.scaled(20, weight: .semibold))
+                        .font(DS.Font.scaled(16, weight: .semibold))
                         .foregroundColor(iconColor)
-                        .frame(width: 44, height: 44)
+                        .frame(width: 34, height: 34)
                         .background(Circle().fill(bg))
                     if member.isDeceased ?? false {
                         Image(systemName: "heart.slash.fill")
-                            .font(.system(size: 9, weight: .bold))
+                            .font(.system(size: 8, weight: .bold))
                             .foregroundColor(DS.Color.error)
-                            .padding(3)
+                            .padding(2)
                             .background(Circle().fill(Color.white))
                     }
                 } else {
                     FemaleAvatarView(bg: bg, iconColor: iconColor, isDeceased: member.isDeceased ?? false)
-                        .frame(width: 44, height: 44).clipShape(Circle())
+                        .frame(width: 34, height: 34).clipShape(Circle())
                 }
             }
-            VStack(alignment: .leading, spacing: 2) {
-                Text(label).font(DS.Font.caption1).foregroundColor(iconColor)
-                Text((member.fullName.isEmpty ? member.firstName : member.fullName)
-                     + ((member.isDeceased ?? false) ? " · \(L10n.t("متوفّاة", "Deceased"))" : ""))
-                    .font(DS.Font.callout).foregroundColor(DS.Color.textPrimary)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(label).font(DS.Font.caption2).foregroundColor(iconColor)
+                Text(member.fullName.isEmpty ? member.firstName : member.fullName)
+                    .font(DS.Font.caption1).foregroundColor(DS.Color.textPrimary)
+                    .lineLimit(1).minimumScaleFactor(0.8)
             }
-            Spacer()
-            if onTap != nil {
-                Image(systemName: canEdit ? "pencil" : (L10n.isArabic ? "chevron.left" : "chevron.right"))
-                    .font(DS.Font.scaled(13, weight: .semibold))
-                    .foregroundColor(DS.Color.textTertiary)
-            }
+            Spacer(minLength: 0)
         }
-        .padding(DS.Spacing.sm)
+        .padding(.vertical, DS.Spacing.xs + 2)
+        .padding(.horizontal, DS.Spacing.sm)
+        .frame(maxWidth: .infinity)
         .background(
             RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
                 .fill(DS.Color.background)

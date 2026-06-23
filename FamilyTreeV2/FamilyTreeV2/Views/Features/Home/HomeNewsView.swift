@@ -164,13 +164,18 @@ struct HomeNewsView: View {
             }
         }
         .onChange(of: selectedTab) { _ in
-            if selectedTab != 0, activeSubPage != nil {
+            if selectedTab != 0 {
                 activeSubPage = nil
+                showWomenTree = false      // مغادرة الرئيسية تُنهي شجرة النساء
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .didReselectTab)) { notification in
-            if let tab = notification.userInfo?["tab"] as? Int, tab == 0, activeSubPage != nil {
-                withAnimation(DS.Anim.snappy) { activeSubPage = nil }
+            // ضغط «الرئيسية» في البار السفلي يرجع لصفحة الرئيسية.
+            if let tab = notification.userInfo?["tab"] as? Int, tab == 0 {
+                withAnimation(DS.Anim.snappy) {
+                    activeSubPage = nil
+                    showWomenTree = false
+                }
             }
         }
         // Deep-link من push خارجي لطلب انضمام — يفتح مركز الإشعارات تلقائياً
@@ -370,29 +375,28 @@ struct HomeNewsView: View {
             unifiedTile(
                 title: L10n.t("شجرة العائلة", "Family Tree"),
                 icon: "tree.fill",
-                color: DS.Color.secondary,
+                color: DS.Color.success,               // أخضر — الشجرة
                 imageURL: nil,
                 count: nil,
                 height: primaryTileHeight,
                 action: { selectedTab = 1 }
             )
-            // شجرة العائلة (النساء) — شاشة منفصلة، يتحكم بإظهارها السيرفر.
+            // شجرة النساء — نفس أيقونة الشجرة بلون بنفسجي.
             if appSettingsVM.settings.womenTreeEnabled ?? true {
                 unifiedTile(
                     title: L10n.t("شجرة النساء", "Women's Tree"),
-                    icon: "person.2.fill",
-                    color: DS.Color.primary,
+                    icon: "tree.fill",
+                    color: FemaleAvatarView.wifeIcon,   // بنفسجي
                     imageURL: nil,
                     count: nil,
                     height: primaryTileHeight,
-                    iconView: AnyView(WomenGroupGlyph()),
                     action: { showWomenTree = true }
                 )
             }
             unifiedTile(
                 title: L10n.t("الديوانيات", "Diwaniyas"),
                 icon: "map.fill",
-                color: DS.Color.accent,
+                color: DS.Color.primary,               // أزرق محيطي — الديوانيات
                 imageURL: nil,
                 count: nil,
                 height: primaryTileHeight,
@@ -456,7 +460,7 @@ struct HomeNewsView: View {
             unifiedTile(
                 title: L10n.t("أرشيف العائلة", "Family Archive"),
                 icon: "archivebox.fill",
-                color: DS.Color.primary,
+                color: DS.Color.accent,                // سليت — الأرشيف
                 imageURL: nil,
                 count: nil,
                 action: { withAnimation(DS.Anim.snappy) { activeSubPage = .archive } }
@@ -464,7 +468,7 @@ struct HomeNewsView: View {
             unifiedTile(
                 title: L10n.t("مشاريع العائلة", "Family Projects"),
                 icon: "briefcase.fill",
-                color: DS.Color.warning,
+                color: DS.Color.warning,               // ذهبي — المشاريع
                 imageURL: projectImageURL,
                 count: projectsVM.projects.count,
                 action: { withAnimation(DS.Anim.snappy) { activeSubPage = .projects } }
@@ -472,7 +476,7 @@ struct HomeNewsView: View {
             unifiedTile(
                 title: L10n.t("التواصل", "Contact"),
                 icon: "envelope.fill",
-                color: DS.Color.gridMessaging,
+                color: DS.Color.info,                  // أزرق معلومات — التواصل
                 imageURL: nil,
                 count: nil,
                 action: { withAnimation(DS.Anim.snappy) { activeSubPage = .contact } }
