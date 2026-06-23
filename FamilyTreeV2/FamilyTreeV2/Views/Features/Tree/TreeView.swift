@@ -1642,6 +1642,12 @@ enum WomenStore {
         try await SupabaseConfig.client.from("women_members").update(payload).eq("id", value: id.uuidString).execute()
     }
 
+    static func setMotherId(childId: UUID, motherId: UUID?) async throws {
+        try await SupabaseConfig.client.from("women_members")
+            .update(["mother_id": AnyEncodable(motherId?.uuidString)])
+            .eq("id", value: childId.uuidString).execute()
+    }
+
     static func delete(id: UUID) async throws {
         try await SupabaseConfig.client.from("women_members").delete().eq("id", value: id.uuidString).execute()
     }
@@ -1674,6 +1680,7 @@ struct WomenTreeView: View {
     @State private var addParent: FamilyMember? = nil
     @State private var addKind: WomenRelKind = .child
     @State private var editTarget: FamilyMember? = nil
+    @State private var pickMotherFor: FamilyMember? = nil
 
     private var canEdit: Bool { authVM.canEditMembers }
 
@@ -1749,6 +1756,49 @@ struct WomenTreeView: View {
                 Task { await load() }
             }
         }
+        .sheet(item: $pickMotherFor) { node in motherPicker(for: node) }
+    }
+
+    @ViewBuilder
+    private func motherPicker(for node: FamilyMember) -> some View {
+        let candidates = allMembers
+            .filter { $0.id != node.id && $0.isFemale }
+            .sorted { $0.fullName < $1.fullName }
+        NavigationStack {
+            List {
+                Button {
+                    pickMotherFor = nil
+                    Task { try? await WomenStore.setMotherId(childId: node.id, motherId: nil); await load() }
+                } label: {
+                    Label(L10n.t("بدون أم", "No mother"), systemImage: "xmark.circle")
+                        .foregroundColor(DS.Color.textSecondary)
+                }
+                if candidates.isEmpty {
+                    Text(L10n.t("لا توجد إناث للاختيار — أضف زوجة/أنثى أولاً.",
+                                "No females yet — add a wife/female first."))
+                        .foregroundColor(DS.Color.textSecondary)
+                }
+                ForEach(candidates) { c in
+                    Button {
+                        pickMotherFor = nil
+                        Task { try? await WomenStore.setMotherId(childId: node.id, motherId: c.id); await load() }
+                    } label: {
+                        Label(c.fullName.isEmpty ? c.firstName : c.fullName,
+                              systemImage: "figure.dress.line.vertical.figure")
+                            .foregroundColor(DS.Color.textPrimary)
+                    }
+                }
+            }
+            .navigationTitle(L10n.t("اختيار الأم", "Choose mother"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(L10n.t("إلغاء", "Cancel")) { pickMotherFor = nil }
+                }
+            }
+            .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+        }
+        .presentationDetents([.medium, .large])
     }
 
     private var header: some View {
@@ -1838,8 +1888,35 @@ struct WomenTreeView: View {
 
     @ViewBuilder
     private func actionSheet(for w: FamilyMember) -> some View {
+        let mother = w.motherId.flatMap { mid in allMembers.first(where: { $0.id == mid }) }
+        let wives = allMembers.filter { $0.husbandId == w.id }
         NavigationStack {
             List {
+                // العلاقات (عرض للجميع): الأم + الزوجات.
+                if mother != nil || !wives.isEmpty {
+                    Section(L10n.t("العلاقات", "Relations")) {
+                        if let mom = mother {
+                            Button { selectedWoman = mom } label: {
+                                Label("\(L10n.t("الأم", "Mother")): \(mom.fullName.isEmpty ? mom.firstName : mom.fullName)",
+                                      systemImage: "figure.2.and.child.holdinghands")
+                                    .foregroundColor(DS.Color.textPrimary)
+                            }
+                        }
+                        ForEach(wives) { wife in
+                            HStack {
+                                Label("\(L10n.t("الزوجة", "Wife")): \(wife.fullName.isEmpty ? wife.firstName : wife.fullName)" + ((wife.isDeceased ?? false) ? " (\(L10n.t("متوفّاة","Deceased")))" : ""),
+                                      systemImage: "figure.dress.line.vertical.figure")
+                                    .foregroundColor(DS.Color.textPrimary)
+                                if canEdit {
+                                    Spacer()
+                                    Button { selectedWoman = nil; editTarget = wife } label: {
+                                        Image(systemName: "pencil").foregroundColor(DS.Color.textTertiary)
+                                    }.buttonStyle(.plain)
+                                }
+                            }
+                        }
+                    }
+                }
                 if canEdit {
                     Button {
                         selectedWoman = nil
@@ -1863,13 +1940,20 @@ struct WomenTreeView: View {
                         Label(L10n.t("إضافة أم", "Add mother"), systemImage: "figure.2.and.child.holdinghands")
                     }
                     Button {
+                        selectedWoman = nil
+                        pickMotherFor = w
+                    } label: {
+                        Label(L10n.t("اختيار الأم", "Choose mother"), systemImage: "rectangle.stack.person.crop")
+                    }
+                    Button {
                         let t = w
                         selectedWoman = nil
                         editTarget = t
                     } label: {
                         Label(L10n.t("تعديل", "Edit"), systemImage: "pencil")
                     }
-                    if w.fatherId != nil {
+                    // الجذر «المحمدعلي» لا يُحذف؛ غيره يُحذف.
+                    if !(w.fatherId == nil && w.husbandId == nil && w.motherId == nil) {
                         Button(role: .destructive) {
                             selectedWoman = nil
                             Task { try? await WomenStore.delete(id: w.id); await load() }
@@ -1961,6 +2045,7 @@ struct WomenEditView: View {
     @State private var deathDate = Date()
     @State private var isHidden = false
     @State private var isSaving = false
+    @State private var showDeleteConfirm = false
 
     var body: some View {
         NavigationStack {
@@ -2007,7 +2092,24 @@ struct WomenEditView: View {
                                   systemImage: isHidden ? "eye.slash" : "eye")
                         }.tint(DS.Color.primary)
                     }
+                    Section {
+                        Button(role: .destructive) { showDeleteConfirm = true } label: {
+                            Label(L10n.t("حذف", "Delete"), systemImage: "trash")
+                        }
+                    }
                 }
+            }
+            .alert(L10n.t("حذف", "Delete"), isPresented: $showDeleteConfirm) {
+                Button(L10n.t("حذف", "Delete"), role: .destructive) {
+                    isSaving = true
+                    Task {
+                        try? await WomenStore.delete(id: node.id)
+                        await MainActor.run { isSaving = false; onSaved(); dismiss() }
+                    }
+                }
+                Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
+            } message: {
+                Text(L10n.t("سيتم حذف هذا العنصر.", "This item will be deleted."))
             }
             .navigationTitle(titleText)
             .navigationBarTitleDisplayMode(.inline)

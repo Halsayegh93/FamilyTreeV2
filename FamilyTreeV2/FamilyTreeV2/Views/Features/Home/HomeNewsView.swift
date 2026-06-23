@@ -344,14 +344,14 @@ struct HomeNewsView: View {
             // 2) الشجرة + الديوانيات — مربعين بنفس ستايل التايل
             primaryTilesRow
 
-            // 3) آخر الأخبار
-            newsBentoCard
-
-            // 4) شبكة الوصول السريع — أرشيف / مشاريع / تواصل
+            // 3) شبكة الوصول السريع — أرشيف / مشاريع / تواصل (فوق الأخبار)
             quickAccessGrid
 
-            // 5) أقسام ديناميكية مضافة من الإدارة (server-driven)
+            // 4) أقسام ديناميكية مضافة من الإدارة (server-driven)
             dynamicSectionsGrid
+
+            // 5) آخر الأخبار
+            newsBentoCard
         }
         .padding(.horizontal, DS.Spacing.lg)
         // حد أقصى للعرض على الأجهزة الواسعة (iPad) حتى لا تتمدد الكروت بشكل مبالغ
