@@ -136,9 +136,7 @@ struct EditProfileView: View {
                                                     }
                                                 }
                                         }
-                                        .cooldownGuarded(.isMarried, cooldown: cooldown)
-
-                                        cooldownLabel(.isMarried)
+                                        // الحالة الاجتماعية حرّة التبديل (بلا تقييد cooldown).
                                     }
                         }
                         .padding(.horizontal, DS.Spacing.lg)
@@ -772,7 +770,7 @@ struct EditProfileView: View {
 
         return ChangedFields(
             birthChanged: newBirthStr != oldBirthStr && cooldown.canEdit(.birthDate),
-            marriedChanged: isMarried != (member.isMarried ?? false) && cooldown.canEdit(.isMarried),
+            marriedChanged: isMarried != (member.isMarried ?? false),
             phoneHiddenChanged: isPhoneHidden != (member.isPhoneHidden ?? false) && cooldown.canEdit(.isPhoneHidden),
             phoneChanged: !normalizedPhone.isEmpty && (normalizedPhone != oldStoredPhone) && cooldown.canEdit(.phoneNumber),
             bioChanged: oldBioKey != newBioKey && cooldown.canEdit(.bio),
@@ -811,7 +809,6 @@ struct EditProfileView: View {
 
     private func recordCooldowns(changes: ChangedFields) {
         if changes.birthChanged { cooldown.recordEdit(.birthDate) }
-        if changes.marriedChanged { cooldown.recordEdit(.isMarried) }
         if changes.phoneHiddenChanged { cooldown.recordEdit(.isPhoneHidden) }
         if changes.bioChanged { cooldown.recordEdit(.bio) }
         if changes.phoneChanged { cooldown.recordEdit(.phoneNumber) }
