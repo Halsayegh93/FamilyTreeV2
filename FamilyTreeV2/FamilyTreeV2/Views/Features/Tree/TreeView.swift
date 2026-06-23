@@ -1319,7 +1319,8 @@ struct TreeMemberNode: View {
                     let states: [Bool] = !wifeStates.isEmpty ? wifeStates : (hasWives ? [wifeDeceased] : [])
                     if !states.isEmpty {
                         let r = interactiveNodeSize / 2
-                        let spread: CGFloat = states.count > 1 ? 78 : 0
+                        // تقارب الشارات: مسافة زاوية أصغر بين كل زوجة والثانية.
+                        let spread: CGFloat = min(CGFloat(states.count - 1) * 26, 60)
                         ZStack {
                             ForEach(Array(states.enumerated()), id: \.offset) { idx, dec in
                                 let f = states.count == 1 ? 0 : (CGFloat(idx) / CGFloat(states.count - 1) - 0.5)
@@ -1811,7 +1812,9 @@ struct WomenTreeView: View {
         // الأمهات المرتبطات بعضو آخر — مستبعدات (لا تُربط الأم مرتين).
         let linkedMothers = Set(allMembers.filter { $0.id != node.id }.compactMap { $0.motherId })
         let candidates = allMembers
-            .filter { $0.id != node.id && $0.isFemale && !linkedMothers.contains($0.id) }
+            .filter { $0.id != node.id && $0.isFemale
+                && !linkedMothers.contains($0.id)
+                && $0.husbandId != node.id }   // زوجته ليست أمّه
             .sorted { $0.fullName < $1.fullName }
         NavigationStack {
             List {
@@ -1953,8 +1956,12 @@ struct WomenTreeView: View {
 
     @ViewBuilder
     private func actionSheet(for w: FamilyMember) -> some View {
-        let mother = w.motherId.flatMap { mid in allMembers.first(where: { $0.id == mid }) }
         let wives = allMembers.filter { $0.husbandId == w.id }
+        let wifeIds = Set(wives.map(\.id))
+        // الأم لا تكون إحدى زوجاته (لا تُعرض الزوجة في مكان الأم).
+        let mother = w.motherId
+            .flatMap { mid in allMembers.first(where: { $0.id == mid }) }
+            .flatMap { wifeIds.contains($0.id) ? nil : $0 }
         let name = w.fullName.isEmpty ? w.firstName : w.fullName
         NavigationStack {
             ScrollView {
@@ -1970,7 +1977,7 @@ struct WomenTreeView: View {
 
                         // الأم ثم الزوجات — ثابتون جنب بعض (شبكة، بدون تمرير).
                         if mother != nil || !wives.isEmpty {
-                            LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: DS.Spacing.sm)],
+                            LazyVGrid(columns: [GridItem(.adaptive(minimum: 124), spacing: DS.Spacing.sm)],
                                       spacing: DS.Spacing.sm) {
                                 if let mom = mother {
                                     womenRelationChip(member: mom, label: L10n.t("الأم", "Mother"),
@@ -2097,37 +2104,37 @@ struct WomenTreeView: View {
     // صندوق علاقة مُصغّر (الأم/الزوجة) — أيقونة صغيرة + التسمية + الاسم.
     private func womenRelationChip(member: FamilyMember, label: String, bg: Color, iconColor: Color,
                                   sfIcon: String?, onTap: (() -> Void)?) -> some View {
-        HStack(spacing: DS.Spacing.sm) {
+        HStack(spacing: DS.Spacing.xs + 2) {
             ZStack(alignment: .bottomTrailing) {
                 if let sfIcon {
                     Image(systemName: sfIcon)
-                        .font(DS.Font.scaled(16, weight: .semibold))
+                        .font(DS.Font.scaled(13, weight: .semibold))
                         .foregroundColor(iconColor)
-                        .frame(width: 34, height: 34)
+                        .frame(width: 28, height: 28)
                         .background(Circle().fill(bg))
                     if member.isDeceased ?? false {
                         Image(systemName: "heart.slash.fill")
-                            .font(.system(size: 8, weight: .bold))
+                            .font(.system(size: 7, weight: .bold))
                             .foregroundColor(DS.Color.error)
                             .padding(2)
                             .background(Circle().fill(Color.white))
                     }
                 } else {
                     FemaleAvatarView(bg: bg, iconColor: iconColor, isDeceased: member.isDeceased ?? false)
-                        .frame(width: 34, height: 34).clipShape(Circle())
+                        .frame(width: 28, height: 28).clipShape(Circle())
                 }
             }
-            VStack(alignment: .leading, spacing: 1) {
-                Text(label).font(DS.Font.caption1).foregroundColor(iconColor)
+            VStack(alignment: .leading, spacing: 0) {
+                Text(label).font(DS.Font.caption2).foregroundColor(iconColor)
                 Text(member.fullName.isEmpty ? member.firstName : member.fullName)
-                    .font(DS.Font.subheadline).fontWeight(.semibold)
+                    .font(DS.Font.footnote).fontWeight(.semibold)
                     .foregroundColor(DS.Color.textPrimary)
                     .lineLimit(1)
             }
             Spacer(minLength: 0)
         }
-        .padding(.vertical, DS.Spacing.sm)
-        .padding(.horizontal, DS.Spacing.md)
+        .padding(.vertical, DS.Spacing.xs)
+        .padding(.horizontal, DS.Spacing.sm)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
