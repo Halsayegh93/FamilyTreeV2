@@ -21,6 +21,12 @@ struct DrillDownTreeView: View {
     var onOpenDetails: ((FamilyMember) -> Void)? = nil
     /// مُضمّن داخل شاشة أخرى (تبويب التفرّع) — نخفي الهيدر وشريط الأدوات الخاص.
     var embedded: Bool = false
+    /// تخصيص الهيدر (لمطابقة شجرة العائلة في تبويب التفرّع).
+    var headerTitle: String? = nil
+    var headerSubtitle: String? = nil
+    var headerIcon: String? = nil
+    /// تبويبات [شجرة العائلة | التفرّع] داخل شريط الأدوات.
+    var treeTab: Binding<Int>? = nil
 
     // مصدر البيانات الموحّد — مُحقون أو memberVM.
     private var allData: [FamilyMember] { injectedMembers ?? memberVM.allMembers }
@@ -119,13 +125,14 @@ struct DrillDownTreeView: View {
                         MainHeaderView(
                             selectedTab: $selectedTab,
                             showingNotifications: $showingNotifications,
-                            title: L10n.t("الشجرة", "Family Tree"),
-                            subtitle: L10n.t("تصفّح بالتفرّع", "Drill-down")
+                            title: headerTitle ?? L10n.t("الشجرة", "Family Tree"),
+                            subtitle: headerSubtitle ?? L10n.t("تصفّح بالتفرّع", "Drill-down"),
+                            icon: headerIcon
                         )
                     }
 
                     // أزرار الإجراءات — تختفي عند فتح البحث (الإغلاق صار داخل مربع البحث)
-                    if !embedded && !showSearchBar {
+                    if !showSearchBar {
                         stickyActionsBar
                             .padding(.horizontal, DS.Spacing.lg)
                             .padding(.top, DS.Spacing.sm)
@@ -460,6 +467,13 @@ struct DrillDownTreeView: View {
             }
             .buttonStyle(DSScaleButtonStyle())
             .accessibilityLabel(L10n.t("البداية", "Start"))
+
+            Spacer()
+
+            // التبويبات بالمنتصف (نفس توزيع شجرة العائلة)
+            if let treeTab {
+                FamilyTreeTabBar(selection: treeTab)
+            }
 
             Spacer()
 

@@ -1736,30 +1736,24 @@ struct WomenTreeView: View {
     private var canEdit: Bool { authVM.canEditMembers }
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
-            womenToolsBar
-            Group {
-                if isLoading {
-                    ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else if allMembers.isEmpty {
-                    Text(L10n.t("لا توجد بيانات", "No data"))
-                        .foregroundColor(DS.Color.textSecondary)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    // عرض التفرّع ببيانات الجدول المنفصل — الضغط يفتح شيت العضو.
-                    DrillDownTreeView(
-                        selectedTab: .constant(1),
-                        injectedMembers: allMembers,
-                        onOpenDetails: { selectedWoman = $0 },
-                        embedded: true
-                    )
-                }
+        Group {
+            if isLoading {
+                ProgressView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(DS.Color.background.ignoresSafeArea())
+            } else {
+                // عرض التفرّع كامل — نفس هيدر وبار شجرة العائلة + التبويبات.
+                DrillDownTreeView(
+                    selectedTab: .constant(1),
+                    injectedMembers: allMembers,
+                    onOpenDetails: { selectedWoman = $0 },
+                    headerTitle: L10n.t("التفرّع", "Drill-down"),
+                    headerSubtitle: "\(allMembers.count) " + L10n.t("فرد", "members"),
+                    headerIcon: "leaf.fill",
+                    treeTab: treeTab
+                )
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .background(DS.Color.background.ignoresSafeArea())
-        .navigationBarHidden(true)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .task { await load() }
         // شيت تفاصيل العضو — وشيتات التعديل/الإضافة تظهر فوقه (متداخلة).
