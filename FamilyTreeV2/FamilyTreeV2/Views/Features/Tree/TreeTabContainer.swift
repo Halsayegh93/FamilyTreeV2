@@ -1,70 +1,51 @@
 import SwiftUI
 
-/// مغلّف لتاب الشجرة — يسمح بالتبديل بين الواجهة الكلاسيكية (TreeView)
-/// والتجربة الجديدة (DrillDownTreeView) عبر زر مدمج.
-/// التفضيل محفوظ في AppStorage فيتذكّره التطبيق بين الجلسات.
+/// مغلّف تبويب الشجرة — تبويبان أعلى الشاشة:
+/// «شجرة العائلة» (TreeView على بيانات profiles) و«النساء» (WomenTreeView على
+/// بيانات women_members المنفصلة). أي تعديل في النساء لا يؤثر على الكلاسيكية.
+/// التبويب المختار محفوظ في AppStorage فيتذكّره التطبيق بين الجلسات.
 struct TreeTabContainer: View {
     @Binding var selectedTab: Int
-    @AppStorage("treeViewMode_useDrillDown") private var useDrillDown = false
+    @AppStorage("familyTreeTab") private var familyTreeTab = 0  // 0=العائلة، 1=النساء
 
     var body: some View {
-        ZStack(alignment: .bottomLeading) {
-            Group {
-                if useDrillDown {
-                    DrillDownTreeView(selectedTab: $selectedTab)
-                } else {
-                    TreeView(selectedTab: $selectedTab)
-                }
+        Group {
+            if familyTreeTab == 1 {
+                WomenTreeView(treeTab: $familyTreeTab)
+            } else {
+                TreeView(selectedTab: $selectedTab, treeTab: $familyTreeTab)
             }
-
-            toggleButton
-                .padding(.leading, DS.Spacing.lg)
-                .padding(.bottom, DS.Spacing.lg)
         }
     }
+}
 
-    // MARK: - Toggle Pill
+/// شريط تبويبات [شجرة العائلة | النساء] — يُعرض داخل صف الأدوات العلوي.
+struct FamilyTreeTabBar: View {
+    @Binding var selection: Int
 
-    private var toggleButton: some View {
-        HStack(spacing: 0) {
-            segment(
-                label: L10n.t("الكلاسيكية", "Classic"),
-                icon: "tree.fill",
-                active: !useDrillDown
-            ) {
-                withAnimation(DS.Anim.snappy) { useDrillDown = false }
-            }
-            segment(
-                label: L10n.t("التفرّع", "Drill"),
-                icon: "rectangle.grid.2x2.fill",
-                active: useDrillDown
-            ) {
-                withAnimation(DS.Anim.snappy) { useDrillDown = true }
-            }
+    var body: some View {
+        HStack(spacing: 2) {
+            segment(L10n.t("شجرة العائلة", "Family"), 0)
+            segment(L10n.t("النساء", "Women"), 1)
         }
         .padding(3)
         .background(.ultraThinMaterial)
         .clipShape(Capsule())
-        .overlay(
-            Capsule()
-                .strokeBorder(DS.Color.primary.opacity(0.20), lineWidth: 1)
-        )
-        .shadow(color: .black.opacity(0.10), radius: 8, x: 0, y: 2)
+        .overlay(Capsule().strokeBorder(DS.Color.primary.opacity(0.20), lineWidth: 1))
     }
 
-    private func segment(label: String, icon: String, active: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: icon)
-                .font(DS.Font.scaled(13, weight: .bold))
-                .foregroundColor(active ? .white : DS.Color.textSecondary)
-                .frame(width: 32, height: 32)
-                .background(
-                    Circle()
-                        .fill(active ? DS.Color.primary : Color.clear)
-                )
-                .accessibilityLabel(label)
+    private func segment(_ label: String, _ idx: Int) -> some View {
+        Button {
+            withAnimation(DS.Anim.snappy) { selection = idx }
+        } label: {
+            Text(label)
+                .font(DS.Font.scaled(12, weight: .bold))
+                .foregroundColor(selection == idx ? .white : DS.Color.textSecondary)
+                .lineLimit(1)
+                .padding(.horizontal, DS.Spacing.md)
+                .frame(height: 34)
+                .background(Capsule().fill(selection == idx ? DS.Color.primary : Color.clear))
         }
-        .buttonStyle(DSScaleButtonStyle())
+        .buttonStyle(.plain)
     }
 }
-

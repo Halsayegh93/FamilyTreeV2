@@ -114,6 +114,8 @@ struct TreeView: View {
     @EnvironmentObject var memberVM: MemberViewModel
     @EnvironmentObject var adminRequestVM: AdminRequestViewModel
     @Binding var selectedTab: Int
+    // تبويب الشجرة [0=العائلة، 1=النساء] — مشترك مع TreeTabContainer/WomenTreeView.
+    var treeTab: Binding<Int>? = nil
     @State private var showingNotifications = false
     @State private var selectedMember: FamilyMember? = nil
     @State private var scrollTarget: UUID? = nil
@@ -672,10 +674,11 @@ struct TreeView: View {
                 toolbarIconButton(icon: "house.fill")
             }
             .buttonStyle(DSScaleButtonStyle())
-            .accessibilityLabel(L10n.t("البداية", "Start"))
+            .accessibilityLabel(L10n.t("إعادة موضع", "Recenter"))
 
             Spacer()
 
+            // موقعي بالمنتصف
             if authVM.currentUser != nil {
                 Button {
                     if let currentUserID = authVM.currentUser?.id,
@@ -694,6 +697,13 @@ struct TreeView: View {
                 }
                 .buttonStyle(DSScaleButtonStyle())
                 .accessibilityLabel(L10n.t("موقعي", "Me"))
+            }
+
+            Spacer()
+
+            // تبويبات [شجرة العائلة | النساء]
+            if let treeTab {
+                FamilyTreeTabBar(selection: treeTab)
             }
         }
     }
@@ -1693,6 +1703,8 @@ enum WomenStore {
 /// RecursiveTreeBranch ببيانات women_members. التعديل للإدارة فقط.
 struct WomenTreeView: View {
     var onClose: (() -> Void)? = nil
+    // تبويب الشجرة [0=العائلة، 1=النساء] — عند العرض كتبويب داخل شجرة العائلة.
+    var treeTab: Binding<Int>? = nil
     @EnvironmentObject var authVM: AuthViewModel
     @Environment(\.dismiss) private var dismiss
 
@@ -1867,10 +1879,13 @@ struct WomenTreeView: View {
 
     private var header: some View {
         HStack(spacing: DS.Spacing.sm) {
-            Button { if let onClose { onClose() } else { dismiss() } } label: {
-                Image(systemName: L10n.isArabic ? "chevron.right" : "chevron.left")
-                    .font(DS.Font.scaled(18, weight: .bold))
-                    .foregroundColor(.white)
+            // زر الرجوع يظهر فقط عند العرض المستقل (ليس كتبويب).
+            if treeTab == nil {
+                Button { if let onClose { onClose() } else { dismiss() } } label: {
+                    Image(systemName: L10n.isArabic ? "chevron.right" : "chevron.left")
+                        .font(DS.Font.scaled(18, weight: .bold))
+                        .foregroundColor(.white)
+                }
             }
             ZStack {
                 Circle().fill(Color.white.opacity(0.18))
@@ -1902,6 +1917,10 @@ struct WomenTreeView: View {
                 Task { await load() }
             }
             Spacer()
+            // تبويبات [شجرة العائلة | النساء]
+            if let treeTab {
+                FamilyTreeTabBar(selection: treeTab)
+            }
         }
         .padding(.horizontal, DS.Spacing.lg)
         .padding(.top, DS.Spacing.sm)

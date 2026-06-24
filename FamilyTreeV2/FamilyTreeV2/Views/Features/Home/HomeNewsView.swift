@@ -14,7 +14,6 @@ struct HomeNewsView: View {
     @Binding var selectedTab: Int
     @State private var showingAddNews = false
     @State private var showingNotifications = false
-    @State private var showWomenTree = false
     @State private var updateBannerDismissed = false
     @State private var homeSections: [HomeSection] = []
     @State private var selectedSection: HomeSection? = nil
@@ -50,11 +49,7 @@ struct HomeNewsView: View {
             ZStack {
                 DS.Color.background.ignoresSafeArea()
 
-                if showWomenTree {
-                    // شجرة النساء داخل تبويب الرئيسية — يبقى البار السفلي شغّالاً.
-                    WomenTreeView(onClose: { withAnimation(DS.Anim.snappy) { showWomenTree = false } })
-                        .transition(.move(edge: L10n.isArabic ? .leading : .trailing))
-                } else if let subPage = activeSubPage {
+                if let subPage = activeSubPage {
                     subPageContent(for: subPage)
                         .transition(.move(edge: L10n.isArabic ? .leading : .trailing))
                 } else {
@@ -164,18 +159,13 @@ struct HomeNewsView: View {
             }
         }
         .onChange(of: selectedTab) { _ in
-            if selectedTab != 0 {
+            if selectedTab != 0, activeSubPage != nil {
                 activeSubPage = nil
-                showWomenTree = false      // مغادرة الرئيسية تُنهي شجرة النساء
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .didReselectTab)) { notification in
-            // ضغط «الرئيسية» في البار السفلي يرجع لصفحة الرئيسية.
-            if let tab = notification.userInfo?["tab"] as? Int, tab == 0 {
-                withAnimation(DS.Anim.snappy) {
-                    activeSubPage = nil
-                    showWomenTree = false
-                }
+            if let tab = notification.userInfo?["tab"] as? Int, tab == 0, activeSubPage != nil {
+                withAnimation(DS.Anim.snappy) { activeSubPage = nil }
             }
         }
         // Deep-link من push خارجي لطلب انضمام — يفتح مركز الإشعارات تلقائياً
@@ -381,18 +371,6 @@ struct HomeNewsView: View {
                 height: primaryTileHeight,
                 action: { selectedTab = 1 }
             )
-            // شجرة النساء — نفس أيقونة الشجرة بلون بنفسجي.
-            if appSettingsVM.settings.womenTreeEnabled ?? true {
-                unifiedTile(
-                    title: L10n.t("شجرة النساء", "Women's Tree"),
-                    icon: "tree.fill",
-                    color: FemaleAvatarView.wifeIcon,   // بنفسجي
-                    imageURL: nil,
-                    count: nil,
-                    height: primaryTileHeight,
-                    action: { showWomenTree = true }
-                )
-            }
             unifiedTile(
                 title: L10n.t("الديوانيات", "Diwaniyas"),
                 icon: "map.fill",
