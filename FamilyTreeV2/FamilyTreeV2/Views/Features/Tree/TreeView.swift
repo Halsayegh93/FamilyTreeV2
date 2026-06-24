@@ -678,7 +678,14 @@ struct TreeView: View {
 
             Spacer()
 
-            // موقعي بالمنتصف
+            // التبويبات بالمنتصف
+            if let treeTab {
+                FamilyTreeTabBar(selection: treeTab)
+            }
+
+            Spacer()
+
+            // موقعي — آخر شي (يسار، مكانه القديم)
             if authVM.currentUser != nil {
                 Button {
                     if let currentUserID = authVM.currentUser?.id,
@@ -697,13 +704,6 @@ struct TreeView: View {
                 }
                 .buttonStyle(DSScaleButtonStyle())
                 .accessibilityLabel(L10n.t("موقعي", "Me"))
-            }
-
-            Spacer()
-
-            // تبويبات [شجرة العائلة | النساء]
-            if let treeTab {
-                FamilyTreeTabBar(selection: treeTab)
             }
         }
     }
