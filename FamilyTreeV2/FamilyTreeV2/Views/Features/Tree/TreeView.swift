@@ -1736,64 +1736,29 @@ struct WomenTreeView: View {
     private var canEdit: Bool { authVM.canEditMembers }
 
     var body: some View {
-        ZStack(alignment: .top) {
-            DS.Color.background.ignoresSafeArea()
-            GeometryReader { geometry in
-                Group {
-                    if isLoading {
-                        ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
-                    } else if roots.isEmpty {
-                        Text(L10n.t("لا توجد بيانات", "No data"))
-                            .foregroundColor(DS.Color.textSecondary)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    } else {
-                        ScrollViewReader { proxy in
-                            ScrollView([.horizontal, .vertical], showsIndicators: false) {
-                                VStack(spacing: DS.Spacing.xxl) {
-                                    ForEach(roots) { root in
-                                        branch(for: root)
-                                            .frame(maxWidth: .infinity, alignment: .center)
-                                    }
-                                }
-                                .background(GeometryReader { g in
-                                    SwiftUI.Color.clear
-                                        .preference(key: TreeContentSizeKey.self, value: g.size)
-                                })
-                                .onPreferenceChange(TreeContentSizeKey.self) { treeContentSize = $0 }
-                                .scaleEffect(scale, anchor: zoomAnchor)
-                                .frame(minWidth: geometry.size.width,
-                                       minHeight: geometry.size.height, alignment: .center)
-                                .padding(.top, DS.Spacing.xxxxl * 3)
-                                .padding(.bottom, DS.Spacing.xxxxl * 3)
-                                .padding(.horizontal, DS.Spacing.xxxxl)
-                            }
-                            .simultaneousGesture(
-                                MagnificationGesture()
-                                    .onChanged { v in
-                                        zoomAnchor = .center
-                                        scale = min(max(baseScale * v, TreeConst.minScale), TreeConst.maxScale)
-                                    }
-                                    .onEnded { v in
-                                        scale = min(max(baseScale * v, TreeConst.minScale), TreeConst.maxScale)
-                                        baseScale = scale
-                                    }
-                            )
-                            .onChange(of: scrollCounter) { _ in
-                                if let id = scrollTarget {
-                                    withAnimation(.easeInOut(duration: 0.3)) {
-                                        proxy.scrollTo(id, anchor: currentAnchor)
-                                    }
-                                }
-                            }
-                        }
-                    }
+        VStack(spacing: 0) {
+            header
+            womenToolsBar
+            Group {
+                if isLoading {
+                    ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if allMembers.isEmpty {
+                    Text(L10n.t("لا توجد بيانات", "No data"))
+                        .foregroundColor(DS.Color.textSecondary)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    // عرض التفرّع ببيانات الجدول المنفصل — الضغط يفتح شيت العضو.
+                    DrillDownTreeView(
+                        selectedTab: .constant(1),
+                        injectedMembers: allMembers,
+                        onOpenDetails: { selectedWoman = $0 },
+                        embedded: true
+                    )
                 }
             }
-            VStack(spacing: 0) {
-                header
-                womenToolsBar
-            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        .background(DS.Color.background.ignoresSafeArea())
         .navigationBarHidden(true)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .task { await load() }
@@ -1894,9 +1859,9 @@ struct WomenTreeView: View {
             .frame(width: 40, height: 40)
             .overlay(Circle().strokeBorder(Color.white.opacity(0.4), lineWidth: 1))
             VStack(alignment: .leading, spacing: 2) {
-                Text(L10n.t("شجرة العائلة (النساء)", "Family Tree (Women)"))
+                Text(L10n.t("التفرّع", "Drill-down"))
                     .font(DS.Font.headline).foregroundColor(.white)
-                Text(L10n.t("فرع النساء", "Women branch"))
+                Text(L10n.t("نسخة مستقلة من الشجرة", "Independent copy"))
                     .font(DS.Font.caption1).foregroundColor(.white.opacity(0.8))
             }
             Spacer()

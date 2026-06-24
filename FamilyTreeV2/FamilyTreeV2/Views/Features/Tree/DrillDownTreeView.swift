@@ -15,6 +15,22 @@ struct DrillDownTreeView: View {
     @EnvironmentObject var memberVM: MemberViewModel
     @EnvironmentObject var authVM: AuthViewModel
     @Binding var selectedTab: Int
+    /// بيانات مُحقونة (تبويب التفرّع — جدول منفصل). عند nil نستخدم memberVM.
+    var injectedMembers: [FamilyMember]? = nil
+    /// عند الضغط على عضو: يُستدعى بدل فتح MemberDetailsView (لبيانات منفصلة).
+    var onOpenDetails: ((FamilyMember) -> Void)? = nil
+    /// مُضمّن داخل شاشة أخرى (تبويب التفرّع) — نخفي الهيدر وشريط الأدوات الخاص.
+    var embedded: Bool = false
+
+    // مصدر البيانات الموحّد — مُحقون أو memberVM.
+    private var allData: [FamilyMember] { injectedMembers ?? memberVM.allMembers }
+    private func lookupMember(_ id: UUID) -> FamilyMember? {
+        if let injectedMembers { return injectedMembers.first { $0.id == id } }
+        return memberVM.member(byId: id)
+    }
+    private func openDetails(_ m: FamilyMember) {
+        if let onOpenDetails { onOpenDetails(m) } else { selectedMemberForDetails = m }
+    }
 
     /// السلسلة الكاملة: الجذر → الأقرب. آخر عضو = النشط.
     @State private var chain: [FamilyMember] = []
@@ -57,7 +73,7 @@ struct DrillDownTreeView: View {
     // MARK: - Helpers
 
     private var roots: [FamilyMember] {
-        let visible = memberVM.allMembers.filter(\.isCountable)
+        let visible = allData.filter(\.isCountable)
         let byId = Dictionary(uniqueKeysWithValues: visible.map { ($0.id, $0) })
         let fatherIds = Set(visible.compactMap(\.fatherId))
         return visible.filter { m in
@@ -67,7 +83,7 @@ struct DrillDownTreeView: View {
     }
 
     private func children(of memberId: UUID) -> [FamilyMember] {
-        memberVM.allMembers
+        allData
             .filter { $0.fatherId == memberId && $0.isCountable }
             .sortedForDisplay()
     }
@@ -99,15 +115,17 @@ struct DrillDownTreeView: View {
                 DS.Color.background.ignoresSafeArea()
 
                 VStack(spacing: 0) {
-                    MainHeaderView(
-                        selectedTab: $selectedTab,
-                        showingNotifications: $showingNotifications,
-                        title: L10n.t("الشجرة", "Family Tree"),
-                        subtitle: L10n.t("تصفّح بالتفرّع", "Drill-down")
-                    )
+                    if !embedded {
+                        MainHeaderView(
+                            selectedTab: $selectedTab,
+                            showingNotifications: $showingNotifications,
+                            title: L10n.t("الشجرة", "Family Tree"),
+                            subtitle: L10n.t("تصفّح بالتفرّع", "Drill-down")
+                        )
+                    }
 
                     // أزرار الإجراءات — تختفي عند فتح البحث (الإغلاق صار داخل مربع البحث)
-                    if !showSearchBar {
+                    if !embedded && !showSearchBar {
                         stickyActionsBar
                             .padding(.horizontal, DS.Spacing.lg)
                             .padding(.top, DS.Spacing.sm)
@@ -120,7 +138,7 @@ struct DrillDownTreeView: View {
                         searchInlinePanel
                             .frame(maxHeight: .infinity)
                             .transition(.opacity)
-                    } else if memberVM.allMembers.isEmpty {
+                    } else if allData.isEmpty {
                         Spacer()
                         emptyState
                         Spacer()
@@ -186,7 +204,7 @@ struct DrillDownTreeView: View {
             }
             .toolbar(.hidden, for: .navigationBar)
             .onAppear { initializeChainIfNeeded() }
-            .onChange(of: memberVM.allMembers.count) { _ in initializeChainIfNeeded() }
+            .onChange(of: allData.count) { _ in initializeChainIfNeeded() }
             .onReceive(NotificationCenter.default.publisher(for: .showKinshipPath)) { note in
                 handleKinshipNotification(note)
             }
@@ -210,7 +228,7 @@ struct DrillDownTreeView: View {
     /// مربّع عضو في وضع القرابة — نفس مربّع الشجرة، النقر يفتح التفاصيل.
     private func kinshipSquareButton(_ member: FamilyMember) -> some View {
         Button {
-            selectedMemberForDetails = member
+            openDetails(member)
         } label: {
             memberSquareContent(
                 member,
@@ -221,7 +239,7 @@ struct DrillDownTreeView: View {
         .buttonStyle(DSScaleButtonStyle())
         .simultaneousGesture(
             LongPressGesture(minimumDuration: 0.4).onEnded { _ in
-                selectedMemberForDetails = member
+                openDetails(member)
             }
         )
         .id(member.id)
@@ -337,11 +355,13 @@ struct DrillDownTreeView: View {
         guard let info = note.userInfo,
               let memberId = info["memberId"] as? UUID,
               let relationship = info["relationship"] as? String,
-              let target = memberVM.member(byId: memberId),
+              let target = lookupMember(memberId),
               let meId = authVM.currentUser?.id,
-              let me = memberVM.member(byId: meId) else { return }
+              let me = lookupMember(meId) else { return }
 
-        let lookup = memberVM._memberById
+        let lookup = injectedMembers != nil
+            ? Dictionary(allData.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+            : memberVM._memberById
         let result = KinshipCalculator.calculate(from: me, to: target, lookup: lookup)
 
         // pathA = [me, ..., common_ancestor]
@@ -357,7 +377,7 @@ struct DrillDownTreeView: View {
             var current: FamilyMember? = target
             while let c = current {
                 ancestors.append(c)
-                current = c.fatherId.flatMap { memberVM.member(byId: $0) }
+                current = c.fatherId.flatMap { lookupMember($0) }
             }
             newChain = Array(ancestors.reversed())
         }
@@ -407,7 +427,7 @@ struct DrillDownTreeView: View {
             kinshipCommonAncestorId = nil
             // الرجوع لنفس مكان الشجرة الذي ضُغطت منه القرابة (أو البداية كحل احتياطي)
             if let saved = preKinshipChain, !saved.isEmpty,
-               memberVM.member(byId: saved[0].id) != nil {
+               lookupMember(saved[0].id) != nil {
                 chain = saved
             } else if let first = roots.first {
                 chain = [first]
@@ -476,7 +496,7 @@ struct DrillDownTreeView: View {
                     if chain.count > 1 {
                         collapseLastLevel()
                     } else {
-                        selectedMemberForDetails = member
+                        openDetails(member)
                     }
                 } else {
                     // سلف: نقرة تخليه النشط (يقطع السلسلة عند هذا المستوى)
@@ -488,7 +508,7 @@ struct DrillDownTreeView: View {
             .buttonStyle(DSScaleButtonStyle())
             .simultaneousGesture(
                 LongPressGesture(minimumDuration: 0.4).onEnded { _ in
-                    selectedMemberForDetails = member
+                    openDetails(member)
                 }
             )
             .accessibilityHint(L10n.t(
@@ -703,7 +723,7 @@ struct DrillDownTreeView: View {
                                 .buttonStyle(DSScaleButtonStyle())
                                 .simultaneousGesture(
                                     LongPressGesture(minimumDuration: 0.4).onEnded { _ in
-                                        selectedMemberForDetails = child
+                                        openDetails(child)
                                     }
                                 )
                                 .accessibilityHint(L10n.t(
@@ -759,7 +779,7 @@ struct DrillDownTreeView: View {
 
     private func initializeChainIfNeeded() {
         // إعادة التهيئة لو السلسلة فاضية، أو لو جذرها صار غير موجود (data refresh)
-        let rootStale = !chain.isEmpty && memberVM.member(byId: chain[0].id) == nil
+        let rootStale = !chain.isEmpty && lookupMember(chain[0].id) == nil
         if chain.isEmpty || rootStale, let first = roots.first {
             chain = [first]
         }
@@ -828,7 +848,7 @@ struct DrillDownTreeView: View {
         var ancestors: [FamilyMember] = []
         var currentId = member.fatherId
         var visited: Set<UUID> = [member.id]
-        while let fid = currentId, !visited.contains(fid), let father = memberVM.member(byId: fid) {
+        while let fid = currentId, !visited.contains(fid), let father = lookupMember(fid) {
             ancestors.append(father)
             visited.insert(fid)
             currentId = father.fatherId
