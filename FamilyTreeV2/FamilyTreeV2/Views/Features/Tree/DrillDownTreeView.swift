@@ -635,21 +635,28 @@ struct DrillDownTreeView: View {
             }
         }
 
-        // صورة الذكر — كلمة "متوفى" تحتها (لا فوقها).
-        let maleAvatar = DSMemberAvatar(
-            name: member.firstName,
-            avatarUrl: displayAvatar(for: member),
-            size: isActive ? 40 : 34,
-            roleColor: genderAccent,
-            isFemale: false
-        )
-        .overlay(
-            Circle().strokeBorder(
-                deceasedAwareBorderColor(isActive: isActive, isDeceased: isDeceased),
-                lineWidth: isActive ? 2.5 : 1.5
+        // صورة الذكر — كلمة "متوفى" على إطار الصورة من الأسفل.
+        let maleAvatar = ZStack(alignment: .bottom) {
+            DSMemberAvatar(
+                name: member.firstName,
+                avatarUrl: displayAvatar(for: member),
+                size: isActive ? 40 : 34,
+                roleColor: genderAccent,
+                isFemale: false
             )
-        )
-        .saturation(isDeceased ? 0.55 : 1.0)
+            .overlay(
+                Circle().strokeBorder(
+                    deceasedAwareBorderColor(isActive: isActive, isDeceased: isDeceased),
+                    lineWidth: isActive ? 2.5 : 1.5
+                )
+            )
+            .saturation(isDeceased ? 0.55 : 1.0)
+
+            if isDeceased {
+                deceasedBadgeSmall
+                    .offset(y: 7)   // على إطار الصورة السفلي
+            }
+        }
 
         return Group {
             if member.isFemale {
@@ -659,12 +666,9 @@ struct DrillDownTreeView: View {
                     infoBlock
                 }
             } else {
-                // الذكور: الصورة جنب المعلومات (أفقي)، وكلمة "متوفى" تحت الصورة.
+                // الذكور: الصورة جنب المعلومات (أفقي)، وكلمة "متوفى" على إطار الصورة.
                 HStack(spacing: 6) {
-                    VStack(spacing: 2) {
-                        maleAvatar
-                        if isDeceased { deceasedBadgeSmall }
-                    }
+                    maleAvatar
                     infoBlock
                     Spacer(minLength: 0)
                 }
