@@ -809,8 +809,7 @@ struct DrillDownTreeView: View {
                     DS.Color.primary.opacity(0.45),
                     style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round)
                 )
-                .frame(width: width, height: 22)
-                .padding(.top, 2)
+                .frame(width: width, height: 12)
         }
     }
 

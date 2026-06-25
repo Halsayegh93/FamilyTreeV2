@@ -1846,22 +1846,23 @@ struct WomenTreeView: View {
 
     @ViewBuilder
     private func motherPicker(for node: FamilyMember) -> some View {
-        // الأمهات المرتبطات بعضو آخر — مستبعدات (لا تُربط الأم مرتين).
-        let linkedMothers = Set(allMembers.filter { $0.id != node.id }.compactMap { $0.motherId })
+        // أمّ الابن = إحدى زوجات أبيه. نعرض زوجات الأب فقط.
+        let father = node.fatherId.flatMap { fid in allMembers.first { $0.id == fid } }
         let candidates = allMembers
-            .filter { $0.id != node.id && $0.isFemale
-                && !linkedMothers.contains($0.id)
-                && $0.husbandId != node.id }   // زوجته ليست أمّه
+            .filter { $0.isFemale && father != nil && $0.husbandId == father!.id }
             .sorted { $0.fullName < $1.fullName }
         NavigationStack {
             List {
-                // إضافة أم جديدة (مدمج مع الاختيار).
-                Button {
-                    pickMotherFor = nil
-                    DispatchQueue.main.async { addRequest = WomenAddRequest(kind: .mother, node: node) }
-                } label: {
-                    Label(L10n.t("إضافة أم جديدة", "Add new mother"), systemImage: "plus.circle.fill")
-                        .foregroundColor(DS.Color.primary)
+                // إضافة زوجة للأب (تصير مرشّحة كأم) — بدل إنشاء أم منفصلة.
+                if let father {
+                    Button {
+                        pickMotherFor = nil
+                        DispatchQueue.main.async { addRequest = WomenAddRequest(kind: .wife, node: father) }
+                    } label: {
+                        Label(L10n.t("إضافة زوجة للأب", "Add wife to father"),
+                              systemImage: "plus.circle.fill")
+                            .foregroundColor(DS.Color.primary)
+                    }
                 }
                 Button {
                     pickMotherFor = nil
@@ -1871,12 +1872,12 @@ struct WomenTreeView: View {
                         .foregroundColor(DS.Color.textSecondary)
                 }
                 if !candidates.isEmpty {
-                    Text(L10n.t("أو اختر من الموجودات:", "Or choose existing:"))
+                    Text(L10n.t("اختر الأم من زوجات الأب:", "Choose mother from father's wives:"))
                         .font(DS.Font.caption1).foregroundColor(DS.Color.textSecondary)
                 }
                 if candidates.isEmpty {
-                    Text(L10n.t("لا توجد إناث للاختيار — أضف زوجة/أنثى أولاً.",
-                                "No females yet — add a wife/female first."))
+                    Text(L10n.t("لا توجد زوجات للأب — أضف زوجة للأب أولاً.",
+                                "No wives for the father — add a wife first."))
                         .foregroundColor(DS.Color.textSecondary)
                 }
                 ForEach(candidates) { c in

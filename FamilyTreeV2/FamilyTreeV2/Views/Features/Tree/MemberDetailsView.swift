@@ -395,8 +395,8 @@ struct MemberDetailsView: View {
             isDeceased: isDeceased, birthYear: birthYear, deathYear: deathYear,
             phone: phone, phoneHidden: phoneHidden
         )
-        let hasFamily = cachedFather != nil || cachedMother != nil
-            || cachedHusband != nil || !cachedWives.isEmpty || !cachedChildren.isEmpty
+        // الأم/الزوجة أُزيلتا من شجرة العائلة — العائلة هنا = الأبناء فقط.
+        let hasFamily = !cachedChildren.isEmpty || canAssignChildren
 
         if !chips.isEmpty || hasFamily {
             DSCard(padding: 0) {
@@ -446,8 +446,7 @@ struct MemberDetailsView: View {
     @ViewBuilder
     private var familyInline: some View {
         VStack(spacing: DS.Spacing.md) {
-            relationsCluster
-
+            // الأم والزوجة أُزيلتا من شجرة العائلة (مكانهما شجرة النساء).
             if canAssignChildren {
                 Button {
                     assignSelection = Set(husbandChildren.filter { $0.motherId == member.id }.map(\.id))
