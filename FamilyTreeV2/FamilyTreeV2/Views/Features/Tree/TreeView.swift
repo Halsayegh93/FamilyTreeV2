@@ -2214,7 +2214,9 @@ struct WomenTreeView: View {
                                   sfIcon: String?, onTap: (() -> Void)?) -> some View {
         VStack(spacing: 2) {
             Text(label).font(DS.Font.caption2).fontWeight(.bold).foregroundColor(iconColor)
-            Text(member.firstName.isEmpty ? (member.fullName.components(separatedBy: " ").first ?? "") : member.firstName)
+            // الاسم الأول فقط دائماً (توحيد العرض — بعض السجلات اسمها الأول كامل).
+            Text((member.firstName.isEmpty ? member.fullName : member.firstName)
+                .components(separatedBy: " ").first ?? "")
                 .font(DS.Font.caption1).fontWeight(.semibold)
                 .foregroundColor(DS.Color.textPrimary)
                 .lineLimit(1).minimumScaleFactor(0.7)

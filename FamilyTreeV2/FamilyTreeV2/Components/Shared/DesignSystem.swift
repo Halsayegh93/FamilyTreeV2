@@ -1480,15 +1480,21 @@ struct FemaleAvatarView: View {
     var iconColor: Color = FemaleAvatarView.pinkIcon
     var isDeceased: Bool = false
 
+    // ألوان تتكيّف مع الوضع المظلم (أوضح/أفتح بالمظلم).
+    private static func adaptive(light: String, dark: String) -> Color {
+        Color(UIColor { tc in
+            UIColor(Color(hex: tc.userInterfaceStyle == .dark ? dark : light))
+        })
+    }
     // بنت / أنثى عامة — وردي.
-    static let pink = Color(hex: "#F7CFE2")
-    static let pinkIcon = Color(hex: "#CF5E97")
+    static let pink = adaptive(light: "#F7CFE2", dark: "#5A2E45")
+    static let pinkIcon = adaptive(light: "#CF5E97", dark: "#F29CC4")
     // زوجة — بنفسجي (نفس لون شارة الشجرة).
-    static let wifeBg = Color(hex: "#E7DAF7")
-    static let wifeIcon = Color(hex: "#8E5BD0")
+    static let wifeBg = adaptive(light: "#E7DAF7", dark: "#4A3A66")
+    static let wifeIcon = adaptive(light: "#8E5BD0", dark: "#C9A8F5")
     // أم — أخضر مزرق.
-    static let motherBg = Color(hex: "#CFEDE5")
-    static let motherIcon = Color(hex: "#2E9E86")
+    static let motherBg = adaptive(light: "#CFEDE5", dark: "#264B43")
+    static let motherIcon = adaptive(light: "#2E9E86", dark: "#5FD3BA")
 
     var body: some View {
         GeometryReader { geo in
