@@ -72,7 +72,7 @@ struct DrillDownTreeView: View {
     }
 
     /// الحجم الموحّد لمربع العضو.
-    private let squareSize: CGFloat = 120
+    private let squareSize: CGFloat = 122
 
     /// استخراج السنة (4 أرقام) من نص تاريخ قد يكون بأي صيغة (YYYY-MM-DD، YYYY/M/D، YYYY فقط).
     private func year(from dateString: String?) -> String? {
