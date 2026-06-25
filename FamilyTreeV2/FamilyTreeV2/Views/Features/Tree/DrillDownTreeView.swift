@@ -544,6 +544,19 @@ struct DrillDownTreeView: View {
         }
     }
 
+    // شارة "متوفى" نصية موحّدة (بدل النجمة/الورقة) — بنفس حجم الشارة السابقة.
+    private var deceasedBadge: some View {
+        Text(L10n.t("متوفى", "Deceased"))
+            .font(.system(size: 9, weight: .bold))
+            .foregroundColor(.white)
+            .padding(.horizontal, 5)
+            .padding(.vertical, 2)
+            .background(Capsule().fill(DS.Color.error))
+            .overlay(Capsule().strokeBorder(Color.white, lineWidth: 1))
+            .shadow(color: .black.opacity(0.20), radius: 2, x: 0, y: 1)
+            .accessibilityLabel(L10n.t("متوفى", "Deceased"))
+    }
+
     // بطاقة زوجة مُصغّرة بجانب الأب — بدون صورة، الاسم فقط.
     private func wifeBesideCard(_ wife: FamilyMember) -> some View {
         VStack(spacing: 3) {
@@ -555,9 +568,7 @@ struct DrillDownTreeView: View {
                 .foregroundColor(DS.Color.textPrimary)
                 .lineLimit(3).multilineTextAlignment(.center).minimumScaleFactor(0.6)
             if wife.isDeceased ?? false {
-                Image(systemName: "leaf.fill")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundColor(DS.Color.error)
+                deceasedBadge
             }
         }
         .frame(width: 104)
@@ -585,9 +596,7 @@ struct DrillDownTreeView: View {
             // الإناث: بدون صورة — الاسم فقط (مع علامة وفاة صغيرة عند اللزوم).
             if member.isFemale {
                 if isDeceased {
-                    Image(systemName: "leaf.fill")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundColor(DS.Color.error)
+                    deceasedBadge
                 }
             } else {
                 // الذكور: الصورة + علامة المتوفى
@@ -608,15 +617,8 @@ struct DrillDownTreeView: View {
                     .saturation(isDeceased ? 0.55 : 1.0)
 
                     if isDeceased {
-                        Image(systemName: "sparkle")
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundColor(.white)
-                            .frame(width: 18, height: 18)
-                            .background(Circle().fill(DS.Color.error))
-                            .overlay(Circle().strokeBorder(Color.white, lineWidth: 1.5))
-                            .shadow(color: .black.opacity(0.20), radius: 2, x: 0, y: 1)
-                            .offset(x: 3, y: -3)
-                            .accessibilityLabel(L10n.t("متوفى", "Deceased"))
+                        deceasedBadge
+                            .offset(x: 10, y: -6)
                     }
                 }
             }
