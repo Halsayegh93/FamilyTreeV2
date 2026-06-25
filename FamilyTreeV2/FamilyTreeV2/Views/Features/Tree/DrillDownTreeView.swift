@@ -527,8 +527,46 @@ struct DrillDownTreeView: View {
                 isActive ? "اضغط لطيّ مستوى — اضغط مطوّلاً للتفاصيل" : "اضغط لتفعيله — اضغط مطوّلاً للتفاصيل",
                 isActive ? "Tap to collapse one level. Long-press for details." : "Tap to activate. Long-press for details."
             ))
+
+            // زوجات الأب — جنبه على اليسار، مكدّسة عمودياً عند التعدّد.
+            if isActive {
+                let wives = allData.filter { $0.husbandId == member.id && $0.isFemale }
+                if !wives.isEmpty {
+                    VStack(spacing: DS.Spacing.sm) {
+                        ForEach(wives) { wife in
+                            Button { openDetails(wife) } label: { wifeBesideCard(wife) }
+                                .buttonStyle(DSScaleButtonStyle())
+                        }
+                    }
+                }
+            }
             Spacer()
         }
+    }
+
+    // بطاقة زوجة مُصغّرة بجانب الأب.
+    private func wifeBesideCard(_ wife: FamilyMember) -> some View {
+        VStack(spacing: 3) {
+            FemaleAvatarView(bg: FemaleAvatarView.wifeBg,
+                             iconColor: FemaleAvatarView.wifeIcon,
+                             isDeceased: wife.isDeceased ?? false)
+                .frame(width: 40, height: 40).clipShape(Circle())
+            Text(wife.firstName.isEmpty ? (wife.fullName.components(separatedBy: " ").first ?? "") : wife.firstName)
+                .font(DS.Font.caption2).fontWeight(.semibold)
+                .foregroundColor(DS.Color.textPrimary)
+                .lineLimit(1).minimumScaleFactor(0.7)
+            Text(L10n.t("زوجة", "Wife"))
+                .font(DS.Font.caption2).foregroundColor(FemaleAvatarView.wifeIcon)
+        }
+        .frame(width: 80)
+        .padding(.vertical, DS.Spacing.xs)
+        .padding(.horizontal, 4)
+        .background(
+            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                .fill(FemaleAvatarView.wifeIcon.opacity(0.08))
+                .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                    .strokeBorder(FemaleAvatarView.wifeIcon.opacity(0.3), lineWidth: 1))
+        )
     }
 
     // MARK: - Member Square Content (unified visual)
