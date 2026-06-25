@@ -608,7 +608,7 @@ struct DrillDownTreeView: View {
                         .font(DS.Font.scaled(9, weight: .semibold))
                         .foregroundColor(isDeceased ? DS.Color.deceased : DS.Color.textSecondary)
                         .lineLimit(1)
-                        .minimumScaleFactor(0.8)
+                        .minimumScaleFactor(0.45)
                 }
                 HStack(spacing: 3) {
                     Image(systemName: kidsCount > 0 ? "person.2.fill" : "person.fill")
@@ -625,7 +625,7 @@ struct DrillDownTreeView: View {
             DSMemberAvatar(
                 name: member.firstName,
                 avatarUrl: displayAvatar(for: member),
-                size: isActive ? 44 : 38,
+                size: isActive ? 40 : 34,
                 roleColor: genderAccent,
                 isFemale: false
             )
@@ -789,6 +789,8 @@ struct DrillDownTreeView: View {
                     genderColumn(color: FemaleAvatarView.wifeIcon,
                                  kids: females, sectionIndex: idx)
                 }
+                .fixedSize(horizontal: true, vertical: false)
+                .frame(maxWidth: .infinity)
                 .padding(.top, DS.Spacing.sm)
             }
         }
@@ -847,7 +849,6 @@ struct DrillDownTreeView: View {
                 }
             }
         }
-        .frame(maxWidth: .infinity, alignment: .top)
     }
 
     // MARK: - Chain Connector (between ancestor squares)
