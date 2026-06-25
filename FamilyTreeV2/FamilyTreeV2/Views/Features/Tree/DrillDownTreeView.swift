@@ -550,17 +550,17 @@ struct DrillDownTreeView: View {
             Text(L10n.t("زوجة", "Wife"))
                 .font(DS.Font.caption2).fontWeight(.bold)
                 .foregroundColor(FemaleAvatarView.wifeIcon)
-            Text(wife.firstName.isEmpty ? (wife.fullName.components(separatedBy: " ").first ?? "") : wife.firstName)
+            Text(wife.fullName.isEmpty ? wife.firstName : wife.fullName)
                 .font(DS.Font.caption1).fontWeight(.semibold)
                 .foregroundColor(DS.Color.textPrimary)
-                .lineLimit(2).multilineTextAlignment(.center).minimumScaleFactor(0.7)
+                .lineLimit(3).multilineTextAlignment(.center).minimumScaleFactor(0.6)
             if wife.isDeceased ?? false {
                 Image(systemName: "leaf.fill")
                     .font(.system(size: 10, weight: .bold))
                     .foregroundColor(DS.Color.error)
             }
         }
-        .frame(width: 80)
+        .frame(width: 104)
         .padding(.vertical, DS.Spacing.sm)
         .padding(.horizontal, 4)
         .background(
@@ -584,10 +584,9 @@ struct DrillDownTreeView: View {
         return VStack(spacing: 2) {
             // الإناث: بدون صورة — الاسم فقط (مع علامة وفاة صغيرة عند اللزوم).
             if member.isFemale {
-                Spacer(minLength: 0)
                 if isDeceased {
                     Image(systemName: "leaf.fill")
-                        .font(.system(size: 12, weight: .bold))
+                        .font(.system(size: 11, weight: .bold))
                         .foregroundColor(DS.Color.error)
                 }
             } else {
@@ -625,30 +624,31 @@ struct DrillDownTreeView: View {
             Text(member.firstName)
                 .font(DS.Font.scaled(12, weight: isActive ? .black : .bold))
                 .foregroundColor(isDeceased ? DS.Color.textSecondary : DS.Color.textPrimary)
-                .lineLimit(1)
+                .lineLimit(member.isFemale ? 2 : 1)
+                .multilineTextAlignment(.center)
                 .minimumScaleFactor(0.7)
 
-            // التواريخ — بدون أيقونة
-            if hasDates {
-                Text(dateRangeText(birthY: birthY, deathY: deathY, isDeceased: isDeceased))
-                    .font(DS.Font.scaled(9, weight: .semibold))
-                    .foregroundColor(isDeceased ? DS.Color.deceased : DS.Color.textSecondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+            // التواريخ + عدّاد الأبناء — للذكور فقط (الإناث مربّع مُصغّر بالاسم).
+            if !member.isFemale {
+                if hasDates {
+                    Text(dateRangeText(birthY: birthY, deathY: deathY, isDeceased: isDeceased))
+                        .font(DS.Font.scaled(9, weight: .semibold))
+                        .foregroundColor(isDeceased ? DS.Color.deceased : DS.Color.textSecondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+                HStack(spacing: 3) {
+                    Image(systemName: kidsCount > 0 ? "person.2.fill" : "person.fill")
+                        .font(.system(size: 8, weight: .bold))
+                    Text("\(kidsCount)")
+                        .font(DS.Font.scaled(9, weight: .bold))
+                }
+                .foregroundColor(kidsCount > 0 ? DS.Color.primary : DS.Color.textTertiary)
             }
-
-            // عدّاد الأبناء (دائماً)
-            HStack(spacing: 3) {
-                Image(systemName: kidsCount > 0 ? "person.2.fill" : "person.fill")
-                    .font(.system(size: 8, weight: .bold))
-                Text("\(kidsCount)")
-                    .font(DS.Font.scaled(9, weight: .bold))
-            }
-            .foregroundColor(kidsCount > 0 ? DS.Color.primary : DS.Color.textTertiary)
         }
-        .padding(.vertical, 5)
+        .padding(.vertical, member.isFemale ? 6 : 5)
         .padding(.horizontal, 6)
-        .frame(width: squareSize, height: squareSize)
+        .frame(width: squareSize, height: member.isFemale ? 56 : squareSize)
         .background(
             RoundedRectangle(cornerRadius: DS.Radius.md)
                 .fill(isDeceased ? DS.Color.surface : genderAccent.opacity(isActive ? 0.14 : 0.07))
