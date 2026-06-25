@@ -1571,6 +1571,7 @@ private struct WomenRow: Decodable {
     let isHiddenFromTree: Bool?
     let photoUrl: String?
     let avatarUrl: String?
+    let linkedUserId: UUID?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -1587,6 +1588,7 @@ private struct WomenRow: Decodable {
         case isHiddenFromTree = "is_hidden_from_tree"
         case photoUrl = "photo_url"
         case avatarUrl = "avatar_url"
+        case linkedUserId = "linked_user_id"
     }
 }
 
@@ -1594,6 +1596,9 @@ private struct WomenRow: Decodable {
 enum WomenStore {
     /// كاش بالذاكرة — يخلي الانتقال لتبويب التفرّع فورياً (بلا إعادة جلب كل مرة).
     static var cache: [FamilyMember] = []
+    /// ربط حساب التطبيق ↔ اسم في شجرة النساء (مرجع إداري + زر موقعي).
+    static var womanByLinkedUser: [UUID: UUID] = [:]   // userId → womanId
+    static var linkedUserByWoman: [UUID: UUID] = [:]   // womanId → userId
 
     static func fetch() async throws -> [FamilyMember] {
         let rows: [WomenRow] = try await SupabaseConfig.client
@@ -1602,6 +1607,14 @@ enum WomenStore {
             .order("sort_order", ascending: true)
             .execute()
             .value
+        var byUser: [UUID: UUID] = [:]
+        var byWoman: [UUID: UUID] = [:]
+        for r in rows where r.linkedUserId != nil {
+            byUser[r.linkedUserId!] = r.id
+            byWoman[r.id] = r.linkedUserId!
+        }
+        womanByLinkedUser = byUser
+        linkedUserByWoman = byWoman
         let mapped = rows.map { r in
             FamilyMember(
                 id: r.id,
@@ -1707,6 +1720,21 @@ enum WomenStore {
     static func delete(id: UUID) async throws {
         try await SupabaseConfig.client.from("women_members").delete().eq("id", value: id.uuidString).execute()
     }
+
+    /// ربط/فكّ ربط اسم في شجرة النساء بحساب مستخدم (للإدارة فقط عبر RLS).
+    static func linkAccount(womanId: UUID, userId: UUID?) async throws {
+        try await SupabaseConfig.client.from("women_members")
+            .update(["linked_user_id": AnyEncodable(userId?.uuidString)])
+            .eq("id", value: womanId.uuidString).execute()
+        // حدّث الكاش المحلي فوراً.
+        if let old = linkedUserByWoman[womanId] { womanByLinkedUser[old] = nil }
+        if let userId {
+            linkedUserByWoman[womanId] = userId
+            womanByLinkedUser[userId] = womanId
+        } else {
+            linkedUserByWoman[womanId] = nil
+        }
+    }
 }
 
 /// شاشة «شجرة العائلة (النساء)» — تُفتح من اختصار الرئيسية، تعيد استخدام
@@ -1716,6 +1744,7 @@ struct WomenTreeView: View {
     // تبويب الشجرة [0=العائلة، 1=النساء] — عند العرض كتبويب داخل شجرة العائلة.
     var treeTab: Binding<Int>? = nil
     @EnvironmentObject var authVM: AuthViewModel
+    @EnvironmentObject var memberVM: MemberViewModel
     @Environment(\.dismiss) private var dismiss
 
     // تبدأ من الكاش (إن وُجد) — انتقال فوري بلا شاشة تحميل في المرات التالية.
@@ -1743,6 +1772,7 @@ struct WomenTreeView: View {
     @State private var addRequest: WomenAddRequest? = nil
     @State private var editTarget: FamilyMember? = nil
     @State private var pickMotherFor: FamilyMember? = nil
+    @State private var linkAccountFor: FamilyMember? = nil
 
     private var canEdit: Bool { authVM.canEditMembers }
 
@@ -1761,7 +1791,15 @@ struct WomenTreeView: View {
                     headerTitle: L10n.t("النساء", "Women"),
                     headerSubtitle: "\(allMembers.count) " + L10n.t("فرد", "members"),
                     headerIcon: "leaf.fill",
-                    treeTab: treeTab
+                    treeTab: treeTab,
+                    meResolver: {
+                        guard let uid = authVM.currentUser?.id else { return nil }
+                        // أنثى مرتبطة باسمها، أو ذكر منعكس بنفس الـid.
+                        if let wid = WomenStore.womanByLinkedUser[uid] {
+                            return allMembers.first { $0.id == wid }
+                        }
+                        return allMembers.first { $0.id == uid }
+                    }
                 )
             }
         }
@@ -1787,6 +1825,23 @@ struct WomenTreeView: View {
                 .presentationDetents([.medium, .large])
             }
             .sheet(item: $pickMotherFor) { node in motherPicker(for: node) }
+            .sheet(item: $linkAccountFor) { node in accountPicker(for: node) }
+    }
+
+    // اختيار حساب التطبيق لربطه باسم المرأة (إدارة فقط) — بحث بالاسم/الرقم.
+    @ViewBuilder
+    private func accountPicker(for node: FamilyMember) -> some View {
+        AccountLinkPicker(
+            womanName: node.fullName.isEmpty ? node.firstName : node.fullName,
+            currentLinkedId: WomenStore.linkedUserByWoman[node.id],
+            accounts: memberVM.allMembers,
+            onPick: { userId in
+                linkAccountFor = nil
+                Task { try? await WomenStore.linkAccount(womanId: node.id, userId: userId); await load() }
+            },
+            onCancel: { linkAccountFor = nil }
+        )
+        .presentationDetents([.medium, .large])
     }
 
     @ViewBuilder
@@ -2009,6 +2064,17 @@ struct WomenTreeView: View {
                                               title: L10n.t("تعديل", "Edit")) {
                                 editTarget = w
                             }
+                            // ربط اسم الأنثى بحساب مسجّل (إدارة فقط) — لزر "موقعي".
+                            if w.isFemale {
+                                let linked = WomenStore.linkedUserByWoman[w.id] != nil
+                                womenCircleAction(
+                                    icon: linked ? "link.circle.fill" : "link",
+                                    color: linked ? DS.Color.success : DS.Color.accent,
+                                    title: linked ? L10n.t("مرتبط", "Linked")
+                                                  : L10n.t("ربط بحساب", "Link")) {
+                                    linkAccountFor = w
+                                }
+                            }
                             // الجذر لا يُحذف؛ غيره يُحذف.
                             if !(w.fatherId == nil && w.husbandId == nil && w.motherId == nil) {
                                 womenCircleAction(icon: "trash", color: DS.Color.error,
@@ -2200,6 +2266,83 @@ struct WomenAddRequest: Identifiable {
     let id = UUID()
     let kind: WomenRelKind
     let node: FamilyMember
+}
+
+/// منتقي حساب لربطه باسم في شجرة النساء (إدارة فقط) — بحث بالاسم/الرقم.
+struct AccountLinkPicker: View {
+    let womanName: String
+    let currentLinkedId: UUID?
+    let accounts: [FamilyMember]
+    let onPick: (UUID?) -> Void
+    let onCancel: () -> Void
+
+    @State private var query: String = ""
+
+    private var filtered: [FamilyMember] {
+        let q = query.trimmingCharacters(in: .whitespaces)
+        let base = accounts.sorted { $0.fullName < $1.fullName }
+        guard !q.isEmpty else { return Array(base.prefix(50)) }
+        let digits = q.filter { $0.isNumber }
+        return base.filter { m in
+            let name = (m.fullName.isEmpty ? m.firstName : m.fullName)
+            let phone = m.phoneNumber ?? ""
+            return name.localizedCaseInsensitiveContains(q)
+                || (!digits.isEmpty && phone.filter { $0.isNumber }.contains(digits))
+        }
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    Text(L10n.t("ربط «\(womanName)» بحساب مستخدم. لزر موقعي.",
+                                "Link “\(womanName)” to an account (for the locate button)."))
+                        .font(DS.Font.caption1).foregroundColor(DS.Color.textSecondary)
+                    if currentLinkedId != nil {
+                        Button(role: .destructive) { onPick(nil) } label: {
+                            Label(L10n.t("فكّ الربط", "Unlink"), systemImage: "link.badge.plus")
+                        }
+                    }
+                }
+                Section {
+                    ForEach(filtered) { m in
+                        Button {
+                            onPick(m.id)
+                        } label: {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(m.fullName.isEmpty ? m.firstName : m.fullName)
+                                        .foregroundColor(DS.Color.textPrimary)
+                                    if let p = m.phoneNumber, !p.isEmpty {
+                                        Text(p).font(DS.Font.caption2)
+                                            .foregroundColor(DS.Color.textSecondary)
+                                    }
+                                }
+                                Spacer()
+                                if m.id == currentLinkedId {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundColor(DS.Color.success)
+                                }
+                            }
+                        }
+                    }
+                    if filtered.isEmpty {
+                        Text(L10n.t("لا نتائج", "No results"))
+                            .foregroundColor(DS.Color.textSecondary)
+                    }
+                }
+            }
+            .searchable(text: $query, prompt: L10n.t("بحث بالاسم أو الرقم", "Search name or phone"))
+            .navigationTitle(L10n.t("ربط بحساب", "Link account"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(L10n.t("إلغاء", "Cancel")) { onCancel() }
+                }
+            }
+            .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+        }
+    }
 }
 
 /// نموذج إضافة/تعديل عضوة شجرة النساء — يدعم: ابن/زوجة/أم/تعديل.

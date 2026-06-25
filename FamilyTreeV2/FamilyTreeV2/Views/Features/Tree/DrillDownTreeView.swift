@@ -27,6 +27,8 @@ struct DrillDownTreeView: View {
     var headerIcon: String? = nil
     /// تبويبات [شجرة العائلة | التفرّع] داخل شريط الأدوات.
     var treeTab: Binding<Int>? = nil
+    /// محدِّد عقدة "موقعي" — لشجرة النساء (يربط حساب الأنثى باسمها). nil = currentUser.
+    var meResolver: (() -> FamilyMember?)? = nil
 
     // مصدر البيانات الموحّد — مُحقون أو memberVM.
     private var allData: [FamilyMember] { injectedMembers ?? memberVM.allMembers }
@@ -476,7 +478,7 @@ struct DrillDownTreeView: View {
 
             Spacer()
 
-            if let me = authVM.currentUser {
+            if let me = (meResolver?() ?? authVM.currentUser) {
                 Button { jumpTo(me) } label: {
                     iconButton(icon: "location.fill", color: DS.Color.primary)
                 }
