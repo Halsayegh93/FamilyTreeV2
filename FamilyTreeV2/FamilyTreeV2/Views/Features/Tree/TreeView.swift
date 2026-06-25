@@ -2214,12 +2214,11 @@ struct WomenTreeView: View {
                                   sfIcon: String?, onTap: (() -> Void)?) -> some View {
         VStack(spacing: 2) {
             Text(label).font(DS.Font.caption2).fontWeight(.bold).foregroundColor(iconColor)
-            // الاسم الأول فقط دائماً (توحيد العرض — بعض السجلات اسمها الأول كامل).
-            Text((member.firstName.isEmpty ? member.fullName : member.firstName)
-                .components(separatedBy: " ").first ?? "")
+            // الاسم الكامل (الأم والزوجة).
+            Text(member.fullName.isEmpty ? member.firstName : member.fullName)
                 .font(DS.Font.caption1).fontWeight(.semibold)
                 .foregroundColor(DS.Color.textPrimary)
-                .lineLimit(1).minimumScaleFactor(0.7)
+                .lineLimit(2).multilineTextAlignment(.center).minimumScaleFactor(0.6)
             if member.isDeceased ?? false {
                 Image(systemName: "leaf.fill").font(.system(size: 9, weight: .bold))
                     .foregroundColor(DS.Color.error)
