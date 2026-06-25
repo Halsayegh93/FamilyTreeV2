@@ -564,9 +564,9 @@ struct DrillDownTreeView: View {
                 .font(DS.Font.caption2).fontWeight(.bold)
                 .foregroundColor(FemaleAvatarView.wifeIcon)
             Text(wife.fullName.isEmpty ? wife.firstName : wife.fullName)
-                .font(DS.Font.caption1).fontWeight(.semibold)
+                .font(DS.Font.scaled(11, weight: .semibold))
                 .foregroundColor(DS.Color.textPrimary)
-                .lineLimit(3).multilineTextAlignment(.center).minimumScaleFactor(0.6)
+                .lineLimit(3).multilineTextAlignment(.center).minimumScaleFactor(0.55)
             if wife.isDeceased ?? false {
                 deceasedBadge
             }
@@ -595,11 +595,11 @@ struct DrillDownTreeView: View {
         // الاسم + التواريخ + العدّاد (تُعرض جنب الصورة للذكور، وحدها للإناث).
         let infoBlock = VStack(alignment: member.isFemale ? .center : .leading, spacing: 2) {
             Text(member.firstName)
-                .font(DS.Font.scaled(12, weight: isActive ? .black : .bold))
+                .font(DS.Font.scaled(member.isFemale ? 12 : 11, weight: isActive ? .black : .bold))
                 .foregroundColor(isDeceased ? DS.Color.textSecondary : DS.Color.textPrimary)
-                .lineLimit(member.isFemale ? 2 : 2)
+                .lineLimit(2)
                 .multilineTextAlignment(member.isFemale ? .center : .leading)
-                .minimumScaleFactor(0.7)
+                .minimumScaleFactor(0.55)
 
             // التواريخ + عدّاد الأبناء — للذكور فقط (الإناث مربّع مُصغّر بالاسم).
             if !member.isFemale {
