@@ -610,11 +610,11 @@ struct DrillDownTreeView: View {
         // الاسم + التواريخ + العدّاد (تُعرض جنب الصورة للذكور، وحدها للإناث).
         let infoBlock = VStack(alignment: member.isFemale ? .center : .leading, spacing: 2) {
             Text(member.firstName)
-                .font(DS.Font.scaled(member.isFemale ? 14 : 13, weight: isActive ? .black : .bold))
+                // حجم اسم موحّد لكل المربعات (بدون تصغير تلقائي يختلف حسب الطول).
+                .font(DS.Font.scaled(12, weight: isActive ? .black : .bold))
                 .foregroundColor(isDeceased ? DS.Color.textSecondary : DS.Color.textPrimary)
                 .lineLimit(2)
                 .multilineTextAlignment(member.isFemale ? .center : .leading)
-                .minimumScaleFactor(0.55)
 
             // التواريخ + عدّاد الأبناء — للذكور فقط (الإناث مربّع مُصغّر بالاسم).
             if !member.isFemale {
