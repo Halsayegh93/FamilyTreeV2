@@ -592,42 +592,13 @@ struct DrillDownTreeView: View {
         // لون المربع حسب الجنس: ذكر أزرق، أنثى بنفسجي.
         let genderAccent: Color = member.isFemale ? FemaleAvatarView.wifeIcon : DS.Color.primary
 
-        return VStack(spacing: 2) {
-            // الإناث: بدون صورة — الاسم فقط (مع علامة وفاة صغيرة عند اللزوم).
-            if member.isFemale {
-                if isDeceased {
-                    deceasedBadge
-                }
-            } else {
-                // الذكور: الصورة + علامة المتوفى
-                ZStack(alignment: .topTrailing) {
-                    DSMemberAvatar(
-                        name: member.firstName,
-                        avatarUrl: displayAvatar(for: member),
-                        size: isActive ? 46 : 42,
-                        roleColor: genderAccent,
-                        isFemale: false
-                    )
-                    .overlay(
-                        Circle().strokeBorder(
-                            deceasedAwareBorderColor(isActive: isActive, isDeceased: isDeceased),
-                            lineWidth: isActive ? 2.5 : 1.5
-                        )
-                    )
-                    .saturation(isDeceased ? 0.55 : 1.0)
-
-                    if isDeceased {
-                        deceasedBadge
-                            .offset(x: 10, y: -6)
-                    }
-                }
-            }
-
+        // الاسم + التواريخ + العدّاد (تُعرض جنب الصورة للذكور، وحدها للإناث).
+        let infoBlock = VStack(alignment: member.isFemale ? .center : .leading, spacing: 2) {
             Text(member.firstName)
                 .font(DS.Font.scaled(12, weight: isActive ? .black : .bold))
                 .foregroundColor(isDeceased ? DS.Color.textSecondary : DS.Color.textPrimary)
-                .lineLimit(member.isFemale ? 2 : 1)
-                .multilineTextAlignment(.center)
+                .lineLimit(member.isFemale ? 2 : 2)
+                .multilineTextAlignment(member.isFemale ? .center : .leading)
                 .minimumScaleFactor(0.7)
 
             // التواريخ + عدّاد الأبناء — للذكور فقط (الإناث مربّع مُصغّر بالاسم).
@@ -648,9 +619,51 @@ struct DrillDownTreeView: View {
                 .foregroundColor(kidsCount > 0 ? DS.Color.primary : DS.Color.textTertiary)
             }
         }
-        .padding(.vertical, member.isFemale ? 6 : 5)
-        .padding(.horizontal, 6)
-        .frame(width: squareSize, height: member.isFemale ? 56 : squareSize)
+
+        // صورة الذكر + علامة المتوفى.
+        let maleAvatar = ZStack(alignment: .topTrailing) {
+            DSMemberAvatar(
+                name: member.firstName,
+                avatarUrl: displayAvatar(for: member),
+                size: isActive ? 46 : 42,
+                roleColor: genderAccent,
+                isFemale: false
+            )
+            .overlay(
+                Circle().strokeBorder(
+                    deceasedAwareBorderColor(isActive: isActive, isDeceased: isDeceased),
+                    lineWidth: isActive ? 2.5 : 1.5
+                )
+            )
+            .saturation(isDeceased ? 0.55 : 1.0)
+
+            if isDeceased {
+                deceasedBadge
+                    .offset(x: 10, y: -6)
+            }
+        }
+
+        return Group {
+            if member.isFemale {
+                // الإناث: بدون صورة — الاسم فقط (مع علامة وفاة صغيرة عند اللزوم).
+                VStack(spacing: 2) {
+                    if isDeceased { deceasedBadge }
+                    infoBlock
+                }
+            } else {
+                // الذكور: الصورة جنب المعلومات (أفقي) بدل فوقها.
+                HStack(spacing: 8) {
+                    maleAvatar
+                    infoBlock
+                    Spacer(minLength: 0)
+                }
+            }
+        }
+        .padding(.vertical, member.isFemale ? 6 : 8)
+        .padding(.horizontal, member.isFemale ? 6 : 10)
+        .frame(width: member.isFemale ? squareSize : squareSize + 40,
+               height: member.isFemale ? 56 : 72,
+               alignment: member.isFemale ? .center : .leading)
         .background(
             RoundedRectangle(cornerRadius: DS.Radius.md)
                 .fill(isDeceased ? DS.Color.surface : genderAccent.opacity(isActive ? 0.14 : 0.07))
