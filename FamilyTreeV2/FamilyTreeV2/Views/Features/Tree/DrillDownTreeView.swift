@@ -557,6 +557,19 @@ struct DrillDownTreeView: View {
             .accessibilityLabel(L10n.t("متوفى", "Deceased"))
     }
 
+    // شارة "متوفى" مُصغّرة — تُستخدم فوق صورة الذكر فقط.
+    private var deceasedBadgeSmall: some View {
+        Text(L10n.t("متوفى", "Deceased"))
+            .font(.system(size: 7, weight: .bold))
+            .foregroundColor(.white)
+            .padding(.horizontal, 3)
+            .padding(.vertical, 1)
+            .background(Capsule().fill(DS.Color.error))
+            .overlay(Capsule().strokeBorder(Color.white, lineWidth: 0.8))
+            .shadow(color: .black.opacity(0.20), radius: 1.5, x: 0, y: 1)
+            .accessibilityLabel(L10n.t("متوفى", "Deceased"))
+    }
+
     // بطاقة زوجة مُصغّرة بجانب الأب — بدون صورة، الاسم فقط.
     private func wifeBesideCard(_ wife: FamilyMember) -> some View {
         VStack(spacing: 3) {
@@ -595,7 +608,7 @@ struct DrillDownTreeView: View {
         // الاسم + التواريخ + العدّاد (تُعرض جنب الصورة للذكور، وحدها للإناث).
         let infoBlock = VStack(alignment: member.isFemale ? .center : .leading, spacing: 2) {
             Text(member.firstName)
-                .font(DS.Font.scaled(member.isFemale ? 12 : 11, weight: isActive ? .black : .bold))
+                .font(DS.Font.scaled(member.isFemale ? 14 : 13, weight: isActive ? .black : .bold))
                 .foregroundColor(isDeceased ? DS.Color.textSecondary : DS.Color.textPrimary)
                 .lineLimit(2)
                 .multilineTextAlignment(member.isFemale ? .center : .leading)
@@ -610,11 +623,11 @@ struct DrillDownTreeView: View {
                         .lineLimit(1)
                         .minimumScaleFactor(0.45)
                 }
-                HStack(spacing: 3) {
+                HStack(spacing: 2) {
                     Image(systemName: kidsCount > 0 ? "person.2.fill" : "person.fill")
-                        .font(.system(size: 8, weight: .bold))
+                        .font(.system(size: 6, weight: .bold))
                     Text("\(kidsCount)")
-                        .font(DS.Font.scaled(9, weight: .bold))
+                        .font(DS.Font.scaled(7, weight: .bold))
                 }
                 .foregroundColor(kidsCount > 0 ? DS.Color.primary : DS.Color.textTertiary)
             }
@@ -638,8 +651,8 @@ struct DrillDownTreeView: View {
             .saturation(isDeceased ? 0.55 : 1.0)
 
             if isDeceased {
-                deceasedBadge
-                    .offset(x: 10, y: -6)
+                deceasedBadgeSmall
+                    .offset(x: 8, y: -5)
             }
         }
 
