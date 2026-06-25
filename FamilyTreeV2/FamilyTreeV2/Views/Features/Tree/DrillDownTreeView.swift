@@ -544,22 +544,24 @@ struct DrillDownTreeView: View {
         }
     }
 
-    // بطاقة زوجة مُصغّرة بجانب الأب.
+    // بطاقة زوجة مُصغّرة بجانب الأب — بدون صورة، الاسم فقط.
     private func wifeBesideCard(_ wife: FamilyMember) -> some View {
         VStack(spacing: 3) {
-            FemaleAvatarView(bg: FemaleAvatarView.wifeBg,
-                             iconColor: FemaleAvatarView.wifeIcon,
-                             isDeceased: wife.isDeceased ?? false)
-                .frame(width: 40, height: 40).clipShape(Circle())
-            Text(wife.firstName.isEmpty ? (wife.fullName.components(separatedBy: " ").first ?? "") : wife.firstName)
-                .font(DS.Font.caption2).fontWeight(.semibold)
-                .foregroundColor(DS.Color.textPrimary)
-                .lineLimit(1).minimumScaleFactor(0.7)
             Text(L10n.t("زوجة", "Wife"))
-                .font(DS.Font.caption2).foregroundColor(FemaleAvatarView.wifeIcon)
+                .font(DS.Font.caption2).fontWeight(.bold)
+                .foregroundColor(FemaleAvatarView.wifeIcon)
+            Text(wife.firstName.isEmpty ? (wife.fullName.components(separatedBy: " ").first ?? "") : wife.firstName)
+                .font(DS.Font.caption1).fontWeight(.semibold)
+                .foregroundColor(DS.Color.textPrimary)
+                .lineLimit(2).multilineTextAlignment(.center).minimumScaleFactor(0.7)
+            if wife.isDeceased ?? false {
+                Image(systemName: "leaf.fill")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(DS.Color.error)
+            }
         }
         .frame(width: 80)
-        .padding(.vertical, DS.Spacing.xs)
+        .padding(.vertical, DS.Spacing.sm)
         .padding(.horizontal, 4)
         .background(
             RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
@@ -580,33 +582,43 @@ struct DrillDownTreeView: View {
         let genderAccent: Color = member.isFemale ? FemaleAvatarView.wifeIcon : DS.Color.primary
 
         return VStack(spacing: 2) {
-            // الصورة + علامة المتوفى (نقطة داكنة بأعلى الزاوية)
-            ZStack(alignment: .topTrailing) {
-                DSMemberAvatar(
-                    name: member.firstName,
-                    avatarUrl: displayAvatar(for: member),
-                    size: isActive ? 46 : 42,
-                    roleColor: genderAccent,
-                    isFemale: member.isFemale
-                )
-                .overlay(
-                    Circle().strokeBorder(
-                        deceasedAwareBorderColor(isActive: isActive, isDeceased: isDeceased),
-                        lineWidth: isActive ? 2.5 : 1.5
-                    )
-                )
-                .saturation(isDeceased ? 0.55 : 1.0)
-
+            // الإناث: بدون صورة — الاسم فقط (مع علامة وفاة صغيرة عند اللزوم).
+            if member.isFemale {
+                Spacer(minLength: 0)
                 if isDeceased {
-                    Image(systemName: "sparkle")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundColor(.white)
-                        .frame(width: 18, height: 18)
-                        .background(Circle().fill(DS.Color.error))
-                        .overlay(Circle().strokeBorder(Color.white, lineWidth: 1.5))
-                        .shadow(color: .black.opacity(0.20), radius: 2, x: 0, y: 1)
-                        .offset(x: 3, y: -3)
-                        .accessibilityLabel(L10n.t("متوفى", "Deceased"))
+                    Image(systemName: "leaf.fill")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(DS.Color.error)
+                }
+            } else {
+                // الذكور: الصورة + علامة المتوفى
+                ZStack(alignment: .topTrailing) {
+                    DSMemberAvatar(
+                        name: member.firstName,
+                        avatarUrl: displayAvatar(for: member),
+                        size: isActive ? 46 : 42,
+                        roleColor: genderAccent,
+                        isFemale: false
+                    )
+                    .overlay(
+                        Circle().strokeBorder(
+                            deceasedAwareBorderColor(isActive: isActive, isDeceased: isDeceased),
+                            lineWidth: isActive ? 2.5 : 1.5
+                        )
+                    )
+                    .saturation(isDeceased ? 0.55 : 1.0)
+
+                    if isDeceased {
+                        Image(systemName: "sparkle")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundColor(.white)
+                            .frame(width: 18, height: 18)
+                            .background(Circle().fill(DS.Color.error))
+                            .overlay(Circle().strokeBorder(Color.white, lineWidth: 1.5))
+                            .shadow(color: .black.opacity(0.20), radius: 2, x: 0, y: 1)
+                            .offset(x: 3, y: -3)
+                            .accessibilityLabel(L10n.t("متوفى", "Deceased"))
+                    }
                 }
             }
 

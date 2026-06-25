@@ -2098,35 +2098,29 @@ struct WomenTreeView: View {
     }
 
     // أيقونة علاقة دائرية (الأم/الزوجة) — دائرة + الاسم تحتها.
+    // علاقة (أم/زوجة) — بدون صورة، الاسم فقط داخل مربع ملوّن.
     private func womenRelationIcon(member: FamilyMember, label: String, bg: Color, iconColor: Color,
                                   sfIcon: String?, onTap: (() -> Void)?) -> some View {
-        VStack(spacing: DS.Spacing.xs) {
-            ZStack(alignment: .bottomTrailing) {
-                if let sfIcon {
-                    Image(systemName: sfIcon)
-                        .font(DS.Font.scaled(20, weight: .semibold))
-                        .foregroundColor(iconColor)
-                        .frame(width: 52, height: 52)
-                        .background(Circle().fill(bg))
-                    if member.isDeceased ?? false {
-                        Image(systemName: "heart.slash.fill")
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundColor(DS.Color.error)
-                            .padding(3)
-                            .background(Circle().fill(Color.white))
-                    }
-                } else {
-                    FemaleAvatarView(bg: bg, iconColor: iconColor, isDeceased: member.isDeceased ?? false)
-                        .frame(width: 52, height: 52).clipShape(Circle())
-                }
-            }
+        VStack(spacing: 2) {
+            Text(label).font(DS.Font.caption2).fontWeight(.bold).foregroundColor(iconColor)
             Text(member.firstName.isEmpty ? (member.fullName.components(separatedBy: " ").first ?? "") : member.firstName)
-                .font(DS.Font.caption2).fontWeight(.semibold)
+                .font(DS.Font.caption1).fontWeight(.semibold)
                 .foregroundColor(DS.Color.textPrimary)
                 .lineLimit(1).minimumScaleFactor(0.7)
-            Text(label).font(DS.Font.caption2).foregroundColor(iconColor)
+            if member.isDeceased ?? false {
+                Image(systemName: "leaf.fill").font(.system(size: 9, weight: .bold))
+                    .foregroundColor(DS.Color.error)
+            }
         }
         .frame(maxWidth: .infinity)
+        .padding(.vertical, DS.Spacing.sm)
+        .padding(.horizontal, DS.Spacing.xs)
+        .background(
+            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                .fill(bg.opacity(0.45))
+                .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                    .strokeBorder(iconColor.opacity(0.3), lineWidth: 1))
+        )
         .contentShape(Rectangle())
         .onTapGesture { onTap?() }
     }
