@@ -174,13 +174,14 @@ struct DrillDownTreeView: View {
                                     }
                                     .onChange(of: scrollTarget) { newId in
                                         guard let id = newId else { return }
-                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                                        // تأخير بعد انتهاء حركة بناء السلسلة حتى يكتمل التخطيط.
+                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
                                             guard chain.contains(where: { $0.id == id }) else {
                                                 scrollTarget = nil
                                                 return
                                             }
                                             withAnimation(.easeInOut(duration: 0.5)) {
-                                                proxy.scrollTo(id, anchor: UnitPoint(x: 0.5, y: 0.15))
+                                                proxy.scrollTo(id, anchor: UnitPoint(x: 0.5, y: 0.25))
                                             }
                                             DispatchQueue.main.async { scrollTarget = nil }
                                         }
@@ -791,8 +792,12 @@ struct DrillDownTreeView: View {
                 emptyChildrenCard
                     .padding(.top, DS.Spacing.sm)
             } else if females.isEmpty {
-                // لا يوجد إناث — الأبناء جنب بعض (أفقي).
-                horizontalChildren(kids, sectionIndex: idx)
+                // لا يوجد إناث — الذكور جنب بعض (أفقي) بلا أي شيء عن الإناث.
+                horizontalChildren(males, sectionIndex: idx)
+                    .padding(.top, DS.Spacing.sm)
+            } else if males.isEmpty {
+                // لا يوجد ذكور — الإناث جنب بعض (أفقي) بلا أي شيء عن الذكور.
+                horizontalChildren(females, sectionIndex: idx)
                     .padding(.top, DS.Spacing.sm)
             } else {
                 HStack(alignment: .top, spacing: DS.Spacing.xs) {
@@ -840,26 +845,22 @@ struct DrillDownTreeView: View {
     @ViewBuilder
     private func genderColumn(color: Color, kids: [FamilyMember], sectionIndex idx: Int) -> some View {
         VStack(spacing: DS.Spacing.xs) {
-            if kids.isEmpty {
-                Text("—").font(DS.Font.caption1).foregroundColor(DS.Color.textTertiary)
-            } else {
-                ForEach(kids) { child in
-                    Button {
-                        drillFromSection(at: idx, to: child)
-                    } label: {
-                        memberSquareContent(
-                            child,
-                            isActive: false,
-                            kidsCount: children(of: child.id).count
-                        )
-                    }
-                    .buttonStyle(DSScaleButtonStyle())
-                    .simultaneousGesture(
-                        LongPressGesture(minimumDuration: 0.4).onEnded { _ in
-                            openDetails(child)
-                        }
+            ForEach(kids) { child in
+                Button {
+                    drillFromSection(at: idx, to: child)
+                } label: {
+                    memberSquareContent(
+                        child,
+                        isActive: false,
+                        kidsCount: children(of: child.id).count
                     )
                 }
+                .buttonStyle(DSScaleButtonStyle())
+                .simultaneousGesture(
+                    LongPressGesture(minimumDuration: 0.4).onEnded { _ in
+                        openDetails(child)
+                    }
+                )
             }
         }
     }
@@ -981,7 +982,13 @@ struct DrillDownTreeView: View {
         }
         ancestors.reverse()
         withAnimation(.easeInOut(duration: 0.35)) {
+            // نظّف أي تمييز قرابة سابق وميّز اسمي فقط.
+            kinshipTargetId = nil
+            kinshipCommonAncestorId = nil
+            kinshipPathIds = []
+            kinshipBanner = nil
             chain = ancestors + [member]
+            kinshipMeId = member.id   // ميّز اسمي
         }
         scrollTarget = member.id
     }
