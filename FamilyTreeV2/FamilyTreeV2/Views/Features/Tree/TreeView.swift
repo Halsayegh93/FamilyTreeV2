@@ -2046,6 +2046,10 @@ struct WomenTreeView: View {
             .flatMap { mid in allMembers.first(where: { $0.id == mid }) }
             .flatMap { wifeIds.contains($0.id) ? nil : $0 }
         let name = w.fullName.isEmpty ? w.firstName : w.fullName
+        // أبناؤها — الأبناء المرتبطون بها كأمّ.
+        let herChildren = allMembers
+            .filter { $0.motherId == w.id }
+            .sorted { $0.sortOrder < $1.sortOrder }
         NavigationStack {
             ScrollView {
                 VStack(spacing: DS.Spacing.xl) {
@@ -2075,6 +2079,33 @@ struct WomenTreeView: View {
                                                       iconColor: FemaleAvatarView.wifeIcon,
                                                       sfIcon: "person.fill",
                                                       onTap: canEdit ? { editTarget = wife } : nil)
+                                }
+                            }
+                            .padding(.top, DS.Spacing.sm)
+                        }
+
+                        // أبناؤها — الأبناء المرتبطون بها كأمّ.
+                        if !herChildren.isEmpty {
+                            VStack(spacing: DS.Spacing.xs) {
+                                Text(L10n.t("أبناؤها", "Her children"))
+                                    .font(DS.Font.caption1).fontWeight(.bold)
+                                    .foregroundColor(DS.Color.textSecondary)
+                                LazyVGrid(columns: [GridItem(.adaptive(minimum: 84), spacing: DS.Spacing.sm)],
+                                          spacing: DS.Spacing.sm) {
+                                    ForEach(herChildren, id: \.id) { kid in
+                                        Button { selectedWoman = kid } label: {
+                                            Text(kid.firstName)
+                                                .font(DS.Font.caption1).fontWeight(.semibold)
+                                                .foregroundColor(DS.Color.textPrimary)
+                                                .lineLimit(1).minimumScaleFactor(0.7)
+                                                .padding(.vertical, DS.Spacing.xs)
+                                                .padding(.horizontal, DS.Spacing.sm)
+                                                .frame(maxWidth: .infinity)
+                                                .background(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous)
+                                                    .fill(DS.Color.primary.opacity(0.08)))
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
                                 }
                             }
                             .padding(.top, DS.Spacing.sm)
