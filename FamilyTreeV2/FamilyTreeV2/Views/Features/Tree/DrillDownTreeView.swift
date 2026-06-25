@@ -37,6 +37,13 @@ struct DrillDownTreeView: View {
     private func openDetails(_ m: FamilyMember) {
         if let onOpenDetails { onOpenDetails(m) } else { selectedMemberForDetails = m }
     }
+    // الصورة مرتبطة حيّة بالأصل (نفس id في profiles) — تتغيّر بتغيّرها في الشجرة.
+    private func displayAvatar(for m: FamilyMember) -> String? {
+        if injectedMembers != nil, let fam = memberVM.member(byId: m.id) {
+            return fam.displayAvatarUrl
+        }
+        return m.displayAvatarUrl
+    }
 
     /// السلسلة الكاملة: الجذر → الأقرب. آخر عضو = النشط.
     @State private var chain: [FamilyMember] = []
@@ -539,7 +546,7 @@ struct DrillDownTreeView: View {
             ZStack(alignment: .topTrailing) {
                 DSMemberAvatar(
                     name: member.firstName,
-                    avatarUrl: member.displayAvatarUrl,
+                    avatarUrl: displayAvatar(for: member),
                     size: isActive ? 46 : 42,
                     roleColor: genderAccent,
                     isFemale: member.isFemale
