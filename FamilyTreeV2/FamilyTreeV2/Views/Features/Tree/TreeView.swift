@@ -1758,7 +1758,7 @@ struct WomenTreeView: View {
                     selectedTab: .constant(1),
                     injectedMembers: allMembers,
                     onOpenDetails: { selectedWoman = $0 },
-                    headerTitle: L10n.t("التفرّع", "Drill-down"),
+                    headerTitle: L10n.t("النساء", "Women"),
                     headerSubtitle: "\(allMembers.count) " + L10n.t("فرد", "members"),
                     headerIcon: "leaf.fill",
                     treeTab: treeTab

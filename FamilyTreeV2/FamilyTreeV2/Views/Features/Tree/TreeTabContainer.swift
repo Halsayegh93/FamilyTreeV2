@@ -26,7 +26,7 @@ struct FamilyTreeTabBar: View {
     var body: some View {
         HStack(spacing: 2) {
             segment(L10n.t("شجرة العائلة", "Family"), 0)
-            segment(L10n.t("التفرّع", "Drill"), 1)
+            segment(L10n.t("النساء", "Women"), 1)
         }
         .padding(3)
         .background(.ultraThinMaterial)

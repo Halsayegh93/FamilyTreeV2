@@ -712,6 +712,10 @@ struct DrillDownTreeView: View {
             if kids.isEmpty {
                 emptyChildrenCard
                     .padding(.top, DS.Spacing.sm)
+            } else if females.isEmpty {
+                // لا يوجد إناث — الأبناء جنب بعض (أفقي).
+                horizontalChildren(kids, sectionIndex: idx)
+                    .padding(.top, DS.Spacing.sm)
             } else {
                 HStack(alignment: .top, spacing: DS.Spacing.lg) {
                     // في RTL: أول عمود = اليمين → الذكور.
@@ -723,6 +727,34 @@ struct DrillDownTreeView: View {
                                  kids: females, sectionIndex: idx)
                 }
                 .padding(.top, DS.Spacing.sm)
+            }
+        }
+    }
+
+    // الأبناء جنب بعض (3 لكل صف) — عند عدم وجود إناث.
+    @ViewBuilder
+    private func horizontalChildren(_ kids: [FamilyMember], sectionIndex idx: Int) -> some View {
+        let rows = smartRows(kids)
+        VStack(spacing: DS.Spacing.sm) {
+            ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
+                HStack(spacing: DS.Spacing.sm) {
+                    ForEach(row) { child in
+                        Button {
+                            drillFromSection(at: idx, to: child)
+                        } label: {
+                            memberSquareContent(
+                                child, isActive: false,
+                                kidsCount: children(of: child.id).count
+                            )
+                        }
+                        .buttonStyle(DSScaleButtonStyle())
+                        .simultaneousGesture(
+                            LongPressGesture(minimumDuration: 0.4).onEnded { _ in
+                                openDetails(child)
+                            }
+                        )
+                    }
+                }
             }
         }
     }
