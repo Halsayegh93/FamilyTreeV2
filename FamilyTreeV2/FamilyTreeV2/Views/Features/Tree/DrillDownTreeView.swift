@@ -72,7 +72,7 @@ struct DrillDownTreeView: View {
     }
 
     /// الحجم الموحّد لمربع العضو.
-    private let squareSize: CGFloat = 120
+    private let squareSize: CGFloat = 110
 
     /// استخراج السنة (4 أرقام) من نص تاريخ قد يكون بأي صيغة (YYYY-MM-DD، YYYY/M/D، YYYY فقط).
     private func year(from dateString: String?) -> String? {
@@ -500,7 +500,7 @@ struct DrillDownTreeView: View {
     /// **السلوك:** نقرة قصيرة = توسيع/طي (drill أو collapse). ضغطة مطوّلة = عرض التفاصيل.
     private func ancestorOrActiveSquare(_ member: FamilyMember, atIndex idx: Int, isActive: Bool) -> some View {
         let kidsCount = children(of: member.id).count
-        return HStack {
+        return HStack(spacing: DS.Spacing.xs) {
             Spacer()
             Button {
                 if isActive {
@@ -625,7 +625,7 @@ struct DrillDownTreeView: View {
             DSMemberAvatar(
                 name: member.firstName,
                 avatarUrl: displayAvatar(for: member),
-                size: isActive ? 46 : 42,
+                size: isActive ? 44 : 38,
                 roleColor: genderAccent,
                 isFemale: false
             )
@@ -652,17 +652,17 @@ struct DrillDownTreeView: View {
                 }
             } else {
                 // الذكور: الصورة جنب المعلومات (أفقي) بدل فوقها.
-                HStack(spacing: 8) {
+                HStack(spacing: 6) {
                     maleAvatar
                     infoBlock
                     Spacer(minLength: 0)
                 }
             }
         }
-        .padding(.vertical, member.isFemale ? 6 : 8)
-        .padding(.horizontal, member.isFemale ? 6 : 10)
-        .frame(width: member.isFemale ? squareSize : squareSize + 40,
-               height: member.isFemale ? 56 : 72,
+        .padding(.vertical, member.isFemale ? 5 : 6)
+        .padding(.horizontal, member.isFemale ? 6 : 8)
+        .frame(width: squareSize,
+               height: member.isFemale ? 52 : 64,
                alignment: member.isFemale ? .center : .leading)
         .background(
             RoundedRectangle(cornerRadius: DS.Radius.md)
@@ -782,13 +782,11 @@ struct DrillDownTreeView: View {
                 horizontalChildren(kids, sectionIndex: idx)
                     .padding(.top, DS.Spacing.sm)
             } else {
-                HStack(alignment: .top, spacing: DS.Spacing.lg) {
+                HStack(alignment: .top, spacing: DS.Spacing.xs) {
                     // في RTL: أول عمود = اليمين → الذكور.
-                    genderColumn(title: L10n.t("ذكور", "Sons"),
-                                 color: DS.Color.primary,
+                    genderColumn(color: DS.Color.primary,
                                  kids: males, sectionIndex: idx)
-                    genderColumn(title: L10n.t("إناث", "Daughters"),
-                                 color: FemaleAvatarView.wifeIcon,
+                    genderColumn(color: FemaleAvatarView.wifeIcon,
                                  kids: females, sectionIndex: idx)
                 }
                 .padding(.top, DS.Spacing.sm)
@@ -825,13 +823,8 @@ struct DrillDownTreeView: View {
     }
 
     @ViewBuilder
-    private func genderColumn(title: String, color: Color, kids: [FamilyMember], sectionIndex idx: Int) -> some View {
-        VStack(spacing: DS.Spacing.sm) {
-            Text(title)
-                .font(DS.Font.scaled(12, weight: .bold))
-                .foregroundColor(color)
-                .padding(.horizontal, DS.Spacing.md).padding(.vertical, 3)
-                .background(Capsule().fill(color.opacity(0.12)))
+    private func genderColumn(color: Color, kids: [FamilyMember], sectionIndex idx: Int) -> some View {
+        VStack(spacing: DS.Spacing.xs) {
             if kids.isEmpty {
                 Text("—").font(DS.Font.caption1).foregroundColor(DS.Color.textTertiary)
             } else {
