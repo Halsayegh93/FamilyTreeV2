@@ -2084,27 +2084,23 @@ struct WomenTreeView: View {
                             .padding(.top, DS.Spacing.sm)
                         }
 
-                        // أبناؤها — الأبناء المرتبطون بها كأمّ.
+                        // أبناؤها — نفس مربع الأم/الزوجة (اسم كامل).
                         if !herChildren.isEmpty {
                             VStack(spacing: DS.Spacing.xs) {
                                 Text(L10n.t("أبناؤها", "Her children"))
                                     .font(DS.Font.caption1).fontWeight(.bold)
                                     .foregroundColor(DS.Color.textSecondary)
-                                LazyVGrid(columns: [GridItem(.adaptive(minimum: 84), spacing: DS.Spacing.sm)],
-                                          spacing: DS.Spacing.sm) {
+                                LazyVGrid(columns: [GridItem(.adaptive(minimum: 64), spacing: DS.Spacing.md)],
+                                          spacing: DS.Spacing.md) {
                                     ForEach(herChildren, id: \.id) { kid in
-                                        Button { selectedWoman = kid } label: {
-                                            Text(kid.firstName)
-                                                .font(DS.Font.caption1).fontWeight(.semibold)
-                                                .foregroundColor(DS.Color.textPrimary)
-                                                .lineLimit(1).minimumScaleFactor(0.7)
-                                                .padding(.vertical, DS.Spacing.xs)
-                                                .padding(.horizontal, DS.Spacing.sm)
-                                                .frame(maxWidth: .infinity)
-                                                .background(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous)
-                                                    .fill(DS.Color.primary.opacity(0.08)))
-                                        }
-                                        .buttonStyle(.plain)
+                                        womenRelationIcon(
+                                            member: kid,
+                                            label: kid.isFemale ? L10n.t("بنت", "Daughter")
+                                                                : L10n.t("ابن", "Son"),
+                                            bg: kid.isFemale ? FemaleAvatarView.pink : DS.Color.primary.opacity(0.18),
+                                            iconColor: kid.isFemale ? FemaleAvatarView.pinkIcon : DS.Color.primary,
+                                            sfIcon: nil,
+                                            onTap: { selectedWoman = kid })
                                     }
                                 }
                             }
