@@ -674,10 +674,11 @@ struct DrillDownTreeView: View {
                 }
             }
         }
-        .padding(.vertical, member.isFemale ? 5 : 6)
+        .padding(.vertical, 6)
         .padding(.horizontal, member.isFemale ? 6 : 8)
+        // مربعات موحّدة بحجم واحد (ذكور وإناث) لتنتظم بشبكة متناسقة.
         .frame(width: squareSize,
-               height: member.isFemale ? 52 : 64,
+               height: 64,
                alignment: member.isFemale ? .center : .leading)
         .background(
             RoundedRectangle(cornerRadius: DS.Radius.md)
