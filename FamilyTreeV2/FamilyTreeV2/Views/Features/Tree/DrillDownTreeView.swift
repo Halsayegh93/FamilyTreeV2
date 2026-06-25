@@ -821,9 +821,9 @@ struct DrillDownTreeView: View {
     @ViewBuilder
     private func horizontalChildren(_ kids: [FamilyMember], sectionIndex idx: Int) -> some View {
         let rows = smartRows(kids)
-        VStack(spacing: DS.Spacing.sm) {
+        VStack(spacing: DS.Spacing.xs) {
             ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
-                HStack(spacing: DS.Spacing.sm) {
+                HStack(spacing: DS.Spacing.xs) {
                     ForEach(row) { child in
                         Button {
                             drillFromSection(at: idx, to: child)
@@ -847,7 +847,7 @@ struct DrillDownTreeView: View {
 
     @ViewBuilder
     private func genderColumn(color: Color, kids: [FamilyMember], sectionIndex idx: Int) -> some View {
-        VStack(spacing: DS.Spacing.xs) {
+        VStack(spacing: 3) {
             ForEach(kids) { child in
                 Button {
                     drillFromSection(at: idx, to: child)
