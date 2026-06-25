@@ -131,73 +131,64 @@ struct DrillDownTreeView: View {
                         )
                     }
 
-                    // أزرار الإجراءات — تختفي عند فتح البحث (الإغلاق صار داخل مربع البحث)
-                    if !showSearchBar {
-                        stickyActionsBar
-                            .padding(.horizontal, DS.Spacing.lg)
-                            .padding(.top, DS.Spacing.sm)
-                            .padding(.bottom, DS.Spacing.xs)
-                            .transition(.opacity)
-                    }
-
-                    // لوحة البحث تأخذ كل المساحة لما تفتح — الشجرة تختفي
-                    if showSearchBar {
-                        searchInlinePanel
-                            .frame(maxHeight: .infinity)
-                            .transition(.opacity)
-                    } else if allData.isEmpty {
-                        Spacer()
-                        emptyState
-                        Spacer()
-                    } else if chain.isEmpty {
-                        Spacer()
-                        ProgressView().tint(DS.Color.primary)
-                        Spacer()
-                    } else if kinshipBanner != nil {
-                        // وضع القرابة: السلسلة عموديًا — نفس ستايل الشجرة
-                        verticalKinshipChain
-                    } else {
-                        ScrollViewReader { proxy in
-                            ScrollView(showsIndicators: false) {
-                                VStack(spacing: DS.Spacing.xs) {
-                                    ForEach(Array(chain.enumerated()), id: \.element.id) { idx, member in
-                                        let isLast = idx == chain.count - 1
-
-                                        // مربع العضو (مركّز)
-                                        ancestorOrActiveSquare(member, atIndex: idx, isActive: isLast)
-                                            .id(member.id)
-
-                                        if isLast {
-                                            // شبكة أبناء النشط
-                                            childrenGridSection(of: member, atSectionIndex: idx)
-                                        } else {
-                                            chainConnector
+                    // المحتوى + البار العائم الشفاف فوقه (الشجرة تبين خلفه)
+                    ZStack(alignment: .top) {
+                        Group {
+                            if showSearchBar {
+                                searchInlinePanel
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                    .transition(.opacity)
+                            } else if allData.isEmpty {
+                                emptyState
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            } else if chain.isEmpty {
+                                ProgressView().tint(DS.Color.primary)
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            } else if kinshipBanner != nil {
+                                verticalKinshipChain
+                            } else {
+                                ScrollViewReader { proxy in
+                                    ScrollView(showsIndicators: false) {
+                                        VStack(spacing: DS.Spacing.xs) {
+                                            ForEach(Array(chain.enumerated()), id: \.element.id) { idx, member in
+                                                let isLast = idx == chain.count - 1
+                                                ancestorOrActiveSquare(member, atIndex: idx, isActive: isLast)
+                                                    .id(member.id)
+                                                if isLast {
+                                                    childrenGridSection(of: member, atSectionIndex: idx)
+                                                } else {
+                                                    chainConnector
+                                                }
+                                            }
+                                        }
+                                        .padding(.horizontal, DS.Spacing.lg)
+                                        .padding(.top, 60)   // يكشف الشجرة تحت البار العائم
+                                        .padding(.bottom, DS.Spacing.xxxxl)
+                                    }
+                                    .onChange(of: scrollTarget) { newId in
+                                        guard let id = newId else { return }
+                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                                            guard chain.contains(where: { $0.id == id }) else {
+                                                scrollTarget = nil
+                                                return
+                                            }
+                                            withAnimation(.easeInOut(duration: 0.5)) {
+                                                proxy.scrollTo(id, anchor: UnitPoint(x: 0.5, y: 0.15))
+                                            }
+                                            DispatchQueue.main.async { scrollTarget = nil }
                                         }
                                     }
                                 }
+                            }
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                        // البار العائم — شفاف، الشجرة تبين خلفه
+                        if !showSearchBar {
+                            stickyActionsBar
                                 .padding(.horizontal, DS.Spacing.lg)
                                 .padding(.top, DS.Spacing.sm)
-                                .padding(.bottom, DS.Spacing.xxxxl)
-                            }
-                            .onChange(of: scrollTarget) { newId in
-                                guard let id = newId else { return }
-                                // تأخير أكبر شوية حتى يُرسَم محتوى الأبناء قبل التمرير
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                                    // تأكد إن الـ ID لا يزال موجود في السلسلة قبل الـ scroll
-                                    guard chain.contains(where: { $0.id == id }) else {
-                                        scrollTarget = nil
-                                        return
-                                    }
-                                    withAnimation(.easeInOut(duration: 0.5)) {
-                                        // anchor قريب من الأعلى عشان شبكة الأبناء تبيّن تحته
-                                        proxy.scrollTo(id, anchor: UnitPoint(x: 0.5, y: 0.15))
-                                    }
-                                    // إعادة التعيين على الـ runloop التالي لتفادي تعديل state أثناء view update
-                                    DispatchQueue.main.async {
-                                        scrollTarget = nil
-                                    }
-                                }
-                            }
+                                .padding(.bottom, DS.Spacing.xs)
                         }
                     }
                 }
@@ -540,6 +531,8 @@ struct DrillDownTreeView: View {
         let birthY = year(from: member.birthDate)
         let deathY = year(from: member.deathDate)
         let hasDates = birthY != nil || deathY != nil
+        // لون المربع حسب الجنس: ذكر أزرق، أنثى بنفسجي.
+        let genderAccent: Color = member.isFemale ? FemaleAvatarView.wifeIcon : DS.Color.primary
 
         return VStack(spacing: 2) {
             // الصورة + علامة المتوفى (نقطة داكنة بأعلى الزاوية)
@@ -548,7 +541,7 @@ struct DrillDownTreeView: View {
                     name: member.firstName,
                     avatarUrl: member.displayAvatarUrl,
                     size: isActive ? 46 : 42,
-                    roleColor: member.roleColor,
+                    roleColor: genderAccent,
                     isFemale: member.isFemale
                 )
                 .overlay(
@@ -599,12 +592,15 @@ struct DrillDownTreeView: View {
         .padding(.vertical, 5)
         .padding(.horizontal, 6)
         .frame(width: squareSize, height: squareSize)
-        .background(squareBackground(isActive: isActive, isDeceased: isDeceased))
+        .background(
+            RoundedRectangle(cornerRadius: DS.Radius.md)
+                .fill(isDeceased ? DS.Color.surface : genderAccent.opacity(isActive ? 0.14 : 0.07))
+        )
         .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
         .overlay(
             RoundedRectangle(cornerRadius: DS.Radius.md)
                 .strokeBorder(
-                    squareBorderColor(isActive: isActive, isDeceased: isDeceased),
+                    isDeceased ? DS.Color.deceased.opacity(0.4) : genderAccent.opacity(isActive ? 0.6 : 0.35),
                     lineWidth: isActive ? 1.5 : 1
                 )
         )
@@ -702,54 +698,59 @@ struct DrillDownTreeView: View {
 
     private func childrenGridSection(of member: FamilyMember, atSectionIndex idx: Int) -> some View {
         let kids = children(of: member.id)
-        let rows = smartRows(kids)
+        // الذكور يمين، الإناث يسار — كل عمود عمودي (تحت بعض).
+        let males = kids.filter { !$0.isFemale }
+        let females = kids.filter { $0.isFemale }
         return Group {
             if kids.isEmpty {
                 emptyChildrenCard
                     .padding(.top, DS.Spacing.sm)
             } else {
-                VStack(spacing: 2) {
-                    ForEach(Array(rows.enumerated()), id: \.offset) { rowIndex, row in
-                        // فروع فقط للصف الأول (أول 3 أبناء كحد أقصى) — البقية بلا فروع
-                        if rowIndex == 0 {
-                            BranchConnector(
-                                branchCount: min(3, row.count),
-                                style: drillBranchStyle
-                            )
-                            .stroke(
-                                DS.Color.primary.opacity(0.55),
-                                style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round)
-                            )
-                            .frame(height: 22)
-                        }
+                HStack(alignment: .top, spacing: DS.Spacing.lg) {
+                    // في RTL: أول عمود = اليمين → الذكور.
+                    genderColumn(title: L10n.t("ذكور", "Sons"),
+                                 color: DS.Color.primary,
+                                 kids: males, sectionIndex: idx)
+                    genderColumn(title: L10n.t("إناث", "Daughters"),
+                                 color: FemaleAvatarView.wifeIcon,
+                                 kids: females, sectionIndex: idx)
+                }
+                .padding(.top, DS.Spacing.sm)
+            }
+        }
+    }
 
-                        HStack(spacing: DS.Spacing.sm) {
-                            ForEach(row) { child in
-                                Button {
-                                    drillFromSection(at: idx, to: child)
-                                } label: {
-                                    memberSquareContent(
-                                        child,
-                                        isActive: false,
-                                        kidsCount: children(of: child.id).count
-                                    )
-                                }
-                                .buttonStyle(DSScaleButtonStyle())
-                                .simultaneousGesture(
-                                    LongPressGesture(minimumDuration: 0.4).onEnded { _ in
-                                        openDetails(child)
-                                    }
-                                )
-                                .accessibilityHint(L10n.t(
-                                    "اضغط للتفرّع — اضغط مطوّلاً للتفاصيل",
-                                    "Tap to drill in. Long-press for details."
-                                ))
-                            }
-                        }
+    @ViewBuilder
+    private func genderColumn(title: String, color: Color, kids: [FamilyMember], sectionIndex idx: Int) -> some View {
+        VStack(spacing: DS.Spacing.sm) {
+            Text(title)
+                .font(DS.Font.scaled(12, weight: .bold))
+                .foregroundColor(color)
+                .padding(.horizontal, DS.Spacing.md).padding(.vertical, 3)
+                .background(Capsule().fill(color.opacity(0.12)))
+            if kids.isEmpty {
+                Text("—").font(DS.Font.caption1).foregroundColor(DS.Color.textTertiary)
+            } else {
+                ForEach(kids) { child in
+                    Button {
+                        drillFromSection(at: idx, to: child)
+                    } label: {
+                        memberSquareContent(
+                            child,
+                            isActive: false,
+                            kidsCount: children(of: child.id).count
+                        )
                     }
+                    .buttonStyle(DSScaleButtonStyle())
+                    .simultaneousGesture(
+                        LongPressGesture(minimumDuration: 0.4).onEnded { _ in
+                            openDetails(child)
+                        }
+                    )
                 }
             }
         }
+        .frame(maxWidth: .infinity, alignment: .top)
     }
 
     // MARK: - Chain Connector (between ancestor squares)

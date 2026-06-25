@@ -1569,6 +1569,8 @@ private struct WomenRow: Decodable {
     let birthDate: String?
     let deathDate: String?
     let isHiddenFromTree: Bool?
+    let photoUrl: String?
+    let avatarUrl: String?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -1583,6 +1585,8 @@ private struct WomenRow: Decodable {
         case birthDate = "birth_date"
         case deathDate = "death_date"
         case isHiddenFromTree = "is_hidden_from_tree"
+        case photoUrl = "photo_url"
+        case avatarUrl = "avatar_url"
     }
 }
 
@@ -1610,11 +1614,12 @@ enum WomenStore {
                 fatherId: r.parentId,                 // parent → father لإعادة استخدام الشجرة
                 motherId: r.motherId,
                 husbandId: r.husbandId,
+                photoURL: r.photoUrl,
                 isHiddenFromTree: r.isHiddenFromTree ?? false,
                 sortOrder: r.sortOrder ?? 0,
                 status: .active,
-                // العقد المعروضة بالستايل الأزرق؛ الزوجة تبقى أنثى للشارة فقط.
-                gender: (r.husbandId != nil ? "female" : "male")
+                avatarUrl: r.avatarUrl,
+                gender: (r.gender?.isEmpty == false ? r.gender! : "male")
             )
         }
         cache = mapped
