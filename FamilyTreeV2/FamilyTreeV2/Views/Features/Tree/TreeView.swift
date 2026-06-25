@@ -1739,8 +1739,8 @@ struct WomenTreeView: View {
     @State private var zoomAnchor: UnitPoint = .center
     @State private var treeContentSize: CGSize = .zero
 
-    @State private var addParent: FamilyMember? = nil
-    @State private var addKind: WomenRelKind = .child
+    // طلب إضافة — يحمل النوع والعقدة معاً (يتفادى قراءة addKind قديمة في الشيت).
+    @State private var addRequest: WomenAddRequest? = nil
     @State private var editTarget: FamilyMember? = nil
     @State private var pickMotherFor: FamilyMember? = nil
 
@@ -1779,9 +1779,9 @@ struct WomenTreeView: View {
                 WomenEditView(kind: .edit, node: w) { Task { await load() } }
                     .presentationDetents([.medium, .large])
             }
-            .sheet(item: $addParent) { p in
-                WomenEditView(kind: addKind, node: p,
-                              siblingCount: allMembers.filter { $0.fatherId == p.id }.count) {
+            .sheet(item: $addRequest) { req in
+                WomenEditView(kind: req.kind, node: req.node,
+                              siblingCount: allMembers.filter { $0.fatherId == req.node.id }.count) {
                     Task { await load() }
                 }
                 .presentationDetents([.medium, .large])
@@ -1803,7 +1803,7 @@ struct WomenTreeView: View {
                 // إضافة أم جديدة (مدمج مع الاختيار).
                 Button {
                     pickMotherFor = nil
-                    DispatchQueue.main.async { addKind = .mother; addParent = node }
+                    DispatchQueue.main.async { addRequest = WomenAddRequest(kind: .mother, node: node) }
                 } label: {
                     Label(L10n.t("إضافة أم جديدة", "Add new mother"), systemImage: "plus.circle.fill")
                         .foregroundColor(DS.Color.primary)
@@ -1994,11 +1994,11 @@ struct WomenTreeView: View {
                                   spacing: DS.Spacing.md) {
                             womenCircleAction(icon: "person.badge.plus", color: DS.Color.primary,
                                               title: L10n.t("إضافة ابن", "Son")) {
-                                addKind = .child; addParent = w
+                                addRequest = WomenAddRequest(kind: .child, node: w)
                             }
                             womenCircleAction(icon: "heart.circle.fill", color: FemaleAvatarView.wifeIcon,
                                               title: L10n.t("إضافة زوجة", "Wife")) {
-                                addKind = .wife; addParent = w
+                                addRequest = WomenAddRequest(kind: .wife, node: w)
                             }
                             // الأم — مدمج: إضافة جديدة أو اختيار موجودة.
                             womenCircleAction(icon: "figure.2.and.child.holdinghands", color: FemaleAvatarView.motherIcon,
@@ -2200,6 +2200,13 @@ struct WomenTreeView: View {
 }
 
 enum WomenRelKind { case child, wife, mother, edit }
+
+/// طلب إضافة (نوع العلاقة + العقدة) — يضمن تطابق النوع مع الشيت ذرّياً.
+struct WomenAddRequest: Identifiable {
+    let id = UUID()
+    let kind: WomenRelKind
+    let node: FamilyMember
+}
 
 /// نموذج إضافة/تعديل عضوة شجرة النساء — يدعم: ابن/زوجة/أم/تعديل.
 struct WomenEditView: View {
