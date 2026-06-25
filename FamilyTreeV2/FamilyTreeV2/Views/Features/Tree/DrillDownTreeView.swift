@@ -627,9 +627,9 @@ struct DrillDownTreeView: View {
                 }
                 HStack(spacing: 2) {
                     Image(systemName: kidsCount > 0 ? "person.2.fill" : "person.fill")
-                        .font(.system(size: 5, weight: .bold))
+                        .font(.system(size: 8, weight: .bold))
                     Text("\(kidsCount)")
-                        .font(.system(size: 6, weight: .bold))
+                        .font(.system(size: 9, weight: .bold))
                 }
                 .foregroundColor(kidsCount > 0 ? DS.Color.primary : DS.Color.textTertiary)
             }
@@ -696,7 +696,7 @@ struct DrillDownTreeView: View {
         .overlay(alignment: .bottom) {
             if kidsCount > 0 {
                 Image(systemName: "chevron.compact.down")
-                    .font(.system(size: 8, weight: .bold))
+                    .font(.system(size: 10, weight: .bold))
                     .foregroundColor(DS.Color.primary.opacity(0.45))
                     .padding(.bottom, 2)
                     .allowsHitTesting(false)
