@@ -607,9 +607,16 @@ struct DrillDownTreeView: View {
         // لون المربع حسب الجنس: ذكر أزرق، أنثى بنفسجي.
         let genderAccent: Color = member.isFemale ? FemaleAvatarView.wifeIcon : DS.Color.primary
 
+        // الاسم — لو فيه لقب بين قوسين (مثل "ابراهيم (العطار)") ينزل القوس لسطر ثانٍ.
+        let displayName: String = member.firstName.contains("(")
+            ? member.firstName
+                .replacingOccurrences(of: " (", with: "(")
+                .replacingOccurrences(of: "(", with: "\n(")
+            : member.firstName
+
         // الاسم + التواريخ + العدّاد (تُعرض جنب الصورة للذكور، وحدها للإناث).
         let infoBlock = VStack(alignment: member.isFemale ? .center : .leading, spacing: 2) {
-            Text(member.firstName)
+            Text(displayName)
                 // حجم اسم موحّد (12)؛ الاسم الطويل فقط يصغر قليلاً (حتى ~10) ليبين كامل.
                 .font(DS.Font.scaled(12, weight: isActive ? .black : .bold))
                 .foregroundColor(isDeceased ? DS.Color.textSecondary : DS.Color.textPrimary)
