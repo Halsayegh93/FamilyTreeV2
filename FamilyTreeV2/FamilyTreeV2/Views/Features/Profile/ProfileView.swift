@@ -20,6 +20,8 @@ struct ProfileView: View {
     @State private var isReorderingChildren = false
     @State private var appeared = false
     @State private var isLoadingChildren = true
+    // عائلة شجرة النساء للمستخدم الحالي (زوجاته/أمّه/أبناؤه من women_members).
+    @State private var womenCache: [FamilyMember] = WomenStore.cache
 
     var user: FamilyMember? { authVM.currentUser }
 
@@ -78,11 +80,17 @@ struct ProfileView: View {
                         .refreshable {
                             await memberVM.fetchAllMembers(force: true)
                             await memberVM.fetchChildren(for: currentUser.id)
+                            womenCache = (try? await WomenStore.fetch()) ?? WomenStore.cache
                         }
                         .task {
                             isLoadingChildren = true
                             await memberVM.fetchChildren(for: currentUser.id)
                             isLoadingChildren = false
+                            if WomenStore.cache.isEmpty {
+                                womenCache = (try? await WomenStore.fetch()) ?? []
+                            } else {
+                                womenCache = WomenStore.cache
+                            }
                         }
                         .onAppear {
                             guard !appeared else { return }
@@ -457,84 +465,71 @@ struct ProfileView: View {
 
     @ViewBuilder
     private var serverSonsSection: some View {
-        // العائلة (زوجة + أبناء) تظهر فقط للمتزوج؛ الأم تظهر دائماً.
-        let isMarried = user?.isMarried ?? false
-        let mom = user?.motherId.flatMap { memberVM.member(byId: $0) }
-        if isMarried || mom != nil {
-        VStack(alignment: .leading, spacing: 0) {
-            DSCard(padding: 0) {
-                // Header مع زر الترتيب
-                HStack {
-                    DSSectionHeader(
-                        title: L10n.t("العائلة", "Family"),
-                        icon: "person.2.fill",
-                        iconColor: DS.Color.textSecondary
-                    )
-
-                    Spacer()
-
-                    if isMarried && memberVM.currentMemberChildren.count > 1 {
-                        Button {
-                            withAnimation(DS.Anim.snappy) {
-                                isReorderingChildren.toggle()
-                            }
-                        } label: {
-                            HStack(spacing: DS.Spacing.xs) {
-                                Image(systemName: isReorderingChildren ? "checkmark" : "arrow.up.arrow.down")
-                                    .font(DS.Font.scaled(11, weight: .bold))
-                                Text(isReorderingChildren ? L10n.t("تم", "Done") : L10n.t("ترتيب", "Sort"))
-                                    .font(DS.Font.scaled(11, weight: .bold))
-                            }
-                            .foregroundColor(isReorderingChildren ? DS.Color.success : DS.Color.primary)
-                            .padding(.horizontal, DS.Spacing.md)
-                            .padding(.vertical, DS.Spacing.xs + 2)
-                            .background(
-                                (isReorderingChildren ? DS.Color.success : DS.Color.primary).opacity(0.1)
-                            )
-                            .clipShape(Capsule())
+        // العائلة من شجرة النساء: زوجاته + أمّه + أبناؤه (women_members).
+        if let u = user {
+            let nodeId = WomenStore.womanByLinkedUser[u.id] ?? u.id
+            let node = womenCache.first { $0.id == nodeId }
+            let wives = womenCache.filter { $0.husbandId == nodeId }
+                .sorted { $0.sortOrder < $1.sortOrder }
+            let mom = node?.motherId.flatMap { mid in womenCache.first { $0.id == mid } }
+            let kids = womenCache.filter { $0.fatherId == nodeId }
+                .sorted { $0.sortOrder < $1.sortOrder }
+            if mom != nil || !wives.isEmpty || !kids.isEmpty {
+                VStack(alignment: .leading, spacing: 0) {
+                    DSCard(padding: 0) {
+                        DSSectionHeader(
+                            title: L10n.t("العائلة", "Family"),
+                            icon: "person.2.fill",
+                            iconColor: DS.Color.textSecondary
+                        )
+                        if let mom { womenFamilyRow(member: mom, label: L10n.t("الأم", "Mother")) }
+                        ForEach(wives, id: \.id) { wife in
+                            womenFamilyRow(member: wife, label: L10n.t("الزوجة", "Wife"))
                         }
-                        .buttonStyle(.plain)
-                        .padding(.trailing, DS.Spacing.lg)
-                    }
-                }
-
-                // الأم (بالأعلى) ثم الزوجة — نفس تعديلات الأبناء (نقر → تعديل).
-                if let u = user {
-                    let wives = isMarried ? memberVM.allMembers
-                        .filter { $0.husbandId == u.id && $0.isFemale }
-                        .sorted { $0.sortOrder < $1.sortOrder } : []
-                    if let mom { familyRelRow(member: mom, label: L10n.t("الأم", "Mother")) }
-                    ForEach(wives, id: \.id) { wife in
-                        familyRelRow(member: wife, label: L10n.t("الزوجة", "Wife"))
-                    }
-                    if mom != nil || !wives.isEmpty {
-                        DSDivider().padding(.vertical, DS.Spacing.xs)
-                    }
-                }
-
-                if isMarried {
-                    if isLoadingChildren && memberVM.currentMemberChildren.isEmpty {
-                        VStack(spacing: DS.Spacing.sm) {
-                            ForEach(0..<3, id: \.self) { _ in
-                                DSSkeletonRow(avatarSize: 44)
-                            }
+                        if (mom != nil || !wives.isEmpty) && !kids.isEmpty {
+                            DSDivider().padding(.vertical, DS.Spacing.xs)
                         }
-                        .padding(DS.Spacing.md)
-                        .transition(.opacity)
-                    } else if isReorderingChildren {
-                        // وضع الترتيب — قائمة عمودية مع أسهم
-                        childrenReorderView
-                    } else {
-                        // الوضع العادي — شبكة
-                        childrenGridView
-                            .transition(.opacity)
+                        ForEach(kids, id: \.id) { kid in
+                            womenFamilyRow(member: kid,
+                                           label: kid.isFemale ? L10n.t("بنت", "Daughter")
+                                                               : L10n.t("ابن", "Son"))
+                        }
                     }
                 }
+                .padding(.horizontal, DS.Spacing.lg)
             }
-            .animation(DS.Anim.medium, value: isLoadingChildren)
+        }
+    }
+
+    // صف عائلة (للعرض فقط) — من بيانات شجرة النساء. الإناث بلا صورة.
+    private func womenFamilyRow(member: FamilyMember, label: String) -> some View {
+        let isWife = label == L10n.t("الزوجة", "Wife")
+        let isMother = label == L10n.t("الأم", "Mother")
+        let fbg = isWife ? FemaleAvatarView.wifeBg : (isMother ? FemaleAvatarView.motherBg : FemaleAvatarView.pink)
+        let ficon = isWife ? FemaleAvatarView.wifeIcon : (isMother ? FemaleAvatarView.motherIcon : FemaleAvatarView.pinkIcon)
+        return HStack(spacing: DS.Spacing.md) {
+            DSMemberAvatar(
+                name: member.firstName,
+                avatarUrl: member.isFemale ? nil : member.displayAvatarUrl,
+                size: 40,
+                isFemale: member.isFemale,
+                femaleBg: fbg,
+                femaleIcon: ficon,
+                isDeceased: member.isDeceased == true
+            )
+            VStack(alignment: .leading, spacing: 2) {
+                Text(member.fullName.isEmpty ? member.firstName : member.fullName)
+                    .font(DS.Font.calloutBold)
+                    .foregroundColor(DS.Color.textPrimary)
+                    .lineLimit(1)
+                Text(label)
+                    .font(DS.Font.caption1)
+                    .foregroundColor(DS.Color.textSecondary)
+            }
+            Spacer()
         }
         .padding(.horizontal, DS.Spacing.lg)
-        }
+        .padding(.vertical, DS.Spacing.sm)
     }
 
     // MARK: - صف الأم/الزوجة داخل «العائلة» — نقر → نفس تعديلات الأبناء
