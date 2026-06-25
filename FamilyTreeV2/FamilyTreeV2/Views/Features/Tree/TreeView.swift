@@ -1588,6 +1588,9 @@ private struct WomenRow: Decodable {
 
 /// طبقة بيانات شجرة النساء — قراءة/إضافة/تعديل/حذف (الكتابة للإدارة عبر RLS).
 enum WomenStore {
+    /// كاش بالذاكرة — يخلي الانتقال لتبويب التفرّع فورياً (بلا إعادة جلب كل مرة).
+    static var cache: [FamilyMember] = []
+
     static func fetch() async throws -> [FamilyMember] {
         let rows: [WomenRow] = try await SupabaseConfig.client
             .from("women_members")
@@ -1595,7 +1598,7 @@ enum WomenStore {
             .order("sort_order", ascending: true)
             .execute()
             .value
-        return rows.map { r in
+        let mapped = rows.map { r in
             FamilyMember(
                 id: r.id,
                 firstName: r.firstName ?? "",
@@ -1614,6 +1617,8 @@ enum WomenStore {
                 gender: (r.husbandId != nil ? "female" : "male")
             )
         }
+        cache = mapped
+        return mapped
     }
 
     static func addChild(parentId: UUID, name: String, sortOrder: Int,
@@ -1708,13 +1713,14 @@ struct WomenTreeView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @Environment(\.dismiss) private var dismiss
 
-    @State private var allMembers: [FamilyMember] = []
+    // تبدأ من الكاش (إن وُجد) — انتقال فوري بلا شاشة تحميل في المرات التالية.
+    @State private var allMembers: [FamilyMember] = WomenStore.cache
     @State private var childrenByParent: [UUID: [FamilyMember]] = [:]
     @State private var roots: [FamilyMember] = []
     @State private var husbandsWithWives: Set<UUID> = []
     @State private var husbandsAllWivesDeceased: Set<UUID> = []
     @State private var wifeStatesByHusband: [UUID: [Bool]] = [:]
-    @State private var isLoading = true
+    @State private var isLoading = WomenStore.cache.isEmpty
 
     @State private var activePath: Set<UUID> = []
     @State private var searchedMemberID: UUID? = nil
@@ -2143,46 +2149,48 @@ struct WomenTreeView: View {
     }
 
     private func load() async {
+        // كاش فوري (إن وُجد) ثم تحديث من السيرفر في الخلفية.
+        if !WomenStore.cache.isEmpty {
+            apply(WomenStore.cache)
+            isLoading = false
+        }
         do {
             let fetched = try await WomenStore.fetch()
-            let visible = fetched.filter { !$0.isHiddenFromTree && !$0.fullName.isEmpty }
-            let ids = Set(visible.map(\.id))
-            var byParent: [UUID: [FamilyMember]] = [:]
-            for m in visible {
-                if let p = m.fatherId { byParent[p, default: []].append(m) }
-            }
-            for k in byParent.keys { byParent[k]?.sort { $0.sortOrder < $1.sortOrder } }
-            // الأمهات المُشار إليها — تظهر بالتفاصيل فقط لا كعقدة.
-            let motherIds = Set(visible.compactMap { $0.motherId })
-            // الزوجة/الأم ليست جذراً — تظهر كشارة/بالتفاصيل فقط.
-            let rootList = visible
-                .filter { $0.husbandId == nil && !motherIds.contains($0.id)
-                    && ($0.fatherId == nil || !ids.contains($0.fatherId!)) }
-                .sorted { $0.sortOrder < $1.sortOrder }
-            // شارات الزوجة (مثل الشجرة العامة).
-            var wivesByHusband: [UUID: [FamilyMember]] = [:]
-            for m in visible where m.isFemale && m.husbandId != nil {
-                wivesByHusband[m.husbandId!, default: []].append(m)
-            }
-            let withWives = Set(wivesByHusband.keys)
-            let allDeceased = Set(wivesByHusband.filter { $0.value.allSatisfy { $0.isDeceased == true } }.keys)
-            let wifeStates = wivesByHusband.mapValues { wives in
-                wives.sorted { $0.sortOrder < $1.sortOrder }.map { $0.isDeceased == true }
-            }
-            await MainActor.run {
-                self.allMembers = visible
-                self.childrenByParent = byParent
-                self.roots = rootList
-                self.husbandsWithWives = withWives
-                self.husbandsAllWivesDeceased = allDeceased
-                self.wifeStatesByHusband = wifeStates
-                if let first = rootList.first { self.activePath = [first.id] }
-                self.isLoading = false
-            }
+            apply(fetched)
+            isLoading = false
         } catch {
             Log.error("خطأ تحميل شجرة النساء: \(error)")
-            await MainActor.run { self.isLoading = false }
+            isLoading = false
         }
+    }
+
+    @MainActor
+    private func apply(_ fetched: [FamilyMember]) {
+        let visible = fetched.filter { !$0.isHiddenFromTree && !$0.fullName.isEmpty }
+        let ids = Set(visible.map(\.id))
+        var byParent: [UUID: [FamilyMember]] = [:]
+        for m in visible {
+            if let p = m.fatherId { byParent[p, default: []].append(m) }
+        }
+        for k in byParent.keys { byParent[k]?.sort { $0.sortOrder < $1.sortOrder } }
+        let motherIds = Set(visible.compactMap { $0.motherId })
+        let rootList = visible
+            .filter { $0.husbandId == nil && !motherIds.contains($0.id)
+                && ($0.fatherId == nil || !ids.contains($0.fatherId!)) }
+            .sorted { $0.sortOrder < $1.sortOrder }
+        var wivesByHusband: [UUID: [FamilyMember]] = [:]
+        for m in visible where m.isFemale && m.husbandId != nil {
+            wivesByHusband[m.husbandId!, default: []].append(m)
+        }
+        self.allMembers = visible
+        self.childrenByParent = byParent
+        self.roots = rootList
+        self.husbandsWithWives = Set(wivesByHusband.keys)
+        self.husbandsAllWivesDeceased = Set(wivesByHusband.filter { $0.value.allSatisfy { $0.isDeceased == true } }.keys)
+        self.wifeStatesByHusband = wivesByHusband.mapValues { wives in
+            wives.sorted { $0.sortOrder < $1.sortOrder }.map { $0.isDeceased == true }
+        }
+        if activePath.isEmpty, let first = rootList.first { self.activePath = [first.id] }
     }
 }
 
