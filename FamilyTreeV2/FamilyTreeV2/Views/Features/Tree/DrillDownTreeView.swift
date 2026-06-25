@@ -493,6 +493,7 @@ struct DrillDownTreeView: View {
             .foregroundColor(color)
             .frame(width: 40, height: 40)
             .background(Circle().fill(color.opacity(0.12)))
+            .dynamicTypeSize(.large)   // أيقونة ثابتة الحجم
     }
 
     // MARK: - Ancestor / Active Square
@@ -626,36 +627,29 @@ struct DrillDownTreeView: View {
                 }
                 HStack(spacing: 2) {
                     Image(systemName: kidsCount > 0 ? "person.2.fill" : "person.fill")
-                        .font(.system(size: 6, weight: .bold))
+                        .font(.system(size: 5, weight: .bold))
                     Text("\(kidsCount)")
-                        .font(DS.Font.scaled(7, weight: .bold))
+                        .font(.system(size: 6, weight: .bold))
                 }
                 .foregroundColor(kidsCount > 0 ? DS.Color.primary : DS.Color.textTertiary)
             }
         }
 
-        // صورة الذكر + علامة المتوفى.
-        let maleAvatar = ZStack(alignment: .topTrailing) {
-            DSMemberAvatar(
-                name: member.firstName,
-                avatarUrl: displayAvatar(for: member),
-                size: isActive ? 40 : 34,
-                roleColor: genderAccent,
-                isFemale: false
+        // صورة الذكر — كلمة "متوفى" تحتها (لا فوقها).
+        let maleAvatar = DSMemberAvatar(
+            name: member.firstName,
+            avatarUrl: displayAvatar(for: member),
+            size: isActive ? 40 : 34,
+            roleColor: genderAccent,
+            isFemale: false
+        )
+        .overlay(
+            Circle().strokeBorder(
+                deceasedAwareBorderColor(isActive: isActive, isDeceased: isDeceased),
+                lineWidth: isActive ? 2.5 : 1.5
             )
-            .overlay(
-                Circle().strokeBorder(
-                    deceasedAwareBorderColor(isActive: isActive, isDeceased: isDeceased),
-                    lineWidth: isActive ? 2.5 : 1.5
-                )
-            )
-            .saturation(isDeceased ? 0.55 : 1.0)
-
-            if isDeceased {
-                deceasedBadgeSmall
-                    .offset(x: 8, y: -5)
-            }
-        }
+        )
+        .saturation(isDeceased ? 0.55 : 1.0)
 
         return Group {
             if member.isFemale {
@@ -665,9 +659,12 @@ struct DrillDownTreeView: View {
                     infoBlock
                 }
             } else {
-                // الذكور: الصورة جنب المعلومات (أفقي) بدل فوقها.
+                // الذكور: الصورة جنب المعلومات (أفقي)، وكلمة "متوفى" تحت الصورة.
                 HStack(spacing: 6) {
-                    maleAvatar
+                    VStack(spacing: 2) {
+                        maleAvatar
+                        if isDeceased { deceasedBadgeSmall }
+                    }
                     infoBlock
                     Spacer(minLength: 0)
                 }
@@ -695,9 +692,9 @@ struct DrillDownTreeView: View {
         .overlay(alignment: .bottom) {
             if kidsCount > 0 {
                 Image(systemName: "chevron.compact.down")
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.system(size: 8, weight: .bold))
                     .foregroundColor(DS.Color.primary.opacity(0.45))
-                    .padding(.bottom, 3)
+                    .padding(.bottom, 2)
                     .allowsHitTesting(false)
             }
         }

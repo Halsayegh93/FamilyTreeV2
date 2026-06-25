@@ -32,6 +32,7 @@ struct FamilyTreeTabBar: View {
         .background(.ultraThinMaterial)
         .clipShape(Capsule())
         .overlay(Capsule().strokeBorder(DS.Color.primary.opacity(0.20), lineWidth: 1))
+        .dynamicTypeSize(.large)   // التبويبات ثابتة الحجم — لا تكبر مع إعداد الهاتف
     }
 
     private func segment(_ label: String, _ idx: Int) -> some View {

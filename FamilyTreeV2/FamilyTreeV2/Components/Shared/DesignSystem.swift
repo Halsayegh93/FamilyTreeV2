@@ -660,6 +660,7 @@ struct DSPrimaryButton: View {
         }
         .buttonStyle(DSBoldButtonStyle())
         .disabled(isLoading)
+        .dynamicTypeSize(.large)   // الأزرار ثابتة الحجم — لا تكبر مع إعداد الهاتف
     }
 }
 
@@ -703,6 +704,7 @@ struct DSSecondaryButton: View {
             )
         }
         .buttonStyle(DSBoldButtonStyle())
+        .dynamicTypeSize(.large)   // الأزرار ثابتة الحجم — لا تكبر مع إعداد الهاتف
     }
 }
 
@@ -799,6 +801,7 @@ struct DSIcon: View {
                 )
             )
             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
+            .dynamicTypeSize(.large)   // الأيقونة ثابتة الحجم — لا تكبر مع إعداد الهاتف
     }
 }
 
@@ -1061,6 +1064,7 @@ struct DSFloatingButton: View {
             .shadow(color: color.opacity(0.22), radius: 8, x: 0, y: 3)
         }
         .buttonStyle(DSBoldButtonStyle())
+        .dynamicTypeSize(.large)   // الزر العائم ثابت الحجم — لا يكبر مع إعداد الهاتف
         .scaleEffect(appeared ? 1 : 0.3)
         .opacity(appeared ? 1 : 0)
         .onAppear {
@@ -1270,6 +1274,7 @@ struct DSIconButton: View {
             .contentShape(Circle())
         }
         .buttonStyle(DSBoldButtonStyle())
+        .dynamicTypeSize(.large)   // زر الأيقونة ثابت الحجم — لا يكبر مع إعداد الهاتف
     }
 }
 
@@ -1320,6 +1325,7 @@ struct DSDestructiveButton: View {
         }
         .buttonStyle(DSBoldButtonStyle())
         .disabled(isLoading)
+        .dynamicTypeSize(.large)   // زر الحذف ثابت الحجم — لا يكبر مع إعداد الهاتف
     }
 }
 
