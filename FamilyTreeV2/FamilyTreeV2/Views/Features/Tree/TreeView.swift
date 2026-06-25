@@ -1735,6 +1735,26 @@ enum WomenStore {
             linkedUserByWoman[womanId] = nil
         }
     }
+
+    /// دمج سجل مكرر [removeId] في السجل المُبقى [keepId]:
+    /// تُنقل كل الارتباطات (أبناء/أم/زوج) للأصلي ثم يُحذف المكرر. (إدارة فقط).
+    static func merge(keepId: UUID, removeId: UUID) async throws {
+        let c = SupabaseConfig.client
+        // الأبناء المرتبطون بالمكرر كأب → للأصلي.
+        try await c.from("women_members")
+            .update(["parent_id": AnyEncodable(keepId.uuidString)])
+            .eq("parent_id", value: removeId.uuidString).execute()
+        // الأبناء اللي أمّهم المكرر → أمّهم الأصلي.
+        try await c.from("women_members")
+            .update(["mother_id": AnyEncodable(keepId.uuidString)])
+            .eq("mother_id", value: removeId.uuidString).execute()
+        // من زوجها المكرر → زوجها الأصلي.
+        try await c.from("women_members")
+            .update(["husband_id": AnyEncodable(keepId.uuidString)])
+            .eq("husband_id", value: removeId.uuidString).execute()
+        // احذف المكرر.
+        try await c.from("women_members").delete().eq("id", value: removeId.uuidString).execute()
+    }
 }
 
 /// شاشة «شجرة العائلة (النساء)» — تُفتح من اختصار الرئيسية، تعيد استخدام
@@ -1773,6 +1793,7 @@ struct WomenTreeView: View {
     @State private var editTarget: FamilyMember? = nil
     @State private var pickMotherFor: FamilyMember? = nil
     @State private var linkAccountFor: FamilyMember? = nil
+    @State private var mergeFor: FamilyMember? = nil
 
     private var canEdit: Bool { authVM.canEditMembers }
 
@@ -1826,6 +1847,23 @@ struct WomenTreeView: View {
             }
             .sheet(item: $pickMotherFor) { node in motherPicker(for: node) }
             .sheet(item: $linkAccountFor) { node in accountPicker(for: node) }
+            .sheet(item: $mergeFor) { node in mergePicker(for: node) }
+    }
+
+    // اختيار سجل مكرر لدمجه في [keep] (إدارة فقط) — بحث بالاسم.
+    @ViewBuilder
+    private func mergePicker(for keep: FamilyMember) -> some View {
+        WomenMergePicker(
+            keepName: keep.fullName.isEmpty ? keep.firstName : keep.fullName,
+            keepId: keep.id,
+            entries: allMembers,
+            onPick: { removeId in
+                mergeFor = nil
+                Task { try? await WomenStore.merge(keepId: keep.id, removeId: removeId); await load() }
+            },
+            onCancel: { mergeFor = nil }
+        )
+        .presentationDetents([.medium, .large])
     }
 
     // اختيار حساب التطبيق لربطه باسم المرأة (إدارة فقط) — بحث بالاسم/الرقم.
@@ -2075,6 +2113,12 @@ struct WomenTreeView: View {
                                                   : L10n.t("ربط بحساب", "Link")) {
                                     linkAccountFor = w
                                 }
+                            }
+                            // دمج سجل مكرر في هذا الاسم (إدارة فقط).
+                            womenCircleAction(icon: "arrow.triangle.merge",
+                                              color: DS.Color.warning,
+                                              title: L10n.t("دمج", "Merge")) {
+                                mergeFor = w
                             }
                             // الجذر لا يُحذف؛ غيره يُحذف.
                             if !(w.fatherId == nil && w.husbandId == nil && w.motherId == nil) {
@@ -2340,6 +2384,84 @@ struct AccountLinkPicker: View {
                 ToolbarItem(placement: .topBarLeading) {
                     Button(L10n.t("إلغاء", "Cancel")) { onCancel() }
                 }
+            }
+            .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+        }
+    }
+}
+
+/// منتقي سجل مكرر لدمجه في سجل آخر (إدارة فقط) — بحث بالاسم، مع تأكيد.
+struct WomenMergePicker: View {
+    let keepName: String
+    let keepId: UUID
+    let entries: [FamilyMember]
+    let onPick: (UUID) -> Void
+    let onCancel: () -> Void
+
+    @State private var query: String = ""
+    @State private var confirmRemove: FamilyMember? = nil
+
+    private var filtered: [FamilyMember] {
+        let q = query.trimmingCharacters(in: .whitespaces)
+        let base = entries.filter { $0.id != keepId }.sorted { $0.fullName < $1.fullName }
+        guard !q.isEmpty else {
+            // افتراضياً: المرشّحون بنفس الاسم الأول (الأرجح مكرر).
+            let keepFirst = entries.first { $0.id == keepId }?.firstName ?? ""
+            let sameName = base.filter { $0.firstName == keepFirst }
+            return sameName.isEmpty ? Array(base.prefix(50)) : sameName
+        }
+        return base.filter {
+            ($0.fullName.isEmpty ? $0.firstName : $0.fullName).localizedCaseInsensitiveContains(q)
+        }
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    Text(L10n.t("اختر السجل المكرر — تُنقل ارتباطاته إلى «\(keepName)» ثم يُحذف.",
+                                "Pick the duplicate — its links move to “\(keepName)”, then it's deleted."))
+                        .font(DS.Font.caption1).foregroundColor(DS.Color.textSecondary)
+                }
+                Section {
+                    ForEach(filtered) { m in
+                        Button { confirmRemove = m } label: {
+                            HStack {
+                                Text(m.fullName.isEmpty ? m.firstName : m.fullName)
+                                    .foregroundColor(DS.Color.textPrimary)
+                                Spacer()
+                                Image(systemName: m.isFemale ? "person.fill" : "person")
+                                    .foregroundColor(DS.Color.textTertiary)
+                            }
+                        }
+                    }
+                    if filtered.isEmpty {
+                        Text(L10n.t("لا نتائج", "No results"))
+                            .foregroundColor(DS.Color.textSecondary)
+                    }
+                }
+            }
+            .searchable(text: $query, prompt: L10n.t("بحث بالاسم", "Search name"))
+            .navigationTitle(L10n.t("دمج في \(keepName)", "Merge into \(keepName)"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(L10n.t("إلغاء", "Cancel")) { onCancel() }
+                }
+            }
+            .confirmationDialog(
+                L10n.t("دمج وحذف المكرر؟", "Merge and delete duplicate?"),
+                isPresented: Binding(get: { confirmRemove != nil },
+                                     set: { if !$0 { confirmRemove = nil } }),
+                titleVisibility: .visible
+            ) {
+                if let rm = confirmRemove {
+                    Button(L10n.t("دمج «\(rm.fullName.isEmpty ? rm.firstName : rm.fullName)»", "Merge"),
+                           role: .destructive) {
+                        onPick(rm.id)
+                    }
+                }
+                Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { confirmRemove = nil }
             }
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         }
