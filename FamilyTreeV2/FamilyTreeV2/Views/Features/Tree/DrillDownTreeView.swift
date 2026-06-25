@@ -164,6 +164,7 @@ struct DrillDownTreeView: View {
                                                 ancestorOrActiveSquare(member, atIndex: idx, isActive: isLast)
                                                     .id(member.id)
                                                 if isLast {
+                                                    childrenBranchConnector(of: member)
                                                     childrenGridSection(of: member, atSectionIndex: idx)
                                                 } else {
                                                     chainConnector
@@ -789,6 +790,27 @@ struct DrillDownTreeView: View {
         case let (b?, nil): return isDeceased ? "؟ – \(b)" : b
         case let (nil, d?): return "؟ – \(d)"   // وفاة فقط → بالجهة الثانية (يمين)
         case (nil, nil):   return ""
+        }
+    }
+
+    // خط الفروع المائل بين الأب وأبنائه — يوضّح أن هؤلاء أبناؤه.
+    @ViewBuilder
+    private func childrenBranchConnector(of member: FamilyMember) -> some View {
+        let kids = children(of: member.id)
+        if !kids.isEmpty {
+            let males = kids.filter { !$0.isFemale }
+            let females = kids.filter { $0.isFemale }
+            // عمودان (ذكور/إناث) → فرعان؛ جنس واحد → عدد الأبناء (حتى 3).
+            let branches = (!males.isEmpty && !females.isEmpty)
+                ? 2 : min(3, max(1, kids.count))
+            let width: CGFloat = branches <= 1 ? 36 : (branches == 2 ? 200 : 300)
+            BranchConnector(branchCount: branches, style: drillBranchStyle)
+                .stroke(
+                    DS.Color.primary.opacity(0.45),
+                    style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round)
+                )
+                .frame(width: width, height: 22)
+                .padding(.top, 2)
         }
     }
 
