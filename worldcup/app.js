@@ -163,6 +163,28 @@ export async function adminVerifyPin(pin) {
   return true; // MATCH_NOT_FOUND (expected) or no error => PIN accepted
 }
 
+// Auto-update: call `onChange` whenever matches or predictions change ----------
+// Real mode uses Supabase Realtime; demo mode listens for cross-tab storage
+// events. A periodic poll backs both up. Returns an unsubscribe function.
+export function watch(onChange, pollMs = 20000) {
+  const timer = setInterval(onChange, pollMs);
+
+  if (DEMO) {
+    const h = (e) => { if (!e.key || e.key.indexOf('wc_demo_') === 0) onChange(); };
+    window.addEventListener('storage', h);
+    return () => { clearInterval(timer); window.removeEventListener('storage', h); };
+  }
+
+  let channel = null;
+  client().then((sb) => {
+    channel = sb.channel('wc-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'wc_matches' }, onChange)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'wc_predictions' }, onChange)
+      .subscribe();
+  }).catch(() => {});
+  return () => { clearInterval(timer); if (channel) channel.unsubscribe(); };
+}
+
 // Build the leaderboard from predictions + finished matches -------------------
 export function buildLeaderboard(matches, predictions) {
   const byId = new Map(matches.map((m) => [m.id, m]));

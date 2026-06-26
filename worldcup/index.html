@@ -3,14 +3,17 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
-  <title>توقعات كأس العالم 2026 🏆</title>
+  <title>جماهير مباريات كأس العالم الرميثية 🏆</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <div class="wrap">
     <div class="hero">
-      <div class="trophy">🏆</div>
-      <h1>توقعات كأس العالم 2026</h1>
+      <div class="emblem-badge">
+        <span class="emblem-trophy">🏆</span>
+        <span class="emblem-26">26</span>
+      </div>
+      <h1>جماهير مباريات كأس العالم <span class="gold">الرميثية</span></h1>
       <p>من دور الـ32 إلى النهائي — توقّع، واجمع النقاط</p>
     </div>
 
@@ -36,7 +39,7 @@
     import {
       isConfigured, loadMatches, loadPredictions, loadMyPredictions,
       submitPrediction, buildLeaderboard, scorePrediction, isLocked,
-      roundLabel, ROUNDS, friendlyError, POINTS,
+      roundLabel, ROUNDS, friendlyError, POINTS, watch,
     } from './app.js';
 
     const $ = (s, r = document) => r.querySelector(s);
@@ -226,12 +229,12 @@
         </tr></thead>
         <tbody>${body}</tbody>
       </table>
-      <div class="notice" style="margin-top:18px">
-        <b>كيف تُحسب النقاط؟</b><br>
-        • ${POINTS.exact} نقاط: النتيجة صحيحة للفريقين (مثال توقعت 2-1 وطلعت 2-1)<br>
-        • ${POINTS.winnerScore} نقاط: الفائز صحيح ونتيجة الفريق الفائز صحيحة (والخسران غلط)<br>
-        • ${POINTS.winner} نقطة: عرفت الفائز فقط (بدون النتيجة الصحيحة)<br>
-        • 0: الفائز غلط
+      <div class="scoring-note">
+        <b>النقاط:</b>
+        <span class="chip">${POINTS.exact} نتيجة كاملة</span>
+        <span class="chip">${POINTS.winnerScore} الفائز + نتيجته</span>
+        <span class="chip">${POINTS.winner} الفائز فقط</span>
+        <span class="chip">0 غلط</span>
       </div>`;
     }
 
@@ -261,7 +264,29 @@
       }
     }
 
-    loadAll();
+    // Auto-update without disrupting a score the user is currently typing.
+    function isEditing() {
+      const a = document.activeElement;
+      return a && a.matches && a.matches('.sc-home, .sc-away');
+    }
+    async function reload() {
+      let data;
+      try { data = await Promise.all([loadMatches(), loadPredictions()]); }
+      catch (_) { return; }
+      [matches, allPreds] = data;
+      const name = playerEl.value.trim();
+      myPreds = new Map();
+      if (name) {
+        try {
+          for (const p of await loadMyPredictions(name))
+            myPreds.set(p.match_id, { home: p.home_score, away: p.away_score });
+        } catch (_) {}
+      }
+      if (viewBoard.style.display !== 'none') renderBoard();
+      else if (!isEditing()) renderMatches();
+    }
+
+    loadAll().then(() => watch(reload));
   </script>
 </body>
 </html>

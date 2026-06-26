@@ -93,6 +93,14 @@ drop policy if exists wc_predictions_read  on public.wc_predictions;
 create policy wc_matches_read    on public.wc_matches     for select using (true);
 create policy wc_predictions_read on public.wc_predictions for select using (true);
 
+-- Enable Realtime so the site auto-updates when results/predictions change.
+do $$ begin
+  alter publication supabase_realtime add table public.wc_matches;
+exception when duplicate_object then null; end $$;
+do $$ begin
+  alter publication supabase_realtime add table public.wc_predictions;
+exception when duplicate_object then null; end $$;
+
 -- ---------- Submit a prediction (public) ------------------------------------
 -- Rejects the submission if the match is finished, locked, or kicked off.
 
