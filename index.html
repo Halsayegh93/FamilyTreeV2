@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <title>جماهير مباريات كأس العالم الرميثية 🏆</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="wrap">
+    <div class="hero">
+      <div class="emblem-badge">
+        <span class="emblem-trophy">🏆</span>
+        <span class="emblem-26">26</span>
+      </div>
+      <h1>جماهير مباريات كأس العالم <span class="gold">الرميثية</span></h1>
+      <p>من دور الـ32 إلى النهائي — توقّع، واجمع النقاط</p>
+    </div>
+
+    <div class="namebar">
+      <label for="player">اسمك</label>
+      <input id="player" type="text" placeholder="اكتب اسمك هنا" autocomplete="name" />
+    </div>
+
+    <div class="tabs">
+      <button id="tab-matches" class="active">المباريات</button>
+      <button id="tab-board">الترتيب</button>
+    </div>
+
+    <div id="view-matches"></div>
+    <div id="view-board" style="display:none"></div>
+
+    <a class="toplink" href="admin.html">⚙︎ لوحة التحكم (للمشرف)</a>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <script type="module">
+    import {
+      isConfigured, loadMatches, loadPredictions, loadMyPredictions,
+      submitPrediction, buildLeaderboard, scorePrediction, isLocked,
+      roundLabel, ROUNDS, friendlyError, POINTS, watch,
+    } from './app.js';
+
+    const $ = (s, r = document) => r.querySelector(s);
+    const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+    const playerEl = $('#player');
+    const viewMatches = $('#view-matches');
+    const viewBoard = $('#view-board');
+
+    let matches = [];
+    let myPreds = new Map();   // match_id -> {home, away}
+    let allPreds = [];
+
+    // ----- player name persistence -----
+    playerEl.value = localStorage.getItem('wc_player') || '';
+    playerEl.addEventListener('input', () => {
+      localStorage.setItem('wc_player', playerEl.value.trim());
+    });
+    playerEl.addEventListener('change', refreshMine);
+
+    function toast(msg, isErr = false) {
+      const t = $('#toast');
+      t.textContent = msg;
+      t.className = 'toast show' + (isErr ? ' err' : '');
+      setTimeout(() => (t.className = 'toast'), 2400);
+    }
+
+    // ----- tabs -----
+    $('#tab-matches').onclick = () => switchTab('matches');
+    $('#tab-board').onclick = () => switchTab('board');
+    function switchTab(which) {
+      const m = which === 'matches';
+      $('#tab-matches').classList.toggle('active', m);
+      $('#tab-board').classList.toggle('active', !m);
+      viewMatches.style.display = m ? '' : 'none';
+      viewBoard.style.display = m ? 'none' : '';
+      if (!m) renderBoard();
+    }
+
+    // ----- rendering matches -----
+    function teamHTML(name, flag, side) {
+      const tbd = !name;
+      return `<div class="team ${side}">
+        <span class="flag">${flag ? esc(flag) : '⚽️'}</span>
+        <span class="name ${tbd ? 'tbd' : ''}">${tbd ? 'غير محدّد' : esc(name)}</span>
+      </div>`;
+    }
+
+    function matchCard(m) {
+      const locked = isLocked(m);
+      const mine = myPreds.get(m.id);
+      const ph = mine ? mine.home : '';
+      const pa = mine ? mine.away : '';
+
+      let badge = '';
+      if (m.finished) badge = '<span class="badge done">انتهت</span>';
+      else if (locked) badge = '<span class="badge locked">مغلقة 🔒</span>';
+      else badge = '<span class="badge live">مفتوحة</span>';
+
+      let resultLine = '';
+      if (m.finished) {
+        const pts = mine
+          ? scorePrediction(mine.home, mine.away, m.home_score, m.away_score)
+          : null;
+        const ptsTag = mine
+          ? `<span class="pts ${pts > 0 ? 'good' : 'zero'}">${pts > 0 ? '+' + pts : '0'} نقطة</span>`
+          : '';
+        resultLine = `<div class="result-line">
+          النتيجة الرسمية: <b>${m.home_score} - ${m.away_score}</b>${ptsTag}
+        </div>`;
+      }
+
+      const kickoff = m.kickoff
+        ? new Date(m.kickoff).toLocaleString('ar', { dateStyle: 'medium', timeStyle: 'short' })
+        : (m.finished ? '' : 'موعد لاحق');
+
+      const venueLine = (m.venue || kickoff)
+        ? `<div class="venue-line">${m.venue ? '🏟️ ' + esc(m.venue) : ''}${
+            m.venue && kickoff ? ' · ' : ''}${kickoff ? '🗓️ ' + esc(kickoff) : ''}</div>`
+        : '';
+
+      return `<div class="card" data-id="${m.id}">
+        <div class="meta">
+          <span>مباراة ${m.match_no}</span>
+          ${badge}
+          <span></span>
+        </div>
+        <div class="match">
+          ${teamHTML(m.home_team, m.home_flag, 'home')}
+          <div class="scorebox">
+            <input type="number" min="0" max="99" inputmode="numeric"
+              class="sc-home" value="${ph}" ${locked ? 'disabled' : ''} />
+            <span class="dash">-</span>
+            <input type="number" min="0" max="99" inputmode="numeric"
+              class="sc-away" value="${pa}" ${locked ? 'disabled' : ''} />
+          </div>
+          ${teamHTML(m.away_team, m.away_flag, 'away')}
+        </div>
+        ${venueLine}
+        ${resultLine}
+        ${locked ? '' : `<div class="card-actions">
+          <button class="btn save ${mine ? 'saved' : ''}">${mine ? '✓ تعديل التوقع' : 'حفظ التوقع'}</button>
+        </div>`}
+      </div>`;
+    }
+
+    function renderMatches() {
+      if (!matches.length) {
+        viewMatches.innerHTML = '<div class="empty">لا توجد مباريات بعد.</div>';
+        return;
+      }
+      const groups = {};
+      for (const m of matches) (groups[m.round] ||= []).push(m);
+
+      const order = Object.keys(groups).sort(
+        (a, b) => (ROUNDS[a]?.order || 9) - (ROUNDS[b]?.order || 9));
+
+      viewMatches.innerHTML = order.map((r) =>
+        `<div class="round-title">${esc(roundLabel(r))}</div>` +
+        groups[r].map(matchCard).join('')
+      ).join('');
+
+      viewMatches.querySelectorAll('.card').forEach((card) => {
+        const btn = card.querySelector('.save');
+        if (btn) btn.onclick = () => onSave(card);
+      });
+    }
+
+    async function onSave(card) {
+      const name = playerEl.value.trim();
+      if (!name) { toast('اكتب اسمك أول', true); playerEl.focus(); return; }
+
+      const id = +card.dataset.id;
+      const h = card.querySelector('.sc-home').value;
+      const a = card.querySelector('.sc-away').value;
+      if (h === '' || a === '') { toast('اكتب النتيجة للفريقين', true); return; }
+
+      const btn = card.querySelector('.save');
+      btn.disabled = true;
+      try {
+        await submitPrediction(id, name, +h, +a);
+        myPreds.set(id, { home: +h, away: +a });
+        btn.textContent = '✓ تم الحفظ';
+        btn.classList.add('saved');
+        toast('انحفظ توقعك ✅');
+        setTimeout(() => { btn.textContent = '✓ تعديل التوقع'; }, 1200);
+      } catch (e) {
+        toast(friendlyError(e), true);
+        if (String(e.message || e).includes('MATCH_LOCKED')) loadAll();
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    // ----- leaderboard -----
+    function renderBoard() {
+      const me = playerEl.value.trim();
+      const rows = buildLeaderboard(matches, allPreds);
+      const finishedCount = matches.filter((m) => m.finished).length;
+
+      if (!rows.length) {
+        viewBoard.innerHTML = `<div class="empty">ما في توقعات بعد.<br>كن أول من يتوقّع! ⚽️</div>`;
+        return;
+      }
+
+      const head = `<div class="round-title">الترتيب العام
+        <span style="font-size:12px;color:var(--muted);font-weight:600">
+          (${finishedCount} مباراة انتهت)</span></div>`;
+
+      const body = rows.map((r, i) => {
+        const rank = i + 1;
+        const rc = rank <= 3 ? `r${rank}` : '';
+        const medal = ['🥇', '🥈', '🥉'][i] || rank;
+        return `<tr class="${r.name === me ? 'me' : ''}">
+          <td class="rank ${rc}">${medal}</td>
+          <td class="name">${esc(r.name)}</td>
+          <td>${r.exact}</td>
+          <td>${r.played}</td>
+          <td class="total">${r.points}</td>
+        </tr>`;
+      }).join('');
+
+      viewBoard.innerHTML = head + `<table class="lb">
+        <thead><tr>
+          <th>#</th><th>الاسم</th><th>نتيجة مضبوطة</th><th>توقعات محسوبة</th><th>النقاط</th>
+        </tr></thead>
+        <tbody>${body}</tbody>
+      </table>
+      <div class="scoring-note">
+        <b>النقاط:</b>
+        <span class="chip">${POINTS.exact} نتيجة كاملة</span>
+        <span class="chip">${POINTS.winnerScore} الفائز + نتيجته</span>
+        <span class="chip">${POINTS.winner} الفائز فقط</span>
+      </div>`;
+    }
+
+    // ----- data -----
+    async function refreshMine() {
+      const name = playerEl.value.trim();
+      myPreds = new Map();
+      if (name) {
+        try {
+          const mine = await loadMyPredictions(name);
+          for (const p of mine) myPreds.set(p.match_id, { home: p.home_score, away: p.away_score });
+        } catch (_) {}
+      }
+      renderMatches();
+    }
+
+    async function loadAll() {
+      try {
+        [matches, allPreds] = await Promise.all([loadMatches(), loadPredictions()]);
+        await refreshMine();
+      } catch (e) {
+        viewMatches.innerHTML = `<div class="notice">
+          <b>تعذّر الاتصال بقاعدة البيانات.</b><br>
+          تأكد إنك عبّيت بيانات Supabase في <code>config.js</code> وشغّلت <code>db.sql</code>.<br>
+          <span style="color:var(--error)">${esc(e.message || e)}</span>
+        </div>`;
+      }
+    }
+
+    // Auto-update without disrupting a score the user is currently typing.
+    function isEditing() {
+      const a = document.activeElement;
+      return a && a.matches && a.matches('.sc-home, .sc-away');
+    }
+    async function reload() {
+      let data;
+      try { data = await Promise.all([loadMatches(), loadPredictions()]); }
+      catch (_) { return; }
+      [matches, allPreds] = data;
+      const name = playerEl.value.trim();
+      myPreds = new Map();
+      if (name) {
+        try {
+          for (const p of await loadMyPredictions(name))
+            myPreds.set(p.match_id, { home: p.home_score, away: p.away_score });
+        } catch (_) {}
+      }
+      if (viewBoard.style.display !== 'none') renderBoard();
+      else if (!isEditing()) renderMatches();
+    }
+
+    loadAll().then(() => watch(reload));
+  </script>
+</body>
+</html>
