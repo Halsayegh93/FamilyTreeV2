@@ -5,8 +5,8 @@
 // 1) Create a free Supabase project at https://supabase.com (or reuse one).
 // 2) Run db.sql in the Supabase SQL Editor.
 // 3) Project Settings → API → paste the URL and the anon/publishable key here.
-export const SUPABASE_URL = 'https://YOUR-PROJECT.supabase.co';
-export const SUPABASE_ANON_KEY = 'YOUR-ANON-OR-PUBLISHABLE-KEY';
+export const SUPABASE_URL = 'https://vnyhbppzufadqxpbijnb.supabase.co';
+export const SUPABASE_ANON_KEY = 'sb_publishable_OPnob-SkO9u-Z7PN7tYTog_paKjdBTJ';
 
 // Points system (highest matching tier wins — not additive):
 //   5 — exact score: both teams' goals predicted correctly
