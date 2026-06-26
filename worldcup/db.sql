@@ -163,7 +163,7 @@ declare
   w_name  text; w_flag text; l_name text; l_flag text;
 begin
   -- CHANGE_ME: set your admin PIN here. The PIN is validated server-side only.
-  if p_pin is distinct from '1234' then
+  if p_pin is distinct from '1993' then
     raise exception 'BAD_PIN';
   end if;
 
@@ -241,7 +241,7 @@ language plpgsql security definer set search_path = public as $$
 declare
   row public.wc_matches;
 begin
-  if p_pin is distinct from '1234' then       -- CHANGE_ME: same PIN as above
+  if p_pin is distinct from '1993' then       -- CHANGE_ME: same PIN as above
     raise exception 'BAD_PIN';
   end if;
 

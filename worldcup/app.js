@@ -120,7 +120,7 @@ export async function submitPrediction(matchId, name, home, away) {
 // Admin operations (demo-aware) -----------------------------------------------
 export async function adminSetResult(matchId, home, away, pin, winner = null) {
   if (DEMO) {
-    if (pin !== '1234') throw new Error('BAD_PIN');
+    if (pin !== '1993') throw new Error('BAD_PIN');
     return demo.setResult(matchId, home, away, winner);
   }
   const sb = await client();
@@ -133,7 +133,7 @@ export async function adminSetResult(matchId, home, away, pin, winner = null) {
 
 export async function adminSaveMatch(matchId, fields, pin) {
   if (DEMO) {
-    if (pin !== '1234') throw new Error('BAD_PIN');
+    if (pin !== '1993') throw new Error('BAD_PIN');
     return demo.saveMatch(matchId, fields);
   }
   const sb = await client();
@@ -153,7 +153,7 @@ export async function adminSaveMatch(matchId, fields, pin) {
 
 // Verify the admin PIN without mutating anything.
 export async function adminVerifyPin(pin) {
-  if (DEMO) return pin === '1234';
+  if (DEMO) return pin === '1993';
   const sb = await client();
   const { error } = await sb.rpc('wc_admin_set_result', {
     p_match_id: 0, p_home: null, p_away: null, p_pin: pin,
