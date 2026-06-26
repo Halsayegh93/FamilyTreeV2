@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>لوحة التحكم — توقعات كأس العالم</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="wrap">
+    <div class="hero">
+      <div class="trophy">⚙︎</div>
+      <h1>لوحة التحكم</h1>
+      <p>حُط النتيجة بس — الفرق والأدوار تتعبّى تلقائياً</p>
+    </div>
+
+    <!-- PIN gate -->
+    <div id="gate" class="gate">
+      <div class="namebar" style="display:block">
+        <label for="pin">كلمة سر المشرف</label>
+        <input id="pin" type="password" inputmode="numeric" placeholder="••••" />
+      </div>
+      <button id="enter" class="btn" style="margin-top:12px">دخول</button>
+      <div id="gate-msg" style="color:var(--error);margin-top:10px;font-size:13px"></div>
+    </div>
+
+    <div id="panel" style="display:none">
+      <div id="list"></div>
+      <a class="toplink" href="index.html">→ رجوع للموقع</a>
+    </div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <script type="module">
+    import {
+      loadMatches, roundLabel, ROUNDS, friendlyError,
+      adminVerifyPin, adminSetResult,
+    } from './app.js';
+
+    const $ = (s, r = document) => r.querySelector(s);
+    const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+    let PIN = '';
+    let matches = [];
+
+    function toast(msg, isErr = false) {
+      const t = $('#toast');
+      t.textContent = msg;
+      t.className = 'toast show' + (isErr ? ' err' : '');
+      setTimeout(() => (t.className = 'toast'), 2400);
+    }
+
+    // ----- PIN gate: verify against the server without mutating anything -----
+    // We call set_result on match id 0 (does not exist):
+    //   wrong PIN  -> BAD_PIN
+    //   right PIN  -> MATCH_NOT_FOUND  (so PIN is correct)
+    $('#enter').onclick = verifyPin;
+    $('#pin').addEventListener('keydown', (e) => { if (e.key === 'Enter') verifyPin(); });
+
+    async function verifyPin() {
+      const pin = $('#pin').value.trim();
+      if (!pin) return;
+      $('#gate-msg').textContent = 'جاري التحقق...';
+      let ok = false;
+      try { ok = await adminVerifyPin(pin); }
+      catch (e) { $('#gate-msg').textContent = friendlyError(e); return; }
+      if (!ok) { $('#gate-msg').textContent = 'كلمة السر غير صحيحة'; return; }
+      PIN = pin;
+      sessionStorage.setItem('wc_pin', pin);
+      $('#gate').style.display = 'none';
+      $('#panel').style.display = '';
+      loadList();
+    }
+
+    // ----- render admin rows -----
+    // The admin only enters the score. Teams fill in automatically: Round of 32
+    // is pre-loaded, and later rounds inherit the winners as results are saved.
+    function adminCard(m) {
+      const finished = m.finished;
+      const home = m.home_team || '—';
+      const away = m.away_team || '—';
+      const kickoff = m.kickoff
+        ? new Date(m.kickoff).toLocaleString('ar', { dateStyle: 'medium', timeStyle: 'short' })
+        : '';
+      return `<div class="card" data-id="${m.id}">
+        <div class="meta">
+          <span><b>${esc(roundLabel(m.round))}</b> — مباراة ${m.match_no}</span>
+          ${finished ? '<span class="badge done">منتهية</span>'
+                     : (m.locked ? '<span class="badge locked">مغلقة</span>'
+                                 : '<span class="badge live">مفتوحة</span>')}
+        </div>
+        ${(m.venue || kickoff) ? `<div class="venue-line">${m.venue ? '🏟️ ' + esc(m.venue) : ''}${
+            m.venue && kickoff ? ' · ' : ''}${kickoff ? '🗓️ ' + esc(kickoff) : ''}</div>` : ''}
+
+        <div class="match">
+          <div class="team home">
+            <span class="flag">${esc(m.home_flag || '⚽️')}</span>
+            <span class="name ${m.home_team ? '' : 'tbd'}">${esc(home)}</span>
+          </div>
+          <div class="scorebox">
+            <input class="r-home" type="number" min="0" max="99" inputmode="numeric"
+              value="${m.home_score ?? ''}" />
+            <span class="dash">-</span>
+            <input class="r-away" type="number" min="0" max="99" inputmode="numeric"
+              value="${m.away_score ?? ''}" />
+          </div>
+          <div class="team away">
+            <span class="flag">${esc(m.away_flag || '⚽️')}</span>
+            <span class="name ${m.away_team ? '' : 'tbd'}">${esc(away)}</span>
+          </div>
+        </div>
+
+        <!-- shown only when the score is a draw in a knockout match -->
+        <div class="win-pick" style="display:none;margin-top:10px;text-align:center;font-size:13px;color:var(--muted)">
+          تعادل — منو الفائز بالركلات؟
+          <div style="display:flex;gap:8px;margin-top:6px">
+            <button class="btn ghost win-home" style="flex:1">${esc(home)}</button>
+            <button class="btn ghost win-away" style="flex:1">${esc(away)}</button>
+          </div>
+        </div>
+
+        <div class="card-actions">
+          <button class="btn save-result">📣 اعتماد النتيجة (تُحسب النقاط)</button>
+        </div>
+      </div>`;
+    }
+
+    function loadList() {
+      $('#list').innerHTML = '<div class="empty">جاري التحميل...</div>';
+      loadMatches().then((data) => {
+        matches = data;
+        const groups = {};
+        for (const m of matches) (groups[m.round] ||= []).push(m);
+        const order = Object.keys(groups).sort(
+          (a, b) => (ROUNDS[a]?.order || 9) - (ROUNDS[b]?.order || 9));
+        $('#list').innerHTML = order.map((r) =>
+          `<div class="round-title">${esc(roundLabel(r))}</div>` +
+          groups[r].map(adminCard).join('')
+        ).join('');
+        $('#list').querySelectorAll('.card').forEach(bind);
+      }).catch((e) => {
+        $('#list').innerHTML = `<div class="notice"><span style="color:var(--error)">${esc(e.message || e)}</span></div>`;
+      });
+    }
+
+    function bind(card) {
+      const id = +card.dataset.id;
+      const hEl = card.querySelector('.r-home');
+      const aEl = card.querySelector('.r-away');
+      const pick = card.querySelector('.win-pick');
+      const winHome = card.querySelector('.win-home');
+      const winAway = card.querySelector('.win-away');
+      const isLater = id >= 17; // knockout draws need a penalty winner from R32 on
+
+      function refreshPick() {
+        const h = hEl.value, a = aEl.value;
+        const draw = h !== '' && a !== '' && +h === +a;
+        pick.style.display = draw && isLater ? '' : 'none';
+        if (!draw) card.dataset.winner = '';
+      }
+      function choose(side) {
+        card.dataset.winner = side;
+        winHome.classList.toggle('saved', side === 'home');
+        winAway.classList.toggle('saved', side === 'away');
+      }
+      hEl.addEventListener('input', refreshPick);
+      aEl.addEventListener('input', refreshPick);
+      winHome.onclick = () => choose('home');
+      winAway.onclick = () => choose('away');
+      refreshPick();
+
+      card.querySelector('.save-result').onclick = async (ev) => {
+        const btn = ev.currentTarget;
+        const h = hEl.value, a = aEl.value;
+        const draw = h !== '' && a !== '' && +h === +a;
+        if (draw && isLater && !card.dataset.winner) {
+          toast('اختر الفائز بالركلات أول', true); return;
+        }
+        btn.disabled = true;
+        try {
+          await adminSetResult(id, h === '' ? null : +h, a === '' ? null : +a,
+            PIN, card.dataset.winner || null);
+          toast(h === '' ? 'انمسحت النتيجة' : 'تم اعتماد النتيجة ✅ وتحسبت النقاط');
+          loadList();
+        } catch (e) { toast(friendlyError(e), true); }
+        finally { btn.disabled = false; }
+      };
+    }
+
+    // boot
+    const saved = sessionStorage.getItem('wc_pin');
+    if (saved) { $('#pin').value = saved; }
+  </script>
+</body>
+</html>
