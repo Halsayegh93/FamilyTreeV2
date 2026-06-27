@@ -228,11 +228,18 @@
               day.items.map(adminCard).join('')).join('')
           : '<div class="empty">ما في مباريات قادمة.</div>';
 
-        // finished matches: tucked into a collapsible "re-open" section
+        // entered results / finished matches — shown open so the admin sees the
+        // chosen results directly (matches WITH a result first).
         if (finished.length) {
-          html += `<details class="team-edit" style="margin-top:24px">
-            <summary>🏁 مباريات منتهية / مغلقة (${finished.length}) — إعادة فتح</summary>` +
-            finished.slice().sort((a, b) => a.id - b.id).map(finishedCard).join('') +
+          const ordered = finished.slice().sort((a, b) => {
+            const ah = a.home_score != null ? 0 : 1;
+            const bh = b.home_score != null ? 0 : 1;
+            return ah - bh || a.id - b.id;
+          });
+          const withResult = finished.filter((m) => m.home_score != null).length;
+          html += `<details class="team-edit" open style="margin-top:24px">
+            <summary>🏁 النتائج المُدخلة (${withResult}) · منتهية/مغلقة (${finished.length})</summary>` +
+            ordered.map(finishedCard).join('') +
             `</details>`;
         }
 
