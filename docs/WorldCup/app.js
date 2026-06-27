@@ -151,6 +151,18 @@ export async function adminSaveMatch(matchId, fields, pin) {
   return data;
 }
 
+// Admin reset — wipe predictions and/or results.
+export async function adminReset(what, pin) {
+  if (DEMO) {
+    if (pin !== '1993') throw new Error('BAD_PIN');
+    return demo.resetWhat(what);
+  }
+  const sb = await client();
+  const { data, error } = await sb.rpc('wc_admin_reset', { p_pin: pin, p_what: what });
+  if (error) throw error;
+  return data;
+}
+
 // Verify the admin PIN without mutating anything.
 export async function adminVerifyPin(pin) {
   if (DEMO) return pin === '1993';
