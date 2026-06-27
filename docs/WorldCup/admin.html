@@ -198,8 +198,15 @@
       $('#list').innerHTML = '<div class="empty">جاري التحميل...</div>';
       loadMatches().then((data) => {
         matches = data;
-        // "open" = playable now; "closed" = finished OR locked (re-openable)
-        const upcoming = matches.filter((m) => !m.finished && !m.locked);
+        // matches whose day already passed are dropped from the admin list
+        const today = new Date(); today.setHours(0, 0, 0, 0);
+        const dayPassed = (m) => {
+          if (!m.kickoff) return false;
+          const d = new Date(m.kickoff); d.setHours(0, 0, 0, 0);
+          return d < today;
+        };
+        // "open" = playable & not past; "closed" = finished OR locked (re-openable)
+        const upcoming = matches.filter((m) => !m.finished && !m.locked && !dayPassed(m));
         const finished = matches.filter((m) => m.finished || m.locked);
 
         // main list: upcoming matches grouped by DAY (sorted by kickoff)
