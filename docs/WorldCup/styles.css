@@ -98,6 +98,64 @@ body { direction: rtl; }
   font-family: inherit;
 }
 .namebar input:focus { outline: none; border-color: var(--primary); }
+.namebar input:disabled { opacity: .8; background: var(--surface); }
+.namebtn {
+  border: none; cursor: pointer; white-space: nowrap;
+  font-family: inherit; font-weight: 800; font-size: 14px;
+  padding: 10px 16px; border-radius: 10px;
+  background: linear-gradient(120deg, var(--primary), var(--primary2));
+  color: #fff; transition: .15s;
+}
+.namebtn:active { transform: scale(.96); }
+.namebtn.confirmed {
+  background: var(--surface2); color: var(--text);
+  border: 1px solid var(--border);
+}
+
+/* Admin button */
+.adminbtn {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  margin-top: 26px; text-decoration: none;
+  padding: 14px; border-radius: 12px;
+  background: var(--surface); border: 1px solid var(--border);
+  color: var(--text); font-weight: 800; font-size: 15px;
+  box-shadow: var(--shadow);
+}
+.adminbtn:active { transform: scale(.98); }
+
+/* Saved-prediction note */
+.predicted-note {
+  margin-top: 12px; text-align: center;
+  font-size: 13px; font-weight: 700; color: var(--green);
+  background: rgba(27,122,75,.10); border: 1px solid rgba(27,122,75,.25);
+  border-radius: 10px; padding: 9px;
+}
+
+/* Scoring rules */
+.rules { display: flex; flex-direction: column; gap: 10px; }
+.rule {
+  display: flex; align-items: center; gap: 14px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 14px; box-shadow: var(--shadow);
+}
+.rule-pts {
+  flex-shrink: 0; width: 46px; height: 46px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px; font-weight: 900; color: #fff;
+  border-radius: 12px;
+  background: linear-gradient(135deg, var(--green), #14613b);
+}
+.rule-pts.zero { background: linear-gradient(135deg, var(--muted), #475569); }
+.rule b { font-size: 15px; }
+.rule-ex { font-size: 13px; color: var(--muted); line-height: 1.6; }
+.maxpts {
+  margin: 16px 0 4px; text-align: center;
+  background: linear-gradient(120deg, rgba(201,154,46,.14), rgba(27,122,75,.12));
+  border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 14px; font-weight: 800; font-size: 16px; color: var(--text);
+}
+.maxpts b { color: var(--gold2); font-size: 20px; }
+.maxpts span { display: block; margin-top: 4px; font-weight: 600; font-size: 12px; color: var(--muted); }
 
 /* Tabs --------------------------------------------------------------------- */
 .tabs {

@@ -20,17 +20,20 @@
     <div class="namebar">
       <label for="player">اسمك</label>
       <input id="player" type="text" placeholder="اكتب اسمك هنا" autocomplete="name" />
+      <button id="confirm-name" class="namebtn">تثبيت</button>
     </div>
 
     <div class="tabs">
       <button id="tab-matches" class="active">المباريات</button>
       <button id="tab-board">الترتيب</button>
+      <button id="tab-rules">القوانين</button>
     </div>
 
     <div id="view-matches"></div>
     <div id="view-board" style="display:none"></div>
+    <div id="view-rules" style="display:none"></div>
 
-    <a class="toplink" href="admin.html">⚙︎ لوحة التحكم (للمشرف)</a>
+    <a class="adminbtn" href="admin.html">⚙️ لوحة المشرف</a>
   </div>
 
   <div id="toast" class="toast"></div>
@@ -47,19 +50,15 @@
       ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
     const playerEl = $('#player');
+    const confirmBtn = $('#confirm-name');
     const viewMatches = $('#view-matches');
     const viewBoard = $('#view-board');
+    const viewRules = $('#view-rules');
 
     let matches = [];
     let myPreds = new Map();   // match_id -> {home, away}
     let allPreds = [];
-
-    // ----- player name persistence -----
-    playerEl.value = localStorage.getItem('wc_player') || '';
-    playerEl.addEventListener('input', () => {
-      localStorage.setItem('wc_player', playerEl.value.trim());
-    });
-    playerEl.addEventListener('change', refreshMine);
+    let nameLocked = false;     // is the name confirmed (fixed)?
 
     function toast(msg, isErr = false) {
       const t = $('#toast');
@@ -68,17 +67,53 @@
       setTimeout(() => (t.className = 'toast'), 2400);
     }
 
-    // ----- tabs -----
-    $('#tab-matches').onclick = () => switchTab('matches');
-    $('#tab-board').onclick = () => switchTab('board');
-    function switchTab(which) {
-      const m = which === 'matches';
-      $('#tab-matches').classList.toggle('active', m);
-      $('#tab-board').classList.toggle('active', !m);
-      viewMatches.style.display = m ? '' : 'none';
-      viewBoard.style.display = m ? 'none' : '';
-      if (!m) renderBoard();
+    // ----- name confirmation -----
+    playerEl.value = localStorage.getItem('wc_player') || '';
+    nameLocked = !!playerEl.value.trim() && localStorage.getItem('wc_confirmed') === '1';
+
+    function setNameUI() {
+      playerEl.disabled = nameLocked;
+      confirmBtn.textContent = nameLocked ? '✎ تغيير' : 'تثبيت';
+      confirmBtn.classList.toggle('confirmed', nameLocked);
     }
+    playerEl.addEventListener('input', () => {
+      if (!nameLocked) localStorage.setItem('wc_player', playerEl.value.trim());
+    });
+    playerEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') confirmBtn.click(); });
+
+    confirmBtn.onclick = () => {
+      if (!nameLocked) {
+        const n = playerEl.value.trim();
+        if (!n) { toast('اكتب اسمك أول', true); playerEl.focus(); return; }
+        nameLocked = true;
+        localStorage.setItem('wc_player', n);
+        localStorage.setItem('wc_confirmed', '1');
+        setNameUI();
+        toast('تم تثبيت اسمك ✅');
+        refreshMine();
+      } else {
+        nameLocked = false;
+        localStorage.removeItem('wc_confirmed');
+        setNameUI();
+        playerEl.focus();
+        renderMatches();
+      }
+    };
+    setNameUI();
+
+    // ----- tabs -----
+    const tabBtns = { matches: $('#tab-matches'), board: $('#tab-board'), rules: $('#tab-rules') };
+    const tabViews = { matches: viewMatches, board: viewBoard, rules: viewRules };
+    function switchTab(which) {
+      for (const k in tabViews) {
+        tabViews[k].style.display = k === which ? '' : 'none';
+        tabBtns[k].classList.toggle('active', k === which);
+      }
+      if (which === 'board') renderBoard();
+    }
+    tabBtns.matches.onclick = () => switchTab('matches');
+    tabBtns.board.onclick = () => switchTab('board');
+    tabBtns.rules.onclick = () => switchTab('rules');
 
     // ----- rendering matches -----
     function teamHTML(name, flag, side) {
@@ -92,12 +127,15 @@
     function matchCard(m) {
       const locked = isLocked(m);
       const mine = myPreds.get(m.id);
+      const predicted = !!mine;          // already saved -> cannot edit
       const ph = mine ? mine.home : '';
       const pa = mine ? mine.away : '';
+      const inputsOff = locked || predicted;
 
       let badge = '';
       if (m.finished) badge = '<span class="badge done">انتهت</span>';
       else if (locked) badge = '<span class="badge locked">مغلقة 🔒</span>';
+      else if (predicted) badge = '<span class="badge done">تم التوقع ✓</span>';
       else badge = '<span class="badge live">مفتوحة</span>';
 
       let resultLine = '';
@@ -122,6 +160,14 @@
             m.venue && kickoff ? ' · ' : ''}${kickoff ? '🗓️ ' + esc(kickoff) : ''}</div>`
         : '';
 
+      // action area
+      let actionHTML = '';
+      if (!m.finished && predicted) {
+        actionHTML = `<div class="predicted-note">✓ توقعك محفوظ (${mine.home} - ${mine.away}) — ما يمكن التعديل</div>`;
+      } else if (!locked && !predicted) {
+        actionHTML = `<div class="card-actions"><button class="btn save">حفظ التوقع</button></div>`;
+      }
+
       return `<div class="card" data-id="${m.id}">
         <div class="meta">
           <span>مباراة ${m.match_no}</span>
@@ -132,22 +178,27 @@
           ${teamHTML(m.home_team, m.home_flag, 'home')}
           <div class="scorebox">
             <input type="number" min="0" max="99" inputmode="numeric"
-              class="sc-home" value="${ph}" ${locked ? 'disabled' : ''} />
+              class="sc-home" value="${ph}" ${inputsOff ? 'disabled' : ''} />
             <span class="dash">-</span>
             <input type="number" min="0" max="99" inputmode="numeric"
-              class="sc-away" value="${pa}" ${locked ? 'disabled' : ''} />
+              class="sc-away" value="${pa}" ${inputsOff ? 'disabled' : ''} />
           </div>
           ${teamHTML(m.away_team, m.away_flag, 'away')}
         </div>
         ${venueLine}
         ${resultLine}
-        ${locked ? '' : `<div class="card-actions">
-          <button class="btn save ${mine ? 'saved' : ''}">${mine ? '✓ تعديل التوقع' : 'حفظ التوقع'}</button>
-        </div>`}
+        ${actionHTML}
       </div>`;
     }
 
     function renderMatches() {
+      // require a confirmed name before showing/using the matches section
+      if (!nameLocked) {
+        viewMatches.innerHTML = `<div class="notice" style="text-align:center">
+          👋 اكتب اسمك فوق واضغط <b>تثبيت</b> عشان تشوف المباريات وتبدأ التوقع.
+        </div>`;
+        return;
+      }
       if (!matches.length) {
         viewMatches.innerHTML = '<div class="empty">لا توجد مباريات بعد.</div>';
         return;
@@ -171,7 +222,7 @@
 
     async function onSave(card) {
       const name = playerEl.value.trim();
-      if (!name) { toast('اكتب اسمك أول', true); playerEl.focus(); return; }
+      if (!name) { toast('ثبّت اسمك أول', true); return; }
 
       const id = +card.dataset.id;
       const h = card.querySelector('.sc-home').value;
@@ -183,16 +234,51 @@
       try {
         await submitPrediction(id, name, +h, +a);
         myPreds.set(id, { home: +h, away: +a });
-        btn.textContent = '✓ تم الحفظ';
-        btn.classList.add('saved');
-        toast('انحفظ توقعك ✅');
-        setTimeout(() => { btn.textContent = '✓ تعديل التوقع'; }, 1200);
+        toast('انحفظ توقعك ✅ (ما يمكن التعديل)');
+        renderMatches();   // re-render: this match is now locked
       } catch (e) {
         toast(friendlyError(e), true);
-        if (String(e.message || e).includes('MATCH_LOCKED')) loadAll();
-      } finally {
         btn.disabled = false;
+        if (String(e.message || e).includes('MATCH_LOCKED')) loadAll();
       }
+    }
+
+    // ----- full scoring rules -----
+    function renderRules() {
+      viewRules.innerHTML = `
+        <div class="round-title">قانون النقاط</div>
+        <div class="rules">
+          <div class="rule">
+            <span class="rule-pts">${POINTS.exact}</span>
+            <div><b>النتيجة كاملة صحيحة</b><br>
+              <span class="rule-ex">توقّعت نتيجة الفريقين بالضبط. مثال: توقعت 2-1 وطلعت 2-1.</span></div>
+          </div>
+          <div class="rule">
+            <span class="rule-pts">${POINTS.winnerScore}</span>
+            <div><b>الفائز صح + نتيجة الفائز صح</b><br>
+              <span class="rule-ex">عرفت الفريق الفائز ونتيجته صح، بس الخسران غلط. مثال: توقعت 3-0 وطلعت 3-1.</span></div>
+          </div>
+          <div class="rule">
+            <span class="rule-pts">${POINTS.winner}</span>
+            <div><b>الفائز فقط</b><br>
+              <span class="rule-ex">عرفت الفائز (أو التعادل) بس النتيجة غلط. مثال: توقعت 2-0 وطلعت 3-1.</span></div>
+          </div>
+          <div class="rule">
+            <span class="rule-pts zero">0</span>
+            <div><b>الفائز غلط</b><br>
+              <span class="rule-ex">توقّعت فوز فريق وطلع الفريق الثاني فاز (أو توقّعت فوز وطلع تعادل والعكس).</span></div>
+          </div>
+        </div>
+        <div class="maxpts">🎯 أقصى نقاط ممكنة: <b>${32 * POINTS.exact}</b> نقطة
+          <span>(32 مباراة × ${POINTS.exact} نقاط لو كل توقعاتك نتيجة كاملة صحيحة)</span></div>
+        <div class="round-title">أحكام مهمة</div>
+        <div class="notice">
+          • <b>التعادل:</b> لو توقّعت تعادل وطلع تعادل بنفس النتيجة = ${POINTS.exact} نقاط، ولو بنتيجة مختلفة = ${POINTS.winner} نقطة.<br>
+          • <b>الأدوار الإقصائية:</b> لو راحت المباراة لركلات الترجيح، النقاط تُحسب على <b>نتيجة الوقت الأصلي</b> اللي يعتمدها المشرف (الركلات ما تغيّر نقاط توقعك).<br>
+          • <b>التوقع نهائي:</b> بعد ما تحفظ توقعك <b>ما يمكن تعديله</b>.<br>
+          • <b>إقفال المباراة:</b> التوقع يُقفل تلقائياً عند بداية المباراة.<br>
+          • <b>الترتيب:</b> الأعلى نقاطاً يتصدّر، وعند التعادل بالنقاط يُقدّم صاحب أكثر "نتائج كاملة صحيحة".
+        </div>`;
     }
 
     // ----- leaderboard -----
@@ -285,6 +371,7 @@
       else if (!isEditing()) renderMatches();
     }
 
+    renderRules();
     loadAll().then(() => watch(reload));
   </script>
 </body>
