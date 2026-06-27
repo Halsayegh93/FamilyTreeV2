@@ -61,6 +61,7 @@
     let allPreds = [];
     let nameLocked = false;     // is the name confirmed (fixed)?
     let matchFilter = 'upcoming'; // matches filter: upcoming | finished | all
+    let lastSig = '';           // last rendered data signature (skip no-op re-renders)
 
     function toast(msg, isErr = false) {
       const t = $('#toast');
@@ -520,8 +521,14 @@
       let data;
       try { data = await Promise.all([loadMatches(), loadPredictions()]); }
       catch (_) { return; }
-      [matches, allPreds] = data;
       const name = playerEl.value.trim();
+      // skip the re-render entirely if nothing changed — prevents the page from
+      // jumping/scrolling on every 20s poll or realtime ping.
+      const sig = JSON.stringify(data) + '|' + name;
+      if (sig === lastSig) return;
+      lastSig = sig;
+
+      [matches, allPreds] = data;
       myPreds = new Map();
       if (name) {
         try {
@@ -534,7 +541,7 @@
     }
 
     renderRules();
-    loadAll().then(() => watch(reload));
+    loadAll().then(() => { lastSig = JSON.stringify([matches, allPreds]) + '|' + playerEl.value.trim(); watch(reload); });
   </script>
 </body>
 </html>
