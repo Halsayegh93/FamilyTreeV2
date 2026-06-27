@@ -49,7 +49,7 @@
   <script type="module">
     import {
       loadMatches, roundLabel, ROUNDS, friendlyError,
-      adminVerifyPin, adminSetResult, adminReset, watch,
+      adminVerifyPin, adminSetResult, adminSaveMatch, adminReset, watch,
     } from './app.js';
 
     const $ = (s, r = document) => r.querySelector(s);
@@ -151,6 +151,17 @@
         <div class="card-actions">
           <button class="btn save-result">📣 اعتماد النتيجة (تُحسب النقاط)</button>
         </div>
+
+        <details class="team-edit">
+          <summary>✏️ تعديل أسماء الفرق والأعلام</summary>
+          <div class="te-grid">
+            <input class="e-home"  value="${esc(m.home_team || '')}" placeholder="الفريق الأول" />
+            <input class="e-hflag" value="${esc(m.home_flag || '')}" placeholder="🇧🇷" />
+            <input class="e-away"  value="${esc(m.away_team || '')}" placeholder="الفريق الثاني" />
+            <input class="e-aflag" value="${esc(m.away_flag || '')}" placeholder="🇦🇷" />
+          </div>
+          <button class="btn ghost save-teams" style="margin-top:8px">💾 حفظ الفرق</button>
+        </details>
       </div>`;
     }
 
@@ -197,6 +208,27 @@
       winHome.onclick = () => choose('home');
       winAway.onclick = () => choose('away');
       refreshPick();
+
+      // edit team names / flags (preserve venue, kickoff, lock)
+      const teamsBtn = card.querySelector('.save-teams');
+      if (teamsBtn) teamsBtn.onclick = async (ev) => {
+        const btn = ev.currentTarget; btn.disabled = true;
+        const cur = matches.find((x) => x.id === id) || {};
+        try {
+          await adminSaveMatch(id, {
+            home_team: card.querySelector('.e-home').value,
+            away_team: card.querySelector('.e-away').value,
+            home_flag: card.querySelector('.e-hflag').value,
+            away_flag: card.querySelector('.e-aflag').value,
+            venue: cur.venue ?? null,
+            kickoff: cur.kickoff ?? null,
+            locked: cur.locked ?? null,
+          }, PIN);
+          toast('انحفظت الفرق ✅');
+          loadList();
+        } catch (e) { toast(friendlyError(e), true); }
+        finally { btn.disabled = false; }
+      };
 
       card.querySelector('.save-result').onclick = async (ev) => {
         const btn = ev.currentTarget;

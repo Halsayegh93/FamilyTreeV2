@@ -196,9 +196,9 @@ body { direction: rtl; }
   flex: 1;
   border: none; cursor: pointer;
   background: transparent; color: var(--muted);
-  font-family: inherit; font-size: 15px; font-weight: 700;
-  padding: 10px; border-radius: 999px;
-  transition: .2s;
+  font-family: inherit; font-size: 14px; font-weight: 700;
+  padding: 9px 4px; border-radius: 999px;
+  transition: .2s; white-space: nowrap;
 }
 .tabs button.active {
   background: linear-gradient(120deg, var(--primary), var(--primary2));
@@ -329,6 +329,35 @@ body { direction: rtl; }
   background: var(--surface); border: 1px solid var(--border);
   font-weight: 700; color: var(--text);
 }
+/* Admin: edit teams */
+.team-edit { margin-top: 12px; }
+.team-edit summary {
+  cursor: pointer; font-size: 13px; font-weight: 700; color: var(--primary);
+  list-style: none; padding: 4px 0;
+}
+.team-edit summary::-webkit-details-marker { display: none; }
+.te-grid { display: grid; grid-template-columns: 1fr 64px; gap: 8px; margin-top: 8px; }
+.te-grid input {
+  background: var(--surface2); border: 1px solid var(--border);
+  color: var(--text); border-radius: 10px; padding: 9px 10px;
+  font-family: inherit; font-size: 14px;
+}
+.te-grid input:focus { outline: none; border-color: var(--primary); }
+
+/* Groups reference */
+.groups-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.group-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 12px; box-shadow: var(--shadow);
+}
+.group-h {
+  font-weight: 900; font-size: 14px; color: var(--green);
+  margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid var(--border);
+}
+.group-team { display: flex; align-items: center; gap: 8px; padding: 5px 0; font-size: 14px; font-weight: 600; }
+.group-team .flag { font-size: 18px; flex-shrink: 0; }
+.gt-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
 .empty { text-align: center; color: var(--muted); padding: 40px 0; }
 .toast {
   position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
