@@ -252,32 +252,27 @@ export function watch(onChange, pollMs = 20000) {
 }
 
 // Build the leaderboard from predictions + finished matches -------------------
+// rec: { name, points, exact, correct, played, predicted }
+//   predicted = total matches the player predicted (any status)
+//   played    = how many of those have finished (counted toward points)
 export function buildLeaderboard(matches, predictions) {
   const byId = new Map(matches.map((m) => [m.id, m]));
-  const players = new Map(); // name -> { name, points, exact, correct, played }
+  const players = new Map();
 
   for (const p of predictions) {
     const m = byId.get(p.match_id);
-    if (!m || !m.finished) continue;
-
-    const pts = scoreRow(p, m);
     const rec = players.get(p.player_name) || {
-      name: p.player_name, points: 0, exact: 0, correct: 0, played: 0,
+      name: p.player_name, points: 0, exact: 0, correct: 0, played: 0, predicted: 0,
     };
-    rec.points += pts;
-    rec.played += 1;
-    if (pts === POINTS.exact) rec.exact += 1;
-    if (pts > 0) rec.correct += 1;
-    players.set(p.player_name, rec);
-  }
-
-  // Players who entered predictions but none finished yet still appear (0 pts).
-  for (const p of predictions) {
-    if (!players.has(p.player_name)) {
-      players.set(p.player_name, {
-        name: p.player_name, points: 0, exact: 0, correct: 0, played: 0,
-      });
+    rec.predicted += 1;                 // every prediction counts here
+    if (m && m.finished) {
+      const pts = scoreRow(p, m);
+      rec.points += pts;
+      rec.played += 1;
+      if (pts === POINTS.exact) rec.exact += 1;
+      if (pts > 0) rec.correct += 1;
     }
+    players.set(p.player_name, rec);
   }
 
   return [...players.values()].sort(

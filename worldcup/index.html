@@ -468,6 +468,7 @@
         return `<tr class="${r.name === me ? 'me' : ''}">
           <td class="rank ${rc}">${medal}</td>
           <td class="name">${esc(r.name)}</td>
+          <td>${r.predicted}</td>
           <td>${r.exact}</td>
           <td>${r.played}</td>
           <td class="total">${r.points}</td>
@@ -476,7 +477,7 @@
 
       viewBoard.innerHTML = prizesHTML + head + `<table class="lb">
         <thead><tr>
-          <th>#</th><th>الاسم</th><th>نتيجة مضبوطة</th><th>توقعات محسوبة</th><th>النقاط</th>
+          <th>#</th><th>الاسم</th><th>توقّع</th><th>نتيجة مضبوطة</th><th>محسوبة</th><th>النقاط</th>
         </tr></thead>
         <tbody>${body}</tbody>
       </table>
