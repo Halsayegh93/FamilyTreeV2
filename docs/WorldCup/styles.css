@@ -307,17 +307,19 @@ body { direction: rtl; }
 
 .mfilter {
   display: flex; gap: 6px; margin: 4px 0 16px;
-  background: var(--surface2); border: 1px solid var(--border);
-  border-radius: 999px; padding: 4px;
+  overflow-x: auto; -webkit-overflow-scrolling: touch;
+  padding: 2px; scrollbar-width: none;
 }
+.mfilter::-webkit-scrollbar { display: none; }
 .mfilter button {
-  flex: 1; border: none; cursor: pointer; font-family: inherit;
-  font-size: 14px; font-weight: 800; padding: 9px 6px; border-radius: 999px;
-  background: transparent; color: var(--muted); transition: .15s;
+  flex: 0 0 auto; border: 1px solid var(--border); cursor: pointer;
+  font-family: inherit; font-size: 14px; font-weight: 800;
+  padding: 9px 16px; border-radius: 999px; white-space: nowrap;
+  background: var(--surface2); color: var(--muted); transition: .15s;
 }
 .mfilter button.active {
   background: linear-gradient(120deg, var(--primary), var(--primary2));
-  color: #fff;
+  color: #fff; border-color: transparent;
 }
 
 .predictors { margin-top: 12px; }
