@@ -185,6 +185,12 @@ export const demo = {
 
   reset() { writeStore(MKEY, seedMatches()); writeStore(PKEY, seedPredictions()); },
 
+  deletePlayer(name) {
+    const preds = this.predictions().filter((p) => p.player_name !== String(name).trim());
+    writeStore(PKEY, preds);
+    return 1;
+  },
+
   resetWhat(what) {
     if (what === 'predictions' || what === 'all') writeStore(PKEY, []);
     if (what === 'results' || what === 'all') {

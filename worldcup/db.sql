@@ -291,10 +291,55 @@ begin
 end;
 $$;
 
+-- ---------- Admin: upsert a match (create or update) ------------------------
+-- Used by the auto-fetch to add group-stage matches (and any new matches) that
+-- are not part of the pre-seeded 32 knockout rows.
+create or replace function public.wc_admin_upsert_match(
+  p_id integer, p_round text, p_match_no integer,
+  p_home_team text, p_home_flag text, p_away_team text, p_away_flag text,
+  p_venue text, p_kickoff timestamptz, p_pin text
+) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if p_pin is distinct from '1993' then          -- CHANGE_ME: same admin PIN
+    raise exception 'BAD_PIN';
+  end if;
+  insert into public.wc_matches
+    (id, round, match_no, home_team, home_flag, away_team, away_flag, venue, kickoff)
+  values
+    (p_id, p_round, coalesce(p_match_no, 0),
+     nullif(btrim(p_home_team), ''), nullif(btrim(p_home_flag), ''),
+     nullif(btrim(p_away_team), ''), nullif(btrim(p_away_flag), ''),
+     nullif(btrim(p_venue), ''), p_kickoff)
+  on conflict (id) do update set
+    round = excluded.round, match_no = excluded.match_no,
+    home_team = excluded.home_team, home_flag = excluded.home_flag,
+    away_team = excluded.away_team, away_flag = excluded.away_flag,
+    venue = excluded.venue, kickoff = excluded.kickoff;
+end;
+$$;
+
+-- ---------- Admin: delete one player from the leaderboard -------------------
+create or replace function public.wc_admin_delete_player(p_name text, p_pin text)
+returns integer
+language plpgsql security definer set search_path = public as $$
+declare n integer;
+begin
+  if p_pin is distinct from '1993' then          -- CHANGE_ME: same admin PIN
+    raise exception 'BAD_PIN';
+  end if;
+  delete from public.wc_predictions where player_name = btrim(p_name);
+  get diagnostics n = row_count;
+  return n;
+end;
+$$;
+
 grant execute on function public.wc_submit_prediction(integer, text, integer, integer) to anon, authenticated;
 grant execute on function public.wc_admin_set_result(integer, integer, integer, text, text) to anon, authenticated;
 grant execute on function public.wc_admin_save_match(integer, text, text, text, text, text, timestamptz, boolean, text) to anon, authenticated;
 grant execute on function public.wc_admin_reset(text, text) to anon, authenticated;
+grant execute on function public.wc_admin_upsert_match(integer, text, integer, text, text, text, text, text, timestamptz, text) to anon, authenticated;
+grant execute on function public.wc_admin_delete_player(text, text) to anon, authenticated;
 
 -- ---------- Seed the 32 knockout matches ------------------------------------
 -- Real FIFA World Cup 2026 knockout SCHEDULE (dates + host venues).

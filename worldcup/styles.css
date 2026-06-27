@@ -131,6 +131,20 @@ body { direction: rtl; }
   border-radius: 10px; padding: 9px;
 }
 
+/* Prizes — three squares side by side, each with a circular medal */
+.prizes3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 8px; }
+.prize3 {
+  text-align: center; padding: 16px 6px; border-radius: 16px;
+  border: 1px solid var(--border); box-shadow: var(--shadow);
+}
+.prize3 .prize-medal { width: 50px; height: 50px; margin: 0 auto 8px; font-size: 28px; }
+.prize3 .prize-place { font-size: 13px; color: var(--muted); font-weight: 700; }
+.prize3 .prize-amt { font-size: 15px; font-weight: 900; margin-top: 4px; color: var(--text); }
+.prize3.p1 { background: linear-gradient(160deg, rgba(224,166,0,.14), var(--surface)); }
+.prize3.p1 .prize-amt { color: var(--gold2); }
+.prize3.p2 { background: linear-gradient(160deg, rgba(148,163,184,.16), var(--surface)); }
+.prize3.p3 { background: linear-gradient(160deg, rgba(192,122,51,.14), var(--surface)); }
+
 /* Prizes */
 .prizes { display: flex; flex-direction: column; gap: 12px; margin-bottom: 8px; }
 .prize {
@@ -251,6 +265,16 @@ body { direction: rtl; }
 .team .name.tbd { color: var(--muted); font-weight: 600; }
 
 .scorebox { display: flex; align-items: center; gap: 6px; }
+.stepper { display: flex; align-items: center; gap: 5px; }
+.step {
+  width: 32px; height: 46px; flex-shrink: 0;
+  border: 1px solid var(--border); border-radius: 10px;
+  background: var(--surface2); color: var(--primary);
+  font-family: inherit; font-size: 20px; font-weight: 900; line-height: 1;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+}
+.step:active { transform: scale(.9); }
+.step:disabled { opacity: .35; cursor: default; }
 .scorebox input {
   width: 46px; height: 46px;
   text-align: center;
@@ -329,6 +353,13 @@ body { direction: rtl; }
   background: var(--surface); border: 1px solid var(--border);
   font-weight: 700; color: var(--text);
 }
+/* Admin: players list */
+.player-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 9px 2px; border-bottom: 1px solid var(--border); font-weight: 700;
+}
+.player-row:last-child { border-bottom: none; }
+
 /* Admin: edit teams */
 .team-edit { margin-top: 12px; }
 .team-edit summary {

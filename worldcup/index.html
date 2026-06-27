@@ -156,10 +156,10 @@
         </div>`;
       }
 
-      const ktime = m.kickoff
-        ? new Date(m.kickoff).toLocaleTimeString('ar', { hour: '2-digit', minute: '2-digit' })
+      const kickoff = m.kickoff
+        ? new Date(m.kickoff).toLocaleString('ar', { dateStyle: 'medium', timeStyle: 'short' })
         : '';
-      const venueLine = ktime ? `<div class="venue-line">🕐 ${esc(ktime)}</div>` : '';
+      const venueLine = kickoff ? `<div class="venue-line">🗓️ ${esc(kickoff)}</div>` : '';
 
       // action area
       let actionHTML = '';
@@ -171,18 +171,26 @@
 
       return `<div class="card" data-id="${m.id}">
         <div class="meta">
-          <span>${esc(roundLabel(m.round))} · مباراة ${m.match_no}</span>
+          <span>مباراة ${m.match_no}</span>
           ${badge}
           <span></span>
         </div>
         <div class="match">
           ${teamHTML(m.home_team, m.home_flag, 'home')}
           <div class="scorebox">
-            <input type="number" min="0" max="99" inputmode="numeric"
-              class="sc-home" value="${ph}" ${inputsOff ? 'disabled' : ''} />
+            <div class="stepper">
+              <button type="button" class="step minus" ${inputsOff ? 'disabled' : ''}>−</button>
+              <input type="number" min="0" max="99" inputmode="numeric"
+                class="sc-home" value="${ph}" ${inputsOff ? 'disabled' : ''} />
+              <button type="button" class="step plus" ${inputsOff ? 'disabled' : ''}>+</button>
+            </div>
             <span class="dash">-</span>
-            <input type="number" min="0" max="99" inputmode="numeric"
-              class="sc-away" value="${pa}" ${inputsOff ? 'disabled' : ''} />
+            <div class="stepper">
+              <button type="button" class="step minus" ${inputsOff ? 'disabled' : ''}>−</button>
+              <input type="number" min="0" max="99" inputmode="numeric"
+                class="sc-away" value="${pa}" ${inputsOff ? 'disabled' : ''} />
+              <button type="button" class="step plus" ${inputsOff ? 'disabled' : ''}>+</button>
+            </div>
           </div>
           ${teamHTML(m.away_team, m.away_flag, 'away')}
         </div>
@@ -207,28 +215,34 @@
           شوف نتائجك في تبويب <b>الترتيب</b>.</div>`;
         return;
       }
-      // group by day, with the date on top of each day's matches
-      const sorted = upcoming.slice().sort((a, b) =>
-        (new Date(a.kickoff || 8.64e15)) - (new Date(b.kickoff || 8.64e15)) || a.id - b.id);
-      const byDay = new Map();
-      for (const m of sorted) {
-        const d = m.kickoff ? new Date(m.kickoff) : null;
-        const key = d ? `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}` : 'tbd';
-        if (!byDay.has(key)) byDay.set(key, []);
-        byDay.get(key).push(m);
-      }
-      const dayLabel = (iso) => new Date(iso).toLocaleDateString('ar',
-        { weekday: 'long', day: 'numeric', month: 'long' });
+      // group into sections by round (group stage first, then knockout rounds)
+      const groups = {};
+      for (const m of upcoming) (groups[m.round] ||= []).push(m);
+      const roundOrder = (code) => {
+        if (ROUNDS[code]) return ROUNDS[code].order;
+        if (String(code).startsWith('المجموعة')) return -1; // groups before knockout
+        return 9;
+      };
+      const order = Object.keys(groups).sort(
+        (a, b) => roundOrder(a) - roundOrder(b) || a.localeCompare(b, 'ar'));
 
-      viewMatches.innerHTML = [...byDay.entries()].map(([k, list]) => {
-        const label = k === 'tbd' ? 'موعد لاحق' : dayLabel(list[0].kickoff);
-        return `<div class="round-title day">📅 ${esc(label)}</div>` +
-          list.map(matchCard).join('');
-      }).join('');
+      viewMatches.innerHTML = order.map((r) =>
+        `<div class="round-title">${esc(roundLabel(r))}</div>` +
+        groups[r].slice().sort((a, b) =>
+          (new Date(a.kickoff || 8.64e15)) - (new Date(b.kickoff || 8.64e15)) || a.id - b.id)
+          .map(matchCard).join('')
+      ).join('');
 
       viewMatches.querySelectorAll('.card').forEach((card) => {
         const btn = card.querySelector('.save');
         if (btn) btn.onclick = () => onSave(card);
+        card.querySelectorAll('.stepper').forEach((st) => {
+          const inp = st.querySelector('input');
+          const set = (d) => { inp.value = Math.max(0, Math.min(99, (parseInt(inp.value) || 0) + d)); };
+          const p = st.querySelector('.plus'), mn = st.querySelector('.minus');
+          if (p) p.onclick = () => set(1);
+          if (mn) mn.onclick = () => set(-1);
+        });
       });
     }
 
@@ -285,22 +299,13 @@
     // ----- leaderboard -----
     const prizesHTML = `
       <div class="round-title">🏆 الجوائز</div>
-      <div class="prizes">
-        <div class="prize p1">
-          <div class="prize-medal">🥇</div>
-          <div class="prize-info"><span class="prize-place">المركز الأول</span>
-            <span class="prize-amt">50 دينار</span></div>
-        </div>
-        <div class="prize p2">
-          <div class="prize-medal">🥈</div>
-          <div class="prize-info"><span class="prize-place">المركز الثاني</span>
-            <span class="prize-amt">30 دينار</span></div>
-        </div>
-        <div class="prize p3">
-          <div class="prize-medal">🥉</div>
-          <div class="prize-info"><span class="prize-place">المركز الثالث</span>
-            <span class="prize-amt">كابون مساج</span></div>
-        </div>
+      <div class="prizes3">
+        <div class="prize3 p1"><div class="prize-medal">🥇</div>
+          <div class="prize-place">الأول</div><div class="prize-amt">50 دينار</div></div>
+        <div class="prize3 p2"><div class="prize-medal">🥈</div>
+          <div class="prize-place">الثاني</div><div class="prize-amt">30 دينار</div></div>
+        <div class="prize3 p3"><div class="prize-medal">🥉</div>
+          <div class="prize-place">الثالث</div><div class="prize-amt">كابون مساج</div></div>
       </div>`;
 
     function renderBoard() {
