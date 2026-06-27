@@ -28,11 +28,13 @@
 
     <div class="tabs">
       <button id="tab-matches" class="active">المباريات</button>
+      <button id="tab-groups">المجموعات</button>
       <button id="tab-board">الترتيب</button>
       <button id="tab-rules">القوانين</button>
     </div>
 
     <div id="view-matches"></div>
+    <div id="view-groups" style="display:none"></div>
     <div id="view-board" style="display:none"></div>
     <div id="view-rules" style="display:none"></div>
   </div>
@@ -53,6 +55,7 @@
     const playerEl = $('#player');
     const confirmBtn = $('#confirm-name');
     const viewMatches = $('#view-matches');
+    const viewGroups = $('#view-groups');
     const viewBoard = $('#view-board');
     const viewRules = $('#view-rules');
 
@@ -106,10 +109,11 @@
 
     // ----- tabs -----
     const tabBtns = {
-      matches: $('#tab-matches'), board: $('#tab-board'), rules: $('#tab-rules'),
+      matches: $('#tab-matches'), groups: $('#tab-groups'),
+      board: $('#tab-board'), rules: $('#tab-rules'),
     };
     const tabViews = {
-      matches: viewMatches, board: viewBoard, rules: viewRules,
+      matches: viewMatches, groups: viewGroups, board: viewBoard, rules: viewRules,
     };
     function switchTab(which) {
       for (const k in tabViews) {
@@ -398,6 +402,35 @@
       else if (!isEditing()) renderMatches();
     }
 
+    // ----- groups reference (official 2026 draw) -----
+    const GROUPS = [
+      ['A', [['Mexico','🇲🇽'],['South Africa','🇿🇦'],['South Korea','🇰🇷'],['Czech Republic','🇨🇿']]],
+      ['B', [['Canada','🇨🇦'],['Switzerland','🇨🇭'],['Qatar','🇶🇦'],['Bosnia & Herzegovina','🇧🇦']]],
+      ['C', [['Brazil','🇧🇷'],['Morocco','🇲🇦'],['Scotland','🏴'],['Haiti','🇭🇹']]],
+      ['D', [['United States','🇺🇸'],['Paraguay','🇵🇾'],['Australia','🇦🇺'],['Turkey','🇹🇷']]],
+      ['E', [['Germany','🇩🇪'],['Curaçao','🇨🇼'],['Costa Rica','🇨🇷'],['Ecuador','🇪🇨']]],
+      ['F', [['Netherlands','🇳🇱'],['Japan','🇯🇵'],['Tunisia','🇹🇳'],['Sweden','🇸🇪']]],
+      ['G', [['Belgium','🇧🇪'],['Egypt','🇪🇬'],['Iran','🇮🇷'],['New Zealand','🇳🇿']]],
+      ['H', [['Spain','🇪🇸'],['Cape Verde','🇨🇻'],['Saudi Arabia','🇸🇦'],['Uruguay','🇺🇾']]],
+      ['I', [['France','🇫🇷'],['Senegal','🇸🇳'],['Norway','🇳🇴'],['Iraq','🇮🇶']]],
+      ['J', [['Argentina','🇦🇷'],['Algeria','🇩🇿'],['Austria','🇦🇹'],['Jordan','🇯🇴']]],
+      ['K', [['Portugal','🇵🇹'],['Colombia','🇨🇴'],['Uzbekistan','🇺🇿'],['DR Congo','🇨🇩']]],
+      ['L', [['England','🏴'],['Croatia','🇭🇷'],['Ghana','🇬🇭'],['Panama','🇵🇦']]],
+    ];
+    function renderGroups() {
+      viewGroups.innerHTML = `<div class="round-title">مجموعات كأس العالم 2026</div>
+        <p style="color:var(--muted);font-size:13px;margin:-6px 4px 14px">
+          يتأهل أول فريقين من كل مجموعة + أفضل 8 منتخبات في المركز الثالث إلى دور الـ32.</p>
+        <div class="groups-grid">` +
+        GROUPS.map(([g, teams]) => `
+          <div class="group-card">
+            <div class="group-h">Group ${g}</div>
+            ${teams.map(([n, f]) => `<div class="group-team">
+              <span class="flag">${f}</span><span class="gt-name">${esc(n)}</span></div>`).join('')}
+          </div>`).join('') + `</div>`;
+    }
+
+    renderGroups();
     renderRules();
     loadAll().then(() => watch(reload));
   </script>
