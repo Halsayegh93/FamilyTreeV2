@@ -156,10 +156,31 @@ export const demo = {
     if (m && (m.finished || m.locked)) throw new Error('MATCH_LOCKED');
     const preds = this.predictions();
     const ex = preds.find((p) => p.match_id === matchId && p.player_name === name);
-    if (ex) { ex.home_score = h; ex.away_score = a; }
-    else preds.push({ match_id: matchId, player_name: name, home_score: h, away_score: a });
+    if (ex) { ex.home_score = h; ex.away_score = a; ex.pick = null; }
+    else preds.push({ match_id: matchId, player_name: name, home_score: h, away_score: a, pick: null });
     writeStore(PKEY, preds);
     return { match_id: matchId, player_name: name, home_score: h, away_score: a };
+  },
+
+  submitWinner(matchId, name, pick) {
+    const m = this.matches().find((x) => x.id === matchId);
+    if (m && (m.finished || m.locked)) throw new Error('MATCH_LOCKED');
+    if (pick !== 'home' && pick !== 'away') throw new Error('INVALID_PICK');
+    const preds = this.predictions();
+    const ex = preds.find((p) => p.match_id === matchId && p.player_name === name);
+    if (ex) { ex.home_score = null; ex.away_score = null; ex.pick = pick; }
+    else preds.push({ match_id: matchId, player_name: name, home_score: null, away_score: null, pick });
+    writeStore(PKEY, preds);
+    return { match_id: matchId, player_name: name, pick };
+  },
+
+  reopenMatch(matchId) {
+    const matches = this.matches();
+    const m = matches.find((x) => x.id === matchId);
+    if (!m) throw new Error('MATCH_NOT_FOUND');
+    m.home_score = null; m.away_score = null; m.finished = false; m.locked = false;
+    writeStore(MKEY, matches);
+    return m;
   },
 
   setResult(matchId, h, a, winner) {

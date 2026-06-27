@@ -302,6 +302,20 @@ body { direction: rtl; }
 .pts.zero { background: rgba(200,54,47,.10);  color: var(--error); }
 
 .card-actions { margin-top: 12px; }
+.orline {
+  text-align: center; margin: 12px 0 8px; color: var(--muted);
+  font-size: 13px; font-weight: 700;
+}
+.orline .hint { color: var(--muted); font-weight: 600; font-size: 12px; }
+.winpick { display: flex; gap: 8px; }
+.winpick .winsel {
+  flex: 1; min-width: 0; padding: 11px 8px; font-size: 13px; font-weight: 800;
+  background: var(--surface2); color: var(--text);
+  border: 1px solid var(--border); border-radius: 12px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.winpick .winsel:hover { border-color: var(--primary); color: var(--primary); }
+.winpick .winsel:active { transform: scale(.98); }
 .btn {
   width: 100%;
   border: none; cursor: pointer;

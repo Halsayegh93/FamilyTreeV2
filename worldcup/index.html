@@ -28,13 +28,11 @@
 
     <div class="tabs">
       <button id="tab-matches" class="active">المباريات</button>
-      <button id="tab-groups">المجموعات</button>
       <button id="tab-board">الترتيب</button>
       <button id="tab-rules">القوانين</button>
     </div>
 
     <div id="view-matches"></div>
-    <div id="view-groups" style="display:none"></div>
     <div id="view-board" style="display:none"></div>
     <div id="view-rules" style="display:none"></div>
   </div>
@@ -44,8 +42,8 @@
   <script type="module">
     import {
       isConfigured, loadMatches, loadPredictions, loadMyPredictions,
-      submitPrediction, buildLeaderboard, scorePrediction, isLocked,
-      roundLabel, ROUNDS, friendlyError, POINTS, watch,
+      submitPrediction, submitWinner, buildLeaderboard, scorePrediction,
+      scoreRow, isLocked, roundLabel, ROUNDS, friendlyError, POINTS, watch,
     } from './app.js';
 
     const $ = (s, r = document) => r.querySelector(s);
@@ -55,7 +53,6 @@
     const playerEl = $('#player');
     const confirmBtn = $('#confirm-name');
     const viewMatches = $('#view-matches');
-    const viewGroups = $('#view-groups');
     const viewBoard = $('#view-board');
     const viewRules = $('#view-rules');
 
@@ -109,11 +106,11 @@
 
     // ----- tabs -----
     const tabBtns = {
-      matches: $('#tab-matches'), groups: $('#tab-groups'),
+      matches: $('#tab-matches'),
       board: $('#tab-board'), rules: $('#tab-rules'),
     };
     const tabViews = {
-      matches: viewMatches, groups: viewGroups, board: viewBoard, rules: viewRules,
+      matches: viewMatches, board: viewBoard, rules: viewRules,
     };
     function switchTab(which) {
       for (const k in tabViews) {
@@ -125,6 +122,12 @@
     for (const k in tabBtns) tabBtns[k].onclick = () => switchTab(k);
 
     // ----- rendering matches -----
+    // a match is shown only once BOTH teams are decided (not TBD)
+    function teamsKnown(m) {
+      return !!(m.home_team && String(m.home_team).trim() &&
+                m.away_team && String(m.away_team).trim());
+    }
+
     function teamHTML(name, flag, side) {
       const tbd = !name;
       return `<div class="team ${side}">
@@ -137,8 +140,9 @@
       const locked = isLocked(m);
       const mine = myPreds.get(m.id);
       const predicted = !!mine;          // already saved -> cannot edit
-      const ph = mine ? mine.home : '';
-      const pa = mine ? mine.away : '';
+      const pickOnly = predicted && mine.pick;   // winner-only prediction
+      const ph = predicted && !pickOnly ? mine.home : '';
+      const pa = predicted && !pickOnly ? mine.away : '';
       const inputsOff = locked || predicted;
 
       let badge = '';
@@ -149,9 +153,7 @@
 
       let resultLine = '';
       if (m.finished) {
-        const pts = mine
-          ? scorePrediction(mine.home, mine.away, m.home_score, m.away_score)
-          : null;
+        const pts = mine ? scoreRow(mine, m) : null;
         const ptsTag = mine
           ? `<span class="pts ${pts > 0 ? 'good' : 'zero'}">${pts > 0 ? '+' + pts : '0'} نقطة</span>`
           : '';
@@ -160,22 +162,30 @@
         </div>`;
       }
 
-      const kickoff = m.kickoff
-        ? new Date(m.kickoff).toLocaleString('ar', { dateStyle: 'medium', timeStyle: 'short' })
+      const ktime = m.kickoff
+        ? new Date(m.kickoff).toLocaleTimeString('ar', { hour: '2-digit', minute: '2-digit' })
         : '';
-      const venueLine = kickoff ? `<div class="venue-line">🗓️ ${esc(kickoff)}</div>` : '';
+      const venueLine = ktime ? `<div class="venue-line">🕐 ${esc(ktime)}</div>` : '';
 
       // action area
       let actionHTML = '';
-      if (!m.finished && predicted) {
+      if (!m.finished && pickOnly) {
+        const t = mine.pick === 'home' ? m.home_team : m.away_team;
+        actionHTML = `<div class="predicted-note">🏆 توقعت فوز <b>${esc(t || '')}</b> — لا يمكن التعديل</div>`;
+      } else if (!m.finished && predicted) {
         actionHTML = `<div class="predicted-note">✓ توقعك محفوظ (${mine.home} - ${mine.away}) — لا يمكن التعديل</div>`;
       } else if (!locked && !predicted) {
-        actionHTML = `<div class="card-actions"><button class="btn save">حفظ التوقع</button></div>`;
+        actionHTML = `<div class="card-actions"><button class="btn save">حفظ التوقع (نتيجة)</button></div>
+          <div class="orline">أو توقّع الفائز فقط <span class="hint">(نقطة وحدة)</span></div>
+          <div class="winpick">
+            <button class="btn winsel" data-pick="home">🏆 ${esc(m.home_team || '')}</button>
+            <button class="btn winsel" data-pick="away">🏆 ${esc(m.away_team || '')}</button>
+          </div>`;
       }
 
       return `<div class="card" data-id="${m.id}">
         <div class="meta">
-          <span>مباراة ${m.match_no}</span>
+          <span>${esc(roundLabel(m.round))}</span>
           ${badge}
           <span></span>
         </div>
@@ -212,35 +222,40 @@
         </div>`;
         return;
       }
-      // finished matches drop off the schedule
-      const upcoming = matches.filter((m) => !m.finished);
+      // only show matches whose teams are decided + finished matches drop off
+      const upcoming = matches.filter((m) => !m.finished && teamsKnown(m));
       if (!upcoming.length) {
         viewMatches.innerHTML = `<div class="empty">ما في مباريات قادمة حالياً ⚽️<br>
           شوف نتائجك في تبويب <b>الترتيب</b>.</div>`;
         return;
       }
-      // group into sections by round (group stage first, then knockout rounds)
-      const groups = {};
-      for (const m of upcoming) (groups[m.round] ||= []).push(m);
-      const roundOrder = (code) => {
-        if (ROUNDS[code]) return ROUNDS[code].order;
-        // group-stage ("current") sections come before the knockout rounds
-        if (code === 'دور المجموعات' || String(code).startsWith('المجموعة')) return -1;
-        return 9;
-      };
-      const order = Object.keys(groups).sort(
-        (a, b) => roundOrder(a) - roundOrder(b) || a.localeCompare(b, 'ar'));
+      // group into sections by DAY (sorted by kickoff time)
+      const sorted = upcoming.slice().sort((a, b) =>
+        (new Date(a.kickoff || 8.64e15)) - (new Date(b.kickoff || 8.64e15)) || a.id - b.id);
+      const days = new Map();
+      for (const m of sorted) {
+        const d = m.kickoff ? new Date(m.kickoff) : null;
+        const key = d
+          ? `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
+          : 'tbd';
+        const label = d
+          ? d.toLocaleDateString('ar', { weekday: 'long', day: 'numeric', month: 'long' })
+          : 'بدون موعد';
+        if (!days.has(key)) days.set(key, { label, items: [] });
+        days.get(key).items.push(m);
+      }
 
-      viewMatches.innerHTML = order.map((r) =>
-        `<div class="round-title">${esc(roundLabel(r))}</div>` +
-        groups[r].slice().sort((a, b) =>
-          (new Date(a.kickoff || 8.64e15)) - (new Date(b.kickoff || 8.64e15)) || a.id - b.id)
-          .map(matchCard).join('')
+      viewMatches.innerHTML = [...days.values()].map((day) =>
+        `<div class="round-title day">📅 ${esc(day.label)}</div>` +
+        day.items.map(matchCard).join('')
       ).join('');
 
       viewMatches.querySelectorAll('.card').forEach((card) => {
         const btn = card.querySelector('.save');
         if (btn) btn.onclick = () => onSave(card);
+        card.querySelectorAll('.winsel').forEach((wb) => {
+          wb.onclick = () => onPickWinner(card, wb.dataset.pick, wb.textContent.trim());
+        });
         card.querySelectorAll('.stepper').forEach((st) => {
           const inp = st.querySelector('input');
           const set = (d) => { inp.value = Math.max(0, Math.min(99, (parseInt(inp.value) || 0) + d)); };
@@ -264,12 +279,32 @@
       btn.disabled = true;
       try {
         await submitPrediction(id, name, +h, +a);
-        myPreds.set(id, { home: +h, away: +a });
+        myPreds.set(id, { home: +h, away: +a, pick: null });
         toast('انحفظ توقعك ✅ (لا يمكن التعديل)');
         renderMatches();   // re-render: this match is now locked
       } catch (e) {
         toast(friendlyError(e), true);
         btn.disabled = false;
+        if (String(e.message || e).includes('MATCH_LOCKED')) loadAll();
+      }
+    }
+
+    // Winner-only quick prediction (1 point). Permanent like a full prediction.
+    async function onPickWinner(card, pick, label) {
+      const name = playerEl.value.trim();
+      if (!name) { toast('ثبّت اسمك أول', true); return; }
+      if (!confirm(`توقّع فوز ${label}؟\nلا يمكن التعديل بعد الحفظ.`)) return;
+
+      const id = +card.dataset.id;
+      card.querySelectorAll('.winsel').forEach((b) => { b.disabled = true; });
+      try {
+        await submitWinner(id, name, pick);
+        myPreds.set(id, { home: null, away: null, pick });
+        toast('انحفظ توقعك للفائز ✅ (لا يمكن التعديل)');
+        renderMatches();   // re-render: this match is now locked
+      } catch (e) {
+        toast(friendlyError(e), true);
+        card.querySelectorAll('.winsel').forEach((b) => { b.disabled = false; });
         if (String(e.message || e).includes('MATCH_LOCKED')) loadAll();
       }
     }
@@ -362,7 +397,7 @@
       if (name) {
         try {
           const mine = await loadMyPredictions(name);
-          for (const p of mine) myPreds.set(p.match_id, { home: p.home_score, away: p.away_score });
+          for (const p of mine) myPreds.set(p.match_id, { home: p.home_score, away: p.away_score, pick: p.pick });
         } catch (_) {}
       }
       renderMatches();
@@ -396,42 +431,13 @@
       if (name) {
         try {
           for (const p of await loadMyPredictions(name))
-            myPreds.set(p.match_id, { home: p.home_score, away: p.away_score });
+            myPreds.set(p.match_id, { home: p.home_score, away: p.away_score, pick: p.pick });
         } catch (_) {}
       }
       if (viewBoard.style.display !== 'none') renderBoard();
       else if (!isEditing()) renderMatches();
     }
 
-    // ----- groups reference (official 2026 draw) -----
-    const GROUPS = [
-      ['A', [['Mexico','🇲🇽'],['South Africa','🇿🇦'],['South Korea','🇰🇷'],['Czech Republic','🇨🇿']]],
-      ['B', [['Canada','🇨🇦'],['Switzerland','🇨🇭'],['Qatar','🇶🇦'],['Bosnia & Herzegovina','🇧🇦']]],
-      ['C', [['Brazil','🇧🇷'],['Morocco','🇲🇦'],['Scotland','🏴'],['Haiti','🇭🇹']]],
-      ['D', [['United States','🇺🇸'],['Paraguay','🇵🇾'],['Australia','🇦🇺'],['Turkey','🇹🇷']]],
-      ['E', [['Germany','🇩🇪'],['Curaçao','🇨🇼'],['Costa Rica','🇨🇷'],['Ecuador','🇪🇨']]],
-      ['F', [['Netherlands','🇳🇱'],['Japan','🇯🇵'],['Tunisia','🇹🇳'],['Sweden','🇸🇪']]],
-      ['G', [['Belgium','🇧🇪'],['Egypt','🇪🇬'],['Iran','🇮🇷'],['New Zealand','🇳🇿']]],
-      ['H', [['Spain','🇪🇸'],['Cape Verde','🇨🇻'],['Saudi Arabia','🇸🇦'],['Uruguay','🇺🇾']]],
-      ['I', [['France','🇫🇷'],['Senegal','🇸🇳'],['Norway','🇳🇴'],['Iraq','🇮🇶']]],
-      ['J', [['Argentina','🇦🇷'],['Algeria','🇩🇿'],['Austria','🇦🇹'],['Jordan','🇯🇴']]],
-      ['K', [['Portugal','🇵🇹'],['Colombia','🇨🇴'],['Uzbekistan','🇺🇿'],['DR Congo','🇨🇩']]],
-      ['L', [['England','🏴'],['Croatia','🇭🇷'],['Ghana','🇬🇭'],['Panama','🇵🇦']]],
-    ];
-    function renderGroups() {
-      viewGroups.innerHTML = `<div class="round-title">مجموعات كأس العالم 2026</div>
-        <p style="color:var(--muted);font-size:13px;margin:-6px 4px 14px">
-          يتأهل أول فريقين من كل مجموعة + أفضل 8 منتخبات في المركز الثالث إلى دور الـ32.</p>
-        <div class="groups-grid">` +
-        GROUPS.map(([g, teams]) => `
-          <div class="group-card">
-            <div class="group-h">Group ${g}</div>
-            ${teams.map(([n, f]) => `<div class="group-team">
-              <span class="flag">${f}</span><span class="gt-name">${esc(n)}</span></div>`).join('')}
-          </div>`).join('') + `</div>`;
-    }
-
-    renderGroups();
     renderRules();
     loadAll().then(() => watch(reload));
   </script>

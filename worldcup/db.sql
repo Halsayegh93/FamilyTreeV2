@@ -33,12 +33,22 @@ create table if not exists public.wc_predictions (
   id          uuid primary key default gen_random_uuid(),
   match_id    integer not null references public.wc_matches(id) on delete cascade,
   player_name text    not null,
-  home_score  integer not null,
-  away_score  integer not null,
+  home_score  integer,                     -- null for a winner-only pick
+  away_score  integer,                     -- null for a winner-only pick
+  pick        text check (pick in ('home','away')),  -- set for winner-only picks
   created_at  timestamptz not null default now(),
   updated_at  timestamptz not null default now(),
   unique (match_id, player_name)
 );
+
+-- Upgrade older installs: allow winner-only rows (scores nullable + pick column).
+alter table public.wc_predictions alter column home_score drop not null;
+alter table public.wc_predictions alter column away_score drop not null;
+alter table public.wc_predictions add column if not exists pick text;
+do $$ begin
+  alter table public.wc_predictions
+    add constraint wc_predictions_pick_chk check (pick in ('home','away'));
+exception when duplicate_object then null; end $$;
 
 create index if not exists wc_predictions_match_idx  on public.wc_predictions(match_id);
 create index if not exists wc_predictions_player_idx on public.wc_predictions(lower(player_name));
@@ -133,11 +143,54 @@ begin
     raise exception 'MATCH_LOCKED';
   end if;
 
-  insert into public.wc_predictions (match_id, player_name, home_score, away_score)
-  values (p_match_id, nm, p_home, p_away)
+  insert into public.wc_predictions (match_id, player_name, home_score, away_score, pick)
+  values (p_match_id, nm, p_home, p_away, null)
   on conflict (match_id, player_name)
   do update set home_score = excluded.home_score,
                away_score = excluded.away_score,
+               pick       = null,
+               updated_at = now()
+  returning * into row;
+
+  return row;
+end;
+$$;
+
+-- ---------- Submit a WINNER-ONLY pick (public) ------------------------------
+-- A quick prediction of who wins (1 point) without entering a score.
+create or replace function public.wc_submit_winner(
+  p_match_id integer,
+  p_name     text,
+  p_pick     text
+) returns public.wc_predictions
+language plpgsql security definer set search_path = public as $$
+declare
+  m   public.wc_matches;
+  row public.wc_predictions;
+  nm  text := nullif(btrim(p_name), '');
+begin
+  if nm is null then
+    raise exception 'NAME_REQUIRED';
+  end if;
+  if p_pick is null or p_pick not in ('home','away') then
+    raise exception 'INVALID_PICK';
+  end if;
+
+  select * into m from public.wc_matches where id = p_match_id;
+  if not found then
+    raise exception 'MATCH_NOT_FOUND';
+  end if;
+  if m.finished or m.locked
+     or (m.kickoff is not null and m.kickoff <= now()) then
+    raise exception 'MATCH_LOCKED';
+  end if;
+
+  insert into public.wc_predictions (match_id, player_name, home_score, away_score, pick)
+  values (p_match_id, nm, null, null, p_pick)
+  on conflict (match_id, player_name)
+  do update set home_score = null,
+               away_score = null,
+               pick       = excluded.pick,
                updated_at = now()
   returning * into row;
 
@@ -319,6 +372,27 @@ begin
 end;
 $$;
 
+-- ---------- Admin: re-open a finished match (undo its result) ---------------
+-- Clears the result + unlocks the match so it shows in the schedule again.
+create or replace function public.wc_admin_reopen_match(p_match_id integer, p_pin text)
+returns public.wc_matches
+language plpgsql security definer set search_path = public as $$
+declare row public.wc_matches;
+begin
+  if p_pin is distinct from '1993' then          -- CHANGE_ME: same admin PIN
+    raise exception 'BAD_PIN';
+  end if;
+  update public.wc_matches
+     set home_score = null, away_score = null, finished = false, locked = false
+   where id = p_match_id
+   returning * into row;
+  if not found then
+    raise exception 'MATCH_NOT_FOUND';
+  end if;
+  return row;
+end;
+$$;
+
 -- ---------- Admin: delete one player from the leaderboard -------------------
 create or replace function public.wc_admin_delete_player(p_name text, p_pin text)
 returns integer
@@ -335,6 +409,8 @@ end;
 $$;
 
 grant execute on function public.wc_submit_prediction(integer, text, integer, integer) to anon, authenticated;
+grant execute on function public.wc_submit_winner(integer, text, text) to anon, authenticated;
+grant execute on function public.wc_admin_reopen_match(integer, text) to anon, authenticated;
 grant execute on function public.wc_admin_set_result(integer, integer, integer, text, text) to anon, authenticated;
 grant execute on function public.wc_admin_save_match(integer, text, text, text, text, text, timestamptz, boolean, text) to anon, authenticated;
 grant execute on function public.wc_admin_reset(text, text) to anon, authenticated;
