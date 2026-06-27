@@ -138,6 +138,28 @@
     }
 
     function matchCard(m) {
+      // teams not decided yet -> show a schedule "preview" card, no prediction
+      if (!teamsKnown(m) && !m.finished) {
+        const kt = m.kickoff
+          ? new Date(m.kickoff).toLocaleTimeString('ar', { hour: '2-digit', minute: '2-digit' })
+          : '';
+        const vline = kt ? `<div class="venue-line">🕐 ${esc(kt)}</div>` : '';
+        return `<div class="card preview" data-id="${m.id}">
+          <div class="meta">
+            <span>${esc(roundLabel(m.round))}</span>
+            <span class="badge soon">قريباً</span>
+            <span></span>
+          </div>
+          <div class="match">
+            ${teamHTML(m.home_team, m.home_flag, 'home')}
+            <div class="scorebox"><span class="vs">VS</span></div>
+            ${teamHTML(m.away_team, m.away_flag, 'away')}
+          </div>
+          ${vline}
+          <div class="predicted-note">⏳ يفتح التوقّع أول ما تتحدد الفرق</div>
+        </div>`;
+      }
+
       const locked = isLocked(m);
       const mine = myPreds.get(m.id);
       const predicted = !!mine;          // already saved -> cannot edit
@@ -251,8 +273,8 @@
         </div>`;
         return;
       }
-      // filter bar: upcoming | finished | all
-      const known = matches.filter((m) => teamsKnown(m));
+      // filter bar: upcoming | finished | all (TBD matches show as schedule preview)
+      const known = matches.slice();
       const filterBar = `<div class="mfilter">
         <button data-f="upcoming" class="${matchFilter === 'upcoming' ? 'active' : ''}">القادمة</button>
         <button data-f="finished" class="${matchFilter === 'finished' ? 'active' : ''}">المنتهية</button>

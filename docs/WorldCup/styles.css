@@ -301,6 +301,10 @@ body { direction: rtl; }
 .pts.good { background: rgba(27,122,75,.13); color: var(--green); }
 .pts.zero { background: rgba(200,54,47,.10);  color: var(--error); }
 
+.card.preview { opacity: .82; }
+.card.preview .vs { font-size: 18px; font-weight: 900; color: var(--muted); }
+.badge.soon { background: rgba(120,120,120,.15); color: var(--muted); }
+
 .mfilter {
   display: flex; gap: 6px; margin: 4px 0 16px;
   background: var(--surface2); border: 1px solid var(--border);
