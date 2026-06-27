@@ -13,6 +13,14 @@ on:
   schedule:
     - cron: '*/20 * * * *'
   workflow_dispatch:
+  # Also run whenever the WorldCup backend files change on main, so a code
+  # push applies db.sql immediately instead of waiting for the next cron tick.
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/wc-autofetch.yml'
+      - '.github/db/wc-db.sql'
+      - '.github/scripts/wc-fetch-results.mjs'
 
 permissions:
   contents: read
