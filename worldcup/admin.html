@@ -170,16 +170,23 @@
       </div>`;
     }
 
-    // Compact card for a finished match — just shows the score + a re-open button.
+    // Compact card for a closed match (finished OR locked) + a re-open button.
     function finishedCard(m) {
       const home = m.home_team || '—', away = m.away_team || '—';
+      const hasScore = m.home_score != null && m.away_score != null;
+      const scoreHTML = hasScore
+        ? `<b>${m.home_score} - ${m.away_score}</b>`
+        : '<span style="color:var(--muted)">بدون نتيجة</span>';
+      const badge = m.finished
+        ? '<span class="badge done">منتهية</span>'
+        : '<span class="badge locked">مغلقة 🔒</span>';
       return `<div class="card" data-id="${m.id}" data-finished="1">
         <div class="meta">
           <span><b>${esc(roundLabel(m.round))}</b> — مباراة ${m.match_no}</span>
-          <span class="badge done">منتهية</span>
+          ${badge}
         </div>
         <div class="venue-line" style="font-size:15px;color:var(--text)">
-          ${esc(home)} <b>${m.home_score} - ${m.away_score}</b> ${esc(away)}
+          ${esc(home)} ${scoreHTML} ${esc(away)}
         </div>
         <div class="card-actions">
           <button class="btn ghost reopen">♻️ إعادة فتح المباراة</button>
@@ -191,8 +198,9 @@
       $('#list').innerHTML = '<div class="empty">جاري التحميل...</div>';
       loadMatches().then((data) => {
         matches = data;
-        const upcoming = matches.filter((m) => !m.finished);
-        const finished = matches.filter((m) => m.finished);
+        // "open" = playable now; "closed" = finished OR locked (re-openable)
+        const upcoming = matches.filter((m) => !m.finished && !m.locked);
+        const finished = matches.filter((m) => m.finished || m.locked);
 
         // main list: upcoming matches grouped by DAY (sorted by kickoff)
         const sorted = upcoming.slice().sort((a, b) =>
@@ -216,7 +224,7 @@
         // finished matches: tucked into a collapsible "re-open" section
         if (finished.length) {
           html += `<details class="team-edit" style="margin-top:24px">
-            <summary>🏁 مباريات منتهية (${finished.length}) — إعادة فتح</summary>` +
+            <summary>🏁 مباريات منتهية / مغلقة (${finished.length}) — إعادة فتح</summary>` +
             finished.slice().sort((a, b) => a.id - b.id).map(finishedCard).join('') +
             `</details>`;
         }
