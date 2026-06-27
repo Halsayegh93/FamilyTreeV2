@@ -179,17 +179,17 @@
           ${teamHTML(m.home_team, m.home_flag, 'home')}
           <div class="scorebox">
             <div class="stepper">
-              <button type="button" class="step minus" ${inputsOff ? 'disabled' : ''}>−</button>
+              <button type="button" class="step plus" ${inputsOff ? 'disabled' : ''}>+</button>
               <input type="number" min="0" max="99" inputmode="numeric"
                 class="sc-home" value="${ph}" ${inputsOff ? 'disabled' : ''} />
-              <button type="button" class="step plus" ${inputsOff ? 'disabled' : ''}>+</button>
+              <button type="button" class="step minus" ${inputsOff ? 'disabled' : ''}>−</button>
             </div>
             <span class="dash">-</span>
             <div class="stepper">
-              <button type="button" class="step minus" ${inputsOff ? 'disabled' : ''}>−</button>
+              <button type="button" class="step plus" ${inputsOff ? 'disabled' : ''}>+</button>
               <input type="number" min="0" max="99" inputmode="numeric"
                 class="sc-away" value="${pa}" ${inputsOff ? 'disabled' : ''} />
-              <button type="button" class="step plus" ${inputsOff ? 'disabled' : ''}>+</button>
+              <button type="button" class="step minus" ${inputsOff ? 'disabled' : ''}>−</button>
             </div>
           </div>
           ${teamHTML(m.away_team, m.away_flag, 'away')}

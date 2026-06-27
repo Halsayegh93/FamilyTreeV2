@@ -264,13 +264,13 @@ body { direction: rtl; }
 }
 .team .name.tbd { color: var(--muted); font-weight: 600; }
 
-.scorebox { display: flex; align-items: center; gap: 6px; }
-.stepper { display: flex; align-items: center; gap: 5px; }
+.scorebox { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.stepper { display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .step {
-  width: 32px; height: 46px; flex-shrink: 0;
-  border: 1px solid var(--border); border-radius: 10px;
+  width: 46px; height: 22px; flex-shrink: 0;
+  border: 1px solid var(--border); border-radius: 8px;
   background: var(--surface2); color: var(--primary);
-  font-family: inherit; font-size: 20px; font-weight: 900; line-height: 1;
+  font-family: inherit; font-size: 16px; font-weight: 900; line-height: 1;
   cursor: pointer; display: flex; align-items: center; justify-content: center;
 }
 .step:active { transform: scale(.9); }
