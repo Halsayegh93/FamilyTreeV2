@@ -263,9 +263,38 @@ begin
 end;
 $$;
 
+-- ---------- Admin: reset (zero the counter) ---------------------------------
+-- p_what: 'predictions' (delete everyone's predictions) | 'results' (clear all
+-- official results + reset later-round teams) | 'all' (both).
+create or replace function public.wc_admin_reset(p_pin text, p_what text)
+returns text
+language plpgsql security definer set search_path = public as $$
+begin
+  if p_pin is distinct from '1993' then          -- CHANGE_ME: same admin PIN
+    raise exception 'BAD_PIN';
+  end if;
+
+  if p_what in ('predictions', 'all') then
+    delete from public.wc_predictions;
+  end if;
+
+  if p_what in ('results', 'all') then
+    update public.wc_matches
+       set home_score = null, away_score = null, finished = false, locked = false;
+    -- rounds after the Round of 32 go back to "to be decided"
+    update public.wc_matches
+       set home_team = null, away_team = null, home_flag = null, away_flag = null
+     where id >= 17;
+  end if;
+
+  return p_what;
+end;
+$$;
+
 grant execute on function public.wc_submit_prediction(integer, text, integer, integer) to anon, authenticated;
 grant execute on function public.wc_admin_set_result(integer, integer, integer, text, text) to anon, authenticated;
 grant execute on function public.wc_admin_save_match(integer, text, text, text, text, text, timestamptz, boolean, text) to anon, authenticated;
+grant execute on function public.wc_admin_reset(text, text) to anon, authenticated;
 
 -- ---------- Seed the 32 knockout matches ------------------------------------
 -- Real FIFA World Cup 2026 knockout SCHEDULE (dates + host venues).

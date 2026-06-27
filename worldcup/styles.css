@@ -101,11 +101,12 @@ body { direction: rtl; }
 .namebar input:disabled { opacity: .8; background: var(--surface); }
 .namebtn {
   flex-shrink: 0; border: none; cursor: pointer;
-  width: 46px; height: 46px; border-radius: 10px;
+  width: 46px; height: 46px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
   font-family: inherit; font-weight: 900; font-size: 20px;
   background: linear-gradient(120deg, var(--primary), var(--primary2));
   color: #fff; transition: .15s;
+  box-shadow: 0 4px 12px rgba(43,122,159,.35);
 }
 .namebtn:active { transform: scale(.94); }
 .namebtn.confirmed { background: var(--green); }

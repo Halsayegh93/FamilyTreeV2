@@ -184,4 +184,17 @@ export const demo = {
   },
 
   reset() { writeStore(MKEY, seedMatches()); writeStore(PKEY, seedPredictions()); },
+
+  resetWhat(what) {
+    if (what === 'predictions' || what === 'all') writeStore(PKEY, []);
+    if (what === 'results' || what === 'all') {
+      const matches = this.matches();
+      for (const m of matches) {
+        m.home_score = null; m.away_score = null; m.finished = false; m.locked = false;
+        if (m.id >= 17) { m.home_team = null; m.away_team = null; m.home_flag = null; m.away_flag = null; }
+      }
+      writeStore(MKEY, matches);
+    }
+    return what;
+  },
 };

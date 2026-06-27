@@ -147,13 +147,10 @@
         </div>`;
       }
 
-      const kickoff = m.kickoff
-        ? new Date(m.kickoff).toLocaleString('ar', { dateStyle: 'medium', timeStyle: 'short' })
-        : (m.finished ? '' : 'موعد لاحق');
-
-      const venueLine = kickoff
-        ? `<div class="venue-line">🗓️ ${esc(kickoff)}</div>`
+      const ktime = m.kickoff
+        ? new Date(m.kickoff).toLocaleTimeString('ar', { hour: '2-digit', minute: '2-digit' })
         : '';
+      const venueLine = ktime ? `<div class="venue-line">🕐 ${esc(ktime)}</div>` : '';
 
       // action area
       let actionHTML = '';
@@ -201,16 +198,24 @@
           شوف نتائجك في تبويب <b>الترتيب</b>.</div>`;
         return;
       }
-      const groups = {};
-      for (const m of upcoming) (groups[m.round] ||= []).push(m);
+      // group by day, ordered by kickoff time
+      const sorted = upcoming.slice().sort((a, b) =>
+        (new Date(a.kickoff || 8.64e15)) - (new Date(b.kickoff || 8.64e15)) || a.id - b.id);
+      const byDay = new Map();
+      for (const m of sorted) {
+        const d = m.kickoff ? new Date(m.kickoff) : null;
+        const key = d ? `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}` : 'tbd';
+        if (!byDay.has(key)) byDay.set(key, []);
+        byDay.get(key).push(m);
+      }
+      const dayLabel = (iso) => new Date(iso).toLocaleDateString('ar',
+        { weekday: 'long', day: 'numeric', month: 'long' });
 
-      const order = Object.keys(groups).sort(
-        (a, b) => (ROUNDS[a]?.order || 9) - (ROUNDS[b]?.order || 9));
-
-      viewMatches.innerHTML = order.map((r) =>
-        `<div class="round-title">${esc(roundLabel(r))}</div>` +
-        groups[r].map(matchCard).join('')
-      ).join('');
+      viewMatches.innerHTML = [...byDay.entries()].map(([k, list]) => {
+        const label = k === 'tbd' ? 'موعد لاحق' : dayLabel(list[0].kickoff);
+        return `<div class="round-title day">📅 ${esc(label)}</div>` +
+          list.map(matchCard).join('');
+      }).join('');
 
       viewMatches.querySelectorAll('.card').forEach((card) => {
         const btn = card.querySelector('.save');
