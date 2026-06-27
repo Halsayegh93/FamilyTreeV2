@@ -292,14 +292,22 @@
           new Date(a.kickoff) <= new Date(b.kickoff) ? a : b);
         previewDay = dayKey(soonest.kickoff);
       }
-      const known = matches.filter((m) => {
-        if (teamsKnown(m) || m.finished) return true;
-        return previewDay !== null && m.kickoff && dayKey(m.kickoff) === previewDay;
-      });
+      // a match whose day already passed leaves "القادمة" and shows under "المنتهية"
+      const t0 = new Date(); t0.setHours(0, 0, 0, 0);
+      const startMs = t0.getTime();
+      const dayPassed = (m) => m.kickoff && new Date(m.kickoff).getTime() < startMs;
+
+      // filters: status (قادمة/منتهية) + by round
+      const ROUND_FILTERS = [
+        ['R32', 'دور 32'], ['R16', 'دور 16'], ['QF', 'ربع'], ['SF', 'نص'], ['FINAL', 'النهائي'],
+      ];
+      const roundCodes = ROUND_FILTERS.map(([c]) => c);
+      const chip = (f, label) =>
+        `<button data-f="${f}" class="${matchFilter === f ? 'active' : ''}">${label}</button>`;
       const filterBar = `<div class="mfilter">
-        <button data-f="upcoming" class="${matchFilter === 'upcoming' ? 'active' : ''}">القادمة</button>
-        <button data-f="finished" class="${matchFilter === 'finished' ? 'active' : ''}">المنتهية</button>
-        <button data-f="all" class="${matchFilter === 'all' ? 'active' : ''}">الكل</button>
+        ${chip('upcoming', 'القادمة')}
+        ${chip('finished', 'المنتهية')}
+        ${ROUND_FILTERS.map(([c, l]) => chip(c, l)).join('')}
       </div>`;
       const wireFilter = () => {
         viewMatches.querySelectorAll('.mfilter button').forEach((b) => {
@@ -307,14 +315,24 @@
         });
       };
 
-      const list = known.filter((m) =>
-        matchFilter === 'all' ? true
-        : matchFilter === 'finished' ? m.finished
-        : !m.finished);
+      let list;
+      if (matchFilter === 'finished') {
+        list = matches.filter((m) => m.finished || dayPassed(m));
+      } else if (roundCodes.includes(matchFilter)) {
+        list = matches.filter((m) => matchFilter === 'FINAL'
+          ? (m.round === 'FINAL' || m.round === '3RD')
+          : m.round === matchFilter);
+      } else { // القادمة (default): not finished, day not passed; TBD only for soonest day
+        list = matches.filter((m) =>
+          !m.finished && !dayPassed(m) &&
+          (teamsKnown(m) || (previewDay !== null && m.kickoff && dayKey(m.kickoff) === previewDay)));
+      }
 
       if (!list.length) {
-        viewMatches.innerHTML = filterBar + `<div class="empty">
-          ${matchFilter === 'finished' ? 'ما في مباريات منتهية بعد 🏁' : 'ما في مباريات هنا ⚽️'}</div>`;
+        const emptyMsg = matchFilter === 'finished' ? 'ما في مباريات منتهية بعد 🏁'
+          : roundCodes.includes(matchFilter) ? 'مباريات هذا الدور ما تحددت بعد ⚽️'
+          : 'ما في مباريات قادمة حالياً ⚽️';
+        viewMatches.innerHTML = filterBar + `<div class="empty">${emptyMsg}</div>`;
         wireFilter();
         return;
       }
