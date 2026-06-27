@@ -1,4 +1,5 @@
 // ============================================================================
+// (Runs on a 20-min cron, on manual dispatch, and on push to main.)
 // World Cup auto-fetch — pulls fixtures/results from football-data.org and
 // pushes them into the Supabase DB via the admin RPCs. Runs in GitHub Actions
 // (see .github/workflows/wc-autofetch.yml).
