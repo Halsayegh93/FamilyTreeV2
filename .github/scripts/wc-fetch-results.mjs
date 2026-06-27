@@ -143,11 +143,41 @@ async function main() {
     }
   }
 
+  // ----- group-stage matches (current matches) -----
+  let groupUpdates = 0;
+  const groupLabel = (g) => {
+    if (!g) return 'دور المجموعات';
+    const L = String(g).trim().slice(-1).toUpperCase();
+    return /[A-L]/.test(L) ? `المجموعة ${L}` : 'دور المجموعات';
+  };
+  for (const api of matches.filter((m) => m.stage === 'GROUP_STAGE')) {
+    const [hN, hF] = teamInfo(api.homeTeam?.name);
+    const [aN, aF] = teamInfo(api.awayTeam?.name);
+    try {
+      await sbRpc('wc_admin_upsert_match', {
+        p_id: api.id,
+        p_round: groupLabel(api.group),
+        p_match_no: api.matchday || 0,
+        p_home_team: hN, p_home_flag: hF, p_away_team: aN, p_away_flag: aF,
+        p_venue: api.venue || null, p_kickoff: api.utcDate || null, p_pin: PIN,
+      });
+      groupUpdates++;
+      if (api.status === 'FINISHED' && api.score?.fullTime?.home != null) {
+        await sbRpc('wc_admin_set_result', {
+          p_match_id: api.id,
+          p_home: api.score.fullTime.home, p_away: api.score.fullTime.away,
+          p_pin: PIN, p_winner: null,
+        });
+        resultUpdates++;
+      }
+    } catch (e) { console.error(`group #${api.id}:`, e.message); }
+  }
+  console.log(`Group-stage matches upserted: ${groupUpdates}`);
+
   console.log(`Done. Team updates: ${teamUpdates}, result updates: ${resultUpdates}.`);
-  if (teamUpdates === 0)
-    console.log('NOTE: no knockout matches matched — the competition may not be ' +
-      'covered by your plan yet, or stages are not published. This is expected ' +
-      'before the knockout stage begins.');
+  if (teamUpdates === 0 && groupUpdates === 0)
+    console.log('NOTE: no matches matched — the competition may not be covered ' +
+      'by your plan, or stages are not published yet.');
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });

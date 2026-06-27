@@ -164,6 +164,18 @@ export async function adminReset(what, pin) {
   return data;
 }
 
+// Admin: delete one player's predictions (remove them from the leaderboard).
+export async function adminDeletePlayer(name, pin) {
+  if (DEMO) {
+    if (pin !== '1993') throw new Error('BAD_PIN');
+    return demo.deletePlayer(name);
+  }
+  const sb = await client();
+  const { data, error } = await sb.rpc('wc_admin_delete_player', { p_name: name, p_pin: pin });
+  if (error) throw error;
+  return data;
+}
+
 // Verify the admin PIN without mutating anything.
 export async function adminVerifyPin(pin) {
   if (DEMO) return pin === '1993';
