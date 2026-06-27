@@ -265,35 +265,6 @@
       </div>`;
     }
 
-    // compact one-line row for a finished match (expand for predictors)
-    function finishedRow(m) {
-      const mine = myPreds.get(m.id);
-      const pts = mine ? scoreRow(mine, m) : null;
-      const ptsTag = mine
-        ? `<span class="pts ${pts > 0 ? 'good' : 'zero'}">${pts > 0 ? '+' + pts : '0'}</span>`
-        : '';
-      const preds = allPreds.filter((p) => p.match_id === m.id);
-      const predBody = preds.length
-        ? preds.slice().sort((a, b) => String(a.player_name).localeCompare(b.player_name, 'ar'))
-            .map((p) => {
-              const guess = p.pick
-                ? '🏆 ' + esc((p.pick === 'home' ? m.home_team : m.away_team) || '')
-                : `${p.home_score}-${p.away_score}`;
-              const pp = scoreRow(p, m);
-              return `<span class="pred-chip">${esc(p.player_name)} <b>${guess}</b>
-                <span class="pts ${pp > 0 ? 'good' : 'zero'}">${pp > 0 ? '+' + pp : '0'}</span></span>`;
-            }).join('')
-        : '<span class="predictors-empty">ما توقّع أحد</span>';
-      return `<details class="fin-row">
-        <summary>
-          <span class="fr-teams">${esc(m.home_flag || '')} ${esc(m.home_team || '—')}
-            <b>${m.home_score}-${m.away_score}</b> ${esc(m.away_team || '—')} ${esc(m.away_flag || '')}</span>
-          ${ptsTag}
-        </summary>
-        <div class="pred-names">👥 ${predBody}</div>
-      </details>`;
-    }
-
     function renderMatches() {
       // require a confirmed name before showing/using the matches section
       if (!nameLocked) {
@@ -318,7 +289,6 @@
         `<button data-f="${f}" class="${matchFilter === f ? 'active' : ''}">${label}</button>`;
       const filterBar = `<div class="mfilter">
         ${chip('upcoming', 'القادمة')}
-        ${chip('finished', 'المنتهية')}
         ${ROUND_FILTERS.map(([c, l]) => chip(c, l)).join('')}
       </div>`;
       const wireFilter = () => {
@@ -328,21 +298,21 @@
       };
 
       let list;
-      if (matchFilter === 'finished') {
-        list = matches.filter((m) => m.finished || dayPassed(m));
-      } else if (roundCodes.includes(matchFilter)) {
+      if (roundCodes.includes(matchFilter)) {
         list = matches.filter((m) => matchFilter === 'FINAL'
           ? (m.round === 'FINAL' || m.round === '3RD')
           : m.round === matchFilter);
-      } else { // القادمة (default): today + tomorrow, not finished, not past
-        list = matches.filter((m) =>
-          !m.finished && !dayPassed(m) && m.kickoff &&
-          new Date(m.kickoff).getTime() < startMs + UPCOMING_WINDOW);
+      } else { // القادمة: today + tomorrow upcoming + finished matches I predicted
+        list = matches.filter((m) => {
+          if (m.finished) return myPreds.has(m.id);   // keep finished only if I predicted it
+          return !dayPassed(m) && m.kickoff &&
+            new Date(m.kickoff).getTime() < startMs + UPCOMING_WINDOW;
+        });
       }
 
       if (!list.length) {
-        const emptyMsg = matchFilter === 'finished' ? 'ما في مباريات منتهية بعد 🏁'
-          : roundCodes.includes(matchFilter) ? 'مباريات هذا الدور ما تحددت بعد ⚽️'
+        const emptyMsg = roundCodes.includes(matchFilter)
+          ? 'مباريات هذا الدور ما تحددت بعد ⚽️'
           : 'ما في مباريات قادمة حالياً ⚽️';
         viewMatches.innerHTML = filterBar + `<div class="empty">${emptyMsg}</div>`;
         wireFilter();
@@ -364,7 +334,7 @@
         days.get(key).items.push(m);
       }
 
-      const renderItem = matchFilter === 'finished' ? finishedRow : matchCard;
+      const renderItem = matchCard;
       viewMatches.innerHTML = filterBar + [...days.values()].map((day) =>
         `<div class="round-title day">📅 ${esc(day.label)}</div>` +
         day.items.map(renderItem).join('')
