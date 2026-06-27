@@ -304,30 +304,27 @@ grant execute on function public.wc_admin_reset(text, text) to anon, authenticat
 -- adjust exact kickoff times from the Admin page if needed.
 -- Times are stored in UTC; tweak per match in the panel.
 
--- Round of 32 is pre-filled with teams + flags so nothing needs to be typed.
--- (Sample pairings reflecting the current bracket — editable from Admin once
---  the official draw is final on 27 June. Later rounds auto-fill from results.)
-insert into public.wc_matches (id, round, match_no, home_team, home_flag, away_team, away_flag, venue, kickoff) values
-  (1, 'R32', 1,  'البرازيل','🇧🇷','كوريا الجنوبية','🇰🇷','SoFi Stadium, Los Angeles',         '2026-06-28 20:00+00'),
-  (2, 'R32', 2,  'الأرجنتين','🇦🇷','نيجيريا','🇳🇬','Estadio Azteca, Mexico City',       '2026-06-28 23:00+00'),
-  (3, 'R32', 3,  'فرنسا','🇫🇷','السنغال','🇸🇳','NRG Stadium, Houston',              '2026-06-29 20:00+00'),
-  (4, 'R32', 4,  'إنجلترا','🏴','اليابان','🇯🇵','Gillette Stadium, Boston',          '2026-06-29 23:00+00'),
-  (5, 'R32', 5,  'إسبانيا','🇪🇸','المغرب','🇲🇦','Estadio BBVA, Monterrey',           '2026-06-30 18:00+00'),
-  (6, 'R32', 6,  'ألمانيا','🇩🇪','المكسيك','🇲🇽','AT&T Stadium, Dallas',              '2026-06-30 21:00+00'),
-  (7, 'R32', 7,  'البرتغال','🇵🇹','كرواتيا','🇭🇷','MetLife Stadium, New York/NJ',      '2026-06-30 23:00+00'),
-  (8, 'R32', 8,  'هولندا','🇳🇱','أمريكا','🇺🇸','Estadio Azteca, Mexico City',       '2026-07-01 18:00+00'),
-  (9, 'R32', 9,  'بلجيكا','🇧🇪','الأوروغواي','🇺🇾','Mercedes-Benz Stadium, Atlanta',    '2026-07-01 21:00+00'),
-  (10,'R32', 10, 'إيطاليا','🇮🇹','أستراليا','🇦🇺','Lumen Field, Seattle',              '2026-07-01 23:00+00'),
-  (11,'R32', 11, 'السعودية','🇸🇦','سويسرا','🇨🇭','Levi''s Stadium, San Francisco Bay','2026-07-02 20:00+00'),
-  (12,'R32', 12, 'كولومبيا','🇨🇴','الدنمارك','🇩🇰','SoFi Stadium, Los Angeles',         '2026-07-02 23:00+00'),
-  (13,'R32', 13, 'قطر','🇶🇦','الإكوادور','🇪🇨','BMO Field, Toronto',                '2026-07-02 20:00+00'),
-  (14,'R32', 14, 'كندا','🇨🇦','غانا','🇬🇭','BC Place, Vancouver',               '2026-07-03 22:00+00'),
-  (15,'R32', 15, 'النرويج','🇳🇴','بولندا','🇵🇱','Hard Rock Stadium, Miami',          '2026-07-03 20:00+00'),
-  (16,'R32', 16, 'مصر','🇪🇬','صربيا','🇷🇸','Arrowhead Stadium, Kansas City',    '2026-07-03 23:00+00')
-on conflict (id) do nothing;
-
--- Round of 16 → Final: teams fill in automatically as results are entered.
+-- Round of 32: real official dates + venues. Teams are left "to be decided" —
+-- the real matchups are only known once the group stage ends, so the admin sets
+-- them from the panel; later rounds then auto-fill from results.
 insert into public.wc_matches (id, round, match_no, venue, kickoff) values
+  (1, 'R32', 1,  'SoFi Stadium, Los Angeles',          '2026-06-28 20:00+00'),
+  (2, 'R32', 2,  'Estadio Azteca, Mexico City',        '2026-06-28 23:00+00'),
+  (3, 'R32', 3,  'NRG Stadium, Houston',               '2026-06-29 20:00+00'),
+  (4, 'R32', 4,  'Gillette Stadium, Boston',           '2026-06-29 23:00+00'),
+  (5, 'R32', 5,  'Estadio BBVA, Monterrey',            '2026-06-30 18:00+00'),
+  (6, 'R32', 6,  'AT&T Stadium, Dallas',               '2026-06-30 21:00+00'),
+  (7, 'R32', 7,  'MetLife Stadium, New York/NJ',       '2026-06-30 23:00+00'),
+  (8, 'R32', 8,  'Estadio Azteca, Mexico City',        '2026-07-01 18:00+00'),
+  (9, 'R32', 9,  'Mercedes-Benz Stadium, Atlanta',     '2026-07-01 21:00+00'),
+  (10,'R32', 10, 'Lumen Field, Seattle',               '2026-07-01 23:00+00'),
+  (11,'R32', 11, 'Levi''s Stadium, San Francisco Bay', '2026-07-02 20:00+00'),
+  (12,'R32', 12, 'SoFi Stadium, Los Angeles',          '2026-07-02 23:00+00'),
+  (13,'R32', 13, 'BMO Field, Toronto',                 '2026-07-02 20:00+00'),
+  (14,'R32', 14, 'BC Place, Vancouver',                '2026-07-03 22:00+00'),
+  (15,'R32', 15, 'Hard Rock Stadium, Miami',           '2026-07-03 20:00+00'),
+  (16,'R32', 16, 'Arrowhead Stadium, Kansas City',     '2026-07-03 23:00+00'),
+  -- Round of 16 → Final: teams fill in automatically as results are entered.
   (17,'R16', 1, 'Lincoln Financial Field, Philadelphia','2026-07-04 20:00+00'),
   (18,'R16', 2, 'NRG Stadium, Houston',                 '2026-07-04 23:00+00'),
   (19,'R16', 3, 'AT&T Stadium, Dallas',                 '2026-07-05 20:00+00'),
