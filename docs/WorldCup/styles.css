@@ -301,6 +301,20 @@ body { direction: rtl; }
 .pts.good { background: rgba(27,122,75,.13); color: var(--green); }
 .pts.zero { background: rgba(200,54,47,.10);  color: var(--error); }
 
+/* finished matches — compact stacked rows */
+.fin-row {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; margin-bottom: 8px; padding: 0 12px;
+}
+.fin-row summary {
+  display: flex; align-items: center; gap: 8px; cursor: pointer;
+  list-style: none; padding: 12px 0; font-size: 14px; font-weight: 700;
+}
+.fin-row summary::-webkit-details-marker { display: none; }
+.fin-row .fr-teams { flex: 1; }
+.fin-row .fr-teams b { margin: 0 6px; color: var(--primary); }
+.fin-row .pred-names { padding: 0 0 12px; }
+
 .card.preview { opacity: .82; }
 .card.preview .vs { font-size: 18px; font-weight: 900; color: var(--muted); }
 .badge.soon { background: rgba(120,120,120,.15); color: var(--muted); }
