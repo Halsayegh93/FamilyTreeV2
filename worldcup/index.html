@@ -273,8 +273,29 @@
         </div>`;
         return;
       }
-      // filter bar: upcoming | finished | all (TBD matches show as schedule preview)
-      const known = matches.slice();
+      // filter bar: upcoming | finished | all
+      // Decided/finished matches always show. For undecided (TBD) matches we
+      // only preview the SOONEST day that has them — so the whole bracket isn't
+      // listed as a placeholder on every single day until the final.
+      const now = Date.now();
+      const DAY = 24 * 3600 * 1000;
+      const dayKey = (ts) => {
+        const d = new Date(ts);
+        return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+      };
+      const tbdSoon = matches.filter((m) =>
+        !teamsKnown(m) && !m.finished && m.kickoff &&
+        (new Date(m.kickoff).getTime() - now) >= -DAY);
+      let previewDay = null;
+      if (tbdSoon.length) {
+        const soonest = tbdSoon.reduce((a, b) =>
+          new Date(a.kickoff) <= new Date(b.kickoff) ? a : b);
+        previewDay = dayKey(soonest.kickoff);
+      }
+      const known = matches.filter((m) => {
+        if (teamsKnown(m) || m.finished) return true;
+        return previewDay !== null && m.kickoff && dayKey(m.kickoff) === previewDay;
+      });
       const filterBar = `<div class="mfilter">
         <button data-f="upcoming" class="${matchFilter === 'upcoming' ? 'active' : ''}">القادمة</button>
         <button data-f="finished" class="${matchFilter === 'finished' ? 'active' : ''}">المنتهية</button>
