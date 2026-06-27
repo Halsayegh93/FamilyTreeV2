@@ -53,7 +53,7 @@
     import {
       loadMatches, loadPredictions, roundLabel, ROUNDS, friendlyError,
       adminVerifyPin, adminSetResult, adminSaveMatch, adminReset,
-      adminDeletePlayer, adminReopenMatch, watch,
+      adminDeletePlayer, adminReopenMatch, scoreRow, watch,
     } from './app.js';
 
     const $ = (s, r = document) => r.querySelector(s);
@@ -62,6 +62,31 @@
 
     let PIN = '';
     let matches = [];
+    let allPreds = [];
+
+    // players' predictions for a match — same style as the public site
+    function predictorsBlock(m) {
+      const preds = allPreds.filter((p) => p.match_id === m.id);
+      if (!preds.length) {
+        return '<div class="predictors-empty">👥 ما توقّع أحد بعد</div>';
+      }
+      const items = preds.slice()
+        .sort((a, b) => String(a.player_name).localeCompare(b.player_name, 'ar'))
+        .map((p) => {
+          const guess = p.pick
+            ? '🏆 ' + esc((p.pick === 'home' ? m.home_team : m.away_team) || '')
+            : `${p.home_score}-${p.away_score}`;
+          const ptsTag = m.finished
+            ? (() => { const pts = scoreRow(p, m);
+                return `<span class="pts ${pts > 0 ? 'good' : 'zero'}">${pts > 0 ? '+' + pts : '0'}</span>`; })()
+            : '';
+          return `<span class="pred-chip">${esc(p.player_name)} <b>${guess}</b> ${ptsTag}</span>`;
+        }).join('');
+      return `<details class="predictors">
+        <summary>👥 توقعات اللاعبين (${preds.length})</summary>
+        <div class="pred-names">${items}</div>
+      </details>`;
+    }
 
     function toast(msg, isErr = false) {
       const t = $('#toast');
@@ -167,6 +192,8 @@
           </div>
           <button class="btn ghost save-teams" style="margin-top:8px">💾 حفظ الفرق</button>
         </details>
+
+        ${predictorsBlock(m)}
       </div>`;
     }
 
@@ -191,13 +218,16 @@
         <div class="card-actions">
           <button class="btn ghost reopen">♻️ إعادة فتح المباراة</button>
         </div>
+
+        ${predictorsBlock(m)}
       </div>`;
     }
 
     function loadList() {
       $('#list').innerHTML = '<div class="empty">جاري التحميل...</div>';
-      loadMatches().then((data) => {
+      Promise.all([loadMatches(), loadPredictions()]).then(([data, preds]) => {
         matches = data;
+        allPreds = preds || [];
         // matches whose day already passed are dropped from the admin list
         const today = new Date(); today.setHours(0, 0, 0, 0);
         const dayPassed = (m) => {
