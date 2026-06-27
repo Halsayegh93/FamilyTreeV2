@@ -301,6 +301,20 @@ body { direction: rtl; }
 .pts.good { background: rgba(27,122,75,.13); color: var(--green); }
 .pts.zero { background: rgba(200,54,47,.10);  color: var(--error); }
 
+.predictors { margin-top: 12px; }
+.predictors summary {
+  cursor: pointer; font-size: 13px; font-weight: 800; color: var(--primary);
+  list-style: none; padding: 8px 0;
+}
+.predictors summary::-webkit-details-marker { display: none; }
+.pred-names { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.pred-chip {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 999px; padding: 5px 11px; font-size: 13px; font-weight: 700;
+}
+.predictors-empty {
+  margin-top: 12px; text-align: center; font-size: 12px; color: var(--muted);
+}
 .card-actions { margin-top: 12px; }
 .orline {
   text-align: center; margin: 12px 0 8px; color: var(--muted);

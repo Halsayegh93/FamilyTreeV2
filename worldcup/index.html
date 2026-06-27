@@ -183,6 +183,33 @@
           </div>`;
       }
 
+      // who predicted this match — names always; reveal picks once it's finished
+      const preds = allPreds.filter((p) => p.match_id === m.id);
+      let predictorsHTML;
+      if (preds.length) {
+        const items = preds
+          .slice()
+          .sort((a, b) => String(a.player_name).localeCompare(b.player_name, 'ar'))
+          .map((p) => {
+            const nm = esc(p.player_name);
+            if (m.finished) {
+              const guess = p.pick
+                ? '🏆 ' + esc((p.pick === 'home' ? m.home_team : m.away_team) || '')
+                : `${p.home_score}-${p.away_score}`;
+              const pts = scoreRow(p, m);
+              return `<span class="pred-chip">${nm} <b>${guess}</b>
+                <span class="pts ${pts > 0 ? 'good' : 'zero'}">${pts > 0 ? '+' + pts : '0'}</span></span>`;
+            }
+            return `<span class="pred-chip">${nm}</span>`;
+          }).join('');
+        predictorsHTML = `<details class="predictors">
+          <summary>👥 توقّعوا (${preds.length})</summary>
+          <div class="pred-names">${items}</div>
+        </details>`;
+      } else {
+        predictorsHTML = `<div class="predictors-empty">👥 ما توقّع أحد بعد</div>`;
+      }
+
       return `<div class="card" data-id="${m.id}">
         <div class="meta">
           <span>${esc(roundLabel(m.round))}</span>
@@ -211,6 +238,7 @@
         ${venueLine}
         ${resultLine}
         ${actionHTML}
+        ${predictorsHTML}
       </div>`;
     }
 
@@ -222,8 +250,8 @@
         </div>`;
         return;
       }
-      // only show matches whose teams are decided + finished matches drop off
-      const upcoming = matches.filter((m) => !m.finished && teamsKnown(m));
+      // show every match with known teams — finished ones stay (result + points)
+      const upcoming = matches.filter((m) => teamsKnown(m));
       if (!upcoming.length) {
         viewMatches.innerHTML = `<div class="empty">ما في مباريات قادمة حالياً ⚽️<br>
           شوف نتائجك في تبويب <b>الترتيب</b>.</div>`;
