@@ -145,11 +145,8 @@ async function main() {
 
   // ----- group-stage matches (current matches) -----
   let groupUpdates = 0;
-  const groupLabel = (g) => {
-    if (!g) return 'دور المجموعات';
-    const L = String(g).trim().slice(-1).toUpperCase();
-    return /[A-L]/.test(L) ? `المجموعة ${L}` : 'دور المجموعات';
-  };
+  // all group matches go under a single "current round" section
+  const groupLabel = () => 'دور المجموعات';
   for (const api of matches.filter((m) => m.stage === 'GROUP_STAGE')) {
     const [hN, hF] = teamInfo(api.homeTeam?.name);
     const [aN, aF] = teamInfo(api.awayTeam?.name);

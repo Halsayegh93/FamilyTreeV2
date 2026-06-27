@@ -259,8 +259,9 @@ body { direction: rtl; }
 .team.away { flex-direction: row-reverse; text-align: left; }
 .team .flag { font-size: 22px; }
 .team .name {
-  font-weight: 700; font-size: 15px;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-weight: 700; font-size: 15px; line-height: 1.25;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden; /* wrap long names onto two lines on phones */
 }
 .team .name.tbd { color: var(--muted); font-weight: 600; }
 
