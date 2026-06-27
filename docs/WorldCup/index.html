@@ -156,10 +156,10 @@
         </div>`;
       }
 
-      const kickoff = m.kickoff
-        ? new Date(m.kickoff).toLocaleString('ar', { dateStyle: 'medium', timeStyle: 'short' })
+      const ktime = m.kickoff
+        ? new Date(m.kickoff).toLocaleTimeString('ar', { hour: '2-digit', minute: '2-digit' })
         : '';
-      const venueLine = kickoff ? `<div class="venue-line">🗓️ ${esc(kickoff)}</div>` : '';
+      const venueLine = ktime ? `<div class="venue-line">🕐 ${esc(ktime)}</div>` : '';
 
       // action area
       let actionHTML = '';
@@ -171,7 +171,7 @@
 
       return `<div class="card" data-id="${m.id}">
         <div class="meta">
-          <span>مباراة ${m.match_no}</span>
+          <span>${esc(roundLabel(m.round))} · مباراة ${m.match_no}</span>
           ${badge}
           <span></span>
         </div>
@@ -207,18 +207,24 @@
           شوف نتائجك في تبويب <b>الترتيب</b>.</div>`;
         return;
       }
-      // group by round, with the round name on top; matches sorted by date
-      const groups = {};
-      for (const m of upcoming) (groups[m.round] ||= []).push(m);
-      const order = Object.keys(groups).sort(
-        (a, b) => (ROUNDS[a]?.order || 9) - (ROUNDS[b]?.order || 9));
+      // group by day, with the date on top of each day's matches
+      const sorted = upcoming.slice().sort((a, b) =>
+        (new Date(a.kickoff || 8.64e15)) - (new Date(b.kickoff || 8.64e15)) || a.id - b.id);
+      const byDay = new Map();
+      for (const m of sorted) {
+        const d = m.kickoff ? new Date(m.kickoff) : null;
+        const key = d ? `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}` : 'tbd';
+        if (!byDay.has(key)) byDay.set(key, []);
+        byDay.get(key).push(m);
+      }
+      const dayLabel = (iso) => new Date(iso).toLocaleDateString('ar',
+        { weekday: 'long', day: 'numeric', month: 'long' });
 
-      viewMatches.innerHTML = order.map((r) =>
-        `<div class="round-title">${esc(roundLabel(r))}</div>` +
-        groups[r].slice().sort((a, b) =>
-          (new Date(a.kickoff || 8.64e15)) - (new Date(b.kickoff || 8.64e15)) || a.id - b.id)
-          .map(matchCard).join('')
-      ).join('');
+      viewMatches.innerHTML = [...byDay.entries()].map(([k, list]) => {
+        const label = k === 'tbd' ? 'موعد لاحق' : dayLabel(list[0].kickoff);
+        return `<div class="round-title day">📅 ${esc(label)}</div>` +
+          list.map(matchCard).join('');
+      }).join('');
 
       viewMatches.querySelectorAll('.card').forEach((card) => {
         const btn = card.querySelector('.save');
