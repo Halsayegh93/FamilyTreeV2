@@ -154,10 +154,10 @@
         </div>`;
       }
 
-      const ktime = m.kickoff
-        ? new Date(m.kickoff).toLocaleTimeString('ar', { hour: '2-digit', minute: '2-digit' })
+      const kickoff = m.kickoff
+        ? new Date(m.kickoff).toLocaleString('ar', { dateStyle: 'medium', timeStyle: 'short' })
         : '';
-      const venueLine = ktime ? `<div class="venue-line">🕐 ${esc(ktime)}</div>` : '';
+      const venueLine = kickoff ? `<div class="venue-line">🗓️ ${esc(kickoff)}</div>` : '';
 
       // action area
       let actionHTML = '';
@@ -205,24 +205,18 @@
           شوف نتائجك في تبويب <b>الترتيب</b>.</div>`;
         return;
       }
-      // group by day, ordered by kickoff time
-      const sorted = upcoming.slice().sort((a, b) =>
-        (new Date(a.kickoff || 8.64e15)) - (new Date(b.kickoff || 8.64e15)) || a.id - b.id);
-      const byDay = new Map();
-      for (const m of sorted) {
-        const d = m.kickoff ? new Date(m.kickoff) : null;
-        const key = d ? `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}` : 'tbd';
-        if (!byDay.has(key)) byDay.set(key, []);
-        byDay.get(key).push(m);
-      }
-      const dayLabel = (iso) => new Date(iso).toLocaleDateString('ar',
-        { weekday: 'long', day: 'numeric', month: 'long' });
+      // group by round, with the round name on top; matches sorted by date
+      const groups = {};
+      for (const m of upcoming) (groups[m.round] ||= []).push(m);
+      const order = Object.keys(groups).sort(
+        (a, b) => (ROUNDS[a]?.order || 9) - (ROUNDS[b]?.order || 9));
 
-      viewMatches.innerHTML = [...byDay.entries()].map(([k, list]) => {
-        const label = k === 'tbd' ? 'موعد لاحق' : dayLabel(list[0].kickoff);
-        return `<div class="round-title day">📅 ${esc(label)}</div>` +
-          list.map(matchCard).join('');
-      }).join('');
+      viewMatches.innerHTML = order.map((r) =>
+        `<div class="round-title">${esc(roundLabel(r))}</div>` +
+        groups[r].slice().sort((a, b) =>
+          (new Date(a.kickoff || 8.64e15)) - (new Date(b.kickoff || 8.64e15)) || a.id - b.id)
+          .map(matchCard).join('')
+      ).join('');
 
       viewMatches.querySelectorAll('.card').forEach((card) => {
         const btn = card.querySelector('.save');
@@ -259,24 +253,24 @@
         <div class="round-title">قانون النقاط</div>
         <div class="rules">
           <div class="rule">
-            <span class="rule-pts">${POINTS.exact}<small>نقطة</small></span>
-            <div><b>نتيجة المباراة كاملة صحيحة</b><br>
-              <span class="rule-ex">توقّعت أهداف الفريقين صح. مثال: المباراة انتهت 2-1، وأنت توقّعت 2-1.</span></div>
+            <span class="rule-pts">${POINTS.exact}<small>نقاط</small></span>
+            <div><b>النتيجة الكاملة صحيحة</b><br>
+              <span class="rule-ex">أن تتوقّع عدد أهداف الفريقين بشكل صحيح. مثال: انتهت المباراة 2-1، وكان توقّعك 2-1.</span></div>
           </div>
           <div class="rule">
-            <span class="rule-pts">${POINTS.winnerScore}<small>نقطة</small></span>
-            <div><b>عرفت الفريق الفائز وعدد أهدافه</b><br>
-              <span class="rule-ex">عرفت الفريق الفائز وعدد أهدافه صح، لكن أهداف الفريق الخاسر غلط. مثال: المباراة انتهت 3-1، وأنت توقّعت 3-0.</span></div>
+            <span class="rule-pts">${POINTS.winnerScore}<small>نقاط</small></span>
+            <div><b>الفائز وعدد أهدافه صحيح</b><br>
+              <span class="rule-ex">أن تتوقّع الفريق الفائز وعدد أهدافه بشكل صحيح، مع خطأ في عدد أهداف الفريق الخاسر. مثال: انتهت المباراة 3-1، وكان توقّعك 3-0.</span></div>
           </div>
           <div class="rule">
             <span class="rule-pts">${POINTS.winner}<small>نقطة</small></span>
-            <div><b>عرفت الفريق الفائز فقط</b><br>
-              <span class="rule-ex">عرفت الفريق الفائز لكن النتيجة غلط. مثال: المباراة انتهت 3-1، وأنت توقّعت 2-0.</span></div>
+            <div><b>الفريق الفائز فقط</b><br>
+              <span class="rule-ex">أن تتوقّع الفريق الفائز فقط دون النتيجة الصحيحة. مثال: انتهت المباراة 3-1، وكان توقّعك 2-0.</span></div>
           </div>
         </div>
         <div class="notice" style="margin-top:14px">
-          • التوقع <b>نهائي</b> بعد الحفظ، ويُقفل عند بداية المباراة.<br>
-          • في الأدوار الإقصائية، ركلات الترجيح ما تغيّر نقاط توقعك (النقاط على النتيجة في الوقت الأصلي).
+          • يُصبح التوقّع <b>نهائياً</b> بعد حفظه، ويُغلَق باب التوقّع عند بداية المباراة.<br>
+          • في الأدوار الإقصائية، لا تؤثّر ركلات الترجيح على نقاط التوقّع، إذ تُحتسب النقاط على النتيجة في الوقت الأصلي.
         </div>`;
     }
 
@@ -284,12 +278,21 @@
     const prizesHTML = `
       <div class="round-title">🏆 الجوائز</div>
       <div class="prizes">
-        <div class="prize gold"><span class="medal">🥇</span>
-          <div><b>المركز الأول</b><span class="amt">100 دينار</span></div></div>
-        <div class="prize silver"><span class="medal">🥈</span>
-          <div><b>المركز الثاني</b><span class="amt">50 دينار</span></div></div>
-        <div class="prize bronze"><span class="medal">🥉</span>
-          <div><b>المركز الثالث</b><span class="amt">كابون مساج</span></div></div>
+        <div class="prize p1">
+          <div class="prize-medal">🥇</div>
+          <div class="prize-info"><span class="prize-place">المركز الأول</span>
+            <span class="prize-amt">100 دينار</span></div>
+        </div>
+        <div class="prize p2">
+          <div class="prize-medal">🥈</div>
+          <div class="prize-info"><span class="prize-place">المركز الثاني</span>
+            <span class="prize-amt">50 دينار</span></div>
+        </div>
+        <div class="prize p3">
+          <div class="prize-medal">🥉</div>
+          <div class="prize-info"><span class="prize-place">المركز الثالث</span>
+            <span class="prize-amt">كابون مساج</span></div>
+        </div>
       </div>`;
 
     function renderBoard() {
