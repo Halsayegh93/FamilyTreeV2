@@ -342,3 +342,7 @@ insert into public.wc_matches (id, round, match_no, venue, kickoff) values
   (31,'3RD', 1, 'Hard Rock Stadium, Miami',         '2026-07-18 20:00+00'),
   (32,'FINAL', 1, 'MetLife Stadium, New York/NJ',   '2026-07-19 19:00+00')
 on conflict (id) do nothing;
+
+-- Force PostgREST to pick up the new functions immediately (so the reset and
+-- other RPCs work right after running this file).
+notify pgrst, 'reload schema';
