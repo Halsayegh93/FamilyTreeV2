@@ -143,8 +143,9 @@ export async function adminSaveMatch(matchId, fields, pin) {
     p_away_team: fields.away_team,
     p_home_flag: fields.home_flag,
     p_away_flag: fields.away_flag,
-    p_kickoff: fields.kickoff,
-    p_locked: fields.locked,
+    p_venue: fields.venue ?? null,
+    p_kickoff: fields.kickoff ?? null,
+    p_locked: fields.locked ?? null,
     p_pin: pin,
   });
   if (error) throw error;
