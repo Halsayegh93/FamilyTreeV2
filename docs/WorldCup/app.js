@@ -240,5 +240,8 @@ export function friendlyError(err) {
   if (msg.includes('INVALID_SCORE'))  return 'النتيجة غير صحيحة';
   if (msg.includes('BAD_PIN'))        return 'كلمة السر غير صحيحة';
   if (msg.includes('MATCH_NOT_FOUND'))return 'المباراة غير موجودة';
+  if (msg.includes('PGRST202') || msg.includes('Could not find the function') ||
+      msg.includes('schema cache') || msg.includes('wc_admin_reset'))
+    return 'لازم تشغّل db.sql في Supabase أول (الدالة غير موجودة بعد) 🔧';
   return msg;
 }
