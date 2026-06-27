@@ -162,6 +162,7 @@
       }
 
       const locked = isLocked(m);
+      const started = !m.finished && m.kickoff && new Date(m.kickoff).getTime() <= Date.now();
       const mine = myPreds.get(m.id);
       const predicted = !!mine;          // already saved -> cannot edit
       const pickOnly = predicted && mine.pick;   // winner-only prediction
@@ -171,8 +172,9 @@
 
       let badge = '';
       if (m.finished) badge = '<span class="badge done">انتهت</span>';
-      else if (locked) badge = '<span class="badge locked">مغلقة 🔒</span>';
+      else if (started) badge = '<span class="badge livenow">🔴 جارية الآن</span>';
       else if (predicted) badge = '<span class="badge done">تم التوقع ✓</span>';
+      else if (locked) badge = '<span class="badge locked">مغلقة 🔒</span>';
       else badge = '<span class="badge live">مفتوحة</span>';
 
       let resultLine = '';
@@ -512,6 +514,13 @@
       }
     }
 
+    // Per-match phase (open / started / finished) — part of the render signature
+    // so the page re-renders when a match crosses kickoff, but not otherwise.
+    function phaseStr(ms) {
+      return (ms || []).map((m) => m.finished ? 'F'
+        : (m.kickoff && new Date(m.kickoff).getTime() <= Date.now() ? 'S' : 'O')).join('');
+    }
+
     // Auto-update without disrupting a score the user is currently typing.
     function isEditing() {
       const a = document.activeElement;
@@ -523,8 +532,9 @@
       catch (_) { return; }
       const name = playerEl.value.trim();
       // skip the re-render entirely if nothing changed — prevents the page from
-      // jumping/scrolling on every 20s poll or realtime ping.
-      const sig = JSON.stringify(data) + '|' + name;
+      // jumping/scrolling on every 20s poll or realtime ping. The phase string
+      // also flips a match open->started->finished so the badge updates on time.
+      const sig = JSON.stringify(data) + '|' + name + '|' + phaseStr(data[0]);
       if (sig === lastSig) return;
       lastSig = sig;
 
@@ -541,7 +551,10 @@
     }
 
     renderRules();
-    loadAll().then(() => { lastSig = JSON.stringify([matches, allPreds]) + '|' + playerEl.value.trim(); watch(reload); });
+    loadAll().then(() => {
+      lastSig = JSON.stringify([matches, allPreds]) + '|' + playerEl.value.trim() + '|' + phaseStr(matches);
+      watch(reload);
+    });
   </script>
 </body>
 </html>
