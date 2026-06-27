@@ -224,7 +224,8 @@
       for (const m of upcoming) (groups[m.round] ||= []).push(m);
       const roundOrder = (code) => {
         if (ROUNDS[code]) return ROUNDS[code].order;
-        if (String(code).startsWith('المجموعة')) return -1; // groups before knockout
+        // group-stage ("current") sections come before the knockout rounds
+        if (code === 'دور المجموعات' || String(code).startsWith('المجموعة')) return -1;
         return 9;
       };
       const order = Object.keys(groups).sort(
