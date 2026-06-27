@@ -70,6 +70,20 @@ export function scorePrediction(predHome, predAway, actHome, actAway) {
   return POINTS.winner; // correct outcome only (incl. a non-exact draw)
 }
 
+// Score one prediction ROW against a match (handles winner-only picks) ---------
+//   - a winner-only pick ({pick:'home'|'away'}) scores 1 if that side won, else 0
+//   - a full score row is scored with scorePrediction (5/3/1/0)
+export function scoreRow(p, m) {
+  if (!m || !m.finished) return 0;
+  if (p && p.pick) {
+    const diff = Math.sign((m.home_score ?? 0) - (m.away_score ?? 0));
+    if (diff === 0) return 0;            // draw -> winner-only pick can't win
+    const winSide = diff > 0 ? 'home' : 'away';
+    return p.pick === winSide ? POINTS.winner : 0;
+  }
+  return scorePrediction(p.home_score, p.away_score, m.home_score, m.away_score);
+}
+
 // Data loading ----------------------------------------------------------------
 export async function loadMatches() {
   if (DEMO) return demo.matches();
@@ -112,6 +126,19 @@ export async function submitPrediction(matchId, name, home, away) {
     p_name: name,
     p_home: home,
     p_away: away,
+  });
+  if (error) throw error;
+  return data;
+}
+
+// Submit a winner-only prediction (1 point if the picked side wins) -----------
+export async function submitWinner(matchId, name, pick) {
+  if (DEMO) return demo.submitWinner(matchId, name, pick);
+  const sb = await client();
+  const { data, error } = await sb.rpc('wc_submit_winner', {
+    p_match_id: matchId,
+    p_name: name,
+    p_pick: pick,
   });
   if (error) throw error;
   return data;
@@ -160,6 +187,20 @@ export async function adminReset(what, pin) {
   }
   const sb = await client();
   const { data, error } = await sb.rpc('wc_admin_reset', { p_pin: pin, p_what: what });
+  if (error) throw error;
+  return data;
+}
+
+// Admin: re-open a finished match (clear its result, show it again).
+export async function adminReopenMatch(matchId, pin) {
+  if (DEMO) {
+    if (pin !== '1993') throw new Error('BAD_PIN');
+    return demo.reopenMatch(matchId);
+  }
+  const sb = await client();
+  const { data, error } = await sb.rpc('wc_admin_reopen_match', {
+    p_match_id: matchId, p_pin: pin,
+  });
   if (error) throw error;
   return data;
 }
@@ -219,7 +260,7 @@ export function buildLeaderboard(matches, predictions) {
     const m = byId.get(p.match_id);
     if (!m || !m.finished) continue;
 
-    const pts = scorePrediction(p.home_score, p.away_score, m.home_score, m.away_score);
+    const pts = scoreRow(p, m);
     const rec = players.get(p.player_name) || {
       name: p.player_name, points: 0, exact: 0, correct: 0, played: 0,
     };
@@ -250,6 +291,7 @@ export function friendlyError(err) {
   if (msg.includes('MATCH_LOCKED'))   return 'انتهى وقت التوقع لهذه المباراة 🔒';
   if (msg.includes('NAME_REQUIRED'))  return 'اكتب اسمك أول';
   if (msg.includes('INVALID_SCORE'))  return 'النتيجة غير صحيحة';
+  if (msg.includes('INVALID_PICK'))   return 'اختر الفريق الفائز';
   if (msg.includes('BAD_PIN'))        return 'كلمة السر غير صحيحة';
   if (msg.includes('MATCH_NOT_FOUND'))return 'المباراة غير موجودة';
   if (msg.includes('PGRST202') || msg.includes('Could not find the function') ||

@@ -53,7 +53,7 @@
     import {
       loadMatches, loadPredictions, roundLabel, ROUNDS, friendlyError,
       adminVerifyPin, adminSetResult, adminSaveMatch, adminReset,
-      adminDeletePlayer, watch,
+      adminDeletePlayer, adminReopenMatch, watch,
     } from './app.js';
 
     const $ = (s, r = document) => r.querySelector(s);
@@ -170,22 +170,78 @@
       </div>`;
     }
 
+    // Compact card for a finished match — just shows the score + a re-open button.
+    function finishedCard(m) {
+      const home = m.home_team || '—', away = m.away_team || '—';
+      return `<div class="card" data-id="${m.id}" data-finished="1">
+        <div class="meta">
+          <span><b>${esc(roundLabel(m.round))}</b> — مباراة ${m.match_no}</span>
+          <span class="badge done">منتهية</span>
+        </div>
+        <div class="venue-line" style="font-size:15px;color:var(--text)">
+          ${esc(home)} <b>${m.home_score} - ${m.away_score}</b> ${esc(away)}
+        </div>
+        <div class="card-actions">
+          <button class="btn ghost reopen">♻️ إعادة فتح المباراة</button>
+        </div>
+      </div>`;
+    }
+
     function loadList() {
       $('#list').innerHTML = '<div class="empty">جاري التحميل...</div>';
       loadMatches().then((data) => {
         matches = data;
-        const groups = {};
-        for (const m of matches) (groups[m.round] ||= []).push(m);
-        const order = Object.keys(groups).sort(
-          (a, b) => (ROUNDS[a]?.order || 9) - (ROUNDS[b]?.order || 9));
-        $('#list').innerHTML = order.map((r) =>
-          `<div class="round-title">${esc(roundLabel(r))}</div>` +
-          groups[r].map(adminCard).join('')
-        ).join('');
-        $('#list').querySelectorAll('.card').forEach(bind);
+        const upcoming = matches.filter((m) => !m.finished);
+        const finished = matches.filter((m) => m.finished);
+
+        // main list: upcoming matches grouped by DAY (sorted by kickoff)
+        const sorted = upcoming.slice().sort((a, b) =>
+          (new Date(a.kickoff || 8.64e15)) - (new Date(b.kickoff || 8.64e15)) || a.id - b.id);
+        const days = new Map();
+        for (const m of sorted) {
+          const d = m.kickoff ? new Date(m.kickoff) : null;
+          const key = d ? `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}` : 'tbd';
+          const label = d
+            ? d.toLocaleDateString('ar', { weekday: 'long', day: 'numeric', month: 'long' })
+            : 'بدون موعد';
+          if (!days.has(key)) days.set(key, { label, items: [] });
+          days.get(key).items.push(m);
+        }
+        let html = upcoming.length
+          ? [...days.values()].map((day) =>
+              `<div class="round-title day">📅 ${esc(day.label)}</div>` +
+              day.items.map(adminCard).join('')).join('')
+          : '<div class="empty">ما في مباريات قادمة.</div>';
+
+        // finished matches: tucked into a collapsible "re-open" section
+        if (finished.length) {
+          html += `<details class="team-edit" style="margin-top:24px">
+            <summary>🏁 مباريات منتهية (${finished.length}) — إعادة فتح</summary>` +
+            finished.slice().sort((a, b) => a.id - b.id).map(finishedCard).join('') +
+            `</details>`;
+        }
+
+        $('#list').innerHTML = html;
+        $('#list').querySelectorAll('.card[data-id]').forEach((c) => {
+          if (c.dataset.finished) bindFinished(c); else bind(c);
+        });
       }).catch((e) => {
         $('#list').innerHTML = `<div class="notice"><span style="color:var(--error)">${esc(e.message || e)}</span></div>`;
       });
+    }
+
+    function bindFinished(card) {
+      const id = +card.dataset.id;
+      const btn = card.querySelector('.reopen');
+      if (btn) btn.onclick = async (ev) => {
+        if (!window.confirm('تعيد فتح المباراة؟ تنمسح نتيجتها وترجع للجدول.')) return;
+        const b = ev.currentTarget; b.disabled = true;
+        try {
+          await adminReopenMatch(id, PIN);
+          toast('انفتحت المباراة ✅');
+          loadList();
+        } catch (e) { toast(friendlyError(e), true); b.disabled = false; }
+      };
     }
 
     function bind(card) {
