@@ -60,6 +60,7 @@
     let myPreds = new Map();   // match_id -> {home, away}
     let allPreds = [];
     let nameLocked = false;     // is the name confirmed (fixed)?
+    let matchFilter = 'upcoming'; // matches filter: upcoming | finished | all
 
     function toast(msg, isErr = false) {
       const t = $('#toast');
@@ -183,6 +184,33 @@
           </div>`;
       }
 
+      // who predicted this match — names always; reveal picks once it's finished
+      const preds = allPreds.filter((p) => p.match_id === m.id);
+      let predictorsHTML;
+      if (preds.length) {
+        const items = preds
+          .slice()
+          .sort((a, b) => String(a.player_name).localeCompare(b.player_name, 'ar'))
+          .map((p) => {
+            const nm = esc(p.player_name);
+            if (m.finished) {
+              const guess = p.pick
+                ? '🏆 ' + esc((p.pick === 'home' ? m.home_team : m.away_team) || '')
+                : `${p.home_score}-${p.away_score}`;
+              const pts = scoreRow(p, m);
+              return `<span class="pred-chip">${nm} <b>${guess}</b>
+                <span class="pts ${pts > 0 ? 'good' : 'zero'}">${pts > 0 ? '+' + pts : '0'}</span></span>`;
+            }
+            return `<span class="pred-chip">${nm}</span>`;
+          }).join('');
+        predictorsHTML = `<details class="predictors">
+          <summary>👥 توقّعوا (${preds.length})</summary>
+          <div class="pred-names">${items}</div>
+        </details>`;
+      } else {
+        predictorsHTML = `<div class="predictors-empty">👥 ما توقّع أحد بعد</div>`;
+      }
+
       return `<div class="card" data-id="${m.id}">
         <div class="meta">
           <span>${esc(roundLabel(m.round))}</span>
@@ -211,6 +239,7 @@
         ${venueLine}
         ${resultLine}
         ${actionHTML}
+        ${predictorsHTML}
       </div>`;
     }
 
@@ -222,15 +251,32 @@
         </div>`;
         return;
       }
-      // only show matches whose teams are decided + finished matches drop off
-      const upcoming = matches.filter((m) => !m.finished && teamsKnown(m));
-      if (!upcoming.length) {
-        viewMatches.innerHTML = `<div class="empty">ما في مباريات قادمة حالياً ⚽️<br>
-          شوف نتائجك في تبويب <b>الترتيب</b>.</div>`;
+      // filter bar: upcoming | finished | all
+      const known = matches.filter((m) => teamsKnown(m));
+      const filterBar = `<div class="mfilter">
+        <button data-f="upcoming" class="${matchFilter === 'upcoming' ? 'active' : ''}">القادمة</button>
+        <button data-f="finished" class="${matchFilter === 'finished' ? 'active' : ''}">المنتهية</button>
+        <button data-f="all" class="${matchFilter === 'all' ? 'active' : ''}">الكل</button>
+      </div>`;
+      const wireFilter = () => {
+        viewMatches.querySelectorAll('.mfilter button').forEach((b) => {
+          b.onclick = () => { matchFilter = b.dataset.f; renderMatches(); };
+        });
+      };
+
+      const list = known.filter((m) =>
+        matchFilter === 'all' ? true
+        : matchFilter === 'finished' ? m.finished
+        : !m.finished);
+
+      if (!list.length) {
+        viewMatches.innerHTML = filterBar + `<div class="empty">
+          ${matchFilter === 'finished' ? 'ما في مباريات منتهية بعد 🏁' : 'ما في مباريات هنا ⚽️'}</div>`;
+        wireFilter();
         return;
       }
       // group into sections by DAY (sorted by kickoff time)
-      const sorted = upcoming.slice().sort((a, b) =>
+      const sorted = list.slice().sort((a, b) =>
         (new Date(a.kickoff || 8.64e15)) - (new Date(b.kickoff || 8.64e15)) || a.id - b.id);
       const days = new Map();
       for (const m of sorted) {
@@ -245,10 +291,11 @@
         days.get(key).items.push(m);
       }
 
-      viewMatches.innerHTML = [...days.values()].map((day) =>
+      viewMatches.innerHTML = filterBar + [...days.values()].map((day) =>
         `<div class="round-title day">📅 ${esc(day.label)}</div>` +
         day.items.map(matchCard).join('')
       ).join('');
+      wireFilter();
 
       viewMatches.querySelectorAll('.card').forEach((card) => {
         const btn = card.querySelector('.save');
