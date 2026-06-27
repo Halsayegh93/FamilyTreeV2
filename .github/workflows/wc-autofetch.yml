@@ -1,0 +1,37 @@
+name: World Cup auto-fetch results
+
+# Pulls fixtures/results from football-data.org every 20 minutes and pushes them
+# into the Supabase DB via the admin RPCs. EXPERIMENTAL — check the run logs to
+# confirm it matched matches (free-tier coverage of WC 2026 is not guaranteed).
+#
+# Required repo Secrets (Settings → Secrets and variables → Actions):
+#   FOOTBALL_API_KEY  - your football-data.org token
+#   WC_ADMIN_PIN      - the admin PIN (e.g. 1993)
+
+on:
+  schedule:
+    - cron: '*/20 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wc-autofetch
+  cancel-in-progress: true
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Fetch & update results
+        run: node .github/scripts/wc-fetch-results.mjs
+        env:
+          FOOTBALL_API_KEY: ${{ secrets.FOOTBALL_API_KEY }}
+          WC_ADMIN_PIN: ${{ secrets.WC_ADMIN_PIN }}
+          SUPABASE_URL: https://vnyhbppzufadqxpbijnb.supabase.co
+          SUPABASE_ANON_KEY: sb_publishable_OPnob-SkO9u-Z7PN7tYTog_paKjdBTJ
