@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تحميل تطبيق الأندرويد — عائلة المحمدعلي</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: #f0f6fa;
+            color: #1a2a3a;
+            line-height: 1.8;
+        }
+
+        /* Hero */
+        .hero {
+            background: linear-gradient(135deg, #357DED 0%, #10B981 100%);
+            padding: 60px 20px 50px;
+            text-align: center;
+            color: white;
+        }
+
+        .app-icon {
+            width: 110px;
+            height: 110px;
+            background: linear-gradient(135deg, #357DED, #10B981);
+            border-radius: 26px;
+            margin: 0 auto 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 56px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.2);
+            border: 3px solid rgba(255,255,255,0.3);
+        }
+
+        .hero h1 {
+            font-size: 32px;
+            font-weight: 800;
+            margin-bottom: 10px;
+            text-shadow: 0 2px 10px rgba(0,0,0,0.15);
+        }
+
+        .hero p {
+            font-size: 17px;
+            opacity: 0.9;
+            max-width: 460px;
+            margin: 0 auto 8px;
+        }
+
+        .badge {
+            display: inline-block;
+            background: rgba(255,255,255,0.2);
+            border: 1px solid rgba(255,255,255,0.4);
+            color: white;
+            padding: 6px 18px;
+            border-radius: 20px;
+            font-size: 14px;
+            margin: 4px;
+        }
+
+        /* Container */
+        .container {
+            max-width: 640px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        /* Download card */
+        .download-card {
+            background: white;
+            border-radius: 20px;
+            padding: 36px 28px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 24px rgba(53,125,237,0.10);
+            text-align: center;
+        }
+
+        .download-card h2 {
+            font-size: 22px;
+            font-weight: 800;
+            color: #1a2a3a;
+            margin-bottom: 8px;
+        }
+
+        .version {
+            display: inline-block;
+            background: #E8FAF4;
+            color: #10B981;
+            font-weight: 700;
+            font-size: 13px;
+            padding: 4px 14px;
+            border-radius: 14px;
+            margin-bottom: 22px;
+        }
+
+        .download-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            background: linear-gradient(135deg, #357DED, #10B981);
+            color: white;
+            text-decoration: none;
+            font-size: 18px;
+            font-weight: 700;
+            padding: 16px 40px;
+            border-radius: 16px;
+            box-shadow: 0 6px 20px rgba(53,125,237,0.35);
+            transition: transform 0.15s, box-shadow 0.15s;
+        }
+
+        .download-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 26px rgba(53,125,237,0.45);
+        }
+
+        .download-btn .icon { font-size: 24px; }
+
+        .download-meta {
+            margin-top: 16px;
+            font-size: 13px;
+            color: #9aa5b0;
+        }
+
+        /* Steps */
+        .steps {
+            background: white;
+            border-radius: 20px;
+            padding: 30px 28px;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 16px rgba(0,0,0,0.06);
+        }
+
+        .steps h3 {
+            font-size: 18px;
+            font-weight: 800;
+            color: #357DED;
+            margin-bottom: 18px;
+            text-align: center;
+        }
+
+        .step {
+            display: flex;
+            align-items: flex-start;
+            gap: 14px;
+            margin-bottom: 16px;
+        }
+
+        .step:last-child { margin-bottom: 0; }
+
+        .step-num {
+            flex-shrink: 0;
+            width: 30px;
+            height: 30px;
+            background: linear-gradient(135deg, #357DED, #10B981);
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 14px;
+        }
+
+        .step-text {
+            font-size: 15px;
+            color: #3a4a5a;
+            padding-top: 3px;
+        }
+
+        /* Note */
+        .note {
+            background: #FFF8E8;
+            border: 1px solid #F0D89A;
+            border-radius: 12px;
+            padding: 14px 18px;
+            font-size: 13.5px;
+            color: #8a6d1f;
+            text-align: center;
+        }
+
+        /* Privacy link */
+        .privacy-link {
+            text-align: center;
+            margin: 26px 0 10px;
+        }
+
+        .privacy-link a {
+            color: #357DED;
+            text-decoration: none;
+            font-size: 15px;
+            border-bottom: 1px solid #357DED33;
+            padding-bottom: 2px;
+        }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            color: #9aa5b0;
+            font-size: 13px;
+            padding: 10px 20px 30px;
+        }
+
+        /* Lang switch */
+        .lang-switch {
+            text-align: center;
+            margin-top: 22px;
+        }
+
+        .lang-switch button {
+            background: rgba(255,255,255,0.25);
+            color: white;
+            border: 1px solid rgba(255,255,255,0.4);
+            padding: 7px 20px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .hidden { display: none; }
+        .en { direction: ltr; text-align: left; }
+        .en .step { text-align: left; }
+    </style>
+</head>
+<body>
+
+<!-- Hero -->
+<div class="hero">
+    <div class="app-icon">🌳</div>
+    <div id="hero-ar">
+        <h1>تطبيق عائلة المحمدعلي</h1>
+        <p>حمّل نسخة الأندرويد الرسمية</p>
+        <div style="margin-top:14px;">
+            <span class="badge">🤖 Android</span>
+            <span class="badge">🇰🇼 الكويت</span>
+            <span class="badge">🔒 خاص بالعائلة</span>
+        </div>
+    </div>
+    <div id="hero-en" class="hidden" style="direction:ltr">
+        <h1>Al-Mohammad Ali Family</h1>
+        <p>Download the official Android app</p>
+        <div style="margin-top:14px;">
+            <span class="badge">🤖 Android</span>
+            <span class="badge">🇰🇼 Kuwait</span>
+            <span class="badge">🔒 Family Only</span>
+        </div>
+    </div>
+    <div class="lang-switch">
+        <button onclick="toggleLang()" id="langBtn">English</button>
+    </div>
+</div>
+
+<!-- Arabic Content -->
+<div id="content-ar">
+    <div class="container">
+
+        <div class="download-card">
+            <h2>📥 تحميل التطبيق</h2>
+            <div class="version">الإصدار 1.0.0</div>
+            <div>
+                <a class="download-btn" href="./FamilyTree.apk" download>
+                    <span class="icon">🤖</span>
+                    <span>تحميل لنظام أندرويد (APK)</span>
+                </a>
+            </div>
+            <div class="download-meta">ملف APK — يعمل على أندرويد 8.0 وأحدث</div>
+        </div>
+
+        <div class="steps">
+            <h3>خطوات التثبيت</h3>
+            <div class="step">
+                <div class="step-num">1</div>
+                <div class="step-text">اضغط على زر «تحميل لنظام أندرويد» في الأعلى.</div>
+            </div>
+            <div class="step">
+                <div class="step-num">2</div>
+                <div class="step-text">افتح الملف بعد اكتمال التحميل من شريط الإشعارات أو مجلد التنزيلات.</div>
+            </div>
+            <div class="step">
+                <div class="step-num">3</div>
+                <div class="step-text">إذا ظهرت رسالة «مصادر غير معروفة»، فعّل السماح بالتثبيت لهذا المتصفح ثم تابع.</div>
+            </div>
+            <div class="step">
+                <div class="step-num">4</div>
+                <div class="step-text">اضغط «تثبيت»، ثم افتح التطبيق وسجّل دخولك برقم هاتفك.</div>
+            </div>
+        </div>
+
+        <div class="note">
+            ℹ️ التطبيق حصري لأفراد عائلة آل محمد علي. التسجيل يتطلب التحقق برمز يُرسل لهاتفك.
+        </div>
+
+        <div class="privacy-link">
+            <a href="./index.html">📋 سياسة الخصوصية والشروط</a>
+        </div>
+
+    </div>
+</div>
+
+<!-- English Content -->
+<div id="content-en" class="hidden">
+    <div class="container">
+
+        <div class="download-card en" style="text-align:center;">
+            <h2>📥 Download the App</h2>
+            <div class="version">Version 1.0.0</div>
+            <div>
+                <a class="download-btn" href="./FamilyTree.apk" download>
+                    <span class="icon">🤖</span>
+                    <span>Download for Android (APK)</span>
+                </a>
+            </div>
+            <div class="download-meta">APK file — works on Android 8.0 and newer</div>
+        </div>
+
+        <div class="steps en">
+            <h3 style="text-align:center;">Installation Steps</h3>
+            <div class="step">
+                <div class="step-num">1</div>
+                <div class="step-text">Tap the “Download for Android” button above.</div>
+            </div>
+            <div class="step">
+                <div class="step-num">2</div>
+                <div class="step-text">Open the file once downloaded from the notification bar or Downloads folder.</div>
+            </div>
+            <div class="step">
+                <div class="step-num">3</div>
+                <div class="step-text">If an “Unknown sources” prompt appears, allow installs for this browser, then continue.</div>
+            </div>
+            <div class="step">
+                <div class="step-num">4</div>
+                <div class="step-text">Tap “Install”, then open the app and sign in with your phone number.</div>
+            </div>
+        </div>
+
+        <div class="note">
+            ℹ️ The app is exclusive to Al-Mohammad Ali family members. Registration requires verification via a code sent to your phone.
+        </div>
+
+        <div class="privacy-link" style="direction:ltr">
+            <a href="./index.html">📋 Privacy Policy & Terms</a>
+        </div>
+
+    </div>
+</div>
+
+<div class="footer">
+    &copy; 2026 عائلة المحمدعلي. جميع الحقوق محفوظة.
+</div>
+
+<script>
+    let isArabic = true;
+    function toggleLang() {
+        isArabic = !isArabic;
+        document.getElementById('content-ar').classList.toggle('hidden');
+        document.getElementById('content-en').classList.toggle('hidden');
+        document.getElementById('hero-ar').classList.toggle('hidden');
+        document.getElementById('hero-en').classList.toggle('hidden');
+        document.getElementById('langBtn').textContent = isArabic ? 'English' : 'العربية';
+    }
+</script>
+
+</body>
+</html>
