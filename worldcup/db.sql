@@ -328,12 +328,13 @@ begin
   end if;
 
   if p_what in ('predictions', 'all') then
-    delete from public.wc_predictions;
+    delete from public.wc_predictions where true;   -- WHERE required by safe-update mode
   end if;
 
   if p_what in ('results', 'all') then
     update public.wc_matches
-       set home_score = null, away_score = null, finished = false, locked = false;
+       set home_score = null, away_score = null, finished = false, locked = false
+     where true;                                     -- WHERE required by safe-update mode
     -- rounds after the Round of 32 go back to "to be decided"
     update public.wc_matches
        set home_team = null, away_team = null, home_flag = null, away_flag = null
