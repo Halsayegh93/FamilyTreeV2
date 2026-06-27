@@ -301,6 +301,21 @@ body { direction: rtl; }
 .pts.good { background: rgba(27,122,75,.13); color: var(--green); }
 .pts.zero { background: rgba(200,54,47,.10);  color: var(--error); }
 
+.mfilter {
+  display: flex; gap: 6px; margin: 4px 0 16px;
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 999px; padding: 4px;
+}
+.mfilter button {
+  flex: 1; border: none; cursor: pointer; font-family: inherit;
+  font-size: 14px; font-weight: 800; padding: 9px 6px; border-radius: 999px;
+  background: transparent; color: var(--muted); transition: .15s;
+}
+.mfilter button.active {
+  background: linear-gradient(120deg, var(--primary), var(--primary2));
+  color: #fff;
+}
+
 .predictors { margin-top: 12px; }
 .predictors summary {
   cursor: pointer; font-size: 13px; font-weight: 800; color: var(--primary);
