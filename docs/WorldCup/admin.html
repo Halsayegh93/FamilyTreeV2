@@ -223,9 +223,14 @@
       </div>`;
     }
 
+    let lastAdminSig = '';
     function loadList() {
-      $('#list').innerHTML = '<div class="empty">جاري التحميل...</div>';
+      if (!$('#list').children.length) $('#list').innerHTML = '<div class="empty">جاري التحميل...</div>';
       Promise.all([loadMatches(), loadPredictions()]).then(([data, preds]) => {
+        // skip the rebuild if nothing changed (stops the page from jumping on poll)
+        const sig = JSON.stringify([data, preds]);
+        if (sig === lastAdminSig && $('#list').querySelector('.card')) return;
+        lastAdminSig = sig;
         matches = data;
         allPreds = preds || [];
         // matches whose day already passed are dropped from the admin list
