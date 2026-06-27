@@ -8,6 +8,9 @@
 </head>
 <body>
   <div class="wrap">
+    <div class="topbar">
+      <a class="adminbtn" href="admin.html">⚙️ المشرف</a>
+    </div>
     <div class="hero">
       <div class="emblem-badge">
         <span class="emblem-trophy">🏆</span>
@@ -20,7 +23,7 @@
     <div class="namebar">
       <label for="player">اسمك</label>
       <input id="player" type="text" placeholder="اكتب اسمك هنا" autocomplete="name" />
-      <button id="confirm-name" class="namebtn">تثبيت</button>
+      <button id="confirm-name" class="namebtn">✓</button>
     </div>
 
     <div class="tabs">
@@ -32,8 +35,6 @@
     <div id="view-matches"></div>
     <div id="view-board" style="display:none"></div>
     <div id="view-rules" style="display:none"></div>
-
-    <a class="adminbtn" href="admin.html">⚙️ لوحة المشرف</a>
   </div>
 
   <div id="toast" class="toast"></div>
@@ -73,7 +74,9 @@
 
     function setNameUI() {
       playerEl.disabled = nameLocked;
-      confirmBtn.textContent = nameLocked ? '✎ تغيير' : 'تثبيت';
+      confirmBtn.textContent = '✓';
+      confirmBtn.disabled = nameLocked;          // once set, the name is permanent
+      confirmBtn.title = nameLocked ? 'تم تثبيت اسمك' : 'تثبيت الاسم';
       confirmBtn.classList.toggle('confirmed', nameLocked);
     }
     playerEl.addEventListener('input', () => {
@@ -82,22 +85,15 @@
     playerEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') confirmBtn.click(); });
 
     confirmBtn.onclick = () => {
-      if (!nameLocked) {
-        const n = playerEl.value.trim();
-        if (!n) { toast('اكتب اسمك أول', true); playerEl.focus(); return; }
-        nameLocked = true;
-        localStorage.setItem('wc_player', n);
-        localStorage.setItem('wc_confirmed', '1');
-        setNameUI();
-        toast('تم تثبيت اسمك ✅');
-        refreshMine();
-      } else {
-        nameLocked = false;
-        localStorage.removeItem('wc_confirmed');
-        setNameUI();
-        playerEl.focus();
-        renderMatches();
-      }
+      if (nameLocked) return;                    // permanent — no changing it
+      const n = playerEl.value.trim();
+      if (!n) { toast('اكتب اسمك أول', true); playerEl.focus(); return; }
+      nameLocked = true;
+      localStorage.setItem('wc_player', n);
+      localStorage.setItem('wc_confirmed', '1');
+      setNameUI();
+      toast('تم تثبيت اسمك ✅');
+      refreshMine();
     };
     setNameUI();
 
@@ -155,15 +151,14 @@
         ? new Date(m.kickoff).toLocaleString('ar', { dateStyle: 'medium', timeStyle: 'short' })
         : (m.finished ? '' : 'موعد لاحق');
 
-      const venueLine = (m.venue || kickoff)
-        ? `<div class="venue-line">${m.venue ? '🏟️ ' + esc(m.venue) : ''}${
-            m.venue && kickoff ? ' · ' : ''}${kickoff ? '🗓️ ' + esc(kickoff) : ''}</div>`
+      const venueLine = kickoff
+        ? `<div class="venue-line">🗓️ ${esc(kickoff)}</div>`
         : '';
 
       // action area
       let actionHTML = '';
       if (!m.finished && predicted) {
-        actionHTML = `<div class="predicted-note">✓ توقعك محفوظ (${mine.home} - ${mine.away}) — ما يمكن التعديل</div>`;
+        actionHTML = `<div class="predicted-note">✓ توقعك محفوظ (${mine.home} - ${mine.away}) — لا يمكن التعديل</div>`;
       } else if (!locked && !predicted) {
         actionHTML = `<div class="card-actions"><button class="btn save">حفظ التوقع</button></div>`;
       }
@@ -195,16 +190,19 @@
       // require a confirmed name before showing/using the matches section
       if (!nameLocked) {
         viewMatches.innerHTML = `<div class="notice" style="text-align:center">
-          👋 اكتب اسمك فوق واضغط <b>تثبيت</b> عشان تشوف المباريات وتبدأ التوقع.
+          👋 اكتب اسمك فوق واضغط <b>✓</b> عشان تشوف المباريات وتبدأ التوقع.
         </div>`;
         return;
       }
-      if (!matches.length) {
-        viewMatches.innerHTML = '<div class="empty">لا توجد مباريات بعد.</div>';
+      // finished matches drop off the schedule
+      const upcoming = matches.filter((m) => !m.finished);
+      if (!upcoming.length) {
+        viewMatches.innerHTML = `<div class="empty">ما في مباريات قادمة حالياً ⚽️<br>
+          شوف نتائجك في تبويب <b>الترتيب</b>.</div>`;
         return;
       }
       const groups = {};
-      for (const m of matches) (groups[m.round] ||= []).push(m);
+      for (const m of upcoming) (groups[m.round] ||= []).push(m);
 
       const order = Object.keys(groups).sort(
         (a, b) => (ROUNDS[a]?.order || 9) - (ROUNDS[b]?.order || 9));
@@ -234,7 +232,7 @@
       try {
         await submitPrediction(id, name, +h, +a);
         myPreds.set(id, { home: +h, away: +a });
-        toast('انحفظ توقعك ✅ (ما يمكن التعديل)');
+        toast('انحفظ توقعك ✅ (لا يمكن التعديل)');
         renderMatches();   // re-render: this match is now locked
       } catch (e) {
         toast(friendlyError(e), true);
@@ -249,35 +247,24 @@
         <div class="round-title">قانون النقاط</div>
         <div class="rules">
           <div class="rule">
-            <span class="rule-pts">${POINTS.exact}</span>
-            <div><b>النتيجة كاملة صحيحة</b><br>
-              <span class="rule-ex">توقّعت نتيجة الفريقين بالضبط. مثال: توقعت 2-1 وطلعت 2-1.</span></div>
+            <span class="rule-pts">${POINTS.exact}<small>نقاط</small></span>
+            <div><b>نتيجة كاملة صح</b><br>
+              <span class="rule-ex">توقّعت أهداف الفريقين بالضبط — مثال: المباراة 2-1 وتوقّعت 2-1.</span></div>
           </div>
           <div class="rule">
-            <span class="rule-pts">${POINTS.winnerScore}</span>
-            <div><b>الفائز صح + نتيجة الفائز صح</b><br>
-              <span class="rule-ex">عرفت الفريق الفائز ونتيجته صح، بس الخسران غلط. مثال: توقعت 3-0 وطلعت 3-1.</span></div>
+            <span class="rule-pts">${POINTS.winnerScore}<small>نقاط</small></span>
+            <div><b>الفائز وأهدافه صح</b><br>
+              <span class="rule-ex">ضبطت الفائز وعدد أهدافه فقط — مثال: المباراة 3-1 وتوقّعت 3-0.</span></div>
           </div>
           <div class="rule">
-            <span class="rule-pts">${POINTS.winner}</span>
-            <div><b>الفائز فقط</b><br>
-              <span class="rule-ex">عرفت الفائز (أو التعادل) بس النتيجة غلط. مثال: توقعت 2-0 وطلعت 3-1.</span></div>
-          </div>
-          <div class="rule">
-            <span class="rule-pts zero">0</span>
-            <div><b>الفائز غلط</b><br>
-              <span class="rule-ex">توقّعت فوز فريق وطلع الفريق الثاني فاز (أو توقّعت فوز وطلع تعادل والعكس).</span></div>
+            <span class="rule-pts">${POINTS.winner}<small>نقطة</small></span>
+            <div><b>الفائز بس</b><br>
+              <span class="rule-ex">ضبطت الفائز بدون النتيجة — مثال: المباراة 3-1 وتوقّعت 2-0.</span></div>
           </div>
         </div>
-        <div class="maxpts">🎯 أقصى نقاط ممكنة: <b>${32 * POINTS.exact}</b> نقطة
-          <span>(32 مباراة × ${POINTS.exact} نقاط لو كل توقعاتك نتيجة كاملة صحيحة)</span></div>
-        <div class="round-title">أحكام مهمة</div>
-        <div class="notice">
-          • <b>التعادل:</b> لو توقّعت تعادل وطلع تعادل بنفس النتيجة = ${POINTS.exact} نقاط، ولو بنتيجة مختلفة = ${POINTS.winner} نقطة.<br>
-          • <b>الأدوار الإقصائية:</b> لو راحت المباراة لركلات الترجيح، النقاط تُحسب على <b>نتيجة الوقت الأصلي</b> اللي يعتمدها المشرف (الركلات ما تغيّر نقاط توقعك).<br>
-          • <b>التوقع نهائي:</b> بعد ما تحفظ توقعك <b>ما يمكن تعديله</b>.<br>
-          • <b>إقفال المباراة:</b> التوقع يُقفل تلقائياً عند بداية المباراة.<br>
-          • <b>الترتيب:</b> الأعلى نقاطاً يتصدّر، وعند التعادل بالنقاط يُقدّم صاحب أكثر "نتائج كاملة صحيحة".
+        <div class="notice" style="margin-top:14px">
+          • التوقع <b>نهائي</b> بعد الحفظ، ويُقفل عند بداية المباراة.<br>
+          • في الأدوار الإقصائية، ركلات الترجيح ما تغيّر نقاط توقعك (النقاط على النتيجة في الوقت الأصلي).
         </div>`;
     }
 

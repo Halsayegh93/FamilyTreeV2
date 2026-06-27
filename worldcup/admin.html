@@ -8,6 +8,9 @@
 </head>
 <body>
   <div class="wrap">
+    <div class="topbar">
+      <a class="adminbtn" href="index.html">🏠 عودة للموقع</a>
+    </div>
     <div class="hero">
       <div class="emblem-badge"><span class="emblem-trophy">⚙️</span></div>
       <h1>لوحة التحكم</h1>
@@ -105,8 +108,7 @@
                      : (m.locked ? '<span class="badge locked">مغلقة</span>'
                                  : '<span class="badge live">مفتوحة</span>')}
         </div>
-        ${(m.venue || kickoff) ? `<div class="venue-line">${m.venue ? '🏟️ ' + esc(m.venue) : ''}${
-            m.venue && kickoff ? ' · ' : ''}${kickoff ? '🗓️ ' + esc(kickoff) : ''}</div>` : ''}
+        ${kickoff ? `<div class="venue-line">🗓️ ${esc(kickoff)}</div>` : ''}
 
         <div class="match">
           <div class="team home">
