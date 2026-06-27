@@ -132,18 +132,29 @@ body { direction: rtl; }
 }
 
 /* Prizes */
-.prizes { display: flex; flex-direction: column; gap: 10px; margin-bottom: 6px; }
+.prizes { display: flex; flex-direction: column; gap: 12px; margin-bottom: 8px; }
 .prize {
-  display: flex; align-items: center; gap: 14px;
-  background: var(--surface); border: 1px solid var(--border);
-  border-radius: var(--radius); padding: 12px 16px; box-shadow: var(--shadow);
+  display: flex; align-items: center; gap: 16px;
+  border-radius: 18px; padding: 16px 18px;
+  border: 1px solid var(--border); box-shadow: var(--shadow);
+  position: relative; overflow: hidden;
 }
-.prize .medal { font-size: 30px; line-height: 1; }
-.prize b { font-size: 15px; }
-.prize .amt { display: block; margin-top: 2px; font-weight: 800; font-size: 14px; color: var(--gold2); }
-.prize.gold   { border-color: rgba(224,166,0,.4);  background: linear-gradient(120deg, rgba(224,166,0,.07), var(--surface)); }
-.prize.silver { border-color: rgba(148,163,184,.45); }
-.prize.bronze { border-color: rgba(192,122,51,.4); }
+.prize::before { content: ""; position: absolute; inset-inline-start: 0; top: 0; bottom: 0; width: 6px; }
+.prize.p1 { background: linear-gradient(120deg, rgba(224,166,0,.13), var(--surface)); }
+.prize.p1::before { background: linear-gradient(#ffd34d, #e0a600); }
+.prize.p2 { background: linear-gradient(120deg, rgba(148,163,184,.16), var(--surface)); }
+.prize.p2::before { background: linear-gradient(#e2e8f0, #94a3b8); }
+.prize.p3 { background: linear-gradient(120deg, rgba(192,122,51,.13), var(--surface)); }
+.prize.p3::before { background: linear-gradient(#e0a878, #c07a33); }
+.prize-medal {
+  width: 54px; height: 54px; flex-shrink: 0; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 30px; background: var(--surface2); box-shadow: var(--shadow);
+}
+.prize-info { display: flex; flex-direction: column; }
+.prize-place { font-size: 13px; color: var(--muted); font-weight: 700; }
+.prize-amt { font-size: 19px; font-weight: 900; color: var(--text); margin-top: 2px; }
+.prize.p1 .prize-amt { color: var(--gold2); }
 
 /* Scoring rules */
 .rules { display: flex; flex-direction: column; gap: 10px; }
