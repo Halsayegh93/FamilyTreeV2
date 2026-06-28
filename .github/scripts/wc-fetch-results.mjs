@@ -23,6 +23,9 @@ const SB_KEY = process.env.SUPABASE_ANON_KEY;
 // orientation by team name). The admin can still override any result by hand.
 // Set WC_AUTO_RESULTS=0 to stop auto-filling results.
 const AUTO_RESULTS = process.env.WC_AUTO_RESULTS !== '0';
+// Knockout-only game: group-stage matches are not imported. Set
+// WC_IMPORT_GROUPS=1 to bring them back.
+const IMPORT_GROUPS = process.env.WC_IMPORT_GROUPS === '1';
 
 if (!API_KEY || !SB_URL || !SB_KEY) {
   console.error('Missing FOOTBALL_API_KEY / SUPABASE_URL / SUPABASE_ANON_KEY');
@@ -161,7 +164,7 @@ async function main() {
 
   // ----- PHASE A (group-stage matches) -----
   const groupLabel = () => 'دور المجموعات';
-  for (const api of matches.filter((m) => m.stage === 'GROUP_STAGE')) {
+  for (const api of (IMPORT_GROUPS ? matches.filter((m) => m.stage === 'GROUP_STAGE') : [])) {
     const [hN, hF] = teamInfo(api.homeTeam?.name);
     const [aN, aF] = teamInfo(api.awayTeam?.name);
     try {
@@ -178,11 +181,11 @@ async function main() {
       }
     } catch (e) { console.error(`group #${api.id}:`, e.message); }
   }
-  console.log(`Group-stage matches upserted: ${groupUpdates}`);
+  console.log(IMPORT_GROUPS
+    ? `Group-stage matches upserted: ${groupUpdates}`
+    : 'Group-stage import skipped (knockout-only game).');
 
   // ----- PHASE B: results -----
-  // Disabled by default: the admin enters results manually, the app computes the
-  // points. Re-enable by setting WC_AUTO_RESULTS=1.
   if (!AUTO_RESULTS) {
     console.log(`Auto-results OFF — ${finishedJobs.length} finished match(es) left for ` +
       'the admin to enter manually. (Set WC_AUTO_RESULTS=1 to auto-fill.)');

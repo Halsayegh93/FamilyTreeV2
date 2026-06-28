@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>لوحة التحكم — جماهير مباريات كأس العالم الرميثية</title>
-  <link rel="stylesheet" href="styles.css?v=4" />
+  <link rel="stylesheet" href="styles.css?v=5" />
 </head>
 <body>
   <div class="wrap">
@@ -53,8 +53,8 @@
     import {
       loadMatches, loadPredictions, roundLabel, ROUNDS, friendlyError,
       adminVerifyPin, adminSetResult, adminSaveMatch, adminReset,
-      adminDeletePlayer, adminReopenMatch, scoreRow, watch,
-    } from './app.js?v=4';
+      adminDeletePlayer, adminReopenMatch, adminSetPoints, scoreRow, watch,
+    } from './app.js?v=5';
 
     const $ = (s, r = document) => r.querySelector(s);
     const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) =>
@@ -64,27 +64,48 @@
     let matches = [];
     let allPreds = [];
 
-    // players' predictions for a match — same style as the public site
+    // The game starts at the Round of 32 — hide every match before this date.
+    const SHOW_FROM = new Date('2026-06-28T00:00:00Z').getTime();
+    const afterCutoff = (m) => !m.kickoff || new Date(m.kickoff).getTime() >= SHOW_FROM;
+
+    // players' predictions for a match. For finished matches the points are
+    // editable per player (empty input = automatic scoring).
     function predictorsBlock(m) {
       const preds = allPreds.filter((p) => p.match_id === m.id);
       if (!preds.length) {
         return '<div class="predictors-empty">👥 ما توقّع أحد بعد</div>';
       }
-      const items = preds.slice()
-        .sort((a, b) => String(a.player_name).localeCompare(b.player_name, 'ar'))
-        .map((p) => {
-          const guess = p.pick
-            ? '🏆 ' + esc((p.pick === 'home' ? m.home_team : m.away_team) || '')
-            : `${p.home_score}-${p.away_score}`;
-          const ptsTag = m.finished
-            ? (() => { const pts = scoreRow(p, m);
-                return `<span class="pts ${pts > 0 ? 'good' : 'zero'}">${pts > 0 ? '+' + pts : '0'}</span>`; })()
-            : '';
-          return `<span class="pred-chip">${esc(p.player_name)} <b>${guess}</b> ${ptsTag}</span>`;
-        }).join('');
-      return `<details class="predictors">
-        <summary>👥 توقعات اللاعبين (${preds.length})</summary>
-        <div class="pred-names">${items}</div>
+      const sorted = preds.slice()
+        .sort((a, b) => String(a.player_name).localeCompare(b.player_name, 'ar'));
+      const guessOf = (p) => p.pick
+        ? '🏆 ' + esc((p.pick === 'home' ? m.home_team : m.away_team) || '')
+        : `${p.home_score}-${p.away_score}`;
+
+      if (!m.finished) {
+        const items = sorted.map((p) =>
+          `<span class="pred-chip">${esc(p.player_name)} <b>${guessOf(p)}</b></span>`).join('');
+        return `<details class="predictors">
+          <summary>👥 توقعات اللاعبين (${preds.length})</summary>
+          <div class="pred-names">${items}</div>
+        </details>`;
+      }
+
+      const rows = sorted.map((p) => {
+        const auto = scoreRow({ ...p, manual_points: null }, m); // automatic value
+        const val = p.manual_points != null ? p.manual_points : '';
+        const isManual = p.manual_points != null;
+        return `<div class="pp-row">
+          <span class="pp-name">${esc(p.player_name)} <b>${guessOf(p)}</b></span>
+          <input class="pp-input ${isManual ? 'manual' : ''}" type="number" min="0" max="999"
+            inputmode="numeric" value="${val}" placeholder="تلقائي ${auto}"
+            data-name="${esc(p.player_name)}" />
+        </div>`;
+      }).join('');
+      return `<details class="predictors" open>
+        <summary>🎯 نقاط اللاعبين (${preds.length}) — تعديل يدوي</summary>
+        <div class="pp-list">${rows}</div>
+        <button class="btn ghost pp-save" style="margin-top:8px">💾 حفظ النقاط</button>
+        <div class="pp-note">اتركها فاضية = احتساب تلقائي حسب القانون</div>
       </details>`;
     }
 
@@ -316,6 +337,21 @@
         try {
           await adminSetResult(id, +h, +a, PIN, null);
           toast('تم تحديث النتيجة ✅ وتحسبت النقاط');
+          loadList();
+        } catch (e) { toast(friendlyError(e), true); b.disabled = false; }
+      };
+
+      // save manual points for each player (empty = revert to automatic)
+      const ppSave = card.querySelector('.pp-save');
+      if (ppSave) ppSave.onclick = async (ev) => {
+        const b = ev.currentTarget; b.disabled = true;
+        try {
+          for (const inp of card.querySelectorAll('.pp-input')) {
+            const raw = inp.value.trim();
+            const pts = raw === '' ? null : Math.max(0, Math.min(999, parseInt(raw) || 0));
+            await adminSetPoints(id, inp.dataset.name, pts, PIN);
+          }
+          toast('انحفظت النقاط ✅');
           loadList();
         } catch (e) { toast(friendlyError(e), true); b.disabled = false; }
       };
