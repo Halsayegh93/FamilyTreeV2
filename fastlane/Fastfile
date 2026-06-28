@@ -33,7 +33,7 @@ platform :ios do
 
     upload_to_testflight(
       skip_waiting_for_build_processing: true,
-      api_key: app_store_connect_api_key
+      api_key: asc_key
     )
   end
 
@@ -55,12 +55,12 @@ platform :ios do
     upload_to_app_store(
       submit_for_review: true,
       automatic_release: false,
-      api_key: app_store_connect_api_key
+      api_key: asc_key
     )
   end
 
   # ─── Helpers ────────────────────────────────────────────
-  private_lane :app_store_connect_api_key do
+  private_lane :asc_key do
     app_store_connect_api_key(
       key_id: ENV["ASC_KEY_ID"],
       issuer_id: ENV["ASC_ISSUER_ID"],
