@@ -76,6 +76,30 @@ async function sbRpc(fn, body) {
   return text;
 }
 
+async function sbGet(path) {
+  const r = await fetch(`${SB_URL}/rest/v1/${path}`, {
+    headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` },
+  });
+  const text = await r.text();
+  if (!r.ok) throw new Error(`GET ${path} -> ${r.status} ${text}`);
+  return JSON.parse(text);
+}
+
+const norm = (s) => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+
+// Align the API's scores to OUR stored home/away by TEAM NAME, so a result is
+// never stored reversed even if our home/away orientation differs from the API's
+// (which otherwise mis-scores predictions). Returns { ph, pa, flipped }.
+function alignToStored(storedHome, api) {
+  const sh = api.score.fullTime.home;
+  const sa = api.score.fullTime.away;
+  const ourH = norm(storedHome);
+  const apiH = norm(api.homeTeam?.name);
+  const apiA = norm(api.awayTeam?.name);
+  if (ourH && ourH === apiA && ourH !== apiH) return { ph: sa, pa: sh, flipped: true };
+  return { ph: sh, pa: sa, flipped: false };
+}
+
 async function main() {
   console.log('Fetching World Cup matches from football-data.org ...');
   const res = await fetch('https://api.football-data.org/v4/competitions/WC/matches', {
@@ -98,8 +122,11 @@ async function main() {
     (byStage[m.stage] ||= []).push(m);
   }
 
-  let teamUpdates = 0, resultUpdates = 0;
+  let teamUpdates = 0, groupUpdates = 0, resultUpdates = 0;
+  // finished matches to score AFTER we know our stored orientation
+  const finishedJobs = []; // { ourId, api }
 
+  // ----- PHASE A: set teams / kickoff (knockout slots) -----
   for (const [stage, ids] of Object.entries(STAGE_TO_IDS)) {
     const list = (byStage[stage] || []).slice()
       .sort((a, b) => new Date(a.utcDate) - new Date(b.utcDate) || a.id - b.id);
@@ -108,8 +135,6 @@ async function main() {
       const ourId = ids[i];
       const [hN, hF] = teamInfo(api.homeTeam?.name);
       const [aN, aF] = teamInfo(api.awayTeam?.name);
-
-      // set teams + kickoff (+ venue) for this match
       try {
         await sbRpc('wc_admin_save_match', {
           p_match_id: ourId,
@@ -124,29 +149,13 @@ async function main() {
         console.log(`teams  #${ourId} [${stage}]  ${hN} vs ${aN}`);
       } catch (e) { console.error(`save_match #${ourId}:`, e.message); }
 
-      // finished -> push the result
-      if (api.status === 'FINISHED' && api.score?.fullTime) {
-        const h = api.score.fullTime.home;
-        const a = api.score.fullTime.away;
-        let winner = null;
-        if (h === a) winner = api.score.winner === 'AWAY_TEAM' ? 'away'
-          : api.score.winner === 'HOME_TEAM' ? 'home' : null;
-        if (h != null && a != null) {
-          try {
-            await sbRpc('wc_admin_set_result', {
-              p_match_id: ourId, p_home: h, p_away: a, p_pin: PIN, p_winner: winner,
-            });
-            resultUpdates++;
-            console.log(`result #${ourId}  ${h}-${a}${winner ? ` (pen:${winner})` : ''}`);
-          } catch (e) { console.error(`set_result #${ourId}:`, e.message); }
-        }
+      if (api.status === 'FINISHED' && api.score?.fullTime?.home != null) {
+        finishedJobs.push({ ourId, api });
       }
     }
   }
 
-  // ----- group-stage matches (current matches) -----
-  let groupUpdates = 0;
-  // all group matches go under a single "current round" section
+  // ----- PHASE A (group-stage matches) -----
   const groupLabel = () => 'دور المجموعات';
   for (const api of matches.filter((m) => m.stage === 'GROUP_STAGE')) {
     const [hN, hF] = teamInfo(api.homeTeam?.name);
@@ -161,18 +170,40 @@ async function main() {
       });
       groupUpdates++;
       if (api.status === 'FINISHED' && api.score?.fullTime?.home != null) {
-        await sbRpc('wc_admin_set_result', {
-          p_match_id: api.id,
-          p_home: api.score.fullTime.home, p_away: api.score.fullTime.away,
-          p_pin: PIN, p_winner: null,
-        });
-        resultUpdates++;
+        finishedJobs.push({ ourId: api.id, api });
       }
     } catch (e) { console.error(`group #${api.id}:`, e.message); }
   }
   console.log(`Group-stage matches upserted: ${groupUpdates}`);
 
-  console.log(`Done. Team updates: ${teamUpdates}, result updates: ${resultUpdates}.`);
+  // ----- read back OUR stored orientation (reflects frozen + freshly-set teams) -----
+  let dbById = new Map();
+  try {
+    const db = await sbGet('wc_matches?select=id,home_team,away_team');
+    dbById = new Map(db.map((m) => [m.id, m]));
+  } catch (e) { console.error('read wc_matches:', e.message); }
+
+  // ----- PHASE B: set results, aligned to OUR orientation by team name -----
+  for (const { ourId, api } of finishedJobs) {
+    const stored = dbById.get(ourId);
+    const { ph, pa, flipped } = alignToStored(stored?.home_team, api);
+    let winner = null;
+    if (ph === pa) {
+      const w = api.score.winner; // penalties decider
+      if (w === 'HOME_TEAM') winner = flipped ? 'away' : 'home';
+      else if (w === 'AWAY_TEAM') winner = flipped ? 'home' : 'away';
+    }
+    try {
+      await sbRpc('wc_admin_set_result', {
+        p_match_id: ourId, p_home: ph, p_away: pa, p_pin: PIN, p_winner: winner,
+      });
+      resultUpdates++;
+      console.log(`result #${ourId}  ${ph}-${pa}${flipped ? ' (aligned by name)' : ''}` +
+        `${winner ? ` (pen:${winner})` : ''}`);
+    } catch (e) { console.error(`set_result #${ourId}:`, e.message); }
+  }
+
+  console.log(`Done. Team updates: ${teamUpdates}, group: ${groupUpdates}, result updates: ${resultUpdates}.`);
   if (teamUpdates === 0 && groupUpdates === 0)
     console.log('NOTE: no matches matched — the competition may not be covered ' +
       'by your plan, or stages are not published yet.');
