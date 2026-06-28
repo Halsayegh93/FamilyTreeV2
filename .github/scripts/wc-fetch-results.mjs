@@ -214,6 +214,16 @@ async function main() {
     ? `Group-stage matches upserted: ${groupUpdates}`
     : 'Group-stage import skipped (knockout-only game).');
 
+  // ----- DEBUG: print what's actually stored for the Round of 32 -----
+  try {
+    const r32 = await sbGet('wc_matches?select=id,home_team,away_team,kickoff&id=lte.16&order=id.asc');
+    console.log('--- Stored Round of 32 ---');
+    for (const m of r32) {
+      console.log(`#${m.id}  ${m.home_team || '∅'} vs ${m.away_team || '∅'}  (${m.kickoff || 'no date'})`);
+    }
+    console.log(`Total rows id<=16: ${r32.length}`);
+  } catch (e) { console.error('debug read:', e.message); }
+
   // ----- PHASE B: results -----
   if (!AUTO_RESULTS) {
     console.log(`Auto-results OFF — ${finishedJobs.length} finished match(es) left for ` +
