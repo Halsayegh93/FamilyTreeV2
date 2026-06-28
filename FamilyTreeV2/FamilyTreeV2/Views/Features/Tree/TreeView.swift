@@ -1721,6 +1721,15 @@ enum WomenStore {
         try await SupabaseConfig.client.from("women_members").delete().eq("id", value: id.uuidString).execute()
     }
 
+    /// إعادة ترتيب الأبناء — يحدّث sort_order حسب الترتيب الجديد. (إدارة فقط).
+    static func reorder(orderedIds: [UUID]) async throws {
+        for (i, id) in orderedIds.enumerated() {
+            try await SupabaseConfig.client.from("women_members")
+                .update(["sort_order": AnyEncodable(i)])
+                .eq("id", value: id.uuidString).execute()
+        }
+    }
+
     /// ربط/فكّ ربط اسم في شجرة النساء بحساب مستخدم (للإدارة فقط عبر RLS).
     static func linkAccount(womanId: UUID, userId: UUID?) async throws {
         try await SupabaseConfig.client.from("women_members")
@@ -1794,6 +1803,8 @@ struct WomenTreeView: View {
     @State private var pickMotherFor: FamilyMember? = nil
     @State private var linkAccountFor: FamilyMember? = nil
     @State private var mergeFor: FamilyMember? = nil
+    @State private var reorderFor: FamilyMember? = nil
+    @State private var reorderItems: [FamilyMember] = []
 
     private var canEdit: Bool { authVM.canEditMembers }
 
@@ -1848,6 +1859,47 @@ struct WomenTreeView: View {
             .sheet(item: $pickMotherFor) { node in motherPicker(for: node) }
             .sheet(item: $linkAccountFor) { node in accountPicker(for: node) }
             .sheet(item: $mergeFor) { node in mergePicker(for: node) }
+            .sheet(item: $reorderFor) { node in reorderSheet(for: node) }
+    }
+
+    // شيت ترتيب الأبناء بالسحب (إدارة فقط) — يحفظ sort_order.
+    @ViewBuilder
+    private func reorderSheet(for node: FamilyMember) -> some View {
+        NavigationStack {
+            List {
+                ForEach(reorderItems) { kid in
+                    HStack(spacing: DS.Spacing.md) {
+                        Text(kid.fullName.isEmpty ? kid.firstName : kid.fullName)
+                            .font(DS.Font.callout)
+                            .foregroundColor(DS.Color.textPrimary)
+                            .lineLimit(1)
+                        Spacer()
+                        Image(systemName: "line.3.horizontal")
+                            .foregroundColor(DS.Color.textTertiary)
+                    }
+                }
+                .onMove { from, to in
+                    reorderItems.move(fromOffsets: from, toOffset: to)
+                }
+            }
+            .environment(\.editMode, .constant(.active))
+            .navigationTitle(L10n.t("ترتيب الأبناء", "Reorder children"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(L10n.t("إلغاء", "Cancel")) { reorderFor = nil }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(L10n.t("حفظ", "Save")) {
+                        let ids = reorderItems.map(\.id)
+                        reorderFor = nil
+                        Task { try? await WomenStore.reorder(orderedIds: ids); await load() }
+                    }.fontWeight(.bold)
+                }
+            }
+            .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+        }
+        .presentationDetents([.medium, .large])
     }
 
     // اختيار سجل مكرر لدمجه في [keep] (إدارة فقط) — بحث بالاسم.
@@ -2146,6 +2198,17 @@ struct WomenTreeView: View {
                                               color: DS.Color.warning,
                                               title: L10n.t("دمج", "Merge")) {
                                 mergeFor = w
+                            }
+                            // ترتيب الأبناء بالسحب (يظهر عند وجود ابنين فأكثر).
+                            if allMembers.filter({ $0.fatherId == w.id }).count > 1 {
+                                womenCircleAction(icon: "arrow.up.arrow.down",
+                                                  color: DS.Color.info,
+                                                  title: L10n.t("ترتيب", "Reorder")) {
+                                    reorderItems = allMembers
+                                        .filter { $0.fatherId == w.id }
+                                        .sorted { $0.sortOrder < $1.sortOrder }
+                                    reorderFor = w
+                                }
                             }
                             // الجذر لا يُحذف؛ غيره يُحذف.
                             if !(w.fatherId == nil && w.husbandId == nil && w.motherId == nil) {
