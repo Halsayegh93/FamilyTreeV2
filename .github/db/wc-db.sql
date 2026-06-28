@@ -516,11 +516,11 @@ insert into public.wc_matches (id, round, match_no, venue, kickoff) values
   (32,'FINAL', 1, 'MetLife Stadium, New York/NJ',   '2026-07-19 19:00+00')
 on conflict (id) do nothing;
 
--- Knockout-only game: delete any match before the Round of 32 (28 Jun 2026).
--- Predictions for those matches cascade away. Runs every time db.sql is applied,
--- so re-imported group-stage rows never linger.
+-- Knockout-only game: delete anything that is NOT a knockout round (i.e. the
+-- group stage / any pre-Round-of-32 match), regardless of its date. Predictions
+-- for those matches cascade away. Runs every time db.sql is applied.
 delete from public.wc_matches
- where kickoff is not null and kickoff < '2026-06-28 00:00:00+00';
+ where coalesce(round, '') not in ('R32', 'R16', 'QF', 'SF', '3RD', 'FINAL');
 
 -- Force PostgREST to pick up the new functions immediately (so the reset and
 -- other RPCs work right after running this file).
