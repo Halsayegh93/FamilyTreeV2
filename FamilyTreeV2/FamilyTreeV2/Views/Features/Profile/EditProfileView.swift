@@ -134,7 +134,8 @@ struct EditProfileView: View {
                                                     .foregroundColor(DS.Color.textPrimary)
                                                 Spacer()
                                                 // مظهر مفتاح ثابت الاتجاه (LTR) — المقبض يمين عند التفعيل.
-                                                ZStack(alignment: isMarried ? .trailing : .leading) {
+                                                // نستخدم offset (لا alignment) لضمان تحرّك المقبض بسلاسة على iOS.
+                                                ZStack {
                                                     Capsule()
                                                         .fill(isMarried ? DS.Color.primary : DS.Color.textTertiary.opacity(0.35))
                                                         .frame(width: 51, height: 31)
@@ -142,9 +143,10 @@ struct EditProfileView: View {
                                                         .fill(Color.white)
                                                         .frame(width: 27, height: 27)
                                                         .shadow(color: .black.opacity(0.2), radius: 1, y: 1)
-                                                        .padding(2)
+                                                        .offset(x: isMarried ? 10 : -10)
                                                 }
                                                 .environment(\.layoutDirection, .leftToRight)
+                                                .animation(.easeInOut(duration: 0.2), value: isMarried)
                                             }
                                             .frame(height: dsFormRowHeight)
                                             .padding(.horizontal, DS.Spacing.lg)
