@@ -495,7 +495,7 @@ struct ProfileView: View {
                             icon: "person.2.fill",
                             iconColor: DS.Color.textSecondary
                         )
-                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 88), spacing: DS.Spacing.md)],
+                        LazyVGrid(columns: [GridItem(.flexible(), spacing: DS.Spacing.md), GridItem(.flexible())],
                                   spacing: DS.Spacing.md) {
                             if let mom { womenFamilyBox(mom, label: L10n.t("الأم", "Mother")) }
                             if isMarried {
@@ -526,11 +526,11 @@ struct ProfileView: View {
                                     }
                                 }
                             }
-                            if canEdit {
+                            // زر الأم يظهر فقط لو ما فيه أم (لإضافتها).
+                            if canEdit && mom == nil {
                                 womenActionBox(icon: "figure.2.and.child.holdinghands",
                                                color: FemaleAvatarView.motherIcon,
-                                               title: mom == nil ? L10n.t("إضافة الأم", "Add mother")
-                                                                 : L10n.t("تغيير الأم", "Change mother")) {
+                                               title: L10n.t("إضافة الأم", "Add mother")) {
                                     motherPickerNode = node ?? u
                                 }
                             }
@@ -549,48 +549,59 @@ struct ProfileView: View {
         }
     }
 
-    // مربع عائلة — أم/زوجة بالاسم الكامل، الأبناء بالاسم الأول.
+    // مربع عائلة — بنفس شكل خلية «المعلومات الشخصية» (أفقي: أيقونة + الدور/الاسم).
     private func womenFamilyBox(_ member: FamilyMember, label: String) -> some View {
         let isWife = label == L10n.t("الزوجة", "Wife")
         let isMother = label == L10n.t("الأم", "Mother")
         let isChild = !isWife && !isMother
         let fbg = isWife ? FemaleAvatarView.wifeBg : (isMother ? FemaleAvatarView.motherBg : FemaleAvatarView.pink)
-        let ficon = isWife ? FemaleAvatarView.wifeIcon : (isMother ? FemaleAvatarView.motherIcon : FemaleAvatarView.pinkIcon)
+        let ficon = isWife ? FemaleAvatarView.wifeIcon : (isMother ? FemaleAvatarView.motherIcon : FemaleAvatarView.pink)
+        let tint = member.isFemale ? ficon : DS.Color.primary
         let name = isChild ? member.firstName : (member.fullName.isEmpty ? member.firstName : member.fullName)
-        return VStack(spacing: 4) {
+        return HStack(spacing: DS.Spacing.sm) {
             DSMemberAvatar(
                 name: member.firstName,
                 avatarUrl: member.isFemale ? nil : member.displayAvatarUrl,
-                size: 46,
+                size: 36,
                 isFemale: member.isFemale,
                 femaleBg: fbg,
                 femaleIcon: ficon,
                 isDeceased: member.isDeceased == true,
                 square: true
             )
-            Text(name)
-                .font(DS.Font.caption1).fontWeight(.semibold)
-                .foregroundColor(DS.Color.textPrimary)
-                .lineLimit(2).multilineTextAlignment(.center).minimumScaleFactor(0.7)
-            Text(label).font(DS.Font.caption2).foregroundColor(DS.Color.textSecondary)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(label).font(DS.Font.caption2).foregroundColor(DS.Color.textTertiary).lineLimit(1)
+                Text(name).font(DS.Font.caption1).fontWeight(.bold)
+                    .foregroundColor(DS.Color.textPrimary).lineLimit(1).minimumScaleFactor(0.7)
+            }
         }
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(DS.Spacing.sm)
+        .background(DS.Color.surface)
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+            .stroke(tint.opacity(0.15), lineWidth: 1))
     }
 
-    // مربع إجراء (إضافة زوجة / الأم).
+    // مربع إجراء — بنفس شكل خلية «المعلومات الشخصية».
     private func womenActionBox(icon: String, color: Color, title: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            VStack(spacing: 4) {
+            HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: icon)
-                    .font(DS.Font.scaled(18, weight: .semibold))
+                    .font(DS.Font.scaled(16, weight: .bold))
                     .foregroundColor(color)
-                    .frame(width: 46, height: 46)
-                    .background(Circle().fill(color.opacity(0.12)))
-                    .overlay(Circle().strokeBorder(color.opacity(0.35), lineWidth: 1))
-                Text(title).font(DS.Font.caption2).fontWeight(.semibold)
+                    .frame(width: 36, height: 36)
+                    .background(color.opacity(0.12))
+                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
+                Text(title).font(DS.Font.caption1).fontWeight(.bold)
                     .foregroundColor(color).lineLimit(1).minimumScaleFactor(0.7)
             }
-            .frame(maxWidth: .infinity)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(DS.Spacing.sm)
+            .background(DS.Color.surface)
+            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                .stroke(color.opacity(0.15), lineWidth: 1))
         }
         .buttonStyle(.plain)
     }
