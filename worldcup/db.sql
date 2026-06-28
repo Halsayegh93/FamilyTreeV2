@@ -309,14 +309,17 @@ begin
   -- Never blank out an existing team/flag: if predicted, freeze it; otherwise
   -- update only when a non-empty value is provided (the source sometimes returns
   -- null for not-yet-decided knockout slots, which must not wipe what we set).
+  -- Freeze a team only when it is ALREADY set (non-null). A predicted match whose
+  -- team is still null can still be filled; only decided teams are protected from
+  -- being swapped.
   update public.wc_matches
-     set home_team = case when has_preds then home_team
+     set home_team = case when has_preds and home_team is not null then home_team
                           else coalesce(nullif(btrim(p_home_team), ''), home_team) end,
-         away_team = case when has_preds then away_team
+         away_team = case when has_preds and away_team is not null then away_team
                           else coalesce(nullif(btrim(p_away_team), ''), away_team) end,
-         home_flag = case when has_preds then home_flag
+         home_flag = case when has_preds and home_team is not null then home_flag
                           else coalesce(nullif(btrim(p_home_flag), ''), home_flag) end,
-         away_flag = case when has_preds then away_flag
+         away_flag = case when has_preds and away_team is not null then away_flag
                           else coalesce(nullif(btrim(p_away_flag), ''), away_flag) end,
          venue     = coalesce(nullif(btrim(p_venue), ''), venue),
          kickoff   = coalesce(p_kickoff, kickoff),
