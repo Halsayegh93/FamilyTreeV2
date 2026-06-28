@@ -1,4 +1,5 @@
 import SwiftUI
+import Supabase
 
 struct AdminPendingRequestsView: View {
     @EnvironmentObject var authVM: AuthViewModel
@@ -706,15 +707,23 @@ struct LinkToExistingMemberSheet: View {
     @State private var searchText = ""
     @State private var selectedMember: FamilyMember? = nil
     @State private var showConfirm = false
+    @State private var femaleTab = false // false = ذكور (عامة) | true = إناث (نساء)
+    @State private var womenList: [FamilyMember] = WomenStore.cache
 
     private var candidates: [FamilyMember] {
-        let all = memberVM.allMembers.filter {
-            $0.role != .pending &&
-            $0.id != pendingMember.id &&
-            $0.isDeceased == false
+        let base: [FamilyMember]
+        if femaleTab {
+            base = womenList.filter { $0.isFemale && $0.isDeceased != true }
+        } else {
+            base = memberVM.allMembers.filter {
+                $0.role != .pending &&
+                $0.isFemale == false &&
+                $0.id != pendingMember.id &&
+                $0.isDeceased == false
+            }
         }
-        if searchText.isEmpty { return all }
-        return all.filter { $0.fullName.localizedCaseInsensitiveContains(searchText) }
+        if searchText.isEmpty { return base }
+        return base.filter { $0.fullName.localizedCaseInsensitiveContains(searchText) }
     }
 
     var body: some View {
@@ -773,6 +782,16 @@ struct LinkToExistingMemberSheet: View {
                     }
                     .padding(DS.Spacing.lg)
                     .background(DS.Color.surface)
+
+                    // تبويب: ذكور (الشجرة العامة) / إناث (شجرة النساء)
+                    Picker("", selection: $femaleTab) {
+                        Text(L10n.t("ذكور", "Males")).tag(false)
+                        Text(L10n.t("إناث", "Females")).tag(true)
+                    }
+                    .pickerStyle(.segmented)
+                    .padding(.horizontal, DS.Spacing.lg)
+                    .padding(.top, DS.Spacing.md)
+                    .onChange(of: femaleTab) { _ in selectedMember = nil }
 
                     // حقل البحث
                     HStack(spacing: DS.Spacing.sm) {
@@ -868,6 +887,9 @@ struct LinkToExistingMemberSheet: View {
                 }
             }
             .animation(DS.Anim.snappy, value: selectedMember?.id)
+            .task {
+                womenList = (try? await WomenStore.fetch()) ?? WomenStore.cache
+            }
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .alert(
@@ -877,10 +899,23 @@ struct LinkToExistingMemberSheet: View {
             Button(L10n.t("ربط", "Link"), role: .none) {
                 guard let target = selectedMember else { return }
                 Task {
-                    await adminRequestVM.mergeMemberIntoTreeMember(
-                        newMemberId: pendingMember.id,
-                        existingTreeMemberId: target.id
-                    )
+                    if femaleTab {
+                        // ربط الحساب بعضوة في شجرة النساء + تفعيله وإخفاؤه من العامة.
+                        try? await WomenStore.linkAccount(womanId: target.id, userId: pendingMember.id)
+                        try? await SupabaseConfig.client.from("profiles").update([
+                            "status": AnyEncodable("active"),
+                            "role": AnyEncodable("member"),
+                            "gender": AnyEncodable("female"),
+                            "is_hidden_from_tree": AnyEncodable(true)
+                        ]).eq("id", value: pendingMember.id.uuidString).execute()
+                        await memberVM.fetchAllMembers(force: true)
+                        WomenStore.cache = (try? await WomenStore.fetch()) ?? WomenStore.cache
+                    } else {
+                        await adminRequestVM.mergeMemberIntoTreeMember(
+                            newMemberId: pendingMember.id,
+                            existingTreeMemberId: target.id
+                        )
+                    }
                     dismiss()
                 }
             }
