@@ -1,6 +1,7 @@
 import SwiftUI
 import PhotosUI
 import UIKit
+import Supabase
 
 struct AddChildSheet: View {
     @EnvironmentObject var memberVM: MemberViewModel
@@ -121,16 +122,30 @@ struct AddChildSheet: View {
 
                     DSDivider()
 
-                    // Phone field — العنوان فوق الحقل، الحقل بدون إطار
-                    DSLabeledFieldRow(icon: "phone.fill", iconColor: DS.Color.success,
-                                      label: L10n.t("رقم الهاتف", "Phone Number")) {
-                        DSPhoneField(
-                            country: $selectedPhoneCountry,
-                            digits: $phoneNumber,
-                            placeholder: L10n.t("اختياري", "Optional"),
-                            compact: true,
-                            bordered: false
-                        )
+                    // الجنس — أنثى تدخل شجرة النساء فقط؛ ذكر يدخل الشجرتين.
+                    DSFormRow(icon: "person.2.fill", iconColor: DS.Color.accent,
+                              label: L10n.t("الجنس", "Gender")) {
+                        Picker("", selection: $selectedGender) {
+                            Text(L10n.t("ذكر", "Male")).tag("male")
+                            Text(L10n.t("أنثى", "Female")).tag("female")
+                        }
+                        .pickerStyle(.segmented)
+                        .fixedSize()
+                    }
+
+                    // Phone field — للذكر فقط (الأنثى بشجرة النساء بلا هاتف)
+                    if selectedGender != "female" {
+                        DSDivider()
+                        DSLabeledFieldRow(icon: "phone.fill", iconColor: DS.Color.success,
+                                          label: L10n.t("رقم الهاتف", "Phone Number")) {
+                            DSPhoneField(
+                                country: $selectedPhoneCountry,
+                                digits: $phoneNumber,
+                                placeholder: L10n.t("اختياري", "Optional"),
+                                compact: true,
+                                bordered: false
+                            )
+                        }
                     }
 
                     DSDivider()
@@ -189,33 +204,45 @@ struct AddChildSheet: View {
 
             let birthDateString: String? = formatter.string(from: birthDate)
             let deathDateString: String? = isDeceased ? formatter.string(from: deathDate) : nil
+            let cleanFirst = firstName.trimmingCharacters(in: .whitespacesAndNewlines)
+            let siblings = memberVM.allMembers.filter { $0.fatherId == member.id }.count
 
-            let childId = await memberVM.addChild(
-                firstNameOnly: firstName.trimmingCharacters(in: .whitespacesAndNewlines),
-                phoneNumber: KuwaitPhone.normalizedForStorage(
-                    country: selectedPhoneCountry,
-                    rawLocalDigits: phoneNumber
-                ) ?? "",
-                birthDate: birthDateString,
-                fatherId: member.id,
-                isDeceased: isDeceased,
-                deathDate: deathDateString,
-                gender: selectedGender
-            )
+            do {
+                // التوجيه عبر السيرفر: أنثى → النساء فقط، ذكر → الشجرتين.
+                let childId = try await WomenStore.addFamilyChild(
+                    parentId: member.id,
+                    name: cleanFirst,
+                    gender: selectedGender,
+                    birthDate: birthDateString,
+                    isDeceased: isDeceased,
+                    deathDate: deathDateString,
+                    sortOrder: siblings,
+                    parentFullName: member.fullName
+                )
 
-            guard let childId else {
+                // الذكر فقط: رقم الهاتف (اختياري) + الصورة.
+                if selectedGender != "female" {
+                    let phone = KuwaitPhone.normalizedForStorage(
+                        country: selectedPhoneCountry, rawLocalDigits: phoneNumber) ?? ""
+                    if !phone.isEmpty {
+                        try? await SupabaseConfig.client.from("profiles")
+                            .update(["phone_number": AnyEncodable(phone)])
+                            .eq("id", value: childId.uuidString).execute()
+                    }
+                    if let image = selectedUIImage {
+                        await memberVM.uploadAvatar(image: image, for: childId)
+                    }
+                }
+
+                await memberVM.fetchAllMembers(force: true)
+                await memberVM.fetchChildren(for: member.id)
+                WomenStore.cache = (try? await WomenStore.fetch()) ?? WomenStore.cache
+                showSuccessAlert = true
+            } catch {
                 Log.error("فشل في إضافة الابن")
                 errorMessage = L10n.t("فشل في إضافة الابن. حاول مرة أخرى.", "Failed to add child. Please try again.")
                 showErrorAlert = true
-                return
             }
-
-            if let image = selectedUIImage {
-                await memberVM.uploadAvatar(image: image, for: childId)
-            }
-
-            await memberVM.fetchChildren(for: member.id)
-            showSuccessAlert = true
         }
     }
 }

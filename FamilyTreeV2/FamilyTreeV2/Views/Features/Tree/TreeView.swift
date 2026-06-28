@@ -1717,6 +1717,26 @@ enum WomenStore {
             .eq("id", value: childId.uuidString).execute()
     }
 
+    /// إضافة ابن عبر السيرفر مع توجيه حسب الجنس — يرجّع المعرّف الجديد.
+    ///  أنثى → women_members فقط. ذكر → profiles (وينعكس للنساء).
+    static func addFamilyChild(parentId: UUID, name: String, gender: String,
+                               birthDate: String?, isDeceased: Bool, deathDate: String?,
+                               sortOrder: Int, parentFullName: String) async throws -> UUID {
+        let params: [String: AnyEncodable] = [
+            "p_parent_id": AnyEncodable(parentId.uuidString),
+            "p_name": AnyEncodable(name),
+            "p_gender": AnyEncodable(gender),
+            "p_birth": AnyEncodable(birthDate),
+            "p_deceased": AnyEncodable(isDeceased),
+            "p_death": AnyEncodable(isDeceased ? deathDate : Optional<String>.none),
+            "p_sort": AnyEncodable(sortOrder),
+            "p_parent_full_name": AnyEncodable(parentFullName)
+        ]
+        let newId: UUID = try await SupabaseConfig.client
+            .rpc("add_family_child", params: params).execute().value
+        return newId
+    }
+
     /// نقل ابن بين الشجرتين حسب الجنس (إدارة فقط) — يرجّع المعرّف الجديد.
     ///  أنثى → شجرة النساء فقط (يخرج من العامة). ذكر → العامة (وينعكس للنساء).
     static func moveChildGender(childId: UUID, toGender: String) async throws -> UUID {

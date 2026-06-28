@@ -26,25 +26,9 @@ struct ProfileView: View {
     @State private var newWifeName = ""
     @State private var pendingNodeId: UUID? = nil
     @State private var motherPickerNode: FamilyMember? = nil
-    @State private var showAddDaughterAlert = false
-    @State private var newDaughterName = ""
-    @State private var pendingDaughterSort = 0
 
     private func reloadWomen() {
         Task { womenCache = (try? await WomenStore.fetch()) ?? womenCache }
-    }
-
-    private func addDaughterFromProfile() {
-        guard let nid = pendingNodeId else { return }
-        let nm = newDaughterName.trimmingCharacters(in: .whitespaces)
-        guard !nm.isEmpty else { return }
-        Task {
-            try? await WomenStore.addChild(parentId: nid, name: nm,
-                                           sortOrder: pendingDaughterSort,
-                                           gender: "female",
-                                           parentFullName: user?.fullName ?? "")
-            womenCache = (try? await WomenStore.fetch()) ?? womenCache
-        }
     }
 
     var user: FamilyMember? { authVM.currentUser }
@@ -534,17 +518,6 @@ struct ProfileView: View {
                                                title: L10n.t("إضافة ابن", "Add son")) {
                                     showAddChild = true
                                 }
-                                // إضافة بنت (شجرة النساء فقط) — إدارة.
-                                if canEdit {
-                                    womenActionBox(icon: "person.badge.plus",
-                                                   color: FemaleAvatarView.pinkIcon,
-                                                   title: L10n.t("إضافة بنت", "Add daughter")) {
-                                        pendingNodeId = nodeId
-                                        pendingDaughterSort = daughters.count
-                                        newDaughterName = ""
-                                        showAddDaughterAlert = true
-                                    }
-                                }
                                 if canEdit {
                                     womenActionBox(icon: "heart.circle.fill",
                                                    color: FemaleAvatarView.wifeIcon,
@@ -570,11 +543,6 @@ struct ProfileView: View {
                     TextField(L10n.t("اسم الزوجة", "Wife name"), text: $newWifeName)
                     Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
                     Button(L10n.t("إضافة", "Add")) { addWifeFromProfile() }
-                }
-                .alert(L10n.t("إضافة بنت", "Add daughter"), isPresented: $showAddDaughterAlert) {
-                    TextField(L10n.t("اسم البنت", "Daughter name"), text: $newDaughterName)
-                    Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
-                    Button(L10n.t("إضافة", "Add")) { addDaughterFromProfile() }
                 }
                 .sheet(item: $motherPickerNode) { n in motherPickerSheet(for: n) }
             }
