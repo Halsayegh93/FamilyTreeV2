@@ -26,6 +26,18 @@ struct ProfileView: View {
     @State private var newWifeName = ""
     @State private var pendingNodeId: UUID? = nil
     @State private var motherPickerNode: FamilyMember? = nil
+    @State private var showAddMotherAlert = false
+    @State private var newMotherName = ""
+
+    private func addMotherFromProfile() {
+        let nm = newMotherName.trimmingCharacters(in: .whitespaces)
+        guard !nm.isEmpty else { return }
+        Task {
+            // العضو يضيف أمّه بنفسه (دالة سيرفر آمنة).
+            try? await WomenStore.addSelfMother(name: nm)
+            womenCache = (try? await WomenStore.fetch()) ?? womenCache
+        }
+    }
 
     private func reloadWomen() {
         Task { womenCache = (try? await WomenStore.fetch()) ?? womenCache }
@@ -483,11 +495,10 @@ struct ProfileView: View {
             let mom = node?.motherId.flatMap { mid in womenCache.first { $0.id == mid } }
             let kids = womenCache.filter { $0.fatherId == nodeId }
                 .sorted { $0.sortOrder < $1.sortOrder }
-            let canEdit = authVM.canEditMembers
             let sons = memberVM.currentMemberChildren
             let daughters = kids.filter { $0.isFemale }
-            let hasAny = mom != nil || canEdit || isMarried
-            if hasAny {
+            // قسم العائلة يظهر دائماً — مربع الأم (عرض/إضافة) لكل عضو.
+            if true {
                 VStack(alignment: .leading, spacing: 0) {
                     DSCard(padding: 0) {
                         DSSectionHeader(
@@ -497,10 +508,10 @@ struct ProfileView: View {
                         )
                         LazyVGrid(columns: [GridItem(.flexible(), spacing: DS.Spacing.md), GridItem(.flexible())],
                                   spacing: DS.Spacing.md) {
-                            // الأم — موجودة، أو مربع «إضافة» إذا غير مضافة.
+                            // الأم — موجودة، أو مربع «إضافة» (العضو يضيف أمّه بنفسه).
                             if let mom {
                                 womenFamilyBox(mom, label: L10n.t("الأم", "Mother"))
-                            } else if canEdit {
+                            } else {
                                 womenAddBox(icon: "figure.2.and.child.holdinghands",
                                             color: FemaleAvatarView.motherIcon,
                                             label: L10n.t("الأم", "Mother")) {
@@ -509,8 +520,8 @@ struct ProfileView: View {
                             }
                             if isMarried {
                                 ForEach(wives, id: \.id) { womenFamilyBox($0, label: L10n.t("الزوجة", "Wife")) }
-                                // الزوجة — مربع «إضافة» إذا غير مضافة.
-                                if canEdit && wives.isEmpty {
+                                // الزوجة — مربع «إضافة» إذا غير مضافة (العضو يضيف زوجته بنفسه).
+                                if wives.isEmpty {
                                     womenAddBox(icon: "heart.circle.fill",
                                                 color: FemaleAvatarView.wifeIcon,
                                                 label: L10n.t("الزوجة", "Wife")) {
@@ -545,6 +556,11 @@ struct ProfileView: View {
                     TextField(L10n.t("اسم الزوجة", "Wife name"), text: $newWifeName)
                     Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
                     Button(L10n.t("إضافة", "Add")) { addWifeFromProfile() }
+                }
+                .alert(L10n.t("إضافة الأم", "Add mother"), isPresented: $showAddMotherAlert) {
+                    TextField(L10n.t("اسم الأم", "Mother name"), text: $newMotherName)
+                    Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
+                    Button(L10n.t("إضافة", "Add")) { addMotherFromProfile() }
                 }
                 .sheet(item: $motherPickerNode) { n in motherPickerSheet(for: n) }
             }
@@ -635,11 +651,11 @@ struct ProfileView: View {
     }
 
     private func addWifeFromProfile() {
-        guard let nid = pendingNodeId else { return }
         let nm = newWifeName.trimmingCharacters(in: .whitespaces)
         guard !nm.isEmpty else { return }
         Task {
-            try? await WomenStore.addWife(husbandId: nid, name: nm)
+            // العضو يضيف زوجته بنفسه (دالة سيرفر آمنة).
+            try? await WomenStore.addSelfWife(name: nm)
             womenCache = (try? await WomenStore.fetch()) ?? womenCache
         }
     }
@@ -653,22 +669,27 @@ struct ProfileView: View {
             .sorted { $0.fullName < $1.fullName }
         NavigationStack {
             List {
+                // إضافة أمّ جديدة (يضيفها العضو بنفسه).
+                Button {
+                    motherPickerNode = nil
+                    newMotherName = ""
+                    showAddMotherAlert = true
+                } label: {
+                    Label(L10n.t("إضافة الأم", "Add mother"), systemImage: "plus.circle")
+                        .foregroundColor(DS.Color.primary)
+                }
                 Button(L10n.t("بدون أم", "No mother")) {
                     motherPickerNode = nil
-                    Task { try? await WomenStore.setMotherId(childId: node.id, motherId: nil)
+                    Task { try? await WomenStore.setSelfMother(motherId: nil)
                            womenCache = (try? await WomenStore.fetch()) ?? womenCache }
                 }.foregroundColor(DS.Color.textSecondary)
-                if candidates.isEmpty {
-                    Text(L10n.t("لا توجد زوجات للأب — أضِف زوجة للأب من شجرة النساء.",
-                                "No wives for the father — add one from the women tree."))
-                        .foregroundColor(DS.Color.textSecondary)
-                } else {
+                if !candidates.isEmpty {
                     Text(L10n.t("اختر الأم من زوجات الأب:", "Choose mother from father's wives:"))
                         .font(DS.Font.caption1).foregroundColor(DS.Color.textSecondary)
                     ForEach(candidates) { c in
                         Button(c.fullName.isEmpty ? c.firstName : c.fullName) {
                             motherPickerNode = nil
-                            Task { try? await WomenStore.setMotherId(childId: node.id, motherId: c.id)
+                            Task { try? await WomenStore.setSelfMother(motherId: c.id)
                                    womenCache = (try? await WomenStore.fetch()) ?? womenCache }
                         }.foregroundColor(DS.Color.textPrimary)
                     }

@@ -1717,6 +1717,20 @@ enum WomenStore {
             .eq("id", value: childId.uuidString).execute()
     }
 
+    // ── إدارة العضو لعائلته الخاصة (الأم/الزوجة) عبر دوال السيرفر ──────────
+    static func addSelfWife(name: String) async throws {
+        try await SupabaseConfig.client
+            .rpc("add_self_wife", params: ["p_name": AnyEncodable(name)]).execute()
+    }
+    static func addSelfMother(name: String) async throws {
+        try await SupabaseConfig.client
+            .rpc("add_self_mother", params: ["p_name": AnyEncodable(name)]).execute()
+    }
+    static func setSelfMother(motherId: UUID?) async throws {
+        try await SupabaseConfig.client
+            .rpc("set_self_mother", params: ["p_mother_id": AnyEncodable(motherId?.uuidString)]).execute()
+    }
+
     /// إضافة ابن عبر السيرفر مع توجيه حسب الجنس — يرجّع المعرّف الجديد.
     ///  أنثى → women_members فقط. ذكر → profiles (وينعكس للنساء).
     static func addFamilyChild(parentId: UUID, name: String, gender: String,
