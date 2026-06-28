@@ -497,9 +497,26 @@ struct ProfileView: View {
                         )
                         LazyVGrid(columns: [GridItem(.flexible(), spacing: DS.Spacing.md), GridItem(.flexible())],
                                   spacing: DS.Spacing.md) {
-                            if let mom { womenFamilyBox(mom, label: L10n.t("الأم", "Mother")) }
+                            // الأم — موجودة، أو مربع «إضافة» إذا غير مضافة.
+                            if let mom {
+                                womenFamilyBox(mom, label: L10n.t("الأم", "Mother"))
+                            } else if canEdit {
+                                womenAddBox(icon: "figure.2.and.child.holdinghands",
+                                            color: FemaleAvatarView.motherIcon,
+                                            label: L10n.t("الأم", "Mother")) {
+                                    motherPickerNode = node ?? u
+                                }
+                            }
                             if isMarried {
                                 ForEach(wives, id: \.id) { womenFamilyBox($0, label: L10n.t("الزوجة", "Wife")) }
+                                // الزوجة — مربع «إضافة» إذا غير مضافة.
+                                if canEdit && wives.isEmpty {
+                                    womenAddBox(icon: "heart.circle.fill",
+                                                color: FemaleAvatarView.wifeIcon,
+                                                label: L10n.t("الزوجة", "Wife")) {
+                                        pendingNodeId = nodeId; newWifeName = ""; showAddWifeAlert = true
+                                    }
+                                }
                                 // الأبناء (الشجرة العامة) — نقر للتعديل.
                                 ForEach(sons, id: \.id) { son in
                                     Button { editingChild = son } label: {
@@ -517,22 +534,6 @@ struct ProfileView: View {
                                                color: DS.Color.primary,
                                                title: L10n.t("إضافة ابن", "Add son")) {
                                     showAddChild = true
-                                }
-                                // زر إضافة زوجة يظهر فقط لو ما فيه زوجة.
-                                if canEdit && wives.isEmpty {
-                                    womenActionBox(icon: "heart.circle.fill",
-                                                   color: FemaleAvatarView.wifeIcon,
-                                                   title: L10n.t("إضافة زوجة", "Add wife")) {
-                                        pendingNodeId = nodeId; newWifeName = ""; showAddWifeAlert = true
-                                    }
-                                }
-                            }
-                            // زر الأم يظهر فقط لو ما فيه أم (لإضافتها).
-                            if canEdit && mom == nil {
-                                womenActionBox(icon: "figure.2.and.child.holdinghands",
-                                               color: FemaleAvatarView.motherIcon,
-                                               title: L10n.t("إضافة الأم", "Add mother")) {
-                                    motherPickerNode = node ?? u
                                 }
                             }
                         }
@@ -582,6 +583,32 @@ struct ProfileView: View {
         .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
             .stroke(tint.opacity(0.15), lineWidth: 1))
+    }
+
+    // مربع «إضافة» في مكان الأم/الزوجة — نفس شكل الخلية، الدور + كلمة «إضافة».
+    private func womenAddBox(icon: String, color: Color, label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: DS.Spacing.sm) {
+                Image(systemName: icon)
+                    .font(DS.Font.scaled(16, weight: .bold))
+                    .foregroundColor(color)
+                    .frame(width: 36, height: 36)
+                    .background(color.opacity(0.12))
+                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(label).font(DS.Font.caption2).foregroundColor(DS.Color.textTertiary).lineLimit(1)
+                    Text(L10n.t("إضافة", "Add")).font(DS.Font.caption1).fontWeight(.bold)
+                        .foregroundColor(color).lineLimit(1)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(DS.Spacing.sm)
+            .background(DS.Color.surface)
+            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                .stroke(color.opacity(0.3), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
     }
 
     // مربع إجراء — بنفس شكل خلية «المعلومات الشخصية».
