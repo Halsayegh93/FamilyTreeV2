@@ -1290,6 +1290,8 @@ class AuthViewModel: ObservableObject {
             "gender": AnyEncodable(gender.isEmpty ? nil : gender),
             "is_deceased": AnyEncodable(false),
             "is_married": AnyEncodable(false),
+            // الإناث: الهاتف مخفي افتراضياً (يظهر فقط لها وللإدارة).
+            "is_phone_hidden": AnyEncodable(gender.lowercased() == "female"),
             "is_hidden_from_tree": AnyEncodable(true),
             "sort_order": AnyEncodable(0),
             "created_at": AnyEncodable(DateHelper.now)

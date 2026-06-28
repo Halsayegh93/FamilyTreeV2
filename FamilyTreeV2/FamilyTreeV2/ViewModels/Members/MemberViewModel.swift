@@ -201,7 +201,7 @@ class MemberViewModel: ObservableObject {
         guard NetworkMonitor.shared.isConnected else { return }
         do {
             let response = try await supabase
-                .from("profiles")
+                .from("members_masked")
                 .select()
                 .eq("id", value: id.uuidString)
                 .single()
@@ -238,7 +238,7 @@ class MemberViewModel: ObservableObject {
 
         do {
             let response = try await supabase
-                .from("profiles")
+                .from("members_masked")   // إخفاء الهاتف على مستوى السيرفر
                 .select()
                 .limit(10000)
                 .execute()
@@ -275,7 +275,7 @@ class MemberViewModel: ObservableObject {
     func fetchChildren(for fatherId: UUID) async {
         do {
             // فلاتر السيرفر تطابق المعيار القانوني (FamilyMember.isCountable)
-            let response: [FamilyMember] = try await supabase.from("profiles")
+            let response: [FamilyMember] = try await supabase.from("members_masked")
                 .select()
                 .eq("father_id", value: fatherId)
                 .eq("is_hidden_from_tree", value: false)

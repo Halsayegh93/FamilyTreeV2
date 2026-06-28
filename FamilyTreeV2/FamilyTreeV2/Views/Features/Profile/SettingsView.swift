@@ -327,9 +327,14 @@ struct NotificationsAndPrivacyView: View {
                             icon: "eye.slash.fill",
                             color: DS.Color.primary,
                             title: t("إخفاء رقم الهاتف", "Hide Phone Number"),
-                            subtitle: t("لن يظهر رقمك للأعضاء الآخرين", "Your number won't be visible to others"),
+                            subtitle: authVM.currentUser?.isFemale == true
+                                ? t("رقم الإناث مخفي دائماً (يظهر للإدارة فقط)", "Women's number is always hidden (admins only)")
+                                : t("لن يظهر رقمك للأعضاء الآخرين", "Your number won't be visible to others"),
                             isOn: $isPhoneHidden
                         )
+                        // الإناث: القفل مفعّل دائماً — لا يمكن إظهار الرقم.
+                        .disabled(authVM.currentUser?.isFemale == true)
+                        .opacity(authVM.currentUser?.isFemale == true ? 0.6 : 1)
                         DSDivider()
                         toggleRow(
                             icon: "calendar.badge.minus",
@@ -366,7 +371,9 @@ struct NotificationsAndPrivacyView: View {
         .environment(\.layoutDirection, langManager.layoutDirection)
         .onAppear {
             badgeEnabled = authVM.currentUser?.badgeEnabled ?? true
-            isPhoneHidden = authVM.currentUser?.isPhoneHidden ?? false
+            // الإناث: مخفي دائماً (مقفول).
+            isPhoneHidden = (authVM.currentUser?.isFemale == true)
+                ? true : (authVM.currentUser?.isPhoneHidden ?? false)
             isBirthDateHidden = authVM.currentUser?.isBirthDateHidden ?? false
         }
         .onChange(of: notificationsEnabled) { newValue in
