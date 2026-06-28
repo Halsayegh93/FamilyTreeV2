@@ -19,9 +19,10 @@ const API_KEY = process.env.FOOTBALL_API_KEY;
 const PIN = process.env.WC_ADMIN_PIN || '1993';
 const SB_URL = process.env.SUPABASE_URL;
 const SB_KEY = process.env.SUPABASE_ANON_KEY;
-// Results are entered manually by the admin. The source only fills the schedule
-// (teams/kickoff). Set WC_AUTO_RESULTS=1 to let it push official results again.
-const AUTO_RESULTS = process.env.WC_AUTO_RESULTS === '1';
+// The source brings teams, flags, kickoff AND the official result (aligned to our
+// orientation by team name). The admin can still override any result by hand.
+// Set WC_AUTO_RESULTS=0 to stop auto-filling results.
+const AUTO_RESULTS = process.env.WC_AUTO_RESULTS !== '0';
 
 if (!API_KEY || !SB_URL || !SB_KEY) {
   console.error('Missing FOOTBALL_API_KEY / SUPABASE_URL / SUPABASE_ANON_KEY');

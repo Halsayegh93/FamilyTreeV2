@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>لوحة التحكم — جماهير مباريات كأس العالم الرميثية</title>
-  <link rel="stylesheet" href="styles.css?v=3" />
+  <link rel="stylesheet" href="styles.css?v=4" />
 </head>
 <body>
   <div class="wrap">
@@ -54,7 +54,7 @@
       loadMatches, loadPredictions, roundLabel, ROUNDS, friendlyError,
       adminVerifyPin, adminSetResult, adminSaveMatch, adminReset,
       adminDeletePlayer, adminReopenMatch, scoreRow, watch,
-    } from './app.js?v=3';
+    } from './app.js?v=4';
 
     const $ = (s, r = document) => r.querySelector(s);
     const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) =>
@@ -212,11 +212,26 @@
           <span><b>${esc(roundLabel(m.round))}</b> — مباراة ${m.match_no}</span>
           ${badge}
         </div>
-        <div class="venue-line" style="font-size:15px;color:var(--text)">
-          ${esc(home)} ${scoreHTML} ${esc(away)}
+        <div class="match">
+          <div class="team home">
+            <span class="flag">${esc(m.home_flag || '⚽️')}</span>
+            <span class="name ${m.home_team ? '' : 'tbd'}">${esc(home)}</span>
+          </div>
+          <div class="scorebox">
+            <input class="r-home" type="number" min="0" max="99" inputmode="numeric"
+              value="${m.home_score ?? ''}" />
+            <span class="dash">-</span>
+            <input class="r-away" type="number" min="0" max="99" inputmode="numeric"
+              value="${m.away_score ?? ''}" />
+          </div>
+          <div class="team away">
+            <span class="flag">${esc(m.away_flag || '⚽️')}</span>
+            <span class="name ${m.away_team ? '' : 'tbd'}">${esc(away)}</span>
+          </div>
         </div>
         <div class="card-actions">
-          <button class="btn ghost reopen">♻️ إعادة فتح المباراة</button>
+          <button class="btn save-result">💾 تحديث النتيجة (تُحسب النقاط)</button>
+          <button class="btn ghost reopen" style="margin-top:8px">♻️ مسح النتيجة وإعادة الفتح</button>
         </div>
 
         ${predictorsBlock(m)}
@@ -289,6 +304,22 @@
 
     function bindFinished(card) {
       const id = +card.dataset.id;
+
+      // update the result in place (recomputes points)
+      const save = card.querySelector('.save-result');
+      if (save) save.onclick = async (ev) => {
+        const b = ev.currentTarget;
+        const h = card.querySelector('.r-home').value;
+        const a = card.querySelector('.r-away').value;
+        if (h === '' || a === '') { toast('اكتب النتيجة للفريقين', true); return; }
+        b.disabled = true;
+        try {
+          await adminSetResult(id, +h, +a, PIN, null);
+          toast('تم تحديث النتيجة ✅ وتحسبت النقاط');
+          loadList();
+        } catch (e) { toast(friendlyError(e), true); b.disabled = false; }
+      };
+
       const btn = card.querySelector('.reopen');
       if (btn) btn.onclick = async (ev) => {
         if (!window.confirm('تعيد فتح المباراة؟ تنمسح نتيجتها وترجع للجدول.')) return;
