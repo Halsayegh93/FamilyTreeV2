@@ -22,6 +22,10 @@ struct ProfileView: View {
     @State private var isLoadingChildren = true
     // عائلة شجرة النساء للمستخدم الحالي (زوجاته/أمّه/أبناؤه من women_members).
     @State private var womenCache: [FamilyMember] = WomenStore.cache
+    @State private var showAddWifeAlert = false
+    @State private var newWifeName = ""
+    @State private var pendingNodeId: UUID? = nil
+    @State private var motherPickerNode: FamilyMember? = nil
 
     var user: FamilyMember? { authVM.currentUser }
 
@@ -465,16 +469,19 @@ struct ProfileView: View {
 
     @ViewBuilder
     private var serverSonsSection: some View {
-        // العائلة من شجرة النساء: زوجاته + أمّه + أبناؤه (women_members).
+        // العائلة من شجرة النساء: الأم دائماً؛ الزوجات/الأبناء حسب الحالة الاجتماعية.
         if let u = user {
             let nodeId = WomenStore.womanByLinkedUser[u.id] ?? u.id
             let node = womenCache.first { $0.id == nodeId }
+            let isMarried = u.isMarried ?? false
             let wives = womenCache.filter { $0.husbandId == nodeId }
                 .sorted { $0.sortOrder < $1.sortOrder }
             let mom = node?.motherId.flatMap { mid in womenCache.first { $0.id == mid } }
             let kids = womenCache.filter { $0.fatherId == nodeId }
                 .sorted { $0.sortOrder < $1.sortOrder }
-            if mom != nil || !wives.isEmpty || !kids.isEmpty {
+            let canEdit = authVM.canEditMembers
+            let hasAny = mom != nil || canEdit || (isMarried && (!wives.isEmpty || !kids.isEmpty))
+            if hasAny {
                 VStack(alignment: .leading, spacing: 0) {
                     DSCard(padding: 0) {
                         DSSectionHeader(
@@ -482,54 +489,139 @@ struct ProfileView: View {
                             icon: "person.2.fill",
                             iconColor: DS.Color.textSecondary
                         )
-                        if let mom { womenFamilyRow(member: mom, label: L10n.t("الأم", "Mother")) }
-                        ForEach(wives, id: \.id) { wife in
-                            womenFamilyRow(member: wife, label: L10n.t("الزوجة", "Wife"))
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 88), spacing: DS.Spacing.md)],
+                                  spacing: DS.Spacing.md) {
+                            if let mom { womenFamilyBox(mom, label: L10n.t("الأم", "Mother")) }
+                            if isMarried {
+                                ForEach(wives, id: \.id) { womenFamilyBox($0, label: L10n.t("الزوجة", "Wife")) }
+                                ForEach(kids, id: \.id) { kid in
+                                    womenFamilyBox(kid, label: kid.isFemale ? L10n.t("بنت", "Daughter")
+                                                                            : L10n.t("ابن", "Son"))
+                                }
+                            }
+                            if canEdit && isMarried {
+                                womenActionBox(icon: "heart.circle.fill",
+                                               color: FemaleAvatarView.wifeIcon,
+                                               title: L10n.t("إضافة زوجة", "Add wife")) {
+                                    pendingNodeId = nodeId; newWifeName = ""; showAddWifeAlert = true
+                                }
+                            }
+                            if canEdit {
+                                womenActionBox(icon: "figure.2.and.child.holdinghands",
+                                               color: FemaleAvatarView.motherIcon,
+                                               title: mom == nil ? L10n.t("إضافة الأم", "Add mother")
+                                                                 : L10n.t("تغيير الأم", "Change mother")) {
+                                    motherPickerNode = node ?? u
+                                }
+                            }
                         }
-                        if (mom != nil || !wives.isEmpty) && !kids.isEmpty {
-                            DSDivider().padding(.vertical, DS.Spacing.xs)
-                        }
-                        ForEach(kids, id: \.id) { kid in
-                            womenFamilyRow(member: kid,
-                                           label: kid.isFemale ? L10n.t("بنت", "Daughter")
-                                                               : L10n.t("ابن", "Son"))
-                        }
+                        .padding(DS.Spacing.md)
                     }
                 }
                 .padding(.horizontal, DS.Spacing.lg)
+                .alert(L10n.t("إضافة زوجة", "Add wife"), isPresented: $showAddWifeAlert) {
+                    TextField(L10n.t("اسم الزوجة", "Wife name"), text: $newWifeName)
+                    Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
+                    Button(L10n.t("إضافة", "Add")) { addWifeFromProfile() }
+                }
+                .sheet(item: $motherPickerNode) { n in motherPickerSheet(for: n) }
             }
         }
     }
 
-    // صف عائلة (للعرض فقط) — من بيانات شجرة النساء. الإناث بلا صورة.
-    private func womenFamilyRow(member: FamilyMember, label: String) -> some View {
+    // مربع عائلة — أم/زوجة بالاسم الكامل، الأبناء بالاسم الأول.
+    private func womenFamilyBox(_ member: FamilyMember, label: String) -> some View {
         let isWife = label == L10n.t("الزوجة", "Wife")
         let isMother = label == L10n.t("الأم", "Mother")
+        let isChild = !isWife && !isMother
         let fbg = isWife ? FemaleAvatarView.wifeBg : (isMother ? FemaleAvatarView.motherBg : FemaleAvatarView.pink)
         let ficon = isWife ? FemaleAvatarView.wifeIcon : (isMother ? FemaleAvatarView.motherIcon : FemaleAvatarView.pinkIcon)
-        return HStack(spacing: DS.Spacing.md) {
+        let name = isChild ? member.firstName : (member.fullName.isEmpty ? member.firstName : member.fullName)
+        return VStack(spacing: 4) {
             DSMemberAvatar(
                 name: member.firstName,
                 avatarUrl: member.isFemale ? nil : member.displayAvatarUrl,
-                size: 40,
+                size: 46,
                 isFemale: member.isFemale,
                 femaleBg: fbg,
                 femaleIcon: ficon,
                 isDeceased: member.isDeceased == true
             )
-            VStack(alignment: .leading, spacing: 2) {
-                Text(member.fullName.isEmpty ? member.firstName : member.fullName)
-                    .font(DS.Font.calloutBold)
-                    .foregroundColor(DS.Color.textPrimary)
-                    .lineLimit(1)
-                Text(label)
-                    .font(DS.Font.caption1)
-                    .foregroundColor(DS.Color.textSecondary)
-            }
-            Spacer()
+            Text(name)
+                .font(DS.Font.caption1).fontWeight(.semibold)
+                .foregroundColor(DS.Color.textPrimary)
+                .lineLimit(2).multilineTextAlignment(.center).minimumScaleFactor(0.7)
+            Text(label).font(DS.Font.caption2).foregroundColor(DS.Color.textSecondary)
         }
-        .padding(.horizontal, DS.Spacing.lg)
-        .padding(.vertical, DS.Spacing.sm)
+        .frame(maxWidth: .infinity)
+    }
+
+    // مربع إجراء (إضافة زوجة / الأم).
+    private func womenActionBox(icon: String, color: Color, title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(DS.Font.scaled(18, weight: .semibold))
+                    .foregroundColor(color)
+                    .frame(width: 46, height: 46)
+                    .background(Circle().fill(color.opacity(0.12)))
+                    .overlay(Circle().strokeBorder(color.opacity(0.35), lineWidth: 1))
+                Text(title).font(DS.Font.caption2).fontWeight(.semibold)
+                    .foregroundColor(color).lineLimit(1).minimumScaleFactor(0.7)
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func addWifeFromProfile() {
+        guard let nid = pendingNodeId else { return }
+        let nm = newWifeName.trimmingCharacters(in: .whitespaces)
+        guard !nm.isEmpty else { return }
+        Task {
+            try? await WomenStore.addWife(husbandId: nid, name: nm)
+            womenCache = (try? await WomenStore.fetch()) ?? womenCache
+        }
+    }
+
+    // اختيار الأم من زوجات الأب، أو إضافة زوجة للأب.
+    @ViewBuilder
+    private func motherPickerSheet(for node: FamilyMember) -> some View {
+        let father = node.fatherId.flatMap { fid in womenCache.first { $0.id == fid } }
+        let candidates = womenCache
+            .filter { $0.isFemale && father != nil && $0.husbandId == father!.id }
+            .sorted { $0.fullName < $1.fullName }
+        NavigationStack {
+            List {
+                Button(L10n.t("بدون أم", "No mother")) {
+                    motherPickerNode = nil
+                    Task { try? await WomenStore.setMotherId(childId: node.id, motherId: nil)
+                           womenCache = (try? await WomenStore.fetch()) ?? womenCache }
+                }.foregroundColor(DS.Color.textSecondary)
+                if candidates.isEmpty {
+                    Text(L10n.t("لا توجد زوجات للأب — أضِف زوجة للأب من شجرة النساء.",
+                                "No wives for the father — add one from the women tree."))
+                        .foregroundColor(DS.Color.textSecondary)
+                } else {
+                    Text(L10n.t("اختر الأم من زوجات الأب:", "Choose mother from father's wives:"))
+                        .font(DS.Font.caption1).foregroundColor(DS.Color.textSecondary)
+                    ForEach(candidates) { c in
+                        Button(c.fullName.isEmpty ? c.firstName : c.fullName) {
+                            motherPickerNode = nil
+                            Task { try? await WomenStore.setMotherId(childId: node.id, motherId: c.id)
+                                   womenCache = (try? await WomenStore.fetch()) ?? womenCache }
+                        }.foregroundColor(DS.Color.textPrimary)
+                    }
+                }
+            }
+            .navigationTitle(L10n.t("الأم", "Mother"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .topBarLeading) {
+                Button(L10n.t("إلغاء", "Cancel")) { motherPickerNode = nil }
+            } }
+            .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+        }
+        .presentationDetents([.medium, .large])
     }
 
     // MARK: - صف الأم/الزوجة داخل «العائلة» — نقر → نفس تعديلات الأبناء

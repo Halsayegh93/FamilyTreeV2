@@ -2152,6 +2152,7 @@ struct WomenTreeView: View {
                                             bg: kid.isFemale ? FemaleAvatarView.pink : DS.Color.primary.opacity(0.18),
                                             iconColor: kid.isFemale ? FemaleAvatarView.pinkIcon : DS.Color.primary,
                                             sfIcon: nil,
+                                            firstNameOnly: true,
                                             onTap: { selectedWoman = kid })
                                     }
                                 }
@@ -2301,11 +2302,13 @@ struct WomenTreeView: View {
     // أيقونة علاقة دائرية (الأم/الزوجة) — دائرة + الاسم تحتها.
     // علاقة (أم/زوجة) — بدون صورة، الاسم فقط داخل مربع ملوّن.
     private func womenRelationIcon(member: FamilyMember, label: String, bg: Color, iconColor: Color,
-                                  sfIcon: String?, onTap: (() -> Void)?) -> some View {
+                                  sfIcon: String?, firstNameOnly: Bool = false,
+                                  onTap: (() -> Void)?) -> some View {
         VStack(spacing: 2) {
             Text(label).font(DS.Font.caption2).fontWeight(.bold).foregroundColor(iconColor)
-            // الاسم الكامل (الأم والزوجة).
-            Text(member.fullName.isEmpty ? member.firstName : member.fullName)
+            // الأم/الزوجة: الاسم الكامل. الأبناء: الاسم الأول فقط.
+            Text(firstNameOnly ? member.firstName
+                               : (member.fullName.isEmpty ? member.firstName : member.fullName))
                 .font(DS.Font.caption1).fontWeight(.semibold)
                 .foregroundColor(DS.Color.textPrimary)
                 .lineLimit(2).multilineTextAlignment(.center).minimumScaleFactor(0.6)
