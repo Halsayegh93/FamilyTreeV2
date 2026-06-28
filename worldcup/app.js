@@ -75,6 +75,7 @@ export function scorePrediction(predHome, predAway, actHome, actAway) {
 //   - a full score row is scored with scorePrediction (5/3/1/0)
 export function scoreRow(p, m) {
   if (!m || !m.finished) return 0;
+  if (p && p.manual_points != null) return p.manual_points;   // admin override
   if (p && p.pick) {
     const diff = Math.sign((m.home_score ?? 0) - (m.away_score ?? 0));
     if (diff === 0) return 0;            // draw -> winner-only pick can't win
@@ -200,6 +201,20 @@ export async function adminReopenMatch(matchId, pin) {
   const sb = await client();
   const { data, error } = await sb.rpc('wc_admin_reopen_match', {
     p_match_id: matchId, p_pin: pin,
+  });
+  if (error) throw error;
+  return data;
+}
+
+// Admin: manually set/override a player's points for a match (null = auto).
+export async function adminSetPoints(matchId, name, points, pin) {
+  if (DEMO) {
+    if (pin !== '1993') throw new Error('BAD_PIN');
+    return demo.setPoints(matchId, name, points);
+  }
+  const sb = await client();
+  const { data, error } = await sb.rpc('wc_admin_set_points', {
+    p_match_id: matchId, p_name: name, p_points: points, p_pin: pin,
   });
   if (error) throw error;
   return data;

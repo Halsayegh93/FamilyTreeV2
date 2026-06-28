@@ -45,6 +45,8 @@ create table if not exists public.wc_predictions (
 alter table public.wc_predictions alter column home_score drop not null;
 alter table public.wc_predictions alter column away_score drop not null;
 alter table public.wc_predictions add column if not exists pick text;
+-- Manual points override (admin edits a player's points by hand). NULL = auto.
+alter table public.wc_predictions add column if not exists manual_points integer;
 do $$ begin
   alter table public.wc_predictions
     add constraint wc_predictions_pick_chk check (pick in ('home','away'));
@@ -407,6 +409,31 @@ begin
 end;
 $$;
 
+-- ---------- Admin: manually set a player's points for a match ---------------
+-- p_points NULL reverts that prediction back to automatic scoring.
+create or replace function public.wc_admin_set_points(
+  p_match_id integer, p_name text, p_points integer, p_pin text
+) returns public.wc_predictions
+language plpgsql security definer set search_path = public as $$
+declare row public.wc_predictions;
+begin
+  if p_pin is distinct from '1993' then          -- CHANGE_ME: same admin PIN
+    raise exception 'BAD_PIN';
+  end if;
+  if p_points is not null and (p_points < 0 or p_points > 999) then
+    raise exception 'INVALID_SCORE';
+  end if;
+  update public.wc_predictions
+     set manual_points = p_points, updated_at = now()
+   where match_id = p_match_id and player_name = btrim(p_name)
+   returning * into row;
+  if not found then
+    raise exception 'MATCH_NOT_FOUND';
+  end if;
+  return row;
+end;
+$$;
+
 -- ---------- Admin: delete one player from the leaderboard -------------------
 create or replace function public.wc_admin_delete_player(p_name text, p_pin text)
 returns integer
@@ -430,6 +457,7 @@ grant execute on function public.wc_admin_save_match(integer, text, text, text, 
 grant execute on function public.wc_admin_reset(text, text) to anon, authenticated;
 grant execute on function public.wc_admin_upsert_match(integer, text, integer, text, text, text, text, text, timestamptz, text) to anon, authenticated;
 grant execute on function public.wc_admin_delete_player(text, text) to anon, authenticated;
+grant execute on function public.wc_admin_set_points(integer, text, integer, text) to anon, authenticated;
 
 -- ---------- Seed the 32 knockout matches ------------------------------------
 -- Real FIFA World Cup 2026 knockout SCHEDULE (dates + host venues).
@@ -477,6 +505,12 @@ insert into public.wc_matches (id, round, match_no, venue, kickoff) values
   (31,'3RD', 1, 'Hard Rock Stadium, Miami',         '2026-07-18 20:00+00'),
   (32,'FINAL', 1, 'MetLife Stadium, New York/NJ',   '2026-07-19 19:00+00')
 on conflict (id) do nothing;
+
+-- Knockout-only game: delete any match before the Round of 32 (28 Jun 2026).
+-- Predictions for those matches cascade away. Runs every time db.sql is applied,
+-- so re-imported group-stage rows never linger.
+delete from public.wc_matches
+ where kickoff is not null and kickoff < '2026-06-28 00:00:00+00';
 
 -- Force PostgREST to pick up the new functions immediately (so the reset and
 -- other RPCs work right after running this file).

@@ -348,6 +348,18 @@ body { direction: rtl; }
 }
 .favpick b { color: var(--primary); }
 
+/* manual points editor (admin) */
+.pp-list { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.pp-row { display: flex; align-items: center; gap: 8px; }
+.pp-name { flex: 1; font-size: 14px; font-weight: 700; }
+.pp-input {
+  width: 84px; text-align: center; font-family: inherit; font-size: 15px;
+  font-weight: 800; padding: 8px; border-radius: 10px;
+  border: 1px solid var(--border); background: var(--surface);
+}
+.pp-input.manual { border-color: var(--primary); color: var(--primary); }
+.pp-note { font-size: 12px; color: var(--muted); margin-top: 6px; text-align: center; }
+
 .predictors { margin-top: 12px; }
 .predictors summary {
   cursor: pointer; font-size: 13px; font-weight: 800; color: var(--primary);

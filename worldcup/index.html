@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
   <title>جماهير مباريات كأس العالم الرميثية 🏆</title>
-  <link rel="stylesheet" href="styles.css?v=3" />
+  <link rel="stylesheet" href="styles.css?v=5" />
 </head>
 <body>
   <div class="wrap">
@@ -44,7 +44,7 @@
       isConfigured, loadMatches, loadPredictions, loadMyPredictions,
       submitPrediction, submitWinner, buildLeaderboard, scorePrediction,
       scoreRow, isLocked, roundLabel, ROUNDS, friendlyError, POINTS, watch,
-    } from './app.js?v=3';
+    } from './app.js?v=5';
 
     const $ = (s, r = document) => r.querySelector(s);
     const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) =>
@@ -62,6 +62,10 @@
     let nameLocked = false;     // is the name confirmed (fixed)?
     let matchFilter = 'upcoming'; // matches filter: upcoming | finished | all
     let lastSig = '';           // last rendered data signature (skip no-op re-renders)
+
+    // The game starts at the Round of 32 — hide every match before this date.
+    const SHOW_FROM = new Date('2026-06-28T00:00:00Z').getTime();
+    const afterCutoff = (m) => !m.kickoff || new Date(m.kickoff).getTime() >= SHOW_FROM;
 
     function toast(msg, isErr = false) {
       const t = $('#toast');
@@ -399,7 +403,7 @@
       btn.disabled = true;
       try {
         await submitPrediction(id, name, +h, +a);
-        myPreds.set(id, { home: +h, away: +a, pick: null });
+        myPreds.set(id, { home: +h, away: +a, pick: null, manual_points: null });
         toast('انحفظ توقعك ✅ (لا يمكن التعديل)');
         renderMatches();   // re-render: this match is now locked
       } catch (e) {
@@ -419,7 +423,7 @@
       card.querySelectorAll('.winsel').forEach((b) => { b.disabled = true; });
       try {
         await submitWinner(id, name, pick);
-        myPreds.set(id, { home: null, away: null, pick });
+        myPreds.set(id, { home: null, away: null, pick, manual_points: null });
         toast('انحفظ توقعك للفائز ✅ (لا يمكن التعديل)');
         renderMatches();   // re-render: this match is now locked
       } catch (e) {
@@ -519,7 +523,7 @@
       if (name) {
         try {
           const mine = await loadMyPredictions(name);
-          for (const p of mine) myPreds.set(p.match_id, { home: p.home_score, away: p.away_score, pick: p.pick });
+          for (const p of mine) myPreds.set(p.match_id, { home: p.home_score, away: p.away_score, pick: p.pick, manual_points: p.manual_points });
         } catch (_) {}
       }
       renderMatches();
@@ -528,6 +532,7 @@
     async function loadAll() {
       try {
         [matches, allPreds] = await Promise.all([loadMatches(), loadPredictions()]);
+        matches = matches.filter(afterCutoff);
         await refreshMine();
       } catch (e) {
         viewMatches.innerHTML = `<div class="notice">
@@ -563,11 +568,12 @@
       lastSig = sig;
 
       [matches, allPreds] = data;
+      matches = matches.filter(afterCutoff);
       myPreds = new Map();
       if (name) {
         try {
           for (const p of await loadMyPredictions(name))
-            myPreds.set(p.match_id, { home: p.home_score, away: p.away_score, pick: p.pick });
+            myPreds.set(p.match_id, { home: p.home_score, away: p.away_score, pick: p.pick, manual_points: p.manual_points });
         } catch (_) {}
       }
       if (viewBoard.style.display !== 'none') renderBoard();

@@ -174,6 +174,15 @@ export const demo = {
     return { match_id: matchId, player_name: name, pick };
   },
 
+  setPoints(matchId, name, points) {
+    const preds = this.predictions();
+    const ex = preds.find((p) => p.match_id === matchId && p.player_name === name);
+    if (!ex) throw new Error('MATCH_NOT_FOUND');
+    ex.manual_points = points;
+    writeStore(PKEY, preds);
+    return ex;
+  },
+
   reopenMatch(matchId) {
     const matches = this.matches();
     const m = matches.find((x) => x.id === matchId);
