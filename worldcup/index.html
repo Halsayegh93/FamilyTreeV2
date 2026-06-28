@@ -181,10 +181,11 @@
       if (m.finished) {
         const pts = mine ? scoreRow(mine, m) : null;
         const ptsTag = mine
-          ? `<span class="pts ${pts > 0 ? 'good' : 'zero'}">${pts > 0 ? '+' + pts : '0'} نقطة</span>`
+          ? `<span class="pts ${pts > 0 ? 'good' : 'zero'}">لك ${pts > 0 ? '+' + pts : '0'} نقطة</span>`
           : '';
         resultLine = `<div class="result-line">
-          النتيجة الرسمية: <b>${m.home_score} - ${m.away_score}</b>${ptsTag}
+          <span>النتيجة الرسمية: <b>${m.home_score} - ${m.away_score}</b></span>
+          ${ptsTag}
         </div>`;
       }
 
