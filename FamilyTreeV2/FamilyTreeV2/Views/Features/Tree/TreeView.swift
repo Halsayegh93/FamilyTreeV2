@@ -2111,8 +2111,10 @@ struct WomenTreeView: View {
             .flatMap { wifeIds.contains($0.id) ? nil : $0 }
         let name = w.fullName.isEmpty ? w.firstName : w.fullName
         // أبناؤها — الأبناء المرتبطون بها كأمّ.
+        // كل الأبناء المرتبطين بها (كأمّ mother_id أو كأب parent_id) —
+        // ليتطابق مع قائمة العائلة في «حسابي» (التي تعتمد على الأب).
         let herChildren = allMembers
-            .filter { $0.motherId == w.id }
+            .filter { $0.motherId == w.id || $0.fatherId == w.id }
             .sorted { $0.sortOrder < $1.sortOrder }
         NavigationStack {
             ScrollView {
