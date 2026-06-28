@@ -1717,6 +1717,18 @@ enum WomenStore {
             .eq("id", value: childId.uuidString).execute()
     }
 
+    /// نقل ابن بين الشجرتين حسب الجنس (إدارة فقط) — يرجّع المعرّف الجديد.
+    ///  أنثى → شجرة النساء فقط (يخرج من العامة). ذكر → العامة (وينعكس للنساء).
+    static func moveChildGender(childId: UUID, toGender: String) async throws -> UUID {
+        let params: [String: AnyEncodable] = [
+            "p_child_id": AnyEncodable(childId.uuidString),
+            "p_to_gender": AnyEncodable(toGender)
+        ]
+        let newId: UUID = try await SupabaseConfig.client
+            .rpc("move_child_gender", params: params).execute().value
+        return newId
+    }
+
     static func delete(id: UUID) async throws {
         try await SupabaseConfig.client.from("women_members").delete().eq("id", value: id.uuidString).execute()
     }

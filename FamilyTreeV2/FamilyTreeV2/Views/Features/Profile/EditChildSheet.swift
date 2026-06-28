@@ -1,9 +1,11 @@
 import SwiftUI
 import PhotosUI
 import UIKit
+import Supabase
 
 struct EditChildSheet: View {
     @EnvironmentObject var memberVM: MemberViewModel
+    @EnvironmentObject var authVM: AuthViewModel
     @Environment(\.dismiss) private var dismiss
     let member: FamilyMember
 
@@ -122,6 +124,20 @@ struct EditChildSheet: View {
                                     firstName = String(firstName.prefix(50))
                                 }
                             }
+                    }
+
+                    // الجنس (إدارة فقط) — أنثى تنتقل لشجرة النساء فقط؛ ذكر للعامة.
+                    if authVM.canEditMembers {
+                        DSDivider()
+                        DSFormRow(icon: "person.2.fill", iconColor: DS.Color.accent,
+                                  label: L10n.t("الجنس", "Gender")) {
+                            Picker("", selection: $selectedGender) {
+                                Text(L10n.t("ذكر", "Male")).tag("male")
+                                Text(L10n.t("أنثى", "Female")).tag("female")
+                            }
+                            .pickerStyle(.segmented)
+                            .fixedSize()
+                        }
                     }
 
                     DSDivider()
@@ -278,35 +294,78 @@ struct EditChildSheet: View {
                 ? ([cleanFirst] + originalParts.dropFirst()).joined(separator: " ")
                 : cleanFirst
 
-            var updatedMember = member
-            updatedMember.fullName = finalFullName
-            updatedMember.firstName = cleanFirst
+            let wasFemale = member.isFemale
+            let nowFemale = selectedGender == "female"
+            let genderChanged = nowFemale != wasFemale && authVM.canEditMembers
 
-            let success = await memberVM.updateChildData(
-                member: updatedMember,
-                firstName: cleanFirst,
-                phoneNumber: KuwaitPhone.normalizedForStorage(
-                    country: selectedPhoneCountry,
-                    rawLocalDigits: phoneNumber
-                ) ?? "",
-                birthDate: birthDateString,
-                isDeceased: isDeceased,
-                deathDate: deathDateString,
-                gender: selectedGender
-            )
+            var success = true
+            do {
+                // عند تغيير الجنس: ننقل السجل بين الشجرتين أولاً (إدارة فقط).
+                var targetId = member.id
+                if genderChanged {
+                    targetId = try await WomenStore.moveChildGender(childId: member.id, toGender: selectedGender)
+                }
 
-            if let image = selectedUIImage {
-                await memberVM.uploadAvatar(image: image, for: member.id)
-            }
-
-            // تعيين الأم (إحدى زوجات الأب) — لا يؤثّر على نجاح بقية الحفظ.
-            if selectedMotherId != member.motherId {
-                await memberVM.setMother(childId: member.id, motherId: selectedMotherId, silent: true)
-            }
-
-            // إظهار/إخفاء من الشجرة.
-            if isHiddenFromTree != member.isHiddenFromTree {
-                await memberVM.setHiddenFromTree(memberId: member.id, hidden: isHiddenFromTree)
+                if nowFemale {
+                    // شجرة النساء — لا صورة شخصية للأنثى.
+                    try await WomenStore.update(
+                        id: targetId,
+                        fullName: finalFullName,
+                        isDeceased: isDeceased,
+                        deathDate: deathDateString,
+                        birthDate: birthDateString,
+                        gender: "female",
+                        isHidden: isHiddenFromTree
+                    )
+                } else if genderChanged {
+                    // انتقل أنثى→ذكر: نحدّث صفّ الشجرة العامة الجديد مباشرةً.
+                    let payload: [String: AnyEncodable] = [
+                        "first_name": AnyEncodable(cleanFirst),
+                        "full_name": AnyEncodable(finalFullName),
+                        "birth_date": AnyEncodable(birthDateString),
+                        "is_deceased": AnyEncodable(isDeceased),
+                        "death_date": AnyEncodable(deathDateString),
+                        "is_hidden_from_tree": AnyEncodable(isHiddenFromTree)
+                    ]
+                    try await SupabaseConfig.client.from("profiles")
+                        .update(payload).eq("id", value: targetId.uuidString).execute()
+                    if let image = selectedUIImage {
+                        await memberVM.uploadAvatar(image: image, for: targetId)
+                    }
+                } else {
+                    // تعديل ابن عادي (المعرّف ثابت).
+                    var updatedMember = member
+                    updatedMember.fullName = finalFullName
+                    updatedMember.firstName = cleanFirst
+                    success = await memberVM.updateChildData(
+                        member: updatedMember,
+                        firstName: cleanFirst,
+                        phoneNumber: KuwaitPhone.normalizedForStorage(
+                            country: selectedPhoneCountry,
+                            rawLocalDigits: phoneNumber
+                        ) ?? "",
+                        birthDate: birthDateString,
+                        isDeceased: isDeceased,
+                        deathDate: deathDateString,
+                        gender: selectedGender
+                    )
+                    if let image = selectedUIImage {
+                        await memberVM.uploadAvatar(image: image, for: member.id)
+                    }
+                    // تعيين الأم (إحدى زوجات الأب).
+                    if selectedMotherId != member.motherId {
+                        await memberVM.setMother(childId: member.id, motherId: selectedMotherId, silent: true)
+                    }
+                    // إظهار/إخفاء من الشجرة.
+                    if isHiddenFromTree != member.isHiddenFromTree {
+                        await memberVM.setHiddenFromTree(memberId: member.id, hidden: isHiddenFromTree)
+                    }
+                }
+                // حدّث الشجرتين محلياً (لتظهر التعديلات/النقل في «حسابي»).
+                WomenStore.cache = (try? await WomenStore.fetch()) ?? WomenStore.cache
+                if genderChanged { await memberVM.fetchAllMembers(force: true) }
+            } catch {
+                success = false
             }
 
             isSaving = false

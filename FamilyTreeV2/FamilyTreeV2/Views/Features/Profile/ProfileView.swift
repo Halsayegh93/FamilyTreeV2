@@ -26,6 +26,26 @@ struct ProfileView: View {
     @State private var newWifeName = ""
     @State private var pendingNodeId: UUID? = nil
     @State private var motherPickerNode: FamilyMember? = nil
+    @State private var showAddDaughterAlert = false
+    @State private var newDaughterName = ""
+    @State private var pendingDaughterSort = 0
+
+    private func reloadWomen() {
+        Task { womenCache = (try? await WomenStore.fetch()) ?? womenCache }
+    }
+
+    private func addDaughterFromProfile() {
+        guard let nid = pendingNodeId else { return }
+        let nm = newDaughterName.trimmingCharacters(in: .whitespaces)
+        guard !nm.isEmpty else { return }
+        Task {
+            try? await WomenStore.addChild(parentId: nid, name: nm,
+                                           sortOrder: pendingDaughterSort,
+                                           gender: "female",
+                                           parentFullName: user?.fullName ?? "")
+            womenCache = (try? await WomenStore.fetch()) ?? womenCache
+        }
+    }
 
     var user: FamilyMember? { authVM.currentUser }
 
@@ -119,7 +139,7 @@ struct ProfileView: View {
                 }
             }
             .fullScreenCover(isPresented: $showQRScanner) { QRScannerView(selectedTab: $selectedTab) }
-            .sheet(isPresented: $showAddChild) { if let c = user { AddChildSheet(member: c).presentationDragIndicator(.visible) } }
+            .sheet(isPresented: $showAddChild, onDismiss: reloadWomen) { if let c = user { AddChildSheet(member: c).presentationDragIndicator(.visible) } }
             .confirmationDialog(
                 L10n.t("تسجيل الخروج", "Sign Out"),
                 isPresented: $showSignOutConfirm,
@@ -132,7 +152,7 @@ struct ProfileView: View {
             } message: {
                 Text(L10n.t("هل تريد الخروج من حسابك على هذا الجهاز؟", "Do you want to sign out of your account on this device?"))
             }
-            .sheet(item: $editingChild) { child in EditChildSheet(member: child).presentationDragIndicator(.visible) }
+            .sheet(item: $editingChild, onDismiss: reloadWomen) { child in EditChildSheet(member: child).presentationDragIndicator(.visible) }
             .sheet(item: $editingRelative) { rel in
                 EditRelativeSheet(member: rel, roleLabel: editingRelativeLabel)
                     .presentationDragIndicator(.visible)
@@ -502,14 +522,28 @@ struct ProfileView: View {
                                         womenFamilyBox(son, label: L10n.t("ابن", "Son"))
                                     }.buttonStyle(.plain)
                                 }
+                                // البنات (شجرة النساء) — نقر للتعديل/تغيير الجنس.
                                 ForEach(daughters, id: \.id) { dgh in
-                                    womenFamilyBox(dgh, label: L10n.t("بنت", "Daughter"))
+                                    Button { editingChild = dgh } label: {
+                                        womenFamilyBox(dgh, label: L10n.t("بنت", "Daughter"))
+                                    }.buttonStyle(.plain)
                                 }
                                 // إضافة ابن (الشجرة العامة) — للمتزوج.
                                 womenActionBox(icon: "person.badge.plus",
                                                color: DS.Color.primary,
                                                title: L10n.t("إضافة ابن", "Add son")) {
                                     showAddChild = true
+                                }
+                                // إضافة بنت (شجرة النساء فقط) — إدارة.
+                                if canEdit {
+                                    womenActionBox(icon: "person.badge.plus",
+                                                   color: FemaleAvatarView.pinkIcon,
+                                                   title: L10n.t("إضافة بنت", "Add daughter")) {
+                                        pendingNodeId = nodeId
+                                        pendingDaughterSort = daughters.count
+                                        newDaughterName = ""
+                                        showAddDaughterAlert = true
+                                    }
                                 }
                                 if canEdit {
                                     womenActionBox(icon: "heart.circle.fill",
@@ -536,6 +570,11 @@ struct ProfileView: View {
                     TextField(L10n.t("اسم الزوجة", "Wife name"), text: $newWifeName)
                     Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
                     Button(L10n.t("إضافة", "Add")) { addWifeFromProfile() }
+                }
+                .alert(L10n.t("إضافة بنت", "Add daughter"), isPresented: $showAddDaughterAlert) {
+                    TextField(L10n.t("اسم البنت", "Daughter name"), text: $newDaughterName)
+                    Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
+                    Button(L10n.t("إضافة", "Add")) { addDaughterFromProfile() }
                 }
                 .sheet(item: $motherPickerNode) { n in motherPickerSheet(for: n) }
             }
