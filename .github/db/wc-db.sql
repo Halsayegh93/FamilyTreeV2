@@ -306,13 +306,20 @@ begin
   -- scoring). Kickoff/venue/lock still update.
   select exists(select 1 from public.wc_predictions where match_id = p_match_id) into has_preds;
 
+  -- Never blank out an existing team/flag: if predicted, freeze it; otherwise
+  -- update only when a non-empty value is provided (the source sometimes returns
+  -- null for not-yet-decided knockout slots, which must not wipe what we set).
   update public.wc_matches
-     set home_team = case when has_preds then home_team else nullif(btrim(p_home_team), '') end,
-         away_team = case when has_preds then away_team else nullif(btrim(p_away_team), '') end,
-         home_flag = case when has_preds then home_flag else nullif(btrim(p_home_flag), '') end,
-         away_flag = case when has_preds then away_flag else nullif(btrim(p_away_flag), '') end,
-         venue     = nullif(btrim(p_venue), ''),
-         kickoff   = p_kickoff,
+     set home_team = case when has_preds then home_team
+                          else coalesce(nullif(btrim(p_home_team), ''), home_team) end,
+         away_team = case when has_preds then away_team
+                          else coalesce(nullif(btrim(p_away_team), ''), away_team) end,
+         home_flag = case when has_preds then home_flag
+                          else coalesce(nullif(btrim(p_home_flag), ''), home_flag) end,
+         away_flag = case when has_preds then away_flag
+                          else coalesce(nullif(btrim(p_away_flag), ''), away_flag) end,
+         venue     = coalesce(nullif(btrim(p_venue), ''), venue),
+         kickoff   = coalesce(p_kickoff, kickoff),
          locked    = coalesce(p_locked, locked)
    where id = p_match_id
    returning * into row;
