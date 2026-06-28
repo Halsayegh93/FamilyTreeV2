@@ -47,6 +47,29 @@ const FLAGS = {
   'algeria': '🇩🇿', 'austria': '🇦🇹', 'jordan': '🇯🇴', 'portugal': '🇵🇹', 'colombia': '🇨🇴',
   'uzbekistan': '🇺🇿', 'dr congo': '🇨🇩', 'congo dr': '🇨🇩', 'england': '🏴',
   'croatia': '🇭🇷', 'ghana': '🇬🇭', 'panama': '🇵🇦',
+  'ivory coast': '🇨🇮', "cote d'ivoire": '🇨🇮', 'côte d’ivoire': '🇨🇮',
+};
+
+// Confirmed Round-of-32 matchups (slot id -> [home, away]). Used as a fallback to
+// fill teams the source still returns as null. The source overrides if it later
+// publishes a value. Order matches the source's date-sorted slot assignment.
+const R32_FALLBACK = {
+  1: ['South Africa', 'Canada'],
+  2: ['Brazil', 'Japan'],
+  3: ['Germany', 'Paraguay'],
+  4: ['Netherlands', 'Morocco'],
+  5: ['Ivory Coast', 'Norway'],
+  6: ['France', 'Sweden'],
+  7: ['Mexico', 'Ecuador'],
+  8: ['England', 'DR Congo'],
+  9: ['Belgium', 'Senegal'],
+  10: ['United States', 'Bosnia and Herzegovina'],
+  11: ['Spain', 'Austria'],
+  12: ['Portugal', 'Croatia'],
+  13: ['Switzerland', 'Algeria'],
+  14: ['Australia', 'Egypt'],
+  15: ['Argentina', 'Cape Verde'],
+  16: ['Colombia', 'Ghana'],
 };
 
 function teamInfo(name) {
@@ -140,8 +163,14 @@ async function main() {
     for (let i = 0; i < list.length && i < ids.length; i++) {
       const api = list[i];
       const ourId = ids[i];
-      const [hN, hF] = teamInfo(api.homeTeam?.name);
-      const [aN, aF] = teamInfo(api.awayTeam?.name);
+      let [hN, hF] = teamInfo(api.homeTeam?.name);
+      let [aN, aF] = teamInfo(api.awayTeam?.name);
+      // fill any team the source hasn't decided yet from the confirmed bracket
+      const fb = R32_FALLBACK[ourId];
+      if (fb) {
+        if (!hN) [hN, hF] = teamInfo(fb[0]);
+        if (!aN) [aN, aF] = teamInfo(fb[1]);
+      }
       try {
         await sbRpc('wc_admin_save_match', {
           p_match_id: ourId,
