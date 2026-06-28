@@ -293,16 +293,22 @@ create or replace function public.wc_admin_save_match(
 language plpgsql security definer set search_path = public as $$
 declare
   row public.wc_matches;
+  has_preds boolean;
 begin
   if p_pin is distinct from '1993' then       -- CHANGE_ME: same PIN as above
     raise exception 'BAD_PIN';
   end if;
 
+  -- Once anyone has predicted this match, FREEZE the team identities/orientation
+  -- so the auto-fetch can't swap home/away under the players (which would corrupt
+  -- scoring). Kickoff/venue/lock still update.
+  select exists(select 1 from public.wc_predictions where match_id = p_match_id) into has_preds;
+
   update public.wc_matches
-     set home_team = nullif(btrim(p_home_team), ''),
-         away_team = nullif(btrim(p_away_team), ''),
-         home_flag = nullif(btrim(p_home_flag), ''),
-         away_flag = nullif(btrim(p_away_flag), ''),
+     set home_team = case when has_preds then home_team else nullif(btrim(p_home_team), '') end,
+         away_team = case when has_preds then away_team else nullif(btrim(p_away_team), '') end,
+         home_flag = case when has_preds then home_flag else nullif(btrim(p_home_flag), '') end,
+         away_flag = case when has_preds then away_flag else nullif(btrim(p_away_flag), '') end,
          venue     = nullif(btrim(p_venue), ''),
          kickoff   = p_kickoff,
          locked    = coalesce(p_locked, locked)
@@ -367,8 +373,15 @@ begin
      nullif(btrim(p_venue), ''), p_kickoff)
   on conflict (id) do update set
     round = excluded.round, match_no = excluded.match_no,
-    home_team = excluded.home_team, home_flag = excluded.home_flag,
-    away_team = excluded.away_team, away_flag = excluded.away_flag,
+    -- freeze team identities once the match has predictions (see save_match)
+    home_team = case when exists(select 1 from public.wc_predictions p where p.match_id = wc_matches.id)
+                     then wc_matches.home_team else excluded.home_team end,
+    home_flag = case when exists(select 1 from public.wc_predictions p where p.match_id = wc_matches.id)
+                     then wc_matches.home_flag else excluded.home_flag end,
+    away_team = case when exists(select 1 from public.wc_predictions p where p.match_id = wc_matches.id)
+                     then wc_matches.away_team else excluded.away_team end,
+    away_flag = case when exists(select 1 from public.wc_predictions p where p.match_id = wc_matches.id)
+                     then wc_matches.away_flag else excluded.away_flag end,
     venue = excluded.venue, kickoff = excluded.kickoff;
 end;
 $$;
