@@ -214,6 +214,12 @@ async function main() {
     ? `Group-stage matches upserted: ${groupUpdates}`
     : 'Group-stage import skipped (knockout-only game).');
 
+  // ----- DEBUG: stored R32 dates -----
+  try {
+    const r32 = await sbGet('wc_matches?select=id,round,home_team,away_team,kickoff&id=lte.16&order=id.asc');
+    for (const m of r32) console.log(`#${m.id} [${m.round}] ${m.home_team}-${m.away_team} @ ${m.kickoff}`);
+  } catch (e) { console.error('dbg:', e.message); }
+
   // ----- PHASE B: results -----
   if (!AUTO_RESULTS) {
     console.log(`Auto-results OFF — ${finishedJobs.length} finished match(es) left for ` +
