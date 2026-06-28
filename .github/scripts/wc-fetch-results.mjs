@@ -19,6 +19,9 @@ const API_KEY = process.env.FOOTBALL_API_KEY;
 const PIN = process.env.WC_ADMIN_PIN || '1993';
 const SB_URL = process.env.SUPABASE_URL;
 const SB_KEY = process.env.SUPABASE_ANON_KEY;
+// Results are entered manually by the admin. The source only fills the schedule
+// (teams/kickoff). Set WC_AUTO_RESULTS=1 to let it push official results again.
+const AUTO_RESULTS = process.env.WC_AUTO_RESULTS === '1';
 
 if (!API_KEY || !SB_URL || !SB_KEY) {
   console.error('Missing FOOTBALL_API_KEY / SUPABASE_URL / SUPABASE_ANON_KEY');
@@ -176,31 +179,39 @@ async function main() {
   }
   console.log(`Group-stage matches upserted: ${groupUpdates}`);
 
-  // ----- read back OUR stored orientation (reflects frozen + freshly-set teams) -----
-  let dbById = new Map();
-  try {
-    const db = await sbGet('wc_matches?select=id,home_team,away_team');
-    dbById = new Map(db.map((m) => [m.id, m]));
-  } catch (e) { console.error('read wc_matches:', e.message); }
-
-  // ----- PHASE B: set results, aligned to OUR orientation by team name -----
-  for (const { ourId, api } of finishedJobs) {
-    const stored = dbById.get(ourId);
-    const { ph, pa, flipped } = alignToStored(stored?.home_team, api);
-    let winner = null;
-    if (ph === pa) {
-      const w = api.score.winner; // penalties decider
-      if (w === 'HOME_TEAM') winner = flipped ? 'away' : 'home';
-      else if (w === 'AWAY_TEAM') winner = flipped ? 'home' : 'away';
-    }
+  // ----- PHASE B: results -----
+  // Disabled by default: the admin enters results manually, the app computes the
+  // points. Re-enable by setting WC_AUTO_RESULTS=1.
+  if (!AUTO_RESULTS) {
+    console.log(`Auto-results OFF — ${finishedJobs.length} finished match(es) left for ` +
+      'the admin to enter manually. (Set WC_AUTO_RESULTS=1 to auto-fill.)');
+  } else {
+    // read back OUR stored orientation (reflects frozen + freshly-set teams)
+    let dbById = new Map();
     try {
-      await sbRpc('wc_admin_set_result', {
-        p_match_id: ourId, p_home: ph, p_away: pa, p_pin: PIN, p_winner: winner,
-      });
-      resultUpdates++;
-      console.log(`result #${ourId}  ${ph}-${pa}${flipped ? ' (aligned by name)' : ''}` +
-        `${winner ? ` (pen:${winner})` : ''}`);
-    } catch (e) { console.error(`set_result #${ourId}:`, e.message); }
+      const db = await sbGet('wc_matches?select=id,home_team,away_team');
+      dbById = new Map(db.map((m) => [m.id, m]));
+    } catch (e) { console.error('read wc_matches:', e.message); }
+
+    // set results, aligned to OUR orientation by team name
+    for (const { ourId, api } of finishedJobs) {
+      const stored = dbById.get(ourId);
+      const { ph, pa, flipped } = alignToStored(stored?.home_team, api);
+      let winner = null;
+      if (ph === pa) {
+        const w = api.score.winner; // penalties decider
+        if (w === 'HOME_TEAM') winner = flipped ? 'away' : 'home';
+        else if (w === 'AWAY_TEAM') winner = flipped ? 'home' : 'away';
+      }
+      try {
+        await sbRpc('wc_admin_set_result', {
+          p_match_id: ourId, p_home: ph, p_away: pa, p_pin: PIN, p_winner: winner,
+        });
+        resultUpdates++;
+        console.log(`result #${ourId}  ${ph}-${pa}${flipped ? ' (aligned by name)' : ''}` +
+          `${winner ? ` (pen:${winner})` : ''}`);
+      } catch (e) { console.error(`set_result #${ourId}:`, e.message); }
+    }
   }
 
   console.log(`Done. Team updates: ${teamUpdates}, group: ${groupUpdates}, result updates: ${resultUpdates}.`);
