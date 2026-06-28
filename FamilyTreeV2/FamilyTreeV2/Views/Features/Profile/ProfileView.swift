@@ -480,7 +480,9 @@ struct ProfileView: View {
             let kids = womenCache.filter { $0.fatherId == nodeId }
                 .sorted { $0.sortOrder < $1.sortOrder }
             let canEdit = authVM.canEditMembers
-            let hasAny = mom != nil || canEdit || (isMarried && (!wives.isEmpty || !kids.isEmpty))
+            let sons = memberVM.currentMemberChildren
+            let daughters = kids.filter { $0.isFemale }
+            let hasAny = mom != nil || canEdit || isMarried
             if hasAny {
                 VStack(alignment: .leading, spacing: 0) {
                     DSCard(padding: 0) {
@@ -494,16 +496,27 @@ struct ProfileView: View {
                             if let mom { womenFamilyBox(mom, label: L10n.t("الأم", "Mother")) }
                             if isMarried {
                                 ForEach(wives, id: \.id) { womenFamilyBox($0, label: L10n.t("الزوجة", "Wife")) }
-                                ForEach(kids, id: \.id) { kid in
-                                    womenFamilyBox(kid, label: kid.isFemale ? L10n.t("بنت", "Daughter")
-                                                                            : L10n.t("ابن", "Son"))
+                                // الأبناء (الشجرة العامة) — نقر للتعديل.
+                                ForEach(sons, id: \.id) { son in
+                                    Button { editingChild = son } label: {
+                                        womenFamilyBox(son, label: L10n.t("ابن", "Son"))
+                                    }.buttonStyle(.plain)
                                 }
-                            }
-                            if canEdit && isMarried {
-                                womenActionBox(icon: "heart.circle.fill",
-                                               color: FemaleAvatarView.wifeIcon,
-                                               title: L10n.t("إضافة زوجة", "Add wife")) {
-                                    pendingNodeId = nodeId; newWifeName = ""; showAddWifeAlert = true
+                                ForEach(daughters, id: \.id) { dgh in
+                                    womenFamilyBox(dgh, label: L10n.t("بنت", "Daughter"))
+                                }
+                                // إضافة ابن (الشجرة العامة) — للمتزوج.
+                                womenActionBox(icon: "person.badge.plus",
+                                               color: DS.Color.primary,
+                                               title: L10n.t("إضافة ابن", "Add son")) {
+                                    showAddChild = true
+                                }
+                                if canEdit {
+                                    womenActionBox(icon: "heart.circle.fill",
+                                                   color: FemaleAvatarView.wifeIcon,
+                                                   title: L10n.t("إضافة زوجة", "Add wife")) {
+                                        pendingNodeId = nodeId; newWifeName = ""; showAddWifeAlert = true
+                                    }
                                 }
                             }
                             if canEdit {
