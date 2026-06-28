@@ -1434,14 +1434,20 @@ struct DSMemberAvatar: View {
     var femaleBg: Color = FemaleAvatarView.pink
     var femaleIcon: Color = FemaleAvatarView.pinkIcon
     var isDeceased: Bool = false
+    /// مربع (زوايا ناعمة) بدل الدائرة — لتوحيد شكل العائلة كمربعات.
+    var square: Bool = false
 
     var body: some View {
-        ZStack {
+        // دائرة افتراضياً؛ مربع بزوايا ناعمة عند square.
+        let shape = RoundedRectangle(cornerRadius: square ? DS.Radius.md : size / 2,
+                                     style: .continuous)
+        return ZStack {
             if isFemale {
-                FemaleAvatarView(bg: femaleBg, iconColor: femaleIcon, isDeceased: isDeceased)
+                FemaleAvatarView(bg: femaleBg, iconColor: femaleIcon,
+                                 isDeceased: isDeceased, square: square)
                     .frame(width: size, height: size)
             } else if let urlStr = avatarUrl, let url = URL(string: urlStr) {
-                Circle()
+                shape
                     .fill(
                         LinearGradient(
                             colors: [roleColor, roleColor.opacity(0.7)],
@@ -1458,9 +1464,9 @@ struct DSMemberAvatar: View {
                         .foregroundColor(roleColor)
                 }
                 .frame(width: size, height: size)
-                .clipShape(Circle())
+                .clipShape(shape)
             } else {
-                Circle()
+                shape
                     .fill(roleColor.opacity(0.12))
                     .frame(width: size, height: size)
 
@@ -1479,6 +1485,8 @@ struct FemaleAvatarView: View {
     var bg: Color = FemaleAvatarView.pink
     var iconColor: Color = FemaleAvatarView.pinkIcon
     var isDeceased: Bool = false
+    /// مربع بزوايا ناعمة بدل الدائرة.
+    var square: Bool = false
 
     // ألوان تتكيّف مع الوضع المظلم (أوضح/أفتح بالمظلم).
     private static func adaptive(light: String, dark: String) -> Color {
@@ -1499,9 +1507,11 @@ struct FemaleAvatarView: View {
     var body: some View {
         GeometryReader { geo in
             let s = min(geo.size.width, geo.size.height)
+            let shape = RoundedRectangle(cornerRadius: square ? s * 0.22 : s / 2,
+                                         style: .continuous)
             ZStack(alignment: .bottomTrailing) {
                 ZStack {
-                    Circle().fill(bg)
+                    shape.fill(bg)
                     Image(systemName: "person.fill")
                         .resizable()
                         .scaledToFit()

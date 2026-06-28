@@ -558,7 +558,8 @@ struct ProfileView: View {
                 isFemale: member.isFemale,
                 femaleBg: fbg,
                 femaleIcon: ficon,
-                isDeceased: member.isDeceased == true
+                isDeceased: member.isDeceased == true,
+                square: true
             )
             Text(name)
                 .font(DS.Font.caption1).fontWeight(.semibold)

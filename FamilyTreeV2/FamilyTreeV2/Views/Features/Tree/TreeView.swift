@@ -2200,13 +2200,14 @@ struct WomenTreeView: View {
                                               title: L10n.t("دمج", "Merge")) {
                                 mergeFor = w
                             }
-                            // ترتيب الأبناء بالسحب (يظهر عند وجود ابنين فأكثر).
-                            if allMembers.filter({ $0.fatherId == w.id }).count > 1 {
+                            // ترتيب الأبناء بالسحب — نفس الأبناء المعروضين بالأسفل
+                            // (المرتبطون كأب father_id أو كأمّ mother_id).
+                            if allMembers.filter({ $0.fatherId == w.id || $0.motherId == w.id }).count > 1 {
                                 womenCircleAction(icon: "arrow.up.arrow.down",
                                                   color: DS.Color.info,
                                                   title: L10n.t("ترتيب", "Reorder")) {
                                     reorderItems = allMembers
-                                        .filter { $0.fatherId == w.id }
+                                        .filter { $0.fatherId == w.id || $0.motherId == w.id }
                                         .sorted { $0.sortOrder < $1.sortOrder }
                                     reorderFor = w
                                 }
