@@ -118,41 +118,29 @@ struct EditProfileView: View {
                             )
 
                                     VStack(spacing: 0) {
-                                        // مفتاح «متزوج» — زر صريح (يضمن الاستجابة للنقر).
-                                        Button {
-                                            let newVal = !isMarried
-                                            withAnimation(.easeInOut(duration: 0.2)) { isMarried = newVal }
-                                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                                            if newVal && !member.isFemale {
-                                                DispatchQueue.main.async { showAddWifeMarried = true }
-                                            }
-                                        } label: {
-                                            HStack(spacing: DS.Spacing.md) {
-                                                DSIcon("heart.fill", color: DS.Color.neonPink)
-                                                Text(L10n.t("متزوج", "Married"))
-                                                    .font(DS.Font.footnote)
-                                                    .foregroundColor(DS.Color.textPrimary)
-                                                Spacer()
-                                                // مظهر مفتاح ثابت الاتجاه (LTR) — المقبض يمين عند التفعيل.
-                                                // نستخدم offset (لا alignment) لضمان تحرّك المقبض بسلاسة على iOS.
-                                                ZStack {
-                                                    Capsule()
-                                                        .fill(isMarried ? DS.Color.primary : DS.Color.textTertiary.opacity(0.35))
-                                                        .frame(width: 51, height: 31)
-                                                    Circle()
-                                                        .fill(Color.white)
-                                                        .frame(width: 27, height: 27)
-                                                        .shadow(color: .black.opacity(0.2), radius: 1, y: 1)
-                                                        .offset(x: isMarried ? 10 : -10)
+                                        // مفتاح «متزوج» — Toggle أصلي (يتحرّك المقبض بسلاسة على iOS).
+                                        HStack(spacing: DS.Spacing.md) {
+                                            DSIcon("heart.fill", color: DS.Color.neonPink)
+                                            Text(L10n.t("متزوج", "Married"))
+                                                .font(DS.Font.footnote)
+                                                .foregroundColor(DS.Color.textPrimary)
+                                            Spacer()
+                                            Toggle("", isOn: Binding(
+                                                get: { isMarried },
+                                                set: { newVal in
+                                                    isMarried = newVal
+                                                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                                    if newVal && !member.isFemale {
+                                                        DispatchQueue.main.async { showAddWifeMarried = true }
+                                                    }
                                                 }
-                                                .environment(\.layoutDirection, .leftToRight)
-                                                .animation(.easeInOut(duration: 0.2), value: isMarried)
-                                            }
-                                            .frame(height: dsFormRowHeight)
-                                            .padding(.horizontal, DS.Spacing.lg)
-                                            .contentShape(Rectangle())
+                                            ))
+                                            .labelsHidden()
+                                            .tint(DS.Color.primary)
+                                            .environment(\.layoutDirection, .leftToRight)
                                         }
-                                        .buttonStyle(.plain)
+                                        .frame(height: dsFormRowHeight)
+                                        .padding(.horizontal, DS.Spacing.lg)
                                     }
                         }
                         .padding(.horizontal, DS.Spacing.lg)
