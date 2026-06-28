@@ -664,9 +664,11 @@ struct ProfileView: View {
     // اختيار الأم من زوجات الأب، أو إضافة زوجة للأب.
     @ViewBuilder
     private func motherPickerSheet(for node: FamilyMember) -> some View {
-        let father = node.fatherId.flatMap { fid in womenCache.first { $0.id == fid } }
+        let fatherId = node.fatherId
+        // مرشّحات الأم: زوجات الأب + أمّهات الإخوة (نفس الأب) الموجودات بالشجرة.
+        let siblingMotherIds = Set(womenCache.filter { $0.fatherId == fatherId }.compactMap { $0.motherId })
         let candidates = womenCache
-            .filter { $0.isFemale && father != nil && $0.husbandId == father!.id }
+            .filter { $0.isFemale && fatherId != nil && ($0.husbandId == fatherId || siblingMotherIds.contains($0.id)) }
             .sorted { $0.fullName < $1.fullName }
         NavigationStack {
             List {
