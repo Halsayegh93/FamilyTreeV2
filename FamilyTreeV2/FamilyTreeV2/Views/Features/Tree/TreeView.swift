@@ -2187,7 +2187,7 @@ struct WomenTreeView: View {
                         // أبناؤها — نفس مربع الأم/الزوجة (اسم كامل).
                         if !herChildren.isEmpty {
                             VStack(spacing: DS.Spacing.xs) {
-                                Text(L10n.t("أبناؤها", "Her children"))
+                                Text(w.isFemale ? L10n.t("أبناؤها", "Her children") : L10n.t("أبناؤه", "His children"))
                                     .font(DS.Font.caption1).fontWeight(.bold)
                                     .foregroundColor(DS.Color.textSecondary)
                                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 64), spacing: DS.Spacing.md)],
