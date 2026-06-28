@@ -908,6 +908,12 @@ struct LinkToExistingMemberSheet: View {
                             "gender": AnyEncodable("female"),
                             "is_hidden_from_tree": AnyEncodable(true)
                         ]).eq("id", value: pendingMember.id.uuidString).execute()
+                        // اعتماد طلب الانضمام/الربط المعلّق حتى يختفي من «طلبات المراجعة».
+                        try? await SupabaseConfig.client.from("admin_requests")
+                            .update(["status": AnyEncodable("approved")])
+                            .eq("member_id", value: pendingMember.id.uuidString)
+                            .in("request_type", values: ["join_request", "link_request"])
+                            .eq("status", value: "pending").execute()
                         await memberVM.fetchAllMembers(force: true)
                         WomenStore.cache = (try? await WomenStore.fetch()) ?? WomenStore.cache
                     } else {
