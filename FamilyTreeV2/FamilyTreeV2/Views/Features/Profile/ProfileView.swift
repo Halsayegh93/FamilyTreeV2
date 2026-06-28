@@ -518,7 +518,8 @@ struct ProfileView: View {
                                                title: L10n.t("إضافة ابن", "Add son")) {
                                     showAddChild = true
                                 }
-                                if canEdit {
+                                // زر إضافة زوجة يظهر فقط لو ما فيه زوجة.
+                                if canEdit && wives.isEmpty {
                                     womenActionBox(icon: "heart.circle.fill",
                                                    color: FemaleAvatarView.wifeIcon,
                                                    title: L10n.t("إضافة زوجة", "Add wife")) {
