@@ -518,7 +518,8 @@ struct ProfileView: View {
                                     motherPickerNode = node ?? u
                                 }
                             }
-                            if isMarried {
+                            // الزوجة والأبناء — للذكر المتزوّج فقط (الأنثى لا تضيف زوجاً/أبناء حالياً).
+                            if isMarried && u.isFemale == false {
                                 ForEach(wives, id: \.id) { womenFamilyBox($0, label: L10n.t("الزوجة", "Wife")) }
                                 // الزوجة — مربع «إضافة» إذا غير مضافة (العضو يضيف زوجته بنفسه).
                                 if wives.isEmpty {
