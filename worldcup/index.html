@@ -240,6 +240,26 @@
         predictorsHTML = `<div class="predictors-empty">👥 ما توقّع أحد بعد</div>`;
       }
 
+      // crowd favorite — the team most players predicted to win
+      let favHTML = '';
+      if (preds.length) {
+        let h = 0, a = 0, d = 0;
+        for (const p of preds) {
+          let side;
+          if (p.pick) side = p.pick;
+          else { const s = Math.sign((p.home_score || 0) - (p.away_score || 0));
+            side = s > 0 ? 'home' : s < 0 ? 'away' : 'draw'; }
+          if (side === 'home') h++; else if (side === 'away') a++; else d++;
+        }
+        const max = Math.max(h, a, d);
+        let label = '';
+        if (max > 0 && h === max && h > a && h > d) label = `🏆 ${esc(m.home_team || '')} (${h}/${preds.length})`;
+        else if (max > 0 && a === max && a > h && a > d) label = `🏆 ${esc(m.away_team || '')} (${a}/${preds.length})`;
+        else if (max > 0 && d === max && d > h && d > a) label = `🤝 تعادل (${d}/${preds.length})`;
+        else if (max > 0) label = 'توقعات متقاربة';
+        if (label) favHTML = `<div class="favpick">🔮 الأكثر توقّعاً: <b>${label}</b></div>`;
+      }
+
       return `<div class="card" data-id="${m.id}">
         <div class="meta">
           <span>${esc(roundLabel(m.round))}</span>
@@ -267,6 +287,7 @@
         </div>
         ${venueLine}
         ${resultLine}
+        ${favHTML}
         ${actionHTML}
         ${predictorsHTML}
       </div>`;

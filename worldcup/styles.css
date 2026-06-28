@@ -341,6 +341,13 @@ body { direction: rtl; }
   color: #fff; border-color: transparent;
 }
 
+.favpick {
+  margin-top: 10px; text-align: center; font-size: 13px; font-weight: 700;
+  color: var(--text); background: var(--surface2);
+  border: 1px solid var(--border); border-radius: 10px; padding: 8px;
+}
+.favpick b { color: var(--primary); }
+
 .predictors { margin-top: 12px; }
 .predictors summary {
   cursor: pointer; font-size: 13px; font-weight: 800; color: var(--primary);
