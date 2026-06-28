@@ -46,10 +46,11 @@ export function isLocked(match) {
 }
 
 // Score a single prediction against the actual result (highest tier wins) -----
-//   5 -> exact score (both teams correct)
-//   3 -> correct winner + the winning team's goals correct
-//   1 -> correct winner (or correctly-predicted draw) only
-//   0 -> wrong outcome
+//   5 -> exact score (both teams correct, draws included e.g. 3-3)
+//   3 -> correct winning team + the winning team's goals correct
+//   1 -> correct winning team only
+//   0 -> wrong outcome — AND any non-exact draw (a draw has no winning team,
+//        so the 3/1 tiers, which require correctly picking the winner, can't apply)
 export function scorePrediction(predHome, predAway, actHome, actAway) {
   if (predHome == null || predAway == null || actHome == null || actAway == null) {
     return 0;
@@ -59,15 +60,14 @@ export function scorePrediction(predHome, predAway, actHome, actAway) {
   const po = Math.sign(predHome - predAway);
   const ao = Math.sign(actHome - actAway);
   if (po !== ao) return 0; // wrong winner / wrong outcome
+  if (ao === 0) return 0;  // correct draw but wrong score -> no winning team to credit
 
-  if (ao !== 0) {
-    // There is a winner and we predicted the right side. Did we also nail the
-    // winning team's goal count?
-    const winnerActual = Math.max(actHome, actAway);
-    const winnerPred = actHome > actAway ? predHome : predAway;
-    if (winnerPred === winnerActual) return POINTS.winnerScore;
-  }
-  return POINTS.winner; // correct outcome only (incl. a non-exact draw)
+  // There is a winner and we predicted the right side. Did we also nail the
+  // winning team's goal count?
+  const winnerActual = Math.max(actHome, actAway);
+  const winnerPred = actHome > actAway ? predHome : predAway;
+  if (winnerPred === winnerActual) return POINTS.winnerScore;
+  return POINTS.winner; // correct winning team only
 }
 
 // Score one prediction ROW against a match (handles winner-only picks) ---------
