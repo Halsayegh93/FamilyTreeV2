@@ -197,6 +197,12 @@
             <button class="btn ghost win-home" style="flex:1">${esc(home)}</button>
             <button class="btn ghost win-away" style="flex:1">${esc(away)}</button>
           </div>
+          <div style="display:flex;gap:6px;align-items:center;justify-content:center;margin-top:8px">
+            <span>ركلات الترجيح:</span>
+            <input class="pen-home" type="number" min="0" max="99" inputmode="numeric" value="${m.home_pen ?? ''}" style="width:48px;text-align:center" />
+            <span>-</span>
+            <input class="pen-away" type="number" min="0" max="99" inputmode="numeric" value="${m.away_pen ?? ''}" style="width:48px;text-align:center" />
+          </div>
         </div>
 
         <div class="card-actions">
@@ -250,6 +256,7 @@
             <span class="name ${m.away_team ? '' : 'tbd'}">${esc(away)}</span>
           </div>
         </div>
+        ${(m.home_pen != null && m.away_pen != null) ? `<div class="venue-line" style="text-align:center">🥅 ركلات الترجيح: ${m.home_pen} - ${m.away_pen}</div>` : ''}
         <div class="card-actions">
           <button class="btn save-result">💾 تحديث النتيجة (تُحسب النقاط)</button>
           <button class="btn ghost reopen" style="margin-top:8px">♻️ مسح النتيجة وإعادة الفتح</button>
@@ -419,13 +426,18 @@
         const btn = ev.currentTarget;
         const h = hEl.value, a = aEl.value;
         const draw = h !== '' && a !== '' && +h === +a;
-        if (draw && isLater && !card.dataset.winner) {
-          toast('اختر الفائز بالركلات أول', true); return;
+        const phEl = card.querySelector('.pen-home'), paEl = card.querySelector('.pen-away');
+        const penH = phEl && phEl.value !== '' ? +phEl.value : null;
+        const penA = paEl && paEl.value !== '' ? +paEl.value : null;
+        let winner = card.dataset.winner || null;
+        if (draw && isLater) {
+          if (penH != null && penA != null && penH !== penA) winner = penH > penA ? 'home' : 'away';
+          if (!winner) { toast('اكتب نتيجة الركلات أو اختر الفائز بالركلات', true); return; }
         }
         btn.disabled = true;
         try {
           await adminSetResult(id, h === '' ? null : +h, a === '' ? null : +a,
-            PIN, card.dataset.winner || null);
+            PIN, winner, penH, penA);
           toast(h === '' ? 'انمسحت النتيجة' : 'تم اعتماد النتيجة ✅ وتحسبت النقاط');
           loadList();
         } catch (e) { toast(friendlyError(e), true); }
