@@ -80,8 +80,9 @@
       const guessOf = (p) => {
         if (p.pick) return '🏆 ' + esc((p.pick === 'home' ? m.home_team : m.away_team) || '');
         let s = `${p.home_score}-${p.away_score}`;
-        if (p.home_score != null && p.home_score === p.away_score && p.pen_pick)
-          s += ` 🥅${esc((p.pen_pick === 'home' ? m.home_team : m.away_team) || '')}`;
+        const d = Math.sign((p.home_score || 0) - (p.away_score || 0));
+        if (d !== 0) s += ` 🏆${esc((d > 0 ? m.home_team : m.away_team) || '')}`;
+        else if (p.pen_pick) s += ` 🥅${esc((p.pen_pick === 'home' ? m.home_team : m.away_team) || '')}`;
         return s;
       };
 

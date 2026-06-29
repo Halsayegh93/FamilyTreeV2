@@ -238,12 +238,17 @@
           .map((p) => {
             const nm = esc(p.player_name);
             if (reveal) {
-              let guess = p.pick
-                ? '🏆 ' + esc((p.pick === 'home' ? m.home_team : m.away_team) || '')
-                : `${p.home_score}-${p.away_score}`;
-              // a drawn score-prediction may carry a penalty qualifier pick
-              if (!p.pick && p.home_score != null && p.home_score === p.away_score && p.pen_pick)
-                guess += ` 🥅${esc((p.pen_pick === 'home' ? m.home_team : m.away_team) || '')}`;
+              let guess;
+              if (p.pick) {
+                guess = '🏆 ' + esc((p.pick === 'home' ? m.home_team : m.away_team) || '');
+              } else {
+                // show the score AND the team they predicted to win, so it's clear
+                // who picked which side (a draw shows the penalty qualifier instead)
+                guess = `${p.home_score}-${p.away_score}`;
+                const d = Math.sign((p.home_score || 0) - (p.away_score || 0));
+                if (d !== 0) guess += ` 🏆${esc((d > 0 ? m.home_team : m.away_team) || '')}`;
+                else if (p.pen_pick) guess += ` 🥅${esc((p.pen_pick === 'home' ? m.home_team : m.away_team) || '')}`;
+              }
               const ptsTag = m.finished
                 ? (() => { const pts = scoreRow(p, m);
                     return `<span class="pts ${pts > 0 ? 'good' : 'zero'}">${pts > 0 ? '+' + pts : '0'}</span>`; })()
