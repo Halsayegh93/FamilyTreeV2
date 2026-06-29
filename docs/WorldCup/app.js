@@ -1,7 +1,7 @@
 // ============================================================================
 // Shared logic: Supabase client, scoring, data loading.
 // ============================================================================
-import { SUPABASE_URL, SUPABASE_ANON_KEY, POINTS } from './config.js?v=3';
+import { SUPABASE_URL, SUPABASE_ANON_KEY, POINTS } from './config.js?v=4';
 import { demo } from './demo.js?v=6';
 
 export { POINTS };
@@ -45,16 +45,26 @@ export function isLocked(match) {
   return false;
 }
 
-// Score a single prediction against the actual result ------------------------
-// Simplified: 1 point for the correct OUTCOME — whichever team wins, or a
-// correctly-predicted draw. The exact score doesn't matter. Wrong outcome -> 0.
+// Score a single prediction against the actual result (highest tier wins) -----
+//   7 -> exact score (both teams' goals correct, draws included e.g. 3-3)
+//   5 -> correct winning team + the winning team's goals correct
+//   3 -> correct winning team only
+//   0 -> wrong outcome — and any non-exact draw (no winning team to credit)
 export function scorePrediction(predHome, predAway, actHome, actAway) {
   if (predHome == null || predAway == null || actHome == null || actAway == null) {
     return 0;
   }
+  if (predHome === actHome && predAway === actAway) return POINTS.exact;
+
   const po = Math.sign(predHome - predAway);
   const ao = Math.sign(actHome - actAway);
-  return po === ao ? POINTS.winner : 0;
+  if (po !== ao) return 0;   // wrong winner / wrong outcome
+  if (ao === 0) return 0;    // correct draw but wrong score -> no winning team
+
+  const winnerActual = Math.max(actHome, actAway);
+  const winnerPred = actHome > actAway ? predHome : predAway;
+  if (winnerPred === winnerActual) return POINTS.winnerScore;
+  return POINTS.winner;      // correct winning team only
 }
 
 // Score one prediction ROW against a match (handles winner-only picks) ---------
@@ -72,14 +82,19 @@ export function scoreRow(p, m) {
     if (!winSide) return 0;              // تعادل بلا حسم -> توقّع الفائز ما ياخذ نقطة
     return p.pick === winSide ? POINTS.winner : 0;
   }
-  // base point: correct outcome (winning team, or a correctly-predicted draw)
+  // base score from the result tiers (7 / 5 / 3 / 0)
   let pts = scorePrediction(p.home_score, p.away_score, m.home_score, m.away_score);
-  // bonus point — SAME principle as the result: a knockout decided by penalties
-  // gives +1 to whoever also nailed the qualifier (from their predicted pen score)
+  // penalty bonus — SAME tiered principle on the shootout score: a knockout
+  // decided on penalties, where the player predicted a draw + a pen score:
+  //   +2 exact pen score, +1 correct pen qualifier only
   if (m.home_pen != null && m.away_pen != null && m.home_pen !== m.away_pen
-      && p.home_score != null && p.home_score === p.away_score && p.pen_pick) {
-    const penWinner = m.home_pen > m.away_pen ? 'home' : 'away';
-    if (p.pen_pick === penWinner) pts += POINTS.winner;
+      && p.home_score != null && p.home_score === p.away_score
+      && p.pen_home != null && p.pen_away != null) {
+    if (p.pen_home === m.home_pen && p.pen_away === m.away_pen) {
+      pts += POINTS.penExact;
+    } else if ((p.pen_home > p.pen_away) === (m.home_pen > m.away_pen)) {
+      pts += POINTS.penWinner;
+    }
   }
   return pts;
 }

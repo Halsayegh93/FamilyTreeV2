@@ -44,7 +44,7 @@
       isConfigured, loadMatches, loadPredictions, loadMyPredictions,
       submitPrediction, submitWinner, buildLeaderboard, scorePrediction,
       scoreRow, isLocked, roundLabel, ROUNDS, friendlyError, POINTS, watch,
-    } from './app.js?v=10';
+    } from './app.js?v=11';
 
     const $ = (s, r = document) => r.querySelector(s);
     const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) =>
@@ -468,24 +468,37 @@
         <div class="round-title">قانون النقاط</div>
         <div class="rules">
           <div class="rule">
-            <span class="rule-pts">${POINTS.winner}<small>نقطة</small></span>
-            <div><b>تضبط الفائز (أو التعادل)</b><br>
-              <span class="rule-ex">اكتب أي نتيجة — المهم تضبط الفريق الفائز. مثال: انتهت 3-1 وتوقّعك 2-1 لنفس الفريق → نقطة. وإذا توقّعت تعادل وانتهت بالتعادل → نقطة.</span></div>
+            <span class="rule-pts">${POINTS.exact}<small>نقاط</small></span>
+            <div><b>النتيجة الكاملة صحيحة</b><br>
+              <span class="rule-ex">تضبط عدد أهداف الفريقين. مثال: انتهت 2-1 وتوقّعك 2-1، أو انتهت 3-3 وتوقّعك 3-3.</span></div>
           </div>
           <div class="rule">
-            <span class="rule-pts">+${POINTS.winner}<small>نقطة</small></span>
-            <div><b>تضبط المتأهّل بالركلات</b><br>
-              <span class="rule-ex">إذا انتهت المباراة بالتعادل وحُسمت بركلات الترجيح، وضبطت الفريق المتأهّل (من نتيجة الركلات اللي كتبتها) → نقطة إضافية.</span></div>
+            <span class="rule-pts">${POINTS.winnerScore}<small>نقاط</small></span>
+            <div><b>الفائز + نتيجته صحيحة</b><br>
+              <span class="rule-ex">تضبط الفريق الفائز وعدد أهدافه، مع خطأ في أهداف الخاسر. مثال: انتهت 3-1 وتوقّعك 3-0.</span></div>
           </div>
           <div class="rule">
-            <span class="rule-pts">0<small>نقطة</small></span>
-            <div><b>تخطئ الفائز</b><br>
-              <span class="rule-ex">إذا فاز فريق غير اللي توقّعته (أو توقّعت فوز وانتهت تعادل والعكس) → لا نقاط.</span></div>
+            <span class="rule-pts">${POINTS.winner}<small>نقاط</small></span>
+            <div><b>الفريق الفائز فقط</b><br>
+              <span class="rule-ex">تضبط الفائز بدون نتيجته الصحيحة. مثال: انتهت 3-1 وتوقّعك 2-1.</span></div>
+          </div>
+        </div>
+        <div class="round-title" style="margin-top:18px">ركلات الترجيح</div>
+        <div class="rules">
+          <div class="rule">
+            <span class="rule-pts">+${POINTS.penExact}<small>نقطة</small></span>
+            <div><b>نتيجة الركلات كاملة</b><br>
+              <span class="rule-ex">في مباراة تعادل محسومة بالركلات: تضبط نتيجة الركلات بالضبط. مثال: انتهت بالركلات 4-2 وتوقّعك 4-2.</span></div>
+          </div>
+          <div class="rule">
+            <span class="rule-pts">+${POINTS.penWinner}<small>نقطة</small></span>
+            <div><b>الفائز بالركلات فقط</b><br>
+              <span class="rule-ex">تضبط الفريق المتأهّل بالركلات بدون نتيجتها الصحيحة.</span></div>
           </div>
         </div>
         <div class="notice" style="margin-top:14px">
-          • أي نتيجة تكتبها تكفي — الشرط الوحيد تضبط <b>من فاز</b> (أو التعادل).<br>
-          • مباراة التعادل المحسومة بالركلات: نقطة للتعادل الصحيح + نقطة إضافية لو ضبطت المتأهّل بالركلات.<br>
+          • التعادل ياخذ نقاط فقط لو ضبطت نتيجته كاملة (مثل 3-3)؛ وإلا فلا نقاط للنتيجة، لأنه ما فيه فائز.<br>
+          • نقاط الركلات تُضاف فوق نقاط النتيجة، وتُحتسب على نتيجة الوقت الأصلي.<br>
           • يُصبح التوقّع <b>نهائياً</b> بعد حفظه، ويُغلَق باب التوقّع عند بداية المباراة.
         </div>`;
     }
@@ -538,8 +551,10 @@
       </table>
       <div class="scoring-note">
         <b>النقاط:</b>
-        <span class="chip">${POINTS.winner} لمن يضبط الفائز</span>
-        <span class="chip">+${POINTS.winner} لمن يضبط المتأهّل بالركلات</span>
+        <span class="chip">${POINTS.exact} كاملة</span>
+        <span class="chip">${POINTS.winnerScore} الفائز + نتيجته</span>
+        <span class="chip">${POINTS.winner} الفائز فقط</span>
+        <span class="chip">+${POINTS.penExact}/+${POINTS.penWinner} ركلات</span>
       </div>`;
     }
 
