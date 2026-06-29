@@ -47,9 +47,16 @@ alter table public.wc_predictions alter column away_score drop not null;
 alter table public.wc_predictions add column if not exists pick text;
 -- Manual points override (admin edits a player's points by hand). NULL = auto.
 alter table public.wc_predictions add column if not exists manual_points integer;
+-- Penalty qualifier pick: on a DRAW score-prediction in a knockout match, who the
+-- player thinks advances on penalties. Informational only — does NOT affect points.
+alter table public.wc_predictions add column if not exists pen_pick text;
 do $$ begin
   alter table public.wc_predictions
     add constraint wc_predictions_pick_chk check (pick in ('home','away'));
+exception when duplicate_object then null; end $$;
+do $$ begin
+  alter table public.wc_predictions
+    add constraint wc_predictions_pen_pick_chk check (pen_pick in ('home','away'));
 exception when duplicate_object then null; end $$;
 
 create index if not exists wc_predictions_match_idx  on public.wc_predictions(match_id);
@@ -116,17 +123,23 @@ exception when duplicate_object then null; end $$;
 -- ---------- Submit a prediction (public) ------------------------------------
 -- Rejects the submission if the match is finished, locked, or kicked off.
 
+-- p_pen_pick: 'home' | 'away' | null. Only meaningful when the predicted score is
+-- a draw (the player names who they think advances on penalties). It is stored for
+-- display only and never affects scoring. Ignored (forced null) for non-draws.
+drop function if exists public.wc_submit_prediction(integer, text, integer, integer);
 create or replace function public.wc_submit_prediction(
   p_match_id integer,
   p_name     text,
   p_home     integer,
-  p_away     integer
+  p_away     integer,
+  p_pen_pick text default null
 ) returns public.wc_predictions
 language plpgsql security definer set search_path = public as $$
 declare
   m   public.wc_matches;
   row public.wc_predictions;
   nm  text := nullif(btrim(p_name), '');
+  pen text;
 begin
   if nm is null then
     raise exception 'NAME_REQUIRED';
@@ -134,6 +147,16 @@ begin
   if p_home is null or p_away is null or p_home < 0 or p_away < 0
      or p_home > 99 or p_away > 99 then
     raise exception 'INVALID_SCORE';
+  end if;
+
+  -- the penalty qualifier pick only applies to a drawn prediction
+  if p_home = p_away then
+    pen := nullif(p_pen_pick, '');
+    if pen is not null and pen not in ('home','away') then
+      raise exception 'INVALID_PICK';
+    end if;
+  else
+    pen := null;
   end if;
 
   select * into m from public.wc_matches where id = p_match_id;
@@ -145,12 +168,13 @@ begin
     raise exception 'MATCH_LOCKED';
   end if;
 
-  insert into public.wc_predictions (match_id, player_name, home_score, away_score, pick)
-  values (p_match_id, nm, p_home, p_away, null)
+  insert into public.wc_predictions (match_id, player_name, home_score, away_score, pick, pen_pick)
+  values (p_match_id, nm, p_home, p_away, null, pen)
   on conflict (match_id, player_name)
   do update set home_score = excluded.home_score,
                away_score = excluded.away_score,
                pick       = null,
+               pen_pick   = excluded.pen_pick,
                updated_at = now()
   returning * into row;
 
@@ -187,12 +211,13 @@ begin
     raise exception 'MATCH_LOCKED';
   end if;
 
-  insert into public.wc_predictions (match_id, player_name, home_score, away_score, pick)
-  values (p_match_id, nm, null, null, p_pick)
+  insert into public.wc_predictions (match_id, player_name, home_score, away_score, pick, pen_pick)
+  values (p_match_id, nm, null, null, p_pick, null)
   on conflict (match_id, player_name)
   do update set home_score = null,
                away_score = null,
                pick       = excluded.pick,
+               pen_pick   = null,
                updated_at = now()
   returning * into row;
 
@@ -459,7 +484,7 @@ begin
 end;
 $$;
 
-grant execute on function public.wc_submit_prediction(integer, text, integer, integer) to anon, authenticated;
+grant execute on function public.wc_submit_prediction(integer, text, integer, integer, text) to anon, authenticated;
 grant execute on function public.wc_submit_winner(integer, text, text) to anon, authenticated;
 grant execute on function public.wc_admin_reopen_match(integer, text) to anon, authenticated;
 grant execute on function public.wc_admin_set_result(integer, integer, integer, text, text) to anon, authenticated;
