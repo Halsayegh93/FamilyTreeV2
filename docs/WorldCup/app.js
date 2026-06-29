@@ -45,34 +45,21 @@ export function isLocked(match) {
   return false;
 }
 
-// Score a single prediction against the actual result (highest tier wins) -----
-//   5 -> exact score (both teams correct, draws included e.g. 3-3)
-//   3 -> correct winning team + the winning team's goals correct
-//   1 -> correct winning team only
-//   0 -> wrong outcome — AND any non-exact draw (a draw has no winning team,
-//        so the 3/1 tiers, which require correctly picking the winner, can't apply)
+// Score a single prediction against the actual result ------------------------
+// Simplified: 1 point for the correct OUTCOME — whichever team wins, or a
+// correctly-predicted draw. The exact score doesn't matter. Wrong outcome -> 0.
 export function scorePrediction(predHome, predAway, actHome, actAway) {
   if (predHome == null || predAway == null || actHome == null || actAway == null) {
     return 0;
   }
-  if (predHome === actHome && predAway === actAway) return POINTS.exact;
-
   const po = Math.sign(predHome - predAway);
   const ao = Math.sign(actHome - actAway);
-  if (po !== ao) return 0; // wrong winner / wrong outcome
-  if (ao === 0) return 0;  // correct draw but wrong score -> no winning team to credit
-
-  // There is a winner and we predicted the right side. Did we also nail the
-  // winning team's goal count?
-  const winnerActual = Math.max(actHome, actAway);
-  const winnerPred = actHome > actAway ? predHome : predAway;
-  if (winnerPred === winnerActual) return POINTS.winnerScore;
-  return POINTS.winner; // correct winning team only
+  return po === ao ? POINTS.winner : 0;
 }
 
 // Score one prediction ROW against a match (handles winner-only picks) ---------
 //   - a winner-only pick ({pick:'home'|'away'}) scores 1 if that side won, else 0
-//   - a full score row is scored with scorePrediction (5/3/1/0)
+//   - a full score row is scored with scorePrediction (1 = correct outcome, else 0)
 export function scoreRow(p, m) {
   if (!m || !m.finished) return 0;
   if (p && p.manual_points != null) return p.manual_points;   // admin override
@@ -85,7 +72,16 @@ export function scoreRow(p, m) {
     if (!winSide) return 0;              // تعادل بلا حسم -> توقّع الفائز ما ياخذ نقطة
     return p.pick === winSide ? POINTS.winner : 0;
   }
-  return scorePrediction(p.home_score, p.away_score, m.home_score, m.away_score);
+  // base point: correct outcome (winning team, or a correctly-predicted draw)
+  let pts = scorePrediction(p.home_score, p.away_score, m.home_score, m.away_score);
+  // bonus point — SAME principle as the result: a knockout decided by penalties
+  // gives +1 to whoever also nailed the qualifier (from their predicted pen score)
+  if (m.home_pen != null && m.away_pen != null && m.home_pen !== m.away_pen
+      && p.home_score != null && p.home_score === p.away_score && p.pen_pick) {
+    const penWinner = m.home_pen > m.away_pen ? 'home' : 'away';
+    if (p.pen_pick === penWinner) pts += POINTS.winner;
+  }
+  return pts;
 }
 
 // Data loading ----------------------------------------------------------------
@@ -304,14 +300,13 @@ export function buildLeaderboard(matches, predictions) {
       const pts = scoreRow(p, m);
       rec.points += pts;
       rec.played += 1;
-      if (pts === POINTS.exact) rec.exact += 1;
       if (pts > 0) rec.correct += 1;
     }
     players.set(p.player_name, rec);
   }
 
   return [...players.values()].sort(
-    (a, b) => b.points - a.points || b.exact - a.exact || a.name.localeCompare(b.name, 'ar'),
+    (a, b) => b.points - a.points || b.correct - a.correct || a.name.localeCompare(b.name, 'ar'),
   );
 }
 
