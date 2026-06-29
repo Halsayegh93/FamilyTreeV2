@@ -391,8 +391,10 @@
           const d = new Date(m.kickoff); d.setHours(0, 0, 0, 0);
           return d < today;
         };
-        // "open" = playable & not past; "closed" = finished OR locked (re-openable)
-        const upcoming = matches.filter((m) => !m.finished && !m.locked && !dayPassed(m));
+        // "open" = playable, not finished/locked. A started (live) match stays open
+        // so the admin can still enter its result, even after its day rolled over.
+        const started = (m) => m.kickoff && new Date(m.kickoff).getTime() <= Date.now();
+        const upcoming = matches.filter((m) => !m.finished && !m.locked && (started(m) || !dayPassed(m)));
         const finished = matches.filter((m) => m.finished || m.locked);
 
         // main list: upcoming matches grouped by DAY (sorted by kickoff)
