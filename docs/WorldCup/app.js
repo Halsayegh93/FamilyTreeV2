@@ -2,7 +2,7 @@
 // Shared logic: Supabase client, scoring, data loading.
 // ============================================================================
 import { SUPABASE_URL, SUPABASE_ANON_KEY, POINTS } from './config.js?v=3';
-import { demo } from './demo.js?v=3';
+import { demo } from './demo.js?v=4';
 
 export { POINTS };
 
@@ -78,8 +78,11 @@ export function scoreRow(p, m) {
   if (p && p.manual_points != null) return p.manual_points;   // admin override
   if (p && p.pick) {
     const diff = Math.sign((m.home_score ?? 0) - (m.away_score ?? 0));
-    if (diff === 0) return 0;            // draw -> winner-only pick can't win
-    const winSide = diff > 0 ? 'home' : 'away';
+    let winSide = diff > 0 ? 'home' : diff < 0 ? 'away' : null;
+    // تعادل محسوم بركلات الترجيح -> الفائز بالركلات (توقّع المتأهّل)
+    if (!winSide && m.home_pen != null && m.away_pen != null && m.home_pen !== m.away_pen)
+      winSide = m.home_pen > m.away_pen ? 'home' : 'away';
+    if (!winSide) return 0;              // تعادل بلا حسم -> توقّع الفائز ما ياخذ نقطة
     return p.pick === winSide ? POINTS.winner : 0;
   }
   return scorePrediction(p.home_score, p.away_score, m.home_score, m.away_score);
@@ -119,14 +122,15 @@ export async function loadMyPredictions(name) {
   return data || [];
 }
 
-export async function submitPrediction(matchId, name, home, away) {
-  if (DEMO) return demo.submit(matchId, name, home, away);
+export async function submitPrediction(matchId, name, home, away, penPick = null) {
+  if (DEMO) return demo.submit(matchId, name, home, away, penPick);
   const sb = await client();
   const { data, error } = await sb.rpc('wc_submit_prediction', {
     p_match_id: matchId,
     p_name: name,
     p_home: home,
     p_away: away,
+    p_pen_pick: penPick,
   });
   if (error) throw error;
   return data;
@@ -146,14 +150,15 @@ export async function submitWinner(matchId, name, pick) {
 }
 
 // Admin operations (demo-aware) -----------------------------------------------
-export async function adminSetResult(matchId, home, away, pin, winner = null) {
+export async function adminSetResult(matchId, home, away, pin, winner = null, homePen = null, awayPen = null) {
   if (DEMO) {
     if (pin !== '1993') throw new Error('BAD_PIN');
-    return demo.setResult(matchId, home, away, winner);
+    return demo.setResult(matchId, home, away, winner, homePen, awayPen);
   }
   const sb = await client();
   const { data, error } = await sb.rpc('wc_admin_set_result', {
     p_match_id: matchId, p_home: home, p_away: away, p_pin: pin, p_winner: winner,
+    p_home_pen: homePen, p_away_pen: awayPen,
   });
   if (error) throw error;
   return data;
