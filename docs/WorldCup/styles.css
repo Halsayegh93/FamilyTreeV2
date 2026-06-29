@@ -389,6 +389,21 @@ body { direction: rtl; }
 }
 .winpick .winsel:hover { border-color: var(--primary); color: var(--primary); }
 .winpick .winsel:active { transform: scale(.98); }
+/* Penalty qualifier picker — appears under the score when a draw is predicted */
+.penpick {
+  margin-top: 12px; padding: 10px; border-radius: 12px;
+  background: rgba(184,142,51,.10); border: 1px solid rgba(184,142,51,.30);
+}
+.penpick-q { text-align: center; font-size: 13px; font-weight: 800; color: var(--text); margin-bottom: 8px; }
+.penpick-opts { display: flex; gap: 8px; }
+.penpick-opts .pensel {
+  flex: 1; min-width: 0; padding: 11px 8px; font-size: 13px; font-weight: 800;
+  background: var(--surface2); color: var(--text);
+  border: 1px solid var(--border); border-radius: 12px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.penpick-opts .pensel:hover { border-color: var(--primary); color: var(--primary); }
+.penpick-opts .pensel:active { transform: scale(.98); }
 .btn {
   width: 100%;
   border: none; cursor: pointer;
