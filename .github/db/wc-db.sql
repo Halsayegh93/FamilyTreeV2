@@ -25,9 +25,15 @@ create table if not exists public.wc_matches (
   kickoff    timestamptz,                   -- optional; locks predictions once passed
   home_score integer,                       -- actual result (admin only)
   away_score integer,
+  home_pen   integer,                        -- penalty-shootout score on a draw
+  away_pen   integer,
   finished   boolean not null default false,
   locked     boolean not null default false -- admin can lock predictions early
 );
+
+-- Upgrade older installs that predate the penalty-shootout result columns.
+alter table public.wc_matches add column if not exists home_pen integer;
+alter table public.wc_matches add column if not exists away_pen integer;
 
 create table if not exists public.wc_predictions (
   id          uuid primary key default gen_random_uuid(),
@@ -241,18 +247,24 @@ $$;
 
 -- ---------- Admin: set the official result ----------------------------------
 
--- p_winner: 'home' | 'away' | null. Only needed to break a draw (penalties).
+-- p_winner / p_home_pen / p_away_pen: only used to break a draw (penalties).
+-- A penalty score (when provided on a draw) both decides the qualifier and is
+-- stored on the match so the site can show it and score the bonus point.
+drop function if exists public.wc_admin_set_result(integer, integer, integer, text, text);
 create or replace function public.wc_admin_set_result(
   p_match_id integer,
   p_home     integer,
   p_away     integer,
   p_pin      text,
-  p_winner   text default null
+  p_winner   text default null,
+  p_home_pen integer default null,
+  p_away_pen integer default null
 ) returns public.wc_matches
 language plpgsql security definer set search_path = public as $$
 declare
   row     public.wc_matches;
   winside text;   -- 'home' | 'away' | null
+  ph integer; pa integer;
   lnk     record;
   w_name  text; w_flag text; l_name text; l_flag text;
 begin
@@ -268,9 +280,19 @@ begin
     raise exception 'INVALID_SCORE';
   end if;
 
+  -- penalty score is kept only on a draw (and ignored otherwise)
+  if p_home is not null and p_away is not null and p_home = p_away
+     and p_home_pen is not null and p_away_pen is not null then
+    ph := p_home_pen; pa := p_away_pen;
+  else
+    ph := null; pa := null;
+  end if;
+
   update public.wc_matches
      set home_score = p_home,
          away_score = p_away,
+         home_pen   = ph,
+         away_pen   = pa,
          finished   = (p_home is not null and p_away is not null),
          locked     = locked or (p_home is not null and p_away is not null)
    where id = p_match_id
@@ -284,7 +306,9 @@ begin
   if row.finished then
     if p_home > p_away then winside := 'home';
     elsif p_away > p_home then winside := 'away';
-    elsif p_winner in ('home','away') then winside := p_winner;  -- penalties
+    elsif ph is not null and pa is not null and ph <> pa then
+      winside := case when ph > pa then 'home' else 'away' end;  -- penalty score decides
+    elsif p_winner in ('home','away') then winside := p_winner;  -- explicit winner pick
     else winside := null;                                        -- draw, undecided
     end if;
   end if;
@@ -520,7 +544,7 @@ $$;
 grant execute on function public.wc_submit_prediction(integer, text, integer, integer, integer, integer) to anon, authenticated;
 grant execute on function public.wc_submit_winner(integer, text, text) to anon, authenticated;
 grant execute on function public.wc_admin_reopen_match(integer, text) to anon, authenticated;
-grant execute on function public.wc_admin_set_result(integer, integer, integer, text, text) to anon, authenticated;
+grant execute on function public.wc_admin_set_result(integer, integer, integer, text, text, integer, integer) to anon, authenticated;
 grant execute on function public.wc_admin_save_match(integer, text, text, text, text, text, timestamptz, boolean, text) to anon, authenticated;
 grant execute on function public.wc_admin_reset(text, text) to anon, authenticated;
 grant execute on function public.wc_admin_upsert_match(integer, text, integer, text, text, text, text, text, timestamptz, text) to anon, authenticated;

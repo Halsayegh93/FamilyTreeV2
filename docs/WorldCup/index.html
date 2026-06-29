@@ -44,7 +44,7 @@
       isConfigured, loadMatches, loadPredictions, loadMyPredictions,
       submitPrediction, submitWinner, buildLeaderboard, scorePrediction,
       scoreRow, isLocked, roundLabel, ROUNDS, friendlyError, POINTS, watch,
-    } from './app.js?v=9';
+    } from './app.js?v=10';
 
     const $ = (s, r = document) => r.querySelector(s);
     const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) =>
@@ -222,13 +222,8 @@
               <span class="penteam">${esc(m.away_team || '')}</span>
             </div>
           </div>` : '';
-        actionHTML = `<div class="card-actions"><button class="btn save">حفظ التوقع (نتيجة)</button></div>
-          ${penPickHTML}
-          <div class="orline">أو توقّع ${isKnockout ? 'المتأهّل (الفائز ولو بالركلات)' : 'الفائز فقط'} <span class="hint">(نقطة وحدة)</span></div>
-          <div class="winpick">
-            <button class="btn winsel" data-pick="home">🏆 ${esc(m.home_team || '')}</button>
-            <button class="btn winsel" data-pick="away">🏆 ${esc(m.away_team || '')}</button>
-          </div>`;
+        actionHTML = `<div class="card-actions"><button class="btn save">حفظ التوقّع</button></div>
+          ${penPickHTML}`;
       }
 
       // who predicted this match — reveal everyone's prediction once the match is
@@ -403,9 +398,6 @@
       viewMatches.querySelectorAll('.card').forEach((card) => {
         const btn = card.querySelector('.save');
         if (btn) btn.onclick = () => onSave(card);
-        card.querySelectorAll('.winsel').forEach((wb) => {
-          wb.onclick = () => onPickWinner(card, wb.dataset.pick, wb.textContent.trim());
-        });
 
         // penalty score boxes — reveal only when the typed score is a draw
         const penWrap = card.querySelector('.penpick');
@@ -470,52 +462,31 @@
       }
     }
 
-    // Winner-only quick prediction (1 point). Permanent like a full prediction.
-    async function onPickWinner(card, pick, label) {
-      const name = playerEl.value.trim();
-      if (!name) { toast('ثبّت اسمك أول', true); return; }
-      if (!confirm(`توقّع فوز ${label}؟\nلا يمكن التعديل بعد الحفظ.`)) return;
-
-      const id = +card.dataset.id;
-      card.querySelectorAll('.winsel').forEach((b) => { b.disabled = true; });
-      try {
-        await submitWinner(id, name, pick);
-        myPreds.set(id, { home: null, away: null, pick, manual_points: null, pen_pick: null, pen_home: null, pen_away: null });
-        toast('انحفظ توقعك للفائز ✅ (لا يمكن التعديل)');
-        renderMatches();   // re-render: this match is now locked
-      } catch (e) {
-        toast(friendlyError(e), true);
-        card.querySelectorAll('.winsel').forEach((b) => { b.disabled = false; });
-        if (String(e.message || e).includes('MATCH_LOCKED')) loadAll();
-      }
-    }
-
     // ----- full scoring rules -----
     function renderRules() {
       viewRules.innerHTML = `
         <div class="round-title">قانون النقاط</div>
         <div class="rules">
           <div class="rule">
-            <span class="rule-pts">${POINTS.exact}<small>نقاط</small></span>
-            <div><b>النتيجة الكاملة صحيحة</b><br>
-              <span class="rule-ex">أن تتوقّع عدد أهداف الفريقين بشكل صحيح — حتى التعادل. مثال: انتهت 2-1 وتوقّعك 2-1، أو انتهت 3-3 وتوقّعك 3-3.</span></div>
-          </div>
-          <div class="rule">
-            <span class="rule-pts">${POINTS.winnerScore}<small>نقاط</small></span>
-            <div><b>الفائز وعدد أهدافه صحيح</b><br>
-              <span class="rule-ex">أن تتوقّع الفريق الفائز وعدد أهدافه بشكل صحيح، مع خطأ في عدد أهداف الفريق الخاسر. مثال: انتهت المباراة 3-1، وكان توقّعك 3-0.</span></div>
-          </div>
-          <div class="rule">
             <span class="rule-pts">${POINTS.winner}<small>نقطة</small></span>
-            <div><b>الفريق الفائز فقط</b><br>
-              <span class="rule-ex">أن تتوقّع الفريق الفائز فقط دون النتيجة الصحيحة. مثال: انتهت المباراة 3-1، وكان توقّعك 2-0.</span></div>
+            <div><b>تضبط الفائز (أو التعادل)</b><br>
+              <span class="rule-ex">اكتب أي نتيجة — المهم تضبط الفريق الفائز. مثال: انتهت 3-1 وتوقّعك 2-1 لنفس الفريق → نقطة. وإذا توقّعت تعادل وانتهت بالتعادل → نقطة.</span></div>
+          </div>
+          <div class="rule">
+            <span class="rule-pts">+${POINTS.winner}<small>نقطة</small></span>
+            <div><b>تضبط المتأهّل بالركلات</b><br>
+              <span class="rule-ex">إذا انتهت المباراة بالتعادل وحُسمت بركلات الترجيح، وضبطت الفريق المتأهّل (من نتيجة الركلات اللي كتبتها) → نقطة إضافية.</span></div>
+          </div>
+          <div class="rule">
+            <span class="rule-pts">0<small>نقطة</small></span>
+            <div><b>تخطئ الفائز</b><br>
+              <span class="rule-ex">إذا فاز فريق غير اللي توقّعته (أو توقّعت فوز وانتهت تعادل والعكس) → لا نقاط.</span></div>
           </div>
         </div>
         <div class="notice" style="margin-top:14px">
-          • التعادل: تأخذ <b>5 نقاط</b> فقط إذا ضبطت نتيجته كاملة (مثل 3-3)؛ وإلا فلا نقاط، لأنه لا يوجد فريق فائز.<br>
-          • يُصبح التوقّع <b>نهائياً</b> بعد حفظه، ويُغلَق باب التوقّع عند بداية المباراة.<br>
-          • في الأدوار الإقصائية، لا تؤثّر ركلات الترجيح على نقاط التوقّع، إذ تُحتسب النقاط على النتيجة في الوقت الأصلي.<br>
-          • إذا توقّعت <b>تعادل</b>، تكتب نتيجة ركلات الترجيح قبل بداية المباراة — للعرض فقط، وما يأثّر على نقاطك.
+          • أي نتيجة تكتبها تكفي — الشرط الوحيد تضبط <b>من فاز</b> (أو التعادل).<br>
+          • مباراة التعادل المحسومة بالركلات: نقطة للتعادل الصحيح + نقطة إضافية لو ضبطت المتأهّل بالركلات.<br>
+          • يُصبح التوقّع <b>نهائياً</b> بعد حفظه، ويُغلَق باب التوقّع عند بداية المباراة.
         </div>`;
     }
 
@@ -554,23 +525,21 @@
           <td class="rank ${rc}">${medal}</td>
           <td class="name">${esc(r.name)}</td>
           <td>${r.predicted}</td>
-          <td>${r.exact}</td>
-          <td>${r.played}</td>
+          <td>${r.correct}</td>
           <td class="total">${r.points}</td>
         </tr>`;
       }).join('');
 
       viewBoard.innerHTML = prizesHTML + head + `<table class="lb">
         <thead><tr>
-          <th>#</th><th>الاسم</th><th>توقّع</th><th>نتيجة مضبوطة</th><th>محسوبة</th><th>النقاط</th>
+          <th>#</th><th>الاسم</th><th>توقّع</th><th>صح</th><th>النقاط</th>
         </tr></thead>
         <tbody>${body}</tbody>
       </table>
       <div class="scoring-note">
         <b>النقاط:</b>
-        <span class="chip">${POINTS.exact} نتيجة كاملة</span>
-        <span class="chip">${POINTS.winnerScore} الفائز + نتيجته</span>
-        <span class="chip">${POINTS.winner} الفائز فقط</span>
+        <span class="chip">${POINTS.winner} لمن يضبط الفائز</span>
+        <span class="chip">+${POINTS.winner} لمن يضبط المتأهّل بالركلات</span>
       </div>`;
     }
 
