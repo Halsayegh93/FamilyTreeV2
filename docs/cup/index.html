@@ -360,11 +360,12 @@
         list = matches.filter((m) => matchFilter === 'FINAL'
           ? (m.round === 'FINAL' || m.round === '3RD')
           : m.round === matchFilter);
-      } else { // القادمة: today + tomorrow upcoming + finished matches I predicted
+      } else { // القادمة: live matches + the upcoming window + finished I predicted
         list = matches.filter((m) => {
           if (m.finished) return myPreds.has(m.id);   // keep finished only if I predicted it
-          return !dayPassed(m) && m.kickoff &&
-            new Date(m.kickoff).getTime() < startMs + UPCOMING_WINDOW;
+          const kt = m.kickoff ? new Date(m.kickoff).getTime() : null;
+          if (kt && kt <= Date.now()) return true;    // started & not finished -> stay until the result is in
+          return !dayPassed(m) && kt && kt < startMs + UPCOMING_WINDOW;
         });
       }
 
