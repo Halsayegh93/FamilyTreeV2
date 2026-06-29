@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
   <title>جماهير مباريات كأس العالم الرميثية 🏆</title>
-  <link rel="stylesheet" href="styles.css?v=10" />
+  <link rel="stylesheet" href="styles.css?v=11" />
 </head>
 <body>
   <div class="wrap">
@@ -153,7 +153,7 @@
           <div class="meta">
             <span>${esc(roundLabel(m.round))}</span>
             <span class="badge soon">قريباً</span>
-            <span></span>
+            <span class="mno">مباراة ${m.id}</span>
           </div>
           <div class="match">
             ${teamHTML(m.home_team, m.home_flag, 'home')}
@@ -290,7 +290,7 @@
         <div class="meta">
           <span>${esc(roundLabel(m.round))}</span>
           ${badge}
-          <span></span>
+          <span class="mno">مباراة ${m.id}</span>
         </div>
         <div class="match">
           ${teamHTML(m.home_team, m.home_flag, 'home')}

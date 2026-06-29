@@ -351,6 +351,8 @@ body { direction: rtl; }
   background: linear-gradient(120deg, var(--primary), var(--primary2));
   color: #fff; border-color: transparent;
 }
+/* Match number on each card's meta row */
+.meta .mno { font-size: 11px; font-weight: 800; color: var(--muted); }
 
 .favpick {
   margin-top: 10px; text-align: center; font-size: 13px; font-weight: 700;
