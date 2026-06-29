@@ -146,14 +146,15 @@ export async function submitWinner(matchId, name, pick) {
 }
 
 // Admin operations (demo-aware) -----------------------------------------------
-export async function adminSetResult(matchId, home, away, pin, winner = null) {
+export async function adminSetResult(matchId, home, away, pin, winner = null, homePen = null, awayPen = null) {
   if (DEMO) {
     if (pin !== '1993') throw new Error('BAD_PIN');
-    return demo.setResult(matchId, home, away, winner);
+    return demo.setResult(matchId, home, away, winner, homePen, awayPen);
   }
   const sb = await client();
   const { data, error } = await sb.rpc('wc_admin_set_result', {
     p_match_id: matchId, p_home: home, p_away: away, p_pin: pin, p_winner: winner,
+    p_home_pen: homePen, p_away_pen: awayPen,
   });
   if (error) throw error;
   return data;
