@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
   <title>جماهير مباريات كأس العالم الرميثية 🏆</title>
-  <link rel="stylesheet" href="styles.css?v=8" />
+  <link rel="stylesheet" href="styles.css?v=9" />
 </head>
 <body>
   <div class="wrap">
@@ -44,7 +44,7 @@
       isConfigured, loadMatches, loadPredictions, loadMyPredictions,
       submitPrediction, submitWinner, buildLeaderboard, scorePrediction,
       scoreRow, isLocked, roundLabel, ROUNDS, friendlyError, POINTS, watch,
-    } from './app.js?v=8';
+    } from './app.js?v=9';
 
     const $ = (s, r = document) => r.querySelector(s);
     const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) =>
@@ -205,16 +205,21 @@
         const t = mine.pick === 'home' ? m.home_team : m.away_team;
         actionHTML = `<div class="predicted-note">🏆 توقعت فوز <b>${esc(t || '')}</b> — لا يمكن التعديل</div>`;
       } else if (!m.finished && predicted) {
-        const penT = mine.pen_pick ? (mine.pen_pick === 'home' ? m.home_team : m.away_team) : '';
-        const penNote = penT ? ` · 🥅 تأهّل <b>${esc(penT)}</b> بالركلات` : '';
+        const penQ = mine.pen_pick ? (mine.pen_pick === 'home' ? m.home_team : m.away_team) : '';
+        const penNote = (mine.pen_home != null && mine.pen_away != null)
+          ? ` · 🥅 ركلات ${mine.pen_home}-${mine.pen_away}${penQ ? ` (${esc(penQ)})` : ''}`
+          : (penQ ? ` · 🥅 تأهّل <b>${esc(penQ)}</b> بالركلات` : '');
         actionHTML = `<div class="predicted-note">✓ توقعك محفوظ (${mine.home} - ${mine.away})${penNote} — لا يمكن التعديل</div>`;
       } else if (!locked && !predicted) {
-        // penalty picker: shown only when the typed score is a draw (knockout decider)
+        // penalty score boxes: shown only when the typed score is a draw (knockout decider)
         const penPickHTML = isKnockout ? `<div class="penpick" style="display:none">
-            <div class="penpick-q">🥅 توقّعت تعادل — منو يتأهّل بالركلات؟</div>
-            <div class="penpick-opts">
-              <button type="button" class="btn pensel" data-pen="home">${esc(m.home_team || '')}</button>
-              <button type="button" class="btn pensel" data-pen="away">${esc(m.away_team || '')}</button>
+            <div class="penpick-q">🥅 توقّعت تعادل — كم نتيجة ركلات الترجيح؟</div>
+            <div class="penpick-score">
+              <span class="penteam">${esc(m.home_team || '')}</span>
+              <input type="number" min="0" max="99" inputmode="numeric" class="pen-h" />
+              <span class="dash">-</span>
+              <input type="number" min="0" max="99" inputmode="numeric" class="pen-a" />
+              <span class="penteam">${esc(m.away_team || '')}</span>
             </div>
           </div>` : '';
         actionHTML = `<div class="card-actions"><button class="btn save">حفظ التوقع (نتيجة)</button></div>
@@ -247,6 +252,7 @@
                 guess = `${p.home_score}-${p.away_score}`;
                 const d = Math.sign((p.home_score || 0) - (p.away_score || 0));
                 if (d !== 0) guess += ` 🏆${esc((d > 0 ? m.home_team : m.away_team) || '')}`;
+                else if (p.pen_home != null && p.pen_away != null) guess += ` 🥅${p.pen_home}-${p.pen_away}`;
                 else if (p.pen_pick) guess += ` 🥅${esc((p.pen_pick === 'home' ? m.home_team : m.away_team) || '')}`;
               }
               const ptsTag = m.finished
@@ -401,7 +407,7 @@
           wb.onclick = () => onPickWinner(card, wb.dataset.pick, wb.textContent.trim());
         });
 
-        // penalty qualifier picker — reveal only when the typed score is a draw
+        // penalty score boxes — reveal only when the typed score is a draw
         const penWrap = card.querySelector('.penpick');
         const hEl = card.querySelector('.sc-home');
         const aEl = card.querySelector('.sc-away');
@@ -410,17 +416,7 @@
           const h = hEl.value, a = aEl.value;
           const draw = h !== '' && a !== '' && +h === +a;
           penWrap.style.display = draw ? '' : 'none';
-          if (!draw) {
-            card.dataset.penPick = '';
-            penWrap.querySelectorAll('.pensel').forEach((b) => b.classList.remove('saved'));
-          }
         };
-        card.querySelectorAll('.pensel').forEach((pb) => {
-          pb.onclick = () => {
-            card.dataset.penPick = pb.dataset.pen;
-            card.querySelectorAll('.pensel').forEach((b) => b.classList.toggle('saved', b === pb));
-          };
-        });
 
         card.querySelectorAll('.stepper').forEach((st) => {
           const inp = st.querySelector('input');
@@ -447,19 +443,24 @@
       const a = card.querySelector('.sc-away').value;
       if (h === '' || a === '') { toast('اكتب النتيجة للفريقين', true); return; }
 
-      // a drawn score in a knockout match must name who advances on penalties
+      // a drawn score in a knockout match needs a penalty-shootout score
       const isKnockout = id <= 32;
       const draw = +h === +a;
-      const penPick = draw && isKnockout ? (card.dataset.penPick || null) : null;
-      if (draw && isKnockout && !penPick) {
-        toast('توقّعت تعادل — اختر منو يتأهّل بالركلات', true); return;
+      let penH = null, penA = null;
+      if (draw && isKnockout) {
+        const phEl = card.querySelector('.pen-h'), paEl = card.querySelector('.pen-a');
+        penH = phEl && phEl.value !== '' ? +phEl.value : null;
+        penA = paEl && paEl.value !== '' ? +paEl.value : null;
+        if (penH == null || penA == null) { toast('توقّعت تعادل — اكتب نتيجة ركلات الترجيح', true); return; }
+        if (penH === penA) { toast('ركلات الترجيح ما تنتهي بالتعادل', true); return; }
       }
+      const penPick = (penH != null && penA != null) ? (penH > penA ? 'home' : 'away') : null;
 
       const btn = card.querySelector('.save');
       btn.disabled = true;
       try {
-        await submitPrediction(id, name, +h, +a, penPick);
-        myPreds.set(id, { home: +h, away: +a, pick: null, manual_points: null, pen_pick: penPick });
+        await submitPrediction(id, name, +h, +a, penH, penA);
+        myPreds.set(id, { home: +h, away: +a, pick: null, manual_points: null, pen_pick: penPick, pen_home: penH, pen_away: penA });
         toast('انحفظ توقعك ✅ (لا يمكن التعديل)');
         renderMatches();   // re-render: this match is now locked
       } catch (e) {
@@ -479,7 +480,7 @@
       card.querySelectorAll('.winsel').forEach((b) => { b.disabled = true; });
       try {
         await submitWinner(id, name, pick);
-        myPreds.set(id, { home: null, away: null, pick, manual_points: null, pen_pick: null });
+        myPreds.set(id, { home: null, away: null, pick, manual_points: null, pen_pick: null, pen_home: null, pen_away: null });
         toast('انحفظ توقعك للفائز ✅ (لا يمكن التعديل)');
         renderMatches();   // re-render: this match is now locked
       } catch (e) {
@@ -514,7 +515,7 @@
           • التعادل: تأخذ <b>5 نقاط</b> فقط إذا ضبطت نتيجته كاملة (مثل 3-3)؛ وإلا فلا نقاط، لأنه لا يوجد فريق فائز.<br>
           • يُصبح التوقّع <b>نهائياً</b> بعد حفظه، ويُغلَق باب التوقّع عند بداية المباراة.<br>
           • في الأدوار الإقصائية، لا تؤثّر ركلات الترجيح على نقاط التوقّع، إذ تُحتسب النقاط على النتيجة في الوقت الأصلي.<br>
-          • إذا توقّعت <b>تعادل</b>، تختار منو يتأهّل بالركلات قبل بداية المباراة — للعرض فقط، وما يأثّر على نقاطك.
+          • إذا توقّعت <b>تعادل</b>، تكتب نتيجة ركلات الترجيح قبل بداية المباراة — للعرض فقط، وما يأثّر على نقاطك.
         </div>`;
     }
 
@@ -580,7 +581,7 @@
       if (name) {
         try {
           const mine = await loadMyPredictions(name);
-          for (const p of mine) myPreds.set(p.match_id, { home: p.home_score, away: p.away_score, pick: p.pick, manual_points: p.manual_points, pen_pick: p.pen_pick });
+          for (const p of mine) myPreds.set(p.match_id, { home: p.home_score, away: p.away_score, pick: p.pick, manual_points: p.manual_points, pen_pick: p.pen_pick, pen_home: p.pen_home, pen_away: p.pen_away });
         } catch (_) {}
       }
       renderMatches();
@@ -630,7 +631,7 @@
       if (name) {
         try {
           for (const p of await loadMyPredictions(name))
-            myPreds.set(p.match_id, { home: p.home_score, away: p.away_score, pick: p.pick, manual_points: p.manual_points, pen_pick: p.pen_pick });
+            myPreds.set(p.match_id, { home: p.home_score, away: p.away_score, pick: p.pick, manual_points: p.manual_points, pen_pick: p.pen_pick, pen_home: p.pen_home, pen_away: p.pen_away });
         } catch (_) {}
       }
       if (viewBoard.style.display !== 'none') renderBoard();
