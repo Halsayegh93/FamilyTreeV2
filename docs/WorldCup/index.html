@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
   <title>جماهير مباريات كأس العالم الرميثية 🏆</title>
-  <link rel="stylesheet" href="styles.css?v=9" />
+  <link rel="stylesheet" href="styles.css?v=10" />
 </head>
 <body>
   <div class="wrap">
@@ -343,28 +343,27 @@
         `<button data-f="${f}" class="${matchFilter === f ? 'active' : ''}">${label}</button>`;
       const filterBar = `<div class="mfilter">
         ${chip('upcoming', 'القادمة')}
-        ${chip('past', '🏁 السابقة')}
         ${ROUND_FILTERS.map(([c, l]) => chip(c, l)).join('')}
-      </div>`;
+      </div>
+      <button class="past-btn ${matchFilter === 'past' ? 'active' : ''}" data-f="past">🏁 المباريات السابقة</button>`;
       const wireFilter = () => {
-        viewMatches.querySelectorAll('.mfilter button').forEach((b) => {
+        viewMatches.querySelectorAll('[data-f]').forEach((b) => {
           b.onclick = () => { matchFilter = b.dataset.f; renderMatches(); };
         });
       };
 
       let list;
-      if (matchFilter === 'past') {   // matches that already started or finished
-        list = matches.filter((m) => m.finished ||
-          (m.kickoff && new Date(m.kickoff).getTime() <= Date.now()));
+      if (matchFilter === 'past') {   // finished matches only
+        list = matches.filter((m) => m.finished);
       } else if (roundCodes.includes(matchFilter)) {
         list = matches.filter((m) => matchFilter === 'FINAL'
           ? (m.round === 'FINAL' || m.round === '3RD')
           : m.round === matchFilter);
-      } else { // القادمة: live matches + the upcoming window + finished I predicted
+      } else { // القادمة: live + upcoming only (finished move to السابقة)
         list = matches.filter((m) => {
-          if (m.finished) return myPreds.has(m.id);   // keep finished only if I predicted it
+          if (m.finished) return false;
           const kt = m.kickoff ? new Date(m.kickoff).getTime() : null;
-          if (kt && kt <= Date.now()) return true;    // started & not finished -> stay until the result is in
+          if (kt && kt <= Date.now()) return true;    // live, not finished -> stay until the result is in
           return !dayPassed(m) && kt && kt < startMs + UPCOMING_WINDOW;
         });
       }
