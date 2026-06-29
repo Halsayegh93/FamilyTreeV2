@@ -1,7 +1,7 @@
 // ============================================================================
 // Shared logic: Supabase client, scoring, data loading.
 // ============================================================================
-import { SUPABASE_URL, SUPABASE_ANON_KEY, POINTS } from './config.js?v=4';
+import { SUPABASE_URL, SUPABASE_ANON_KEY, POINTS } from './config.js?v=5';
 import { demo } from './demo.js?v=7';
 
 export { POINTS };
