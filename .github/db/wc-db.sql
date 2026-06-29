@@ -47,9 +47,12 @@ alter table public.wc_predictions alter column away_score drop not null;
 alter table public.wc_predictions add column if not exists pick text;
 -- Manual points override (admin edits a player's points by hand). NULL = auto.
 alter table public.wc_predictions add column if not exists manual_points integer;
--- Penalty qualifier pick: on a DRAW score-prediction in a knockout match, who the
--- player thinks advances on penalties. Informational only — does NOT affect points.
+-- Penalty shootout prediction: on a DRAW score-prediction in a knockout match the
+-- player enters a penalty score (pen_home-pen_away); pen_pick is the derived
+-- qualifier (the higher side). Informational only — does NOT affect points.
 alter table public.wc_predictions add column if not exists pen_pick text;
+alter table public.wc_predictions add column if not exists pen_home integer;
+alter table public.wc_predictions add column if not exists pen_away integer;
 do $$ begin
   alter table public.wc_predictions
     add constraint wc_predictions_pick_chk check (pick in ('home','away'));
@@ -123,23 +126,26 @@ exception when duplicate_object then null; end $$;
 -- ---------- Submit a prediction (public) ------------------------------------
 -- Rejects the submission if the match is finished, locked, or kicked off.
 
--- p_pen_pick: 'home' | 'away' | null. Only meaningful when the predicted score is
--- a draw (the player names who they think advances on penalties). It is stored for
--- display only and never affects scoring. Ignored (forced null) for non-draws.
+-- p_pen_home / p_pen_away: predicted penalty-shootout score. Only meaningful when
+-- the predicted result is a draw (the qualifier = the higher side). Stored for
+-- display only — never affects scoring. Forced null for non-draws, and penalties
+-- may not be a tie.
 drop function if exists public.wc_submit_prediction(integer, text, integer, integer);
+drop function if exists public.wc_submit_prediction(integer, text, integer, integer, text);
 create or replace function public.wc_submit_prediction(
   p_match_id integer,
   p_name     text,
   p_home     integer,
   p_away     integer,
-  p_pen_pick text default null
+  p_pen_home integer default null,
+  p_pen_away integer default null
 ) returns public.wc_predictions
 language plpgsql security definer set search_path = public as $$
 declare
   m   public.wc_matches;
   row public.wc_predictions;
   nm  text := nullif(btrim(p_name), '');
-  pen text;
+  ph  integer; pa integer; pen text;
 begin
   if nm is null then
     raise exception 'NAME_REQUIRED';
@@ -149,14 +155,18 @@ begin
     raise exception 'INVALID_SCORE';
   end if;
 
-  -- the penalty qualifier pick only applies to a drawn prediction
-  if p_home = p_away then
-    pen := nullif(p_pen_pick, '');
-    if pen is not null and pen not in ('home','away') then
-      raise exception 'INVALID_PICK';
+  -- the penalty score only applies to a drawn prediction
+  if p_home = p_away and p_pen_home is not null and p_pen_away is not null then
+    if p_pen_home < 0 or p_pen_away < 0 or p_pen_home > 99 or p_pen_away > 99 then
+      raise exception 'INVALID_SCORE';
     end if;
+    if p_pen_home = p_pen_away then
+      raise exception 'INVALID_PICK';   -- a shootout can't end level
+    end if;
+    ph := p_pen_home; pa := p_pen_away;
+    pen := case when ph > pa then 'home' else 'away' end;
   else
-    pen := null;
+    ph := null; pa := null; pen := null;
   end if;
 
   select * into m from public.wc_matches where id = p_match_id;
@@ -168,13 +178,15 @@ begin
     raise exception 'MATCH_LOCKED';
   end if;
 
-  insert into public.wc_predictions (match_id, player_name, home_score, away_score, pick, pen_pick)
-  values (p_match_id, nm, p_home, p_away, null, pen)
+  insert into public.wc_predictions (match_id, player_name, home_score, away_score, pick, pen_pick, pen_home, pen_away)
+  values (p_match_id, nm, p_home, p_away, null, pen, ph, pa)
   on conflict (match_id, player_name)
   do update set home_score = excluded.home_score,
                away_score = excluded.away_score,
                pick       = null,
                pen_pick   = excluded.pen_pick,
+               pen_home   = excluded.pen_home,
+               pen_away   = excluded.pen_away,
                updated_at = now()
   returning * into row;
 
@@ -211,13 +223,15 @@ begin
     raise exception 'MATCH_LOCKED';
   end if;
 
-  insert into public.wc_predictions (match_id, player_name, home_score, away_score, pick, pen_pick)
-  values (p_match_id, nm, null, null, p_pick, null)
+  insert into public.wc_predictions (match_id, player_name, home_score, away_score, pick, pen_pick, pen_home, pen_away)
+  values (p_match_id, nm, null, null, p_pick, null, null, null)
   on conflict (match_id, player_name)
   do update set home_score = null,
                away_score = null,
                pick       = excluded.pick,
                pen_pick   = null,
+               pen_home   = null,
+               pen_away   = null,
                updated_at = now()
   returning * into row;
 
@@ -503,7 +517,7 @@ begin
 end;
 $$;
 
-grant execute on function public.wc_submit_prediction(integer, text, integer, integer, text) to anon, authenticated;
+grant execute on function public.wc_submit_prediction(integer, text, integer, integer, integer, integer) to anon, authenticated;
 grant execute on function public.wc_submit_winner(integer, text, text) to anon, authenticated;
 grant execute on function public.wc_admin_reopen_match(integer, text) to anon, authenticated;
 grant execute on function public.wc_admin_set_result(integer, integer, integer, text, text) to anon, authenticated;

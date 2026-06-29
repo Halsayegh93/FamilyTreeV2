@@ -2,7 +2,7 @@
 // Shared logic: Supabase client, scoring, data loading.
 // ============================================================================
 import { SUPABASE_URL, SUPABASE_ANON_KEY, POINTS } from './config.js?v=3';
-import { demo } from './demo.js?v=5';
+import { demo } from './demo.js?v=6';
 
 export { POINTS };
 
@@ -122,15 +122,16 @@ export async function loadMyPredictions(name) {
   return data || [];
 }
 
-export async function submitPrediction(matchId, name, home, away, penPick = null) {
-  if (DEMO) return demo.submit(matchId, name, home, away, penPick);
+export async function submitPrediction(matchId, name, home, away, penHome = null, penAway = null) {
+  if (DEMO) return demo.submit(matchId, name, home, away, penHome, penAway);
   const sb = await client();
   const { data, error } = await sb.rpc('wc_submit_prediction', {
     p_match_id: matchId,
     p_name: name,
     p_home: home,
     p_away: away,
-    p_pen_pick: penPick,
+    p_pen_home: penHome,
+    p_pen_away: penAway,
   });
   if (error) throw error;
   return data;
