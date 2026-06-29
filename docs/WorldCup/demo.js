@@ -226,6 +226,14 @@ export const demo = {
     return 1;
   },
 
+  deletePrediction(matchId, name) {
+    const nm = String(name).trim();
+    const preds = this.predictions().filter(
+      (p) => !(p.match_id === matchId && p.player_name === nm));
+    writeStore(PKEY, preds);
+    return 1;
+  },
+
   resetWhat(what) {
     if (what === 'predictions' || what === 'all') writeStore(PKEY, []);
     if (what === 'results' || what === 'all') {

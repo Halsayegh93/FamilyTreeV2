@@ -484,6 +484,25 @@ begin
 end;
 $$;
 
+-- ---------- Admin: delete ONE player's prediction for ONE match -------------
+-- Removes a single (match, player) prediction so the player can submit a fresh
+-- one for that match (only works while the match is still open for predictions).
+create or replace function public.wc_admin_delete_prediction(
+  p_match_id integer, p_name text, p_pin text
+) returns integer
+language plpgsql security definer set search_path = public as $$
+declare n integer;
+begin
+  if p_pin is distinct from '1993' then          -- CHANGE_ME: same admin PIN
+    raise exception 'BAD_PIN';
+  end if;
+  delete from public.wc_predictions
+   where match_id = p_match_id and player_name = btrim(p_name);
+  get diagnostics n = row_count;
+  return n;
+end;
+$$;
+
 grant execute on function public.wc_submit_prediction(integer, text, integer, integer, text) to anon, authenticated;
 grant execute on function public.wc_submit_winner(integer, text, text) to anon, authenticated;
 grant execute on function public.wc_admin_reopen_match(integer, text) to anon, authenticated;
@@ -492,6 +511,7 @@ grant execute on function public.wc_admin_save_match(integer, text, text, text, 
 grant execute on function public.wc_admin_reset(text, text) to anon, authenticated;
 grant execute on function public.wc_admin_upsert_match(integer, text, integer, text, text, text, text, text, timestamptz, text) to anon, authenticated;
 grant execute on function public.wc_admin_delete_player(text, text) to anon, authenticated;
+grant execute on function public.wc_admin_delete_prediction(integer, text, text) to anon, authenticated;
 grant execute on function public.wc_admin_set_points(integer, text, integer, text) to anon, authenticated;
 
 -- ---------- Seed the 32 knockout matches ------------------------------------

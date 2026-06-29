@@ -2,7 +2,7 @@
 // Shared logic: Supabase client, scoring, data loading.
 // ============================================================================
 import { SUPABASE_URL, SUPABASE_ANON_KEY, POINTS } from './config.js?v=3';
-import { demo } from './demo.js?v=4';
+import { demo } from './demo.js?v=5';
 
 export { POINTS };
 
@@ -233,6 +233,20 @@ export async function adminDeletePlayer(name, pin) {
   }
   const sb = await client();
   const { data, error } = await sb.rpc('wc_admin_delete_player', { p_name: name, p_pin: pin });
+  if (error) throw error;
+  return data;
+}
+
+// Admin: delete a single player's prediction for one match (lets them re-predict).
+export async function adminDeletePrediction(matchId, name, pin) {
+  if (DEMO) {
+    if (pin !== '1993') throw new Error('BAD_PIN');
+    return demo.deletePrediction(matchId, name);
+  }
+  const sb = await client();
+  const { data, error } = await sb.rpc('wc_admin_delete_prediction', {
+    p_match_id: matchId, p_name: name, p_pin: pin,
+  });
   if (error) throw error;
   return data;
 }
