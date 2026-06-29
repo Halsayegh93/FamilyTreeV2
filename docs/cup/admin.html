@@ -90,6 +90,13 @@
     const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) =>
       ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
+    // ISO timestamp -> value for a <input type="datetime-local"> in LOCAL time
+    const toLocalInput = (iso) => {
+      if (!iso) return '';
+      const d = new Date(iso); const p = (n) => String(n).padStart(2, '0');
+      return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+    };
+
     let PIN = '';
     let matches = [];
     let allPreds = [];
@@ -255,14 +262,16 @@
         </div>
 
         <details class="team-edit">
-          <summary>✏️ تعديل أسماء الفرق والأعلام</summary>
+          <summary>✏️ تعديل الفرق والموعد</summary>
           <div class="te-grid">
             <input class="e-home"  value="${esc(m.home_team || '')}" placeholder="الفريق الأول" />
             <input class="e-hflag" value="${esc(m.home_flag || '')}" placeholder="🇧🇷" />
             <input class="e-away"  value="${esc(m.away_team || '')}" placeholder="الفريق الثاني" />
             <input class="e-aflag" value="${esc(m.away_flag || '')}" placeholder="🇦🇷" />
           </div>
-          <button class="btn ghost save-teams" style="margin-top:8px">💾 حفظ الفرق</button>
+          <label style="display:block;font-size:12px;color:var(--muted);margin-top:10px">📅 موعد المباراة (بتوقيتك)</label>
+          <input class="e-kick" type="datetime-local" value="${toLocalInput(m.kickoff)}" style="width:100%;margin-top:4px" />
+          <button class="btn ghost save-teams" style="margin-top:10px">💾 حفظ الفرق والموعد</button>
         </details>
 
         ${predictorsBlock(m)}
@@ -534,6 +543,7 @@
       if (teamsBtn) teamsBtn.onclick = async (ev) => {
         const btn = ev.currentTarget; btn.disabled = true;
         const cur = matches.find((x) => x.id === id) || {};
+        const kv = card.querySelector('.e-kick') ? card.querySelector('.e-kick').value : '';
         try {
           await adminSaveMatch(id, {
             home_team: card.querySelector('.e-home').value,
@@ -541,7 +551,7 @@
             home_flag: card.querySelector('.e-hflag').value,
             away_flag: card.querySelector('.e-aflag').value,
             venue: cur.venue ?? null,
-            kickoff: cur.kickoff ?? null,
+            kickoff: kv ? new Date(kv).toISOString() : (cur.kickoff ?? null),
             locked: cur.locked ?? null,
           }, PIN);
           toast('انحفظت الفرق ✅');
