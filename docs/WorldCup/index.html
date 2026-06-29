@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
   <title>جماهير مباريات كأس العالم الرميثية 🏆</title>
-  <link rel="stylesheet" href="styles.css?v=11" />
+  <link rel="stylesheet" href="styles.css?v=12" />
 </head>
 <body>
   <div class="wrap">
@@ -255,13 +255,13 @@
                 ? (() => { const pts = scoreRow(p, m);
                     return `<span class="pts ${pts > 0 ? 'good' : 'zero'}">${pts > 0 ? '+' + pts : '0'}</span>`; })()
                 : '';
-              return `<span class="pred-chip">${nm} <b>${guess}</b> ${ptsTag}</span>`;
+              return `<div class="pred-row"><span class="pr-name">${nm}</span><span class="pr-guess"><b>${guess}</b> ${ptsTag}</span></div>`;
             }
-            return `<span class="pred-chip">${nm}</span>`;
+            return `<div class="pred-row"><span class="pr-name">${nm}</span></div>`;
           }).join('');
         predictorsHTML = `<details class="predictors">
           <summary>👥 توقّعوا (${preds.length})</summary>
-          <div class="pred-names">${items}</div>
+          <div class="pred-rows">${items}</div>
         </details>`;
       } else {
         predictorsHTML = `<div class="predictors-empty">👥 ما توقّع أحد بعد</div>`;

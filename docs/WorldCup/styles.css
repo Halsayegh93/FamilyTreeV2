@@ -353,6 +353,18 @@ body { direction: rtl; }
 }
 /* Match number on each card's meta row */
 .meta .mno { font-size: 11px; font-weight: 800; color: var(--muted); }
+/* Predictors list — one player per row (name vs prediction) */
+.pred-rows { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.pred-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 9px 12px; border-radius: 10px;
+  background: var(--surface2); border: 1px solid var(--border);
+}
+.pred-row .pr-name { font-size: 14px; font-weight: 800; color: var(--text); }
+.pred-row .pr-guess {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 13px; font-weight: 700; color: var(--muted); text-align: left;
+}
 
 .favpick {
   margin-top: 10px; text-align: center; font-size: 13px; font-weight: 700;
