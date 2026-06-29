@@ -43,8 +43,8 @@
     import {
       isConfigured, loadMatches, loadPredictions, loadMyPredictions,
       submitPrediction, submitWinner, buildLeaderboard, scorePrediction,
-      scoreRow, isLocked, roundLabel, ROUNDS, friendlyError, POINTS, watch,
-    } from './app.js?v=12';
+      scoreRow, isLocked, roundLabel, matchDay, ROUNDS, friendlyError, POINTS, watch,
+    } from './app.js?v=13';
 
     const $ = (s, r = document) => r.querySelector(s);
     const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) =>
@@ -343,6 +343,7 @@
         `<button data-f="${f}" class="${matchFilter === f ? 'active' : ''}">${label}</button>`;
       const filterBar = `<div class="mfilter">
         ${chip('upcoming', 'القادمة')}
+        ${chip('past', '🏁 السابقة')}
         ${ROUND_FILTERS.map(([c, l]) => chip(c, l)).join('')}
       </div>`;
       const wireFilter = () => {
@@ -352,7 +353,10 @@
       };
 
       let list;
-      if (roundCodes.includes(matchFilter)) {
+      if (matchFilter === 'past') {   // matches that already started or finished
+        list = matches.filter((m) => m.finished ||
+          (m.kickoff && new Date(m.kickoff).getTime() <= Date.now()));
+      } else if (roundCodes.includes(matchFilter)) {
         list = matches.filter((m) => matchFilter === 'FINAL'
           ? (m.round === 'FINAL' || m.round === '3RD')
           : m.round === matchFilter);
@@ -365,19 +369,23 @@
       }
 
       if (!list.length) {
-        const emptyMsg = roundCodes.includes(matchFilter)
-          ? 'مباريات هذا الدور ما تحددت بعد ⚽️'
-          : 'ما في مباريات قادمة حالياً ⚽️';
+        const emptyMsg = matchFilter === 'past'
+          ? 'ما في مباريات سابقة بعد ⚽️'
+          : roundCodes.includes(matchFilter)
+            ? 'مباريات هذا الدور ما تحددت بعد ⚽️'
+            : 'ما في مباريات قادمة حالياً ⚽️';
         viewMatches.innerHTML = filterBar + `<div class="empty">${emptyMsg}</div>`;
         wireFilter();
         return;
       }
-      // group into sections by DAY (sorted by kickoff time)
-      const sorted = list.slice().sort((a, b) =>
-        (new Date(a.kickoff || 8.64e15)) - (new Date(b.kickoff || 8.64e15)) || a.id - b.id);
+      // group into sections by DAY — past = newest first, otherwise chronological
+      const sorted = list.slice().sort((a, b) => {
+        const t = (new Date(a.kickoff || 8.64e15)) - (new Date(b.kickoff || 8.64e15)) || a.id - b.id;
+        return matchFilter === 'past' ? -t : t;
+      });
       const days = new Map();
       for (const m of sorted) {
-        const d = m.kickoff ? new Date(m.kickoff) : null;
+        const d = matchDay(m.kickoff);   // late-night kickoffs stay on the prior day
         const key = d
           ? `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
           : 'tbd';

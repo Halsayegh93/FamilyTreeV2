@@ -37,6 +37,15 @@ export function roundLabel(code) {
   return (ROUNDS[code] && ROUNDS[code].label) || code;
 }
 
+// The "match day" used for grouping in the schedule. A kickoff that lands after
+// midnight but before ~6am local (a late night match seen from Kuwait time) is
+// counted as the PREVIOUS evening, so it stays under the day it belongs to even
+// once the clock rolls past midnight. The displayed kickoff TIME is unaffected.
+export function matchDay(kickoff) {
+  if (!kickoff) return null;
+  return new Date(new Date(kickoff).getTime() - 6 * 3600 * 1000);
+}
+
 // Is a match closed for predictions? ------------------------------------------
 export function isLocked(match) {
   if (!match) return true;

@@ -28,6 +28,7 @@
     </div>
 
     <div id="panel" style="display:none">
+      <button class="btn ghost" id="prev-btn" style="margin-bottom:14px">🏁 المباريات السابقة</button>
       <div id="list"></div>
 
       <div class="round-title" style="margin-top:26px">➕ إضافة توقّع لمباراة بدأت</div>
@@ -82,8 +83,8 @@
     import {
       loadMatches, loadPredictions, roundLabel, ROUNDS, friendlyError,
       adminVerifyPin, adminSetResult, adminSaveMatch, adminReset,
-      adminDeletePlayer, adminDeletePrediction, adminAddPrediction, adminReopenMatch, adminSetPoints, scoreRow, watch,
-    } from './app.js?v=12';
+      adminDeletePlayer, adminDeletePrediction, adminAddPrediction, adminReopenMatch, adminSetPoints, scoreRow, matchDay, watch,
+    } from './app.js?v=13';
 
     const $ = (s, r = document) => r.querySelector(s);
     const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) =>
@@ -173,6 +174,11 @@
       sessionStorage.setItem('wc_pin', pin);
       $('#gate').style.display = 'none';
       $('#panel').style.display = '';
+      $('#prev-btn').onclick = () => {
+        const sec = $('#finished-sec');
+        if (sec) { sec.open = true; sec.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+        else toast('ما في مباريات سابقة بعد');
+      };
       setupAddPred();
       loadList();
       renderPlayers();
@@ -394,7 +400,7 @@
           (new Date(a.kickoff || 8.64e15)) - (new Date(b.kickoff || 8.64e15)) || a.id - b.id);
         const days = new Map();
         for (const m of sorted) {
-          const d = m.kickoff ? new Date(m.kickoff) : null;
+          const d = matchDay(m.kickoff);   // late-night kickoffs stay on the prior day
           const key = d ? `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}` : 'tbd';
           const label = d
             ? d.toLocaleDateString('ar', { weekday: 'long', day: 'numeric', month: 'long' })
@@ -417,7 +423,7 @@
             return ah - bh || a.id - b.id;
           });
           const withResult = finished.filter((m) => m.home_score != null).length;
-          html += `<details class="team-edit" open style="margin-top:24px">
+          html += `<details class="team-edit" id="finished-sec" open style="margin-top:24px">
             <summary>🏁 النتائج المُدخلة (${withResult}) · منتهية/مغلقة (${finished.length})</summary>` +
             ordered.map(finishedCard).join('') +
             `</details>`;
