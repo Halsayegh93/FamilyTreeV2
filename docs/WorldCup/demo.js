@@ -7,15 +7,30 @@
 
 // Bracket links: when `src` finishes, the winner (W) / loser (L) is copied into
 // `dst` at the given slot — this is what auto-fills the later rounds.
+// Official FIFA World Cup 2026 knockout bracket (matches numbered 1..16 = R32,
+// 17..24 = R16, 25..28 = QF, 29..30 = SF, 31 = 3rd, 32 = Final). The R32→R16
+// feed is NOT adjacent: it follows the real bracket (e.g. R16 #17 = W2 vs W5).
 export const BRACKET = [
-  [1,'W',17,'home'],[2,'W',17,'away'],[3,'W',18,'home'],[4,'W',18,'away'],
-  [5,'W',19,'home'],[6,'W',19,'away'],[7,'W',20,'home'],[8,'W',20,'away'],
-  [9,'W',21,'home'],[10,'W',21,'away'],[11,'W',22,'home'],[12,'W',22,'away'],
-  [13,'W',23,'home'],[14,'W',23,'away'],[15,'W',24,'home'],[16,'W',24,'away'],
-  [17,'W',25,'home'],[18,'W',25,'away'],[19,'W',26,'home'],[20,'W',26,'away'],
-  [21,'W',27,'home'],[22,'W',27,'away'],[23,'W',28,'home'],[24,'W',28,'away'],
-  [25,'W',29,'home'],[26,'W',29,'away'],[27,'W',30,'home'],[28,'W',30,'away'],
-  [29,'W',32,'home'],[30,'W',32,'away'],[29,'L',31,'home'],[30,'L',31,'away'],
+  // R32 winners -> R16
+  [2,'W',17,'home'],[5,'W',17,'away'],
+  [1,'W',18,'home'],[3,'W',18,'away'],
+  [4,'W',19,'home'],[6,'W',19,'away'],
+  [7,'W',20,'home'],[8,'W',20,'away'],
+  [11,'W',21,'home'],[12,'W',21,'away'],
+  [9,'W',22,'home'],[10,'W',22,'away'],
+  [14,'W',23,'home'],[16,'W',23,'away'],
+  [13,'W',24,'home'],[15,'W',24,'away'],
+  // R16 winners -> QF
+  [17,'W',25,'home'],[18,'W',25,'away'],
+  [21,'W',26,'home'],[22,'W',26,'away'],
+  [19,'W',27,'home'],[20,'W',27,'away'],
+  [23,'W',28,'home'],[24,'W',28,'away'],
+  // QF winners -> SF
+  [25,'W',29,'home'],[26,'W',29,'away'],
+  [27,'W',30,'home'],[28,'W',30,'away'],
+  // SF winners -> Final, losers -> 3rd place
+  [29,'W',32,'home'],[30,'W',32,'away'],
+  [29,'L',31,'home'],[30,'L',31,'away'],
 ];
 
 // Round of 32 — teams + flags + venues (same data the real db.sql seeds).

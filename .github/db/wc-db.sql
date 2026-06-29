@@ -84,20 +84,24 @@ create table if not exists public.wc_bracket (
   primary key (src, result)
 );
 
+-- Official FIFA World Cup 2026 bracket (matches 1..16 = R32 in schedule order).
+-- The R32 -> R16 feed is NOT adjacent: it follows the real tournament bracket
+-- (e.g. R16 #17 = winners of R32 #2 and #5). `do update` so re-running corrects
+-- any older (adjacent) links already in the table.
 insert into public.wc_bracket (src, result, dst, slot) values
   -- Round of 32 winners -> Round of 16
-  (1,'W',17,'home'),(2,'W',17,'away'),
-  (3,'W',18,'home'),(4,'W',18,'away'),
-  (5,'W',19,'home'),(6,'W',19,'away'),
+  (2,'W',17,'home'),(5,'W',17,'away'),
+  (1,'W',18,'home'),(3,'W',18,'away'),
+  (4,'W',19,'home'),(6,'W',19,'away'),
   (7,'W',20,'home'),(8,'W',20,'away'),
-  (9,'W',21,'home'),(10,'W',21,'away'),
-  (11,'W',22,'home'),(12,'W',22,'away'),
-  (13,'W',23,'home'),(14,'W',23,'away'),
-  (15,'W',24,'home'),(16,'W',24,'away'),
+  (11,'W',21,'home'),(12,'W',21,'away'),
+  (9,'W',22,'home'),(10,'W',22,'away'),
+  (14,'W',23,'home'),(16,'W',23,'away'),
+  (13,'W',24,'home'),(15,'W',24,'away'),
   -- Round of 16 winners -> Quarter-finals
   (17,'W',25,'home'),(18,'W',25,'away'),
-  (19,'W',26,'home'),(20,'W',26,'away'),
-  (21,'W',27,'home'),(22,'W',27,'away'),
+  (21,'W',26,'home'),(22,'W',26,'away'),
+  (19,'W',27,'home'),(20,'W',27,'away'),
   (23,'W',28,'home'),(24,'W',28,'away'),
   -- Quarter-final winners -> Semi-finals
   (25,'W',29,'home'),(26,'W',29,'away'),
@@ -105,7 +109,7 @@ insert into public.wc_bracket (src, result, dst, slot) values
   -- Semi-final winners -> Final, losers -> Third place
   (29,'W',32,'home'),(30,'W',32,'away'),
   (29,'L',31,'home'),(30,'L',31,'away')
-on conflict (src, result) do nothing;
+on conflict (src, result) do update set dst = excluded.dst, slot = excluded.slot;
 
 -- ---------- Row Level Security ---------------------------------------------
 -- Everyone (anon) may READ. Nobody may write directly.
@@ -589,7 +593,54 @@ begin
 end;
 $$;
 
+-- ---------- Admin: rebuild the bracket from entered results ------------------
+-- Clears every auto-filled team (rounds after R32) and re-propagates each
+-- finished match's winner/loser through wc_bracket, cascading R32 -> Final. Run
+-- this once after correcting the bracket links so existing rounds re-fill right.
+create or replace function public.wc_admin_rebuild_bracket(p_pin text)
+returns void
+language plpgsql security definer set search_path = public as $$
+declare
+  r record; m public.wc_matches; winside text;
+  w_name text; w_flag text; l_name text; l_flag text; lnk record;
+begin
+  if p_pin is distinct from '1993' then raise exception 'BAD_PIN'; end if;  -- CHANGE_ME
+  update public.wc_matches
+     set home_team = null, away_team = null, home_flag = null, away_flag = null
+   where id >= 17;
+  for r in select id from public.wc_matches order by id loop
+    select * into m from public.wc_matches where id = r.id;   -- fresh read (sees prior updates)
+    if not m.finished then continue; end if;
+    if m.home_score > m.away_score then winside := 'home';
+    elsif m.away_score > m.home_score then winside := 'away';
+    elsif m.home_pen is not null and m.away_pen is not null and m.home_pen <> m.away_pen then
+      winside := case when m.home_pen > m.away_pen then 'home' else 'away' end;
+    else winside := null; end if;
+    if winside is null then continue; end if;
+    if winside = 'home' then
+      w_name := m.home_team; w_flag := m.home_flag; l_name := m.away_team; l_flag := m.away_flag;
+    else
+      w_name := m.away_team; w_flag := m.away_flag; l_name := m.home_team; l_flag := m.home_flag;
+    end if;
+    for lnk in select * from public.wc_bracket where src = m.id loop
+      if lnk.slot = 'home' then
+        update public.wc_matches set
+          home_team = case when lnk.result='W' then w_name else l_name end,
+          home_flag = case when lnk.result='W' then w_flag else l_flag end
+        where id = lnk.dst;
+      else
+        update public.wc_matches set
+          away_team = case when lnk.result='W' then w_name else l_name end,
+          away_flag = case when lnk.result='W' then w_flag else l_flag end
+        where id = lnk.dst;
+      end if;
+    end loop;
+  end loop;
+end;
+$$;
+
 grant execute on function public.wc_submit_prediction(integer, text, integer, integer, integer, integer) to anon, authenticated;
+grant execute on function public.wc_admin_rebuild_bracket(text) to anon, authenticated;
 grant execute on function public.wc_submit_winner(integer, text, text) to anon, authenticated;
 grant execute on function public.wc_admin_reopen_match(integer, text) to anon, authenticated;
 grant execute on function public.wc_admin_set_result(integer, integer, integer, text, text, integer, integer) to anon, authenticated;
