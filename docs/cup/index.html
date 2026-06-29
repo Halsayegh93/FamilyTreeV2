@@ -207,7 +207,7 @@
         actionHTML = `<div class="predicted-note">✓ توقعك محفوظ (${mine.home} - ${mine.away}) — لا يمكن التعديل</div>`;
       } else if (!locked && !predicted) {
         actionHTML = `<div class="card-actions"><button class="btn save">حفظ التوقع (نتيجة)</button></div>
-          <div class="orline">أو توقّع الفائز فقط <span class="hint">(نقطة وحدة)</span></div>
+          <div class="orline">أو توقّع ${m.id <= 32 ? 'المتأهّل (الفائز ولو بالركلات)' : 'الفائز فقط'} <span class="hint">(نقطة وحدة)</span></div>
           <div class="winpick">
             <button class="btn winsel" data-pick="home">🏆 ${esc(m.home_team || '')}</button>
             <button class="btn winsel" data-pick="away">🏆 ${esc(m.away_team || '')}</button>
