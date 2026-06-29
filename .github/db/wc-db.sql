@@ -522,6 +522,54 @@ begin
 end;
 $$;
 
+-- ---------- Admin: add/replace a prediction for a started match -------------
+-- Lets the admin enter a prediction for one player AFTER kickoff (bypasses the
+-- lock) — but never once the match is finished (the result is already known).
+create or replace function public.wc_admin_add_prediction(
+  p_match_id integer, p_name text, p_home integer, p_away integer, p_pin text,
+  p_pen_home integer default null, p_pen_away integer default null
+) returns public.wc_predictions
+language plpgsql security definer set search_path = public as $$
+declare
+  m   public.wc_matches;
+  row public.wc_predictions;
+  nm  text := nullif(btrim(p_name), '');
+  ph  integer; pa integer; pen text;
+begin
+  if p_pin is distinct from '1993' then          -- CHANGE_ME: same admin PIN
+    raise exception 'BAD_PIN';
+  end if;
+  if nm is null then raise exception 'NAME_REQUIRED'; end if;
+  if p_home is null or p_away is null or p_home < 0 or p_away < 0
+     or p_home > 99 or p_away > 99 then raise exception 'INVALID_SCORE'; end if;
+
+  if p_home = p_away and p_pen_home is not null and p_pen_away is not null then
+    if p_pen_home < 0 or p_pen_away < 0 or p_pen_home > 99 or p_pen_away > 99
+      then raise exception 'INVALID_SCORE'; end if;
+    if p_pen_home = p_pen_away then raise exception 'INVALID_PICK'; end if;
+    ph := p_pen_home; pa := p_pen_away;
+    pen := case when ph > pa then 'home' else 'away' end;
+  else
+    ph := null; pa := null; pen := null;
+  end if;
+
+  select * into m from public.wc_matches where id = p_match_id;
+  if not found then raise exception 'MATCH_NOT_FOUND'; end if;
+  if m.finished then raise exception 'MATCH_FINISHED'; end if;   -- result already known
+
+  insert into public.wc_predictions
+    (match_id, player_name, home_score, away_score, pick, pen_pick, pen_home, pen_away)
+  values (p_match_id, nm, p_home, p_away, null, pen, ph, pa)
+  on conflict (match_id, player_name)
+  do update set home_score = excluded.home_score, away_score = excluded.away_score,
+               pick = null, pen_pick = excluded.pen_pick,
+               pen_home = excluded.pen_home, pen_away = excluded.pen_away,
+               updated_at = now()
+  returning * into row;
+  return row;
+end;
+$$;
+
 -- ---------- Admin: delete ONE player's prediction for ONE match -------------
 -- Removes a single (match, player) prediction so the player can submit a fresh
 -- one for that match (only works while the match is still open for predictions).
@@ -550,6 +598,7 @@ grant execute on function public.wc_admin_reset(text, text) to anon, authenticat
 grant execute on function public.wc_admin_upsert_match(integer, text, integer, text, text, text, text, text, timestamptz, text) to anon, authenticated;
 grant execute on function public.wc_admin_delete_player(text, text) to anon, authenticated;
 grant execute on function public.wc_admin_delete_prediction(integer, text, text) to anon, authenticated;
+grant execute on function public.wc_admin_add_prediction(integer, text, integer, integer, text, integer, integer) to anon, authenticated;
 grant execute on function public.wc_admin_set_points(integer, text, integer, text) to anon, authenticated;
 
 -- ---------- Seed the 32 knockout matches ------------------------------------
