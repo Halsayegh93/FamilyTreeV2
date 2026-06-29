@@ -192,11 +192,13 @@ export const demo = {
     return m;
   },
 
-  setResult(matchId, h, a, winner) {
+  setResult(matchId, h, a, winner, homePen = null, awayPen = null) {
     const matches = this.matches();
     const m = matches.find((x) => x.id === matchId);
     if (!m) throw new Error('MATCH_NOT_FOUND');
     m.home_score = h; m.away_score = a;
+    m.home_pen = (h != null && a != null && h === a) ? homePen : null;
+    m.away_pen = (h != null && a != null && h === a) ? awayPen : null;
     m.finished = h != null && a != null;
     m.locked = m.locked || m.finished;
     if (m.finished) applyBracket(matches, m, decideWinner(m, winner));
