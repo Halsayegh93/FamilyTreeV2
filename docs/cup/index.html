@@ -188,7 +188,7 @@
           ? `<span class="pts ${pts > 0 ? 'good' : 'zero'}">لك ${pts > 0 ? '+' + pts : '0'} نقطة</span>`
           : '';
         resultLine = `<div class="result-line">
-          <span>النتيجة الرسمية: <b>${m.home_score} - ${m.away_score}</b></span>
+          <span>النتيجة الرسمية: <b>${m.home_score} - ${m.away_score}</b>${(m.home_pen != null && m.away_pen != null) ? ` <span style="color:var(--muted,#789)">(ركلات ${m.home_pen}-${m.away_pen})</span>` : ''}</span>
           ${ptsTag}
         </div>`;
       }
