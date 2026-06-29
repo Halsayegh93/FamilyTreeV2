@@ -1,270 +1,115 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>almohammad ali - Privacy Policy & Terms</title>
-    <style>
-        :root {
-            --primary: #357DED;
-            --secondary: #10B981;
-            --accent: #5438DC;
-            --primary-light: #EBF3FE;
-            --secondary-light: #E8FAF4;
-        }
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-            background: #f4f7ff;
-            color: #1a2a3a;
-            line-height: 1.8;
-            padding: 20px;
-        }
-        .container {
-            max-width: 700px;
-            margin: 0 auto;
-            background: #fff;
-            border-radius: 20px;
-            padding: 0;
-            box-shadow: 0 4px 30px rgba(53,125,237,0.10);
-            overflow: hidden;
-        }
-        .header {
-            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
-            padding: 36px 30px 28px;
-            text-align: center;
-        }
-        .header h1 {
-            font-size: 26px;
-            font-weight: 800;
-            color: white;
-            margin-bottom: 6px;
-            text-shadow: 0 2px 8px rgba(0,0,0,0.15);
-        }
-        .header p {
-            color: rgba(255,255,255,0.85);
-            font-size: 14px;
-        }
-        .body-content {
-            padding: 30px 30px 10px;
-        }
-        .lang-switch {
-            text-align: center;
-            margin-bottom: 24px;
-        }
-        .lang-switch button {
-            background: linear-gradient(135deg, var(--primary), var(--secondary));
-            color: white;
-            border: none;
-            padding: 8px 24px;
-            border-radius: 20px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 600;
-            box-shadow: 0 2px 10px rgba(53,125,237,0.3);
-        }
-        h2 {
-            color: var(--primary);
-            font-size: 18px;
-            font-weight: 700;
-            margin: 28px 0 10px;
-            padding-bottom: 8px;
-            border-bottom: 2px solid var(--primary-light);
-        }
-        h2 .icon { margin-left: 8px; }
-        ul {
-            padding-right: 20px;
-            margin: 10px 0;
-        }
-        li {
-            margin: 8px 0;
-            color: #3a4a5a;
-        }
-        .contact {
-            background: var(--primary-light);
-            border-radius: 12px;
-            padding: 15px 20px;
-            margin-top: 20px;
-            text-align: center;
-            color: var(--primary);
-            font-weight: 600;
-            border: 1px solid rgba(53,125,237,0.15);
-        }
-        .footer {
-            text-align: center;
-            margin: 24px 0 20px;
-            color: #9aa5b0;
-            font-size: 13px;
-        }
-        /* English overrides */
-        .en { direction: ltr; text-align: left; }
-        .en ul { padding-left: 20px; padding-right: 0; }
-        .hidden { display: none; }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>عائلة المحمدعلي — Al‑Mohammad Ali</title>
+<meta name="description" content="تطبيق وموقع عائلة آل محمد علي — حمّل التطبيق وتصفّح شجرة العائلة على أندرويد وآيفون والويب.">
+<style>
+  :root{
+    --bg:#0b1622; --bg2:#0f2336; --card:rgba(255,255,255,.06); --card-bd:rgba(255,255,255,.12);
+    --primary:#2B7A9F; --primary-l:#78ACC3; --accent:#5D8AA8; --android:#3DDC84; --gold:#E0B64A;
+    --ink:#eaf2f8; --ink-soft:#a9c0d1;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Tahoma',sans-serif;
+    background:radial-gradient(1200px 600px at 80% -10%,rgba(43,122,159,.35),transparent 60%),
+               radial-gradient(900px 500px at -10% 10%,rgba(93,138,168,.25),transparent 55%),
+               var(--bg);
+    color:var(--ink); min-height:100vh; line-height:1.7; overflow-x:hidden;
+  }
+  .wrap{max-width:760px;margin:0 auto;padding:0 20px}
+  /* Hero */
+  .hero{text-align:center;padding:64px 20px 30px}
+  .logo{width:92px;height:92px;margin:0 auto 18px;border-radius:26px;
+    background:linear-gradient(135deg,var(--primary),var(--accent));
+    display:flex;align-items:center;justify-content:center;font-size:46px;
+    box-shadow:0 14px 40px rgba(43,122,159,.45)}
+  .hero h1{font-size:34px;font-weight:800;letter-spacing:-.5px;margin-bottom:6px}
+  .hero .en{color:var(--primary-l);font-size:15px;font-weight:600;letter-spacing:1px}
+  .hero p{color:var(--ink-soft);font-size:16px;max-width:520px;margin:14px auto 0}
+  /* sections */
+  section{padding:14px 0}
+  .sec-title{text-align:center;font-size:13px;font-weight:700;color:var(--primary-l);
+    letter-spacing:2px;text-transform:uppercase;margin:26px 0 16px;opacity:.9}
+  /* download buttons */
+  .dl{display:flex;flex-direction:column;gap:13px;max-width:440px;margin:0 auto}
+  .dl a{display:flex;align-items:center;gap:14px;padding:17px 20px;border-radius:18px;
+    text-decoration:none;color:#fff;font-weight:700;font-size:17px;border:1px solid var(--card-bd);
+    background:var(--card);backdrop-filter:blur(10px);transition:transform .15s,box-shadow .15s,background .15s}
+  .dl a:hover{transform:translateY(-2px);background:rgba(255,255,255,.1)}
+  .dl a .ic{width:44px;height:44px;border-radius:13px;display:flex;align-items:center;justify-content:center;font-size:24px;flex:0 0 auto}
+  .dl a .sub{display:block;font-size:12px;font-weight:500;color:var(--ink-soft)}
+  .ic-an{background:linear-gradient(135deg,#3DDC84,#10B981)}
+  .ic-ios{background:linear-gradient(135deg,#1a2a3a,#4a6b80)}
+  .ic-web{background:linear-gradient(135deg,var(--primary),var(--accent))}
+  .arrow{margin-inline-start:auto;color:var(--ink-soft);font-size:20px}
+  /* pages grid */
+  .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;max-width:560px;margin:0 auto}
+  .grid a{display:flex;align-items:center;gap:11px;padding:15px;border-radius:16px;text-decoration:none;
+    color:var(--ink);background:var(--card);border:1px solid var(--card-bd);font-weight:600;font-size:15px;
+    transition:transform .15s,background .15s}
+  .grid a:hover{transform:translateY(-2px);background:rgba(255,255,255,.1)}
+  .grid a .e{font-size:22px}
+  /* footer */
+  footer{text-align:center;padding:40px 20px 50px;color:var(--ink-soft);font-size:13px}
+  footer .fl{display:flex;gap:18px;justify-content:center;flex-wrap:wrap;margin-bottom:14px}
+  footer a{color:var(--primary-l);text-decoration:none;font-weight:600}
+  footer a:hover{text-decoration:underline}
+  @media(max-width:480px){.hero h1{font-size:28px}.grid{grid-template-columns:1fr}}
+</style>
 </head>
 <body>
+  <div class="wrap">
+    <header class="hero">
+      <div class="logo">🌳</div>
+      <h1>عائلة المحمدعلي</h1>
+      <div class="en">AL‑MOHAMMAD ALI FAMILY</div>
+      <p>شجرة العائلة، الأخبار، الديوانيات، والمناسبات — في مكان واحد خاص بالعائلة.</p>
+    </header>
 
-<div class="container">
-    <div class="header">
-        <h1>almohammad ali</h1>
-        <p id="subtitle-ar">تطبيق شجرة عائلة آل محمد علي</p>
-        <p id="subtitle-en" class="hidden">Al-Mohammad Ali Family Tree App</p>
-    </div>
-    <!-- ===== أزرار المنصّات (تحميل التطبيق) ===== -->
-    <div style="padding:22px 26px 4px;">
-      <h2 style="text-align:center;margin:0 0 14px;font-size:18px;color:#357DED;border:none;">📲 حمّل التطبيق</h2>
-      <div style="display:flex;flex-direction:column;gap:11px;max-width:420px;margin:0 auto;">
-        <a href="/android.html" style="display:flex;align-items:center;justify-content:center;gap:10px;padding:15px;border-radius:14px;font-size:16px;font-weight:700;text-decoration:none;color:#fff;background:linear-gradient(135deg,#3DDC84,#10B981);box-shadow:0 4px 14px rgba(16,185,129,.28);">🤖 تحميل أندرويد</a>
-        <a href="https://apps.apple.com/app/id6759812011" style="display:flex;align-items:center;justify-content:center;gap:10px;padding:15px;border-radius:14px;font-size:16px;font-weight:700;text-decoration:none;color:#fff;background:linear-gradient(135deg,#1a2a3a,#357DED);box-shadow:0 4px 14px rgba(53,125,237,.28);">🍎 آيفون (App Store)</a>
-        <a href="/tree" style="display:flex;align-items:center;justify-content:center;gap:10px;padding:15px;border-radius:14px;font-size:16px;font-weight:700;text-decoration:none;color:#fff;background:linear-gradient(135deg,#5438DC,#357DED);box-shadow:0 4px 14px rgba(84,56,220,.28);">🌳 شجرة العائلة (الويب)</a>
+    <section>
+      <div class="sec-title">📲 حمّل التطبيق</div>
+      <div class="dl">
+        <a href="/android.html">
+          <span class="ic ic-an">🤖</span>
+          <span>تحميل أندرويد <span class="sub">ملف APK مباشر</span></span>
+          <span class="arrow">←</span>
+        </a>
+        <a href="https://apps.apple.com/app/id6759812011">
+          <span class="ic ic-ios"></span>
+          <span>آيفون / آيباد <span class="sub">App Store</span></span>
+          <span class="arrow">←</span>
+        </a>
+        <a href="/tree">
+          <span class="ic ic-web">🌳</span>
+          <span>شجرة العائلة (الويب) <span class="sub">تصفّح من المتصفّح</span></span>
+          <span class="arrow">←</span>
+        </a>
       </div>
-    </div>
-    <!-- ===== جميع صفحات الموقع ===== -->
-    <div style="padding:4px 26px 18px;">
-      <h2 style="text-align:center;margin:0 0 12px;font-size:16px;color:#5438DC;border:none;">📄 جميع صفحات الموقع</h2>
-      <div style="display:flex;flex-wrap:wrap;gap:9px;justify-content:center;max-width:470px;margin:0 auto;">
-        <a href="/marketing.html" style="padding:9px 14px;border-radius:999px;font-size:14px;font-weight:600;text-decoration:none;color:#357DED;background:#EBF3FE;border:1px solid #cfe0fb;">📣 تعريف بالعائلة</a>
-        <a href="/tree" style="padding:9px 14px;border-radius:999px;font-size:14px;font-weight:600;text-decoration:none;color:#357DED;background:#EBF3FE;border:1px solid #cfe0fb;">🌳 شجرة الويب</a>
-        <a href="/android.html" style="padding:9px 14px;border-radius:999px;font-size:14px;font-weight:600;text-decoration:none;color:#357DED;background:#EBF3FE;border:1px solid #cfe0fb;">🤖 تحميل أندرويد</a>
-        <a href="https://apps.apple.com/app/id6759812011" style="padding:9px 14px;border-radius:999px;font-size:14px;font-weight:600;text-decoration:none;color:#357DED;background:#EBF3FE;border:1px solid #cfe0fb;">🍎 آيفون</a>
-        <a href="/cup/" style="padding:9px 14px;border-radius:999px;font-size:14px;font-weight:600;text-decoration:none;color:#357DED;background:#EBF3FE;border:1px solid #cfe0fb;">⚽ كأس العالم</a>
-        <a href="/admin-members.html" style="padding:9px 14px;border-radius:999px;font-size:14px;font-weight:600;text-decoration:none;color:#357DED;background:#EBF3FE;border:1px solid #cfe0fb;">🛡️ إدارة الأعضاء</a>
+    </section>
+
+    <section>
+      <div class="sec-title">📄 صفحات الموقع</div>
+      <div class="grid">
+        <a href="/marketing.html"><span class="e">📣</span> تعريف بالعائلة</a>
+        <a href="/tree"><span class="e">🌳</span> شجرة الويب</a>
+        <a href="/cup/"><span class="e">⚽</span> كأس العالم</a>
+        <a href="/admin-members.html"><span class="e">🛡️</span> إدارة الأعضاء</a>
+        <a href="/privacy.html"><span class="e">🔒</span> الخصوصية والشروط</a>
+        <a href="https://almohali.com"><span class="e">🏠</span> الموقع الرئيسي</a>
       </div>
-    </div>
+    </section>
 
-
-
-
-
-    <div class="body-content">
-    <div class="lang-switch">
-        <button onclick="toggleLang()" id="langBtn">English</button>
-    </div>
-
-    <!-- Arabic Content -->
-    <div id="content-ar">
-        <h2><span class="icon">📋</span> سياسة الخصوصية والشروط</h2>
-        <p>آخر تحديث: أبريل 2026</p>
-
-        <h2><span class="icon">📥</span> جمع البيانات</h2>
-        <ul>
-            <li>نجمع فقط الاسم، رقم الهاتف، تاريخ الميلاد، والصور التي تشاركها.</li>
-            <li>لا نجمع بيانات الموقع أو جهات الاتصال أو سجل التصفح.</li>
-            <li>يتم التحقق من هويتك عبر رمز OTP يُرسل لهاتفك.</li>
-        </ul>
-
-        <h2><span class="icon">🤚</span> استخدام البيانات</h2>
-        <ul>
-            <li>بياناتك تُستخدم فقط لعرض الشجرة والتواصل بين الأعضاء.</li>
-            <li>لا نبيع أو نشارك بياناتك مع أي طرف خارجي.</li>
-            <li>يمكن للمدراء فقط الاطلاع على البيانات لأغراض الإدارة.</li>
-        </ul>
-
-        <h2><span class="icon">🔒</span> التخزين والأمان</h2>
-        <ul>
-            <li>بياناتك مخزّنة على خوادم مشفرة وآمنة (Supabase).</li>
-            <li>جميع الاتصالات محمية عبر بروتوكول HTTPS.</li>
-            <li>نستخدم حماية على مستوى كل مستخدم (Row Level Security).</li>
-        </ul>
-
-        <h2><span class="icon">🗑️</span> حذف البيانات</h2>
-        <ul>
-            <li>يمكنك حذف حسابك وجميع بياناتك من الإعدادات.</li>
-            <li>عند الحذف تُزال بياناتك بالكامل من خوادمنا.</li>
-            <li>لا يمكن استرجاع البيانات بعد الحذف النهائي.</li>
-        </ul>
-
-        <h2><span class="icon">🔔</span> الإشعارات</h2>
-        <ul>
-            <li>نرسل إشعارات عن التعليقات والإعجابات والتحديثات.</li>
-            <li>تتحكّم بأنواع الإشعارات من إعدادات الخصوصية.</li>
-            <li>يمكنك تعطيل الإشعارات بالكامل من الإعدادات.</li>
-        </ul>
-
-        <h2><span class="icon">📄</span> شروط الاستخدام</h2>
-        <ul>
-            <li>التطبيق مخصص حصرياً لأفراد عائلة آل محمد علي.</li>
-            <li>يجب استخدام التطبيق بمسؤولية واحترام خصوصية الآخرين.</li>
-            <li>يحق للإدارة تجميد أو حذف الحسابات المخالفة.</li>
-            <li>باستخدامك التطبيق فأنت توافق على هذه الشروط.</li>
-        </ul>
-
-        <div class="contact">
-            📧 للتواصل: استخدم مركز التواصل داخل التطبيق
-        </div>
-    </div>
-
-    <!-- English Content -->
-    <div id="content-en" class="en hidden">
-        <h2><span class="icon">📋</span> Privacy Policy & Terms</h2>
-        <p>Last updated: April 2026</p>
-
-        <h2><span class="icon">📥</span> Data Collection</h2>
-        <ul>
-            <li>We only collect your name, phone number, birth date, and photos you share.</li>
-            <li>We do not collect location data, contacts, or browsing history.</li>
-            <li>Your identity is verified via an OTP code sent to your phone.</li>
-        </ul>
-
-        <h2><span class="icon">🤚</span> Data Usage</h2>
-        <ul>
-            <li>Your data is only used for the family tree and member communication.</li>
-            <li>We never sell or share your data with third parties.</li>
-            <li>Only admins can view data for management purposes.</li>
-        </ul>
-
-        <h2><span class="icon">🔒</span> Storage & Security</h2>
-        <ul>
-            <li>Your data is stored on encrypted and secure servers (Supabase).</li>
-            <li>All connections are protected via HTTPS protocol.</li>
-            <li>We apply per-user level data protection (Row Level Security).</li>
-        </ul>
-
-        <h2><span class="icon">🗑️</span> Data Deletion</h2>
-        <ul>
-            <li>You can delete your account and all data from Settings.</li>
-            <li>Upon deletion, all your data is fully removed from our servers.</li>
-            <li>Data cannot be recovered after permanent deletion.</li>
-        </ul>
-
-        <h2><span class="icon">🔔</span> Notifications</h2>
-        <ul>
-            <li>We send alerts for comments, likes, and updates.</li>
-            <li>Control notification types from Privacy settings.</li>
-            <li>You can fully disable notifications from Settings.</li>
-        </ul>
-
-        <h2><span class="icon">📄</span> Terms of Use</h2>
-        <ul>
-            <li>The app is exclusively for Al-Mohammad Ali family members.</li>
-            <li>Use the app responsibly and respect others' privacy.</li>
-            <li>Admins may freeze or delete accounts that violate policies.</li>
-            <li>By using the app, you agree to these terms.</li>
-        </ul>
-
-        <div class="contact">
-            📧 Contact: Use the Contact Center inside the app
-        </div>
-    </div>
-
-    <div class="footer">
-        &copy; 2026 almohammad ali. All rights reserved.
-    </div>
-    </div><!-- end body-content -->
-</div>
-
-<script>
-    let isArabic = true;
-    function toggleLang() {
-        isArabic = !isArabic;
-        document.getElementById('content-ar').classList.toggle('hidden');
-        document.getElementById('content-en').classList.toggle('hidden');
-        document.getElementById('subtitle-ar').classList.toggle('hidden');
-        document.getElementById('subtitle-en').classList.toggle('hidden');
-        document.getElementById('langBtn').textContent = isArabic ? 'English' : 'العربية';
-        document.body.querySelector('.container').style.direction = isArabic ? 'rtl' : 'ltr';
-    }
-</script>
-
+    <footer>
+      <div class="fl">
+        <a href="/privacy.html">سياسة الخصوصية</a>
+        <a href="/privacy.html">شروط الاستخدام</a>
+        <a href="mailto:kw.hasn@gmail.com">تواصل</a>
+      </div>
+      © 2026 عائلة المحمدعلي · صُنع بحبّ للعائلة
+    </footer>
+  </div>
 </body>
 </html>
