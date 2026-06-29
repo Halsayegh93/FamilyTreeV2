@@ -340,6 +340,17 @@ body { direction: rtl; }
   background: linear-gradient(120deg, var(--primary), var(--primary2));
   color: #fff; border-color: transparent;
 }
+/* Standalone "previous matches" button (full width, on its own row) */
+.past-btn {
+  width: 100%; margin: 2px 0 14px; padding: 12px; cursor: pointer;
+  font-family: inherit; font-size: 14px; font-weight: 800;
+  border-radius: 14px; border: 1px solid var(--border);
+  background: var(--surface2); color: var(--text); transition: .15s;
+}
+.past-btn.active {
+  background: linear-gradient(120deg, var(--primary), var(--primary2));
+  color: #fff; border-color: transparent;
+}
 
 .favpick {
   margin-top: 10px; text-align: center; font-size: 13px; font-weight: 700;
