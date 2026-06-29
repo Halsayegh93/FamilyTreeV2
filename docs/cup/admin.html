@@ -37,17 +37,23 @@
         </div>
         <select id="ap-match" class="ap-sel"></select>
         <input id="ap-name" class="ap-name" placeholder="اسم اللاعب" />
-        <div class="match" style="margin-top:10px">
-          <input class="r-home" id="ap-home" type="number" min="0" max="99" inputmode="numeric" placeholder="0" />
-          <span class="dash">-</span>
-          <input class="r-away" id="ap-away" type="number" min="0" max="99" inputmode="numeric" placeholder="0" />
+        <div class="match" style="margin-top:12px">
+          <div class="team home"><span class="name" id="ap-hteam">—</span></div>
+          <div class="scorebox">
+            <input class="r-home" id="ap-home" type="number" min="0" max="99" inputmode="numeric" placeholder="0" />
+            <span class="dash">-</span>
+            <input class="r-away" id="ap-away" type="number" min="0" max="99" inputmode="numeric" placeholder="0" />
+          </div>
+          <div class="team away"><span class="name" id="ap-ateam">—</span></div>
         </div>
         <div id="ap-pen" style="display:none;margin-top:10px;text-align:center;font-size:13px;color:var(--muted)">
-          تعادل — نتيجة ركلات الترجيح
-          <div style="display:flex;gap:6px;align-items:center;justify-content:center;margin-top:6px">
+          🥅 نتيجة ركلات الترجيح
+          <div style="display:flex;gap:8px;align-items:center;justify-content:center;margin-top:6px">
+            <span id="ap-hteam2" style="font-weight:800;color:var(--text);flex:1;text-align:left">—</span>
             <input id="ap-penh" type="number" min="0" max="99" inputmode="numeric" value="" style="width:48px;text-align:center" />
             <span>-</span>
             <input id="ap-pena" type="number" min="0" max="99" inputmode="numeric" value="" style="width:48px;text-align:center" />
+            <span id="ap-ateam2" style="font-weight:800;color:var(--text);flex:1;text-align:right">—</span>
           </div>
         </div>
         <button class="btn" id="ap-save" style="margin-top:12px">➕ إضافة التوقّع</button>
@@ -311,6 +317,16 @@
         ? opts.map((m) => `<option value="${m.id}">${esc(roundLabel(m.round))} — ${esc(m.home_team)} × ${esc(m.away_team)}</option>`).join('')
         : '<option value="">ما في مباريات متاحة</option>';
       if (prev && opts.some((m) => String(m.id) === prev)) sel.value = prev;
+      updateApTeams();
+    }
+
+    // reflect the selected match's team names beside the score & penalty boxes
+    function updateApTeams() {
+      const m = matches.find((x) => x.id === +$('#ap-match').value);
+      const hn = (m && m.home_team) || '—';
+      const an = (m && m.away_team) || '—';
+      $('#ap-hteam').textContent = hn;  $('#ap-ateam').textContent = an;
+      $('#ap-hteam2').textContent = hn; $('#ap-ateam2').textContent = an;
     }
 
     function setupAddPred() {
@@ -321,6 +337,7 @@
       };
       h.addEventListener('input', refresh);
       a.addEventListener('input', refresh);
+      $('#ap-match').addEventListener('change', updateApTeams);
       refresh();
       $('#ap-save').onclick = async (ev) => {
         const id = +$('#ap-match').value;
