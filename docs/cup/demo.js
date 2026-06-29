@@ -117,13 +117,14 @@ function seedMatches() {
 }
 
 function seedPredictions() {
-  const p = (match_id, player_name, h, a) =>
-    ({ match_id, player_name, home_score: h, away_score: a });
+  // pen = penalty qualifier pick on a drawn prediction ('home' | 'away' | null)
+  const p = (match_id, player_name, h, a, pen = null) =>
+    ({ match_id, player_name, home_score: h, away_score: a, pen_pick: (h === a ? pen : null) });
   return [
-    p(1, 'حسن', 3, 1), p(2, 'حسن', 2, 1), p(3, 'حسن', 1, 1), p(4, 'حسن', 1, 1), p(5, 'حسن', 2, 0),
-    p(1, 'عبدالله', 2, 1), p(2, 'عبدالله', 2, 0), p(3, 'عبدالله', 0, 0), p(4, 'عبدالله', 0, 2),
-    p(1, 'فهد', 1, 0), p(2, 'فهد', 3, 1), p(3, 'فهد', 2, 1), p(4, 'فهد', 0, 1), p(5, 'فهد', 1, 1),
-    p(1, 'سارة', 3, 1), p(2, 'سارة', 1, 0), p(3, 'سارة', 1, 1), p(4, 'سارة', 0, 2),
+    p(1, 'حسن', 3, 1), p(2, 'حسن', 2, 1), p(3, 'حسن', 1, 1, 'home'), p(4, 'حسن', 1, 1, 'away'), p(5, 'حسن', 2, 0),
+    p(1, 'عبدالله', 2, 1), p(2, 'عبدالله', 2, 0), p(3, 'عبدالله', 0, 0, 'away'), p(4, 'عبدالله', 0, 2),
+    p(1, 'فهد', 1, 0), p(2, 'فهد', 3, 1), p(3, 'فهد', 2, 1), p(4, 'فهد', 0, 1), p(5, 'فهد', 1, 1, 'home'),
+    p(1, 'سارة', 3, 1), p(2, 'سارة', 1, 0), p(3, 'سارة', 1, 1, 'home'), p(4, 'سارة', 0, 2),
   ];
 }
 
@@ -151,15 +152,17 @@ export const demo = {
     return this.predictions().filter((p) => p.player_name === name);
   },
 
-  submit(matchId, name, h, a) {
+  submit(matchId, name, h, a, penPick = null) {
     const m = this.matches().find((x) => x.id === matchId);
     if (m && (m.finished || m.locked)) throw new Error('MATCH_LOCKED');
+    // penalty qualifier pick is only meaningful when the predicted score is a draw
+    const pen = (h === a) ? (penPick || null) : null;
     const preds = this.predictions();
     const ex = preds.find((p) => p.match_id === matchId && p.player_name === name);
-    if (ex) { ex.home_score = h; ex.away_score = a; ex.pick = null; }
-    else preds.push({ match_id: matchId, player_name: name, home_score: h, away_score: a, pick: null });
+    if (ex) { ex.home_score = h; ex.away_score = a; ex.pick = null; ex.pen_pick = pen; }
+    else preds.push({ match_id: matchId, player_name: name, home_score: h, away_score: a, pick: null, pen_pick: pen });
     writeStore(PKEY, preds);
-    return { match_id: matchId, player_name: name, home_score: h, away_score: a };
+    return { match_id: matchId, player_name: name, home_score: h, away_score: a, pen_pick: pen };
   },
 
   submitWinner(matchId, name, pick) {
@@ -168,8 +171,8 @@ export const demo = {
     if (pick !== 'home' && pick !== 'away') throw new Error('INVALID_PICK');
     const preds = this.predictions();
     const ex = preds.find((p) => p.match_id === matchId && p.player_name === name);
-    if (ex) { ex.home_score = null; ex.away_score = null; ex.pick = pick; }
-    else preds.push({ match_id: matchId, player_name: name, home_score: null, away_score: null, pick });
+    if (ex) { ex.home_score = null; ex.away_score = null; ex.pick = pick; ex.pen_pick = null; }
+    else preds.push({ match_id: matchId, player_name: name, home_score: null, away_score: null, pick, pen_pick: null });
     writeStore(PKEY, preds);
     return { match_id: matchId, player_name: name, pick };
   },
