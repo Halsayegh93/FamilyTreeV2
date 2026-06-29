@@ -358,6 +358,14 @@ body { direction: rtl; }
   border: 1px solid var(--border); background: var(--surface);
 }
 .pp-input.manual { border-color: var(--primary); color: var(--primary); }
+/* Admin: add-prediction form (started matches) */
+.ap-sel, .ap-name {
+  width: 100%; font-family: inherit; font-size: 15px; font-weight: 700;
+  padding: 11px; border-radius: 12px; background: var(--surface);
+  border: 1px solid var(--border); color: var(--text);
+}
+.ap-name { margin-top: 10px; }
+.ap-sel:focus, .ap-name:focus { border-color: var(--primary); outline: none; }
 .pp-note { font-size: 12px; color: var(--muted); margin-top: 6px; text-align: center; }
 
 .predictors { margin-top: 12px; }

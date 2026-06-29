@@ -2,7 +2,7 @@
 // Shared logic: Supabase client, scoring, data loading.
 // ============================================================================
 import { SUPABASE_URL, SUPABASE_ANON_KEY, POINTS } from './config.js?v=4';
-import { demo } from './demo.js?v=6';
+import { demo } from './demo.js?v=7';
 
 export { POINTS };
 
@@ -249,6 +249,21 @@ export async function adminDeletePlayer(name, pin) {
   return data;
 }
 
+// Admin: add/replace a prediction for a player on a started (not finished) match.
+export async function adminAddPrediction(matchId, name, home, away, pin, penHome = null, penAway = null) {
+  if (DEMO) {
+    if (pin !== '1993') throw new Error('BAD_PIN');
+    return demo.addPrediction(matchId, name, home, away, penHome, penAway);
+  }
+  const sb = await client();
+  const { data, error } = await sb.rpc('wc_admin_add_prediction', {
+    p_match_id: matchId, p_name: name, p_home: home, p_away: away, p_pin: pin,
+    p_pen_home: penHome, p_pen_away: penAway,
+  });
+  if (error) throw error;
+  return data;
+}
+
 // Admin: delete a single player's prediction for one match (lets them re-predict).
 export async function adminDeletePrediction(matchId, name, pin) {
   if (DEMO) {
@@ -328,6 +343,7 @@ export function buildLeaderboard(matches, predictions) {
 // Friendly Arabic error messages for RPC failures -----------------------------
 export function friendlyError(err) {
   const msg = (err && err.message) || String(err);
+  if (msg.includes('MATCH_FINISHED')) return 'المباراة خلصت — ما يمكن إضافة توقّع';
   if (msg.includes('MATCH_LOCKED'))   return 'انتهى وقت التوقع لهذه المباراة 🔒';
   if (msg.includes('NAME_REQUIRED'))  return 'اكتب اسمك أول';
   if (msg.includes('INVALID_SCORE'))  return 'النتيجة غير صحيحة';

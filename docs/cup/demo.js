@@ -232,6 +232,22 @@ export const demo = {
     return 1;
   },
 
+  addPrediction(matchId, name, h, a, penHome = null, penAway = null) {
+    const m = this.matches().find((x) => x.id === matchId);
+    if (!m) throw new Error('MATCH_NOT_FOUND');
+    if (m.finished) throw new Error('MATCH_FINISHED');   // admin bypasses lock, not result
+    let ph = null, pa = null, pen = null;
+    if (h === a && penHome != null && penAway != null && penHome !== penAway) {
+      ph = penHome; pa = penAway; pen = penHome > penAway ? 'home' : 'away';
+    }
+    const preds = this.predictions();
+    const ex = preds.find((p) => p.match_id === matchId && p.player_name === String(name).trim());
+    if (ex) { ex.home_score = h; ex.away_score = a; ex.pick = null; ex.pen_pick = pen; ex.pen_home = ph; ex.pen_away = pa; }
+    else preds.push({ match_id: matchId, player_name: String(name).trim(), home_score: h, away_score: a, pick: null, pen_pick: pen, pen_home: ph, pen_away: pa });
+    writeStore(PKEY, preds);
+    return { match_id: matchId, player_name: name };
+  },
+
   deletePrediction(matchId, name) {
     const nm = String(name).trim();
     const preds = this.predictions().filter(
