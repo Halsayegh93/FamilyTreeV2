@@ -310,7 +310,7 @@
             <span class="name ${m.away_team ? '' : 'tbd'}">${esc(away)}</span>
           </div>
         </div>
-        ${(m.home_pen != null && m.away_pen != null) ? `<div class="venue-line" style="text-align:center">🥅 ركلات الترجيح: ${m.home_pen} - ${m.away_pen}</div>` : ''}
+        ${(m.home_pen != null && m.away_pen != null) ? `<div class="venue-line" style="text-align:center">🥅 ركلات الترجيح: ${m.home_pen} - ${m.away_pen} ${esc((m.home_pen > m.away_pen ? m.home_team : m.away_team) || '')}</div>` : ''}
         <div class="card-actions">
           <button class="btn save-result">💾 تحديث النتيجة (تُحسب النقاط)</button>
           <button class="btn ghost reopen" style="margin-top:8px">♻️ مسح النتيجة وإعادة الفتح</button>
