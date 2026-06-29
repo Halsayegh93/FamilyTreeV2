@@ -78,8 +78,11 @@ export function scoreRow(p, m) {
   if (p && p.manual_points != null) return p.manual_points;   // admin override
   if (p && p.pick) {
     const diff = Math.sign((m.home_score ?? 0) - (m.away_score ?? 0));
-    if (diff === 0) return 0;            // draw -> winner-only pick can't win
-    const winSide = diff > 0 ? 'home' : 'away';
+    let winSide = diff > 0 ? 'home' : diff < 0 ? 'away' : null;
+    // تعادل محسوم بركلات الترجيح -> الفائز بالركلات (توقّع المتأهّل)
+    if (!winSide && m.home_pen != null && m.away_pen != null && m.home_pen !== m.away_pen)
+      winSide = m.home_pen > m.away_pen ? 'home' : 'away';
+    if (!winSide) return 0;              // تعادل بلا حسم -> توقّع الفائز ما ياخذ نقطة
     return p.pick === winSide ? POINTS.winner : 0;
   }
   return scorePrediction(p.home_score, p.away_score, m.home_score, m.away_score);
