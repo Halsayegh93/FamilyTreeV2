@@ -353,6 +353,13 @@ body { direction: rtl; }
 }
 /* Match number on each card's meta row */
 .meta .mno { font-size: 11px; font-weight: 800; color: var(--muted); }
+/* Admin: collapsible day groups (tap the day header to hide its matches) */
+.day-group { margin: 0; }
+.day-group > summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 8px; }
+.day-group > summary::-webkit-details-marker { display: none; }
+.day-group > summary::after { content: '▾'; margin-inline-start: auto; color: var(--muted); font-size: 13px; transition: transform .15s; }
+.day-group:not([open]) > summary::after { transform: rotate(-90deg); }
+.day-group .day-count { font-size: 12px; color: var(--muted); font-weight: 700; }
 /* Predictors list — one player per row (name vs prediction) */
 .pred-rows { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
 .pred-row {
