@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>لوحة التحكم — جماهير مباريات كأس العالم الرميثية</title>
-  <link rel="stylesheet" href="styles.css?v=13" />
+  <link rel="stylesheet" href="styles.css?v=14" />
 </head>
 <body>
   <div class="wrap">
@@ -427,8 +427,10 @@
         }
         let html = upcoming.length
           ? [...days.values()].map((day) =>
-              `<div class="round-title day">📅 ${esc(day.label)}</div>` +
-              day.items.map(adminCard).join('')).join('')
+              `<details class="day-group" open>
+                <summary class="round-title day">📅 ${esc(day.label)} <span class="day-count">(${day.items.length})</span></summary>
+                ${day.items.map(adminCard).join('')}
+              </details>`).join('')
           : '<div class="empty">ما في مباريات قادمة.</div>';
 
         // entered results / finished matches — shown open so the admin sees the
