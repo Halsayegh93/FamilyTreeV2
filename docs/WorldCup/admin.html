@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>لوحة التحكم — جماهير مباريات كأس العالم الرميثية</title>
-  <link rel="stylesheet" href="styles.css?v=14" />
+  <link rel="stylesheet" href="styles.css?v=16" />
 </head>
 <body>
   <div class="wrap">
@@ -216,12 +216,17 @@
         ? new Date(m.kickoff).toLocaleString('ar', { dateStyle: 'medium', timeStyle: 'short' })
         : '';
       return `<div class="card" data-id="${m.id}">
-        <div class="meta">
-          <span><b>${esc(roundLabel(m.round))}</b> — مباراة ${m.match_no}</span>
-          ${finished ? '<span class="badge done">منتهية</span>'
-                     : (m.locked ? '<span class="badge locked">مغلقة</span>'
-                                 : '<span class="badge live">مفتوحة</span>')}
-        </div>
+        <details class="match-fold">
+          <summary class="match-sum">
+            <span class="ms-no">م${m.id}</span>
+            <span class="ms-teams">${esc(home)} <span class="ms-x">×</span> ${esc(away)}</span>
+            ${finished ? '<span class="badge done">منتهية</span>'
+                       : (m.locked ? '<span class="badge locked">مغلقة</span>'
+                                   : '<span class="badge live">مفتوحة</span>')}
+          </summary>
+          <div class="meta" style="margin-top:8px">
+            <span><b>${esc(roundLabel(m.round))}</b> — مباراة ${m.match_no}</span>
+          </div>
         ${kickoff ? `<div class="venue-line">🗓️ ${esc(kickoff)}</div>` : ''}
 
         <div class="match">
@@ -275,6 +280,7 @@
         </details>
 
         ${predictorsBlock(m)}
+        </details>
       </div>`;
     }
 
