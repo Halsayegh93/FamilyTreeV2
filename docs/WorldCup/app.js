@@ -60,9 +60,16 @@ function flagCode(s) {
 }
 
 // Flag element: a real <img> when we can resolve a country code, else the emoji.
+// flagcdn doesn't carry the UK subdivisions (England/Scotland/Wales/N.Ireland),
+// so those use the flag-icons set on jsDelivr instead.
 export function flagHTML(emoji) {
   const code = flagCode(emoji);
-  if (code) return `<img class="flag-img" src="https://flagcdn.com/${code}.svg" alt="" loading="lazy" />`;
+  if (code) {
+    const src = code.includes('-')
+      ? `https://cdn.jsdelivr.net/npm/flag-icons@7/flags/4x3/${code}.svg`
+      : `https://flagcdn.com/${code}.svg`;
+    return `<img class="flag-img" src="${src}" alt="" loading="lazy" />`;
+  }
   const e = String(emoji ?? '').replace(/[&<>"]/g, (c) =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   return `<span class="flag">${e || '⚽️'}</span>`;
