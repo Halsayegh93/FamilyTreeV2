@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>لوحة التحكم — جماهير مباريات كأس العالم الرميثية</title>
-  <link rel="stylesheet" href="styles.css?v=12" />
+  <link rel="stylesheet" href="styles.css?v=13" />
 </head>
 <body>
   <div class="wrap">
@@ -48,13 +48,10 @@
           <div class="team away"><span class="name" id="ap-ateam">—</span></div>
         </div>
         <div id="ap-pen" style="display:none;margin-top:10px;text-align:center;font-size:13px;color:var(--muted)">
-          🥅 نتيجة ركلات الترجيح
-          <div style="display:flex;gap:8px;align-items:center;justify-content:center;margin-top:6px">
-            <span id="ap-hteam2" style="font-weight:800;color:var(--text);flex:1;text-align:left">—</span>
-            <input id="ap-penh" type="number" min="0" max="99" inputmode="numeric" value="" style="width:48px;text-align:center" />
-            <span>-</span>
-            <input id="ap-pena" type="number" min="0" max="99" inputmode="numeric" value="" style="width:48px;text-align:center" />
-            <span id="ap-ateam2" style="font-weight:800;color:var(--text);flex:1;text-align:right">—</span>
+          🥅 منو يتأهّل بالركلات؟
+          <div class="penpick-opts" style="margin-top:6px">
+            <button type="button" class="pensel" id="ap-penh" data-pen="home">—</button>
+            <button type="button" class="pensel" id="ap-pena" data-pen="away">—</button>
           </div>
         </div>
         <button class="btn" id="ap-save" style="margin-top:12px">➕ إضافة التوقّع</button>
@@ -119,8 +116,8 @@
         let s = `${p.home_score}-${p.away_score}`;
         const d = Math.sign((p.home_score || 0) - (p.away_score || 0));
         if (d !== 0) s += ` 🏆${esc((d > 0 ? m.home_team : m.away_team) || '')}`;
-        else if (p.pen_home != null && p.pen_away != null) s = `🥅${p.pen_home}-${p.pen_away} ${esc((p.pen_home > p.pen_away ? m.home_team : m.away_team) || '')}`;
         else if (p.pen_pick) s = `🥅${esc((p.pen_pick === 'home' ? m.home_team : m.away_team) || '')}`;
+        else if (p.pen_home != null && p.pen_away != null) s = `🥅${esc((p.pen_home > p.pen_away ? m.home_team : m.away_team) || '')}`;
         return s;
       };
 
@@ -338,24 +335,32 @@
       updateApTeams();
     }
 
-    // reflect the selected match's team names beside the score & penalty boxes
+    // reflect the selected match's team names on the score row & penalty buttons
     function updateApTeams() {
       const m = matches.find((x) => x.id === +$('#ap-match').value);
       const hn = (m && m.home_team) || '—';
       const an = (m && m.away_team) || '—';
       $('#ap-hteam').textContent = hn;  $('#ap-ateam').textContent = an;
-      $('#ap-hteam2').textContent = hn; $('#ap-ateam2').textContent = an;
+      $('#ap-penh').textContent = hn;   $('#ap-pena').textContent = an;
     }
 
+    let apPenPick = '';   // selected penalty winner in the add-prediction form
     function setupAddPred() {
       const h = $('#ap-home'), a = $('#ap-away'), penWrap = $('#ap-pen');
       const refresh = () => {
         const draw = h.value !== '' && a.value !== '' && +h.value === +a.value;
         penWrap.style.display = draw ? '' : 'none';
+        if (!draw) { apPenPick = ''; penWrap.querySelectorAll('.pensel').forEach((b) => b.classList.remove('saved')); }
       };
       h.addEventListener('input', refresh);
       a.addEventListener('input', refresh);
       $('#ap-match').addEventListener('change', updateApTeams);
+      penWrap.querySelectorAll('.pensel').forEach((pb) => {
+        pb.onclick = () => {
+          apPenPick = pb.dataset.pen;
+          penWrap.querySelectorAll('.pensel').forEach((b) => b.classList.toggle('saved', b === pb));
+        };
+      });
       refresh();
       $('#ap-save').onclick = async (ev) => {
         const id = +$('#ap-match').value;
@@ -366,18 +371,16 @@
         if (hh === '' || aa === '') { toast('اكتب النتيجة للفريقين', true); return; }
         let penH = null, penA = null;
         if (+hh === +aa) {
-          const ph = $('#ap-penh').value, pa = $('#ap-pena').value;
-          penH = ph !== '' ? +ph : null;
-          penA = pa !== '' ? +pa : null;
-          if (penH == null || penA == null) { toast('تعادل — اكتب نتيجة ركلات الترجيح', true); return; }
-          if (penH === penA) { toast('ركلات الترجيح ما تنتهي بالتعادل', true); return; }
+          if (!apPenPick) { toast('تعادل — اختر منو يتأهّل بالركلات', true); return; }
+          penH = apPenPick === 'home' ? 1 : 0;
+          penA = apPenPick === 'home' ? 0 : 1;
         }
         const btn = ev.currentTarget; btn.disabled = true;
         try {
           await adminAddPrediction(id, name, +hh, +aa, PIN, penH, penA);
           toast('انضاف التوقّع ✅');
           $('#ap-name').value = ''; h.value = ''; a.value = '';
-          $('#ap-penh').value = ''; $('#ap-pena').value = '';
+          apPenPick = ''; penWrap.querySelectorAll('.pensel').forEach((b) => b.classList.remove('saved'));
           refresh();
           loadList();
         } catch (e) { toast(friendlyError(e), true); }
