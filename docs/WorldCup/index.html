@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
   <title>جماهير مباريات كأس العالم الرميثية 🏆</title>
-  <link rel="stylesheet" href="styles.css?v=17" />
+  <link rel="stylesheet" href="styles.css?v=18" />
 </head>
 <body>
   <div class="wrap">
@@ -43,8 +43,8 @@
     import {
       isConfigured, loadMatches, loadPredictions, loadMyPredictions,
       submitPrediction, submitWinner, buildLeaderboard, scorePrediction,
-      scoreRow, isLocked, roundLabel, matchDay, ROUNDS, friendlyError, POINTS, watch,
-    } from './app.js?v=17';
+      scoreRow, isLocked, roundLabel, matchDay, flagHTML, ROUNDS, friendlyError, POINTS, watch,
+    } from './app.js?v=18';
 
     const $ = (s, r = document) => r.querySelector(s);
     const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) =>
@@ -137,7 +137,7 @@
     function teamHTML(name, flag, side) {
       const tbd = !name;
       return `<div class="team ${side}">
-        <span class="flag">${flag ? esc(flag) : '⚽️'}</span>
+        ${flagHTML(flag)}
         <span class="name ${tbd ? 'tbd' : ''}">${tbd ? 'غير محدّد' : esc(name)}</span>
       </div>`;
     }

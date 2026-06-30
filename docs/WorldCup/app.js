@@ -46,6 +46,28 @@ export function matchDay(kickoff) {
   return new Date(kickoff);
 }
 
+// Map a flag emoji to a flagcdn country code so flags render as real images and
+// look identical on every device (incl. England/Scotland/Wales, which many
+// platforms show as a plain black flag). Returns null if it's not a flag emoji.
+function flagCode(s) {
+  if (!s) return null;
+  const cps = [...String(s)].map((c) => c.codePointAt(0));
+  const ri = cps.filter((cp) => cp >= 0x1F1E6 && cp <= 0x1F1FF);   // 🇦..🇿
+  if (ri.length >= 2) return String.fromCharCode(ri[0] - 0x1F1E6 + 97, ri[1] - 0x1F1E6 + 97);
+  const tags = cps.filter((cp) => cp >= 0xE0061 && cp <= 0xE007A)   // subdivision tag letters
+                  .map((cp) => String.fromCharCode(cp - 0xE0000)).join('');
+  return ({ gbeng: 'gb-eng', gbsct: 'gb-sct', gbwls: 'gb-wls', gbnir: 'gb-nir' })[tags] || null;
+}
+
+// Flag element: a real <img> when we can resolve a country code, else the emoji.
+export function flagHTML(emoji) {
+  const code = flagCode(emoji);
+  if (code) return `<img class="flag-img" src="https://flagcdn.com/${code}.svg" alt="" loading="lazy" />`;
+  const e = String(emoji ?? '').replace(/[&<>"]/g, (c) =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  return `<span class="flag">${e || '⚽️'}</span>`;
+}
+
 // Is a match closed for predictions? ------------------------------------------
 export function isLocked(match) {
   if (!match) return true;
