@@ -1,7 +1,7 @@
 // ============================================================================
 // Shared logic: Supabase client, scoring, data loading.
 // ============================================================================
-import { SUPABASE_URL, SUPABASE_ANON_KEY, POINTS } from './config.js?v=6';
+import { SUPABASE_URL, SUPABASE_ANON_KEY, POINTS } from './config.js?v=7';
 import { demo } from './demo.js?v=7';
 
 export { POINTS };
@@ -56,21 +56,26 @@ export function isLocked(match) {
 
 // Score the match result on the regular-time score (before penalties):
 //   5 -> exact score
-//   3 -> correct outcome (right winner OR a draw), score not exact
+//   3 -> correct winner + the winning team's goals, OR a correct (non-exact) draw
+//   1 -> correct winner only (score wrong)
 //   0 -> wrong outcome
 export function scorePrediction(predHome, predAway, actHome, actAway) {
   if (predHome == null || predAway == null || actHome == null || actAway == null) {
     return 0;
   }
-  if (predHome === actHome && predAway === actAway) return POINTS.exact;
+  if (predHome === actHome && predAway === actAway) return POINTS.exact;   // 5
   const po = Math.sign(predHome - predAway);
   const ao = Math.sign(actHome - actAway);
-  return po === ao ? POINTS.outcome : 0;   // same outcome (winner side or draw) -> 3
+  if (po !== ao) return 0;                  // wrong outcome
+  if (ao === 0) return POINTS.draw;         // correct draw, not exact -> 3
+  const winnerActual = Math.max(actHome, actAway);
+  const winnerPred = actHome > actAway ? predHome : predAway;
+  return winnerPred === winnerActual ? POINTS.winnerScore : POINTS.winner;   // 3 or 1
 }
 
 // Score one prediction ROW against a match (handles winner-only picks) ---------
 //   - a winner-only pick ({pick:'home'|'away'}) scores 1 if that side won, else 0
-//   - a full score row is scored with scorePrediction (1 = correct outcome, else 0)
+//   - a full score row is scored with scorePrediction (5 / 3 / 1 / 0)
 export function scoreRow(p, m) {
   if (!m || !m.finished) return 0;
   if (p && p.manual_points != null) return p.manual_points;   // admin override
@@ -81,11 +86,11 @@ export function scoreRow(p, m) {
     if (!winSide && m.home_pen != null && m.away_pen != null && m.home_pen !== m.away_pen)
       winSide = m.home_pen > m.away_pen ? 'home' : 'away';
     if (!winSide) return 0;              // تعادل بلا حسم -> توقّع الفائز ما ياخذ نقطة
-    return p.pick === winSide ? POINTS.outcome : 0;
+    return p.pick === winSide ? POINTS.winner : 0;
   }
-  // match-result points (5 / 3 / 0) on the regular-time score
+  // match-result points (5 / 3 / 1 / 0) on the regular-time score
   let pts = scorePrediction(p.home_score, p.away_score, m.home_score, m.away_score);
-  // +1 only if the match actually went to penalties, the player predicted a draw,
+  // +2 only if the match actually went to penalties, the player predicted a draw,
   // and named the correct penalty winner
   if (m.home_pen != null && m.away_pen != null && m.home_pen !== m.away_pen
       && p.home_score != null && p.home_score === p.away_score
