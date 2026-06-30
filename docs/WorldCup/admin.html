@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>لوحة التحكم — جماهير مباريات كأس العالم الرميثية</title>
-  <link rel="stylesheet" href="styles.css?v=17" />
+  <link rel="stylesheet" href="styles.css?v=18" />
 </head>
 <body>
   <div class="wrap">
@@ -80,8 +80,8 @@
     import {
       loadMatches, loadPredictions, roundLabel, ROUNDS, friendlyError,
       adminVerifyPin, adminSetResult, adminSaveMatch, adminReset,
-      adminDeletePlayer, adminDeletePrediction, adminAddPrediction, adminReopenMatch, adminSetPoints, scoreRow, matchDay, watch,
-    } from './app.js?v=17';
+      adminDeletePlayer, adminDeletePrediction, adminAddPrediction, adminReopenMatch, adminSetPoints, scoreRow, matchDay, flagHTML, watch,
+    } from './app.js?v=18';
 
     const $ = (s, r = document) => r.querySelector(s);
     const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) =>
@@ -231,7 +231,7 @@
 
         <div class="match">
           <div class="team home">
-            <span class="flag">${esc(m.home_flag || '⚽️')}</span>
+            ${flagHTML(m.home_flag)}
             <span class="name ${m.home_team ? '' : 'tbd'}">${esc(home)}</span>
           </div>
           <div class="scorebox">
@@ -242,7 +242,7 @@
               value="${m.away_score ?? ''}" />
           </div>
           <div class="team away">
-            <span class="flag">${esc(m.away_flag || '⚽️')}</span>
+            ${flagHTML(m.away_flag)}
             <span class="name ${m.away_team ? '' : 'tbd'}">${esc(away)}</span>
           </div>
         </div>
@@ -301,7 +301,7 @@
         </div>
         <div class="match">
           <div class="team home">
-            <span class="flag">${esc(m.home_flag || '⚽️')}</span>
+            ${flagHTML(m.home_flag)}
             <span class="name ${m.home_team ? '' : 'tbd'}">${esc(home)}</span>
           </div>
           <div class="scorebox">
@@ -312,7 +312,7 @@
               value="${m.away_score ?? ''}" />
           </div>
           <div class="team away">
-            <span class="flag">${esc(m.away_flag || '⚽️')}</span>
+            ${flagHTML(m.away_flag)}
             <span class="name ${m.away_team ? '' : 'tbd'}">${esc(away)}</span>
           </div>
         </div>
