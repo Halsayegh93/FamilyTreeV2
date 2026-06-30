@@ -44,7 +44,7 @@
       isConfigured, loadMatches, loadPredictions, loadMyPredictions,
       submitPrediction, submitWinner, buildLeaderboard, scorePrediction,
       scoreRow, isLocked, roundLabel, matchDay, ROUNDS, friendlyError, POINTS, watch,
-    } from './app.js?v=16';
+    } from './app.js?v=17';
 
     const $ = (s, r = document) => r.querySelector(s);
     const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) =>
@@ -491,9 +491,14 @@
               <span class="rule-ex">تضبط عدد أهداف الفريقين. مثال: انتهت 2-1 وتوقّعك 2-1.</span></div>
           </div>
           <div class="rule">
-            <span class="rule-pts">${POINTS.outcome}<small>نقاط</small></span>
-            <div><b>مسار المباراة صحيح</b><br>
-              <span class="rule-ex">تضبط الفائز الصحيح أو التعادل، بدون نتيجة دقيقة. مثال: انتهت 2-1 وتوقّعك 3-1، أو انتهت 1-1 وتوقّعك 2-2.</span></div>
+            <span class="rule-pts">${POINTS.winnerScore}<small>نقاط</small></span>
+            <div><b>الفائز + عدد أهدافه، أو تعادل صحيح</b><br>
+              <span class="rule-ex">تضبط الفريق الفائز وعدد أهدافه (الخاسر غلط)، مثال: 3-1 وتوقّعك 3-0. أو توقّعت تعادل وصار تعادل بنتيجة مختلفة (1-1 والنتيجة 2-2).</span></div>
+          </div>
+          <div class="rule">
+            <span class="rule-pts">${POINTS.winner}<small>نقطة</small></span>
+            <div><b>الفريق الفائز فقط</b><br>
+              <span class="rule-ex">تضبط الفائز بدون نتيجته الصحيحة. مثال: انتهت 3-1 وتوقّعك 2-1.</span></div>
           </div>
           <div class="rule">
             <span class="rule-pts">+${POINTS.penWinner}<small>نقطة</small></span>
@@ -509,8 +514,8 @@
         <div class="notice" style="margin-top:14px">
           🥅 ركلات الترجيح:<br>
           • لازم تتوقّع <b>التعادل</b> قبل الركلات عشان تستحق نقطة الركلات.<br>
-          • نقطة الركلات تُضاف فقط إذا وصلت المباراة فعلاً للركلات.<br>
-          • أعلى نقاط: مباراة عادية <b>5</b>، ومباراة فيها ركلات <b>6</b>.<br>
+          • نقطة الركلات (+${POINTS.penWinner}) تُضاف فقط إذا وصلت المباراة فعلاً للركلات.<br>
+          • أعلى نقاط: مباراة عادية <b>5</b>، ومباراة فيها ركلات <b>7</b>.<br>
           • يُصبح التوقّع <b>نهائياً</b> بعد حفظه، ويُغلَق باب التوقّع عند بداية المباراة.
         </div>`;
     }
@@ -566,9 +571,10 @@
       </table>
       <div class="scoring-note">
         <b>النقاط:</b>
-        <span class="chip">${POINTS.exact} نتيجة مضبوطة</span>
-        <span class="chip">${POINTS.outcome} مسار صحيح</span>
-        <span class="chip">+${POINTS.penWinner} فائز الركلات</span>
+        <span class="chip">${POINTS.exact} مضبوطة</span>
+        <span class="chip">${POINTS.winnerScore} الفائز+أهدافه/تعادل</span>
+        <span class="chip">${POINTS.winner} الفائز فقط</span>
+        <span class="chip">+${POINTS.penWinner} الركلات</span>
       </div>`;
     }
 
