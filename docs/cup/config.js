@@ -8,20 +8,16 @@
 export const SUPABASE_URL = 'https://vnyhbppzufadqxpbijnb.supabase.co';
 export const SUPABASE_ANON_KEY = 'sb_publishable_OPnob-SkO9u-Z7PN7tYTog_paKjdBTJ';
 
-// Points system. The match result uses the highest matching tier (not additive):
-//   5 — exact score: both teams' goals predicted correctly
-//   3 — correct winner AND the winning team's goals correct (loser's wrong)
-//   1 — correct winner only, score wrong
-//   0 — wrong winner / wrong outcome
-// A knockout decided on penalties adds a bonus (on the predicted pen score):
-//   +2 — exact penalty-shootout score
-//   +1 — correct penalty qualifier only
+// Points. The match result is judged on the score BEFORE penalties:
+//   5 — exact score
+//   3 — correct outcome (right winner OR a draw), score not exact
+//   0 — wrong outcome
+//   +1 — correct penalty-shootout winner, ONLY if the match actually went to pens
+//        (max: normal match 5, penalty match 6)
 export const POINTS = {
-  exact: 5,        // both teams' goals correct
-  winnerScore: 3,  // right winner + winning team's score right
-  winner: 1,       // right winner only
-  penExact: 2,     // bonus: exact penalty-shootout score
-  penWinner: 1,    // bonus: correct penalty qualifier only
+  exact: 5,        // exact score
+  outcome: 3,      // correct outcome (winner side or draw), score wrong
+  penWinner: 1,    // correct penalty winner (only when the match reached penalties)
 };
 
 // The admin PIN is validated SERVER-SIDE inside db.sql (search for CHANGE_ME).
