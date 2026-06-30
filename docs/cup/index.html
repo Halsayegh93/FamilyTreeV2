@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
   <title>جماهير مباريات كأس العالم الرميثية 🏆</title>
-  <link rel="stylesheet" href="styles.css?v=12" />
+  <link rel="stylesheet" href="styles.css?v=13" />
 </head>
 <body>
   <div class="wrap">
@@ -205,21 +205,17 @@
         const t = mine.pick === 'home' ? m.home_team : m.away_team;
         actionHTML = `<div class="predicted-note">🏆 توقعت فوز <b>${esc(t || '')}</b> — لا يمكن التعديل</div>`;
       } else if (!m.finished && predicted) {
-        const penQ = mine.pen_pick ? (mine.pen_pick === 'home' ? m.home_team : m.away_team) : '';
-        const penNote = (mine.pen_home != null && mine.pen_away != null)
-          ? ` · 🥅 ركلات ${mine.pen_home}-${mine.pen_away}${penQ ? ` (${esc(penQ)})` : ''}`
-          : (penQ ? ` · 🥅 تأهّل <b>${esc(penQ)}</b> بالركلات` : '');
+        const penQ = mine.pen_pick ? (mine.pen_pick === 'home' ? m.home_team : m.away_team)
+          : ((mine.pen_home != null && mine.pen_away != null) ? (mine.pen_home > mine.pen_away ? m.home_team : m.away_team) : '');
+        const penNote = penQ ? ` · 🥅 تأهّل <b>${esc(penQ)}</b> بالركلات` : '';
         actionHTML = `<div class="predicted-note">✓ توقعك محفوظ (${mine.home} - ${mine.away})${penNote} — لا يمكن التعديل</div>`;
       } else if (!locked && !predicted) {
-        // penalty score boxes: shown only when the typed score is a draw (knockout decider)
+        // penalty winner picker: shown only when the typed score is a draw (knockout decider)
         const penPickHTML = isKnockout ? `<div class="penpick" style="display:none">
-            <div class="penpick-q">🥅 توقّعت تعادل — كم نتيجة ركلات الترجيح؟</div>
-            <div class="penpick-score">
-              <span class="penteam">${esc(m.home_team || '')}</span>
-              <input type="number" min="0" max="99" inputmode="numeric" class="pen-h" />
-              <span class="dash">-</span>
-              <input type="number" min="0" max="99" inputmode="numeric" class="pen-a" />
-              <span class="penteam">${esc(m.away_team || '')}</span>
+            <div class="penpick-q">🥅 توقّعت تعادل — منو يتأهّل بالركلات؟</div>
+            <div class="penpick-opts">
+              <button type="button" class="btn pensel" data-pen="home">${esc(m.home_team || '')}</button>
+              <button type="button" class="btn pensel" data-pen="away">${esc(m.away_team || '')}</button>
             </div>
           </div>` : '';
         actionHTML = `<div class="card-actions"><button class="btn save">حفظ التوقّع</button></div>
@@ -247,9 +243,9 @@
                 guess = `${p.home_score}-${p.away_score}`;
                 const d = Math.sign((p.home_score || 0) - (p.away_score || 0));
                 if (d !== 0) guess += ` 🏆${esc((d > 0 ? m.home_team : m.away_team) || '')}`;
-                // penalty-decided draw -> show only the shootout + qualifier (drop the draw score)
-                else if (p.pen_home != null && p.pen_away != null) guess = `🥅${p.pen_home}-${p.pen_away} ${esc((p.pen_home > p.pen_away ? m.home_team : m.away_team) || '')}`;
+                // penalty-decided draw -> show only the qualifier team (the winner pick)
                 else if (p.pen_pick) guess = `🥅${esc((p.pen_pick === 'home' ? m.home_team : m.away_team) || '')}`;
+                else if (p.pen_home != null && p.pen_away != null) guess = `🥅${esc((p.pen_home > p.pen_away ? m.home_team : m.away_team) || '')}`;
               }
               const ptsTag = m.finished
                 ? (() => { const pts = scoreRow(p, m);
@@ -408,7 +404,7 @@
         const btn = card.querySelector('.save');
         if (btn) btn.onclick = () => onSave(card);
 
-        // penalty score boxes — reveal only when the typed score is a draw
+        // penalty winner buttons — reveal only when the typed score is a draw
         const penWrap = card.querySelector('.penpick');
         const hEl = card.querySelector('.sc-home');
         const aEl = card.querySelector('.sc-away');
@@ -417,7 +413,17 @@
           const h = hEl.value, a = aEl.value;
           const draw = h !== '' && a !== '' && +h === +a;
           penWrap.style.display = draw ? '' : 'none';
+          if (!draw) {
+            card.dataset.penPick = '';
+            penWrap.querySelectorAll('.pensel').forEach((b) => b.classList.remove('saved'));
+          }
         };
+        card.querySelectorAll('.pensel').forEach((pb) => {
+          pb.onclick = () => {
+            card.dataset.penPick = pb.dataset.pen;
+            card.querySelectorAll('.pensel').forEach((b) => b.classList.toggle('saved', b === pb));
+          };
+        });
 
         card.querySelectorAll('.stepper').forEach((st) => {
           const inp = st.querySelector('input');
@@ -444,16 +450,16 @@
       const a = card.querySelector('.sc-away').value;
       if (h === '' || a === '') { toast('اكتب النتيجة للفريقين', true); return; }
 
-      // a drawn score in a knockout match needs a penalty-shootout score
+      // a drawn prediction in a knockout match needs a penalty winner pick
       const isKnockout = id <= 32;
       const draw = +h === +a;
       let penH = null, penA = null;
       if (draw && isKnockout) {
-        const phEl = card.querySelector('.pen-h'), paEl = card.querySelector('.pen-a');
-        penH = phEl && phEl.value !== '' ? +phEl.value : null;
-        penA = paEl && paEl.value !== '' ? +paEl.value : null;
-        if (penH == null || penA == null) { toast('توقّعت تعادل — اكتب نتيجة ركلات الترجيح', true); return; }
-        if (penH === penA) { toast('ركلات الترجيح ما تنتهي بالتعادل', true); return; }
+        const penPick = card.dataset.penPick || null;
+        if (!penPick) { toast('توقّعت تعادل — اختر منو يتأهّل بالركلات', true); return; }
+        // store the pick as a 1-0 marker so the backend records the qualifier
+        penH = penPick === 'home' ? 1 : 0;
+        penA = penPick === 'home' ? 0 : 1;
       }
       const penPick = (penH != null && penA != null) ? (penH > penA ? 'home' : 'away') : null;
 
