@@ -59,23 +59,17 @@ function flagCode(s) {
   return ({ gbeng: 'gb-eng', gbsct: 'gb-sct', gbwls: 'gb-wls', gbnir: 'gb-nir' })[tags] || null;
 }
 
-// Flag element. Country flag emoji (🇧🇦, 🇧🇷, …) render perfectly as native
-// emoji on every device, so we keep them as-is — no external network at all.
-// The ONLY emoji that some platforms draw as a plain black flag are the UK
-// subdivisions (England/Scotland/Wales), so those — and only those — are
-// swapped for an inline SVG image embedded right in the code (no network).
-const svgURI = (s) => 'data:image/svg+xml,' + encodeURIComponent(s);
-const SUBDIV_FLAG = {
-  'gb-eng': svgURI('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 36"><rect width="60" height="36" fill="#fff"/><rect x="25" width="10" height="36" fill="#ce1124"/><rect y="13" width="60" height="10" fill="#ce1124"/></svg>'),
-  'gb-sct': svgURI('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 36"><rect width="60" height="36" fill="#005eb8"/><path d="M0 0 60 36 M60 0 0 36" stroke="#fff" stroke-width="7"/></svg>'),
-  'gb-wls': svgURI('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 36"><rect width="60" height="18" fill="#fff"/><rect y="18" width="60" height="18" fill="#00ab39"/></svg>'),
-};
+// Flag element: every flag renders as a real <img> with the SAME look, served
+// from THIS site's own /flags folder (same origin) — so it never depends on an
+// external CDN that might be blocked, and the UK subdivisions (England/Scotland/
+// Wales) get a proper flag instead of a black square. Falls back to the stored
+// emoji only if, somehow, the image can't be found.
 export function flagHTML(emoji) {
   const e = String(emoji ?? '').replace(/[&<>"]/g, (c) =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const code = flagCode(emoji);
-  if (code && SUBDIV_FLAG[code]) {
-    return `<img class="flag-img" src="${SUBDIV_FLAG[code]}" alt="" data-fb="${e || '⚽️'}" ` +
+  if (code) {
+    return `<img class="flag-img" src="flags/${code}.svg" alt="" loading="lazy" data-fb="${e || '⚽️'}" ` +
       `onerror="this.onerror=null;const s=document.createElement('span');s.className='flag';s.textContent=this.dataset.fb;this.replaceWith(s);" />`;
   }
   return `<span class="flag">${e || '⚽️'}</span>`;
