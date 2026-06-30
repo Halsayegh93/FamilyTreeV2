@@ -60,18 +60,18 @@ function flagCode(s) {
 }
 
 // Flag element: a real <img> when we can resolve a country code, else the emoji.
-// flagcdn doesn't carry the UK subdivisions (England/Scotland/Wales/N.Ireland),
-// so those use the flag-icons set on jsDelivr instead.
+// Uses the flag-icons set (jsDelivr) which covers every country AND the UK
+// subdivisions (gb-eng/sct/wls/nir). If the image fails to load it falls back
+// to the stored emoji so a flag is never just blank.
 export function flagHTML(emoji) {
-  const code = flagCode(emoji);
-  if (code) {
-    const src = code.includes('-')
-      ? `https://cdn.jsdelivr.net/npm/flag-icons@7/flags/4x3/${code}.svg`
-      : `https://flagcdn.com/${code}.svg`;
-    return `<img class="flag-img" src="${src}" alt="" loading="lazy" />`;
-  }
   const e = String(emoji ?? '').replace(/[&<>"]/g, (c) =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const code = flagCode(emoji);
+  if (code) {
+    const src = `https://cdn.jsdelivr.net/npm/flag-icons@7/flags/4x3/${code}.svg`;
+    return `<img class="flag-img" src="${src}" alt="" loading="lazy" data-fb="${e || '⚽️'}" ` +
+      `onerror="this.onerror=null;const s=document.createElement('span');s.className='flag';s.textContent=this.dataset.fb;this.replaceWith(s);" />`;
+  }
   return `<span class="flag">${e || '⚽️'}</span>`;
 }
 
