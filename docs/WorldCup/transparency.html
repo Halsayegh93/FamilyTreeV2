@@ -149,6 +149,25 @@
       return `<details class="tp-hist"><summary><span class="mk">▸</span> ✏️ عُدّل${count}</summary>${body}</details>`;
     }
 
+    // Points cell. When the admin manually overrode the points, show a
+    // collapsible that opens to reveal the automatic value vs the manual one.
+    function pointsCell(m, p) {
+      if (!m.finished) return '';
+      const pts = scoreRow(p, m);                              // final (manual if set)
+      const tag = `<span class="tp-pts ${pts > 0 ? 'good' : 'zero'}">${pts > 0 ? '+' + pts : '0'} نقطة</span>`;
+      if (p.manual_points == null) return tag;                 // no manual edit -> plain
+      const auto = scoreRow({ ...p, manual_points: null }, m); // what the law would give
+      const body = `<div class="tp-hist-item">
+          <span class="tp-type first">تلقائي</span>
+          <span class="hg">${auto > 0 ? '+' + auto : '0'} نقطة</span>
+        </div>
+        <div class="tp-hist-item">
+          <span class="tp-type edit">معدّلة يدوياً</span>
+          <span class="hg">${pts > 0 ? '+' + pts : '0'} نقطة</span>
+        </div>`;
+      return `${tag}<details class="tp-hist"><summary><span class="mk">▸</span> ✏️ النقاط معدّلة</summary>${body}</details>`;
+    }
+
     function matchBlock(m, preds, histMap) {
       const mine = preds
         .filter((p) => p.match_id === m.id)
@@ -162,14 +181,10 @@
         const edited = hist.length >= 2
           || (p.updated_at && p.created_at
               && Math.abs(new Date(p.updated_at) - new Date(p.created_at)) > 60000);
-        const pts = m.finished ? scoreRow(p, m) : null;
-        const ptsTag = pts != null
-          ? `<span class="tp-pts ${pts > 0 ? 'good' : 'zero'}">${pts > 0 ? '+' + pts : '0'} نقطة</span>`
-          : '';
         return `<div class="tp-p ${late ? 'late' : ''}">
           <span class="nm">${esc(p.player_name)}</span>
           <span class="gs">${guessOf(p, m)}</span>
-          ${ptsTag}
+          ${pointsCell(m, p)}
           ${late ? '<span class="tp-late-tag">⚠️ أُضيف بعد الإقفال</span>' : ''}
           <span class="tm">🕒 ${fmt(p.created_at)}</span>
           ${editFold(m, p, hist, edited)}
