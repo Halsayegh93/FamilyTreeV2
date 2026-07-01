@@ -28,6 +28,9 @@
       border-radius: 10px; padding: 8px 10px; }
     .tp-p .nm { font-weight: 700; font-size: 14px; }
     .tp-p .gs { font-size: 13px; color: var(--primary); font-weight: 700; }
+    .tp-pts { font-size: 11.5px; font-weight: 800; padding: 2px 8px; border-radius: 999px; }
+    .tp-pts.good { background: rgba(47,92,62,.14); color: var(--success); }
+    .tp-pts.zero { background: rgba(120,120,120,.14); color: var(--muted); }
     .tp-p .tm { margin-inline-start: auto; font-size: 11.5px; color: var(--muted); white-space: nowrap; }
     .tp-p.late { border-color: rgba(184,142,51,.55); background: rgba(184,142,51,.10); }
     .tp-late-tag { font-size: 10.5px; color: var(--warning); font-weight: 700; }
@@ -61,7 +64,7 @@
 
   <script type="module">
     import {
-      loadMatches, loadPredictions, roundLabel, flagHTML, watch, friendlyError,
+      loadMatches, loadPredictions, roundLabel, flagHTML, scoreRow, watch, friendlyError,
     } from './app.js?v=23';
 
     const $ = (s, r = document) => r.querySelector(s);
@@ -119,9 +122,14 @@
         const late = koMs != null && t != null && t > koMs;   // added after lock
         const edited = p.updated_at && p.created_at
           && Math.abs(new Date(p.updated_at) - new Date(p.created_at)) > 60000;
+        const pts = m.finished ? scoreRow(p, m) : null;
+        const ptsTag = pts != null
+          ? `<span class="tp-pts ${pts > 0 ? 'good' : 'zero'}">${pts > 0 ? '+' + pts : '0'} نقطة</span>`
+          : '';
         return `<div class="tp-p ${late ? 'late' : ''}">
           <span class="nm">${esc(p.player_name)}</span>
           <span class="gs">${guessOf(p, m)}</span>
+          ${ptsTag}
           ${late ? '<span class="tp-late-tag">⚠️ أُضيف بعد الإقفال</span>' : ''}
           <span class="tm">🕒 ${fmt(p.created_at)}${edited ? ' <span class="tp-edited">(عُدّل)</span>' : ''}</span>
         </div>`;
