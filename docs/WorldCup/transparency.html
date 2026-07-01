@@ -88,8 +88,9 @@
     .tp-me-match .tp-vs { font-size: 14px; font-weight: 800; color: var(--ink); }
     .tp-me-match .tp-vs .x { color: var(--muted); font-weight: 700; margin: 0 2px; }
     .tp-me-info { font-size: 12px; color: var(--muted); }
-    .tp-me-info.res { color: var(--primary); font-weight: 700; }
-    .tp-me-info .tp-pts { margin-inline-start: 16px; }   /* space the points off the result */
+    .tp-me-info.res { color: var(--primary); font-weight: 700;
+      display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+    .tp-me-info .tp-pts { margin-inline-start: auto; }   /* push points to the far end */
     .tp-me-guess { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 2px; }
     .tp-win { font-size: 13px; font-weight: 700; color: var(--primary); }   /* same as توقّعك */
     .tp-p.me { border-color: var(--primary); background: rgba(43,122,159,.08); }
