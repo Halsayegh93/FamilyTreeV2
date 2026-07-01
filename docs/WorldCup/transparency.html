@@ -143,9 +143,6 @@
 
     // the visitor's own saved name (from the main site) -> personal view
     const MY_NAME = (localStorage.getItem('wc_player') || '').trim();
-    // is the edit-history table active? when true we trust the log only and
-    // never fall back to the updated_at guess (so automatic/unedited = no edit).
-    let HIST_ACTIVE = false;
 
     // human-readable guess for one prediction
     function guessOf(p, m) {
@@ -193,19 +190,9 @@
           </div>`;
         }).join('');
         predCol = `<div class="tp-sec-t">🔮 توقّع</div>${items}`;
-      } else if (!HIST_ACTIVE) {
-        // only guess from updated_at when the log is OFF; when it's ON, no history
-        // entry means the prediction wasn't edited (automatic) -> show nothing
-        const predEdited = p.manual_points == null && p.updated_at && p.created_at
-          && Math.abs(new Date(p.updated_at) - new Date(p.created_at)) > 60000;
-        if (predEdited) {                                      // edited but old value not stored
-          predCol = `<div class="tp-sec-t">🔮 توقّع</div>
-            <div class="tp-hist-item">
-              <span class="tp-type edit">آخر تعديل</span>
-              <span class="hg">🕒 ${fmt(p.updated_at)}</span>
-            </div>`;
-        }
       }
+      // No updated_at guessing: a prediction only counts as edited when the real
+      // history log has 2+ entries. Automatic/unedited -> nothing shown.
 
       // LEFT column — points override (previous = automatic, modified = manual)
       let ptsCol = '';
@@ -361,7 +348,6 @@
           loadMatches(), loadPredictions(), loadPredictionHistory(),
         ]);
         const history = historyRaw || [];   // null = table not created yet
-        HIST_ACTIVE = historyRaw !== null;  // log on -> trust it, no updated_at guesses
         // group history by player+match, oldest first
         const histMap = new Map();
         for (const h of history) {
