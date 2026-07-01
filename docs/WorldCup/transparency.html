@@ -53,6 +53,10 @@
     .tp-sec-t { font-size: 11px; font-weight: 800; color: var(--muted); margin: 4px 0 2px; }
     .tp-sec-div { height: 1px; background: var(--border); margin: 6px 0; }
     .tp-note-sm { font-size: 10.5px; color: var(--muted); padding: 2px; }
+    .tp-status { font-size: 12.5px; text-align: center; line-height: 1.7;
+      border-radius: var(--radius); padding: 10px 12px; margin-bottom: 14px; }
+    .tp-status.on  { background: rgba(47,92,62,.12);  color: var(--success); border: 1px solid rgba(47,92,62,.3); }
+    .tp-status.off { background: rgba(184,142,51,.14); color: var(--warning); border: 1px solid rgba(184,142,51,.4); }
   </style>
 </head>
 <body>
@@ -83,7 +87,7 @@
     import {
       loadMatches, loadPredictions, loadPredictionHistory,
       roundLabel, flagHTML, scoreRow, watch, friendlyError,
-    } from './app.js?v=24';
+    } from './app.js?v=25';
 
     const $ = (s, r = document) => r.querySelector(s);
     const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) =>
@@ -226,11 +230,22 @@
       </div>`;
     }
 
+    // status banner telling whether the edit-history SQL is active
+    function statusBanner(historyRaw) {
+      if (historyRaw === null) {
+        return `<div class="tp-status off">⚠️ سجل التعديلات <b>غير مفعّل</b> — شغّل ملف wc-history.sql في Supabase.
+          يظهر وقت آخر تعديل فقط.</div>`;
+      }
+      return `<div class="tp-status on">✅ سجل التعديلات <b>مفعّل</b> — ${historyRaw.length} تسجيلة.
+        التعديلات الجديدة تُحفظ بالكامل (القديم ← الجديد).</div>`;
+    }
+
     async function render() {
       try {
-        const [matches, preds, history] = await Promise.all([
+        const [matches, preds, historyRaw] = await Promise.all([
           loadMatches(), loadPredictions(), loadPredictionHistory(),
         ]);
+        const history = historyRaw || [];   // null = table not created yet
         // group history by player+match, oldest first
         const histMap = new Map();
         for (const h of history) {
@@ -247,9 +262,9 @@
             const kb = b.kickoff ? new Date(b.kickoff).getTime() : Infinity;
             return ka - kb || a.id - b.id;
           });
-        $('#list').innerHTML = shown.length
+        $('#list').innerHTML = statusBanner(historyRaw) + (shown.length
           ? shown.map((m) => matchBlock(m, preds, histMap)).join('')
-          : `<div class="tp-empty">لا توجد مباريات بعد</div>`;
+          : `<div class="tp-empty">لا توجد مباريات بعد</div>`);
       } catch (e) {
         $('#list').innerHTML = `<div class="tp-empty">تعذّر التحميل: ${esc(friendlyError(e))}</div>`;
       }

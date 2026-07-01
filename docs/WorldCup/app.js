@@ -153,8 +153,8 @@ export async function loadPredictions() {
 }
 
 // Full edit history of every prediction (requires the wc-history.sql migration).
-// Returns [] gracefully if the table doesn't exist yet, so the feature is
-// simply "off" until the admin runs the SQL.
+// Returns null when the table doesn't exist yet (feature not activated) so the
+// UI can tell "not activated" apart from "activated but empty" ([]).
 export async function loadPredictionHistory() {
   if (DEMO) return [];
   const sb = await client();
@@ -162,7 +162,7 @@ export async function loadPredictionHistory() {
     .from('wc_prediction_history')
     .select('*')
     .order('changed_at', { ascending: true });
-  if (error) return [];   // table not created yet -> feature disabled
+  if (error) return null;   // table not created yet -> feature disabled
   return data || [];
 }
 
