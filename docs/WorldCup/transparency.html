@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <title>الشفافية — جماهير مباريات كأس العالم الرميثية 🔍</title>
+  <link rel="stylesheet" href="styles.css?v=20" />
+  <style>
+    /* ---- transparency page specifics ---- */
+    .tp-intro { font-size: 13px; color: var(--muted); text-align: center; line-height: 1.9;
+      background: rgba(255,255,255,.55); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 12px 14px; margin-bottom: 16px; }
+    .tp-facts { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 4px; }
+    .tp-fact { flex: 1; min-width: 90px; text-align: center; background: rgba(255,255,255,.6);
+      border: 1px solid var(--border); border-radius: 12px; padding: 8px 6px; }
+    .tp-fact b { display: block; font-size: 15px; color: var(--ink); }
+    .tp-fact span { font-size: 11px; color: var(--muted); }
+    .tp-lock { font-size: 12.5px; margin-top: 8px; padding: 7px 10px; border-radius: 10px;
+      background: rgba(43,122,159,.10); color: var(--primary); text-align: center; font-weight: 600; }
+    .tp-lock.done { background: rgba(120,120,120,.14); color: var(--muted); }
+    .tp-preds { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+    .tp-p { display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+      background: rgba(255,255,255,.55); border: 1px solid var(--border);
+      border-radius: 10px; padding: 8px 10px; }
+    .tp-p .nm { font-weight: 700; font-size: 14px; }
+    .tp-p .gs { font-size: 13px; color: var(--primary); font-weight: 700; }
+    .tp-p .tm { margin-inline-start: auto; font-size: 11.5px; color: var(--muted); white-space: nowrap; }
+    .tp-p.late { border-color: rgba(184,142,51,.55); background: rgba(184,142,51,.10); }
+    .tp-late-tag { font-size: 10.5px; color: var(--warning); font-weight: 700; }
+    .tp-empty { font-size: 12.5px; color: var(--muted); text-align: center; padding: 6px; }
+    .tp-edited { font-size: 10.5px; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="topbar">
+      <a class="adminbtn" href="index.html">🏠 عودة للموقع</a>
+    </div>
+    <div class="hero">
+      <div class="emblem-badge"><span class="emblem-trophy">🔍</span></div>
+      <h1>الشفافية <span class="gold">للحقيقة</span></h1>
+      <p>كل توقّع بوقته — بدون تلاعب</p>
+    </div>
+
+    <div class="tp-intro">
+      هذي الصفحة تبيّن <b>وقت كل توقّع بالضبط</b>، و<b>متى يتصكّر التوقّع</b> لكل مباراة،
+      و<b>كم توقّع</b> عند كل مباراة — عشان الكل يشوف إن اللعب نظيف وكل واحد توقّع قبل ما تبدأ المباراة.
+      <br />⚠️ أي توقّع أُضيف بعد إقفال المباراة (من المشرف) يظهر بعلامة تنبيه.
+    </div>
+
+    <div id="list"><div class="tp-empty">⏳ يتم التحميل…</div></div>
+
+    <a class="adminbtn" href="index.html" style="margin-top:18px">🏠 عودة للموقع</a>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <script type="module">
+    import {
+      loadMatches, loadPredictions, roundLabel, flagHTML, watch, friendlyError,
+    } from './app.js?v=23';
+
+    const $ = (s, r = document) => r.querySelector(s);
+    const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+    // full date + time in the reader's local timezone
+    const fmt = (iso) => {
+      if (!iso) return '—';
+      try {
+        return new Date(iso).toLocaleString('ar', {
+          weekday: 'short', day: '2-digit', month: '2-digit',
+          hour: '2-digit', minute: '2-digit',
+        });
+      } catch { return '—'; }
+    };
+
+    // The game starts at the Round of 32 — hide every match before this date.
+    const SHOW_FROM = new Date('2026-06-28T00:00:00Z').getTime();
+    const afterCutoff = (m) => !m.kickoff || new Date(m.kickoff).getTime() >= SHOW_FROM;
+    const teamsKnown = (m) => !!(m.home_team && String(m.home_team).trim()
+                             && m.away_team && String(m.away_team).trim());
+
+    // human-readable guess for one prediction
+    function guessOf(p, m) {
+      if (p.pick) return '🏆 ' + esc((p.pick === 'home' ? m.home_team : m.away_team) || '');
+      let s = `${p.home_score}-${p.away_score}`;
+      const d = Math.sign((p.home_score || 0) - (p.away_score || 0));
+      if (d !== 0) s += ` 🏆${esc((d > 0 ? m.home_team : m.away_team) || '')}`;
+      else if (p.pen_pick) s += ` 🥅${esc((p.pen_pick === 'home' ? m.home_team : m.away_team) || '')}`;
+      else if (p.pen_home != null && p.pen_away != null)
+        s += ` 🥅${esc((p.pen_home > p.pen_away ? m.home_team : m.away_team) || '')}`;
+      return s;
+    }
+
+    function lockLine(m) {
+      if (m.finished) return `<div class="tp-lock done">🏁 انتهت المباراة — التوقّع مقفل</div>`;
+      if (m.locked)   return `<div class="tp-lock done">🔒 مقفلة من المشرف</div>`;
+      if (m.kickoff) {
+        const passed = new Date(m.kickoff).getTime() <= Date.now();
+        return `<div class="tp-lock ${passed ? 'done' : ''}">`
+          + `${passed ? '🔒 أُقفل التوقّع' : '🔓 يُقفل التوقّع'}: ${fmt(m.kickoff)}</div>`;
+      }
+      return `<div class="tp-lock">🔓 مفتوح للتوقّع</div>`;
+    }
+
+    function matchBlock(m, preds) {
+      const mine = preds
+        .filter((p) => p.match_id === m.id)
+        .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+      const koMs = m.kickoff ? new Date(m.kickoff).getTime() : null;
+
+      const rows = mine.length ? mine.map((p) => {
+        const t = p.created_at ? new Date(p.created_at).getTime() : null;
+        const late = koMs != null && t != null && t > koMs;   // added after lock
+        const edited = p.updated_at && p.created_at
+          && Math.abs(new Date(p.updated_at) - new Date(p.created_at)) > 60000;
+        return `<div class="tp-p ${late ? 'late' : ''}">
+          <span class="nm">${esc(p.player_name)}</span>
+          <span class="gs">${guessOf(p, m)}</span>
+          ${late ? '<span class="tp-late-tag">⚠️ أُضيف بعد الإقفال</span>' : ''}
+          <span class="tm">🕒 ${fmt(p.created_at)}${edited ? ' <span class="tp-edited">(عُدّل)</span>' : ''}</span>
+        </div>`;
+      }).join('') : `<div class="tp-empty">👥 ما توقّع أحد لهالمباراة</div>`;
+
+      return `<div class="card">
+        <div class="meta">
+          <span>${esc(roundLabel(m.round))}</span>
+          <span class="mno">مباراة ${m.id}</span>
+        </div>
+        <div class="match">
+          <div class="team home">${flagHTML(m.home_flag)}<span class="name">${esc(m.home_team || 'غير محدّد')}</span></div>
+          <div class="scorebox"><span class="vs">VS</span></div>
+          <div class="team away">${flagHTML(m.away_flag)}<span class="name">${esc(m.away_team || 'غير محدّد')}</span></div>
+        </div>
+        <div class="tp-facts">
+          <div class="tp-fact"><b>${mine.length}</b><span>عدد التوقّعات</span></div>
+          <div class="tp-fact"><b>${m.kickoff ? fmt(m.kickoff).split('،').slice(-1)[0].trim() || '—' : '—'}</b><span>وقت الإقفال</span></div>
+        </div>
+        ${lockLine(m)}
+        <div class="tp-preds">${rows}</div>
+      </div>`;
+    }
+
+    async function render() {
+      try {
+        const [matches, preds] = await Promise.all([loadMatches(), loadPredictions()]);
+        const shown = matches
+          .filter((m) => afterCutoff(m) && (teamsKnown(m) || m.finished))
+          .sort((a, b) => {
+            const ka = a.kickoff ? new Date(a.kickoff).getTime() : Infinity;
+            const kb = b.kickoff ? new Date(b.kickoff).getTime() : Infinity;
+            return ka - kb || a.id - b.id;
+          });
+        $('#list').innerHTML = shown.length
+          ? shown.map((m) => matchBlock(m, preds)).join('')
+          : `<div class="tp-empty">لا توجد مباريات بعد</div>`;
+      } catch (e) {
+        $('#list').innerHTML = `<div class="tp-empty">تعذّر التحميل: ${esc(friendlyError(e))}</div>`;
+      }
+    }
+
+    render();
+    watch(render);
+  </script>
+</body>
+</html>

@@ -112,7 +112,7 @@ body { direction: rtl; }
 .namebtn:disabled { cursor: default; }
 
 /* Top bar + admin button */
-.topbar { display: flex; justify-content: flex-start; margin-bottom: 2px; }
+.topbar { display: flex; justify-content: flex-start; gap: 8px; margin-bottom: 2px; }
 .adminbtn {
   display: inline-flex; align-items: center; gap: 6px;
   text-decoration: none; padding: 8px 14px; border-radius: 999px;
