@@ -4,12 +4,16 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
   <title>الشفافية — جماهير مباريات كأس العالم الرميثية 🔍</title>
-  <link rel="stylesheet" href="styles.css?v=20" />
+  <link rel="stylesheet" href="styles.css?v=21" />
   <style>
     /* ---- transparency page specifics ---- */
     .tp-intro { font-size: 13px; color: var(--muted); text-align: center; line-height: 1.9;
       background: rgba(255,255,255,.55); border: 1px solid var(--border);
       border-radius: var(--radius); padding: 12px 14px; margin-bottom: 16px; }
+    .tp-when { margin-top: 10px; font-size: 13px; text-align: center; color: var(--ink);
+      background: rgba(43,122,159,.08); border: 1px solid var(--border);
+      border-radius: 10px; padding: 8px 10px; }
+    .tp-when b { color: var(--primary); }
     .tp-facts { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 4px; }
     .tp-fact { flex: 1; min-width: 90px; text-align: center; background: rgba(255,255,255,.6);
       border: 1px solid var(--border); border-radius: 12px; padding: 8px 6px; }
@@ -133,6 +137,7 @@
           <div class="scorebox"><span class="vs">VS</span></div>
           <div class="team away">${flagHTML(m.away_flag)}<span class="name">${esc(m.away_team || 'غير محدّد')}</span></div>
         </div>
+        <div class="tp-when">🗓️ موعد المباراة: <b>${m.kickoff ? fmt(m.kickoff) : 'غير محدّد'}</b></div>
         <div class="tp-facts">
           <div class="tp-fact"><b>${mine.length}</b><span>عدد التوقّعات</span></div>
           <div class="tp-fact"><b>${m.kickoff ? fmt(m.kickoff).split('،').slice(-1)[0].trim() || '—' : '—'}</b><span>وقت الإقفال</span></div>
