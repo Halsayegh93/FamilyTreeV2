@@ -38,8 +38,11 @@
     .tp-edited { font-size: 10.5px; color: var(--warning); font-weight: 700; }
     /* edit-history chain */
     .tp-hist { flex-basis: 100%; margin-top: 6px; border-top: 1px dashed var(--border); padding-top: 6px; }
-    .tp-hist summary { font-size: 11.5px; color: var(--muted); cursor: pointer; list-style: none; }
+    .tp-hist summary { font-size: 11.5px; color: var(--primary); font-weight: 700;
+      cursor: pointer; list-style: none; padding: 4px 2px; user-select: none; }
     .tp-hist summary::-webkit-details-marker { display: none; }
+    .tp-hist summary .mk { display: inline-block; transition: transform .15s; }
+    .tp-hist[open] summary .mk { transform: rotate(90deg); }
     .tp-hist-item { display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
       font-size: 12px; padding: 5px 2px; }
     .tp-hist-item .hg { color: var(--ink); font-weight: 600; }
@@ -137,7 +140,7 @@
           <span class="ht">🕒 ${fmt(h.changed_at)}</span>
         </div>`;
       }).join('');
-      return `<details class="tp-hist"><summary>📝 سجل التعديلات (${hist.length})</summary>${items}</details>`;
+      return `<details class="tp-hist"><summary><span class="mk">▸</span> 📝 سجل التعديلات (${hist.length})</summary>${items}</details>`;
     }
 
     function matchBlock(m, preds, histMap) {
