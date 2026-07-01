@@ -286,12 +286,11 @@
             <span class="tp-vs">${esc(m.home_team || '?')} <span class="x">×</span> ${esc(m.away_team || '?')}</span>
           </div>
           <div class="tp-me-info">🗓️ ${m.kickoff ? fmt(m.kickoff) : 'غير محدّد'}</div>
-          <div class="tp-me-info ${m.finished ? 'res' : ''}">🏁 النتيجة الفعلية: ${actual}</div>
+          <div class="tp-me-info ${m.finished ? 'res' : ''}">🏁 النتيجة الفعلية: ${actual} ${m.finished ? ptsTag : ''}</div>
           <div class="tp-me-guess">
             <span class="gs">توقّعك: ${esc(score)}</span>
-            ${ptsTag}
+            <span class="tp-win">🏆 الفائز المتوقّع: ${esc(winner)}</span>
           </div>
-          <div class="tp-me-winline">🏆 الفائز المتوقّع: <b>${esc(winner)}</b></div>
           ${changesFold(m, p, hist)}
         </div>`;
       }).join('');
