@@ -225,7 +225,8 @@
       "Bash(grep -n \"admin/profiles/\\\\${\" /Users/hasan/Desktop/familytree-web/src/app/\\\\\\(app\\\\\\)/admin/profiles/FollowUpSearch.tsx)",
       "Bash(node_modules/.bin/tsc --noEmit)",
       "Bash(npx tsc *)",
-      "Bash(bash -c \"cd /Users/hasan/Desktop/familytree-web && npx tsc --noEmit 2>&1 | head -20\")"
+      "Bash(bash -c \"cd /Users/hasan/Desktop/familytree-web && npx tsc --noEmit 2>&1 | head -20\")",
+      "Bash(sed -n '/^## Network access/,/^## Move tasks/p' \"/root/.claude/projects/-home-user-FamilyTreeV2/2930a74f-9822-52db-9ce9-f952c09d2e27/tool-results/toolu_017WzZ8Wr755y3KdLYGPo39T.txt\" | head -90)"
     ]
   }
 }
