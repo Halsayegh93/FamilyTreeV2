@@ -52,6 +52,10 @@
     .tp-type.edit { background: rgba(184,142,51,.16); color: var(--warning); }
     .tp-sec-t { font-size: 11px; font-weight: 800; color: var(--muted); margin: 4px 0 2px; }
     .tp-sec-div { height: 1px; background: var(--border); margin: 6px 0; }
+    /* two-column edits: prediction (right) | points (left) in RTL */
+    .tp-cols { display: flex; gap: 10px; flex-wrap: wrap; width: 100%; }
+    .tp-cols .tp-col { flex: 1; min-width: 140px; }
+    .tp-cols .tp-col + .tp-col { border-inline-start: 1px solid var(--border); padding-inline-start: 10px; }
     .tp-note-sm { font-size: 10.5px; color: var(--muted); padding: 2px; }
     .tp-status { font-size: 12.5px; text-align: center; line-height: 1.7;
       border-radius: var(--radius); padding: 10px 12px; margin-bottom: 14px; }
@@ -152,12 +156,11 @@
       return `<span class="tp-pts ${pts > 0 ? 'good' : 'zero'}">${pts > 0 ? '+' + pts : '0'} نقطة</span>`;
     }
 
-    // ONE collapsible "✏️ التعديلات" per player, in the same place, gathering
-    // everything editable: the prediction's edit history AND the points override.
+    // ONE collapsible "✏️ التعديلات" per player. Two columns (RTL): prediction
+    // edits on the RIGHT, points edits on the LEFT (previous vs modified).
     function changesFold(m, p, hist) {
-      const sections = [];
-
-      // 1) prediction edits
+      // RIGHT column — prediction edits
+      let predCol = '';
       if (hist && hist.length >= 2) {                          // full history (needs SQL)
         const items = hist.map((h, i) => {
           const type = (h.action === 'created' && i === 0) ? 'أول توقّع' : 'تعديل';
@@ -168,38 +171,42 @@
             <span class="ht">🕒 ${fmt(h.changed_at)}</span>
           </div>`;
         }).join('');
-        sections.push(`<div class="tp-sec-t">🔮 توقّع</div>${items}`);
+        predCol = `<div class="tp-sec-t">🔮 توقّع</div>${items}`;
       } else {
         const predEdited = p.manual_points == null && p.updated_at && p.created_at
           && Math.abs(new Date(p.updated_at) - new Date(p.created_at)) > 60000;
         if (predEdited) {                                      // edited but old value not stored
-          sections.push(`<div class="tp-sec-t">🔮 توقّع</div>
+          predCol = `<div class="tp-sec-t">🔮 توقّع</div>
             <div class="tp-hist-item">
               <span class="tp-type edit">آخر تعديل</span>
               <span class="hg">🕒 ${fmt(p.updated_at)}</span>
-            </div>`);
+            </div>`;
         }
       }
 
-      // 2) points override (available without SQL)
+      // LEFT column — points override (previous = automatic, modified = manual)
+      let ptsCol = '';
       if (m.finished && p.manual_points != null) {
         const pts = scoreRow(p, m);
         const auto = scoreRow({ ...p, manual_points: null }, m);
-        sections.push(`<div class="tp-sec-t">🎯 النقاط</div>
+        ptsCol = `<div class="tp-sec-t">🎯 النقاط</div>
           <div class="tp-hist-item">
-            <span class="tp-type first">تلقائي</span>
+            <span class="tp-type first">السابق</span>
             <span class="hg">${auto > 0 ? '+' + auto : '0'} نقطة</span>
           </div>
           <div class="tp-hist-item">
-            <span class="tp-type edit">معدّلة يدوياً</span>
+            <span class="tp-type edit">المعدّل</span>
             <span class="hg">${pts > 0 ? '+' + pts : '0'} نقطة</span>
             <span class="ht">🕒 ${fmt(p.updated_at)}</span>
-          </div>`);
+          </div>`;
       }
 
-      if (!sections.length) return '';
-      return `<details class="tp-hist"><summary><span class="mk">▸</span> ✏️ التعديلات</summary>`
-        + sections.join('<div class="tp-sec-div"></div>') + `</details>`;
+      if (!predCol && !ptsCol) return '';
+      const cols = `<div class="tp-cols">`
+        + (predCol ? `<div class="tp-col">${predCol}</div>` : '')
+        + (ptsCol ? `<div class="tp-col">${ptsCol}</div>` : '')
+        + `</div>`;
+      return `<details class="tp-hist"><summary><span class="mk">▸</span> ✏️ التعديلات</summary>${cols}</details>`;
     }
 
     // Personal card for whoever opens the page: their own REAL points (actual
