@@ -143,19 +143,27 @@
           </div>`;
         }).join('');
       } else {
-        body = `<div class="tp-hist-item"><span class="ht">🕒 آخر تعديل: ${fmt(p.updated_at)}</span></div>`;
+        // no detailed history yet (SQL not activated) -> show the last-edit time clearly
+        body = `<div class="tp-hist-item">
+          <span class="tp-type edit">آخر تعديل</span>
+          <span class="hg">🕒 ${fmt(p.updated_at)}</span>
+        </div>`;
       }
       const count = (hist && hist.length >= 2) ? ` (${hist.length})` : '';
       return `<details class="tp-hist"><summary><span class="mk">▸</span> ✏️ عُدّل${count}</summary>${body}</details>`;
     }
 
-    // Points cell. When the admin manually overrode the points, show a
-    // collapsible that opens to reveal the automatic value vs the manual one.
+    // Points cell (transparency view only). Per request: a prediction that the
+    // admin did NOT manually adjust shows 0 here; only manually-set points show
+    // their value, with a collapsible revealing automatic vs manual. This is a
+    // display choice on this page and does not change the real leaderboard.
     function pointsCell(m, p) {
       if (!m.finished) return '';
-      const pts = scoreRow(p, m);                              // final (manual if set)
+      if (p.manual_points == null) {                           // not manually edited -> zero
+        return `<span class="tp-pts zero">0 نقطة</span>`;
+      }
+      const pts = scoreRow(p, m);                              // manual value
       const tag = `<span class="tp-pts ${pts > 0 ? 'good' : 'zero'}">${pts > 0 ? '+' + pts : '0'} نقطة</span>`;
-      if (p.manual_points == null) return tag;                 // no manual edit -> plain
       const auto = scoreRow({ ...p, manual_points: null }, m); // what the law would give
       const body = `<div class="tp-hist-item">
           <span class="tp-type first">تلقائي</span>
