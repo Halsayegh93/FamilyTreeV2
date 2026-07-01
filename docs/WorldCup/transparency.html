@@ -41,6 +41,13 @@
     .tp-hist summary { font-size: 11.5px; color: var(--warning); font-weight: 700;
       cursor: pointer; list-style: none; padding: 4px 2px; user-select: none; }
     .tp-hist summary::-webkit-details-marker { display: none; }
+    /* make real edits stand out clearly */
+    .tp-hist.has-edits { border-top-color: var(--warning); }
+    .tp-edit-pill { background: var(--warning); color: #fff; font-weight: 800;
+      padding: 2px 9px; border-radius: 999px; font-size: 11px; }
+    .tp-edit-label { color: var(--warning); font-weight: 700; font-size: 11.5px; }
+    .tp-p:has(> .tp-hist.has-edits) { border-color: var(--warning);
+      box-shadow: 0 0 0 1px rgba(184,142,51,.35) inset; }
     .tp-hist summary .mk { display: inline-block; transition: transform .15s; }
     .tp-hist[open] summary .mk { transform: rotate(90deg); }
     .tp-hist-item { display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
@@ -216,7 +223,14 @@
         + (predCol ? `<div class="tp-col">${predCol}</div>` : '')
         + (ptsCol ? `<div class="tp-col">${ptsCol}</div>` : '')
         + `</div>`;
-      return `<details class="tp-hist"><summary><span class="mk">▸</span> ✏️ التعديلات</summary>${cols}</details>`;
+      // clear label of WHAT changed
+      const parts = [];
+      if (predCol) parts.push(`${(hist.length - 1)} تعديل توقّع`);
+      if (ptsCol) parts.push('نقاط معدّلة');
+      const label = parts.join(' · ');
+      return `<details class="tp-hist has-edits"><summary>`
+        + `<span class="mk">▸</span> <span class="tp-edit-pill">✏️ معدّل</span> `
+        + `<span class="tp-edit-label">${label}</span></summary>${cols}</details>`;
     }
 
     // Personal card for whoever opens the page: their own REAL points (actual
