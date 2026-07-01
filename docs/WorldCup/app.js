@@ -102,6 +102,15 @@ export function scorePrediction(predHome, predAway, actHome, actAway) {
   return winnerPred === winnerActual ? POINTS.winnerScore : POINTS.winner;   // 3 or 1
 }
 
+// The shootout winner a player predicted — from the pick button (pen_pick) or
+// the entered penalty score (pen_home/pen_away). Returns 'home' | 'away' | null.
+function predPenSide(p) {
+  if (p.pen_pick === 'home' || p.pen_pick === 'away') return p.pen_pick;
+  if (p.pen_home != null && p.pen_away != null && p.pen_home !== p.pen_away)
+    return p.pen_home > p.pen_away ? 'home' : 'away';
+  return null;
+}
+
 // Score one prediction ROW against a match (handles winner-only picks) ---------
 //   - a winner-only pick ({pick:'home'|'away'}) scores 1 if that side won, else 0
 //   - a full score row is scored with scorePrediction (5 / 3 / 1 / 0)
@@ -119,13 +128,20 @@ export function scoreRow(p, m) {
   }
   // match-result points (5 / 3 / 1 / 0) on the regular-time score
   let pts = scorePrediction(p.home_score, p.away_score, m.home_score, m.away_score);
-  // +2 only if the match actually went to penalties, the player predicted a draw,
-  // and named the correct penalty winner
-  if (m.home_pen != null && m.away_pen != null && m.home_pen !== m.away_pen
-      && p.home_score != null && p.home_score === p.away_score
-      && p.pen_home != null && p.pen_away != null
-      && (p.pen_home > p.pen_away) === (m.home_pen > m.away_pen)) {
-    pts += POINTS.penWinner;
+
+  // Penalty matches (regular time ended a draw, a shootout decided it): a draw
+  // prediction only earns points when the shootout winner is named correctly.
+  //   exact draw       -> 5, and +2 for the correct shootout winner   (7 / 5)
+  //   diff-score draw  -> 3 only if the shootout winner is right, else 0 (3 / 0)
+  const wentToPens = m.home_pen != null && m.away_pen != null && m.home_pen !== m.away_pen;
+  const predictedDraw = p.home_score != null && p.home_score === p.away_score;
+  if (wentToPens && predictedDraw) {
+    const penCorrect = predPenSide(p) === (m.home_pen > m.away_pen ? 'home' : 'away');
+    if (p.home_score === m.home_score) {
+      if (penCorrect) pts += POINTS.penWinner;   // exact draw: 5 -> 7
+    } else {
+      pts = penCorrect ? POINTS.draw : 0;        // different-score draw: 3 or 0
+    }
   }
   return pts;
 }
