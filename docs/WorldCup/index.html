@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-cache" />
   <title>جماهير مباريات كأس العالم الرميثية 🏆</title>
   <link rel="stylesheet" href="styles.css?v=21" />
 </head>
@@ -184,7 +185,8 @@
 
       let resultLine = '';
       if (m.finished) {
-        const pts = mine ? scoreRow(mine, m) : null;
+        // points EARNED from the prediction per the rules (ignore admin override)
+        const pts = mine ? scoreRow({ ...mine, manual_points: null }, m) : null;
         const ptsTag = mine
           ? `<span class="pts ${pts > 0 ? 'good' : 'zero'}">لك ${pts > 0 ? '+' + pts : '0'} نقطة</span>`
           : '';
