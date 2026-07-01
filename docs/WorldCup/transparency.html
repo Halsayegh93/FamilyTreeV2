@@ -82,6 +82,8 @@
     .tp-me-info { font-size: 12px; color: var(--muted); }
     .tp-me-info.res { color: var(--primary); font-weight: 700; }
     .tp-me-guess { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 2px; }
+    .tp-me-winline { font-size: 13px; font-weight: 700; color: var(--success); }
+    .tp-me-winline b { color: var(--success); }
     .tp-win { font-size: 13px; font-weight: 700; color: var(--success); }
     .tp-p.me { border-color: var(--primary); background: rgba(43,122,159,.08); }
     .tp-you { font-size: 10px; font-weight: 800; color: var(--textOnPrimary, #fff);
@@ -280,9 +282,9 @@
           <div class="tp-me-info ${m.finished ? 'res' : ''}">🏁 النتيجة الفعلية: ${actual}</div>
           <div class="tp-me-guess">
             <span class="gs">توقّعك: ${esc(score)}</span>
-            <span class="tp-win">🏆 الفائز: ${esc(winner)}</span>
             ${ptsTag}
           </div>
+          <div class="tp-me-winline">🏆 الفائز المتوقّع: <b>${esc(winner)}</b></div>
           ${changesFold(m, p, hist)}
         </div>`;
       }).join('');

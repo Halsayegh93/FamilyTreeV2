@@ -213,7 +213,7 @@
       } else if (!locked && !predicted) {
         // penalty winner picker: shown only when the typed score is a draw (knockout decider)
         const penPickHTML = isKnockout ? `<div class="penpick" style="display:none">
-            <div class="penpick-q">🥅 توقّعت تعادل — منو يتأهّل بالركلات؟</div>
+            <div class="penpick-q">🥅 توقّعت تعادل — منو يتأهّل بالركلات؟ <b style="color:var(--error,#c33)">(إجباري)</b></div>
             <div class="penpick-opts">
               <button type="button" class="btn pensel" data-pen="home">${esc(m.home_team || '')}</button>
               <button type="button" class="btn pensel" data-pen="away">${esc(m.away_team || '')}</button>
