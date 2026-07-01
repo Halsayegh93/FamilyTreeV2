@@ -50,6 +50,9 @@
     .tp-type { font-size: 10.5px; font-weight: 800; padding: 2px 8px; border-radius: 999px; }
     .tp-type.first { background: rgba(47,92,62,.14); color: var(--success); }
     .tp-type.edit { background: rgba(184,142,51,.16); color: var(--warning); }
+    .tp-sec-t { font-size: 11px; font-weight: 800; color: var(--muted); margin: 4px 0 2px; }
+    .tp-sec-div { height: 1px; background: var(--border); margin: 6px 0; }
+    .tp-note-sm { font-size: 10.5px; color: var(--muted); padding: 2px; }
   </style>
 </head>
 <body>
@@ -126,14 +129,21 @@
       return `<div class="tp-lock">🔓 مفتوح للتوقّع</div>`;
     }
 
-    // Collapsible "✏️ عُدّل" toggle placed in the player card, in place of the
-    // old plain text. Opens to show the full edit history when available
-    // (needs wc-history.sql), otherwise just the last-edit time.
-    function editFold(m, p, hist, edited) {
-      if (!edited) return '';
-      let body;
-      if (hist && hist.length >= 2) {
-        body = hist.map((h, i) => {
+    // The visible points number (display only). Not manually adjusted -> 0.
+    function pointsTag(m, p) {
+      if (!m.finished) return '';
+      const pts = p.manual_points == null ? 0 : scoreRow(p, m);
+      return `<span class="tp-pts ${pts > 0 ? 'good' : 'zero'}">${pts > 0 ? '+' + pts : '0'} نقطة</span>`;
+    }
+
+    // ONE collapsible "✏️ التعديلات" per player, in the same place, gathering
+    // everything editable: the prediction's edit history AND the points override.
+    function changesFold(m, p, hist) {
+      const sections = [];
+
+      // 1) prediction edits
+      if (hist && hist.length >= 2) {                          // full history (needs SQL)
+        const items = hist.map((h, i) => {
           const type = (h.action === 'created' && i === 0) ? 'أول توقّع' : 'تعديل';
           const cls = type === 'أول توقّع' ? 'first' : 'edit';
           return `<div class="tp-hist-item">
@@ -142,38 +152,38 @@
             <span class="ht">🕒 ${fmt(h.changed_at)}</span>
           </div>`;
         }).join('');
+        sections.push(`<div class="tp-sec-t">🔮 توقّع</div>${items}`);
       } else {
-        // no detailed history yet (SQL not activated) -> show the last-edit time clearly
-        body = `<div class="tp-hist-item">
-          <span class="tp-type edit">آخر تعديل</span>
-          <span class="hg">🕒 ${fmt(p.updated_at)}</span>
-        </div>`;
+        const predEdited = p.manual_points == null && p.updated_at && p.created_at
+          && Math.abs(new Date(p.updated_at) - new Date(p.created_at)) > 60000;
+        if (predEdited) {                                      // edited but old value not stored
+          sections.push(`<div class="tp-sec-t">🔮 توقّع</div>
+            <div class="tp-hist-item">
+              <span class="tp-type edit">آخر تعديل</span>
+              <span class="hg">🕒 ${fmt(p.updated_at)}</span>
+            </div>
+            <div class="tp-note-sm">القيمة القديمة تظهر بعد تفعيل سجل التعديلات (SQL).</div>`);
+        }
       }
-      const count = (hist && hist.length >= 2) ? ` (${hist.length})` : '';
-      return `<details class="tp-hist"><summary><span class="mk">▸</span> ✏️ عُدّل${count}</summary>${body}</details>`;
-    }
 
-    // Points cell (transparency view only). Per request: a prediction that the
-    // admin did NOT manually adjust shows 0 here; only manually-set points show
-    // their value, with a collapsible revealing automatic vs manual. This is a
-    // display choice on this page and does not change the real leaderboard.
-    function pointsCell(m, p) {
-      if (!m.finished) return '';
-      if (p.manual_points == null) {                           // not manually edited -> zero
-        return `<span class="tp-pts zero">0 نقطة</span>`;
+      // 2) points override (available without SQL)
+      if (m.finished && p.manual_points != null) {
+        const pts = scoreRow(p, m);
+        const auto = scoreRow({ ...p, manual_points: null }, m);
+        sections.push(`<div class="tp-sec-t">🎯 النقاط</div>
+          <div class="tp-hist-item">
+            <span class="tp-type first">تلقائي</span>
+            <span class="hg">${auto > 0 ? '+' + auto : '0'} نقطة</span>
+          </div>
+          <div class="tp-hist-item">
+            <span class="tp-type edit">معدّلة يدوياً</span>
+            <span class="hg">${pts > 0 ? '+' + pts : '0'} نقطة</span>
+          </div>`);
       }
-      const pts = scoreRow(p, m);                              // manual value
-      const tag = `<span class="tp-pts ${pts > 0 ? 'good' : 'zero'}">${pts > 0 ? '+' + pts : '0'} نقطة</span>`;
-      const auto = scoreRow({ ...p, manual_points: null }, m); // what the law would give
-      const body = `<div class="tp-hist-item">
-          <span class="tp-type first">تلقائي</span>
-          <span class="hg">${auto > 0 ? '+' + auto : '0'} نقطة</span>
-        </div>
-        <div class="tp-hist-item">
-          <span class="tp-type edit">معدّلة يدوياً</span>
-          <span class="hg">${pts > 0 ? '+' + pts : '0'} نقطة</span>
-        </div>`;
-      return `${tag}<details class="tp-hist"><summary><span class="mk">▸</span> ✏️ النقاط معدّلة</summary>${body}</details>`;
+
+      if (!sections.length) return '';
+      return `<details class="tp-hist"><summary><span class="mk">▸</span> ✏️ التعديلات</summary>`
+        + sections.join('<div class="tp-sec-div"></div>') + `</details>`;
     }
 
     function matchBlock(m, preds, histMap) {
@@ -186,16 +196,13 @@
         const t = p.created_at ? new Date(p.created_at).getTime() : null;
         const late = koMs != null && t != null && t > koMs;   // added after lock
         const hist = histMap.get(`${p.match_id}|${p.player_name}`) || [];
-        const edited = hist.length >= 2
-          || (p.updated_at && p.created_at
-              && Math.abs(new Date(p.updated_at) - new Date(p.created_at)) > 60000);
         return `<div class="tp-p ${late ? 'late' : ''}">
           <span class="nm">${esc(p.player_name)}</span>
           <span class="gs">${guessOf(p, m)}</span>
-          ${pointsCell(m, p)}
+          ${pointsTag(m, p)}
           ${late ? '<span class="tp-late-tag">⚠️ أُضيف بعد الإقفال</span>' : ''}
           <span class="tm">🕒 ${fmt(p.created_at)}</span>
-          ${editFold(m, p, hist, edited)}
+          ${changesFold(m, p, hist)}
         </div>`;
       }).join('') : `<div class="tp-empty">👥 ما توقّع أحد لهالمباراة</div>`;
 
