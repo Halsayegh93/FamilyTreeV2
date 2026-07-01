@@ -79,7 +79,9 @@
       padding-bottom: 5px; border-bottom: 1px dashed var(--border); }
     .tp-me-match .tp-vs { font-size: 14px; font-weight: 800; color: var(--ink); }
     .tp-me-match .tp-vs .x { color: var(--muted); font-weight: 700; margin: 0 2px; }
-    .tp-me-guess { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .tp-me-info { font-size: 12px; color: var(--muted); }
+    .tp-me-info.res { color: var(--primary); font-weight: 700; }
+    .tp-me-guess { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 2px; }
     .tp-win { font-size: 13px; font-weight: 700; color: var(--success); }
     .tp-p.me { border-color: var(--primary); background: rgba(43,122,159,.08); }
     .tp-you { font-size: 10px; font-weight: 800; color: var(--textOnPrimary, #fff);
@@ -258,13 +260,26 @@
             winner = `${(p.pen_home > p.pen_away ? m.home_team : m.away_team) || ''} (ركلات)`;
           else winner = 'تعادل';
         }
+        // actual match result (real score + real winner / pens)
+        let actual = 'لم تنتهِ بعد';
+        if (m.finished) {
+          const d = Math.sign((m.home_score || 0) - (m.away_score || 0));
+          actual = `${m.home_score}-${m.away_score}`;
+          if (d > 0) actual += ` 🏆 ${esc(m.home_team || '')}`;
+          else if (d < 0) actual += ` 🏆 ${esc(m.away_team || '')}`;
+          else if (m.home_pen != null && m.away_pen != null && m.home_pen !== m.away_pen)
+            actual += ` (ركلات ${m.home_pen}-${m.away_pen}) 🏆 ${esc((m.home_pen > m.away_pen ? m.home_team : m.away_team) || '')}`;
+          else actual += ' تعادل';
+        }
         return `<div class="tp-p tp-me-p">
           <div class="tp-me-match">
             <span class="nm">مباراة ${m.id}</span>
             <span class="tp-vs">${esc(m.home_team || '?')} <span class="x">×</span> ${esc(m.away_team || '?')}</span>
           </div>
+          <div class="tp-me-info">🗓️ ${m.kickoff ? fmt(m.kickoff) : 'غير محدّد'}</div>
+          <div class="tp-me-info ${m.finished ? 'res' : ''}">🏁 النتيجة الفعلية: ${actual}</div>
           <div class="tp-me-guess">
-            <span class="gs">النتيجة: ${esc(score)}</span>
+            <span class="gs">توقّعك: ${esc(score)}</span>
             <span class="tp-win">🏆 الفائز: ${esc(winner)}</span>
             ${ptsTag}
           </div>
