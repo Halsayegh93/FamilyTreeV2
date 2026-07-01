@@ -17,7 +17,7 @@ class MemberViewModel: ObservableObject {
     // MARK: - Published Properties
     
     @Published var allMembers: [FamilyMember] = [] {
-        didSet { _memberByIdDirty = true }
+        didSet { _memberByIdDirty = true; _childrenByFatherIdDirty = true }
     }
 
     /// O(1) member lookup by ID — use instead of allMembers.first(where:).
@@ -28,13 +28,40 @@ class MemberViewModel: ObservableObject {
 
     var _memberById: [UUID: FamilyMember] {
         if _memberByIdDirty {
-            _memberByIdCache = Dictionary(uniqueKeysWithValues: allMembers.map { ($0.id, $0) })
+            // uniquingKeysWith بدل uniqueKeysWithValues — يمنع crash لو صار id مكرر
+            _memberByIdCache = Dictionary(
+                allMembers.map { ($0.id, $0) },
+                uniquingKeysWith: { _, new in new }
+            )
             _memberByIdDirty = false
         }
         return _memberByIdCache
     }
 
     func member(byId id: UUID) -> FamilyMember? { _memberById[id] }
+
+    /// O(1) خريطة أبناء كل أب (المعدودون فقط، مرتّبون للعرض) — تُبنى مرة واحدة بعد كل تعديل.
+    /// تمنع تكرار `allMembers.filter` المكلف على كل استدعاء (بطء مع آلاف الأعضاء).
+    private var _childrenByFatherIdCache: [UUID: [FamilyMember]] = [:]
+    private var _childrenByFatherIdDirty: Bool = false
+
+    var childrenByFatherId: [UUID: [FamilyMember]] {
+        if _childrenByFatherIdDirty {
+            var map: [UUID: [FamilyMember]] = [:]
+            for m in allMembers where m.isCountable {
+                if let fid = m.fatherId { map[fid, default: []].append(m) }
+            }
+            for (k, v) in map { map[k] = v.sortedForDisplay() }
+            _childrenByFatherIdCache = map
+            _childrenByFatherIdDirty = false
+        }
+        return _childrenByFatherIdCache
+    }
+
+    /// أبناء عضو معيّن (معدودون، مرتّبون) — بحث O(1) من الخريطة المكاشة.
+    func children(of fatherId: UUID) -> [FamilyMember] {
+        childrenByFatherId[fatherId] ?? []
+    }
     
     @Published var currentMemberChildren: [FamilyMember] = []
     @Published var activePath: [UUID] = []
@@ -237,13 +264,27 @@ class MemberViewModel: ObservableObject {
         self.activePath = [] // تصفير المسار عند كل تحميل
 
         do {
-            let response = try await supabase
-                .from("profiles")
-                .select()
-                .limit(10000)
-                .execute()
-
-            let members = try JSONDecoder().decode([FamilyMember].self, from: response.data)
+            // تحميل بالتقسيم (pagination) لضمان جلب كل الأعضاء — PostgREST يحدّ الصفوف
+            // لكل طلب (افتراضياً 1000) فيتجاهل .limit الكبير، فنجلب صفحة صفحة حتى تنتهي.
+            var members: [FamilyMember] = []
+            var seenIds = Set<UUID>()
+            let pageSize = 1000
+            var offset = 0
+            while true {
+                let response = try await supabase
+                    .from("profiles")
+                    .select()
+                    .order("id", ascending: true)
+                    .range(from: offset, to: offset + pageSize - 1)
+                    .execute()
+                let page = try JSONDecoder().decode([FamilyMember].self, from: response.data)
+                // إزالة التكرار — لو رجع صف موجود مسبقاً (حدود صفحات/تغيّر بيانات)
+                for m in page where seenIds.insert(m.id).inserted {
+                    members.append(m)
+                }
+                if page.count < pageSize { break }
+                offset += pageSize
+            }
 
             self.allMembers = members
             self.membersLoadFailed = false

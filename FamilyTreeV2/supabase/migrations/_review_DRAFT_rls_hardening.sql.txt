@@ -1,0 +1,116 @@
+-- ============================================================================
+-- DRAFT — NOT APPLIED. For review only (extension is .txt so `supabase db push`
+-- will NOT pick it up). Rename to a timestamped .sql ONLY after approval.
+--
+-- Purpose: close the RLS write holes found in the security audit (2026-06-02).
+-- Root cause: write policies are granted to role `public` (which includes the
+-- anonymous `anon` role). Anyone holding the public anon key — which ships in the
+-- app bundle and on the website — can INSERT/UPDATE/DELETE on these tables without
+-- logging in.
+--
+-- SELECT policies are intentionally LEFT UNTOUCHED here (the family directory /
+-- news are meant to be broadly readable, and the public web companion may rely on
+-- anon SELECT — changing reads needs a separate decision).
+-- ============================================================================
+
+
+-- ████████████████████████████████████████████████████████████████████████████
+-- TIER 1 — SAFE: scope writes from `public` -> `authenticated` (same conditions).
+-- Closes the anonymous-write hole. Does NOT change what a logged-in member can do,
+-- so it cannot break any in-app flow (the app always has a session when writing).
+-- ████████████████████████████████████████████████████████████████████████████
+
+-- admin_requests ----------------------------------------------------------------
+alter policy "admin_requests_insert" on public.admin_requests to authenticated;
+alter policy "admin_requests_update" on public.admin_requests to authenticated;
+alter policy "admin_requests_delete" on public.admin_requests to authenticated;
+-- (admin_requests_select left as-is for now; see Tier 2 note)
+
+-- diwaniyas ---------------------------------------------------------------------
+alter policy "diwaniyas_insert" on public.diwaniyas to authenticated;
+alter policy "diwaniyas_update" on public.diwaniyas to authenticated;
+alter policy "diwaniyas_delete" on public.diwaniyas to authenticated;
+
+-- projects ----------------------------------------------------------------------
+alter policy "projects_insert" on public.projects to authenticated;
+alter policy "projects_update" on public.projects to authenticated;
+alter policy "projects_delete" on public.projects to authenticated;
+
+-- family_stories ----------------------------------------------------------------
+alter policy "family_stories_insert" on public.family_stories to authenticated;
+alter policy "family_stories_update" on public.family_stories to authenticated;
+alter policy "family_stories_delete" on public.family_stories to authenticated;
+
+-- member_gallery_photos ---------------------------------------------------------
+alter policy "member_gallery_photos_insert" on public.member_gallery_photos to authenticated;
+alter policy "member_gallery_photos_update" on public.member_gallery_photos to authenticated;
+alter policy "member_gallery_photos_delete" on public.member_gallery_photos to authenticated;
+
+-- news --------------------------------------------------------------------------
+alter policy "المدراء فقط يضيفون أخبار" on public.news to authenticated;
+alter policy "news_delete" on public.news to authenticated;
+
+-- profiles ----------------------------------------------------------------------
+-- "Allow system to link profiles" = the login flow re-pointing a profile row to the
+-- new auth uid. Must stay possible for logged-in users; just remove anon.
+alter policy "Allow system to link profiles" on public.profiles to authenticated;
+
+-- device_tokens -----------------------------------------------------------------
+alter policy "device_tokens_insert_self" on public.device_tokens to authenticated;
+alter policy "device_tokens_update_self" on public.device_tokens to authenticated;
+
+
+-- ████████████████████████████████████████████████████████████████████████████
+-- TIER 2 — NEEDS BEHAVIOR CONFIRMATION. Adds role/ownership checks so that
+-- admin-only operations are actually admin-only. Apply after confirming these
+-- match how the app is used. Uses existing helper public.current_user_role().
+-- ████████████████████████████████████████████████████████████████████████████
+
+-- (2a) FIX THE MISLEADING NEWS-INSERT POLICY ------------------------------------
+-- Its name says "admins only add news" but its check is literally `true`, so any
+-- authenticated user can post. If members may submit news (pending approval), keep
+-- it open to authenticated (Tier 1 already did that). If posting is admin-only,
+-- replace with the role check below:
+--
+-- alter policy "المدراء فقط يضيفون أخبار" on public.news
+--   with check ( public.current_user_role() in ('owner','admin','monitor','supervisor') );
+
+-- (2b) NEWS DELETE = owner/admin only (canDeleteNews) ----------------------------
+-- alter policy "news_delete" on public.news
+--   using ( public.current_user_role() in ('owner','admin') );
+
+-- (2c) ADMIN_REQUESTS: approve/reject + delete = moderators only ------------------
+-- alter policy "admin_requests_update" on public.admin_requests
+--   using ( public.current_user_role() in ('owner','admin','monitor','supervisor') )
+--   with check ( public.current_user_role() in ('owner','admin','monitor','supervisor') );
+-- alter policy "admin_requests_delete" on public.admin_requests
+--   using ( public.current_user_role() in ('owner','admin') );
+
+-- (2d) ADMIN_REQUESTS INSERT: requester must be self ----------------------------
+-- alter policy "admin_requests_insert" on public.admin_requests
+--   with check ( requester_id = auth.uid() OR member_id = auth.uid() );
+
+-- (2e) DEVICE_TOKENS: only manage your own rows ---------------------------------
+-- alter policy "device_tokens_insert_self" on public.device_tokens
+--   with check ( member_id = auth.uid() );
+-- alter policy "device_tokens_update_self" on public.device_tokens
+--   using ( member_id = auth.uid() ) with check ( member_id = auth.uid() );
+
+-- (2f) diwaniyas / projects delete+update = moderators ---------------------------
+-- alter policy "diwaniyas_delete" on public.diwaniyas
+--   using ( public.current_user_role() in ('owner','admin','monitor','supervisor') );
+-- alter policy "projects_delete" on public.projects
+--   using ( public.current_user_role() in ('owner','admin','monitor','supervisor') );
+
+
+-- ████████████████████████████████████████████████████████████████████████████
+-- TIER 3 — OPTIONAL low-risk hardening (function search_path). 11 functions flagged.
+-- Example (safe; pin search_path to prevent shadowing):
+--   alter function public.normalize_phone() set search_path = public;
+--   ... (repeat for the 11 flagged functions)
+-- NOTE: trigger functions must keep their exact signatures.
+-- ████████████████████████████████████████████████████████████████████████████
+
+-- OPEN QUESTION (not in this file): profiles/news SELECT are open to anon `public`.
+-- This may be REQUIRED by the public web companion (almohali-website / familytree-web).
+-- Decide separately whether to restrict reads to `authenticated`.

@@ -37,3 +37,4 @@ Pods/
 .env
 .env.*
 .claude/worktrees/
+/supabase/.temp/

@@ -1543,6 +1543,8 @@ struct AdminAllRequestsView: View {
                 }
                 .padding(.horizontal, DS.Spacing.md)
                 .padding(.vertical, DS.Spacing.md)
+                // يجعل كامل مستطيل الكرت قابلاً للنقر (حتى الفراغات) — يفتح التفاصيل من أي مكان
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
         }
@@ -1897,9 +1899,14 @@ struct AdminAllRequestsView: View {
                     Text(L10n.t(action.arabicLabel, action.englishLabel))
                         .font(DS.Font.calloutBold)
                         .foregroundColor(DS.Color.textPrimary)
-                    Text(request.member?.fullName ?? L10n.t("عضو", "Member"))
-                        .font(DS.Font.caption1)
-                        .foregroundColor(DS.Color.textSecondary)
+                    // في طلب تعديل الاسم اسم العضو موجود في تفاصيل الطلب — لا نكرره
+                    if case .editName = action {
+                        EmptyView()
+                    } else {
+                        Text(request.member?.fullName ?? L10n.t("عضو", "Member"))
+                            .font(DS.Font.caption1)
+                            .foregroundColor(DS.Color.textSecondary)
+                    }
                 }
                 Spacer()
             }
@@ -2272,13 +2279,43 @@ struct AdminAllRequestsView: View {
 
     // MARK: - Join Request Row
 
+    /// يحدّد أيقونة/اسم/لون منصّة الانضمام من قيمة `registration_platform`.
+    /// ثلاث منصّات واضحة: الموقع، تطبيق الآيفون، تطبيق الأندرويد.
+    private func platformInfo(_ raw: String?, hasUsername: Bool) -> (icon: String, ar: String, en: String, color: Color) {
+        switch (raw ?? (hasUsername ? "web" : "ios")).lowercased() {
+        case "web":
+            return ("globe", "الموقع", "Web", DS.Color.info)
+        case "android":
+            return ("candybarphone", "تطبيق أندرويد", "Android App", DS.Color.success)
+        default: // ios أو غير معروف
+            return ("apple.logo", "تطبيق آيفون", "iPhone App", DS.Color.accent)
+        }
+    }
+
+    /// شارة بارزة توضّح مصدر الانضمام (موقع / آيفون / أندرويد) — تظهر من خارج الكرت.
+    @ViewBuilder
+    private func joinSourceChip(for rawPlatform: String?, hasUsername: Bool) -> some View {
+        let info = platformInfo(rawPlatform, hasUsername: hasUsername)
+        HStack(spacing: 5) {
+            Image(systemName: info.icon)
+                .font(DS.Font.scaled(11, weight: .bold))
+            Text(L10n.t("انضم عبر \(info.ar)", "Joined via \(info.en)"))
+                .font(DS.Font.scaled(11, weight: .bold))
+        }
+        .foregroundColor(info.color)
+        .padding(.horizontal, DS.Spacing.sm)
+        .padding(.vertical, 5)
+        .background(info.color.opacity(0.12))
+        .clipShape(Capsule())
+        .overlay(Capsule().stroke(info.color.opacity(0.25), lineWidth: 0.5))
+    }
+
     private func joinRequestRow(for member: FamilyMember) -> some View {
         // كل المتغيرات خارج ViewBuilder لتفادي مشاكل @ViewBuilder مع let
         let registrationTime = member.createdAt.map { formatRegistrationDate($0) } ?? "—"
         let uname = member.username
         let orderedResults = orderedMatchList(for: member)
         let hasMatches = !orderedResults.isEmpty
-        let serverMatchCount = orderedResults.count
         let isExpanded = expandedMatchMembers.contains(member.id)
         let visible = isExpanded ? orderedResults : Array(orderedResults.prefix(5))
 
@@ -2286,30 +2323,19 @@ struct AdminAllRequestsView: View {
             HStack(spacing: DS.Spacing.sm) {
                 iconCircle(icon: "person.badge.shield.checkmark", color: hasMatches ? DS.Color.success : DS.Color.warning, size: 36)
 
-                VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                    // رأس الكرت: نوع الطلب
+                VStack(alignment: .leading, spacing: 2) {
+                    // عنوان الطلب — بارز (موحّد مع بقية الكروت)
                     Text(L10n.t("طلب انضمام", "Join Request"))
                         .font(DS.Font.calloutBold)
                         .foregroundColor(DS.Color.textPrimary)
 
-                    // اسم المنضم — سطر ثاني
+                    // اسم المنضم — عنوان فرعي
                     Text(member.fullName)
-                        .font(DS.Font.scaled(13, weight: .bold))
+                        .font(DS.Font.caption1)
                         .foregroundColor(DS.Color.textSecondary)
                         .lineLimit(2)
 
-                    // اسم المستخدم (من الموقع)
-                    if let uname {
-                        HStack(spacing: 3) {
-                            Image(systemName: "at")
-                                .font(DS.Font.scaled(9, weight: .bold))
-                            Text(uname)
-                                .font(DS.Font.scaled(11, weight: .bold))
-                        }
-                        .foregroundColor(DS.Color.primary)
-                    }
-
-                    // رقم هاتف المنضم
+                    // رقم الهاتف — عنوان فرعي
                     if let phone = member.phoneNumber, !phone.isEmpty {
                         HStack(spacing: DS.Spacing.xs) {
                             Image(systemName: "phone.fill")
@@ -2321,20 +2347,22 @@ struct AdminAllRequestsView: View {
                         .foregroundColor(DS.Color.textSecondary)
                     }
 
-                    // الوقت والتاريخ
-                    HStack(spacing: 3) {
-                        Image(systemName: "clock.fill")
-                            .font(DS.Font.scaled(9))
-                        Text(registrationTime)
-                            .font(DS.Font.scaled(10, weight: .semibold))
+                    // اسم المستخدم (للمنضمين من الموقع)
+                    if let uname {
+                        HStack(spacing: 3) {
+                            Image(systemName: "at")
+                                .font(DS.Font.scaled(9, weight: .bold))
+                            Text(uname)
+                                .font(DS.Font.scaled(11, weight: .bold))
+                        }
+                        .foregroundColor(DS.Color.primary)
                     }
-                    .foregroundColor(DS.Color.textSecondary)
                 }
 
                 Spacer()
 
+                // زر واتساب — تواصل مباشر مع المنضم
                 VStack(alignment: .trailing, spacing: DS.Spacing.xs) {
-                    // زر واتساب — تواصل مباشر مع المنضم من الكرت الخارجي
                     if let phone = member.phoneNumber, !phone.isEmpty,
                        let wa = KuwaitPhone.whatsappURL(phone) {
                         Button {
@@ -2354,24 +2382,11 @@ struct AdminAllRequestsView: View {
                         }
                         .buttonStyle(DSScaleButtonStyle())
                     }
-
-                    // بادج مطابقات التسجيل
-                    if serverMatchCount > 0 {
-                        VStack(spacing: 2) {
-                            Text("\(serverMatchCount)")
-                                .font(DS.Font.scaled(14, weight: .black))
-                                .foregroundColor(DS.Color.info)
-                            Text(L10n.t("مطابقة", "match"))
-                                .font(DS.Font.scaled(8, weight: .bold))
-                                .foregroundColor(DS.Color.info)
-                        }
-                        .padding(.horizontal, DS.Spacing.sm)
-                        .padding(.vertical, DS.Spacing.xs)
-                        .background(DS.Color.info.opacity(0.1))
-                        .cornerRadius(DS.Radius.md)
-                    }
                 }
             }
+
+            // مصدر الانضمام — بارز (موقع / تطبيق آيفون / تطبيق أندرويد)
+            joinSourceChip(for: member.registrationPlatform, hasUsername: uname != nil)
 
             // نتائج التطابق — لستة مرتبة من الاسم الأول للأخير
             if !orderedResults.isEmpty {
@@ -2433,6 +2448,15 @@ struct AdminAllRequestsView: View {
                 .background(DS.Color.surface)
                 .cornerRadius(DS.Radius.sm)
             }
+
+            // الوقت والتاريخ — أسفل الكرت
+            HStack(spacing: 3) {
+                Image(systemName: "clock.fill")
+                    .font(DS.Font.scaled(9))
+                Text(registrationTime)
+                    .font(DS.Font.scaled(10, weight: .semibold))
+            }
+            .foregroundColor(DS.Color.textSecondary)
         }
     }
 
@@ -3072,10 +3096,7 @@ struct AdminAllRequestsView: View {
                         .font(DS.Font.calloutBold)
                         .foregroundColor(DS.Color.textPrimary)
 
-                    Text(L10n.t("لـ: \(request.member?.fullName ?? "عضو")",
-                                "For: \(request.member?.fullName ?? "Member")"))
-                        .font(DS.Font.caption1)
-                        .foregroundColor(DS.Color.textSecondary)
+                    // اسم العضو موجود في تفاصيل الطلب — لا نكرره هنا
 
                     if let requester = memberVM.allMembers.first(where: { $0.id == request.requesterId }) {
                         Text(L10n.t("من: \(requester.fullName)", "By: \(requester.fullName)"))
@@ -3128,7 +3149,6 @@ struct AdminAllRequestsView: View {
     // MARK: - Name Change Row
 
     private func nameChangeRow(for request: AdminRequest) -> some View {
-        let currentName = request.member?.fullName ?? L10n.t("عضو", "Member")
         let newName = request.newValue ?? "—"
 
         return VStack(alignment: .leading, spacing: DS.Spacing.sm) {
@@ -3141,9 +3161,7 @@ struct AdminAllRequestsView: View {
                         .font(DS.Font.calloutBold)
                         .foregroundColor(DS.Color.textPrimary)
 
-                    Text(currentName)
-                        .font(DS.Font.caption1)
-                        .foregroundColor(DS.Color.textSecondary)
+                    // اسم العضو موجود في تفاصيل الطلب — لا نكرره هنا
 
                     if let requester = memberVM.allMembers.first(where: { $0.id == request.requesterId }) {
                         Text(L10n.t("من: \(requester.fullName)", "By: \(requester.fullName)"))

@@ -243,7 +243,13 @@ struct AdminPendingRequestsView: View {
         let hasMatches = !nameMatches.isEmpty
         let isLoading = loadingMatchFor == member.id
         let hasSearched = nameMatchResults.keys.contains(member.id)
-        let platform = member.registrationPlatform ?? "ios"
+        let platform = member.registrationPlatform ?? (member.username != nil ? "web" : "ios")
+        // مصدر التسجيل — ثلاث منصّات واضحة: موقع / آيفون / أندرويد
+        let platformIcon: String = platform == "web" ? "globe" : (platform == "android" ? "candybarphone" : "apple.logo")
+        let platformLabel: String = platform == "web"
+            ? L10n.t("الموقع", "Web")
+            : (platform == "android" ? L10n.t("أندرويد", "Android") : L10n.t("آيفون", "iPhone"))
+        let platformColor: Color = platform == "web" ? DS.Color.info : (platform == "android" ? DS.Color.success : DS.Color.accent)
         let registrationTime = member.createdAt.map { formatRegistrationDate($0) } ?? "—"
         let uname = member.username
 
@@ -314,17 +320,17 @@ struct AdminPendingRequestsView: View {
                         }
                         .foregroundColor(DS.Color.textSecondary)
 
-                        // المصدر
+                        // المصدر — موقع / آيفون / أندرويد
                         HStack(spacing: 3) {
-                            Image(systemName: platform == "web" ? "globe" : "iphone")
+                            Image(systemName: platformIcon)
                                 .font(DS.Font.scaled(9))
-                            Text(platform == "web" ? L10n.t("الموقع", "Web") : L10n.t("التطبيق", "App"))
+                            Text(platformLabel)
                                 .font(DS.Font.scaled(10, weight: .bold))
                         }
-                        .foregroundColor(platform == "web" ? DS.Color.info : DS.Color.success)
+                        .foregroundColor(platformColor)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
-                        .background((platform == "web" ? DS.Color.info : DS.Color.success).opacity(0.12))
+                        .background(platformColor.opacity(0.12))
                         .clipShape(Capsule())
                     }
 

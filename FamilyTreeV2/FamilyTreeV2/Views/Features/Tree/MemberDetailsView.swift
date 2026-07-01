@@ -1125,24 +1125,35 @@ struct MemberDetailsView: View {
     // MARK: - Kinship Path
 
     private func showKinshipPath() {
-        guard let currentUser = authVM.currentUser else { return }
+        Log.error("🟣 [ضغط زر القرابة] الهدف=«\(member.fullName)» id=\(member.id.uuidString.prefix(8)) fatherId=\(member.fatherId?.uuidString.prefix(8) ?? "nil")")
+        // أغلق الشيت دائماً أولاً — استجابة فورية حتى لو فشل أي شي بعده
+        dismiss()
+
+        guard let currentUser = authVM.currentUser else {
+            Log.error("🟣 [القرابة] ❌ currentUser فاضي — تعذّر الحساب (الشيت أُغلق فقط)")
+            Log.warning("[Kinship] لا يوجد مستخدم حالي — تعذّر حساب صلة القرابة")
+            return
+        }
+        Log.error("🟣 [القرابة] currentUser=«\(currentUser.fullName)» id=\(currentUser.id.uuidString.prefix(8)) | عدد المحمّلين=\(memberVM.allMembers.count)")
         let lookup = memberVM._memberById
         let result = KinshipCalculator.calculate(from: currentUser, to: member, lookup: lookup)
+        Log.error("🟣 [القرابة] النتيجة: العلاقة=«\(result.relationship)» الجد المشترك=\(result.commonAncestor?.firstName ?? "nil") pathA=\(result.pathA.count) pathB=\(result.pathB.count)")
 
         var pathIds = result.pathA.map(\.id) + result.pathB.map(\.id)
         if let ancestor = result.commonAncestor {
             pathIds.append(ancestor.id)
         }
 
-        dismiss()
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+        let targetId = member.id
+        let relationship = result.relationship
+        Log.error("🟣 [القرابة] سيُرسل الإشعار بعد 0.2ث (targetId=\(targetId.uuidString.prefix(8)))")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
             NotificationCenter.default.post(
                 name: .showKinshipPath,
                 object: nil,
                 userInfo: [
-                    "memberId": member.id,
-                    "relationship": result.relationship,
+                    "memberId": targetId,
+                    "relationship": relationship,
                     "pathIds": pathIds
                 ]
             )

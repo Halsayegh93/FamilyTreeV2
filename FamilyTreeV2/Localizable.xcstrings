@@ -51,16 +51,6 @@
     "%lld" : {
 
     },
-    "%lld / %lld" : {
-      "localizations" : {
-        "ar" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$lld / %2$lld"
-          }
-        }
-      }
-    },
     "%lld عضو في الفرع" : {
 
     },
