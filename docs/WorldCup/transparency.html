@@ -56,6 +56,8 @@
     .tp-cols { display: flex; gap: 10px; flex-wrap: wrap; width: 100%; }
     .tp-cols .tp-col { flex: 1; min-width: 140px; }
     .tp-cols .tp-col + .tp-col { border-inline-start: 1px solid var(--border); padding-inline-start: 10px; }
+    /* inside the narrow columns, let the time show fully on its own line */
+    .tp-cols .tp-hist-item .ht { margin-inline-start: 0; white-space: normal; flex-basis: 100%; }
     .tp-note-sm { font-size: 10.5px; color: var(--muted); padding: 2px; }
     .tp-status { font-size: 12.5px; text-align: center; line-height: 1.7;
       border-radius: var(--radius); padding: 10px 12px; margin-bottom: 14px; }
