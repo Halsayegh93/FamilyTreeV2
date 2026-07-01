@@ -273,16 +273,19 @@
             winner = `${(p.pen_home > p.pen_away ? m.home_team : m.away_team) || ''} (ركلات)`;
           else winner = 'تعادل';
         }
-        // actual match result (real score + real winner / pens)
+        // actual match result — GOALS on their own; the shootout is a separate line
         let actual = 'لم تنتهِ بعد';
+        let penActual = '';
         if (m.finished) {
           const d = Math.sign((m.home_score || 0) - (m.away_score || 0));
           actual = `${m.home_score}-${m.away_score}`;
           if (d > 0) actual += ` 🏆 ${esc(m.home_team || '')}`;
           else if (d < 0) actual += ` 🏆 ${esc(m.away_team || '')}`;
-          else if (m.home_pen != null && m.away_pen != null && m.home_pen !== m.away_pen)
-            actual += ` (ركلات ${m.home_pen}-${m.away_pen}) 🏆 ${esc((m.home_pen > m.away_pen ? m.home_team : m.away_team) || '')}`;
-          else actual += ' تعادل';
+          else {
+            actual += ' تعادل';
+            if (m.home_pen != null && m.away_pen != null && m.home_pen !== m.away_pen)
+              penActual = `🥅 ركلات الترجيح: ${m.home_pen}-${m.away_pen} 🏆 ${esc((m.home_pen > m.away_pen ? m.home_team : m.away_team) || '')}`;
+          }
         }
         return `<div class="tp-p tp-me-p">
           <div class="tp-me-match">
@@ -290,7 +293,8 @@
             <span class="tp-vs">${esc(m.home_team || '?')} <span class="x">×</span> ${esc(m.away_team || '?')}</span>
           </div>
           <div class="tp-me-info">🗓️ ${m.kickoff ? fmt(m.kickoff) : 'غير محدّد'}</div>
-          <div class="tp-me-info ${m.finished ? 'res' : ''}">🏁 النتيجة الفعلية: ${actual} ${m.finished ? ptsTag : ''}</div>
+          <div class="tp-me-info ${m.finished ? 'res' : ''}">🏁 النتيجة الفعلية (الأهداف): ${actual} ${m.finished ? ptsTag : ''}</div>
+          ${penActual ? `<div class="tp-me-info res">${penActual}</div>` : ''}
           <div class="tp-me-guess">
             <span class="gs">توقّعك: ${esc(score)}</span>
             <span class="tp-win">🏆 ${esc(winner)}</span>
