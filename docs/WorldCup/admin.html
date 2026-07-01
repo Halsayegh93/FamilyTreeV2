@@ -316,7 +316,21 @@
             <span class="name ${m.away_team ? '' : 'tbd'}">${esc(away)}</span>
           </div>
         </div>
-        ${(m.home_pen != null && m.away_pen != null) ? `<div class="venue-line" style="text-align:center">🥅 ركلات الترجيح: ${m.home_pen} - ${m.away_pen} ${esc((m.home_pen > m.away_pen ? m.home_team : m.away_team) || '')}</div>` : ''}
+
+        <!-- shown only when the score is a draw — pick the penalty winner + score -->
+        <div class="win-pick" style="display:none;margin-top:10px;text-align:center;font-size:13px;color:var(--muted)">
+          تعادل — منو الفائز بالركلات؟
+          <div style="display:flex;gap:8px;margin-top:6px">
+            <button class="btn ghost win-home" style="flex:1">${esc(home)}</button>
+            <button class="btn ghost win-away" style="flex:1">${esc(away)}</button>
+          </div>
+          <div style="display:flex;gap:6px;align-items:center;justify-content:center;margin-top:8px">
+            <span>ركلات الترجيح:</span>
+            <input class="pen-home" type="number" min="0" max="99" inputmode="numeric" value="${m.home_pen ?? ''}" style="width:48px;text-align:center" />
+            <span>-</span>
+            <input class="pen-away" type="number" min="0" max="99" inputmode="numeric" value="${m.away_pen ?? ''}" style="width:48px;text-align:center" />
+          </div>
+        </div>
         <div class="card-actions">
           <button class="btn save-result">💾 تحديث النتيجة (تُحسب النقاط)</button>
           <button class="btn ghost reopen" style="margin-top:8px">♻️ مسح النتيجة وإعادة الفتح</button>
@@ -483,16 +497,51 @@
       const id = +card.dataset.id;
       wirePredDelete(card, id);
 
+      // draw → penalty winner + penalty score (same rule as the upcoming-match form)
+      const hEl = card.querySelector('.r-home');
+      const aEl = card.querySelector('.r-away');
+      const pick = card.querySelector('.win-pick');
+      const winHome = card.querySelector('.win-home');
+      const winAway = card.querySelector('.win-away');
+      if (pick) {
+        const choose = (side) => {
+          card.dataset.winner = side;
+          winHome.classList.toggle('saved', side === 'home');
+          winAway.classList.toggle('saved', side === 'away');
+        };
+        const refreshPick = () => {
+          const draw = hEl.value !== '' && aEl.value !== '' && +hEl.value === +aEl.value;
+          pick.style.display = draw ? '' : 'none';
+          if (!draw) card.dataset.winner = '';
+        };
+        hEl.addEventListener('input', refreshPick);
+        aEl.addEventListener('input', refreshPick);
+        winHome.onclick = () => choose('home');
+        winAway.onclick = () => choose('away');
+        // preselect the already-saved penalty winner, if any
+        const cur = matches.find((x) => x.id === id) || {};
+        if (cur.home_pen != null && cur.away_pen != null && cur.home_pen !== cur.away_pen)
+          choose(cur.home_pen > cur.away_pen ? 'home' : 'away');
+        refreshPick();
+      }
+
       // update the result in place (recomputes points)
       const save = card.querySelector('.save-result');
       if (save) save.onclick = async (ev) => {
         const b = ev.currentTarget;
-        const h = card.querySelector('.r-home').value;
-        const a = card.querySelector('.r-away').value;
+        const h = hEl.value, a = aEl.value;
         if (h === '' || a === '') { toast('اكتب النتيجة للفريقين', true); return; }
+        const phEl = card.querySelector('.pen-home'), paEl = card.querySelector('.pen-away');
+        const penH = phEl && phEl.value !== '' ? +phEl.value : null;
+        const penA = paEl && paEl.value !== '' ? +paEl.value : null;
+        let winner = card.dataset.winner || null;
+        if (+h === +a) {
+          if (penH != null && penA != null && penH !== penA) winner = penH > penA ? 'home' : 'away';
+          if (!winner) { toast('اكتب نتيجة الركلات أو اختر الفائز بالركلات', true); return; }
+        }
         b.disabled = true;
         try {
-          await adminSetResult(id, +h, +a, PIN, null);
+          await adminSetResult(id, +h, +a, PIN, winner, penH, penA);
           toast('تم تحديث النتيجة ✅ وتحسبت النقاط');
           loadList();
         } catch (e) { toast(friendlyError(e), true); b.disabled = false; }
