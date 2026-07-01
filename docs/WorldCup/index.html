@@ -174,7 +174,12 @@
       const pickOnly = predicted && mine.pick;   // winner-only prediction
       const ph = predicted && !pickOnly ? mine.home : '';
       const pa = predicted && !pickOnly ? mine.away : '';
-      const inputsOff = locked || predicted;
+      // the previously-saved penalty qualifier (to pre-select when editing a draw)
+      const savedPen = (predicted && !pickOnly)
+        ? (mine.pen_pick || (mine.pen_home != null && mine.pen_away != null
+            ? (mine.pen_home > mine.pen_away ? 'home' : 'away') : ''))
+        : '';
+      const inputsOff = locked;   // editable until kickoff, even after saving
 
       let badge = '';
       if (m.finished) badge = '<span class="badge done">انتهت</span>';
@@ -209,16 +214,10 @@
       // action area
       const isKnockout = m.id <= 32;   // every match here is knockout (penalties possible)
       let actionHTML = '';
-      if (!m.finished && pickOnly) {
-        const t = mine.pick === 'home' ? m.home_team : m.away_team;
-        actionHTML = `<div class="predicted-note">🏆 توقعت فوز <b>${esc(t || '')}</b> — لا يمكن التعديل</div>`;
-      } else if (!m.finished && predicted) {
-        const penQ = mine.pen_pick ? (mine.pen_pick === 'home' ? m.home_team : m.away_team)
-          : ((mine.pen_home != null && mine.pen_away != null) ? (mine.pen_home > mine.pen_away ? m.home_team : m.away_team) : '');
-        const penNote = penQ ? ` · 🥅 تأهّل <b>${esc(penQ)}</b> بالركلات` : '';
-        actionHTML = `<div class="predicted-note">✓ توقعك محفوظ (${mine.home} - ${mine.away})${penNote} — لا يمكن التعديل</div>`;
-      } else if (!locked && !predicted) {
-        // penalty winner picker: shown only when the typed score is a draw (knockout decider)
+      if (m.finished) {
+        actionHTML = '';   // result shown above
+      } else if (!locked) {
+        // before kickoff — the prediction can be created OR changed
         const penPickHTML = isKnockout ? `<div class="penpick" style="display:none">
             <div class="penpick-q">🥅 توقّعت تعادل — منو يتأهّل بالركلات؟ <b style="color:var(--error,#c33)">(إجباري)</b></div>
             <div class="penpick-opts">
@@ -226,8 +225,19 @@
               <button type="button" class="btn pensel" data-pen="away">${esc(m.away_team || '')}</button>
             </div>
           </div>` : '';
-        actionHTML = `<div class="card-actions"><button class="btn save">حفظ التوقّع</button></div>
+        const editNote = predicted
+          ? `<div class="predicted-note ok">✓ توقعك محفوظ — تقدر تعدّله لين ما تبدأ المباراة</div>`
+          : '';
+        actionHTML = `${editNote}<div class="card-actions"><button class="btn save">${predicted ? 'تحديث التوقّع' : 'حفظ التوقّع'}</button></div>
           ${penPickHTML}`;
+      } else if (pickOnly) {
+        const t = mine.pick === 'home' ? m.home_team : m.away_team;
+        actionHTML = `<div class="predicted-note">🏆 توقعت فوز <b>${esc(t || '')}</b> — بدأت المباراة، أُقفل التعديل</div>`;
+      } else if (predicted) {
+        const penQ = mine.pen_pick ? (mine.pen_pick === 'home' ? m.home_team : m.away_team)
+          : ((mine.pen_home != null && mine.pen_away != null) ? (mine.pen_home > mine.pen_away ? m.home_team : m.away_team) : '');
+        const penNote = penQ ? ` · 🥅 تأهّل <b>${esc(penQ)}</b> بالركلات` : '';
+        actionHTML = `<div class="predicted-note">✓ توقعك محفوظ (${mine.home} - ${mine.away})${penNote} — بدأت المباراة، أُقفل التعديل</div>`;
       }
 
       // who predicted this match — reveal everyone's prediction once the match is
@@ -291,7 +301,7 @@
         if (label) favHTML = `<div class="favpick">🔮 الأكثر توقّعاً: <b>${label}</b></div>`;
       }
 
-      return `<div class="card" data-id="${m.id}">
+      return `<div class="card" data-id="${m.id}" data-pen-saved="${savedPen}">
         <div class="meta">
           <span>${esc(roundLabel(m.round))}</span>
           ${badge}
@@ -432,6 +442,13 @@
             card.querySelectorAll('.pensel').forEach((b) => b.classList.toggle('saved', b === pb));
           };
         });
+        // when editing an existing draw prediction, restore the saved qualifier
+        const savedPen = card.dataset.penSaved;
+        if (savedPen === 'home' || savedPen === 'away') {
+          card.dataset.penPick = savedPen;
+          const sb = card.querySelector(`.pensel[data-pen="${savedPen}"]`);
+          if (sb) sb.classList.add('saved');
+        }
 
         card.querySelectorAll('.stepper').forEach((st) => {
           const inp = st.querySelector('input');
@@ -476,8 +493,8 @@
       try {
         await submitPrediction(id, name, +h, +a, penH, penA);
         myPreds.set(id, { home: +h, away: +a, pick: null, manual_points: null, pen_pick: penPick, pen_home: penH, pen_away: penA });
-        toast('انحفظ توقعك ✅ (لا يمكن التعديل)');
-        renderMatches();   // re-render: this match is now locked
+        toast('انحفظ توقعك ✅ (تقدر تعدّله لين ما تبدأ المباراة)');
+        renderMatches();   // re-render with the saved values (still editable until kickoff)
       } catch (e) {
         toast(friendlyError(e), true);
         btn.disabled = false;
