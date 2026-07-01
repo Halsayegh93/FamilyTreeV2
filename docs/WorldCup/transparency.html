@@ -38,7 +38,7 @@
     .tp-edited { font-size: 10.5px; color: var(--warning); font-weight: 700; }
     /* edit-history chain */
     .tp-hist { flex-basis: 100%; margin-top: 6px; border-top: 1px dashed var(--border); padding-top: 6px; }
-    .tp-hist summary { font-size: 11.5px; color: var(--primary); font-weight: 700;
+    .tp-hist summary { font-size: 11.5px; color: var(--warning); font-weight: 700;
       cursor: pointer; list-style: none; padding: 4px 2px; user-select: none; }
     .tp-hist summary::-webkit-details-marker { display: none; }
     .tp-hist summary .mk { display: inline-block; transition: transform .15s; }
@@ -126,21 +126,27 @@
       return `<div class="tp-lock">🔓 مفتوح للتوقّع</div>`;
     }
 
-    // Edit-history chain for one player+match (needs wc-history.sql).
-    // Shows the TYPE of each change: أول توقّع (created) / تعديل (updated),
-    // with the value at that moment and its exact time.
-    function historyChain(m, hist) {
-      if (!hist || hist.length < 2) return '';   // nothing edited -> skip chain
-      const items = hist.map((h, i) => {
-        const type = (h.action === 'created' && i === 0) ? 'أول توقّع' : 'تعديل';
-        const cls = type === 'أول توقّع' ? 'first' : 'edit';
-        return `<div class="tp-hist-item">
-          <span class="tp-type ${cls}">${type}</span>
-          <span class="hg">${guessOf(h, m)}</span>
-          <span class="ht">🕒 ${fmt(h.changed_at)}</span>
-        </div>`;
-      }).join('');
-      return `<details class="tp-hist"><summary><span class="mk">▸</span> 📝 سجل التعديلات (${hist.length})</summary>${items}</details>`;
+    // Collapsible "✏️ عُدّل" toggle placed in the player card, in place of the
+    // old plain text. Opens to show the full edit history when available
+    // (needs wc-history.sql), otherwise just the last-edit time.
+    function editFold(m, p, hist, edited) {
+      if (!edited) return '';
+      let body;
+      if (hist && hist.length >= 2) {
+        body = hist.map((h, i) => {
+          const type = (h.action === 'created' && i === 0) ? 'أول توقّع' : 'تعديل';
+          const cls = type === 'أول توقّع' ? 'first' : 'edit';
+          return `<div class="tp-hist-item">
+            <span class="tp-type ${cls}">${type}</span>
+            <span class="hg">${guessOf(h, m)}</span>
+            <span class="ht">🕒 ${fmt(h.changed_at)}</span>
+          </div>`;
+        }).join('');
+      } else {
+        body = `<div class="tp-hist-item"><span class="ht">🕒 آخر تعديل: ${fmt(p.updated_at)}</span></div>`;
+      }
+      const count = (hist && hist.length >= 2) ? ` (${hist.length})` : '';
+      return `<details class="tp-hist"><summary><span class="mk">▸</span> ✏️ عُدّل${count}</summary>${body}</details>`;
     }
 
     function matchBlock(m, preds, histMap) {
@@ -165,8 +171,8 @@
           <span class="gs">${guessOf(p, m)}</span>
           ${ptsTag}
           ${late ? '<span class="tp-late-tag">⚠️ أُضيف بعد الإقفال</span>' : ''}
-          <span class="tm">🕒 ${fmt(p.created_at)}${edited ? ` <span class="tp-edited">✏️ عُدّل: ${fmt(p.updated_at)}</span>` : ''}</span>
-          ${historyChain(m, hist)}
+          <span class="tm">🕒 ${fmt(p.created_at)}</span>
+          ${editFold(m, p, hist, edited)}
         </div>`;
       }).join('') : `<div class="tp-empty">👥 ما توقّع أحد لهالمباراة</div>`;
 
