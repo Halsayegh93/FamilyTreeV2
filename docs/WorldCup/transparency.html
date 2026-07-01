@@ -177,10 +177,11 @@
       return `<div class="tp-lock">🔓 مفتوح للتوقّع</div>`;
     }
 
-    // The visible points number (display only). Not manually adjusted -> 0.
+    // Points EARNED from the prediction itself (automatic), not any admin
+    // override. The admin override, if any, still shows inside the التعديلات fold.
     function pointsTag(m, p) {
       if (!m.finished) return '';
-      const pts = p.manual_points == null ? 0 : scoreRow(p, m);
+      const pts = scoreRow({ ...p, manual_points: null }, m);
       return `<span class="tp-pts ${pts > 0 ? 'good' : 'zero'}">${pts > 0 ? '+' + pts : '0'} نقطة</span>`;
     }
 
@@ -252,7 +253,8 @@
       let total = 0;
       const rows = mine.map((p) => {
         const m = mById.get(p.match_id);
-        const real = m.finished ? scoreRow(p, m) : null;     // actual earned points
+        // points EARNED from the prediction (automatic), not any admin override
+        const real = m.finished ? scoreRow({ ...p, manual_points: null }, m) : null;
         if (real != null) total += real;
         const ptsTag = real != null
           ? `<span class="tp-pts ${real > 0 ? 'good' : 'zero'}">${real > 0 ? '+' + real : '0'} نقطة</span>`
