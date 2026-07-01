@@ -298,14 +298,13 @@
       </div>`;
     }
 
-    // status banner telling whether the edit-history SQL is active
+    // status banner: only warn when the edit-history SQL is NOT active
     function statusBanner(historyRaw) {
       if (historyRaw === null) {
         return `<div class="tp-status off">⚠️ سجل التعديلات <b>غير مفعّل</b> — شغّل ملف wc-history.sql في Supabase.
           يظهر وقت آخر تعديل فقط.</div>`;
       }
-      return `<div class="tp-status on">✅ سجل التعديلات <b>مفعّل</b> — ${historyRaw.length} تسجيلة.
-        التعديلات الجديدة تُحفظ بالكامل (القديم ← الجديد).</div>`;
+      return '';   // active -> no banner
     }
 
     async function render() {
