@@ -35,7 +35,18 @@
     .tp-p.late { border-color: rgba(184,142,51,.55); background: rgba(184,142,51,.10); }
     .tp-late-tag { font-size: 10.5px; color: var(--warning); font-weight: 700; }
     .tp-empty { font-size: 12.5px; color: var(--muted); text-align: center; padding: 6px; }
-    .tp-edited { font-size: 10.5px; color: var(--muted); }
+    .tp-edited { font-size: 10.5px; color: var(--warning); font-weight: 700; }
+    /* edit-history chain */
+    .tp-hist { flex-basis: 100%; margin-top: 6px; border-top: 1px dashed var(--border); padding-top: 6px; }
+    .tp-hist summary { font-size: 11.5px; color: var(--muted); cursor: pointer; list-style: none; }
+    .tp-hist summary::-webkit-details-marker { display: none; }
+    .tp-hist-item { display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+      font-size: 12px; padding: 5px 2px; }
+    .tp-hist-item .hg { color: var(--ink); font-weight: 600; }
+    .tp-hist-item .ht { margin-inline-start: auto; font-size: 11px; color: var(--muted); white-space: nowrap; }
+    .tp-type { font-size: 10.5px; font-weight: 800; padding: 2px 8px; border-radius: 999px; }
+    .tp-type.first { background: rgba(47,92,62,.14); color: var(--success); }
+    .tp-type.edit { background: rgba(184,142,51,.16); color: var(--warning); }
   </style>
 </head>
 <body>
@@ -64,8 +75,9 @@
 
   <script type="module">
     import {
-      loadMatches, loadPredictions, roundLabel, flagHTML, scoreRow, watch, friendlyError,
-    } from './app.js?v=23';
+      loadMatches, loadPredictions, loadPredictionHistory,
+      roundLabel, flagHTML, scoreRow, watch, friendlyError,
+    } from './app.js?v=24';
 
     const $ = (s, r = document) => r.querySelector(s);
     const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) =>
@@ -111,7 +123,24 @@
       return `<div class="tp-lock">🔓 مفتوح للتوقّع</div>`;
     }
 
-    function matchBlock(m, preds) {
+    // Edit-history chain for one player+match (needs wc-history.sql).
+    // Shows the TYPE of each change: أول توقّع (created) / تعديل (updated),
+    // with the value at that moment and its exact time.
+    function historyChain(m, hist) {
+      if (!hist || hist.length < 2) return '';   // nothing edited -> skip chain
+      const items = hist.map((h, i) => {
+        const type = (h.action === 'created' && i === 0) ? 'أول توقّع' : 'تعديل';
+        const cls = type === 'أول توقّع' ? 'first' : 'edit';
+        return `<div class="tp-hist-item">
+          <span class="tp-type ${cls}">${type}</span>
+          <span class="hg">${guessOf(h, m)}</span>
+          <span class="ht">🕒 ${fmt(h.changed_at)}</span>
+        </div>`;
+      }).join('');
+      return `<details class="tp-hist"><summary>📝 سجل التعديلات (${hist.length})</summary>${items}</details>`;
+    }
+
+    function matchBlock(m, preds, histMap) {
       const mine = preds
         .filter((p) => p.match_id === m.id)
         .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
@@ -120,8 +149,10 @@
       const rows = mine.length ? mine.map((p) => {
         const t = p.created_at ? new Date(p.created_at).getTime() : null;
         const late = koMs != null && t != null && t > koMs;   // added after lock
-        const edited = p.updated_at && p.created_at
-          && Math.abs(new Date(p.updated_at) - new Date(p.created_at)) > 60000;
+        const hist = histMap.get(`${p.match_id}|${p.player_name}`) || [];
+        const edited = hist.length >= 2
+          || (p.updated_at && p.created_at
+              && Math.abs(new Date(p.updated_at) - new Date(p.created_at)) > 60000);
         const pts = m.finished ? scoreRow(p, m) : null;
         const ptsTag = pts != null
           ? `<span class="tp-pts ${pts > 0 ? 'good' : 'zero'}">${pts > 0 ? '+' + pts : '0'} نقطة</span>`
@@ -132,6 +163,7 @@
           ${ptsTag}
           ${late ? '<span class="tp-late-tag">⚠️ أُضيف بعد الإقفال</span>' : ''}
           <span class="tm">🕒 ${fmt(p.created_at)}${edited ? ` <span class="tp-edited">✏️ عُدّل: ${fmt(p.updated_at)}</span>` : ''}</span>
+          ${historyChain(m, hist)}
         </div>`;
       }).join('') : `<div class="tp-empty">👥 ما توقّع أحد لهالمباراة</div>`;
 
@@ -157,7 +189,18 @@
 
     async function render() {
       try {
-        const [matches, preds] = await Promise.all([loadMatches(), loadPredictions()]);
+        const [matches, preds, history] = await Promise.all([
+          loadMatches(), loadPredictions(), loadPredictionHistory(),
+        ]);
+        // group history by player+match, oldest first
+        const histMap = new Map();
+        for (const h of history) {
+          const k = `${h.match_id}|${h.player_name}`;
+          (histMap.get(k) || histMap.set(k, []).get(k)).push(h);
+        }
+        for (const arr of histMap.values())
+          arr.sort((a, b) => new Date(a.changed_at) - new Date(b.changed_at));
+
         const shown = matches
           .filter((m) => afterCutoff(m) && (teamsKnown(m) || m.finished))
           .sort((a, b) => {
@@ -166,7 +209,7 @@
             return ka - kb || a.id - b.id;
           });
         $('#list').innerHTML = shown.length
-          ? shown.map((m) => matchBlock(m, preds)).join('')
+          ? shown.map((m) => matchBlock(m, preds, histMap)).join('')
           : `<div class="tp-empty">لا توجد مباريات بعد</div>`;
       } catch (e) {
         $('#list').innerHTML = `<div class="tp-empty">تعذّر التحميل: ${esc(friendlyError(e))}</div>`;

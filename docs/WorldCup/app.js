@@ -152,6 +152,20 @@ export async function loadPredictions() {
   return data || [];
 }
 
+// Full edit history of every prediction (requires the wc-history.sql migration).
+// Returns [] gracefully if the table doesn't exist yet, so the feature is
+// simply "off" until the admin runs the SQL.
+export async function loadPredictionHistory() {
+  if (DEMO) return [];
+  const sb = await client();
+  const { data, error } = await sb
+    .from('wc_prediction_history')
+    .select('*')
+    .order('changed_at', { ascending: true });
+  if (error) return [];   // table not created yet -> feature disabled
+  return data || [];
+}
+
 export async function loadMyPredictions(name) {
   if (!name) return [];
   if (DEMO) return demo.myPredictions(name);
