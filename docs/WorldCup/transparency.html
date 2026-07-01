@@ -15,6 +15,8 @@
       background: rgba(43,122,159,.08); border: 1px solid var(--border);
       border-radius: 10px; padding: 8px 10px; }
     .tp-when b { color: var(--primary); }
+    /* simple one-line match info: date · count · status */
+    .tp-line { margin-top: 8px; font-size: 12px; color: var(--muted); text-align: center; }
     .tp-facts { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 4px; }
     .tp-fact { flex: 1; min-width: 90px; text-align: center; background: rgba(255,255,255,.6);
       border: 1px solid var(--border); border-radius: 12px; padding: 8px 6px; }
@@ -327,6 +329,9 @@
         </div>`;
       }).join('') : `<div class="tp-empty">👥 ما توقّع أحد لهالمباراة</div>`;
 
+      const status = m.finished ? '🏁 انتهت'
+        : (m.kickoff && new Date(m.kickoff).getTime() <= Date.now()) ? '🔴 جارية'
+        : m.locked ? '🔒 مقفلة' : '🔓 مفتوحة';
       return `<div class="card">
         <div class="meta">
           <span>${esc(roundLabel(m.round))}</span>
@@ -337,12 +342,7 @@
           <div class="scorebox"><span class="vs">VS</span></div>
           <div class="team away">${flagHTML(m.away_flag)}<span class="name">${esc(m.away_team || 'غير محدّد')}</span></div>
         </div>
-        <div class="tp-when">🗓️ موعد المباراة: <b>${m.kickoff ? fmt(m.kickoff) : 'غير محدّد'}</b></div>
-        <div class="tp-facts">
-          <div class="tp-fact"><b>${mine.length}</b><span>عدد التوقّعات</span></div>
-          <div class="tp-fact"><b>${m.kickoff ? fmt(m.kickoff).split('،').slice(-1)[0].trim() || '—' : '—'}</b><span>وقت الإقفال</span></div>
-        </div>
-        ${lockLine(m)}
+        <div class="tp-line">🗓️ ${m.kickoff ? fmt(m.kickoff) : 'غير محدّد'} · 📝 ${mine.length} توقّع · ${status}</div>
         <div class="tp-preds">${rows}</div>
       </div>`;
     }
