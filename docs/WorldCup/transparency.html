@@ -322,7 +322,7 @@
           <span class="gs">${guessOf(p, m)}</span>
           ${pointsTag(m, p)}
           ${late ? '<span class="tp-late-tag">⚠️ أُضيف بعد الإقفال</span>' : ''}
-          <span class="tm">🕒 ${fmt(p.created_at)}</span>
+          <span class="tm">🕒 توقّع: ${fmt(p.created_at)}${m.finished ? ` · 🏁 النقاط: ${fmt(p.manual_points != null ? p.updated_at : m.updated_at)}` : ''}</span>
           ${changesFold(m, p, hist)}
         </div>`;
       }).join('') : `<div class="tp-empty">👥 ما توقّع أحد لهالمباراة</div>`;
