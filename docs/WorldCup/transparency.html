@@ -177,11 +177,11 @@
       return `<div class="tp-lock">🔓 مفتوح للتوقّع</div>`;
     }
 
-    // Points EARNED from the prediction itself (automatic), not any admin
-    // override. The admin override, if any, still shows inside the التعديلات fold.
+    // Final points shown in the match list = the modified value if the admin
+    // overrode it, otherwise the automatic score.
     function pointsTag(m, p) {
       if (!m.finished) return '';
-      const pts = scoreRow({ ...p, manual_points: null }, m);
+      const pts = scoreRow(p, m);
       return `<span class="tp-pts ${pts > 0 ? 'good' : 'zero'}">${pts > 0 ? '+' + pts : '0'} نقطة</span>`;
     }
 
