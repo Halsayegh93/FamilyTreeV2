@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
   <meta http-equiv="Cache-Control" content="no-cache" />
   <title>جماهير مباريات كأس العالم الرميثية 🏆</title>
-  <link rel="stylesheet" href="styles.css?v=25" />
+  <link rel="stylesheet" href="styles.css?v=26" />
 </head>
 <body>
   <div class="wrap">
@@ -248,8 +248,9 @@
       }
 
       // who predicted this match — reveal everyone's prediction once the match is
-      // locked or finished (before that, names only, so nobody copies).
-      const reveal = m.finished || locked;
+      // locked/finished, OR once THIS player has saved their own (one-time) pick,
+      // since a saved prediction is final and can no longer be copied/changed.
+      const reveal = m.finished || locked || predicted;
       const preds = allPreds.filter((p) => p.match_id === m.id);
       let predictorsHTML;
       if (preds.length) {
@@ -575,9 +576,6 @@
           <div class="prize-place">الثاني</div><div class="prize-amt">50 دينار</div></div>
         <div class="prize3 p3"><div class="prize-medal">🥉</div>
           <div class="prize-place">الثالث</div><div class="prize-amt">كابون غسيل سيارات</div></div>
-      </div>
-      <div style="text-align:center;font-size:13px;font-weight:800;color:#B88E33;background:rgba(184,142,51,.10);border:1px solid rgba(184,142,51,.30);border-radius:12px;padding:10px;margin-top:10px">
-        🎯 الدخول في منافسة الجوائز: <b>100 نقطة</b>
       </div>`;
 
     function renderBoard() {
