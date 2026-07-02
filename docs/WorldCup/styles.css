@@ -129,6 +129,10 @@ body { direction: rtl; }
   background: rgba(27,122,75,.10); border: 1px solid rgba(27,122,75,.25);
   border-radius: 10px; padding: 9px;
 }
+.predicted-note.warn {
+  color: #9a6a00;
+  background: rgba(224,166,0,.12); border-color: rgba(224,166,0,.35);
+}
 
 /* Prizes — three squares side by side, each with a circular medal */
 .prizes3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 8px; }

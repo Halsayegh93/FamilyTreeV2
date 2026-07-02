@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
   <meta http-equiv="Cache-Control" content="no-cache" />
   <title>جماهير مباريات كأس العالم الرميثية 🏆</title>
-  <link rel="stylesheet" href="styles.css?v=22" />
+  <link rel="stylesheet" href="styles.css?v=23" />
 </head>
 <body>
   <div class="wrap">
@@ -46,7 +46,7 @@
       isConfigured, loadMatches, loadPredictions, loadMyPredictions,
       submitPrediction, submitWinner, buildLeaderboard, scorePrediction,
       scoreRow, isLocked, roundLabel, matchDay, flagHTML, ROUNDS, friendlyError, POINTS, watch,
-    } from './app.js?v=26';
+    } from './app.js?v=27';
 
     const $ = (s, r = document) => r.querySelector(s);
     const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) =>
@@ -179,7 +179,7 @@
         ? (mine.pen_pick || (mine.pen_home != null && mine.pen_away != null
             ? (mine.pen_home > mine.pen_away ? 'home' : 'away') : ''))
         : '';
-      const inputsOff = locked;   // editable until kickoff, even after saving
+      const inputsOff = locked || predicted;   // one-time: saved prediction is final
 
       let badge = '';
       if (m.finished) badge = '<span class="badge done">انتهت</span>';
@@ -192,9 +192,11 @@
       if (m.finished) {
         // points EARNED from the prediction per the rules (ignore admin override)
         const pts = mine ? scoreRow({ ...mine, manual_points: null }, m) : null;
-        // the earned point sits on its own line, right after the goals result
+        // the earned point sits on its own line, right after the goals result —
+        // showing the name that earned it, e.g. «🎯 النقطة المكتسبة: حسن +5»
+        const myName = esc(playerEl.value.trim());
         const ptsLine = mine
-          ? `<div class="result-line"><span class="pts ${pts > 0 ? 'good' : 'zero'}">🎯 النقطة المكتسبة من المباراة: ${pts > 0 ? '+' + pts : '0'}</span></div>`
+          ? `<div class="result-line"><span class="pts ${pts > 0 ? 'good' : 'zero'}">🎯 النقطة المكتسبة من المباراة: ${myName ? '<b>' + myName + '</b> ' : ''}${pts > 0 ? '+' + pts : '0'}</span></div>`
           : '';
         const penLine = (m.home_pen != null && m.away_pen != null)
           ? `<div class="result-line pen-line">
@@ -216,8 +218,19 @@
       let actionHTML = '';
       if (m.finished) {
         actionHTML = '';   // result shown above
+      } else if (predicted) {
+        // one-time prediction — once saved it's FINAL, no editing (even before kickoff)
+        if (pickOnly) {
+          const t = mine.pick === 'home' ? m.home_team : m.away_team;
+          actionHTML = `<div class="predicted-note ok">🏆 توقّعت فوز <b>${esc(t || '')}</b> — التوقّع نهائي 🔒</div>`;
+        } else {
+          const penQ = mine.pen_pick ? (mine.pen_pick === 'home' ? m.home_team : m.away_team)
+            : ((mine.pen_home != null && mine.pen_away != null) ? (mine.pen_home > mine.pen_away ? m.home_team : m.away_team) : '');
+          const penNote = penQ ? ` · 🥅 تأهّل <b>${esc(penQ)}</b> بالركلات` : '';
+          actionHTML = `<div class="predicted-note ok">✓ توقّعك محفوظ ونهائي (${mine.home} - ${mine.away})${penNote} 🔒</div>`;
+        }
       } else if (!locked) {
-        // before kickoff — the prediction can be created OR changed
+        // first & only chance — create the prediction (cannot be changed afterwards)
         const penPickHTML = isKnockout ? `<div class="penpick" style="display:none">
             <div class="penpick-q">🥅 توقّعت تعادل — منو يتأهّل بالركلات؟ <b style="color:var(--error,#c33)">(إجباري)</b></div>
             <div class="penpick-opts">
@@ -225,19 +238,9 @@
               <button type="button" class="btn pensel" data-pen="away">${esc(m.away_team || '')}</button>
             </div>
           </div>` : '';
-        const editNote = predicted
-          ? `<div class="predicted-note ok">✓ توقعك محفوظ — تقدر تعدّله لين ما تبدأ المباراة</div>`
-          : '';
-        actionHTML = `${editNote}<div class="card-actions"><button class="btn save">${predicted ? 'تحديث التوقّع' : 'حفظ التوقّع'}</button></div>
+        actionHTML = `<div class="predicted-note warn">⚠️ التوقّع يُحفظ <b>مرة وحدة</b> — تأكّد قبل الحفظ</div>
+          <div class="card-actions"><button class="btn save">حفظ التوقّع</button></div>
           ${penPickHTML}`;
-      } else if (pickOnly) {
-        const t = mine.pick === 'home' ? m.home_team : m.away_team;
-        actionHTML = `<div class="predicted-note">🏆 توقعت فوز <b>${esc(t || '')}</b> — بدأت المباراة، أُقفل التعديل</div>`;
-      } else if (predicted) {
-        const penQ = mine.pen_pick ? (mine.pen_pick === 'home' ? m.home_team : m.away_team)
-          : ((mine.pen_home != null && mine.pen_away != null) ? (mine.pen_home > mine.pen_away ? m.home_team : m.away_team) : '');
-        const penNote = penQ ? ` · 🥅 تأهّل <b>${esc(penQ)}</b> بالركلات` : '';
-        actionHTML = `<div class="predicted-note">✓ توقعك محفوظ (${mine.home} - ${mine.away})${penNote} — بدأت المباراة، أُقفل التعديل</div>`;
       }
 
       // who predicted this match — reveal everyone's prediction once the match is
@@ -488,13 +491,16 @@
       }
       const penPick = (penH != null && penA != null) ? (penH > penA ? 'home' : 'away') : null;
 
+      // one-time prediction — confirm before saving, since it can't be changed
+      if (!confirm(`توقّعك: ${+h} - ${+a}\nينحفظ مرة وحدة ونهائي — ما يمكن تعديله. متأكد؟`)) return;
+
       const btn = card.querySelector('.save');
       btn.disabled = true;
       try {
         await submitPrediction(id, name, +h, +a, penH, penA);
         myPreds.set(id, { home: +h, away: +a, pick: null, manual_points: null, pen_pick: penPick, pen_home: penH, pen_away: penA });
-        toast('انحفظ توقعك ✅ (تقدر تعدّله لين ما تبدأ المباراة)');
-        renderMatches();   // re-render with the saved values (still editable until kickoff)
+        toast('انحفظ توقعك ✅ (نهائي — ما يمكن تعديله)');
+        renderMatches();   // re-render as a final, locked prediction
       } catch (e) {
         toast(friendlyError(e), true);
         btn.disabled = false;

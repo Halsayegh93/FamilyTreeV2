@@ -405,6 +405,7 @@ export function buildLeaderboard(matches, predictions) {
 // Friendly Arabic error messages for RPC failures -----------------------------
 export function friendlyError(err) {
   const msg = (err && err.message) || String(err);
+  if (msg.includes('ALREADY_PREDICTED')) return 'عندك توقّع محفوظ لهالمباراة — التوقّع مرة وحدة ونهائي 🔒';
   if (msg.includes('MATCH_FINISHED')) return 'المباراة خلصت — ما يمكن إضافة توقّع';
   if (msg.includes('MATCH_LOCKED'))   return 'انتهى وقت التوقع لهذه المباراة 🔒';
   if (msg.includes('NAME_REQUIRED'))  return 'اكتب اسمك أول';

@@ -179,9 +179,11 @@ export const demo = {
       ph = penHome; pa = penAway; pen = penHome > penAway ? 'home' : 'away';
     }
     const preds = this.predictions();
-    const ex = preds.find((p) => p.match_id === matchId && p.player_name === name);
-    if (ex) { ex.home_score = h; ex.away_score = a; ex.pick = null; ex.pen_pick = pen; ex.pen_home = ph; ex.pen_away = pa; }
-    else preds.push({ match_id: matchId, player_name: name, home_score: h, away_score: a, pick: null, pen_pick: pen, pen_home: ph, pen_away: pa });
+    // one-time prediction — a player can't change a saved prediction
+    if (preds.some((p) => p.match_id === matchId && p.player_name === name)) {
+      throw new Error('ALREADY_PREDICTED');
+    }
+    preds.push({ match_id: matchId, player_name: name, home_score: h, away_score: a, pick: null, pen_pick: pen, pen_home: ph, pen_away: pa });
     writeStore(PKEY, preds);
     return { match_id: matchId, player_name: name, home_score: h, away_score: a, pen_pick: pen, pen_home: ph, pen_away: pa };
   },
@@ -191,9 +193,11 @@ export const demo = {
     if (m && (m.finished || m.locked)) throw new Error('MATCH_LOCKED');
     if (pick !== 'home' && pick !== 'away') throw new Error('INVALID_PICK');
     const preds = this.predictions();
-    const ex = preds.find((p) => p.match_id === matchId && p.player_name === name);
-    if (ex) { ex.home_score = null; ex.away_score = null; ex.pick = pick; ex.pen_pick = null; ex.pen_home = null; ex.pen_away = null; }
-    else preds.push({ match_id: matchId, player_name: name, home_score: null, away_score: null, pick, pen_pick: null, pen_home: null, pen_away: null });
+    // one-time prediction — a player can't change a saved prediction
+    if (preds.some((p) => p.match_id === matchId && p.player_name === name)) {
+      throw new Error('ALREADY_PREDICTED');
+    }
+    preds.push({ match_id: matchId, player_name: name, home_score: null, away_score: null, pick, pen_pick: null, pen_home: null, pen_away: null });
     writeStore(PKEY, preds);
     return { match_id: matchId, player_name: name, pick };
   },
