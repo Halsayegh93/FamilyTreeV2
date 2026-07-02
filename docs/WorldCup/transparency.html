@@ -331,6 +331,74 @@
       </details>`;
     }
 
+    // PERSON-CENTRED card: one per player. Under each, every match they predicted
+    // with WHEN they predicted it + the match result. Others' picks stay hidden
+    // until the match starts (anti-copy); a player always sees their own.
+    function personBlock(name, matches, preds, histMap) {
+      const mById = new Map(matches.map((m) => [m.id, m]));
+      const isMe = !!MY_NAME && name === MY_NAME;
+      const mine = preds
+        .filter((p) => (p.player_name || '').trim() === name && mById.has(p.match_id))
+        .sort((a, b) => {
+          const ka = mById.get(a.match_id).kickoff, kb = mById.get(b.match_id).kickoff;
+          return (ka ? new Date(ka) : Infinity) - (kb ? new Date(kb) : Infinity) || a.match_id - b.match_id;
+        });
+      if (!mine.length) return '';
+
+      let total = 0;
+      const rows = mine.map((p) => {
+        const m = mById.get(p.match_id);
+        const koMs = m.kickoff ? new Date(m.kickoff).getTime() : null;
+        const started = koMs != null && koMs <= Date.now();
+        const revealed = m.finished || m.locked || started || isMe;
+        const real = m.finished ? scoreRow({ ...p, manual_points: null }, m) : null;
+        if (real != null) total += real;
+        const ptsTag = real != null
+          ? `<span class="tp-pts ${real > 0 ? 'good' : 'zero'}">${real > 0 ? '+' + real : '0'} نقطة</span>`
+          : '';
+        // actual match result (goals; shootout on its own line)
+        let actual = '', penActual = '';
+        if (m.finished) {
+          const d = Math.sign((m.home_score || 0) - (m.away_score || 0));
+          actual = `${m.home_score}-${m.away_score}`;
+          if (d > 0) actual += ` 🏆 ${esc(m.home_team || '')}`;
+          else if (d < 0) actual += ` 🏆 ${esc(m.away_team || '')}`;
+          else {
+            actual += ' تعادل';
+            if (m.home_pen != null && m.away_pen != null && m.home_pen !== m.away_pen)
+              penActual = `🥅 ركلات الترجيح: ${m.home_pen}-${m.away_pen} 🏆 ${esc((m.home_pen > m.away_pen ? m.home_team : m.away_team) || '')}`;
+          }
+        }
+        const guessLine = revealed
+          ? `<span class="gs">التوقّع: ${esc(guessOf(p, m))}</span>`
+          : '<span class="tp-hidden">🔒 التوقّع يظهر بعد بداية المباراة</span>';
+        const hist = histMap.get(`${p.match_id}|${p.player_name}`) || [];
+        return `<div class="tp-p tp-me-p">
+          <div class="tp-me-match">
+            <span class="nm">مباراة ${m.id}</span>
+            <span class="tp-vs">${esc(m.home_team || '?')} <span class="x">×</span> ${esc(m.away_team || '?')}</span>
+          </div>
+          <div class="tp-me-info res">🕒 توقّع بتاريخ: <b>${fmt(p.created_at)}</b></div>
+          ${m.finished
+            ? `<div class="tp-me-info res">🏁 نتيجة المباراة: ${actual} ${ptsTag}</div>`
+            : `<div class="tp-me-info">🗓️ ${m.kickoff ? fmt(m.kickoff) : 'غير محدّد'}</div>`}
+          ${penActual ? `<div class="tp-me-info res">${penActual}</div>` : ''}
+          <div class="tp-me-guess">${guessLine}</div>
+          ${revealed ? changesFold(m, p, hist) : ''}
+        </div>`;
+      }).join('');
+
+      return `<details class="card tp-me"${isMe ? ' open' : ''}>
+        <summary class="tp-me-sum">
+          <span class="mk">▸</span>
+          <span class="tp-me-h">👤 ${esc(name)}${isMe ? ' <span class="tp-you">أنت</span>' : ''}</span>
+          <span class="tp-me-total">المجموع: <b>${total}</b> نقطة</span>
+        </summary>
+        <div class="tp-me-sub">التوقّعات (${mine.length}) — تحت كل مباراة وقت التوقّع والنتيجة</div>
+        <div class="tp-preds">${rows}</div>
+      </details>`;
+    }
+
     function matchBlock(m, preds, histMap) {
       const mine = preds
         .filter((p) => p.match_id === m.id)
@@ -415,16 +483,19 @@
         for (const arr of histMap.values())
           arr.sort((a, b) => new Date(a.changed_at) - new Date(b.changed_at));
 
-        const shown = matches
-          .filter((m) => afterCutoff(m) && (teamsKnown(m) || m.finished))
+        // PERSON-CENTRED: one card per player (me first, then alphabetical)
+        const mIds = new Set(matches.map((m) => m.id));
+        const names = [...new Set(preds
+          .filter((p) => mIds.has(p.match_id))
+          .map((p) => (p.player_name || '').trim())
+          .filter(Boolean))]
           .sort((a, b) => {
-            const ka = a.kickoff ? new Date(a.kickoff).getTime() : Infinity;
-            const kb = b.kickoff ? new Date(b.kickoff).getTime() : Infinity;
-            return ka - kb || a.id - b.id;
+            if (MY_NAME) { if (a === MY_NAME) return -1; if (b === MY_NAME) return 1; }
+            return a.localeCompare(b, 'ar');
           });
-        $('#list').innerHTML = myPanel(matches, preds, histMap) + statusBanner(historyRaw) + (shown.length
-          ? shown.map((m) => matchBlock(m, preds, histMap)).join('')
-          : `<div class="tp-empty">لا توجد مباريات بعد</div>`);
+        $('#list').innerHTML = statusBanner(historyRaw) + (names.length
+          ? names.map((n) => personBlock(n, matches, preds, histMap)).join('')
+          : `<div class="tp-empty">لا توجد توقّعات بعد</div>`);
       } catch (e) {
         $('#list').innerHTML = `<div class="tp-empty">تعذّر التحميل: ${esc(friendlyError(e))}</div>`;
       }

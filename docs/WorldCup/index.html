@@ -6,6 +6,19 @@
   <meta http-equiv="Cache-Control" content="no-cache" />
   <title>جماهير مباريات كأس العالم الرميثية 🏆</title>
   <link rel="stylesheet" href="styles.css?v=26" />
+  <style>
+    /* predictors list: click a player to reveal WHEN they predicted */
+    .pred-when > summary { list-style: none; cursor: pointer; display: flex;
+      align-items: center; gap: 8px; padding: 3px 0; }
+    .pred-when > summary::-webkit-details-marker { display: none; }
+    .pred-when .pr-when-hint { margin-inline-start: auto; font-size: 12px; color: var(--primary);
+      background: rgba(43,122,159,.08); border: 1px solid rgba(43,122,159,.22);
+      border-radius: 999px; padding: 1px 8px; white-space: nowrap; }
+    .pred-when[open] .pr-when-hint { display: none; }
+    .pr-when-detail { margin: 4px 0 8px; font-size: 12px; font-weight: 700; color: var(--primary);
+      background: rgba(43,122,159,.08); border: 1px solid rgba(43,122,159,.2);
+      border-radius: 8px; padding: 6px 10px; }
+  </style>
 </head>
 <body>
   <div class="wrap">
@@ -259,6 +272,11 @@
           .sort((a, b) => String(a.player_name).localeCompare(b.player_name, 'ar'))
           .map((p) => {
             const nm = esc(p.player_name);
+            // WHEN the player saved this prediction (shown on click)
+            const when = p.created_at
+              ? new Date(p.created_at).toLocaleString('ar', { dateStyle: 'medium', timeStyle: 'short' })
+              : 'غير معروف';
+            const whenFold = `<div class="pr-when-detail">🕒 توقّع بتاريخ: ${esc(when)}</div>`;
             if (reveal) {
               let guess;
               if (p.pick) {
@@ -277,9 +295,9 @@
                 ? (() => { const pts = scoreRow(p, m);
                     return `<span class="pts ${pts > 0 ? 'good' : 'zero'}">${pts > 0 ? '+' + pts : '0'}</span>`; })()
                 : '';
-              return `<div class="pred-row"><span class="pr-name">${nm}</span><span class="pr-guess"><b>${guess}</b> ${ptsTag}</span></div>`;
+              return `<details class="pred-row pred-when"><summary><span class="pr-name">${nm}</span><span class="pr-guess"><b>${guess}</b> ${ptsTag}</span><span class="pr-when-hint">🕒 وقت التوقّع</span></summary>${whenFold}</details>`;
             }
-            return `<div class="pred-row"><span class="pr-name">${nm}</span></div>`;
+            return `<details class="pred-row pred-when"><summary><span class="pr-name">${nm}</span><span class="pr-when-hint">🕒 وقت التوقّع</span></summary>${whenFold}</details>`;
           }).join('');
         predictorsHTML = `<details class="predictors">
           <summary>👥 توقّعوا (${preds.length})</summary>
