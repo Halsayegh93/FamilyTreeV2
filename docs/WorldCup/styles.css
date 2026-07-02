@@ -249,10 +249,16 @@ body { direction: rtl; }
 .badge.locked { color: var(--muted);  border-color: var(--border); }
 .badge.done   { color: #fff; border-color: var(--error); background: var(--error); }
 .badge.livenow {
-  color: #fff; border-color: transparent; background: #c62828;
-  animation: livepulse 1.4s ease-in-out infinite;
+  color: #c62828; border-color: #c62828;
+  background: rgba(198,40,40,.08);
+  display: inline-flex; align-items: center; gap: 5px;
 }
-@keyframes livepulse { 0%,100% { opacity: 1; } 50% { opacity: .55; } }
+.badge.livenow .live-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: #c62828; display: inline-block;
+  animation: livepulse 1.2s ease-in-out infinite;
+}
+@keyframes livepulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: .3; transform: scale(.7); } }
 
 .match {
   display: grid;

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
   <meta http-equiv="Cache-Control" content="no-cache" />
   <title>جماهير مباريات كأس العالم الرميثية 🏆</title>
-  <link rel="stylesheet" href="styles.css?v=21" />
+  <link rel="stylesheet" href="styles.css?v=22" />
 </head>
 <body>
   <div class="wrap">
@@ -183,7 +183,7 @@
 
       let badge = '';
       if (m.finished) badge = '<span class="badge done">انتهت</span>';
-      else if (started) badge = '<span class="badge livenow">🔴 جارية الآن</span>';
+      else if (started) badge = '<span class="badge livenow"><span class="live-dot"></span> جارية الآن</span>';
       else if (predicted) badge = '<span class="badge done">تم التوقع ✓</span>';
       else if (locked) badge = '<span class="badge locked">مغلقة 🔒</span>';
       else badge = '<span class="badge live">مفتوحة</span>';
@@ -192,8 +192,9 @@
       if (m.finished) {
         // points EARNED from the prediction per the rules (ignore admin override)
         const pts = mine ? scoreRow({ ...mine, manual_points: null }, m) : null;
-        const ptsTag = mine
-          ? `<span class="pts ${pts > 0 ? 'good' : 'zero'}">لك ${pts > 0 ? '+' + pts : '0'} نقطة</span>`
+        // the earned point sits on its own line, right after the goals result
+        const ptsLine = mine
+          ? `<div class="result-line"><span class="pts ${pts > 0 ? 'good' : 'zero'}">🎯 النقطة المكتسبة من المباراة: ${pts > 0 ? '+' + pts : '0'}</span></div>`
           : '';
         const penLine = (m.home_pen != null && m.away_pen != null)
           ? `<div class="result-line pen-line">
@@ -202,8 +203,7 @@
           : '';
         resultLine = `<div class="result-line">
           <span>النتيجة (الأهداف): <b>${m.home_score} - ${m.away_score}</b></span>
-          ${ptsTag}
-        </div>${penLine}`;
+        </div>${ptsLine}${penLine}`;
       }
 
       const ktime = m.kickoff
