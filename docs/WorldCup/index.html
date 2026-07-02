@@ -11,10 +11,11 @@
     .pred-when > summary { list-style: none; cursor: pointer; display: flex;
       align-items: center; gap: 8px; padding: 3px 0; }
     .pred-when > summary::-webkit-details-marker { display: none; }
-    .pred-when .pr-when-hint { margin-inline-start: auto; font-size: 14px; line-height: 1;
-      color: var(--primary); background: rgba(43,122,159,.08);
-      border: 1px solid rgba(43,122,159,.22); border-radius: 7px;
-      width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; }
+    .pred-when .pr-when-hint { margin-inline-start: auto; font-size: 11px; line-height: 1;
+      color: var(--primary); background: rgba(43,122,159,.10);
+      border: 1px solid rgba(43,122,159,.28); border-radius: 6px; cursor: pointer;
+      width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; }
+    .pred-when .pr-when-hint:active { transform: scale(.92); }
     .pred-when[open] .pr-when-hint { display: none; }
     .pr-when-detail { margin: 4px 0 8px; font-size: 12px; font-weight: 700; color: var(--primary);
       background: rgba(43,122,159,.08); border: 1px solid rgba(43,122,159,.2);
