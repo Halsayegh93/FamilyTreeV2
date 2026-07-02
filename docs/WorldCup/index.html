@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
   <meta http-equiv="Cache-Control" content="no-cache" />
   <title>جماهير مباريات كأس العالم الرميثية 🏆</title>
-  <link rel="stylesheet" href="styles.css?v=24" />
+  <link rel="stylesheet" href="styles.css?v=25" />
 </head>
 <body>
   <div class="wrap">
@@ -190,8 +190,14 @@
 
       let resultLine = '';
       if (m.finished) {
-        // points EARNED from the prediction per the rules (ignore admin override)
-        const pts = mine ? scoreRow({ ...mine, manual_points: null }, m) : null;
+        // points EARNED from the prediction per the rules (ignore admin override).
+        // NOTE: myPreds stores home/away, but scoreRow reads home_score/away_score —
+        // map the keys, otherwise this always scores 0.
+        const pts = mine ? scoreRow({
+          home_score: mine.home, away_score: mine.away, pick: mine.pick,
+          pen_home: mine.pen_home, pen_away: mine.pen_away, pen_pick: mine.pen_pick,
+          manual_points: null,
+        }, m) : null;
         // the earned point sits on its own line, right after the goals result
         const ptsLine = mine
           ? `<div class="result-line"><span class="pts ${pts > 0 ? 'good' : 'zero'}">🎯 النقطة المكتسبة من المباراة: ${pts > 0 ? '+' + pts : '0'}</span></div>`
