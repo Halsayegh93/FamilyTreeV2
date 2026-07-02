@@ -35,13 +35,19 @@
     .tp-pts.good { background: rgba(47,92,62,.14); color: var(--success); }
     .tp-pts.zero { background: rgba(120,120,120,.14); color: var(--muted); }
     .tp-p .tm { margin-inline-start: auto; font-size: 11.5px; color: var(--muted); white-space: nowrap; }
-    /* time-centered transparency: rank + prominent prediction time */
-    .tp-rank { flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%;
-      background: var(--primary); color: #fff; font-size: 11px; font-weight: 800;
-      display: inline-flex; align-items: center; justify-content: center; }
-    .tp-when-big { font-size: 12px; font-weight: 800; color: var(--primary);
-      background: rgba(43,122,159,.10); border: 1px solid rgba(43,122,159,.25);
-      border-radius: 999px; padding: 3px 9px; white-space: nowrap; }
+    /* click a prediction to reveal its time; guesses stay hidden until kickoff */
+    .tp-when-fold { flex: 1; min-width: 0; }
+    .tp-when-fold > summary { list-style: none; cursor: pointer; display: flex;
+      align-items: center; gap: 8px; flex-wrap: wrap; }
+    .tp-when-fold > summary::-webkit-details-marker { display: none; }
+    .tp-when-hint { margin-inline-start: auto; font-size: 11px; color: var(--primary);
+      background: rgba(43,122,159,.08); border: 1px solid rgba(43,122,159,.22);
+      border-radius: 999px; padding: 2px 9px; white-space: nowrap; }
+    .tp-when-fold[open] .tp-when-hint { display: none; }
+    .tp-when-detail { margin-top: 6px; font-size: 12.5px; font-weight: 700; color: var(--primary);
+      background: rgba(43,122,159,.08); border: 1px solid rgba(43,122,159,.2);
+      border-radius: 8px; padding: 6px 10px; }
+    .tp-hidden { font-size: 12px; color: var(--muted); font-weight: 700; }
     .tp-preds-head { font-size: 11.5px; font-weight: 800; color: var(--muted); margin: 12px 0 2px; }
     .tp-score { font-size: 20px; font-weight: 900; color: var(--text); }
     .tp-res { margin-top: 8px; font-size: 13px; font-weight: 700; color: var(--primary); text-align: center; }
@@ -331,19 +337,28 @@
         .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
       const koMs = m.kickoff ? new Date(m.kickoff).getTime() : null;
 
-      const rows = mine.length ? mine.map((p, i) => {
+      // reveal the actual guesses only after the match has started (or locked/ended)
+      const started = koMs != null && koMs <= Date.now();
+      const revealed = m.finished || m.locked || started;
+      const rows = mine.length ? mine.map((p) => {
         const t = p.created_at ? new Date(p.created_at).getTime() : null;
         const late = koMs != null && t != null && t > koMs;   // added after lock
         const hist = histMap.get(`${p.match_id}|${p.player_name}`) || [];
         const isMe = MY_NAME && (p.player_name || '').trim() === MY_NAME;
+        const guessPart = revealed
+          ? `<span class="gs">${guessOf(p, m)}</span> ${pointsTag(m, p)}`
+          : '<span class="tp-hidden">🔒 يظهر بعد بداية المباراة</span>';
         return `<div class="tp-p ${late ? 'late' : ''} ${isMe ? 'me' : ''}">
-          <span class="tp-rank">${i + 1}</span>
-          <span class="tp-when-big">🕒 ${fmt(p.created_at)}</span>
-          <span class="nm">${esc(p.player_name)}${isMe ? ' <span class="tp-you">أنت</span>' : ''}</span>
-          <span class="gs">${guessOf(p, m)}</span>
-          ${pointsTag(m, p)}
-          ${late ? '<span class="tp-late-tag">⚠️ أُضيف بعد الإقفال</span>' : ''}
-          ${changesFold(m, p, hist)}
+          <details class="tp-when-fold">
+            <summary>
+              <span class="nm">${esc(p.player_name)}${isMe ? ' <span class="tp-you">أنت</span>' : ''}</span>
+              ${guessPart}
+              ${late ? '<span class="tp-late-tag">⚠️ أُضيف بعد الإقفال</span>' : ''}
+              <span class="tp-when-hint">🕒 وقت التوقّع</span>
+            </summary>
+            <div class="tp-when-detail">🕒 توقّع بتاريخ: <b>${fmt(p.created_at)}</b></div>
+          </details>
+          ${revealed ? changesFold(m, p, hist) : ''}
         </div>`;
       }).join('') : `<div class="tp-empty">👥 ما توقّع أحد لهالمباراة</div>`;
 
@@ -371,7 +386,7 @@
         </div>
         ${resultLine}
         <div class="tp-line">🗓️ ${m.kickoff ? fmt(m.kickoff) : 'غير محدّد'} · 📝 ${mine.length} توقّع · ${status}</div>
-        ${mine.length ? '<div class="tp-preds-head">👥 التوقّعات بترتيب وقت التسجيل (الأقدم أول)</div>' : ''}
+        ${mine.length ? '<div class="tp-preds-head">👥 التوقّعات (بترتيب وقت التسجيل) — اضغط أي توقّع تشوف وقته وتاريخه</div>' : ''}
         <div class="tp-preds">${rows}</div>
       </div>`;
     }
