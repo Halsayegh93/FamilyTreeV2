@@ -223,6 +223,11 @@ body { direction: rtl; }
   box-shadow: 0 6px 16px rgba(43,122,159,.3);
 }
 
+/* admin: الكل / ركلات فقط filter inside the finished-results section */
+#finished-sec .fin-pens-empty { display: none; }
+#finished-sec.pens-only .card:not([data-pens]) { display: none; }
+#finished-sec.pens-only .fin-pens-empty { display: block; }
+
 /* Round group -------------------------------------------------------------- */
 .round-title {
   display: flex; align-items: center; gap: 10px;
