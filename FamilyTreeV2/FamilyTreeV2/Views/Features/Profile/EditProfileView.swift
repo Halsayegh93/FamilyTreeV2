@@ -180,8 +180,14 @@ struct EditProfileView: View {
                 guard let newImage else { return }
                 if cooldown.canEdit(.avatar) {
                     Task {
-                        await memberVM.uploadAvatar(image: newImage, for: member.id)
-                        cooldown.recordEdit(.avatar)
+                        let uploaded = await memberVM.uploadAvatar(image: newImage, for: member.id)
+                        if uploaded {
+                            cooldown.recordEdit(.avatar)
+                        } else {
+                            // فشل الرفع: رجّع المعاينة للصورة الحالية وأظهر الخطأ
+                            localPreviewImage = nil
+                            showSaveError = true
+                        }
                     }
                 } else {
                     localPreviewImage = nil

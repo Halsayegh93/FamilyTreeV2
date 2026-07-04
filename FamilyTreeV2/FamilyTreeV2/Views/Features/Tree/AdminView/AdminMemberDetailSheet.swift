@@ -48,6 +48,7 @@ struct AdminMemberDetailSheet: View {
 
     @State private var isSaving = false
     @State private var showEmptyNameAlert = false
+    @State private var showAvatarUploadError = false
 
     private var canDeleteMember: Bool { authVM.canDeleteMembers }
     private var isMonitorOnly: Bool { authVM.currentUser?.role == .monitor }
@@ -163,6 +164,17 @@ struct AdminMemberDetailSheet: View {
                 ))
             }
             .alert(
+                L10n.t("تعذر رفع الصورة", "Photo Upload Failed"),
+                isPresented: $showAvatarUploadError
+            ) {
+                Button(L10n.t("حسناً", "OK"), role: .cancel) {}
+            } message: {
+                Text(L10n.t(
+                    "تعذر رفع الصورة. تأكد من الاتصال ثم حاول مرة أخرى.",
+                    "The photo could not be uploaded. Check your connection and try again."
+                ))
+            }
+            .alert(
                 L10n.t("لا يوجد اتصال بالإنترنت", "No Internet Connection"),
                 isPresented: $showOfflineAlert
             ) {
@@ -252,7 +264,15 @@ struct AdminMemberDetailSheet: View {
                 .onChange(of: localAvatarPreview) { newImage in
                     guard let newImage else { return }
                     Task {
-                        await memberVM.uploadAvatar(image: newImage, for: member.id)
+                        let uploaded = await memberVM.uploadAvatar(image: newImage, for: member.id)
+                        guard uploaded else {
+                            // فشل الرفع: رجّع المعاينة للصورة الحالية وأظهر الخطأ
+                            await MainActor.run {
+                                localAvatarPreview = nil
+                                showAvatarUploadError = true
+                            }
+                            return
+                        }
                         if let updated = memberVM.member(byId: member.id) {
                             await MainActor.run { currentAvatarURL = updated.avatarUrl }
                         }

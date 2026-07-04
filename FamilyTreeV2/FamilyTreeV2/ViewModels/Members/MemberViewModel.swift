@@ -118,8 +118,9 @@ class MemberViewModel: ObservableObject {
         return L10n.t("\(verb) للعضو «\(name)»", "\(verb) for «\(name)»")
     }
     
+    // lowercase لمطابقة auth.uid()::text في سياسات RLS (التسجيل يستخدمها أصلاً)
     func getSafeMemberName(for memberId: UUID) -> String {
-        return memberId.uuidString
+        return memberId.uuidString.lowercased()
     }
 
     // MARK: - Phone Duplicate Check
@@ -549,9 +550,10 @@ class MemberViewModel: ObservableObject {
     
     // MARK: - Avatar Upload/Delete
     
-    // رفع صورة العضو
-    func uploadAvatar(image: UIImage, for memberId: UUID) async {
-        guard NetworkMonitor.shared.requireOnline() else { return }
+    // رفع صورة العضو — يرجع false مع errorMessage عند الفشل (لا فشل صامت)
+    @discardableResult
+    func uploadAvatar(image: UIImage, for memberId: UUID) async -> Bool {
+        guard NetworkMonitor.shared.requireOnline() else { return false }
         self.isLoading = true
 
         // 1. ضغط الصورة وتحويلها لبيانات (في خلفية لتجنب تجميد UI)
@@ -560,7 +562,8 @@ class MemberViewModel: ObservableObject {
         }.value
         guard let imageData = processed else {
             self.isLoading = false
-            return
+            self.errorMessage = L10n.t("تعذر معالجة الصورة", "Could not process the image")
+            return false
         }
 
         // التقط رابط الصورة القديم قبل التعديل
@@ -658,10 +661,14 @@ class MemberViewModel: ObservableObject {
 
         } catch {
             Log.error("خطأ في الرفع أو الرابط: \(error.localizedDescription)")
+            self.errorMessage = L10n.t("تعذر رفع الصورة. حاول مرة أخرى.", "Photo upload failed. Try again.")
+            self.isLoading = false
+            return false
         }
         self.isLoading = false
+        return true
     }
-    
+
     func deleteAvatar(for memberId: UUID) async {
         guard NetworkMonitor.shared.requireOnline() else { return }
         guard memberId == currentUser?.id || canModerate else {
@@ -710,6 +717,7 @@ class MemberViewModel: ObservableObject {
             
         } catch {
             Log.error("خطأ في حذف الصورة: \(error.localizedDescription)")
+            self.errorMessage = L10n.t("تعذر حذف الصورة. حاول مرة أخرى.", "Photo removal failed. Try again.")
         }
         self.isLoading = false
     }

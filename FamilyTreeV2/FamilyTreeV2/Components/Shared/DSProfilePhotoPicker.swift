@@ -504,7 +504,11 @@ struct DSProfilePhotoPicker: View {
             await MainActor.run { isLoading = true }
             guard let data = try? await item.loadTransferable(type: Data.self),
                   let uiImage = UIImage(data: data) else {
-                await MainActor.run { isLoading = false }
+                // تصفير الاختيار حتى يعمل onChange عند اختيار نفس الصورة مجدداً
+                await MainActor.run {
+                    isLoading = false
+                    pickerItem = nil
+                }
                 return
             }
 
@@ -513,6 +517,7 @@ struct DSProfilePhotoPicker: View {
 
             await MainActor.run {
                 isLoading = false
+                pickerItem = nil
                 lastRawImage = uiImage
                 if enableCrop {
                     rawPickedImage = uiImage
