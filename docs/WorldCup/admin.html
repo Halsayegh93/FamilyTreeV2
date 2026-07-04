@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>لوحة التحكم — جماهير مباريات كأس العالم الرميثية</title>
-  <link rel="stylesheet" href="styles.css?v=23" />
+  <link rel="stylesheet" href="styles.css?v=24" />
 </head>
 <body>
   <div class="wrap">
@@ -116,8 +116,8 @@
         let s = `${p.home_score}-${p.away_score}`;
         const d = Math.sign((p.home_score || 0) - (p.away_score || 0));
         if (d !== 0) s += ` 🏆${esc((d > 0 ? m.home_team : m.away_team) || '')}`;
-        else if (p.pen_pick) s = `🥅${esc((p.pen_pick === 'home' ? m.home_team : m.away_team) || '')}`;
-        else if (p.pen_home != null && p.pen_away != null) s = `🥅${esc((p.pen_home > p.pen_away ? m.home_team : m.away_team) || '')}`;
+        else if (p.pen_pick) s += ` 🥅${esc((p.pen_pick === 'home' ? m.home_team : m.away_team) || '')}`;
+        else if (p.pen_home != null && p.pen_away != null) s += ` 🥅${esc((p.pen_home > p.pen_away ? m.home_team : m.away_team) || '')}`;
         return s;
       };
 
@@ -288,17 +288,20 @@
     function finishedCard(m) {
       const home = m.home_team || '—', away = m.away_team || '—';
       const hasScore = m.home_score != null && m.away_score != null;
-      const scoreHTML = hasScore
-        ? `<b>${m.home_score} - ${m.away_score}</b>`
-        : '<span style="color:var(--muted)">بدون نتيجة</span>';
       const badge = m.finished
         ? '<span class="badge done">منتهية</span>'
         : '<span class="badge locked">مغلقة 🔒</span>';
       const wentToPens = m.home_pen != null && m.away_pen != null;
       return `<div class="card" data-id="${m.id}" data-finished="1"${wentToPens ? ' data-pens="1"' : ''}>
-        <div class="meta">
+        <details class="match-fold">
+          <summary class="match-sum">
+            <span class="ms-no">م${m.id}</span>
+            <span class="ms-teams">${esc(home)} <span class="ms-x">×</span> ${esc(away)}</span>
+            ${hasScore ? `<b class="ms-score">${m.home_score}-${m.away_score}${wentToPens ? ` 🥅${m.home_pen}-${m.away_pen}` : ''}</b>` : ''}
+            ${badge}
+          </summary>
+        <div class="meta" style="margin-top:8px">
           <span><b>${esc(roundLabel(m.round))}</b> — مباراة ${m.match_no}</span>
-          ${badge}
         </div>
         <div class="match">
           <div class="team home">
@@ -338,6 +341,7 @@
         </div>
 
         ${predictorsBlock(m)}
+        </details>
       </div>`;
     }
 

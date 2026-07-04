@@ -392,6 +392,7 @@ body { direction: rtl; }
 .match-fold .ms-teams { font-size: 15px; font-weight: 800; color: var(--text); }
 .match-fold .ms-x { color: var(--muted); font-weight: 700; }
 .match-fold .match-sum .badge { margin-inline-start: 6px; }
+.match-fold .ms-score { margin-inline-start: 6px; font-size: 13px; color: var(--green); white-space: nowrap; }
 /* a collapsed match card is a clean borderless row (no boxy lines) */
 .card:has(> .match-fold:not([open])) {
   border: none; box-shadow: none; background: transparent;
