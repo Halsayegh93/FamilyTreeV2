@@ -541,59 +541,61 @@
       viewRules.innerHTML = `
         <div class="round-title">قانون النقاط</div>
         <div class="notice" style="margin-bottom:12px;font-size:13px;text-align:center">
-          تُحتسب نتيجة المباراة على النتيجة <b>قبل ركلات الترجيح</b>.
+          نتيجة المباراة تُحسب على الأهداف <b>قبل ركلات الترجيح</b> (الوقت الأصلي والإضافي).<br>
+          المباراة اللي تنتهي بتعادل تنحسب من <b>جدول الركلات</b> تحت 👇
         </div>
         <div class="rules">
           <div class="rule">
             <span class="rule-pts">${POINTS.exact}<small>نقاط</small></span>
             <div><b>النتيجة الصحيحة بالضبط</b><br>
-              <span class="rule-ex">تضبط عدد أهداف الفريقين. مثال: انتهت 2-1 وتوقّعك 2-1.</span></div>
+              <span class="rule-ex">تضبط أهداف الفريقين حرفياً. مثال: انتهت المباراة 2-1 وتوقّعك 2-1.</span></div>
           </div>
           <div class="rule">
             <span class="rule-pts">${POINTS.winnerScore}<small>نقاط</small></span>
-            <div><b>الفائز + عدد أهدافه، أو تعادل صحيح</b><br>
-              <span class="rule-ex">تضبط الفريق الفائز وعدد أهدافه (الخاسر غلط)، مثال: 3-1 وتوقّعك 3-0. أو توقّعت تعادل وصار تعادل بنتيجة مختلفة (1-1 والنتيجة 2-2).</span></div>
+            <div><b>الفائز + عدد أهدافه</b><br>
+              <span class="rule-ex">تضبط الفريق الفائز وعدد أهدافه، بس تغلط بأهداف الخاسر. مثال: انتهت 3-1 وتوقّعك 3-0.</span></div>
           </div>
           <div class="rule">
             <span class="rule-pts">${POINTS.winner}<small>نقطة</small></span>
             <div><b>الفريق الفائز فقط</b><br>
-              <span class="rule-ex">تضبط الفائز بدون نتيجته الصحيحة. مثال: انتهت 3-1 وتوقّعك 2-1.</span></div>
+              <span class="rule-ex">تضبط الفائز بس تغلط بعدد أهدافه. مثال: انتهت 3-1 وتوقّعك 2-1 — الفائز صح والنتيجة لا.</span></div>
           </div>
           <div class="rule">
             <span class="rule-pts">0<small>نقطة</small></span>
             <div><b>توقّع غير صحيح</b><br>
-              <span class="rule-ex">إذا أخطأت مسار المباراة (الفائز أو التعادل).</span></div>
+              <span class="rule-ex">غلطت بمسار المباراة: توقّعت فائز وفاز الفريق الثاني، أو توقّعت فائز وانتهت تعادل، أو توقّعت تعادل وفاز فريق.</span></div>
           </div>
         </div>
         <div class="round-title" style="margin-top:16px">🥅 نقاط ركلات الترجيح</div>
         <div class="notice" style="margin-bottom:12px;font-size:13px;text-align:center">
-          تنطبق فقط إذا <b>راحت المباراة ركلات ترجيح</b> — ولازم تكون توقّعت <b>تعادل</b>.
+          إذا انتهت المباراة بتعادل وراحت <b>ركلات ترجيح</b>، توقّعك ينحسب من هالجدول —<br>
+          بشرط تكون توقّعت <b>تعادل</b> واخترت <b>المتأهّل بالركلات</b>.
         </div>
         <div class="rules">
           <div class="rule">
             <span class="rule-pts">${POINTS.pensExactRight}<small>نقاط</small></span>
             <div><b>النتيجة بالضبط + الفائز بالركلات صح</b><br>
-              <span class="rule-ex">تضبط نتيجة التعادل بالضبط وتختار المتأهّل بالركلات صح. مثال: توقّعت 1-1 وباراغواي، والنتيجة 1-1 وباراغواي تأهّلت.</span></div>
+              <span class="rule-ex">تضبط نتيجة التعادل حرفياً وتضبط المتأهّل. مثال: توقّعت 1-1 وباراغواي، وانتهت 1-1 وباراغواي تأهّلت بالركلات.</span></div>
           </div>
           <div class="rule">
             <span class="rule-pts">${POINTS.pensDiffRight}<small>نقاط</small></span>
             <div><b>تعادل بنتيجة مختلفة + الفائز بالركلات صح</b><br>
-              <span class="rule-ex">توقّعت تعادل بنتيجة غير مطابقة، بس اخترت المتأهّل بالركلات صح. مثال: توقّعت 2-2 وباراغواي، والنتيجة 1-1 وباراغواي تأهّلت.</span></div>
+              <span class="rule-ex">توقّعت تعادل بنتيجة ثانية، بس ضبطت المتأهّل. مثال: توقّعت 2-2 ومصر، وانتهت 1-1 ومصر تأهّلت بالركلات.</span></div>
           </div>
           <div class="rule">
             <span class="rule-pts">${POINTS.pensExactWrong}<small>نقاط</small></span>
             <div><b>النتيجة بالضبط + الفائز بالركلات غلط</b><br>
-              <span class="rule-ex">تضبط نتيجة التعادل بالضبط، بس تخطئ المتأهّل بالركلات.</span></div>
+              <span class="rule-ex">تضبط نتيجة التعادل حرفياً، بس تغلط بالمتأهّل. مثال: توقّعت 1-1 وألمانيا، وانتهت 1-1 بس باراغواي تأهّلت بالركلات.</span></div>
           </div>
           <div class="rule">
             <span class="rule-pts">0<small>نقطة</small></span>
             <div><b>تعادل بنتيجة مختلفة + الفائز بالركلات غلط</b><br>
-              <span class="rule-ex">توقّعت التعادل، بس النتيجة غير مطابقة والمتأهّل بالركلات غلط.</span></div>
+              <span class="rule-ex">لا نتيجة التعادل مطابقة ولا المتأهّل صح. مثال: توقّعت 2-2 وهولندا، وانتهت 1-1 والمغرب تأهّل بالركلات.</span></div>
           </div>
         </div>
         <div class="notice" style="margin-top:12px;font-size:13px;line-height:2">
-          • إذا انحسمت المباراة (وقت أصلي أو إضافي، <b>بدون ركلات</b>) وتوقّعت تعادل → <b>0</b> (توقّع الركلات ما له قيمة).<br>
-          • أعلى نقاط: مباراة عادية <b>5</b>، ومباراة فيها ركلات <b>7</b>.<br>
+          • توقّعت فوز فريق والمباراة راحت ركلات ترجيح؟ → <b>0</b> — جدول الركلات خاص بمن توقّع التعادل.<br>
+          • أعلى نقاط: مباراة محسومة <b>${POINTS.exact}</b>، ومباراة ركلات <b>${POINTS.pensExactRight}</b>.<br>
           • يُصبح التوقّع <b>نهائياً</b> بعد حفظه، ويُغلَق باب التوقّع عند بداية المباراة.
         </div>`;
     }
@@ -647,7 +649,7 @@
       <div class="scoring-note">
         <b>النقاط:</b>
         <span class="chip">${POINTS.exact} مضبوطة</span>
-        <span class="chip">${POINTS.winnerScore} الفائز+أهدافه/تعادل</span>
+        <span class="chip">${POINTS.winnerScore} الفائز+أهدافه</span>
         <span class="chip">${POINTS.winner} الفائز فقط</span>
         <span class="chip">${POINTS.pensExactRight}/${POINTS.pensDiffRight}/${POINTS.pensExactWrong} الركلات</span>
       </div>`;
