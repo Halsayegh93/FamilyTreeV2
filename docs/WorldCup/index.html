@@ -11,6 +11,9 @@
     .pred-when.pred-row { display: block; }   /* stack summary + time, not side-by-side */
     .pred-when > summary { list-style: none; cursor: pointer; display: flex;
       align-items: center; gap: 8px; padding: 3px 0; }
+    .pred-when > summary .pr-end { margin-inline-start: auto; display: inline-flex;
+      align-items: center; flex-shrink: 0; }   /* goals/pens + team + points on the other side */
+    .pred-when > summary .pr-name { min-width: 0; }
     .pred-when > summary::-webkit-details-marker { display: none; }
     .pred-when .pr-when-hint { flex-shrink: 0; margin-inline-end: 4px; font-size: 11px; line-height: 1;
       color: var(--primary); background: rgba(43,122,159,.10);
@@ -289,15 +292,15 @@
                 guess = `${p.home_score}-${p.away_score}`;
                 const d = Math.sign((p.home_score || 0) - (p.away_score || 0));
                 if (d !== 0) guess += ` 🏆${esc((d > 0 ? m.home_team : m.away_team) || '')}`;
-                // penalty-decided draw -> show only the qualifier team (the winner pick)
-                else if (p.pen_pick) guess = `🥅${esc((p.pen_pick === 'home' ? m.home_team : m.away_team) || '')}`;
-                else if (p.pen_home != null && p.pen_away != null) guess = `🥅${esc((p.pen_home > p.pen_away ? m.home_team : m.away_team) || '')}`;
+                // penalty-decided draw -> the predicted goals PLUS the penalty qualifier
+                else if (p.pen_pick) guess += ` 🥅${esc((p.pen_pick === 'home' ? m.home_team : m.away_team) || '')}`;
+                else if (p.pen_home != null && p.pen_away != null) guess += ` 🥅${esc((p.pen_home > p.pen_away ? m.home_team : m.away_team) || '')}`;
               }
               const ptsTag = m.finished
                 ? (() => { const pts = scoreRow(p, m);
                     return `<span class="pts ${pts > 0 ? 'good' : 'zero'}">${pts > 0 ? '+' + pts : '0'}</span>`; })()
                 : '';
-              return `<details class="pred-row pred-when"><summary><span class="pr-when-hint" title="وقت التوقّع" aria-label="وقت التوقّع">🕒</span><span class="pr-name">${nm}</span><span class="pr-guess"><b>${guess}</b> ${ptsTag}</span></summary>${whenFold}</details>`;
+              return `<details class="pred-row pred-when"><summary><span class="pr-when-hint" title="وقت التوقّع" aria-label="وقت التوقّع">🕒</span><span class="pr-name">${nm}</span><span class="pr-end"><span class="pr-guess"><b>${guess}</b></span>${ptsTag}</span></summary>${whenFold}</details>`;
             }
             return `<details class="pred-row pred-when"><summary><span class="pr-when-hint" title="وقت التوقّع" aria-label="وقت التوقّع">🕒</span><span class="pr-name">${nm}</span></summary>${whenFold}</details>`;
           }).join('');
