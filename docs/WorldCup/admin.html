@@ -199,8 +199,9 @@
       if (watching) return;
       watching = true;
       watch(() => {
+        // never rebuild while the admin is typing in any edit field
         const a = document.activeElement;
-        if (a && a.matches && a.matches('.r-home, .r-away')) return;
+        if (a && a.matches && a.matches('#list input, #addpred input, #addpred select')) return;
         loadList();
       });
     }
@@ -482,9 +483,51 @@
             `</details>`;
         }
 
+        // keep whatever the admin opened (match folds + inner sections) and any
+        // unsaved edits across the realtime rebuilds triggered by players'
+        // predictions coming in
+        const openFolds = new Set(
+          [...$('#list').querySelectorAll('.card[data-id] details.match-fold[open]')]
+            .map((d) => d.closest('.card').dataset.id));
+        const openInner = new Set(
+          [...$('#list').querySelectorAll('.card[data-id] details:not(.match-fold)[open]')]
+            .map((d) => d.closest('.card').dataset.id + ':' + d.className));
+        const edits = new Map();   // cardId -> { winner, fields: [[key, value]] }
+        [...$('#list').querySelectorAll('.card[data-id]')].forEach((c) => {
+          const fields = [];
+          c.querySelectorAll('input').forEach((i) => {
+            if (i.value !== i.defaultValue)
+              fields.push([i.classList[0] + '|' + (i.dataset.name || ''), i.value]);
+          });
+          if (fields.length || c.dataset.winner)
+            edits.set(c.dataset.id, { winner: c.dataset.winner || '', fields });
+        });
+
         $('#list').innerHTML = html;
         $('#list').querySelectorAll('.card[data-id]').forEach((c) => {
           if (c.dataset.finished) bindFinished(c); else bind(c);
+          const fold = c.querySelector('details.match-fold');
+          if (fold && openFolds.has(c.dataset.id)) fold.open = true;
+          c.querySelectorAll('details:not(.match-fold)').forEach((d) => {
+            if (openInner.has(c.dataset.id + ':' + d.className)) d.open = true;
+          });
+          const e = edits.get(c.dataset.id);
+          if (e) {
+            for (const [k, v] of e.fields) {
+              const [cls, name] = k.split('|');
+              const inp = c.querySelector(name ? `.${cls}[data-name="${CSS.escape(name)}"]` : `.${cls}`);
+              if (inp) inp.value = v;
+            }
+            if (e.winner) {
+              c.dataset.winner = e.winner;
+              const wh = c.querySelector('.win-home'), wa = c.querySelector('.win-away');
+              if (wh) wh.classList.toggle('saved', e.winner === 'home');
+              if (wa) wa.classList.toggle('saved', e.winner === 'away');
+            }
+            // re-evaluate the draw → penalty-pick visibility with the restored score
+            const rh = c.querySelector('.r-home');
+            if (rh) rh.dispatchEvent(new Event('input'));
+          }
         });
         // الكل / ركلات فقط — filter locally, no refetch
         $('#list').querySelectorAll('.fin-tab').forEach((b) => {
@@ -536,7 +579,11 @@
         const refreshPick = () => {
           const draw = hEl.value !== '' && aEl.value !== '' && +hEl.value === +aEl.value;
           pick.style.display = draw ? '' : 'none';
-          if (!draw) card.dataset.winner = '';
+          if (!draw) {
+            card.dataset.winner = '';
+            winHome.classList.remove('saved');
+            winAway.classList.remove('saved');
+          }
         };
         hEl.addEventListener('input', refreshPick);
         aEl.addEventListener('input', refreshPick);
@@ -612,7 +659,11 @@
         const h = hEl.value, a = aEl.value;
         const draw = h !== '' && a !== '' && +h === +a;
         pick.style.display = draw && isLater ? '' : 'none';
-        if (!draw) card.dataset.winner = '';
+        if (!draw) {
+          card.dataset.winner = '';
+          winHome.classList.remove('saved');
+          winAway.classList.remove('saved');
+        }
       }
       function choose(side) {
         card.dataset.winner = side;
