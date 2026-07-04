@@ -85,24 +85,24 @@ create table if not exists public.wc_bracket (
 );
 
 -- Official FIFA World Cup 2026 bracket (matches 1..16 = R32 in schedule order).
--- The R32 -> R16 feed is NOT adjacent: it follows the real tournament bracket
--- (e.g. R16 #17 = winners of R32 #2 and #5). `do update` so re-running corrects
--- any older (adjacent) links already in the table.
+-- The R32 -> R16 feed is NOT adjacent: it follows the real tournament bracket.
+-- Verified 2026-07-04 against the announced Round-of-16 fixtures (FIFA/Al
+-- Jazeera/Sky). `do update` so re-running corrects any older links.
 insert into public.wc_bracket (src, result, dst, slot) values
   -- Round of 32 winners -> Round of 16
-  (2,'W',17,'home'),(5,'W',17,'away'),
-  (1,'W',18,'home'),(3,'W',18,'away'),
-  (4,'W',19,'home'),(6,'W',19,'away'),
-  (7,'W',20,'home'),(8,'W',20,'away'),
-  (11,'W',21,'home'),(12,'W',21,'away'),
-  (9,'W',22,'home'),(10,'W',22,'away'),
-  (14,'W',23,'home'),(16,'W',23,'away'),
-  (13,'W',24,'home'),(15,'W',24,'away'),
+  (1,'W',17,'home'),(4,'W',17,'away'),    -- #17 Canada v Morocco    (Houston, Jul 4)
+  (3,'W',18,'home'),(6,'W',18,'away'),    -- #18 Paraguay v France   (Philadelphia, Jul 4)
+  (2,'W',19,'home'),(5,'W',19,'away'),    -- #19 Brazil v Norway     (NY/NJ, Jul 5)
+  (7,'W',20,'home'),(8,'W',20,'away'),    -- #20 Mexico v England    (Mexico City, Jul 5)
+  (12,'W',21,'home'),(11,'W',21,'away'),  -- #21 Portugal v Spain    (Dallas, Jul 6)
+  (10,'W',22,'home'),(9,'W',22,'away'),   -- #22 United States v Belgium (Seattle, Jul 6)
+  (15,'W',23,'home'),(14,'W',23,'away'),  -- #23 Argentina v Egypt   (Atlanta, Jul 7)
+  (13,'W',24,'home'),(16,'W',24,'away'),  -- #24 Switzerland v Colombia (Vancouver, Jul 7)
   -- Round of 16 winners -> Quarter-finals
-  (17,'W',25,'home'),(18,'W',25,'away'),
-  (21,'W',26,'home'),(22,'W',26,'away'),
-  (19,'W',27,'home'),(20,'W',27,'away'),
-  (23,'W',28,'home'),(24,'W',28,'away'),
+  (18,'W',25,'home'),(17,'W',25,'away'),  -- QF1 Boston (Jul 9)
+  (21,'W',26,'home'),(22,'W',26,'away'),  -- QF2 Los Angeles (Jul 10)
+  (19,'W',27,'home'),(20,'W',27,'away'),  -- QF3 Miami (Jul 11)
+  (23,'W',28,'home'),(24,'W',28,'away'),  -- QF4 Kansas City (Jul 12)
   -- Quarter-final winners -> Semi-finals
   (25,'W',29,'home'),(26,'W',29,'away'),
   (27,'W',30,'home'),(28,'W',30,'away'),
@@ -708,3 +708,30 @@ delete from public.wc_matches
 -- Force PostgREST to pick up the new functions immediately (so the reset and
 -- other RPCs work right after running this file).
 notify pgrst, 'reload schema';
+
+-- ---------- One-off fix (2026-07-04): re-pair the Round of 16 ---------------
+-- The old R32->R16 links filled the R16 slots with the wrong matchups. Guarded
+-- by the stale "Brazil at #17" state, so it runs exactly once and is a no-op
+-- on every later re-run of this file.
+do $$
+begin
+  if exists (select 1 from public.wc_matches where id = 17 and home_team = 'Brazil') then
+    -- Predictions on matchups that never existed (Canada-Paraguay at #18,
+    -- Morocco-France at #19, Egypt-Colombia at #23) cannot be mapped to any
+    -- real fixture — remove them so those players can re-predict.
+    delete from public.wc_predictions where match_id in (18, 19, 23);
+    -- Brazil v Norway moved from slot #17 to #19 with the same orientation:
+    -- carry its predictions over (slot #19 was just cleared above).
+    update public.wc_predictions set match_id = 19 where match_id = 17;
+    -- Slots #21 (Portugal-Spain) and #22 (United States-Belgium) kept their
+    -- fixture but home/away flipped: mirror the stored predictions.
+    update public.wc_predictions
+       set home_score = away_score, away_score = home_score,
+           pen_home = pen_away, pen_away = pen_home,
+           pick = case pick when 'home' then 'away' when 'away' then 'home' else pick end,
+           pen_pick = case pen_pick when 'home' then 'away' when 'away' then 'home' else pen_pick end
+     where match_id in (21, 22);
+    -- Re-fill the R16 teams from the finished R32 results via the corrected links.
+    perform public.wc_admin_rebuild_bracket('1993');
+  end if;
+end $$;
