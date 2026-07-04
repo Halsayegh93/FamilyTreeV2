@@ -119,15 +119,38 @@ const norm = (s) => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
 
 // Align the API's scores to OUR stored home/away by TEAM NAME, so a result is
 // never stored reversed even if our home/away orientation differs from the API's
-// (which otherwise mis-scores predictions). Returns { ph, pa, flipped }.
+// (which otherwise mis-scores predictions). Returns { gh, ga, ph, pa, flipped }.
+
+// Split the API score into GOALS (incl. extra time) and the PENALTY SHOOTOUT.
+// football-data.org quirk: when a match ends in a shootout, score.fullTime
+// INCLUDES the shootout kicks — storing it as-is shows e.g. "4-5" for a 1-1
+// match decided 3-4 on penalties. The real goals are regularTime + extraTime
+// (fallback: fullTime minus penalties).
+function splitScore(api) {
+  const s = api.score || {};
+  let gh = s.fullTime?.home, ga = s.fullTime?.away;
+  let ph = null, pa = null;
+  if (s.duration === 'PENALTY_SHOOTOUT'
+      && s.penalties?.home != null && s.penalties?.away != null) {
+    ph = s.penalties.home; pa = s.penalties.away;
+    if (s.regularTime?.home != null && s.regularTime?.away != null) {
+      gh = s.regularTime.home + (s.extraTime?.home || 0);
+      ga = s.regularTime.away + (s.extraTime?.away || 0);
+    } else if (gh != null && ga != null) {
+      gh -= ph; ga -= pa;
+    }
+  }
+  return { gh, ga, ph, pa };
+}
+
 function alignToStored(storedHome, api) {
-  const sh = api.score.fullTime.home;
-  const sa = api.score.fullTime.away;
+  const { gh, ga, ph, pa } = splitScore(api);
   const ourH = norm(storedHome);
   const apiH = norm(api.homeTeam?.name);
   const apiA = norm(api.awayTeam?.name);
-  if (ourH && ourH === apiA && ourH !== apiH) return { ph: sa, pa: sh, flipped: true };
-  return { ph: sh, pa: sa, flipped: false };
+  if (ourH && ourH === apiA && ourH !== apiH)
+    return { gh: ga, ga: gh, ph: pa, pa: ph, flipped: true };
+  return { gh, ga, ph, pa, flipped: false };
 }
 
 async function main() {
@@ -226,23 +249,27 @@ async function main() {
       dbById = new Map(db.map((m) => [m.id, m]));
     } catch (e) { console.error('read wc_matches:', e.message); }
 
-    // set results, aligned to OUR orientation by team name
+    // set results, aligned to OUR orientation by team name; the penalty
+    // shootout (if any) is stored separately in home_pen/away_pen — never
+    // mixed into the goals.
     for (const { ourId, api } of finishedJobs) {
       const stored = dbById.get(ourId);
-      const { ph, pa, flipped } = alignToStored(stored?.home_team, api);
+      const { gh, ga, ph, pa, flipped } = alignToStored(stored?.home_team, api);
       let winner = null;
-      if (ph === pa) {
-        const w = api.score.winner; // penalties decider
+      if (gh === ga && (ph == null || pa == null)) {
+        const w = api.score.winner; // penalties decider (shootout score unknown)
         if (w === 'HOME_TEAM') winner = flipped ? 'away' : 'home';
         else if (w === 'AWAY_TEAM') winner = flipped ? 'home' : 'away';
       }
       try {
         await sbRpc('wc_admin_set_result', {
-          p_match_id: ourId, p_home: ph, p_away: pa, p_pin: PIN, p_winner: winner,
+          p_match_id: ourId, p_home: gh, p_away: ga, p_pin: PIN, p_winner: winner,
+          p_home_pen: ph, p_away_pen: pa,
         });
         resultUpdates++;
-        console.log(`result #${ourId}  ${ph}-${pa}${flipped ? ' (aligned by name)' : ''}` +
-          `${winner ? ` (pen:${winner})` : ''}`);
+        console.log(`result #${ourId}  ${gh}-${ga}` +
+          `${ph != null ? ` (pens ${ph}-${pa})` : ''}` +
+          `${flipped ? ' (aligned by name)' : ''}${winner ? ` (pen:${winner})` : ''}`);
       } catch (e) { console.error(`set_result #${ourId}:`, e.message); }
     }
   }
