@@ -201,7 +201,12 @@
 
       let badge = '';
       if (m.finished) badge = '<span class="badge done">انتهت</span>';
-      else if (started) badge = '<span class="badge livenow"><span class="live-dot"></span> جارية الآن</span>';
+      else if (started) {
+        // the live score (mirrored from ESPN) sits inside the badge itself
+        const liveScore = (m.home_score != null && m.away_score != null)
+          ? ` · <b>${m.home_score} - ${m.away_score}</b>` : '';
+        badge = `<span class="badge livenow"><span class="live-dot"></span> جارية الآن${liveScore}</span>`;
+      }
       else if (predicted) badge = '<span class="badge done">تم التوقع ✓</span>';
       else if (locked) badge = '<span class="badge locked">مغلقة 🔒</span>';
       else badge = '<span class="badge live">مفتوحة</span>';
@@ -228,14 +233,12 @@
         resultLine = `<div class="result-line">
           <span>النتيجة (الأهداف): <b>${m.home_score} - ${m.away_score}</b></span>
         </div>${ptsLine}${penLine}`;
-      } else if (started && m.home_score != null && m.away_score != null) {
-        // live score mirrored from ESPN while the match is in progress
-        const penLive = (m.home_pen != null && m.away_pen != null)
-          ? `<div class="result-line pen-line"><span>🥅 ركلات الترجيح الآن: <b>${m.home_pen} - ${m.away_pen}</b></span></div>`
-          : '';
+      } else if (started && m.home_pen != null && m.away_pen != null) {
+        // the live goals sit in the جارية الآن badge — only a live shootout
+        // still gets its own line
         resultLine = `<div class="result-line live-line">
-          <span><span class="live-dot"></span> مباشر: <b>${m.home_score} - ${m.away_score}</b></span>
-        </div>${penLive}`;
+          <span>🥅 ركلات الترجيح الآن: <b>${m.home_pen} - ${m.away_pen}</b></span>
+        </div>`;
       }
 
       const ktime = m.kickoff
