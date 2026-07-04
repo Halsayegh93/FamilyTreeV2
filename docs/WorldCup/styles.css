@@ -223,6 +223,11 @@ body { direction: rtl; }
   box-shadow: 0 6px 16px rgba(43,122,159,.3);
 }
 
+/* admin: read-only official result on finished matches */
+.scorebox .final-score { font-size: 24px; font-weight: 800; color: var(--text); white-space: nowrap; letter-spacing: 1px; }
+.pens-line { text-align: center; font-size: 13px; color: var(--muted); margin-top: 10px; }
+.pens-line b { color: var(--text); }
+
 /* admin: الكل / ركلات فقط filter inside the finished-results section */
 #finished-sec .fin-pens-empty { display: none; }
 #finished-sec.pens-only .card:not([data-pens]) { display: none; }

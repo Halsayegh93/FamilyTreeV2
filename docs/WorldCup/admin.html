@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>لوحة التحكم — جماهير مباريات كأس العالم الرميثية</title>
-  <link rel="stylesheet" href="styles.css?v=24" />
+  <link rel="stylesheet" href="styles.css?v=25" />
 </head>
 <body>
   <div class="wrap">
@@ -310,20 +310,25 @@
             ${flagHTML(m.home_flag)}
             <span class="name ${m.home_team ? '' : 'tbd'}">${esc(home)}</span>
           </div>
-          <div class="scorebox">
+          ${m.finished
+            ? `<div class="scorebox"><b class="final-score">${m.home_score ?? '—'} - ${m.away_score ?? '—'}</b></div>`
+            : `<div class="scorebox">
             <input class="r-home" type="number" min="0" max="99" inputmode="numeric"
               value="${m.home_score ?? ''}" />
             <span class="dash">-</span>
             <input class="r-away" type="number" min="0" max="99" inputmode="numeric"
               value="${m.away_score ?? ''}" />
-          </div>
+          </div>`}
           <div class="team away">
             ${flagHTML(m.away_flag)}
             <span class="name ${m.away_team ? '' : 'tbd'}">${esc(away)}</span>
           </div>
         </div>
+        ${m.finished && wentToPens
+          ? `<div class="pens-line">🥅 ركلات الترجيح: <b>${m.home_pen} - ${m.away_pen}</b> · تأهّل ${esc((m.home_pen > m.away_pen ? m.home_team : m.away_team) || '')}</div>`
+          : ''}
 
-        <!-- shown only when the score is a draw — pick the penalty winner + score -->
+        ${m.finished ? '' : `<!-- shown only when the score is a draw — pick the penalty winner + score -->
         <div class="win-pick" style="display:none;margin-top:10px;text-align:center;font-size:13px;color:var(--muted)">
           تعادل — منو الفائز بالركلات؟
           <div style="display:flex;gap:8px;margin-top:6px">
@@ -336,9 +341,9 @@
             <span>-</span>
             <input class="pen-away" type="number" min="0" max="99" inputmode="numeric" value="${m.away_pen ?? ''}" style="width:48px;text-align:center" />
           </div>
-        </div>
+        </div>`}
         <div class="card-actions">
-          <button class="btn save-result">💾 تحديث النتيجة (تُحسب النقاط)</button>
+          ${m.finished ? '' : '<button class="btn save-result">💾 تحديث النتيجة (تُحسب النقاط)</button>'}
           <button class="btn ghost reopen" style="margin-top:8px">♻️ مسح النتيجة وإعادة الفتح</button>
         </div>
 
