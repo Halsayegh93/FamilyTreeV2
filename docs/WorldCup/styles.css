@@ -274,6 +274,36 @@ body { direction: rtl; }
 }
 @keyframes livepulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: .3; transform: scale(.7); } }
 
+/* champion pick (توقّع بطل الكاس) ------------------------------------------ */
+.champ-card { margin-bottom: 14px; }
+.champ-pts {
+  font-size: 12px; font-weight: 800; color: #fff;
+  background: linear-gradient(120deg, var(--primary), var(--primary2));
+  border-radius: 999px; padding: 3px 10px; margin-inline-start: 8px;
+}
+.champ-sub { font-size: 12.5px; color: var(--muted); margin-bottom: 10px; }
+.champ-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 8px; }
+.champ-team {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 8px 4px; border: 1.5px solid var(--border); border-radius: 12px;
+  background: var(--surface); cursor: pointer; position: relative;
+  font-family: inherit; font-size: 12px; font-weight: 700; color: var(--text);
+  transition: .15s;
+}
+.champ-team:hover:not([disabled]) { border-color: var(--primary); }
+.champ-team.saved { border-color: var(--green); background: rgba(27,122,75,.1); }
+.champ-team[disabled] { cursor: default; opacity: .7; }
+.champ-team.saved[disabled] { opacity: 1; }
+.champ-team .ct-name { line-height: 1.2; text-align: center; }
+.champ-team .ct-count {
+  position: absolute; top: -7px; inset-inline-end: -5px;
+  background: var(--primary); color: #fff;
+  font-size: 10.5px; font-weight: 800; border-radius: 999px; padding: 1px 6px;
+}
+.champ-save { margin-top: 10px; }
+.champ-note { text-align: center; font-size: 13px; color: var(--muted); margin-top: 10px; }
+.champ-note.ok { color: var(--green); font-weight: 700; }
+
 /* live score line on an in-progress match (mirrored from ESPN) */
 .result-line.live-line { color: #c62828; font-weight: 700; }
 .result-line.live-line b { color: #c62828; font-size: 16px; }

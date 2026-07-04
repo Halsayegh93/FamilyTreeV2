@@ -1,7 +1,7 @@
 // ============================================================================
 // Shared logic: Supabase client, scoring, data loading.
 // ============================================================================
-import { SUPABASE_URL, SUPABASE_ANON_KEY, POINTS } from './config.js?v=8';
+import { SUPABASE_URL, SUPABASE_ANON_KEY, POINTS } from './config.js?v=9';
 import { demo } from './demo.js?v=7';
 
 export { POINTS };
@@ -181,6 +181,25 @@ export async function loadPredictionHistory() {
     .order('changed_at', { ascending: true });
   if (error) return null;   // table not created yet -> feature disabled
   return data || [];
+}
+
+// Champion picks (توقّع بطل الكاس) — one final pick per player, +50 points if
+// the picked team lifts the cup. Returns null when the table doesn't exist yet
+// (feature not activated) so the UI can hide the section.
+export async function loadChampionPicks() {
+  if (DEMO) return [];
+  const sb = await client();
+  const { data, error } = await sb.from('wc_champion_picks').select('*');
+  if (error) return null;
+  return data || [];
+}
+
+export async function submitChampion(name, team) {
+  if (DEMO) throw new Error('CHAMPION_LOCKED');
+  const sb = await client();
+  const { data, error } = await sb.rpc('wc_submit_champion', { p_name: name, p_team: team });
+  if (error) throw error;
+  return data;
 }
 
 export async function loadMyPredictions(name) {
@@ -369,6 +388,7 @@ export function watch(onChange, pollMs = 20000) {
     channel = sb.channel('wc-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'wc_matches' }, onChange)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'wc_predictions' }, onChange)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'wc_champion_picks' }, onChange)
       .subscribe();
   }).catch(() => {});
   return () => { clearInterval(timer); if (channel) channel.unsubscribe(); };
@@ -378,7 +398,7 @@ export function watch(onChange, pollMs = 20000) {
 // rec: { name, points, exact, correct, played, predicted }
 //   predicted = total matches the player predicted (any status)
 //   played    = how many of those have finished (counted toward points)
-export function buildLeaderboard(matches, predictions) {
+export function buildLeaderboard(matches, predictions, championPicks = []) {
   const byId = new Map(matches.map((m) => [m.id, m]));
   const players = new Map();
 
@@ -397,6 +417,27 @@ export function buildLeaderboard(matches, predictions) {
     players.set(p.player_name, rec);
   }
 
+  // champion pick: +50 once the final is decided and the pick lifted the cup
+  const final = matches.find((m) => m.round === 'FINAL');
+  let champ = null;
+  if (final && final.finished) {
+    const d = Math.sign((final.home_score ?? 0) - (final.away_score ?? 0));
+    if (d !== 0) champ = d > 0 ? final.home_team : final.away_team;
+    else if (final.home_pen != null && final.away_pen != null && final.home_pen !== final.away_pen)
+      champ = final.home_pen > final.away_pen ? final.home_team : final.away_team;
+  }
+  for (const c of championPicks || []) {
+    const rec = players.get(c.player_name) || {
+      name: c.player_name, points: 0, exact: 0, correct: 0, played: 0, predicted: 0,
+    };
+    rec.champion = c.team;
+    if (champ && c.team === champ) {
+      rec.points += POINTS.champion;
+      rec.championHit = true;
+    }
+    players.set(c.player_name, rec);
+  }
+
   return [...players.values()].sort(
     (a, b) => b.points - a.points || b.correct - a.correct || a.name.localeCompare(b.name, 'ar'),
   );
@@ -406,6 +447,9 @@ export function buildLeaderboard(matches, predictions) {
 export function friendlyError(err) {
   const msg = (err && err.message) || String(err);
   if (msg.includes('ALREADY_PREDICTED')) return 'عندك توقّع محفوظ لهالمباراة — التوقّع مرة وحدة ونهائي 🔒';
+  if (msg.includes('ALREADY_PICKED'))  return 'توقّعك للبطل محفوظ — التوقّع مرة وحدة ونهائي 🔒';
+  if (msg.includes('CHAMPION_LOCKED')) return 'انتهى وقت توقّع البطل — يُقفل مع نهاية دور الـ16 🔒';
+  if (msg.includes('INVALID_TEAM'))    return 'اختر فريقاً من الفرق المتأهلة';
   if (msg.includes('MATCH_FINISHED')) return 'المباراة خلصت — ما يمكن إضافة توقّع';
   if (msg.includes('MATCH_LOCKED'))   return 'انتهى وقت التوقع لهذه المباراة 🔒';
   if (msg.includes('NAME_REQUIRED'))  return 'اكتب اسمك أول';

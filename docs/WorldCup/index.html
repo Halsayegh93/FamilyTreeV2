@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
   <meta http-equiv="Cache-Control" content="no-cache" />
   <title>جماهير مباريات كأس العالم الرميثية 🏆</title>
-  <link rel="stylesheet" href="styles.css?v=27" />
+  <link rel="stylesheet" href="styles.css?v=28" />
   <style>
     /* predictors list: click a player to reveal WHEN they predicted */
     .pred-when.pred-row { display: block; }   /* stack summary + time, not side-by-side */
@@ -64,7 +64,8 @@
       isConfigured, loadMatches, loadPredictions, loadMyPredictions,
       submitPrediction, submitWinner, buildLeaderboard, scorePrediction,
       scoreRow, isLocked, roundLabel, matchDay, flagHTML, ROUNDS, friendlyError, POINTS, watch,
-    } from './app.js?v=28';
+      loadChampionPicks, submitChampion,
+    } from './app.js?v=29';
 
     const $ = (s, r = document) => r.querySelector(s);
     const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) =>
@@ -79,6 +80,8 @@
     let matches = [];
     let myPreds = new Map();   // match_id -> {home, away}
     let allPreds = [];
+    let championPicks = null;   // توقعات بطل الكاس (null = feature not activated)
+    let champSel = '';          // team currently highlighted in the champion card
     let nameLocked = false;     // is the name confirmed (fixed)?
     let matchFilter = 'upcoming'; // matches filter: upcoming | finished | all
     let lastSig = '';           // last rendered data signature (skip no-op re-renders)
@@ -376,6 +379,86 @@
       </div>`;
     }
 
+    // ----- توقّع بطل الكاس (+50) — one final pick, closes at the end of R16 -----
+    function champLocked() {
+      const r16 = matches.filter((m) => m.round === 'R16');
+      if (r16.length && r16.every((m) => m.finished)) return true;   // دور الـ16 خلص
+      const qf = matches.filter((m) => m.round === 'QF' && m.kickoff);
+      const first = qf.length ? Math.min(...qf.map((m) => new Date(m.kickoff).getTime())) : null;
+      return first != null && Date.now() >= first;                    // fallback: ربع النهائي بدأ
+    }
+
+    function championCard() {
+      if (championPicks === null) return '';   // table not created yet
+      const teams = [], seen = new Set();
+      for (const m of matches.filter((x) => x.round === 'R16').sort((a, b) => a.id - b.id)) {
+        for (const side of ['home', 'away']) {
+          const t = m[side + '_team'];
+          if (!t || seen.has(t)) continue;
+          seen.add(t);
+          teams.push({ team: t, flag: m[side + '_flag'] });
+        }
+      }
+      if (!teams.length) return '';
+      const name = playerEl.value.trim();
+      const mine = championPicks.find((p) => p.player_name === name);
+      const locked = champLocked();
+      const reveal = !!mine || locked;   // same rule as matches: see others once yours is saved
+      const counts = new Map();
+      for (const p of championPicks) counts.set(p.team, (counts.get(p.team) || 0) + 1);
+      const btns = teams.map(({ team, flag }) => {
+        const sel = mine ? mine.team === team : champSel === team;
+        const n = reveal ? (counts.get(team) || 0) : 0;
+        return `<button type="button" class="champ-team${sel ? ' saved' : ''}"
+          data-team="${esc(team)}" ${mine || locked ? 'disabled' : ''}>
+          ${flagHTML(flag)}<span class="ct-name">${esc(team)}</span>
+          ${n ? `<span class="ct-count">${n}</span>` : ''}
+        </button>`;
+      }).join('');
+      let action;
+      if (mine) action = `<div class="champ-note ok">✓ توقّعك: <b>${esc(mine.team)}</b> — نهائي 🔒</div>`;
+      else if (locked) action = '<div class="champ-note">🔒 قفل توقّع البطل — انتهى دور الـ16.</div>';
+      else action = `<button class="btn champ-save" ${champSel ? '' : 'disabled'}>💾 حفظ توقّع البطل (نهائي)</button>`;
+      return `<div class="card champ-card">
+        <div class="round-title" style="margin:0 0 4px">🏆 توقّع بطل كأس العالم
+          <span class="champ-pts">+${POINTS.champion} نقطة</span></div>
+        <div class="champ-sub">اختر الفريق اللي يرفع الكاس من الـ16 المتأهلين — توقّع واحد نهائي، ويُقفل مع نهاية دور الـ16.</div>
+        <div class="champ-grid">${btns}</div>
+        ${action}
+      </div>`;
+    }
+
+    function wireChampion() {
+      const card = viewMatches.querySelector('.champ-card');
+      if (!card) return;
+      card.querySelectorAll('.champ-team:not([disabled])').forEach((b) => {
+        b.onclick = () => {
+          champSel = b.dataset.team;
+          card.querySelectorAll('.champ-team').forEach((x) =>
+            x.classList.toggle('saved', x.dataset.team === champSel));
+          const save = card.querySelector('.champ-save');
+          if (save) save.disabled = false;
+        };
+      });
+      const save = card.querySelector('.champ-save');
+      if (save) save.onclick = async () => {
+        const name = playerEl.value.trim();
+        if (!name) { toast('اكتب اسمك أول', true); return; }
+        if (!champSel) { toast('اختر فريقاً أول', true); return; }
+        if (!window.confirm(`تتوقّع ${champSel} بطل كأس العالم 🏆؟ التوقّع نهائي وما يتغيّر.`)) return;
+        save.disabled = true;
+        try {
+          await submitChampion(name, champSel);
+          toast('انحفظ توقّعك للبطل ✅ (نهائي)');
+          await reload();
+          renderMatches();
+        } catch (e) {
+          toast(friendlyError(e), true);
+          save.disabled = false;
+        }
+      };
+    }
+
     function renderMatches() {
       // require a confirmed name before showing/using the matches section
       if (!nameLocked) {
@@ -425,14 +508,18 @@
         });
       }
 
+      // champion pick sits at the top of the "القادمة" view
+      const champHTML = matchFilter === 'upcoming' ? championCard() : '';
+
       if (!list.length) {
         const emptyMsg = matchFilter === 'past'
           ? 'ما في مباريات سابقة بعد ⚽️'
           : roundCodes.includes(matchFilter)
             ? 'مباريات هذا الدور ما تحددت بعد ⚽️'
             : 'ما في مباريات قادمة حالياً ⚽️';
-        viewMatches.innerHTML = filterBar + `<div class="empty">${emptyMsg}</div>`;
+        viewMatches.innerHTML = filterBar + champHTML + `<div class="empty">${emptyMsg}</div>`;
         wireFilter();
+        wireChampion();
         return;
       }
       // group into sections by DAY — past = newest first, otherwise chronological
@@ -454,11 +541,12 @@
       }
 
       const renderItem = matchCard;
-      viewMatches.innerHTML = filterBar + [...days.values()].map((day) =>
+      viewMatches.innerHTML = filterBar + champHTML + [...days.values()].map((day) =>
         `<div class="round-title day">📅 ${esc(day.label)}</div>` +
         day.items.map(renderItem).join('')
       ).join('');
       wireFilter();
+      wireChampion();
 
       viewMatches.querySelectorAll('.card').forEach((card) => {
         const btn = card.querySelector('.save');
@@ -604,6 +692,14 @@
               <span class="rule-ex">لا نتيجة التعادل مطابقة ولا المتأهّل صح. مثال: توقّعت 2-2 وهولندا، وانتهت 1-1 والمغرب تأهّل بالركلات.</span></div>
           </div>
         </div>
+        <div class="round-title" style="margin-top:16px">🏆 توقّع بطل كأس العالم</div>
+        <div class="rules">
+          <div class="rule">
+            <span class="rule-pts">${POINTS.champion}<small>نقطة</small></span>
+            <div><b>توقّعت بطل البطولة</b><br>
+              <span class="rule-ex">اختر البطل من الـ16 المتأهلين لدور الـ16 — توقّع واحد نهائي، ويُقفل مع نهاية دور الـ16. إذا فريقك رفع الكاس، تنضاف ${POINTS.champion} نقطة لمجموعك.</span></div>
+          </div>
+        </div>
         <div class="notice" style="margin-top:12px;font-size:13px;line-height:2">
           • توقّعت فوز فريق والمباراة راحت ركلات ترجيح؟ → <b>0</b> — جدول الركلات خاص بمن توقّع التعادل.<br>
           • أعلى نقاط: مباراة محسومة <b>${POINTS.exact}</b>، ومباراة ركلات <b>${POINTS.pensExactRight}</b>.<br>
@@ -625,7 +721,7 @@
 
     function renderBoard() {
       const me = playerEl.value.trim();
-      const rows = buildLeaderboard(matches, allPreds);
+      const rows = buildLeaderboard(matches, allPreds, championPicks || []);
       const finishedCount = matches.filter((m) => m.finished).length;
 
       if (!rows.length) {
@@ -663,6 +759,7 @@
         <span class="chip">${POINTS.winnerScore} الفائز+أهدافه</span>
         <span class="chip">${POINTS.winner} الفائز فقط</span>
         <span class="chip">${POINTS.pensExactRight}/${POINTS.pensDiffRight}/${POINTS.pensExactWrong} الركلات</span>
+        <span class="chip">+${POINTS.champion} البطل 🏆</span>
       </div>`;
     }
 
@@ -681,7 +778,7 @@
 
     async function loadAll() {
       try {
-        [matches, allPreds] = await Promise.all([loadMatches(), loadPredictions()]);
+        [matches, allPreds, championPicks] = await Promise.all([loadMatches(), loadPredictions(), loadChampionPicks()]);
         matches = matches.filter(afterCutoff);
         await refreshMine();
       } catch (e) {
@@ -707,7 +804,7 @@
     }
     async function reload() {
       let data;
-      try { data = await Promise.all([loadMatches(), loadPredictions()]); }
+      try { data = await Promise.all([loadMatches(), loadPredictions(), loadChampionPicks()]); }
       catch (_) { return; }
       const name = playerEl.value.trim();
       // skip the re-render entirely if nothing changed — prevents the page from
@@ -717,7 +814,7 @@
       if (sig === lastSig) return;
       lastSig = sig;
 
-      [matches, allPreds] = data;
+      [matches, allPreds, championPicks] = data;
       matches = matches.filter(afterCutoff);
       myPreds = new Map();
       if (name) {

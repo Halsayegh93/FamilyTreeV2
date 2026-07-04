@@ -26,6 +26,7 @@ export const POINTS = {
   pensExactRight: 7,  // exact draw score + correct shootout winner
   pensDiffRight: 5,   // different draw score + correct shootout winner
   pensExactWrong: 3,  // exact draw score + wrong shootout winner
+  champion: 50,       // picked the World Cup champion (one pick, locks at the end of R16)
 };
 
 // The admin PIN is validated SERVER-SIDE inside db.sql (search for CHANGE_ME).
