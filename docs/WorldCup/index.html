@@ -64,8 +64,8 @@
       isConfigured, loadMatches, loadPredictions, loadMyPredictions,
       submitPrediction, submitWinner, buildLeaderboard, scorePrediction,
       scoreRow, isLocked, roundLabel, matchDay, flagHTML, ROUNDS, friendlyError, POINTS, watch,
-      loadChampionPicks, submitChampion,
-    } from './app.js?v=29';
+      loadChampionPicks, submitChampion, loadMaintenance,
+    } from './app.js?v=30';
 
     const $ = (s, r = document) => r.querySelector(s);
     const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) =>
@@ -82,6 +82,9 @@
     let allPreds = [];
     let championPicks = null;   // توقعات بطل الكاس (null = feature not activated)
     let champSel = '';          // team currently highlighted in the champion card
+    let maintenance = false;    // admin-toggled: site paused for players
+    const MAINT_HTML = `<div class="notice" style="text-align:center;padding:28px 16px;font-size:15px;line-height:2.2">
+      🔧 <b>الموقع متوقف مؤقتاً</b><br>المشرف موقف الموقع للصيانة — رجّعوا لنا بعد شوي 🙏</div>`;
     let nameLocked = false;     // is the name confirmed (fixed)?
     let matchFilter = 'upcoming'; // matches filter: upcoming | finished | all
     let lastSig = '';           // last rendered data signature (skip no-op re-renders)
@@ -473,6 +476,7 @@
     }
 
     function renderMatches() {
+      if (maintenance) { viewMatches.innerHTML = MAINT_HTML; return; }
       // require a confirmed name before showing/using the matches section
       if (!nameLocked) {
         viewMatches.innerHTML = `<div class="notice" style="text-align:center">
@@ -650,6 +654,7 @@
 
     // ----- full scoring rules -----
     function renderRules() {
+      if (maintenance) { viewRules.innerHTML = MAINT_HTML; return; }
       viewRules.innerHTML = `
         <div class="round-title">قانون النقاط</div>
         <div class="notice" style="margin-bottom:12px;font-size:13px;text-align:center">
@@ -733,6 +738,7 @@
       </div>`;
 
     function renderBoard() {
+      if (maintenance) { viewBoard.innerHTML = MAINT_HTML; return; }
       const me = playerEl.value.trim();
       const rows = buildLeaderboard(matches, allPreds, championPicks || []);
       const finishedCount = matches.filter((m) => m.finished).length;
@@ -791,7 +797,8 @@
 
     async function loadAll() {
       try {
-        [matches, allPreds, championPicks] = await Promise.all([loadMatches(), loadPredictions(), loadChampionPicks()]);
+        [matches, allPreds, championPicks, maintenance] = await Promise.all([
+          loadMatches(), loadPredictions(), loadChampionPicks(), loadMaintenance()]);
         matches = matches.filter(afterCutoff);
         await refreshMine();
       } catch (e) {
@@ -817,7 +824,7 @@
     }
     async function reload() {
       let data;
-      try { data = await Promise.all([loadMatches(), loadPredictions(), loadChampionPicks()]); }
+      try { data = await Promise.all([loadMatches(), loadPredictions(), loadChampionPicks(), loadMaintenance()]); }
       catch (_) { return; }
       const name = playerEl.value.trim();
       // skip the re-render entirely if nothing changed — prevents the page from
@@ -827,7 +834,8 @@
       if (sig === lastSig) return;
       lastSig = sig;
 
-      [matches, allPreds, championPicks] = data;
+      const wasMaint = maintenance;
+      [matches, allPreds, championPicks, maintenance] = data;
       matches = matches.filter(afterCutoff);
       myPreds = new Map();
       if (name) {
@@ -836,13 +844,23 @@
             myPreds.set(p.match_id, { home: p.home_score, away: p.away_score, pick: p.pick, manual_points: p.manual_points, pen_pick: p.pen_pick, pen_home: p.pen_home, pen_away: p.pen_away });
         } catch (_) {}
       }
+      if (maintenance !== wasMaint) {
+        // the pause flipped — refresh every view so no tab stays stale
+        renderRules(); renderBoard(); renderMatches();
+        return;
+      }
       if (viewBoard.style.display !== 'none') renderBoard();
+      else if (viewRules.style.display !== 'none') renderRules();
       else if (!isEditing()) renderMatches();
     }
 
     renderRules();
     loadAll().then(() => {
       lastSig = JSON.stringify([matches, allPreds]) + '|' + playerEl.value.trim() + '|' + phaseStr(matches);
+      // re-render with the loaded maintenance state (covers a paused site at boot)
+      renderRules();
+      if (viewBoard.style.display !== 'none') renderBoard();
+      else renderMatches();
       watch(reload);
     });
   </script>

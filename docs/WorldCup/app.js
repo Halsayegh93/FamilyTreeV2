@@ -183,6 +183,25 @@ export async function loadPredictionHistory() {
   return data || [];
 }
 
+// Maintenance switch — admin can take the site offline for players. Missing
+// table (feature not activated) reads as "not in maintenance".
+export async function loadMaintenance() {
+  if (DEMO) return false;
+  const sb = await client();
+  const { data, error } = await sb
+    .from('wc_settings').select('value').eq('key', 'maintenance').maybeSingle();
+  if (error) return false;
+  return !!data && data.value === 'on';
+}
+
+export async function adminSetMaintenance(on, pin) {
+  if (DEMO) { if (pin !== '1993') throw new Error('BAD_PIN'); return on ? 'on' : 'off'; }
+  const sb = await client();
+  const { data, error } = await sb.rpc('wc_admin_set_maintenance', { p_on: on, p_pin: pin });
+  if (error) throw error;
+  return data;
+}
+
 // Champion picks (توقّع بطل الكاس) — one final pick per player, +50 points if
 // the picked team lifts the cup. Returns null when the table doesn't exist yet
 // (feature not activated) so the UI can hide the section.
@@ -389,6 +408,7 @@ export function watch(onChange, pollMs = 20000) {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'wc_matches' }, onChange)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'wc_predictions' }, onChange)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'wc_champion_picks' }, onChange)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'wc_settings' }, onChange)
       .subscribe();
   }).catch(() => {});
   return () => { clearInterval(timer); if (channel) channel.unsubscribe(); };
@@ -450,6 +470,7 @@ export function friendlyError(err) {
   if (msg.includes('ALREADY_PICKED'))  return 'توقّعك للبطل محفوظ — التوقّع مرة وحدة ونهائي 🔒';
   if (msg.includes('CHAMPION_LOCKED')) return 'انتهى وقت توقّع البطل — يُقفل مع نهاية دور الـ16 🔒';
   if (msg.includes('INVALID_TEAM'))    return 'اختر فريقاً من الفرق المتأهلة';
+  if (msg.includes('MAINTENANCE'))     return 'الموقع متوقف مؤقتاً للصيانة 🔧';
   if (msg.includes('MATCH_FINISHED')) return 'المباراة خلصت — ما يمكن إضافة توقّع';
   if (msg.includes('MATCH_LOCKED'))   return 'انتهى وقت التوقع لهذه المباراة 🔒';
   if (msg.includes('NAME_REQUIRED'))  return 'اكتب اسمك أول';
