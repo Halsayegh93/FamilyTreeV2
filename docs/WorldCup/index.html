@@ -64,7 +64,7 @@
       isConfigured, loadMatches, loadPredictions, loadMyPredictions,
       submitPrediction, submitWinner, buildLeaderboard, scorePrediction,
       scoreRow, isLocked, roundLabel, matchDay, flagHTML, ROUNDS, friendlyError, POINTS, watch,
-    } from './app.js?v=27';
+    } from './app.js?v=28';
 
     const $ = (s, r = document) => r.querySelector(s);
     const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) =>
@@ -560,11 +560,6 @@
               <span class="rule-ex">تضبط الفائز بدون نتيجته الصحيحة. مثال: انتهت 3-1 وتوقّعك 2-1.</span></div>
           </div>
           <div class="rule">
-            <span class="rule-pts">+${POINTS.penWinner}<small>نقطة</small></span>
-            <div><b>الفائز بالركلات</b><br>
-              <span class="rule-ex">تضبط الفريق الفائز بركلات الترجيح — وتُحسب فقط إذا وصلت المباراة فعلاً للركلات.</span></div>
-          </div>
-          <div class="rule">
             <span class="rule-pts">0<small>نقطة</small></span>
             <div><b>توقّع غير صحيح</b><br>
               <span class="rule-ex">إذا أخطأت مسار المباراة (الفائز أو التعادل).</span></div>
@@ -576,19 +571,19 @@
         </div>
         <div class="rules">
           <div class="rule">
-            <span class="rule-pts">7<small>نقاط</small></span>
+            <span class="rule-pts">${POINTS.pensExactRight}<small>نقاط</small></span>
             <div><b>النتيجة بالضبط + الفائز بالركلات صح</b><br>
               <span class="rule-ex">تضبط نتيجة التعادل بالضبط وتختار المتأهّل بالركلات صح. مثال: توقّعت 1-1 وباراغواي، والنتيجة 1-1 وباراغواي تأهّلت.</span></div>
           </div>
           <div class="rule">
-            <span class="rule-pts">5<small>نقاط</small></span>
-            <div><b>النتيجة بالضبط + الفائز بالركلات غلط</b><br>
-              <span class="rule-ex">تضبط نتيجة التعادل بالضبط، بس تخطئ المتأهّل بالركلات.</span></div>
-          </div>
-          <div class="rule">
-            <span class="rule-pts">3<small>نقاط</small></span>
+            <span class="rule-pts">${POINTS.pensDiffRight}<small>نقاط</small></span>
             <div><b>تعادل بنتيجة مختلفة + الفائز بالركلات صح</b><br>
               <span class="rule-ex">توقّعت تعادل بنتيجة غير مطابقة، بس اخترت المتأهّل بالركلات صح. مثال: توقّعت 2-2 وباراغواي، والنتيجة 1-1 وباراغواي تأهّلت.</span></div>
+          </div>
+          <div class="rule">
+            <span class="rule-pts">${POINTS.pensExactWrong}<small>نقاط</small></span>
+            <div><b>النتيجة بالضبط + الفائز بالركلات غلط</b><br>
+              <span class="rule-ex">تضبط نتيجة التعادل بالضبط، بس تخطئ المتأهّل بالركلات.</span></div>
           </div>
           <div class="rule">
             <span class="rule-pts">0<small>نقطة</small></span>
@@ -654,7 +649,7 @@
         <span class="chip">${POINTS.exact} مضبوطة</span>
         <span class="chip">${POINTS.winnerScore} الفائز+أهدافه/تعادل</span>
         <span class="chip">${POINTS.winner} الفائز فقط</span>
-        <span class="chip">+${POINTS.penWinner} الركلات</span>
+        <span class="chip">${POINTS.pensExactRight}/${POINTS.pensDiffRight}/${POINTS.pensExactWrong} الركلات</span>
       </div>`;
     }
 

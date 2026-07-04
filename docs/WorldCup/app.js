@@ -1,7 +1,7 @@
 // ============================================================================
 // Shared logic: Supabase client, scoring, data loading.
 // ============================================================================
-import { SUPABASE_URL, SUPABASE_ANON_KEY, POINTS } from './config.js?v=7';
+import { SUPABASE_URL, SUPABASE_ANON_KEY, POINTS } from './config.js?v=8';
 import { demo } from './demo.js?v=7';
 
 export { POINTS };
@@ -132,16 +132,16 @@ export function scoreRow(p, m) {
   // A draw prediction is judged on the shootout winner too — but ONLY when the
   // match actually goes to a penalty shootout. A match decided in regular or
   // extra time (no shootout) with a draw prediction is a wrong outcome -> 0.
-  //   exact-score draw     -> 5, and +2 for the correct shootout winner (7 / 5)
-  //   different-score draw -> 3 if the shootout winner is right, else 0
+  //   exact-score draw     -> 7 if the shootout winner is right, else 3
+  //   different-score draw -> 5 if the shootout winner is right, else 0
   const predictedDraw = p.home_score != null && p.home_score === p.away_score;
   const wentToPens = m.home_pen != null && m.away_pen != null && m.home_pen !== m.away_pen;
   if (predictedDraw && wentToPens) {
     const penCorrect = predPenSide(p) === (m.home_pen > m.away_pen ? 'home' : 'away');
     if (p.home_score === m.home_score) {
-      if (penCorrect) pts += POINTS.penWinner;   // exact draw: 5 -> 7
+      pts = penCorrect ? POINTS.pensExactRight : POINTS.pensExactWrong;   // 7 / 3
     } else {
-      pts = penCorrect ? POINTS.draw : 0;         // different-score draw: 3 / 0
+      pts = penCorrect ? POINTS.pensDiffRight : 0;                        // 5 / 0
     }
   }
   return pts;

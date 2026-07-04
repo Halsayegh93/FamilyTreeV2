@@ -13,14 +13,19 @@ export const SUPABASE_ANON_KEY = 'sb_publishable_OPnob-SkO9u-Z7PN7tYTog_paKjdBTJ
 //   3 — correct winner AND the winning team's goals correct, OR a correct draw
 //   1 — correct winner only (score wrong)
 //   0 — wrong outcome
-//   +2 — correct penalty-shootout winner, ONLY if the match actually went to pens
-//        (max: decisive match 5, penalty match 7)
+// Penalty-shootout matches (draw predicted + match actually reached pens):
+//   7 — exact draw score + correct shootout winner
+//   5 — different draw score + correct shootout winner
+//   3 — exact draw score + wrong shootout winner
+//   0 — different draw score + wrong shootout winner
 export const POINTS = {
   exact: 5,        // exact score
   winnerScore: 3,  // correct winner + winning team's goal count
-  draw: 3,         // correct draw outcome (not exact)
+  draw: 3,         // correct draw outcome (not exact), match decided without pens
   winner: 1,       // correct winner only
-  penWinner: 2,    // correct penalty winner (only when the match reached penalties)
+  pensExactRight: 7,  // exact draw score + correct shootout winner
+  pensDiffRight: 5,   // different draw score + correct shootout winner
+  pensExactWrong: 3,  // exact draw score + wrong shootout winner
 };
 
 // The admin PIN is validated SERVER-SIDE inside db.sql (search for CHANGE_ME).
