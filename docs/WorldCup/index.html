@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
   <meta http-equiv="Cache-Control" content="no-cache" />
   <title>جماهير مباريات كأس العالم الرميثية 🏆</title>
-  <link rel="stylesheet" href="styles.css?v=26" />
+  <link rel="stylesheet" href="styles.css?v=27" />
   <style>
     /* predictors list: click a player to reveal WHEN they predicted */
     .pred-when.pred-row { display: block; }   /* stack summary + time, not side-by-side */
@@ -228,6 +228,14 @@
         resultLine = `<div class="result-line">
           <span>النتيجة (الأهداف): <b>${m.home_score} - ${m.away_score}</b></span>
         </div>${ptsLine}${penLine}`;
+      } else if (started && m.home_score != null && m.away_score != null) {
+        // live score mirrored from ESPN while the match is in progress
+        const penLive = (m.home_pen != null && m.away_pen != null)
+          ? `<div class="result-line pen-line"><span>🥅 ركلات الترجيح الآن: <b>${m.home_pen} - ${m.away_pen}</b></span></div>`
+          : '';
+        resultLine = `<div class="result-line live-line">
+          <span><span class="live-dot"></span> مباشر: <b>${m.home_score} - ${m.away_score}</b></span>
+        </div>${penLive}`;
       }
 
       const ktime = m.kickoff

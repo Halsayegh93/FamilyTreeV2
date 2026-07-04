@@ -35,6 +35,11 @@ const ESPN = (yyyymmdd: string) =>
 const FINISHED = new Set([
   "STATUS_FULL_TIME", "STATUS_FINAL", "STATUS_FINAL_AET", "STATUS_FINAL_PEN",
 ]);
+// statuses where the match has NOT started — everything else (and not FINISHED)
+// counts as in-progress, and its score is mirrored live into wc_matches
+const NOT_STARTED = new Set([
+  "STATUS_SCHEDULED", "STATUS_POSTPONED", "STATUS_CANCELED", "STATUS_DELAYED",
+]);
 
 // Canonicalise a team name so the same team from any source compares equal.
 function canon(s: string): string {
@@ -73,6 +78,7 @@ type Fix = {
   hs: number | null; as: number | null;
   hp: number | null; ap: number | null;
   finished: boolean;
+  live: boolean;   // kicked off, still in progress
 };
 
 // ---- ESPN -----------------------------------------------------------------
@@ -98,6 +104,7 @@ async function espnIndex(dates: string[]): Promise<Map<string, Fix>> {
         hs: num(home.score), as: num(away.score),
         hp: num(home.shootoutScore), ap: num(away.shootoutScore),
         finished: FINISHED.has(status),
+        live: !FINISHED.has(status) && !NOT_STARTED.has(status),
       });
     }
   }
@@ -153,7 +160,7 @@ Deno.serve(async (req) => {
 
   // --- pending matches (both teams, kicked off, not finished) ---
   const nowIso = new Date().toISOString();
-  const q = `${SB_URL}/rest/v1/wc_matches?select=id,round,home_team,away_team,kickoff,finished`
+  const q = `${SB_URL}/rest/v1/wc_matches?select=id,round,home_team,away_team,kickoff,finished,home_score,away_score,home_pen,away_pen`
     + `&finished=eq.false&home_team=not.is.null&away_team=not.is.null&kickoff=lt.${nowIso}`;
   const pr = await fetch(q, { headers: { apikey: SVC, Authorization: `Bearer ${SVC}` } });
   if (!pr.ok) {
@@ -161,7 +168,7 @@ Deno.serve(async (req) => {
   }
   const pending: any[] = await pr.json();
   if (!pending.length) {
-    return new Response(JSON.stringify({ ok: true, dry, approved: [], conflicts: [], waiting: [], msg: "no pending matches" }), {
+    return new Response(JSON.stringify({ ok: true, dry, approved: [], conflicts: [], waiting: [], liveUpdated: [], msg: "no pending matches" }), {
       headers: { "Content-Type": "application/json" },
     });
   }
@@ -171,13 +178,36 @@ Deno.serve(async (req) => {
   const espn = await espnIndex(dates);
   const cross = await apiFootballIndex(dates);
 
-  const approved: any[] = [], conflicts: any[] = [], waiting: any[] = [];
+  const approved: any[] = [], conflicts: any[] = [], waiting: any[] = [], liveUpdated: any[] = [];
 
   for (const m of pending) {
     const key = pairKey(m.home_team, m.away_team);
     const fx = espn.get(key);
     if (!fx || !fx.finished || fx.hs === null || fx.as === null) {
-      waiting.push({ id: m.id, match: `${m.home_team} vs ${m.away_team}`, reason: fx ? "not finished" : "not found on ESPN" });
+      // in progress → mirror the live score (and a live shootout) into the row
+      // WITHOUT finishing it, so the site + admin see goals as they happen
+      if (fx && fx.live && fx.hs !== null && fx.as !== null && !dry) {
+        const sameO = canon(fx.home) === canon(m.home_team);
+        const lh = sameO ? fx.hs : fx.as;
+        const la = sameO ? fx.as : fx.hs;
+        const draw = lh === la;
+        const lp = draw && fx.hp !== null && fx.ap !== null ? (sameO ? fx.hp : fx.ap) : null;
+        const lq = draw && fx.hp !== null && fx.ap !== null ? (sameO ? fx.ap : fx.hp) : null;
+        if (lh !== m.home_score || la !== m.away_score || lp !== m.home_pen || lq !== m.away_pen) {
+          try {
+            const r = await fetch(`${SB_URL}/rest/v1/wc_matches?id=eq.${m.id}&finished=eq.false`, {
+              method: "PATCH",
+              headers: {
+                "Content-Type": "application/json", apikey: SVC,
+                Authorization: `Bearer ${SVC}`, Prefer: "return=minimal",
+              },
+              body: JSON.stringify({ home_score: lh, away_score: la, home_pen: lp, away_pen: lq }),
+            });
+            if (r.ok) liveUpdated.push({ id: m.id, match: `${m.home_team} vs ${m.away_team}`, live: `${lh}-${la}${lp !== null ? ` (pens ${lp}-${lq})` : ""}` });
+          } catch { /* live mirroring is best-effort */ }
+        }
+      }
+      waiting.push({ id: m.id, match: `${m.home_team} vs ${m.away_team}`, reason: fx ? (fx.live ? "live" : "not finished") : "not found on ESPN" });
       continue;
     }
     // map ESPN home/away onto the DB row's home/away by team identity
@@ -222,7 +252,7 @@ Deno.serve(async (req) => {
     }
   }
 
-  return new Response(JSON.stringify({ ok: true, dry, approved, conflicts, waiting }, null, 2), {
+  return new Response(JSON.stringify({ ok: true, dry, approved, conflicts, waiting, liveUpdated }, null, 2), {
     headers: { "Content-Type": "application/json" },
   });
 });
