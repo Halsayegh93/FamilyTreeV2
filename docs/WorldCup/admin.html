@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>لوحة التحكم — جماهير مباريات كأس العالم الرميثية</title>
-  <link rel="stylesheet" href="styles.css?v=25" />
+  <link rel="stylesheet" href="styles.css?v=29" />
 </head>
 <body>
   <div class="wrap">
@@ -28,7 +28,19 @@
     </div>
 
     <div id="panel" style="display:none">
-      <button class="btn ghost" id="prev-btn" style="margin-bottom:14px">🏁 المباريات السابقة</button>
+      <!-- quick navigation: one tile per admin section -->
+      <div class="admin-grid">
+        <button class="ag-tile" data-target="sec-matches"><span class="ag-ico">⚽️</span><span>المباريات</span></button>
+        <button class="ag-tile" data-target="finished-sec"><span class="ag-ico">🏁</span><span>النتائج المُدخلة</span></button>
+        <button class="ag-tile" data-target="addpred"><span class="ag-ico">➕</span><span>إضافة توقّع</span></button>
+        <button class="ag-tile" data-target="sec-champs"><span class="ag-ico">🏆</span><span>توقعات البطل</span></button>
+        <button class="ag-tile" data-target="sec-players"><span class="ag-ico">👥</span><span>اللاعبون</span></button>
+        <button class="ag-tile" data-target="sec-reveal"><span class="ag-ico">🤫</span><span>كشف النتائج</span></button>
+        <button class="ag-tile" data-target="sec-maint"><span class="ag-ico">⏸️</span><span>إيقاف الموقع</span></button>
+        <button class="ag-tile" data-target="sec-reset"><span class="ag-ico">🗑️</span><span>تصفير العداد</span></button>
+      </div>
+
+      <div class="round-title" id="sec-matches">⚽️ المباريات القادمة</div>
       <div id="list"></div>
 
       <div class="round-title" style="margin-top:26px">➕ إضافة توقّع لمباراة بدأت</div>
@@ -57,25 +69,25 @@
         <button class="btn" id="ap-save" style="margin-top:12px">➕ إضافة التوقّع</button>
       </div>
 
-      <div class="round-title" style="margin-top:26px">🏆 توقعات بطل كأس العالم</div>
+      <div class="round-title" id="sec-champs" style="margin-top:26px">🏆 توقعات بطل كأس العالم</div>
       <div id="champs" class="card"></div>
 
-      <div class="round-title" style="margin-top:26px">اللاعبون — حذف من الترتيب</div>
+      <div class="round-title" id="sec-players" style="margin-top:26px">👥 اللاعبون — حذف من الترتيب</div>
       <div id="players" class="card"></div>
 
-      <div class="round-title" style="margin-top:26px">🤫 نتائج النهائي والترتيب</div>
+      <div class="round-title" id="sec-reveal" style="margin-top:26px">🤫 نتائج النهائي والترتيب</div>
       <div class="card">
         <div id="reveal-status" style="font-size:13px;color:var(--muted);margin-bottom:12px;text-align:center">...</div>
         <button class="btn ghost" id="reveal-toggle" disabled>...</button>
       </div>
 
-      <div class="round-title" style="margin-top:26px">⏸️ إيقاف الموقع مؤقتاً</div>
+      <div class="round-title" id="sec-maint" style="margin-top:26px">⏸️ إيقاف الموقع مؤقتاً</div>
       <div class="card">
         <div id="maint-status" style="font-size:13px;color:var(--muted);margin-bottom:12px;text-align:center">...</div>
         <button class="btn ghost" id="maint-toggle" disabled>...</button>
       </div>
 
-      <div class="round-title" style="margin-top:26px;color:var(--error)">تصفير العداد</div>
+      <div class="round-title" id="sec-reset" style="margin-top:26px;color:var(--error)">🗑️ تصفير العداد</div>
       <div class="card">
         <div style="font-size:13px;color:var(--muted);margin-bottom:12px;text-align:center">
           عمليات لا يمكن التراجع عنها — استخدمها بحذر.
@@ -199,11 +211,20 @@
       sessionStorage.setItem('wc_pin', pin);
       $('#gate').style.display = 'none';
       $('#panel').style.display = '';
-      $('#prev-btn').onclick = () => {
-        const sec = $('#finished-sec');
-        if (sec) { sec.open = true; sec.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
-        else toast('ما في مباريات سابقة بعد');
-      };
+      // quick-nav tiles: scroll to the section (the finished section also opens)
+      document.querySelectorAll('.admin-grid .ag-tile').forEach((t) => {
+        t.onclick = () => {
+          const id = t.dataset.target;
+          if (id === 'finished-sec') {
+            const sec = $('#finished-sec');
+            if (sec) { sec.open = true; sec.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+            else toast('ما في نتائج مُدخلة بعد');
+            return;
+          }
+          const el = document.getElementById(id);
+          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        };
+      });
       setupAddPred();
       loadList();
       renderPlayers();
