@@ -116,12 +116,12 @@ body { direction: rtl; font-size: 15px; line-height: 1.65; }
 .namebtn:disabled { cursor: default; }
 
 /* Top bar + admin button */
-.topbar { display: flex; justify-content: flex-start; gap: 8px; margin-bottom: 2px; }
+.topbar { display: flex; justify-content: flex-start; gap: 6px; margin-bottom: 2px; flex-wrap: wrap; }
 .adminbtn {
-  display: inline-flex; align-items: center; gap: 6px;
-  text-decoration: none; padding: 8px 14px; border-radius: 999px;
+  display: inline-flex; align-items: center; gap: 4px;
+  text-decoration: none; padding: 5px 10px; border-radius: 999px;
   background: var(--surface); border: 1px solid var(--border);
-  color: var(--muted); font-weight: 700; font-size: 13px;
+  color: var(--muted); font-weight: 700; font-size: 11.5px;
   box-shadow: var(--shadow);
 }
 .adminbtn:active { transform: scale(.97); }
