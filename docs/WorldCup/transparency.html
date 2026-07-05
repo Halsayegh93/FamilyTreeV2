@@ -145,7 +145,8 @@
     import {
       loadMatches, loadPredictions, loadPredictionHistory,
       roundLabel, flagHTML, scoreRow, watch, friendlyError,
-    } from './app.js?v=30';
+      loadRevealFinals, maskHiddenFinals,
+    } from './app.js?v=32';
 
     const $ = (s, r = document) => r.querySelector(s);
     const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) =>
@@ -470,9 +471,11 @@
 
     async function render() {
       try {
-        const [matches, preds, historyRaw] = await Promise.all([
-          loadMatches(), loadPredictions(), loadPredictionHistory(),
+        let [matches, preds, historyRaw, reveal] = await Promise.all([
+          loadMatches(), loadPredictions(), loadPredictionHistory(), loadRevealFinals(),
         ]);
+        // FINAL + 3RD results stay hidden here too until the admin reveals them
+        matches = maskHiddenFinals(matches, reveal);
         const history = historyRaw || [];   // null = table not created yet
         // group history by player+match, oldest first
         const histMap = new Map();

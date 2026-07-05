@@ -202,6 +202,52 @@ export async function adminSetMaintenance(on, pin) {
   return data;
 }
 
+// FINAL + 3RD place: results stay hidden on the public site until the admin
+// reveals them (settings key reveal_finals) -----------------------------------
+const HIDDEN_ROUNDS = new Set(['FINAL', '3RD']);
+
+export async function loadRevealFinals() {
+  if (DEMO) return true;
+  const sb = await client();
+  const { data, error } = await sb
+    .from('wc_settings').select('value').eq('key', 'reveal_finals').maybeSingle();
+  if (error || !data) return true;   // switch not set up -> nothing hidden
+  return data.value === 'on';
+}
+
+export async function adminSetRevealFinals(on, pin) {
+  if (DEMO) { if (pin !== '1993') throw new Error('BAD_PIN'); return on ? 'on' : 'off'; }
+  const sb = await client();
+  const { data, error } = await sb.rpc('wc_admin_set_reveal_finals', { p_on: on, p_pin: pin });
+  if (error) throw error;
+  return data;
+}
+
+// Mask hidden matches for the public pages: scores (live or final) are wiped
+// and a finished match reads as unfinished, so cards, per-match points and the
+// champion bonus reveal nothing until the admin flips reveal_finals.
+export function maskHiddenFinals(ms, reveal) {
+  if (reveal) return ms;
+  return (ms || []).map((m) => {
+    if (!HIDDEN_ROUNDS.has(m.round)) return m;
+    const masked = { ...m, home_score: null, away_score: null, home_pen: null, away_pen: null };
+    if (m.finished) { masked.finished = false; masked.locked = true; masked.resultHidden = true; }
+    return masked;
+  });
+}
+
+// The leaderboard disappears from the SEMI-FINALS on (SF/3RD/FINAL kicked off
+// or finished) and stays hidden until the admin reveals the results. Match
+// results themselves stay visible through the semis — only FINAL + 3RD
+// results are masked.
+const BOARD_HIDE_ROUNDS = new Set(['SF', '3RD', 'FINAL']);
+export function boardHiddenNow(ms, reveal) {
+  if (reveal) return false;
+  return (ms || []).some((m) => BOARD_HIDE_ROUNDS.has(m.round)
+    && (m.finished || m.resultHidden
+        || (m.kickoff && new Date(m.kickoff).getTime() <= Date.now())));
+}
+
 // Champion picks (توقّع بطل الكاس) — one final pick per player, +50 points if
 // the picked team lifts the cup. Returns null when the table doesn't exist yet
 // (feature not activated) so the UI can hide the section.

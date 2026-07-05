@@ -65,7 +65,8 @@
       submitPrediction, submitWinner, buildLeaderboard, scorePrediction,
       scoreRow, isLocked, roundLabel, matchDay, flagHTML, ROUNDS, friendlyError, POINTS, watch,
       loadChampionPicks, submitChampion, loadMaintenance,
-    } from './app.js?v=31';
+      loadRevealFinals, maskHiddenFinals, boardHiddenNow,
+    } from './app.js?v=32';
 
     const $ = (s, r = document) => r.querySelector(s);
     const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) =>
@@ -83,8 +84,11 @@
     let championPicks = null;   // توقعات بطل الكاس (null = feature not activated)
     let champSel = '';          // team currently highlighted in the champion card
     let maintenance = false;    // admin-toggled: site paused for players
+    let revealFinals = true;    // admin-toggled: show FINAL + 3RD results
     const MAINT_HTML = `<div class="notice" style="text-align:center;padding:28px 16px;font-size:15px;line-height:2.2">
       🔧 <b>الموقع متوقف مؤقتاً</b><br>المشرف موقف الموقع للصيانة — رجّعوا لنا بعد شوي 🙏</div>`;
+    const HIDDEN_BOARD_HTML = `<div class="notice" style="text-align:center;padding:28px 16px;font-size:15px;line-height:2.2">
+      🤫 <b>الترتيب مخفي من نص النهائي</b><br>الترتيب النهائي والفائزين بينكشفون مع نتيجة النهائي 🏆</div>`;
     let nameLocked = false;     // is the name confirmed (fixed)?
     let matchFilter = 'upcoming'; // matches filter: upcoming | finished | all
     let lastSig = '';           // last rendered data signature (skip no-op re-renders)
@@ -206,7 +210,8 @@
       const inputsOff = locked || predicted;   // one-time: saved prediction is final
 
       let badge = '';
-      if (m.finished) badge = '<span class="badge done">انتهت</span>';
+      if (m.resultHidden) badge = '<span class="badge locked">🤫 النتيجة مخفية</span>';
+      else if (m.finished) badge = '<span class="badge done">انتهت</span>';
       else if (started) {
         // the live score (mirrored from ESPN) sits inside the badge itself
         const liveScore = (m.home_score != null && m.away_score != null)
@@ -239,6 +244,10 @@
         resultLine = `<div class="result-line">
           <span>النتيجة (الأهداف): <b>${m.home_score} - ${m.away_score}</b></span>
         </div>${ptsLine}${penLine}`;
+      } else if (m.resultHidden) {
+        resultLine = `<div class="result-line">
+          <span>🤫 <b>المباراة انتهت</b> — النتيجة والنقاط تنكشف مع الترتيب النهائي 🏆</span>
+        </div>`;
       } else if (started && m.home_pen != null && m.away_pen != null) {
         // the live goals sit in the جارية الآن badge — only a live shootout
         // still gets its own line
@@ -739,6 +748,7 @@
 
     function renderBoard() {
       if (maintenance) { viewBoard.innerHTML = MAINT_HTML; return; }
+      if (boardHiddenNow(matches, revealFinals)) { viewBoard.innerHTML = HIDDEN_BOARD_HTML; return; }
       const me = playerEl.value.trim();
       const rows = buildLeaderboard(matches, allPreds, championPicks || []);
       const finishedCount = matches.filter((m) => m.finished).length;
@@ -797,9 +807,9 @@
 
     async function loadAll() {
       try {
-        [matches, allPreds, championPicks, maintenance] = await Promise.all([
-          loadMatches(), loadPredictions(), loadChampionPicks(), loadMaintenance()]);
-        matches = matches.filter(afterCutoff);
+        [matches, allPreds, championPicks, maintenance, revealFinals] = await Promise.all([
+          loadMatches(), loadPredictions(), loadChampionPicks(), loadMaintenance(), loadRevealFinals()]);
+        matches = maskHiddenFinals(matches.filter(afterCutoff), revealFinals);
         await refreshMine();
       } catch (e) {
         viewMatches.innerHTML = `<div class="notice">
@@ -824,7 +834,7 @@
     }
     async function reload() {
       let data;
-      try { data = await Promise.all([loadMatches(), loadPredictions(), loadChampionPicks(), loadMaintenance()]); }
+      try { data = await Promise.all([loadMatches(), loadPredictions(), loadChampionPicks(), loadMaintenance(), loadRevealFinals()]); }
       catch (_) { return; }
       const name = playerEl.value.trim();
       // skip the re-render entirely if nothing changed — prevents the page from
@@ -834,9 +844,9 @@
       if (sig === lastSig) return;
       lastSig = sig;
 
-      const wasMaint = maintenance;
-      [matches, allPreds, championPicks, maintenance] = data;
-      matches = matches.filter(afterCutoff);
+      const wasMaint = maintenance, wasReveal = revealFinals;
+      [matches, allPreds, championPicks, maintenance, revealFinals] = data;
+      matches = maskHiddenFinals(matches.filter(afterCutoff), revealFinals);
       myPreds = new Map();
       if (name) {
         try {
@@ -844,8 +854,8 @@
             myPreds.set(p.match_id, { home: p.home_score, away: p.away_score, pick: p.pick, manual_points: p.manual_points, pen_pick: p.pen_pick, pen_home: p.pen_home, pen_away: p.pen_away });
         } catch (_) {}
       }
-      if (maintenance !== wasMaint) {
-        // the pause flipped — refresh every view so no tab stays stale
+      if (maintenance !== wasMaint || revealFinals !== wasReveal) {
+        // the pause / finals-reveal flipped — refresh every view so no tab stays stale
         renderRules(); renderBoard(); renderMatches();
         return;
       }
