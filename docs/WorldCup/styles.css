@@ -30,11 +30,15 @@ html, body {
     radial-gradient(800px 480px at -10% 5%, #eaf3ee 0%, transparent 55%),
     var(--bg);
   color: var(--text);
-  font-family: -apple-system, "SF Pro Rounded", "Segoe UI", Tahoma, "Helvetica Neue", Arial, sans-serif;
+  /* Tajawal renders Arabic the same on Android and iOS — the old stack fell
+     back to the cramped Android system font */
+  font-family: "Tajawal", -apple-system, "SF Pro Rounded", "Segoe UI", Tahoma, "Helvetica Neue", Arial, sans-serif;
   min-height: 100vh;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
-body { direction: rtl; }
+body { direction: rtl; font-size: 15px; line-height: 1.65; }
 
 .wrap { max-width: 720px; margin: 0 auto; padding: 16px 16px 60px; }
 
