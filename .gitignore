@@ -37,3 +37,6 @@ Pods/
 .env
 .env.*
 .claude/worktrees/
+
+# database backups — personal family data, never commit
+worldcup-supabase/backups/
