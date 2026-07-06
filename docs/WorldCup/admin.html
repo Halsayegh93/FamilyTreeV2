@@ -37,6 +37,7 @@
         <button class="ag-tile" data-target="finished-sec"><span class="ag-ico">🏁</span><span>النتائج المُدخلة</span></button>
         <button class="ag-tile" data-target="addpred"><span class="ag-ico">➕</span><span>إضافة توقّع</span></button>
         <button class="ag-tile" data-target="sec-champs"><span class="ag-ico">🏆</span><span>توقعات البطل</span></button>
+        <button class="ag-tile" data-target="sec-stats"><span class="ag-ico">📈</span><span>الإحصائيات</span></button>
         <button class="ag-tile" data-target="sec-players"><span class="ag-ico">👥</span><span>اللاعبون</span></button>
         <button class="ag-tile" data-target="sec-reveal"><span class="ag-ico">🤫</span><span>كشف النتائج</span></button>
         <button class="ag-tile" data-target="sec-maint"><span class="ag-ico">⏸️</span><span>إيقاف الموقع</span></button>
@@ -75,6 +76,9 @@
       <div class="round-title" id="sec-champs" style="margin-top:26px">🏆 توقعات بطل كأس العالم</div>
       <div id="champs" class="card"></div>
 
+      <div class="round-title" id="sec-stats" style="margin-top:26px">📈 إحصائيات اللاعبين</div>
+      <div id="stats-box" class="card"><div class="empty">جاري التحميل...</div></div>
+
       <div class="round-title" id="sec-players" style="margin-top:26px">👥 اللاعبون — حذف من الترتيب</div>
       <div id="players" class="card"></div>
 
@@ -112,7 +116,7 @@
       adminVerifyPin, adminSetResult, adminSaveMatch, adminReset,
       adminDeletePlayer, adminDeletePrediction, adminAddPrediction, adminReopenMatch, adminSetPoints, scoreRow, matchDay, flagHTML, watch,
       loadMaintenance, adminSetMaintenance, loadChampionPicks, adminDeleteChampion,
-      loadRevealFinals, adminSetRevealFinals,
+      loadRevealFinals, adminSetRevealFinals, loadPredictionHistory,
     } from './app.js?v=32';
 
     const $ = (s, r = document) => r.querySelector(s);
@@ -235,6 +239,124 @@
       refreshMaint();
       refreshReveal();
       startWatch();
+    }
+
+    // ----- إحصائيات اللاعبين (admin-only fun stats) -----
+    function fmtLead(ms) {
+      const h = ms / 3600000;
+      if (h >= 48) return `${Math.round(h / 24)} أيام`;
+      if (h >= 1.5) return `${Math.round(h)} ساعة`;
+      return `${Math.max(1, Math.round(ms / 60000))} دقيقة`;
+    }
+    function statBlock(title, rows) {
+      if (!rows || !rows.length) return '';
+      const medals = ['🥇', '🥈', '🥉'];
+      return `<div style="font-size:12px;font-weight:800;color:var(--muted);margin:12px 0 4px">${title}</div>
+        ${rows.map((r, i) => `<div style="display:flex;align-items:center;gap:10px;padding:7px 4px;border-bottom:1px solid var(--border)">
+          <span style="width:24px;text-align:center;font-size:16px;flex-shrink:0">${medals[i] || '•'}</span>
+          <b style="font-size:13px;min-width:0">${esc(r.name)}</b>
+          <span style="margin-inline-start:auto;font-size:11.5px;color:var(--muted);text-align:left;flex-shrink:0">${r.detail}</span>
+        </div>`).join('')}`;
+    }
+
+    async function renderStatsAdmin() {
+      const box = $('#stats-box');
+      if (!box || !matches.length) return;
+      let hist = [];
+      try { hist = (await loadPredictionHistory()) || []; } catch (_) {}
+      const byId = new Map(matches.map((m) => [m.id, m]));
+      const P = new Map();
+      const rec = (n) => {
+        let r = P.get(n);
+        if (!r) { r = { name: n, exact: 0, preds: 0, goals: 0, goalPreds: 0, lead: [], lastHour: 0 }; P.set(n, r); }
+        return r;
+      };
+      for (const p of allPreds) {
+        const m = byId.get(p.match_id);
+        if (!m) continue;
+        const r = rec(p.player_name);
+        r.preds += 1;
+        if (p.home_score != null && p.away_score != null) {
+          r.goals += p.home_score + p.away_score;
+          r.goalPreds += 1;
+          if (m.finished && p.home_score === m.home_score && p.away_score === m.away_score) r.exact += 1;
+        }
+        if (p.created_at && m.kickoff) {
+          const lead = new Date(m.kickoff) - new Date(p.created_at);
+          if (lead > 0) {
+            r.lead.push(lead);
+            if (lead <= 3600000) r.lastHour += 1;
+          }
+        }
+      }
+      const players = [...P.values()];
+      if (!players.length) { box.innerHTML = '<div class="empty">ما في توقعات بعد ⚽️</div>'; return; }
+
+      // edit counts from history (first row per match+player = the original save)
+      const groups = new Map();
+      for (const h of hist) {
+        const k = `${h.match_id}|${h.player_name}`;
+        groups.set(k, (groups.get(k) || 0) + 1);
+      }
+      const editCount = new Map();
+      for (const [k, n] of groups) {
+        if (n > 1) {
+          const name = k.split('|')[1];
+          editCount.set(name, (editCount.get(name) || 0) + (n - 1));
+        }
+      }
+
+      const top = (arr, val, detail) => arr
+        .filter((r) => val(r) >= 1)
+        .sort((a, b) => val(b) - val(a)).slice(0, 3)
+        .map((r) => ({ name: r.name, detail: detail(r) }));
+
+      const exact = top(players, (r) => r.exact, (r) => `<b>${r.exact}</b> نتيجة بالضبط 🎯`);
+      const early = players.filter((r) => r.lead.length >= 3)
+        .map((r) => ({ name: r.name, avg: r.lead.reduce((s, x) => s + x, 0) / r.lead.length }))
+        .sort((a, b) => b.avg - a.avg).slice(0, 3)
+        .map((r) => ({ name: r.name, detail: `يتوقّع قبل المباراة بـ<b>${fmtLead(r.avg)}</b> بالمتوسط` }));
+      const lastMin = top(players, (r) => r.lastHour, (r) => `<b>${r.lastHour}</b> توقّع بآخر ساعة ⏱️`);
+      const editors = [...editCount.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3)
+        .map(([name, n]) => ({ name, detail: `غيّر توقّعه <b>${n}</b> مرة ✏️` }));
+      const byGoals = players.filter((r) => r.goalPreds >= 5)
+        .map((r) => ({ name: r.name, avg: r.goals / r.goalPreds }))
+        .sort((a, b) => b.avg - a.avg);
+      const goalRows = [];
+      if (byGoals.length >= 2) {
+        goalRows.push({ name: byGoals[0].name, detail: `الأكثر تفاؤلاً — <b>${byGoals[0].avg.toFixed(1)}</b> هدف بالمباراة 🔥` });
+        goalRows.push({ name: byGoals[byGoals.length - 1].name, detail: `الأكثر حذراً — <b>${byGoals[byGoals.length - 1].avg.toFixed(1)}</b> هدف بالمباراة 🧊` });
+      }
+      const possible = matches.filter((m) => m.home_team && m.away_team).length;
+      const commit = top(players, (r) => r.preds, (r) => `توقّع <b>${r.preds}</b> من ${possible} مباراة 📋`);
+
+      // who hasn't predicted the upcoming matches (next 48h)
+      const allNames = [...P.keys()].sort((a, b) => a.localeCompare(b, 'ar'));
+      const soon = matches.filter((m) => !m.finished && m.home_team && m.away_team && m.kickoff
+        && new Date(m.kickoff) > Date.now()
+        && new Date(m.kickoff) - Date.now() < 48 * 3600000)
+        .sort((a, b) => new Date(a.kickoff) - new Date(b.kickoff));
+      let missHTML = '';
+      for (const m of soon) {
+        const have = new Set(allPreds.filter((p) => p.match_id === m.id).map((p) => p.player_name));
+        const missing = allNames.filter((n) => !have.has(n));
+        if (!missing.length) continue;
+        missHTML += `<div style="padding:8px 4px;border-bottom:1px solid var(--border)">
+          <b style="font-size:13px">${esc(m.home_team)} × ${esc(m.away_team)}</b>
+          <span style="font-size:11px;color:var(--muted)"> · ${esc(new Date(m.kickoff).toLocaleString('ar', { weekday: 'long', hour: '2-digit', minute: '2-digit' }))}</span>
+          <div style="font-size:11.5px;color:var(--error);margin-top:3px;line-height:1.9">⏰ ما توقّعوا بعد: ${missing.map(esc).join('، ')}</div>
+        </div>`;
+      }
+
+      box.innerHTML =
+        statBlock('🎯 ملوك النتيجة بالضبط', exact)
+        + statBlock('⚡️ الأسرع توقعاً', early)
+        + statBlock('⏱️ عشاق اللحظة الأخيرة', lastMin)
+        + statBlock('✏️ الأكثر تغييراً لرأيهم', editors)
+        + statBlock('⚽️ أهداف التوقعات', goalRows)
+        + statBlock('📋 الأكثر التزاماً', commit)
+        + (missHTML ? `<div style="font-size:12px;font-weight:800;color:var(--error);margin:12px 0 4px">⏰ ناسين يتوقعون؟</div>${missHTML}` : '')
+        || '<div class="empty">ما في بيانات بعد</div>';
     }
 
     // ----- champion picks (🏆 منو توقّع البطل) -----
@@ -679,6 +801,7 @@
               t.classList.toggle('active', t.dataset.f === finFilter));
           };
         });
+        renderStatsAdmin();
       }).catch((e) => {
         $('#list').innerHTML = `<div class="notice"><span style="color:var(--error)">${esc(e.message || e)}</span></div>`;
       });
