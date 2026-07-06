@@ -242,10 +242,11 @@ async function main() {
     console.log(`Auto-results OFF — ${finishedJobs.length} finished match(es) left for ` +
       'the admin to enter manually. (Set WC_AUTO_RESULTS=1 to auto-fill.)');
   } else {
-    // read back OUR stored orientation (reflects frozen + freshly-set teams)
+    // read back OUR stored orientation + current result (reflects frozen +
+    // freshly-set teams, and lets us keep data the API doesn't resend)
     let dbById = new Map();
     try {
-      const db = await sbGet('wc_matches?select=id,home_team,away_team');
+      const db = await sbGet('wc_matches?select=id,home_team,away_team,home_score,away_score,home_pen,away_pen,finished');
       dbById = new Map(db.map((m) => [m.id, m]));
     } catch (e) { console.error('read wc_matches:', e.message); }
 
@@ -254,7 +255,24 @@ async function main() {
     // mixed into the goals.
     for (const { ourId, api } of finishedJobs) {
       const stored = dbById.get(ourId);
-      const { gh, ga, ph, pa, flipped } = alignToStored(stored?.home_team, api);
+      let { gh, ga, ph, pa, flipped } = alignToStored(stored?.home_team, api);
+      // The matches endpoint often omits the shootout breakdown for a finished
+      // draw — never let that erase a shootout score already stored (entered by
+      // the admin or a previous run), or the pens vanish from the site on every
+      // cron tick.
+      if (gh != null && gh === ga && (ph == null || pa == null)
+          && stored?.home_pen != null && stored?.away_pen != null) {
+        ph = stored.home_pen; pa = stored.away_pen;
+        console.log(`result #${ourId}  keeping stored pens ${ph}-${pa} (API sent none)`);
+      }
+      // identical to what's stored -> skip the write entirely, so manual admin
+      // fixes aren't churned every 20 minutes
+      if (stored?.finished
+          && stored.home_score === gh && stored.away_score === ga
+          && (stored.home_pen ?? null) === (ph ?? null)
+          && (stored.away_pen ?? null) === (pa ?? null)) {
+        continue;
+      }
       let winner = null;
       if (gh === ga && (ph == null || pa == null)) {
         const w = api.score.winner; // penalties decider (shootout score unknown)
