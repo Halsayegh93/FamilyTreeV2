@@ -275,6 +275,13 @@
         if (!r) { r = { name: n, exact: 0, preds: 0, goals: 0, goalPreds: 0, lead: [], lastHour: 0 }; P.set(n, r); }
         return r;
       };
+      const autoPts = (p, m) => scoreRow({ ...p, manual_points: null }, m);
+      const predPen = (p) => {
+        if (p.pen_pick === 'home' || p.pen_pick === 'away') return p.pen_pick;
+        if (p.pen_home != null && p.pen_away != null && p.pen_home !== p.pen_away)
+          return p.pen_home > p.pen_away ? 'home' : 'away';
+        return null;
+      };
       for (const p of allPreds) {
         const m = byId.get(p.match_id);
         if (!m) continue;
@@ -284,6 +291,27 @@
           r.goals += p.home_score + p.away_score;
           r.goalPreds += 1;
           if (m.finished && p.home_score === m.home_score && p.away_score === m.away_score) r.exact += 1;
+          // hidden fan: which team does this player keep backing?
+          const d = Math.sign(p.home_score - p.away_score);
+          if (d !== 0) {
+            const team = d > 0 ? m.home_team : m.away_team;
+            if (team) {
+              r.fans = r.fans || new Map();
+              r.fans.set(team, (r.fans.get(team) || 0) + 1);
+            }
+          }
+        }
+        if (m.finished) {
+          const pts = autoPts(p, m);
+          r.played = (r.played || 0) + 1;
+          r.ptsSum = (r.ptsSum || 0) + pts;
+          if (pts > 0) r.hits = (r.hits || 0) + 1;
+          else r.zeroes = (r.zeroes || 0) + 1;
+          // correct shootout winner on a pens match
+          if (m.home_pen != null && m.away_pen != null && m.home_pen !== m.away_pen) {
+            const actual = m.home_pen > m.away_pen ? 'home' : 'away';
+            if (predPen(p) === actual) r.pensRight = (r.pensRight || 0) + 1;
+          }
         }
         if (p.created_at && m.kickoff) {
           const lead = new Date(m.kickoff) - new Date(p.created_at);
@@ -293,6 +321,56 @@
           }
         }
       }
+      // longest scoring streak per player (finished matches in kickoff order)
+      const finishedOrder = matches.filter((m) => m.finished)
+        .sort((a, b) => new Date(a.kickoff || 0) - new Date(b.kickoff || 0) || a.id - b.id);
+      for (const r of P.values()) {
+        let best = 0, cur = 0;
+        for (const m of finishedOrder) {
+          const p = allPreds.find((x) => x.match_id === m.id && x.player_name === r.name);
+          if (!p) continue;
+          if (autoPts(p, m) > 0) { cur += 1; best = Math.max(best, cur); }
+          else cur = 0;
+        }
+        r.streak = best;
+      }
+      // twins: which pair predicted the same exact score most often?
+      const pairCount = new Map();
+      for (const m of matches) {
+        const ps = allPreds.filter((p) => p.match_id === m.id && p.home_score != null && p.away_score != null);
+        const bySc = new Map();
+        for (const p of ps) {
+          const k = `${p.home_score}-${p.away_score}|${predPen(p) || ''}`;
+          (bySc.get(k) || bySc.set(k, []).get(k)).push(p.player_name);
+        }
+        for (const names of bySc.values()) {
+          if (names.length < 2) continue;
+          for (let i = 0; i < names.length; i++)
+            for (let j = i + 1; j < names.length; j++) {
+              const key = [names[i], names[j]].sort().join(' + ');
+              pairCount.set(key, (pairCount.get(key) || 0) + 1);
+            }
+        }
+      }
+      // favourite scorelines: most predicted vs most common real result
+      const predSc = new Map(), realSc = new Map();
+      for (const p of allPreds)
+        if (p.home_score != null && p.away_score != null) {
+          const k = `${p.home_score}-${p.away_score}`;
+          predSc.set(k, (predSc.get(k) || 0) + 1);
+        }
+      for (const m of matches)
+        if (m.finished && m.home_score != null) {
+          const k = `${m.home_score}-${m.away_score}`;
+          realSc.set(k, (realSc.get(k) || 0) + 1);
+        }
+      // hardest / easiest finished match by hit-rate
+      const matchRates = matches.filter((m) => m.finished).map((m) => {
+        const ps = allPreds.filter((p) => p.match_id === m.id);
+        if (ps.length < 5) return null;
+        const hits = ps.filter((p) => autoPts(p, m) > 0).length;
+        return { m, rate: hits / ps.length };
+      }).filter(Boolean).sort((a, b) => a.rate - b.rate);
       const players = [...P.values()];
       if (!players.length) { box.innerHTML = '<div class="empty">ما في توقعات بعد ⚽️</div>'; return; }
 
@@ -334,6 +412,40 @@
       const possible = matches.filter((m) => m.home_team && m.away_team).length;
       const commit = top(players, (r) => r.preds, (r) => `توقّع <b>${r.preds}</b> من ${possible} مباراة 📋`);
 
+      // the new blocks --------------------------------------------------------
+      const sharp = players.filter((r) => (r.played || 0) >= 5)
+        .map((r) => ({ name: r.name, avg: r.ptsSum / r.played }))
+        .sort((a, b) => b.avg - a.avg).slice(0, 3)
+        .map((r) => ({ name: r.name, detail: `<b>${r.avg.toFixed(2)}</b> نقطة بالمباراة 💯` }));
+      const hitRate = players.filter((r) => (r.played || 0) >= 5)
+        .map((r) => ({ name: r.name, rate: (r.hits || 0) / r.played }))
+        .sort((a, b) => b.rate - a.rate).slice(0, 3)
+        .map((r) => ({ name: r.name, detail: `يجيب نقاط في <b>${Math.round(r.rate * 100)}%</b> من مبارياته ✅` }));
+      const streaks = top(players, (r) => r.streak || 0, (r) => `<b>${r.streak}</b> مباراة متتالية بنقاط 🔥`);
+      const pensKings = top(players, (r) => r.pensRight || 0, (r) => `أصاب المتأهّل بالركلات <b>${r.pensRight}</b> مرة 🥅`);
+      const zeroKings = top(players, (r) => r.zeroes || 0, (r) => `<b>${r.zeroes}</b> مباراة بدون نقاط 😅`);
+      const twins = [...pairCount.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3)
+        .map(([pair, n]) => ({ name: pair, detail: `توقّعا نفس النتيجة <b>${n}</b> مرة 🤝` }));
+      const fans = players
+        .map((r) => {
+          if (!r.fans || !r.fans.size) return null;
+          const [team, n] = [...r.fans.entries()].sort((a, b) => b[1] - a[1])[0];
+          return { name: r.name, team, n };
+        }).filter((x) => x && x.n >= 3)
+        .sort((a, b) => b.n - a.n).slice(0, 3)
+        .map((x) => ({ name: x.name, detail: `توقّع فوز <b>${esc(x.team)}</b> في ${x.n} مباريات ❤️` }));
+      const scRows = [];
+      const topPred = [...predSc.entries()].sort((a, b) => b[1] - a[1])[0];
+      const topReal = [...realSc.entries()].sort((a, b) => b[1] - a[1])[0];
+      if (topPred) scRows.push({ name: topPred[0], detail: `النتيجة الأكثر توقعاً — <b>${topPred[1]}</b> مرة 🎲` });
+      if (topReal) scRows.push({ name: topReal[0], detail: `النتيجة الأكثر حدوثاً فعلاً — <b>${topReal[1]}</b> مرات ⚽️` });
+      const matchRows = [];
+      if (matchRates.length >= 2) {
+        const hard = matchRates[0], easy = matchRates[matchRates.length - 1];
+        matchRows.push({ name: `${hard.m.home_team} × ${hard.m.away_team}`, detail: `الأصعب — أصاب فيها <b>${Math.round(hard.rate * 100)}%</b> فقط 🧱` });
+        matchRows.push({ name: `${easy.m.home_team} × ${easy.m.away_team}`, detail: `الأسهل — أصاب فيها <b>${Math.round(easy.rate * 100)}%</b> 🍰` });
+      }
+
       // who hasn't predicted the upcoming matches (next 48h)
       const allNames = [...P.keys()].sort((a, b) => a.localeCompare(b, 'ar'));
       const soon = matches.filter((m) => !m.finished && m.home_team && m.away_team && m.kickoff
@@ -354,10 +466,19 @@
 
       box.innerHTML =
         statBlock('🎯 ملوك النتيجة بالضبط', exact)
+        + statBlock('💯 الأعلى متوسط نقاط', sharp)
+        + statBlock('✅ نسبة الإصابة', hitRate)
+        + statBlock('🔥 أطول سلسلة نقاط', streaks)
+        + statBlock('🥅 ملوك ركلات الترجيح', pensKings)
+        + statBlock('😅 ملوك الأصفار', zeroKings)
         + statBlock('⚡️ الأسرع توقعاً', early)
         + statBlock('⏱️ عشاق اللحظة الأخيرة', lastMin)
         + statBlock('✏️ الأكثر تغييراً لرأيهم', editors)
         + statBlock('⚽️ أهداف التوقعات', goalRows)
+        + statBlock('🤝 التوائم — يفكرون بنفس الطريقة', twins)
+        + statBlock('❤️ المشجع المخفي', fans)
+        + statBlock('🎲 النتائج المفضلة', scRows)
+        + statBlock('🏟️ أصعب وأسهل مباراة', matchRows)
         + statBlock('📋 الأكثر التزاماً', commit)
         + (missHTML ? `<div style="font-size:12px;font-weight:800;color:var(--error);margin:12px 0 4px">⏰ ناسين يتوقعون؟</div>${missHTML}` : '')
         || '<div class="empty">ما في بيانات بعد</div>';
