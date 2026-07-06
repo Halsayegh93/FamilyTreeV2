@@ -504,8 +504,10 @@
       const UPCOMING_WINDOW = 3 * DAY;   // today + next 2 days
 
       // filters: status (قادمة/منتهية) + by round
+      // R32 is over — its chip is gone from the bar; the matches still show
+      // under "المباريات السابقة" (the past filter lists every finished match).
       const ROUND_FILTERS = [
-        ['R32', 'دور 32'], ['R16', 'دور 16'], ['QF', 'ربع'], ['SF', 'نص'], ['FINAL', 'النهائي'],
+        ['R16', 'دور 16'], ['QF', 'ربع'], ['SF', 'نص'], ['FINAL', 'النهائي'],
       ];
       const roundCodes = ROUND_FILTERS.map(([c]) => c);
       const chip = (f, label) =>
