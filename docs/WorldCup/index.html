@@ -53,11 +53,13 @@
     <div class="tabs">
       <button id="tab-matches" class="active">المباريات</button>
       <button id="tab-board">الترتيب</button>
+      <button id="tab-stats">الطرائف</button>
       <button id="tab-rules">القوانين</button>
     </div>
 
     <div id="view-matches"></div>
     <div id="view-board" style="display:none"></div>
+    <div id="view-stats" style="display:none"></div>
     <div id="view-rules" style="display:none"></div>
   </div>
 
@@ -69,7 +71,7 @@
       submitPrediction, submitWinner, buildLeaderboard, scorePrediction,
       scoreRow, isLocked, roundLabel, matchDay, flagHTML, ROUNDS, friendlyError, POINTS, watch,
       loadChampionPicks, submitChampion, loadMaintenance,
-      loadRevealFinals, maskHiddenFinals, boardHiddenNow,
+      loadRevealFinals, maskHiddenFinals, boardHiddenNow, loadPredictionHistory,
     } from './app.js?v=32';
 
     const $ = (s, r = document) => r.querySelector(s);
@@ -80,11 +82,13 @@
     const confirmBtn = $('#confirm-name');
     const viewMatches = $('#view-matches');
     const viewBoard = $('#view-board');
+    const viewStats = $('#view-stats');
     const viewRules = $('#view-rules');
 
     let matches = [];
     let myPreds = new Map();   // match_id -> {home, away}
     let allPreds = [];
+    let predHistory = [];       // سجل تعديلات التوقعات (للطرائف)
     let championPicks = null;   // توقعات بطل الكاس (null = feature not activated)
     let champSel = '';          // team currently highlighted in the champion card
     let maintenance = false;    // admin-toggled: site paused for players
@@ -147,10 +151,10 @@
     // ----- tabs -----
     const tabBtns = {
       matches: $('#tab-matches'),
-      board: $('#tab-board'), rules: $('#tab-rules'),
+      board: $('#tab-board'), stats: $('#tab-stats'), rules: $('#tab-rules'),
     };
     const tabViews = {
-      matches: viewMatches, board: viewBoard, rules: viewRules,
+      matches: viewMatches, board: viewBoard, stats: viewStats, rules: viewRules,
     };
     function switchTab(which) {
       for (const k in tabViews) {
@@ -158,6 +162,7 @@
         tabBtns[k].classList.toggle('active', k === which);
       }
       if (which === 'board') renderBoard();
+      if (which === 'stats') renderStats();
     }
     for (const k in tabBtns) tabBtns[k].onclick = () => switchTab(k);
 
@@ -750,6 +755,124 @@
           <div class="prize-place">الثالث</div><div class="prize-amt">كابون غسيل سيارات</div></div>
       </div>`;
 
+    // ----- الطرائف: fun stats from predictions + edit history -----
+    function fmtLead(ms) {
+      const h = ms / 3600000;
+      if (h >= 48) return `${Math.round(h / 24)} أيام`;
+      if (h >= 1.5) return `${Math.round(h)} ساعة`;
+      return `${Math.max(1, Math.round(ms / 60000))} دقيقة`;
+    }
+    function statCard(title, rows) {
+      if (!rows || !rows.length) return '';
+      const medals = ['🥇', '🥈', '🥉'];
+      return `<div class="round-title">${title}</div><div class="card">
+        ${rows.map((r, i) => `<div style="display:flex;align-items:center;gap:10px;padding:9px 4px;${i < rows.length - 1 ? 'border-bottom:1px solid var(--border)' : ''}">
+          <span style="width:26px;text-align:center;font-size:18px;flex-shrink:0">${medals[i] || '•'}</span>
+          <b style="font-size:13.5px;min-width:0">${esc(r.name)}</b>
+          <span style="margin-inline-start:auto;font-size:12px;color:var(--muted);text-align:left;flex-shrink:0">${r.detail}</span>
+        </div>`).join('')}
+      </div>`;
+    }
+
+    function renderStats() {
+      if (maintenance) { viewStats.innerHTML = MAINT_HTML; return; }
+      if (boardHiddenNow(matches, revealFinals)) { viewStats.innerHTML = HIDDEN_BOARD_HTML; return; }
+      const byId = new Map(matches.map((m) => [m.id, m]));
+      const P = new Map();
+      const rec = (n) => {
+        let r = P.get(n);
+        if (!r) { r = { name: n, exact: 0, preds: 0, goals: 0, goalPreds: 0, lead: [], lastHour: 0 }; P.set(n, r); }
+        return r;
+      };
+      for (const p of allPreds) {
+        const m = byId.get(p.match_id);
+        if (!m) continue;
+        const r = rec(p.player_name);
+        r.preds += 1;
+        if (p.home_score != null && p.away_score != null) {
+          r.goals += p.home_score + p.away_score;
+          r.goalPreds += 1;
+          if (m.finished && p.home_score === m.home_score && p.away_score === m.away_score) r.exact += 1;
+        }
+        if (p.created_at && m.kickoff) {
+          const lead = new Date(m.kickoff) - new Date(p.created_at);
+          if (lead > 0) {
+            r.lead.push(lead);
+            if (lead <= 3600000) r.lastHour += 1;
+          }
+        }
+      }
+      const players = [...P.values()];
+      if (!players.length) { viewStats.innerHTML = '<div class="empty">ما في توقعات بعد ⚽️</div>'; return; }
+
+      // edit counts from the prediction history (first row = the original save)
+      const groups = new Map();
+      for (const h of predHistory) {
+        const k = `${h.match_id}|${h.player_name}`;
+        groups.set(k, (groups.get(k) || 0) + 1);
+      }
+      const editCount = new Map();
+      for (const [k, n] of groups) {
+        if (n > 1) {
+          const name = k.split('|')[1];
+          editCount.set(name, (editCount.get(name) || 0) + (n - 1));
+        }
+      }
+
+      const top = (arr, val, detail) => arr
+        .filter((r) => val(r) >= 1)
+        .sort((a, b) => val(b) - val(a)).slice(0, 3)
+        .map((r) => ({ name: r.name, detail: detail(r) }));
+
+      const exact = top(players, (r) => r.exact, (r) => `<b>${r.exact}</b> نتيجة بالضبط 🎯`);
+      const early = players.filter((r) => r.lead.length >= 3)
+        .map((r) => ({ name: r.name, avg: r.lead.reduce((s, x) => s + x, 0) / r.lead.length }))
+        .sort((a, b) => b.avg - a.avg).slice(0, 3)
+        .map((r) => ({ name: r.name, detail: `يتوقّع قبل المباراة بـ<b>${fmtLead(r.avg)}</b> بالمتوسط` }));
+      const lastMin = top(players, (r) => r.lastHour, (r) => `<b>${r.lastHour}</b> توقّع بآخر ساعة ⏱️`);
+      const editors = [...editCount.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3)
+        .map(([name, n]) => ({ name, detail: `غيّر توقّعه <b>${n}</b> مرة ✏️` }));
+      const byGoals = players.filter((r) => r.goalPreds >= 5)
+        .map((r) => ({ name: r.name, avg: r.goals / r.goalPreds }))
+        .sort((a, b) => b.avg - a.avg);
+      const goalRows = [];
+      if (byGoals.length >= 2) {
+        goalRows.push({ name: byGoals[0].name, detail: `الأكثر تفاؤلاً بالأهداف — <b>${byGoals[0].avg.toFixed(1)}</b> بالمباراة 🔥` });
+        goalRows.push({ name: byGoals[byGoals.length - 1].name, detail: `الأكثر حذراً — <b>${byGoals[byGoals.length - 1].avg.toFixed(1)}</b> بالمباراة 🧊` });
+      }
+      const possible = matches.filter((m) => m.home_team && m.away_team).length;
+      const commit = top(players, (r) => r.preds, (r) => `توقّع <b>${r.preds}</b> من ${possible} مباراة 📋`);
+
+      // who hasn't predicted the upcoming matches (next 48h)
+      const allNames = [...P.keys()].sort((a, b) => a.localeCompare(b, 'ar'));
+      const soon = matches.filter((m) => !m.finished && m.home_team && m.away_team && m.kickoff
+        && new Date(m.kickoff) > Date.now()
+        && new Date(m.kickoff) - Date.now() < 48 * 3600000)
+        .sort((a, b) => new Date(a.kickoff) - new Date(b.kickoff));
+      let missHTML = '';
+      for (const m of soon) {
+        const have = new Set(allPreds.filter((p) => p.match_id === m.id).map((p) => p.player_name));
+        const missing = allNames.filter((n) => !have.has(n));
+        if (!missing.length) continue;
+        missHTML += `<div style="padding:9px 4px;border-bottom:1px solid var(--border)">
+          <b style="font-size:13.5px">${esc(m.home_team)} × ${esc(m.away_team)}</b>
+          <span style="font-size:11.5px;color:var(--muted)"> · ${esc(new Date(m.kickoff).toLocaleString('ar', { weekday: 'long', hour: '2-digit', minute: '2-digit' }))}</span>
+          <div style="font-size:12px;color:var(--error);margin-top:4px;line-height:1.9">⏰ ما توقّعوا بعد: ${missing.map(esc).join('، ')}</div>
+        </div>`;
+      }
+
+      viewStats.innerHTML =
+        `<div class="notice" style="margin-bottom:12px;font-size:13px;text-align:center">
+          📈 طرائف وأرقام البطولة — تتحدث تلقائياً مع كل توقّع ونتيجة</div>`
+        + statCard('🎯 ملوك النتيجة بالضبط', exact)
+        + statCard('⚡️ الأسرع توقعاً', early)
+        + statCard('⏱️ عشاق اللحظة الأخيرة', lastMin)
+        + statCard('✏️ الأكثر تغييراً لرأيهم', editors)
+        + statCard('⚽️ أهداف التوقعات', goalRows)
+        + statCard('📋 الأكثر التزاماً', commit)
+        + (missHTML ? `<div class="round-title">⏰ ناسين يتوقعون؟</div><div class="card">${missHTML}</div>` : '');
+    }
+
     function renderBoard() {
       if (maintenance) { viewBoard.innerHTML = MAINT_HTML; return; }
       if (boardHiddenNow(matches, revealFinals)) { viewBoard.innerHTML = HIDDEN_BOARD_HTML; return; }
@@ -811,8 +934,11 @@
 
     async function loadAll() {
       try {
-        [matches, allPreds, championPicks, maintenance, revealFinals] = await Promise.all([
-          loadMatches(), loadPredictions(), loadChampionPicks(), loadMaintenance(), loadRevealFinals()]);
+        let hist;
+        [matches, allPreds, championPicks, maintenance, revealFinals, hist] = await Promise.all([
+          loadMatches(), loadPredictions(), loadChampionPicks(), loadMaintenance(), loadRevealFinals(),
+          loadPredictionHistory()]);
+        predHistory = hist || [];
         matches = maskHiddenFinals(matches.filter(afterCutoff), revealFinals);
         await refreshMine();
       } catch (e) {
@@ -838,7 +964,7 @@
     }
     async function reload() {
       let data;
-      try { data = await Promise.all([loadMatches(), loadPredictions(), loadChampionPicks(), loadMaintenance(), loadRevealFinals()]); }
+      try { data = await Promise.all([loadMatches(), loadPredictions(), loadChampionPicks(), loadMaintenance(), loadRevealFinals(), loadPredictionHistory()]); }
       catch (_) { return; }
       const name = playerEl.value.trim();
       // skip the re-render entirely if nothing changed — prevents the page from
@@ -849,7 +975,9 @@
       lastSig = sig;
 
       const wasMaint = maintenance, wasReveal = revealFinals;
-      [matches, allPreds, championPicks, maintenance, revealFinals] = data;
+      let hist;
+      [matches, allPreds, championPicks, maintenance, revealFinals, hist] = data;
+      predHistory = hist || [];
       matches = maskHiddenFinals(matches.filter(afterCutoff), revealFinals);
       myPreds = new Map();
       if (name) {
@@ -860,10 +988,11 @@
       }
       if (maintenance !== wasMaint || revealFinals !== wasReveal) {
         // the pause / finals-reveal flipped — refresh every view so no tab stays stale
-        renderRules(); renderBoard(); renderMatches();
+        renderRules(); renderBoard(); renderStats(); renderMatches();
         return;
       }
       if (viewBoard.style.display !== 'none') renderBoard();
+      else if (viewStats.style.display !== 'none') renderStats();
       else if (viewRules.style.display !== 'none') renderRules();
       else if (!isEditing()) renderMatches();
     }
