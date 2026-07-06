@@ -143,6 +143,33 @@ function splitScore(api) {
   return { gh, ga, ph, pa };
 }
 
+// A shootout match whose score can't be split into goals vs. kicks: the list
+// endpoint often sends only fullTime (which INCLUDES the shootout kicks) with
+// no penalties/regularTime breakdown. Storing that as-is merges the kicks into
+// the goals (a 1-1 match decided 4-3 shows as 5-4) and breaks the scoring.
+function unsplittable(api) {
+  const s = api.score || {};
+  return s.duration === 'PENALTY_SHOOTOUT'
+    && (s.penalties?.home == null || s.penalties?.away == null);
+}
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// The single-match endpoint DOES carry the full breakdown (regularTime,
+// extraTime, penalties). Fetched only for shootout matches the list response
+// left unsplittable. Returns the match object or null.
+async function fetchMatchDetail(apiId) {
+  try {
+    await sleep(6500);   // free tier: 10 calls/min — stay under the limit
+    const r = await fetch(`https://api.football-data.org/v4/matches/${apiId}`, {
+      headers: { 'X-Auth-Token': API_KEY },
+    });
+    if (!r.ok) { console.error(`match detail ${apiId} -> ${r.status}`); return null; }
+    const d = await r.json();
+    return d.match || d;
+  } catch (e) { console.error(`match detail ${apiId}:`, e.message); return null; }
+}
+
 function alignToStored(storedHome, api) {
   const { gh, ga, ph, pa } = splitScore(api);
   const ourH = norm(storedHome);
@@ -255,7 +282,25 @@ async function main() {
     // mixed into the goals.
     for (const { ourId, api } of finishedJobs) {
       const stored = dbById.get(ourId);
-      let { gh, ga, ph, pa, flipped } = alignToStored(stored?.home_team, api);
+
+      // shootout without a breakdown -> get the real goals/kicks split from the
+      // single-match endpoint; NEVER store a merged goals+kicks number.
+      let src = api;
+      if (unsplittable(src)) {
+        const detail = await fetchMatchDetail(api.id);
+        if (detail && !unsplittable(detail)) {
+          src = detail;
+        } else if (stored?.finished) {
+          console.log(`result #${ourId}  kept stored result (shootout breakdown unavailable)`);
+          continue;
+        } else {
+          console.log(`result #${ourId}  SKIPPED — shootout breakdown unavailable; ` +
+            'enter it from the admin page or wait for the next run.');
+          continue;
+        }
+      }
+
+      let { gh, ga, ph, pa, flipped } = alignToStored(stored?.home_team, src);
       // The matches endpoint often omits the shootout breakdown for a finished
       // draw — never let that erase a shootout score already stored (entered by
       // the admin or a previous run), or the pens vanish from the site on every
@@ -275,7 +320,7 @@ async function main() {
       }
       let winner = null;
       if (gh === ga && (ph == null || pa == null)) {
-        const w = api.score.winner; // penalties decider (shootout score unknown)
+        const w = src.score.winner; // penalties decider (shootout score unknown)
         if (w === 'HOME_TEAM') winner = flipped ? 'away' : 'home';
         else if (w === 'AWAY_TEAM') winner = flipped ? 'home' : 'away';
       }
