@@ -38,6 +38,7 @@
         <button class="ag-tile" data-target="addpred"><span class="ag-ico">➕</span><span>إضافة توقّع</span></button>
         <button class="ag-tile" data-target="sec-champs"><span class="ag-ico">🏆</span><span>توقعات البطل</span></button>
         <button class="ag-tile" data-target="sec-stats"><span class="ag-ico">📈</span><span>الإحصائيات</span></button>
+        <button class="ag-tile" data-target="sec-teams"><span class="ag-ico">📊</span><span>ترتيب المنتخبات</span></button>
         <button class="ag-tile" data-target="sec-players"><span class="ag-ico">👥</span><span>اللاعبون</span></button>
         <button class="ag-tile" data-target="sec-reveal"><span class="ag-ico">🤫</span><span>كشف النتائج</span></button>
         <button class="ag-tile" data-target="sec-maint"><span class="ag-ico">⏸️</span><span>إيقاف الموقع</span></button>
@@ -78,6 +79,9 @@
 
       <div class="round-title" id="sec-stats" style="margin-top:26px">📈 إحصائيات اللاعبين</div>
       <div id="stats-box" class="card"><div class="empty">جاري التحميل...</div></div>
+
+      <div class="round-title" id="sec-teams" style="margin-top:26px">📊 ترتيب المنتخبات</div>
+      <div id="teams-box" class="card"><div class="empty">جاري التحميل...</div></div>
 
       <div class="round-title" id="sec-players" style="margin-top:26px">👥 اللاعبون — حذف من الترتيب</div>
       <div id="players" class="card"></div>
@@ -357,6 +361,101 @@
         + statBlock('📋 الأكثر التزاماً', commit)
         + (missHTML ? `<div style="font-size:12px;font-weight:800;color:var(--error);margin:12px 0 4px">⏰ ناسين يتوقعون؟</div>${missHTML}` : '')
         || '<div class="empty">ما في بيانات بعد</div>';
+    }
+
+    // ----- ترتيب المنتخبات (admin-only: the 16 qualifiers' journey) -----
+    const TEAM_ROUNDS = ['R16', 'QF', 'SF', '3RD', 'FINAL'];
+    const teamRIdx = (r) => TEAM_ROUNDS.indexOf(r);
+
+    function teamsSideOf(m, want) {   // winner/loser of a finished match (pens-aware)
+      if (!m.finished) return null;
+      let d = Math.sign((m.home_score ?? 0) - (m.away_score ?? 0));
+      if (d === 0 && m.home_pen != null && m.away_pen != null && m.home_pen !== m.away_pen)
+        d = m.home_pen > m.away_pen ? 1 : -1;
+      if (d === 0) return null;
+      return (d > 0) === (want === 'w') ? m.home_team : m.away_team;
+    }
+    function teamsLossScore(m, team) {
+      const home = m.home_team === team;
+      const gs = home ? `${m.home_score}-${m.away_score}` : `${m.away_score}-${m.home_score}`;
+      if (m.home_pen != null && m.away_pen != null)
+        return `${gs} (ركلات ${home ? `${m.home_pen}-${m.away_pen}` : `${m.away_pen}-${m.home_pen}`})`;
+      return gs;
+    }
+
+    function renderTeams() {
+      const box = $('#teams-box');
+      if (!box || !matches.length) return;
+      const knockout = matches.filter((m) => TEAM_ROUNDS.includes(m.round));
+      const flags = new Map();
+      for (const m of knockout.filter((x) => x.round === 'R16')) {
+        if (m.home_team) flags.set(m.home_team, m.home_flag);
+        if (m.away_team) flags.set(m.away_team, m.away_flag);
+      }
+      if (!flags.size) { box.innerHTML = '<div class="empty">فرق دور الـ16 ما تحددت بعد ⚽️</div>'; return; }
+
+      const teams = [];
+      for (const [team, flag] of flags) {
+        const mine = knockout
+          .filter((m) => m.home_team === team || m.away_team === team)
+          .sort((a, b) => teamRIdx(a.round) - teamRIdx(b.round));
+        const last = mine[mine.length - 1];
+        const t = { team, flag, group: 'alive', roundIdx: teamRIdx(last.round), detail: '' };
+        if (last.round === 'FINAL' && last.finished) {
+          t.group = teamsSideOf(last, 'w') === team ? 'champion' : 'runner';
+        } else if (last.round === '3RD' && last.finished) {
+          t.group = teamsSideOf(last, 'w') === team ? 'third' : 'fourth';
+        } else if (!last.finished) {
+          const opp = last.home_team === team ? last.away_team : last.home_team;
+          t.detail = `${opp ? `ضد <b>${esc(opp)}</b>` : ''}${last.kickoff ? ` · ${esc(new Date(last.kickoff).toLocaleDateString('ar', { weekday: 'long', day: 'numeric', month: 'long' }))}` : ''}`;
+        } else {
+          const opp = last.home_team === team ? last.away_team : last.home_team;
+          t.group = 'out';
+          t.detail = `خسر أمام <b>${esc(opp || '')}</b> ${esc(teamsLossScore(last, team))}`;
+        }
+        teams.push(t);
+      }
+
+      const trow = (t, medal) => `<div style="display:flex;align-items:center;gap:10px;padding:8px 4px;border-bottom:1px solid var(--border)">
+        <span style="width:26px;text-align:center;font-size:17px;flex-shrink:0">${medal}</span>
+        ${flagHTML(t.flag)}
+        <b style="font-size:13.5px;min-width:0">${esc(t.team)}</b>
+        <span style="margin-inline-start:auto;font-size:11.5px;color:var(--muted);text-align:left;flex-shrink:0">${t.detail}</span>
+      </div>`;
+      const header = (txt) => `<div style="font-size:12px;font-weight:800;color:var(--muted);margin:12px 0 4px">${txt}</div>`;
+
+      let html = '';
+      const podium = [
+        ['champion', '🏆', 'بطل كأس العالم'],
+        ['runner',   '🥈', 'الوصيف'],
+        ['third',    '🥉', 'المركز الثالث'],
+        ['fourth',   '4️⃣', 'المركز الرابع'],
+      ].map(([g, medal, label]) => {
+        const t = teams.find((x) => x.group === g);
+        return t ? trow({ ...t, detail: label }, medal) : '';
+      }).join('');
+      if (podium) html += header('🏆 منصة التتويج') + podium;
+
+      const alive = teams.filter((t) => t.group === 'alive');
+      const aliveRounds = [...new Set(alive.map((t) => t.roundIdx))].sort((a, b) => b - a);
+      for (const ri of aliveRounds) {
+        const g = alive.filter((t) => t.roundIdx === ri).sort((a, b) => a.team.localeCompare(b.team));
+        html += header(`✅ ${esc(roundLabel(TEAM_ROUNDS[ri]))} (${g.length})`) + g.map((t) => trow(t, '⚽️')).join('');
+      }
+
+      const outs = teams.filter((t) => t.group === 'out');
+      const OUT_GROUPS = [
+        [teamRIdx('SF'),  'ودّعوا من نص النهائي — المركزان 3-4'],
+        [teamRIdx('QF'),  'ودّعوا من ربع النهائي — المراكز 5-8'],
+        [teamRIdx('R16'), 'ودّعوا من دور الـ16 — المراكز 9-16'],
+      ];
+      for (const [idx, label] of OUT_GROUPS) {
+        const g = outs.filter((t) => t.roundIdx === idx).sort((a, b) => a.team.localeCompare(b.team));
+        if (!g.length) continue;
+        html += header(`❌ ${label}`) + g.map((t) => trow(t, '💔')).join('');
+      }
+
+      box.innerHTML = html || '<div class="empty">ما في بيانات بعد ⚽️</div>';
     }
 
     // ----- champion picks (🏆 منو توقّع البطل) -----
@@ -802,6 +901,7 @@
           };
         });
         renderStatsAdmin();
+        renderTeams();
       }).catch((e) => {
         $('#list').innerHTML = `<div class="notice"><span style="color:var(--error)">${esc(e.message || e)}</span></div>`;
       });
