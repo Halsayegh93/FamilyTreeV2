@@ -259,7 +259,7 @@
 
         <div class="download-card">
             <h2>📥 تحميل التطبيق</h2>
-            <div class="version">الإصدار 1.0.0</div>
+            <div class="version" id="version-ar">أحدث إصدار</div>
             <div>
                 <a class="download-btn" href="https://github.com/Halsayegh93/almohali-family-app/releases/latest/download/FamilyTree-AlMohammadAli.apk" download>
                     <span class="icon">🤖</span>
@@ -306,7 +306,7 @@
 
         <div class="download-card en" style="text-align:center;">
             <h2>📥 Download the App</h2>
-            <div class="version">Version 1.0.0</div>
+            <div class="version" id="version-en">Latest version</div>
             <div>
                 <a class="download-btn" href="https://github.com/Halsayegh93/almohali-family-app/releases/latest/download/FamilyTree-AlMohammadAli.apk" download>
                     <span class="icon">🤖</span>
@@ -352,6 +352,25 @@
 </div>
 
 <script>
+    // رقم الإصدار وتاريخه يُجلبان تلقائياً من أحدث Release على GitHub —
+    // رابط التنزيل نفسه (releases/latest/download) يشير دائماً لأحدث ملف APK.
+    (async () => {
+        try {
+            const res = await fetch('https://api.github.com/repos/Halsayegh93/almohali-family-app/releases/latest');
+            if (!res.ok) return;
+            const rel = await res.json();
+            const tag = (rel.tag_name || '').replace(/^v/i, '');
+            if (!tag) return;
+            const date = rel.published_at
+                ? new Date(rel.published_at).toLocaleDateString('ar-KW', { year: 'numeric', month: 'long', day: 'numeric' })
+                : '';
+            const ar = document.getElementById('version-ar');
+            const en = document.getElementById('version-en');
+            if (ar) ar.textContent = 'الإصدار ' + tag + (date ? ' — ' + date : '');
+            if (en) en.textContent = 'Version ' + tag;
+        } catch (_) { /* يبقى النص الافتراضي */ }
+    })();
+
     let isArabic = true;
     function toggleLang() {
         isArabic = !isArabic;
