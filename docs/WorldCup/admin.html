@@ -446,23 +446,35 @@
         matchRows.push({ name: `${easy.m.home_team} × ${easy.m.away_team}`, detail: `الأسهل — أصاب فيها <b>${Math.round(easy.rate * 100)}%</b> 🍰` });
       }
 
-      // who hasn't predicted the upcoming matches (next 48h)
+      // who hasn't predicted — for EVERY upcoming match (not just the next 48h)
       const allNames = [...P.keys()].sort((a, b) => a.localeCompare(b, 'ar'));
-      const soon = matches.filter((m) => !m.finished && m.home_team && m.away_team && m.kickoff
-        && new Date(m.kickoff) > Date.now()
-        && new Date(m.kickoff) - Date.now() < 48 * 3600000)
+      const predictedNames = (id) =>
+        new Set(allPreds.filter((p) => p.match_id === id).map((p) => p.player_name));
+      const missRow = (m, label, color) => {
+        const missing = allNames.filter((n) => !predictedNames(m.id).has(n));
+        if (!missing.length) return '';
+        const when = m.kickoff
+          ? ` · ${esc(new Date(m.kickoff).toLocaleString('ar', { weekday: 'long', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }))}`
+          : '';
+        return `<div style="padding:8px 4px;border-bottom:1px solid var(--border)">
+          <b style="font-size:13px">${esc(m.home_team)} × ${esc(m.away_team)}</b>
+          <span style="font-size:11px;color:var(--muted)">${when}</span>
+          <div style="font-size:11.5px;color:${color};margin-top:3px;line-height:1.9">${label} ${missing.map(esc).join('، ')}</div>
+        </div>`;
+      };
+
+      // upcoming (not yet played) — ALL of them, soonest first
+      const upcoming = matches.filter((m) => !m.finished && m.home_team && m.away_team && m.kickoff
+        && new Date(m.kickoff) > Date.now())
         .sort((a, b) => new Date(a.kickoff) - new Date(b.kickoff));
       let missHTML = '';
-      for (const m of soon) {
-        const have = new Set(allPreds.filter((p) => p.match_id === m.id).map((p) => p.player_name));
-        const missing = allNames.filter((n) => !have.has(n));
-        if (!missing.length) continue;
-        missHTML += `<div style="padding:8px 4px;border-bottom:1px solid var(--border)">
-          <b style="font-size:13px">${esc(m.home_team)} × ${esc(m.away_team)}</b>
-          <span style="font-size:11px;color:var(--muted)"> · ${esc(new Date(m.kickoff).toLocaleString('ar', { weekday: 'long', hour: '2-digit', minute: '2-digit' }))}</span>
-          <div style="font-size:11.5px;color:var(--error);margin-top:3px;line-height:1.9">⏰ ما توقّعوا بعد: ${missing.map(esc).join('، ')}</div>
-        </div>`;
-      }
+      for (const m of upcoming) missHTML += missRow(m, '⏰ ما توقّعوا بعد:', 'var(--error)');
+
+      // past (finished) matches — who MISSED predicting them, newest first
+      const past = matches.filter((m) => m.finished && m.home_team && m.away_team)
+        .sort((a, b) => new Date(b.kickoff || 0) - new Date(a.kickoff || 0));
+      let missedHTML = '';
+      for (const m of past) missedHTML += missRow(m, '😶 ناسين التوقّع:', 'var(--warning)');
 
       box.innerHTML =
         statBlock('🎯 ملوك النتيجة بالضبط', exact)
@@ -480,7 +492,8 @@
         + statBlock('🎲 النتائج المفضلة', scRows)
         + statBlock('🏟️ أصعب وأسهل مباراة', matchRows)
         + statBlock('📋 الأكثر التزاماً', commit)
-        + (missHTML ? `<div style="font-size:12px;font-weight:800;color:var(--error);margin:12px 0 4px">⏰ ناسين يتوقعون؟</div>${missHTML}` : '')
+        + (missHTML ? `<div style="font-size:12px;font-weight:800;color:var(--error);margin:12px 0 4px">⏰ ناسين يتوقعون؟ (مباريات قادمة)</div>${missHTML}` : '')
+        + (missedHTML ? `<div style="font-size:12px;font-weight:800;color:var(--warning);margin:12px 0 4px">🏁 ناسين التوقّع (مباريات سابقة)</div>${missedHTML}` : '')
         || '<div class="empty">ما في بيانات بعد</div>';
     }
 
