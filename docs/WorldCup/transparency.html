@@ -166,6 +166,12 @@
     .tp-step-guess { font-weight: 800; color: var(--ink); }
     .tp-step-when { font-size: 11px; color: var(--muted); margin-inline-start: auto; white-space: nowrap; }
     .tp-clean-msg { font-size: 13px; font-weight: 700; color: var(--success); line-height: 1.8; }
+    /* policy note: the edit rule changed (multi-edit -> one-time) */
+    .tp-rule { font-size: 12.5px; line-height: 1.95; color: var(--ink);
+      background: rgba(43,122,159,.08); border: 1px solid rgba(43,122,159,.28);
+      border-radius: var(--radius); padding: 11px 14px; margin-bottom: 16px; }
+    .tp-rule .h { display: block; font-weight: 800; color: var(--primary); margin-bottom: 3px; }
+    .tp-rule b { color: var(--primary); }
   </style>
 </head>
 <body>
@@ -185,6 +191,14 @@
       و<b>أي تعديل على توقّع سابق</b> مع بيان إذا كان <b>قبل بداية المباراة</b> أو بعدها —
       كلٌّ بوقته بالضبط ومكشوف للجميع.
       <br />⚠️ التعديل اللي ما يغيّر شي فعلياً ما يظهر هنا.
+    </div>
+
+    <div class="tp-rule">
+      <span class="h">📌 قاعدة التعديل — تغيّرت</span>
+      في السابق كان مسموح للّاعب يغيّر توقّعه <b>أكثر من مرة</b> — بشرط قبل بداية المباراة.
+      الحين تغيّرت القاعدة وصار التوقّع <b>مرة وحدة فقط ونهائي</b>.
+      فالتعديلات المتعددة اللي تشوفها بالسجل من فترة القاعدة القديمة (التغيير كان مسموح قبل المباراة)،
+      وأي تغيير صار بعد بداية المباراة يظهر بعلامة ⚠️.
     </div>
 
     <div id="list"><div class="tp-empty">⏳ يتم التحميل…</div></div>
