@@ -394,13 +394,12 @@
       </div>`;
     }
 
-    // ----- توقّع بطل الكاس (+50) — one final pick, closes at the end of R16 -----
+    // ----- توقّع بطل الكاس (+50) — one final pick, closes at the FIRST
+    // quarter-final kickoff (the QF opening whistle) -----
     function champLocked() {
-      const r16 = matches.filter((m) => m.round === 'R16');
-      if (r16.length && r16.every((m) => m.finished)) return true;   // دور الـ16 خلص
       const qf = matches.filter((m) => m.round === 'QF' && m.kickoff);
       const first = qf.length ? Math.min(...qf.map((m) => new Date(m.kickoff).getTime())) : null;
-      return first != null && Date.now() >= first;                    // fallback: ربع النهائي بدأ
+      return first != null && Date.now() >= first;   // ربع النهائي انطلق
     }
 
     // the losing side of a finished R16 match — knocked out, no longer pickable
@@ -445,12 +444,12 @@
       }).join('');
       let action;
       if (mine) action = `<div class="champ-note ok">✓ توقّعك: <b>${esc(mine.team)}</b> — نهائي 🔒</div>`;
-      else if (locked) action = '<div class="champ-note">🔒 قفل توقّع البطل — انتهى دور الـ16.</div>';
+      else if (locked) action = '<div class="champ-note">🔒 قفل توقّع البطل — انطلق ربع النهائي.</div>';
       else action = `<button class="btn champ-save" ${champSel ? '' : 'disabled'}>💾 حفظ توقّع البطل (نهائي)</button>`;
       return `<div class="card champ-card">
         <div class="round-title" style="margin:0 0 4px">🏆 توقّع بطل كأس العالم
           <span class="champ-pts">+${POINTS.champion} نقطة</span></div>
-        <div class="champ-sub">اختر الفريق اللي يرفع الكاس — توقّع واحد نهائي من لحظة حفظه. تقدر تنتظر إلى نهاية دور الـ16 وتتوقّع، بس الباب يُقفل مع نهاية آخر مباراة فيه — والفريق اللي يطيح ينشال من القائمة.</div>
+        <div class="champ-sub">اختر الفريق اللي يرفع الكاس — توقّع واحد نهائي من لحظة حفظه. تقدر تتوقّع لين انطلاق ربع النهائي، بس الباب يُقفل مع أول صافرة ربع نهائي — والفريق اللي يطيح ينشال من القائمة.</div>
         <div class="champ-grid">${btns}</div>
         ${action}
       </div>`;
@@ -727,7 +726,7 @@
           <div class="rule">
             <span class="rule-pts">${POINTS.champion}<small>نقطة</small></span>
             <div><b>توقّعت بطل البطولة</b><br>
-              <span class="rule-ex">اختر البطل من الـ16 المتأهلين لدور الـ16 — توقّع واحد نهائي، ويُقفل مع نهاية دور الـ16. إذا فريقك رفع الكاس، تنضاف ${POINTS.champion} نقطة لمجموعك.</span></div>
+              <span class="rule-ex">اختر البطل من المتأهلين — توقّع واحد نهائي، ويُقفل مع انطلاق ربع النهائي. إذا فريقك رفع الكاس، تنضاف ${POINTS.champion} نقطة لمجموعك.</span></div>
           </div>
         </div>
         <div class="notice" style="margin-top:12px;font-size:13px;line-height:2">
