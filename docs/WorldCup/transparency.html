@@ -540,7 +540,8 @@
         const m = mById.get(p.match_id);
         if (!m) continue;
         const who = (p.player_name || '').trim();
-        const matchLabel = `مباراة ${m.id} — ${esc(m.home_team || '?')} × ${esc(m.away_team || '?')}`;
+        const matchLabel = `مباراة ${m.id} — ${esc(m.home_team || '?')} × ${esc(m.away_team || '?')}`
+          + (m.kickoff ? ` · 🗓️ موعد المباراة: ${fmt(m.kickoff)}` : '');
 
         const koMs = m.kickoff ? new Date(m.kickoff).getTime() : null;
 
@@ -643,7 +644,7 @@
                   <span class="tp-iv-to">${esc(iv.to)}</span>
                 </div>`}
             ${iv.note ? `<div class="tp-iv-note">${esc(iv.note)}</div>` : ''}
-            <div class="tp-iv-when">🕒 ${fmt(iv.when)}</div>
+            ${iv.chain ? '' : `<div class="tp-iv-when">🕒 ${fmt(iv.when)}</div>`}
           </div>
         </div>`).join('');
       return `<div class="tp-audit">
