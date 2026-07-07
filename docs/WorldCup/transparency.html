@@ -118,6 +118,40 @@
     .tp-p.me { border-color: var(--primary); background: rgba(43,122,159,.08); }
     .tp-you { font-size: 10px; font-weight: 800; color: var(--textOnPrimary, #fff);
       background: var(--primary); padding: 1px 6px; border-radius: 999px; }
+    /* ---- admin-interventions log: the heart of the page ---- */
+    .tp-audit { border: 2px solid var(--warning); border-radius: var(--radius);
+      padding: 14px 15px; margin-bottom: 18px; background: rgba(184,142,51,.07); }
+    .tp-audit.clean { border-color: rgba(47,92,62,.5); background: rgba(47,92,62,.07); }
+    .tp-audit-h { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
+    .tp-audit-h .t { font-size: 16px; font-weight: 900; color: var(--ink); }
+    .tp-audit-count { font-size: 12px; font-weight: 800; padding: 3px 11px; border-radius: 999px;
+      background: var(--warning); color: #fff; }
+    .tp-audit.clean .tp-audit-count { background: var(--success); }
+    .tp-audit-sub { font-size: 12px; color: var(--muted); line-height: 1.85; margin-bottom: 4px; }
+    .tp-iv { display: flex; align-items: flex-start; gap: 10px; flex-wrap: wrap;
+      background: rgba(255,255,255,.7); border: 1px solid var(--border);
+      border-inline-start: 4px solid var(--warning); border-radius: 10px;
+      padding: 10px 12px; margin-top: 9px; }
+    .tp-iv.kind-points { border-inline-start-color: var(--error, #8C2A2A); }
+    .tp-iv.kind-late   { border-inline-start-color: var(--warning); }
+    .tp-iv.kind-edit   { border-inline-start-color: var(--primary); }
+    .tp-iv-ico { font-size: 18px; line-height: 1.3; }
+    .tp-iv-body { flex: 1; min-width: 0; }
+    .tp-iv-who { font-size: 13.5px; font-weight: 800; color: var(--ink);
+      display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+    .tp-iv-kind { font-size: 10.5px; font-weight: 800; padding: 2px 8px; border-radius: 999px;
+      background: rgba(184,142,51,.16); color: var(--warning); }
+    .tp-iv.kind-points .tp-iv-kind { background: rgba(140,42,42,.14); color: var(--error, #8C2A2A); }
+    .tp-iv.kind-edit .tp-iv-kind { background: rgba(43,122,159,.14); color: var(--primary); }
+    .tp-iv-match { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+    .tp-iv-change { font-size: 13px; font-weight: 700; margin-top: 5px;
+      display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+    .tp-iv-from { color: var(--muted); text-decoration: line-through; text-decoration-color: rgba(0,0,0,.25); }
+    .tp-iv-arrow { color: var(--warning); font-weight: 900; }
+    .tp-iv-to { color: var(--ink); font-weight: 800; }
+    .tp-iv.kind-points .tp-iv-to { color: var(--error, #8C2A2A); }
+    .tp-iv-when { font-size: 11px; color: var(--muted); margin-top: 5px; }
+    .tp-clean-msg { font-size: 13px; font-weight: 700; color: var(--success); line-height: 1.8; }
   </style>
 </head>
 <body>
@@ -132,9 +166,11 @@
     </div>
 
     <div class="tp-intro">
-      هذي الصفحة تبيّن <b>وقت كل توقّع بالضبط</b>، و<b>متى يتصكّر التوقّع</b> لكل مباراة،
-      و<b>كم توقّع</b> عند كل مباراة — عشان الكل يشوف إن اللعب نظيف وكل واحد توقّع قبل ما تبدأ المباراة.
-      <br />⚠️ أي توقّع أُضيف بعد إقفال المباراة (من المشرف) يظهر بعلامة تنبيه.
+      أساس هالصفحة هو <b>سجل التدخّلات الإدارية</b> تحت — يجمع في مكان واحد
+      <b>أي تعديل يدوي على النقاط</b>، و<b>أي توقّع أُضيف بعد إقفال مباراته</b>،
+      و<b>أي تعديل على توقّع سابق</b> — كلٌّ بوقته بالضبط ومكشوف للجميع.
+      <br />وتحته تفاصيل كل لاعب: توقّعاته، وقت تسجيلها، ونتيجة كل مباراة —
+      عشان الكل يتأكّد إن اللعب نظيف.
     </div>
 
     <div id="list"><div class="tp-empty">⏳ يتم التحميل…</div></div>
@@ -463,6 +499,101 @@
       </div>`;
     }
 
+    // ---- Admin-interventions audit: the CORE of the transparency page ----
+    // Every manual override / late change is surfaced here at a glance instead
+    // of being buried under a player card. Three kinds:
+    //   points — admin set manual_points, overriding the automatic score
+    //   late   — a prediction saved AFTER the match locked (created_at > kickoff)
+    //   edit   — a prediction changed after first save (history has 2+ entries)
+    function collectInterventions(matches, preds, histMap) {
+      const mById = new Map(matches.map((m) => [m.id, m]));
+      const out = [];
+      for (const p of preds) {
+        const m = mById.get(p.match_id);
+        if (!m) continue;
+        const who = (p.player_name || '').trim();
+        const matchLabel = `مباراة ${m.id} — ${esc(m.home_team || '?')} × ${esc(m.away_team || '?')}`;
+
+        // 1) manual points override (only counts when it changed the value)
+        if (m.finished && p.manual_points != null) {
+          const auto = scoreRow({ ...p, manual_points: null }, m);
+          const manual = scoreRow(p, m);
+          if (manual !== auto) {
+            out.push({
+              kind: 'points', icon: '🎯', label: 'تعديل نقاط يدوي',
+              who, match: matchLabel,
+              from: `تلقائي ${auto > 0 ? '+' + auto : '0'}`,
+              to: `المعدّل ${manual > 0 ? '+' + manual : '0'}`,
+              when: p.updated_at, whenMs: p.updated_at ? new Date(p.updated_at).getTime() : 0,
+            });
+          }
+        }
+
+        // 2) prediction added after the match locked
+        const koMs = m.kickoff ? new Date(m.kickoff).getTime() : null;
+        const t = p.created_at ? new Date(p.created_at).getTime() : null;
+        if (koMs != null && t != null && t > koMs) {
+          out.push({
+            kind: 'late', icon: '⏰', label: 'توقّع بعد الإقفال',
+            who, match: matchLabel,
+            from: `أُقفلت ${fmt(m.kickoff)}`,
+            to: `أُضيف ${fmt(p.created_at)}`,
+            when: p.created_at, whenMs: t,
+          });
+        }
+
+        // 3) prediction edited after first save (needs the real history log)
+        const hist = histMap.get(`${p.match_id}|${who}`) || [];
+        if (hist.length >= 2) {
+          const first = hist[0], last = hist[hist.length - 1];
+          out.push({
+            kind: 'edit', icon: '✏️', label: `${hist.length - 1} تعديل توقّع`,
+            who, match: matchLabel,
+            from: guessOf(first, m), to: guessOf(last, m),
+            when: last.changed_at, whenMs: last.changed_at ? new Date(last.changed_at).getTime() : 0,
+          });
+        }
+      }
+      out.sort((a, b) => b.whenMs - a.whenMs);   // newest first
+      return out;
+    }
+
+    function auditPanel(interventions) {
+      if (!interventions.length) {
+        return `<div class="tp-audit clean">
+          <div class="tp-audit-h">
+            <span class="t">🛡️ سجل التدخّلات الإدارية</span>
+            <span class="tp-audit-count">نظيف</span>
+          </div>
+          <div class="tp-clean-msg">✅ ما فيه أي تدخّل إداري لين الآن — كل النقاط محسوبة تلقائياً،
+            وكل التوقّعات انسجّلت قبل إقفال مبارياتها.</div>
+        </div>`;
+      }
+      const items = interventions.map((iv) => `
+        <div class="tp-iv kind-${iv.kind}">
+          <span class="tp-iv-ico">${iv.icon}</span>
+          <div class="tp-iv-body">
+            <div class="tp-iv-who">${esc(iv.who)} <span class="tp-iv-kind">${esc(iv.label)}</span></div>
+            <div class="tp-iv-match">${iv.match}</div>
+            <div class="tp-iv-change">
+              <span class="tp-iv-from">${esc(iv.from)}</span>
+              <span class="tp-iv-arrow">←</span>
+              <span class="tp-iv-to">${esc(iv.to)}</span>
+            </div>
+            <div class="tp-iv-when">🕒 ${fmt(iv.when)}</div>
+          </div>
+        </div>`).join('');
+      return `<div class="tp-audit">
+        <div class="tp-audit-h">
+          <span class="t">🛡️ سجل التدخّلات الإدارية</span>
+          <span class="tp-audit-count">${interventions.length}</span>
+        </div>
+        <div class="tp-audit-sub">كل تعديل يدوي على النقاط، وكل توقّع أُضيف بعد إقفال مباراته،
+          وكل تعديل على توقّع سابق — مجموعة هنا بوقتها بالضبط ومكشوفة للجميع.</div>
+        ${items}
+      </div>`;
+    }
+
     // status banner: only warn when the edit-history SQL is NOT active
     function statusBanner(historyRaw) {
       if (historyRaw === null) {
@@ -499,9 +630,11 @@
             if (MY_NAME) { if (a === MY_NAME) return -1; if (b === MY_NAME) return 1; }
             return a.localeCompare(b, 'ar');
           });
-        $('#list').innerHTML = statusBanner(historyRaw) + (names.length
-          ? names.map((n) => personBlock(n, matches, preds, histMap)).join('')
-          : `<div class="tp-empty">لا توجد توقّعات بعد</div>`);
+        $('#list').innerHTML = statusBanner(historyRaw)
+          + auditPanel(collectInterventions(matches, preds, histMap))
+          + (names.length
+            ? names.map((n) => personBlock(n, matches, preds, histMap)).join('')
+            : `<div class="tp-empty">لا توجد توقّعات بعد</div>`);
       } catch (e) {
         $('#list').innerHTML = `<div class="tp-empty">تعذّر التحميل: ${esc(friendlyError(e))}</div>`;
       }
