@@ -156,6 +156,15 @@
     .tp-iv-timing.bad { background: rgba(140,42,42,.14); color: var(--error, #8C2A2A); }
     .tp-iv-note { font-size: 11.5px; font-weight: 700; color: var(--ink); margin-top: 4px;
       background: rgba(184,142,51,.10); border-radius: 8px; padding: 4px 8px; display: inline-block; }
+    /* full change chain: every real edit as its own step */
+    .tp-iv-chain { margin-top: 6px; display: flex; flex-direction: column; gap: 5px; }
+    .tp-iv-step { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12.5px;
+      padding-inline-start: 4px; border-inline-start: 2px solid var(--border); }
+    .tp-step-tag { font-size: 10.5px; font-weight: 800; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+    .tp-step-tag.first { background: rgba(47,92,62,.14); color: var(--success); }
+    .tp-step-tag.edit  { background: rgba(43,122,159,.14); color: var(--primary); }
+    .tp-step-guess { font-weight: 800; color: var(--ink); }
+    .tp-step-when { font-size: 11px; color: var(--muted); margin-inline-start: auto; white-space: nowrap; }
     .tp-clean-msg { font-size: 13px; font-weight: 700; color: var(--success); line-height: 1.8; }
   </style>
 </head>
@@ -554,25 +563,30 @@
           });
         }
 
-        // 3) prediction edited after first save (needs the real history log).
-        // Skip edits that didn't actually change the pick (نفس الشيء)، and note
-        // whether the change happened BEFORE the match started (legit) or after.
+        // 3) prediction change chain — show EVERY real change, not just the
+        // first and last. No-op re-saves (same pick as the step before) are
+        // collapsed away, so only genuine changes appear.
         const hist = histMap.get(`${p.match_id}|${who}`) || [];
         if (hist.length >= 2) {
-          const first = hist[0], last = hist[hist.length - 1];
-          const before = guessOf(first, m), after = guessOf(last, m);
-          if (before !== after) {                         // ignore no-op re-saves
-            const lastMs = last.changed_at ? new Date(last.changed_at).getTime() : 0;
-            const beforeKO = koMs == null || lastMs <= koMs;
+          const steps = [];
+          for (const h of hist) {
+            const g = guessOf(h, m);
+            if (steps.length && steps[steps.length - 1].guess === g) continue;  // نفس الشيء
+            const ms = h.changed_at ? new Date(h.changed_at).getTime() : 0;
+            steps.push({ guess: g, when: h.changed_at, ms, ko: koMs == null || ms <= koMs });
+          }
+          if (steps.length >= 2) {                    // at least one real change
+            const last = steps[steps.length - 1];
+            const anyAfter = steps.slice(1).some((s) => !s.ko);
             out.push({
-              kind: 'edit', icon: '✏️', label: `${hist.length - 1} تعديل توقّع`,
+              kind: 'edit', icon: '✏️', label: `${steps.length - 1} تعديل توقّع`,
               who, match: matchLabel,
-              from: before, to: after,
+              chain: steps,
               timing: {
-                ok: beforeKO,
-                text: beforeKO ? 'التغيير قبل بداية المباراة' : 'التغيير بعد بداية المباراة',
+                ok: !anyAfter,
+                text: anyAfter ? 'فيه تغيير بعد بداية المباراة' : 'كل التغييرات قبل بداية المباراة',
               },
-              when: last.changed_at, whenMs: lastMs,
+              when: last.when, whenMs: last.ms,
             });
           }
         }
@@ -602,11 +616,18 @@
                 : ''
             }</div>
             <div class="tp-iv-match">${iv.match}</div>
-            <div class="tp-iv-change">
-              <span class="tp-iv-from">${esc(iv.from)}</span>
-              <span class="tp-iv-arrow">←</span>
-              <span class="tp-iv-to">${esc(iv.to)}</span>
-            </div>
+            ${iv.chain
+              ? `<div class="tp-iv-chain">${iv.chain.map((s, i) => `
+                  <div class="tp-iv-step">
+                    <span class="tp-step-tag ${i === 0 ? 'first' : 'edit'}">${i === 0 ? '🥇 أول توقّع' : '✏️ تعديل ' + i}</span>
+                    <span class="tp-step-guess">${esc(s.guess)}</span>
+                    <span class="tp-step-when">🕒 ${fmt(s.when)}${i > 0 && !s.ko ? ' · ⚠️ بعد المباراة' : ''}</span>
+                  </div>`).join('')}</div>`
+              : `<div class="tp-iv-change">
+                  <span class="tp-iv-from">${esc(iv.from)}</span>
+                  <span class="tp-iv-arrow">←</span>
+                  <span class="tp-iv-to">${esc(iv.to)}</span>
+                </div>`}
             ${iv.note ? `<div class="tp-iv-note">${esc(iv.note)}</div>` : ''}
             <div class="tp-iv-when">🕒 ${fmt(iv.when)}</div>
           </div>
