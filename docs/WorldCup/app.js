@@ -523,7 +523,7 @@ export function friendlyError(err) {
   const msg = (err && err.message) || String(err);
   if (msg.includes('ALREADY_PREDICTED')) return 'عندك توقّع محفوظ لهالمباراة — التوقّع مرة وحدة ونهائي 🔒';
   if (msg.includes('ALREADY_PICKED'))  return 'توقّعك للبطل محفوظ — التوقّع مرة وحدة ونهائي 🔒';
-  if (msg.includes('CHAMPION_LOCKED')) return 'انتهى وقت توقّع البطل — يُقفل مع نهاية دور الـ16 🔒';
+  if (msg.includes('CHAMPION_LOCKED')) return 'انتهى وقت توقّع البطل — يُقفل مع انطلاق ربع النهائي 🔒';
   if (msg.includes('INVALID_TEAM'))    return 'اختر فريقاً من الفرق المتأهلة';
   if (msg.includes('MAINTENANCE'))     return 'الموقع متوقف مؤقتاً للصيانة 🔧';
   if (msg.includes('MATCH_FINISHED')) return 'المباراة خلصت — ما يمكن إضافة توقّع';
