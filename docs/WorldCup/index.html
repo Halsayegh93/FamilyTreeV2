@@ -496,12 +496,10 @@
         </div>`;
         return;
       }
-      const DAY = 24 * 3600 * 1000;
-      // "القادمة" = today + tomorrow (full slate). Past-day & finished -> "المنتهية".
+      // "القادمة" = every not-yet-played match (today onward). Past-day & finished -> "المنتهية".
       const t0 = new Date(); t0.setHours(0, 0, 0, 0);
       const startMs = t0.getTime();
       const dayPassed = (m) => m.kickoff && new Date(m.kickoff).getTime() < startMs;
-      const UPCOMING_WINDOW = 3 * DAY;   // today + next 2 days
 
       // filters: status (قادمة/منتهية) + by round
       // R32 is over — its chip is gone from the bar; the matches still show
@@ -530,12 +528,12 @@
         list = matches.filter((m) => matchFilter === 'FINAL'
           ? (m.round === 'FINAL' || m.round === '3RD')
           : m.round === matchFilter);
-      } else { // القادمة: live + upcoming only (finished move to السابقة)
+      } else { // القادمة: live + every upcoming match through the final
         list = matches.filter((m) => {
           if (m.finished) return false;
           const kt = m.kickoff ? new Date(m.kickoff).getTime() : null;
           if (kt && kt <= Date.now()) return true;    // live, not finished -> stay until the result is in
-          return !dayPassed(m) && kt && kt < startMs + UPCOMING_WINDOW;
+          return !dayPassed(m) && !!kt;               // any match whose day hasn't passed yet
         });
       }
 
