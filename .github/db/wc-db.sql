@@ -652,6 +652,50 @@ grant execute on function public.wc_admin_delete_prediction(integer, text, text)
 grant execute on function public.wc_admin_add_prediction(integer, text, integer, integer, text, integer, integer) to anon, authenticated;
 grant execute on function public.wc_admin_set_points(integer, text, integer, text) to anon, authenticated;
 
+-- ---------- Champion pick (توقّع البطل) -------------------------------------
+-- The wc_champion_picks table is created directly in Supabase. This (re)defines
+-- the submit function so its deadline is the OPENING WHISTLE of the quarter-
+-- finals (first QF kickoff) — matching the app — instead of the end of the
+-- round of 16. One final pick per player; the picked team must be a real
+-- knockout participant.
+drop function if exists public.wc_submit_champion(text, text);
+create or replace function public.wc_submit_champion(p_name text, p_team text)
+returns public.wc_champion_picks
+language plpgsql security definer set search_path = public as $$
+declare
+  nm  text := nullif(btrim(p_name), '');
+  tm  text := nullif(btrim(p_team), '');
+  qf1 timestamptz;
+  row public.wc_champion_picks;
+begin
+  if nm is null then raise exception 'NAME_REQUIRED'; end if;
+  if tm is null then raise exception 'INVALID_TEAM';  end if;
+
+  -- closes at the first quarter-final kickoff (the QF opening whistle)
+  select min(kickoff) into qf1
+    from public.wc_matches where round = 'QF' and kickoff is not null;
+  if qf1 is not null and now() >= qf1 then
+    raise exception 'CHAMPION_LOCKED';
+  end if;
+
+  -- the picked team must be a real knockout participant
+  if not exists (select 1 from public.wc_matches where home_team = tm or away_team = tm) then
+    raise exception 'INVALID_TEAM';
+  end if;
+
+  -- one final pick per player
+  if exists (select 1 from public.wc_champion_picks where player_name = nm) then
+    raise exception 'ALREADY_PICKED';
+  end if;
+
+  insert into public.wc_champion_picks (player_name, team)
+  values (nm, tm)
+  returning * into row;
+  return row;
+end;
+$$;
+grant execute on function public.wc_submit_champion(text, text) to anon, authenticated;
+
 -- ---------- Seed the 32 knockout matches ------------------------------------
 -- Real FIFA World Cup 2026 knockout SCHEDULE (dates + host venues).
 -- Team names are left empty on purpose: the Round-of-32 matchups are only
