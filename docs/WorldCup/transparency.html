@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta http-equiv="Cache-Control" content="no-cache" />
-  <title>سجل الرقابة — جماهير مباريات كأس العالم الرميثية 🔍</title>
+  <title>سجل التعديلات — جماهير مباريات كأس العالم الرميثية 🔍</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap" rel="stylesheet" />
@@ -151,6 +151,11 @@
     .tp-iv-to { color: var(--ink); font-weight: 800; }
     .tp-iv.kind-points .tp-iv-to { color: var(--error, #8C2A2A); }
     .tp-iv-when { font-size: 11px; color: var(--muted); margin-top: 5px; }
+    .tp-iv-timing { font-size: 10.5px; font-weight: 800; padding: 2px 8px; border-radius: 999px; }
+    .tp-iv-timing.ok  { background: rgba(47,92,62,.14); color: var(--success); }
+    .tp-iv-timing.bad { background: rgba(140,42,42,.14); color: var(--error, #8C2A2A); }
+    .tp-iv-note { font-size: 11.5px; font-weight: 700; color: var(--ink); margin-top: 4px;
+      background: rgba(184,142,51,.10); border-radius: 8px; padding: 4px 8px; display: inline-block; }
     .tp-clean-msg { font-size: 13px; font-weight: 700; color: var(--success); line-height: 1.8; }
   </style>
 </head>
@@ -161,16 +166,16 @@
     </div>
     <div class="hero">
       <div class="emblem-badge"><span class="emblem-trophy">🔍</span></div>
-      <h1>سجل <span class="gold">الرقابة</span></h1>
-      <p>كل توقّع بوقته وكل تعديل مكشوف — يراقبه الجميع</p>
+      <h1>سجل <span class="gold">التعديلات</span></h1>
+      <p>كل تغيير يدوي — مكشوف بوقته للجميع</p>
     </div>
 
     <div class="tp-intro">
-      أساس هالصفحة هو <b>سجل التدخّلات الإدارية</b> تحت — يجمع في مكان واحد
-      <b>أي تعديل يدوي على النقاط</b>، و<b>أي توقّع أُضيف بعد إقفال مباراته</b>،
-      و<b>أي تعديل على توقّع سابق</b> — كلٌّ بوقته بالضبط ومكشوف للجميع.
-      <br />وتحته تفاصيل كل لاعب: توقّعاته، وقت تسجيلها، ونتيجة كل مباراة —
-      عشان الكل يتأكّد إن اللعب نظيف.
+      هالصفحة تجمع في مكان واحد كل <b>تغيير</b> صار في المسابقة:
+      <b>أي تعديل يدوي على النقاط ومقداره</b>، و<b>أي توقّع أُضيف بعد بداية مباراته</b>،
+      و<b>أي تعديل على توقّع سابق</b> مع بيان إذا كان <b>قبل بداية المباراة</b> أو بعدها —
+      كلٌّ بوقته بالضبط ومكشوف للجميع.
+      <br />⚠️ التعديل اللي ما يغيّر شي فعلياً ما يظهر هنا.
     </div>
 
     <div id="list"><div class="tp-empty">⏳ يتم التحميل…</div></div>
@@ -514,23 +519,30 @@
         const who = (p.player_name || '').trim();
         const matchLabel = `مباراة ${m.id} — ${esc(m.home_team || '?')} × ${esc(m.away_team || '?')}`;
 
-        // 1) manual points override (only counts when it changed the value)
+        const koMs = m.kickoff ? new Date(m.kickoff).getTime() : null;
+
+        // 1) manual points override — only when it actually changed the value.
+        // We show the BASIS: how much was added/removed vs the automatic score.
         if (m.finished && p.manual_points != null) {
           const auto = scoreRow({ ...p, manual_points: null }, m);
           const manual = scoreRow(p, m);
           if (manual !== auto) {
+            const delta = manual - auto;
+            const note = delta > 0
+              ? `الزيادة: +${delta} نقطة فوق الحساب التلقائي`
+              : `النقص: ${delta} نقطة عن الحساب التلقائي`;
             out.push({
               kind: 'points', icon: '🎯', label: 'تعديل نقاط يدوي',
               who, match: matchLabel,
               from: `تلقائي ${auto > 0 ? '+' + auto : '0'}`,
               to: `المعدّل ${manual > 0 ? '+' + manual : '0'}`,
+              note,
               when: p.updated_at, whenMs: p.updated_at ? new Date(p.updated_at).getTime() : 0,
             });
           }
         }
 
         // 2) prediction added after the match locked
-        const koMs = m.kickoff ? new Date(m.kickoff).getTime() : null;
         const t = p.created_at ? new Date(p.created_at).getTime() : null;
         if (koMs != null && t != null && t > koMs) {
           out.push({
@@ -542,16 +554,27 @@
           });
         }
 
-        // 3) prediction edited after first save (needs the real history log)
+        // 3) prediction edited after first save (needs the real history log).
+        // Skip edits that didn't actually change the pick (نفس الشيء)، and note
+        // whether the change happened BEFORE the match started (legit) or after.
         const hist = histMap.get(`${p.match_id}|${who}`) || [];
         if (hist.length >= 2) {
           const first = hist[0], last = hist[hist.length - 1];
-          out.push({
-            kind: 'edit', icon: '✏️', label: `${hist.length - 1} تعديل توقّع`,
-            who, match: matchLabel,
-            from: guessOf(first, m), to: guessOf(last, m),
-            when: last.changed_at, whenMs: last.changed_at ? new Date(last.changed_at).getTime() : 0,
-          });
+          const before = guessOf(first, m), after = guessOf(last, m);
+          if (before !== after) {                         // ignore no-op re-saves
+            const lastMs = last.changed_at ? new Date(last.changed_at).getTime() : 0;
+            const beforeKO = koMs == null || lastMs <= koMs;
+            out.push({
+              kind: 'edit', icon: '✏️', label: `${hist.length - 1} تعديل توقّع`,
+              who, match: matchLabel,
+              from: before, to: after,
+              timing: {
+                ok: beforeKO,
+                text: beforeKO ? 'التغيير قبل بداية المباراة' : 'التغيير بعد بداية المباراة',
+              },
+              when: last.changed_at, whenMs: lastMs,
+            });
+          }
         }
       }
       out.sort((a, b) => b.whenMs - a.whenMs);   // newest first
@@ -573,13 +596,18 @@
         <div class="tp-iv kind-${iv.kind}">
           <span class="tp-iv-ico">${iv.icon}</span>
           <div class="tp-iv-body">
-            <div class="tp-iv-who">${esc(iv.who)} <span class="tp-iv-kind">${esc(iv.label)}</span></div>
+            <div class="tp-iv-who">${esc(iv.who)} <span class="tp-iv-kind">${esc(iv.label)}</span>${
+              iv.timing
+                ? ` <span class="tp-iv-timing ${iv.timing.ok ? 'ok' : 'bad'}">${iv.timing.ok ? '✅' : '⚠️'} ${esc(iv.timing.text)}</span>`
+                : ''
+            }</div>
             <div class="tp-iv-match">${iv.match}</div>
             <div class="tp-iv-change">
               <span class="tp-iv-from">${esc(iv.from)}</span>
               <span class="tp-iv-arrow">←</span>
               <span class="tp-iv-to">${esc(iv.to)}</span>
             </div>
+            ${iv.note ? `<div class="tp-iv-note">${esc(iv.note)}</div>` : ''}
             <div class="tp-iv-when">🕒 ${fmt(iv.when)}</div>
           </div>
         </div>`).join('');
@@ -620,21 +648,9 @@
         for (const arr of histMap.values())
           arr.sort((a, b) => new Date(a.changed_at) - new Date(b.changed_at));
 
-        // PERSON-CENTRED: one card per player (me first, then alphabetical)
-        const mIds = new Set(matches.map((m) => m.id));
-        const names = [...new Set(preds
-          .filter((p) => mIds.has(p.match_id))
-          .map((p) => (p.player_name || '').trim())
-          .filter(Boolean))]
-          .sort((a, b) => {
-            if (MY_NAME) { if (a === MY_NAME) return -1; if (b === MY_NAME) return 1; }
-            return a.localeCompare(b, 'ar');
-          });
+        // The page is now purely the changes log — no per-player cards below.
         $('#list').innerHTML = statusBanner(historyRaw)
-          + auditPanel(collectInterventions(matches, preds, histMap))
-          + (names.length
-            ? names.map((n) => personBlock(n, matches, preds, histMap)).join('')
-            : `<div class="tp-empty">لا توجد توقّعات بعد</div>`);
+          + auditPanel(collectInterventions(matches, preds, histMap));
       } catch (e) {
         $('#list').innerHTML = `<div class="tp-empty">تعذّر التحميل: ${esc(friendlyError(e))}</div>`;
       }
