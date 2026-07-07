@@ -77,6 +77,14 @@ function teamInfo(name) {
   return [name, FLAGS[String(name).trim().toLowerCase()] || '⚽️'];
 }
 
+// Flag DERIVED from a team name — returns null (not the '⚽️' placeholder) when
+// the name is empty or unknown. Passing null to save_match keeps whatever flag
+// is already stored, so an undecided slot never wipes a real flag that bracket
+// propagation set on a match that has no predictions yet.
+function flagFor(name) {
+  return name ? (FLAGS[String(name).trim().toLowerCase()] || null) : null;
+}
+
 // football-data stage -> our match id ranges (in order within the stage)
 const STAGE_TO_IDS = {
   LAST_32: [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16],
@@ -206,6 +214,15 @@ async function main() {
   // finished matches to score AFTER we know our stored orientation
   const finishedJobs = []; // { ourId, api }
 
+  // Snapshot current teams/flags BEFORE Phase A, so a slot whose team is
+  // already known (e.g. filled by bracket propagation) can heal a lost flag
+  // even when the source still reports the slot as undecided.
+  let preDb = new Map();
+  try {
+    const rows = await sbGet('wc_matches?select=id,home_team,away_team,home_flag,away_flag');
+    preDb = new Map(rows.map((r) => [r.id, r]));
+  } catch (e) { console.error('read wc_matches (pre):', e.message); }
+
   // ----- PHASE A: set teams / kickoff (knockout slots) -----
   for (const [stage, ids] of Object.entries(STAGE_TO_IDS)) {
     const list = (byStage[stage] || []).slice()
@@ -213,14 +230,16 @@ async function main() {
     for (let i = 0; i < list.length && i < ids.length; i++) {
       const api = list[i];
       const ourId = ids[i];
-      let [hN, hF] = teamInfo(api.homeTeam?.name);
-      let [aN, aF] = teamInfo(api.awayTeam?.name);
-      // fill any team the source hasn't decided yet from the confirmed bracket
       const fb = R32_FALLBACK[ourId];
-      if (fb) {
-        if (!hN) [hN, hF] = teamInfo(fb[0]);
-        if (!aN) [aN, aF] = teamInfo(fb[1]);
-      }
+      const stored = preDb.get(ourId);
+      // team name: source, else the confirmed bracket fallback, else whatever
+      // bracket propagation already stored (winners of earlier rounds).
+      const hN = api.homeTeam?.name || (fb ? fb[0] : null) || stored?.home_team || null;
+      const aN = api.awayTeam?.name || (fb ? fb[1] : null) || stored?.away_team || null;
+      // flag derived from the NAME — never the '⚽️' placeholder. null = keep
+      // the stored flag, so an undecided slot can't wipe a real flag.
+      const hF = flagFor(hN);
+      const aF = flagFor(aN);
       try {
         await sbRpc('wc_admin_save_match', {
           p_match_id: ourId,
