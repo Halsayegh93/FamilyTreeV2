@@ -38,7 +38,6 @@
         <button class="ag-tile" data-target="addpred"><span class="ag-ico">➕</span><span>إضافة توقّع</span></button>
         <button class="ag-tile" data-target="sec-champs"><span class="ag-ico">🏆</span><span>توقعات البطل</span></button>
         <button class="ag-tile" data-target="sec-stats"><span class="ag-ico">📈</span><span>الإحصائيات</span></button>
-        <button class="ag-tile" data-target="sec-missed"><span class="ag-ico">😶</span><span>ناسين التوقّع</span></button>
         <button class="ag-tile" data-target="sec-teams"><span class="ag-ico">📊</span><span>ترتيب المنتخبات</span></button>
         <button class="ag-tile" data-target="sec-players"><span class="ag-ico">👥</span><span>اللاعبون</span></button>
         <button class="ag-tile" data-target="sec-reveal"><span class="ag-ico">🤫</span><span>كشف النتائج</span></button>
@@ -80,9 +79,6 @@
 
       <div class="round-title" id="sec-stats" style="margin-top:26px">📈 إحصائيات اللاعبين</div>
       <div id="stats-box" class="card"><div class="empty">جاري التحميل...</div></div>
-
-      <div class="round-title" id="sec-missed" style="margin-top:26px">😶 ناسين التوقّع (مباريات سابقة)</div>
-      <div id="missed-box" class="card"><div class="empty">جاري التحميل...</div></div>
 
       <div class="round-title" id="sec-teams" style="margin-top:26px">📊 ترتيب المنتخبات</div>
       <div id="teams-box" class="card"><div class="empty">جاري التحميل...</div></div>
@@ -473,12 +469,8 @@
         .sort((a, b) => new Date(a.kickoff) - new Date(b.kickoff));
       let missHTML = '';
       for (const m of upcoming) missHTML += missRow(m, '⏰ ما توقّعوا بعد:', 'var(--error)');
-
-      // past (finished) matches — who MISSED predicting them, newest first
-      const past = matches.filter((m) => m.finished && m.home_team && m.away_team)
-        .sort((a, b) => new Date(b.kickoff || 0) - new Date(a.kickoff || 0));
-      let missedHTML = '';
-      for (const m of past) missedHTML += missRow(m, '😶 ناسين التوقّع:', 'var(--warning)');
+      // NOTE: missed predictions for PAST matches live inside the "النتائج
+      // المُدخلة" (finished) section, built in loadList().
 
       box.innerHTML =
         statBlock('🎯 ملوك النتيجة بالضبط', exact)
@@ -498,11 +490,6 @@
         + statBlock('📋 الأكثر التزاماً', commit)
         + (missHTML ? `<div style="font-size:12px;font-weight:800;color:var(--error);margin:12px 0 4px">⏰ ناسين يتوقعون؟ (مباريات قادمة)</div>${missHTML}` : '')
         || '<div class="empty">ما في بيانات بعد</div>';
-
-      // "ناسين التوقّع" for past matches lives in its OWN section/box
-      const mbox = $('#missed-box');
-      if (mbox) mbox.innerHTML = missedHTML
-        || '<div class="empty">ما في أحد فاته توقّع مباراة سابقة ✅</div>';
     }
 
     // ----- ترتيب المنتخبات (admin-only: the 16 qualifiers' journey) -----
@@ -975,6 +962,25 @@
           const hasPens = (m) => m.home_pen != null && m.away_pen != null;
           const pensCount = finished.filter(hasPens).length;
           const wasOpen = !!document.querySelector('#finished-sec[open]');
+          // who MISSED predicting each finished match (folded, inside this section)
+          const missNames = [...new Set(allPreds.map((p) => (p.player_name || '').trim()).filter(Boolean))]
+            .sort((a, b) => a.localeCompare(b, 'ar'));
+          let missedHTML = '';
+          for (const m of ordered) {
+            if (!m.home_team || !m.away_team) continue;
+            const have = new Set(allPreds.filter((p) => p.match_id === m.id).map((p) => p.player_name));
+            const missing = missNames.filter((n) => !have.has(n));
+            if (!missing.length) continue;
+            const when = m.kickoff ? ` · ${esc(new Date(m.kickoff).toLocaleString('ar', { weekday: 'short', day: 'numeric', month: 'short' }))}` : '';
+            missedHTML += `<div style="padding:8px 4px;border-bottom:1px solid var(--border)">
+              <b style="font-size:13px">${esc(m.home_team)} × ${esc(m.away_team)}</b>
+              <span style="font-size:11px;color:var(--muted)">${when}</span>
+              <div style="font-size:11.5px;color:var(--warning);margin-top:3px;line-height:1.9">😶 ناسين التوقّع: ${missing.map(esc).join('، ')}</div>
+            </div>`;
+          }
+          const missedBlock = missedHTML
+            ? `<details class="team-edit" style="margin-top:14px"><summary>😶 ناسين التوقّع في مباريات سابقة</summary>${missedHTML}</details>`
+            : '';
           html += `<details class="team-edit${finFilter === 'pens' ? ' pens-only' : ''}" id="finished-sec"${wasOpen ? ' open' : ''} style="margin-top:24px">
             <summary>🏁 النتائج المُدخلة (${withResult}) · منتهية/مغلقة (${finished.length})</summary>
             <div class="tabs" style="margin:12px 0 4px">
@@ -983,6 +989,7 @@
             </div>` +
             ordered.map(finishedCard).join('') +
             (pensCount ? '' : '<div class="empty fin-pens-empty">ما في مباريات انتهت بركلات ترجيح.</div>') +
+            missedBlock +
             `</details>`;
         }
 
