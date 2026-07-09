@@ -119,7 +119,7 @@
       loadMatches, loadPredictions, roundLabel, ROUNDS, friendlyError,
       adminVerifyPin, adminSetResult, adminSaveMatch, adminReset,
       adminDeletePlayer, adminDeletePrediction, adminAddPrediction, adminReopenMatch, adminSetPoints, scoreRow, matchDay, flagHTML, watch,
-      loadMaintenance, adminSetMaintenance, loadChampionPicks, adminDeleteChampion,
+      loadMaintenance, adminSetMaintenance, loadChampionPicks, adminDeleteChampion, adminSetChampion,
       loadRevealFinals, adminSetRevealFinals, loadPredictionHistory,
     } from './app.js?v=32';
 
@@ -599,19 +599,41 @@
       for (const p of picks) counts.set(p.team, (counts.get(p.team) || 0) + 1);
       const chips = [...counts.entries()].sort((a, b) => b[1] - a[1])
         .map(([t, n]) => `<span class="chip">${esc(t)} <b>(${n})</b></span>`).join(' ');
+      // teams the admin can assign (every knockout participant, deduped)
+      const teamSet = new Set();
+      for (const m of matches) {
+        if (m.home_team) teamSet.add(m.home_team);
+        if (m.away_team) teamSet.add(m.away_team);
+      }
+      const teamOpts = (sel) => [...teamSet].sort((a, b) => a.localeCompare(b))
+        .map((t) => `<option value="${esc(t)}"${t === sel ? ' selected' : ''}>${esc(t)}</option>`).join('');
       const rows = picks.slice()
         .sort((a, b) => String(a.team).localeCompare(b.team)
           || String(a.player_name).localeCompare(b.player_name, 'ar'))
         .map((p) => `<div class="pred-row">
           <span class="pr-name">${esc(p.player_name)}</span>
-          <span class="pr-guess"><b>🏆 ${esc(p.team)}</b>
+          <span class="pr-guess">
+            <select class="champ-edit" data-name="${esc(p.player_name)}" data-cur="${esc(p.team)}" title="غيّر الفريق">${teamOpts(p.team)}</select>
             <button class="pred-del champ-del" data-name="${esc(p.player_name)}" title="حذف توقّعه للبطل">🗑️</button>
           </span>
         </div>`).join('');
       box.innerHTML = `<div class="scoring-note" style="margin:0 0 10px">
           <b>المتوقّع (${picks.length}):</b> ${chips}</div>
         <div class="pred-rows">${rows}</div>
-        <div class="pp-note">الحذف يخلي اللاعب يقدر يتوقّع من جديد (ما دام باب التوقّع مفتوح)</div>`;
+        <div class="pp-note">تقدر تغيّر فريق أي لاعب من القائمة (يشتغل حتى بعد إقفال التوقّع)، أو تحذف توقّعه ليعيد بنفسه.</div>`;
+      box.querySelectorAll('.champ-edit').forEach((sel) => {
+        sel.onchange = async () => {
+          const nm = sel.dataset.name, team = sel.value, cur = sel.dataset.cur;
+          if (team === cur) return;
+          if (!window.confirm(`تغيّر توقّع "${nm}" من ${cur} إلى ${team}؟`)) { sel.value = cur; return; }
+          sel.disabled = true;
+          try {
+            await adminSetChampion(nm, team, PIN);
+            toast('تغيّر فريق البطل ✅');
+            renderChampions();
+          } catch (e) { toast(friendlyError(e), true); sel.value = cur; sel.disabled = false; }
+        };
+      });
       box.querySelectorAll('.champ-del').forEach((b) => {
         b.onclick = async () => {
           const nm = b.dataset.name;
