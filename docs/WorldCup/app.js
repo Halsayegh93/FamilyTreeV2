@@ -267,6 +267,15 @@ export async function submitChampion(name, team) {
   return data;
 }
 
+// admin: change (or set) a player's champion pick at any time (no deadline)
+export async function adminSetChampion(name, team, pin) {
+  if (DEMO) { if (pin !== '1993') throw new Error('BAD_PIN'); return team; }
+  const sb = await client();
+  const { data, error } = await sb.rpc('wc_admin_set_champion', { p_name: name, p_team: team, p_pin: pin });
+  if (error) throw error;
+  return data;
+}
+
 // admin: remove a player's champion pick so they can pick again
 export async function adminDeleteChampion(name, pin) {
   if (DEMO) { if (pin !== '1993') throw new Error('BAD_PIN'); return 0; }

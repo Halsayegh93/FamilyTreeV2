@@ -696,6 +696,33 @@ end;
 $$;
 grant execute on function public.wc_submit_champion(text, text) to anon, authenticated;
 
+-- Admin override: change (or set) a player's champion pick at ANY time — no
+-- deadline lock — so the admin can correct a pick even after predictions close.
+drop function if exists public.wc_admin_set_champion(text, text, text);
+create or replace function public.wc_admin_set_champion(p_name text, p_team text, p_pin text)
+returns public.wc_champion_picks
+language plpgsql security definer set search_path = public as $$
+declare
+  nm  text := nullif(btrim(p_name), '');
+  tm  text := nullif(btrim(p_team), '');
+  row public.wc_champion_picks;
+begin
+  if p_pin is distinct from '1993' then raise exception 'BAD_PIN'; end if;   -- CHANGE_ME: admin PIN
+  if nm is null then raise exception 'NAME_REQUIRED'; end if;
+  if tm is null then raise exception 'INVALID_TEAM';  end if;
+  if not exists (select 1 from public.wc_matches where home_team = tm or away_team = tm) then
+    raise exception 'INVALID_TEAM';
+  end if;
+  -- change the team if the player already has a pick, otherwise create one
+  update public.wc_champion_picks set team = tm where player_name = nm returning * into row;
+  if not found then
+    insert into public.wc_champion_picks (player_name, team) values (nm, tm) returning * into row;
+  end if;
+  return row;
+end;
+$$;
+grant execute on function public.wc_admin_set_champion(text, text, text) to anon, authenticated;
+
 -- ---------- Seed the 32 knockout matches ------------------------------------
 -- Real FIFA World Cup 2026 knockout SCHEDULE (dates + host venues).
 -- Team names are left empty on purpose: the Round-of-32 matchups are only
