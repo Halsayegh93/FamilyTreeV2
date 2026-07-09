@@ -599,9 +599,13 @@
       for (const p of picks) counts.set(p.team, (counts.get(p.team) || 0) + 1);
       const chips = [...counts.entries()].sort((a, b) => b[1] - a[1])
         .map(([t, n]) => `<span class="chip">${esc(t)} <b>(${n})</b></span>`).join(' ');
-      // teams the admin can assign (every knockout participant, deduped)
+      // teams the admin can assign (every knockout participant, deduped).
+      // renderChampions can run before loadList() populates `matches`, so fetch
+      // them here if needed — otherwise the dropdown would be empty.
+      let ms = matches;
+      if (!ms.length) { try { ms = await loadMatches(); matches = ms; } catch (_) { ms = []; } }
       const teamSet = new Set();
-      for (const m of matches) {
+      for (const m of ms) {
         if (m.home_team) teamSet.add(m.home_team);
         if (m.away_team) teamSet.add(m.away_team);
       }
