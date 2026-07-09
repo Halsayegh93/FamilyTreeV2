@@ -778,6 +778,7 @@ delete from public.wc_matches
 
 -- Force PostgREST to pick up the new functions immediately (so the reset and
 -- other RPCs work right after running this file).
+-- Re-applied to recover from a transient Supabase 502 that skipped a prior run.
 notify pgrst, 'reload schema';
 
 -- ---------- One-off fix (2026-07-04): re-pair the Round of 16 ---------------
