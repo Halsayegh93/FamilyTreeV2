@@ -599,18 +599,30 @@
       for (const p of picks) counts.set(p.team, (counts.get(p.team) || 0) + 1);
       const chips = [...counts.entries()].sort((a, b) => b[1] - a[1])
         .map(([t, n]) => `<span class="chip">${esc(t)} <b>(${n})</b></span>`).join(' ');
-      // teams the admin can assign (every knockout participant, deduped).
       // renderChampions can run before loadList() populates `matches`, so fetch
       // them here if needed — otherwise the dropdown would be empty.
       let ms = matches;
       if (!ms.length) { try { ms = await loadMatches(); matches = ms; } catch (_) { ms = []; } }
+      // only STILL-ALIVE teams can be champion: drop anyone who lost a finished
+      // knockout match (penalty-shootout losers included).
+      const eliminated = new Set();
+      for (const m of ms) {
+        if (!m.finished) continue;
+        const loser = teamsSideOf(m, 'l');
+        if (loser) eliminated.add(loser);
+      }
       const teamSet = new Set();
       for (const m of ms) {
-        if (m.home_team) teamSet.add(m.home_team);
-        if (m.away_team) teamSet.add(m.away_team);
+        if (m.home_team && !eliminated.has(m.home_team)) teamSet.add(m.home_team);
+        if (m.away_team && !eliminated.has(m.away_team)) teamSet.add(m.away_team);
       }
-      const teamOpts = (sel) => [...teamSet].sort((a, b) => a.localeCompare(b))
-        .map((t) => `<option value="${esc(t)}"${t === sel ? ' selected' : ''}>${esc(t)}</option>`).join('');
+      // keep a player's current pick selectable even if that team is now out
+      const teamOpts = (sel) => {
+        const opts = [...teamSet];
+        if (sel && !teamSet.has(sel)) opts.push(sel);
+        return opts.sort((a, b) => a.localeCompare(b))
+          .map((t) => `<option value="${esc(t)}"${t === sel ? ' selected' : ''}>${esc(t)}${!teamSet.has(t) ? ' (خارج)' : ''}</option>`).join('');
+      };
       const rows = picks.slice()
         .sort((a, b) => String(a.team).localeCompare(b.team)
           || String(a.player_name).localeCompare(b.player_name, 'ar'))
