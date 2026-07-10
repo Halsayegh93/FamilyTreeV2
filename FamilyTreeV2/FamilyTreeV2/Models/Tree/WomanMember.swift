@@ -39,6 +39,15 @@ struct WomanMember: Identifiable, Codable, Equatable {
         case sortOrder  = "sort_order"
     }
 
+    init(id: UUID, firstName: String, fullName: String, parentId: UUID?, husbandId: UUID?,
+         motherId: UUID?, gender: String, isDeceased: Bool, birthDate: String?,
+         avatarUrl: String?, photoUrl: String?, sortOrder: Int) {
+        self.id = id; self.firstName = firstName; self.fullName = fullName
+        self.parentId = parentId; self.husbandId = husbandId; self.motherId = motherId
+        self.gender = gender; self.isDeceased = isDeceased; self.birthDate = birthDate
+        self.avatarUrl = avatarUrl; self.photoUrl = photoUrl; self.sortOrder = sortOrder
+    }
+
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id         = try c.decode(UUID.self, forKey: .id)
@@ -53,5 +62,33 @@ struct WomanMember: Identifiable, Codable, Equatable {
         avatarUrl  = try c.decodeIfPresent(String.self, forKey: .avatarUrl)
         photoUrl   = try c.decodeIfPresent(String.self, forKey: .photoUrl)
         sortOrder  = try c.decodeIfPresent(Int.self, forKey: .sortOrder) ?? 0
+    }
+}
+
+/// فرد من عائلة العضو في شجرة النساء مع دوره (أم/زوجة/ابن) — للعرض في «عائلتي».
+struct WomenFamilyEntry: Identifiable, Equatable {
+    let member: WomanMember
+    let role: Role
+    var id: UUID { member.id }
+
+    enum Role: Int, Equatable {
+        case mother = 0   // تُعرض أولاً
+        case wife   = 1
+        case child  = 2
+
+        var label: String {
+            switch self {
+            case .mother: return "الأم"
+            case .wife:   return "الزوجة"
+            case .child:  return "ابن/ابنة"
+            }
+        }
+        var labelEn: String {
+            switch self {
+            case .mother: return "Mother"
+            case .wife:   return "Wife"
+            case .child:  return "Child"
+            }
+        }
     }
 }

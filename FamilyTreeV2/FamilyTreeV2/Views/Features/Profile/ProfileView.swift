@@ -207,12 +207,12 @@ struct ProfileView: View {
                     .overlay(Capsule().stroke(user.roleColor.opacity(0.2), lineWidth: 1))
 
                     // عدد الأبناء (شجرة الرجال + شجرة النساء)
-                    let totalChildren = memberVM.currentMemberChildren.count + memberVM.currentMemberWomenChildren.count
+                    let totalChildren = memberVM.currentMemberChildren.count + memberVM.currentMemberWomenFamily.count
                     if totalChildren > 0 {
                         HStack(spacing: DS.Spacing.xs) {
                             Image(systemName: "person.2.fill")
                                 .font(DS.Font.scaled(10, weight: .semibold))
-                            Text("\(totalChildren) " + L10n.t("أبناء", "children"))
+                            Text("\(totalChildren) " + L10n.t("من العائلة", "family"))
                                 .font(DS.Font.scaled(11, weight: .bold))
                         }
                         .foregroundColor(DS.Color.textSecondary)
@@ -452,7 +452,7 @@ struct ProfileView: View {
                 // Header مع زر الترتيب
                 HStack {
                     DSSectionHeader(
-                        title: L10n.t("الأبناء", "Children"),
+                        title: L10n.t("عائلتي", "My Family"),
                         icon: "person.2.fill",
                         iconColor: DS.Color.textSecondary
                     )
@@ -523,11 +523,11 @@ struct ProfileView: View {
                     .accessibilityHint(L10n.t("تعديل", "Edit"))
                 }
 
-                // أبناء شجرة النساء (زوجة/بنات مسجّلون على الويب) — عرض فقط
-                ForEach(memberVM.currentMemberWomenChildren, id: \.id) { woman in
-                    womanChildGridCell(woman: woman)
+                // عائلة شجرة النساء (الأم/الزوجة/الأبناء المسجّلون على الويب) — عرض فقط
+                ForEach(memberVM.currentMemberWomenFamily) { entry in
+                    womanFamilyGridCell(entry: entry)
                         .accessibilityElement(children: .ignore)
-                        .accessibilityLabel(woman.firstName.isEmpty ? L10n.t("فرد", "Member") : woman.firstName)
+                        .accessibilityLabel(entry.member.firstName.isEmpty ? L10n.t("فرد", "Member") : entry.member.firstName)
                 }
 
                 // Add child as last grid cell
@@ -606,8 +606,17 @@ struct ProfileView: View {
     }
 
     /// خلية عرض لعضو من شجرة النساء (زوجة/بنت) — للقراءة فقط.
-    private func womanChildGridCell(woman: WomanMember) -> some View {
-        let accent = DS.Color.neonPink
+    private func womanRoleAccent(_ role: WomenFamilyEntry.Role) -> Color {
+        switch role {
+        case .mother: return DS.Color.accent      // إنديغو
+        case .wife:   return DS.Color.neonPink     // وردي
+        case .child:  return DS.Color.secondary    // أخضر
+        }
+    }
+
+    private func womanFamilyGridCell(entry: WomenFamilyEntry) -> some View {
+        let woman = entry.member
+        let accent = womanRoleAccent(entry.role)
         return HStack(spacing: DS.Spacing.sm) {
             // صورة أو أيقونة
             Group {
@@ -626,28 +635,29 @@ struct ProfileView: View {
             .overlay(Circle().strokeBorder(accent.opacity(0.25), lineWidth: 1))
 
             VStack(alignment: .leading, spacing: 2) {
+                // بشارة الدور (الأم/الزوجة/ابن)
+                Text(L10n.t(entry.role.label, entry.role.labelEn))
+                    .font(DS.Font.scaled(8, weight: .black))
+                    .foregroundColor(accent)
+                    .padding(.horizontal, DS.Spacing.xs)
+                    .padding(.vertical, 1)
+                    .background(accent.opacity(0.12))
+                    .clipShape(Capsule())
+
                 Text(woman.firstName.isEmpty ? L10n.t("الاسم", "Name") : woman.firstName)
                     .font(DS.Font.caption1)
                     .fontWeight(.bold)
                     .foregroundColor(DS.Color.textPrimary)
                     .lineLimit(1)
 
-                HStack(spacing: DS.Spacing.xs) {
-                    if let birth = woman.birthDate, !birth.isEmpty {
-                        Text(birth)
-                            .font(DS.Font.caption2)
-                            .foregroundColor(DS.Color.textSecondary)
-                            .lineLimit(1)
-                    }
-                    if woman.isDeceased {
-                        Text(L10n.t("متوفى", "Deceased"))
-                            .font(DS.Font.scaled(8, weight: .bold))
-                            .foregroundColor(DS.Color.textOnPrimary)
-                            .padding(.horizontal, DS.Spacing.xs)
-                            .padding(.vertical, 1)
-                            .background(DS.Color.error.opacity(0.8))
-                            .clipShape(Capsule())
-                    }
+                if woman.isDeceased {
+                    Text(L10n.t("متوفى", "Deceased"))
+                        .font(DS.Font.scaled(8, weight: .bold))
+                        .foregroundColor(DS.Color.textOnPrimary)
+                        .padding(.horizontal, DS.Spacing.xs)
+                        .padding(.vertical, 1)
+                        .background(DS.Color.error.opacity(0.8))
+                        .clipShape(Capsule())
                 }
             }
             Spacer(minLength: 0)
@@ -658,7 +668,7 @@ struct ProfileView: View {
         .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                .stroke(accent.opacity(0.15), lineWidth: 1)
+                .stroke(accent.opacity(0.20), lineWidth: 1)
         )
     }
 
