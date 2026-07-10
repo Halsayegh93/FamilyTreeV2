@@ -125,15 +125,25 @@ struct EditProfileView: View {
                                 iconColor: DS.Color.neonPink
                             )
 
-                                    VStack(spacing: 0) {
-                                        // الحالة الاجتماعية حقل طبيعي قابل للتغيير — بلا قفل cooldown
-                                        DSFormRow(icon: "heart.fill", iconColor: DS.Color.neonPink,
-                                                  label: L10n.t("متزوج", "Married")) {
-                                            Toggle("", isOn: $isMarried)
-                                                .labelsHidden()
-                                                .tint(DS.Color.primary)
-                                        }
+                                    // الحالة الاجتماعية — زرّان واضحان بدل التبديل
+                                    // (أمتن للتفاعل وأوضح، بلا قفل cooldown)
+                                    HStack(spacing: DS.Spacing.sm) {
+                                        maritalButton(
+                                            title: L10n.t("أعزب", "Single"),
+                                            icon: "person.fill",
+                                            selected: !isMarried,
+                                            color: DS.Color.textSecondary
+                                        ) { isMarried = false }
+
+                                        maritalButton(
+                                            title: L10n.t("متزوج", "Married"),
+                                            icon: "heart.fill",
+                                            selected: isMarried,
+                                            color: DS.Color.neonPink
+                                        ) { isMarried = true }
                                     }
+                                    .padding(.horizontal, DS.Spacing.lg)
+                                    .padding(.vertical, DS.Spacing.md)
                         }
                         .padding(.horizontal, DS.Spacing.lg)
 
@@ -658,6 +668,33 @@ struct EditProfileView: View {
     }
 
     // MARK: - Logic (الوظائف)
+
+    /// زر اختيار حالة اجتماعية — كبير وواضح وسهل النقر (بديل التبديل).
+    private func maritalButton(title: String, icon: String, selected: Bool, color: Color, action: @escaping () -> Void) -> some View {
+        Button(action: {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            action()
+        }) {
+            HStack(spacing: DS.Spacing.xs) {
+                Image(systemName: icon)
+                    .font(DS.Font.scaled(13, weight: .bold))
+                Text(title)
+                    .font(DS.Font.calloutBold)
+            }
+            .foregroundColor(selected ? .white : DS.Color.textSecondary)
+            .frame(maxWidth: .infinity)
+            .frame(height: 48)
+            .background(
+                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                    .fill(selected ? color : DS.Color.surface)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                    .strokeBorder(selected ? Color.clear : DS.Color.textTertiary.opacity(0.25), lineWidth: 1)
+            )
+        }
+        .buttonStyle(DSScaleButtonStyle())
+    }
 
     private func setupData() {
         self.fullName = member.fullName
