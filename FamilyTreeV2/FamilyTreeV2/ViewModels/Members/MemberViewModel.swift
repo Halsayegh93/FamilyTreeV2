@@ -345,6 +345,31 @@ class MemberViewModel: ObservableObject {
             Log.warning("[Women] تعذّر جلب عائلة شجرة النساء: \(error.localizedDescription)")
         }
     }
+
+    /// حفظ فوري لحالة الزواج فقط (عند الضغط على زر متزوج/أعزب) — لا يعتمد على زر
+    /// الحفظ العام. يكتب is_married فقط (ليس ضمن مراقبة trigger النساء، فآمن).
+    @discardableResult
+    func setMaritalStatus(memberId: UUID, isMarried: Bool) async -> Bool {
+        guard NetworkMonitor.shared.requireOnline() else { return false }
+        do {
+            try await supabase
+                .from("profiles")
+                .update(["is_married": isMarried])
+                .eq("id", value: memberId.uuidString)
+                .execute()
+            Log.info("[Profile] حفظ حالة الزواج: \(isMarried)")
+            // حدّث نسخة العضو محلياً + المستخدم الحالي ليتفاعل العرض فوراً
+            await fetchSingleMember(id: memberId)
+            if memberId == currentUser?.id {
+                await authVM?.checkUserProfile()
+            }
+            return true
+        } catch {
+            self.errorMessage = L10n.t("تعذّر حفظ الحالة الاجتماعية.", "Failed to save marital status.")
+            Log.error("[Profile] خطأ حفظ حالة الزواج: \(error.localizedDescription)")
+            return false
+        }
+    }
     
     func reorderChildren(_ children: [FamilyMember]) async {
         // تحديث محلي فوري

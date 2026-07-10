@@ -133,14 +133,14 @@ struct EditProfileView: View {
                                             icon: "person.fill",
                                             selected: !isMarried,
                                             color: DS.Color.textSecondary
-                                        ) { isMarried = false }
+                                        ) { setMarried(false) }
 
                                         maritalButton(
                                             title: L10n.t("متزوج", "Married"),
                                             icon: "heart.fill",
                                             selected: isMarried,
                                             color: DS.Color.neonPink
-                                        ) { isMarried = true }
+                                        ) { setMarried(true) }
                                     }
                                     .padding(.horizontal, DS.Spacing.lg)
                                     .padding(.vertical, DS.Spacing.md)
@@ -669,12 +669,17 @@ struct EditProfileView: View {
 
     // MARK: - Logic (الوظائف)
 
+    /// تغيير حالة الزواج + حفظ فوري في القاعدة (لا يعتمد على زر الحفظ العام).
+    private func setMarried(_ value: Bool) {
+        UISelectionFeedbackGenerator().selectionChanged()
+        withAnimation(DS.Anim.quick) { isMarried = value }
+        Task { await memberVM.setMaritalStatus(memberId: member.id, isMarried: value) }
+    }
+
     /// زر اختيار حالة اجتماعية — ثابت لا يرجّ عند الضغط، مع انتقال لون ناعم.
     private func maritalButton(title: String, icon: String, selected: Bool, color: Color, action: @escaping () -> Void) -> some View {
         Button {
-            guard !selected else { return }          // ضغط الزر المختار أصلاً = لا شيء (استقرار)
-            UISelectionFeedbackGenerator().selectionChanged()
-            withAnimation(DS.Anim.quick) { action() }
+            action()
         } label: {
             HStack(spacing: DS.Spacing.xs) {
                 Image(systemName: icon)
