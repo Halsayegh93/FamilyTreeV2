@@ -684,7 +684,7 @@ struct EditProfileView: View {
             }
             .foregroundColor(selected ? .white : DS.Color.textSecondary)
             .frame(maxWidth: .infinity)
-            .frame(height: 48)
+            .frame(height: 52)
             .background(
                 RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
                     .fill(selected ? color : DS.Color.surface)
@@ -693,7 +693,7 @@ struct EditProfileView: View {
                 RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
                     .strokeBorder(selected ? Color.clear : DS.Color.textTertiary.opacity(0.25), lineWidth: 1)
             )
-            .contentShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+            .contentShape(Rectangle())                // كامل مساحة الزر قابلة للنقر
         }
         .buttonStyle(.plain)                          // بلا تصغير/رجّة عند الضغط
     }

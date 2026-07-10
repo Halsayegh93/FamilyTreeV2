@@ -64,10 +64,12 @@ struct ProfileView: View {
                                     .opacity(appeared ? 1 : 0)
                                     .offset(y: appeared ? 0 : 28)
 
-                                // Children section
-                                serverSonsSection
-                                    .opacity(appeared ? 1 : 0)
-                                    .offset(y: appeared ? 0 : 30)
+                                // قسم «عائلتي» — يظهر فقط عند «متزوج»، ويختفي كاملاً عند «أعزب»
+                                if isCurrentUserMarried {
+                                    serverSonsSection
+                                        .opacity(appeared ? 1 : 0)
+                                        .offset(y: appeared ? 0 : 30)
+                                }
 
                                 // زر تسجيل الخروج بأسفل الصفحة
                                 signOutButton
