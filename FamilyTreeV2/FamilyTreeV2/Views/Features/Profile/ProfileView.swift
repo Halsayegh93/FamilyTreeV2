@@ -21,6 +21,9 @@ struct ProfileView: View {
 
     var user: FamilyMember? { authVM.currentUser }
 
+    /// عائلة شجرة النساء (الأم/الزوجة/الأبناء) تظهر فقط عند «متزوج».
+    private var isCurrentUserMarried: Bool { authVM.currentUser?.isMarried ?? false }
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -207,7 +210,7 @@ struct ProfileView: View {
                     .overlay(Capsule().stroke(user.roleColor.opacity(0.2), lineWidth: 1))
 
                     // عدد الأبناء (شجرة الرجال + شجرة النساء)
-                    let totalChildren = memberVM.currentMemberChildren.count + memberVM.currentMemberWomenFamily.count
+                    let totalChildren = memberVM.currentMemberChildren.count + (isCurrentUserMarried ? memberVM.currentMemberWomenFamily.count : 0)
                     if totalChildren > 0 {
                         HStack(spacing: DS.Spacing.xs) {
                             Image(systemName: "person.2.fill")
@@ -523,11 +526,13 @@ struct ProfileView: View {
                     .accessibilityHint(L10n.t("تعديل", "Edit"))
                 }
 
-                // عائلة شجرة النساء (الأم/الزوجة/الأبناء المسجّلون على الويب) — عرض فقط
-                ForEach(memberVM.currentMemberWomenFamily) { entry in
-                    womanFamilyGridCell(entry: entry)
-                        .accessibilityElement(children: .ignore)
-                        .accessibilityLabel(entry.member.firstName.isEmpty ? L10n.t("فرد", "Member") : entry.member.firstName)
+                // عائلة شجرة النساء (الأم/الزوجة/الأبناء) — تظهر فقط عند «متزوج»
+                if isCurrentUserMarried {
+                    ForEach(memberVM.currentMemberWomenFamily) { entry in
+                        womanFamilyGridCell(entry: entry)
+                            .accessibilityElement(children: .ignore)
+                            .accessibilityLabel(entry.member.firstName.isEmpty ? L10n.t("فرد", "Member") : entry.member.firstName)
+                    }
                 }
 
                 // Add child as last grid cell
