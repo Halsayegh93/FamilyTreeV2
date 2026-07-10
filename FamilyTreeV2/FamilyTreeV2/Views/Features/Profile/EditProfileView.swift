@@ -669,12 +669,13 @@ struct EditProfileView: View {
 
     // MARK: - Logic (الوظائف)
 
-    /// زر اختيار حالة اجتماعية — كبير وواضح وسهل النقر (بديل التبديل).
+    /// زر اختيار حالة اجتماعية — ثابت لا يرجّ عند الضغط، مع انتقال لون ناعم.
     private func maritalButton(title: String, icon: String, selected: Bool, color: Color, action: @escaping () -> Void) -> some View {
-        Button(action: {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            action()
-        }) {
+        Button {
+            guard !selected else { return }          // ضغط الزر المختار أصلاً = لا شيء (استقرار)
+            UISelectionFeedbackGenerator().selectionChanged()
+            withAnimation(DS.Anim.quick) { action() }
+        } label: {
             HStack(spacing: DS.Spacing.xs) {
                 Image(systemName: icon)
                     .font(DS.Font.scaled(13, weight: .bold))
@@ -692,8 +693,9 @@ struct EditProfileView: View {
                 RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
                     .strokeBorder(selected ? Color.clear : DS.Color.textTertiary.opacity(0.25), lineWidth: 1)
             )
+            .contentShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
         }
-        .buttonStyle(DSScaleButtonStyle())
+        .buttonStyle(.plain)                          // بلا تصغير/رجّة عند الضغط
     }
 
     private func setupData() {
