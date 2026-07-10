@@ -125,27 +125,23 @@ struct EditProfileView: View {
                                 iconColor: DS.Color.neonPink
                             )
 
-                                    // الحالة الاجتماعية — زرّان واضحان بدل التبديل
-                                    // (أمتن للتفاعل وأوضح، بلا قفل cooldown)
-                                    HStack(spacing: DS.Spacing.sm) {
-                                        maritalButton(
-                                            title: L10n.t("أعزب", "Single"),
-                                            icon: "person.fill",
-                                            selected: !isMarried,
-                                            color: DS.Color.textSecondary
-                                        ) { setMarried(false) }
-
-                                        maritalButton(
-                                            title: L10n.t("متزوج", "Married"),
-                                            icon: "heart.fill",
-                                            selected: isMarried,
-                                            color: DS.Color.neonPink
-                                        ) { setMarried(true) }
+                                    // الحالة الاجتماعية — Picker مقسّم native (يتعامل مع RTL
+                                    // بشكل صحيح؛ الزرّان المخصّصان كان لهما خلل hit-testing في RTL)
+                                    Picker("", selection: Binding(
+                                        get: { isMarried },
+                                        set: { setMarried($0) }
+                                    )) {
+                                        Text(L10n.t("أعزب", "Single")).tag(false)
+                                        Text(L10n.t("متزوج", "Married")).tag(true)
                                     }
+                                    .pickerStyle(.segmented)
                                     .padding(.horizontal, DS.Spacing.lg)
                                     .padding(.vertical, DS.Spacing.md)
                         }
                         .padding(.horizontal, DS.Spacing.lg)
+                        // عنصر مجاور (زر الحفظ العائم) كان يتراكب ويبتلع النقر على النصف
+                        // الأيسر من هذا القسم — نرفع طبقته ليأخذ أولوية النقر.
+                        .zIndex(1)
 
                         // 4. المحطات الحياتية
                         bioStationsSection
@@ -673,34 +669,8 @@ struct EditProfileView: View {
     private func setMarried(_ value: Bool) {
         UISelectionFeedbackGenerator().selectionChanged()
         withAnimation(DS.Anim.quick) { isMarried = value }
+        // حفظ فوري في القاعدة (is_married فقط — آمن، خارج مراقبة trigger النساء)
         Task { await memberVM.setMaritalStatus(memberId: member.id, isMarried: value) }
-    }
-
-    /// زر اختيار حالة اجتماعية — ثابت لا يرجّ عند الضغط، مع انتقال لون ناعم.
-    private func maritalButton(title: String, icon: String, selected: Bool, color: Color, action: @escaping () -> Void) -> some View {
-        Button {
-            action()
-        } label: {
-            HStack(spacing: DS.Spacing.xs) {
-                Image(systemName: icon)
-                    .font(DS.Font.scaled(13, weight: .bold))
-                Text(title)
-                    .font(DS.Font.calloutBold)
-            }
-            .foregroundColor(selected ? .white : DS.Color.textSecondary)
-            .frame(maxWidth: .infinity)
-            .frame(height: 52)
-            .background(
-                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                    .fill(selected ? color : DS.Color.surface)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                    .strokeBorder(selected ? Color.clear : DS.Color.textTertiary.opacity(0.25), lineWidth: 1)
-            )
-            .contentShape(Rectangle())                // كامل مساحة الزر قابلة للنقر
-        }
-        .buttonStyle(.plain)                          // بلا تصغير/رجّة عند الضغط
     }
 
     private func setupData() {
