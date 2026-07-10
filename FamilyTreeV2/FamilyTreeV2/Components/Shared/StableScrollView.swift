@@ -77,25 +77,25 @@ struct StableScrollView<Content: View>: UIViewRepresentable {
 
         // MARK: UIScrollViewDelegate
 
+        // دوال UIScrollViewDelegate تُستدعى دائماً على الـmain thread، فنستخدم
+        // MainActor.assumeIsolated لقراءة خصائص UIScrollView المعزولة بأمان (بلا تحذيرات).
         nonisolated func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
-            Task { @MainActor in self.isUserScrolling = true }
+            MainActor.assumeIsolated { self.isUserScrolling = true }
         }
 
         nonisolated func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
             // لو ما فيه تباطؤ، خلّص user scrolling فوراً وحدّث الـoffset
-            let offset = scrollView.contentOffset.y
-            if !decelerate {
-                Task { @MainActor in
-                    self.lastUserOffset = offset
+            MainActor.assumeIsolated {
+                if !decelerate {
+                    self.lastUserOffset = scrollView.contentOffset.y
                     self.isUserScrolling = false
                 }
             }
         }
 
         nonisolated func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
-            let offset = scrollView.contentOffset.y
-            Task { @MainActor in
-                self.lastUserOffset = offset
+            MainActor.assumeIsolated {
+                self.lastUserOffset = scrollView.contentOffset.y
                 self.isUserScrolling = false
             }
         }
@@ -103,12 +103,11 @@ struct StableScrollView<Content: View>: UIViewRepresentable {
         nonisolated func scrollViewDidScroll(_ scrollView: UIScrollView) {
             // نحدِّث lastUserOffset فقط إذا المستخدم فعلاً يسحب أو يتباطأ —
             // نتجاهل أي تحديث برمجي من iOS (مثلاً بعد sheet dismiss).
-            let offset = scrollView.contentOffset.y
-            let dragging = scrollView.isDragging
-            let decelerating = scrollView.isDecelerating
-            Task { @MainActor in
+            MainActor.assumeIsolated {
+                let dragging = scrollView.isDragging
+                let decelerating = scrollView.isDecelerating
                 guard self.isUserScrolling || dragging || decelerating else { return }
-                self.lastUserOffset = offset
+                self.lastUserOffset = scrollView.contentOffset.y
             }
         }
 

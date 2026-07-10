@@ -185,7 +185,7 @@ struct TreeView: View {
     }
 
     /// حساب الكاش — pure function، تشتغل على أي thread.
-    private static func computeCache(from members: [FamilyMember]) -> TreeCache {
+    private nonisolated static func computeCache(from members: [FamilyMember]) -> TreeCache {
         // المعيار القانوني الموحّد لـ"عضو في العائلة" — نفسه في الويب وكل العدّادات
         let visible = members.filter(\.isCountable)
         let byId = Dictionary(uniqueKeysWithValues: visible.map { ($0.id, $0) })

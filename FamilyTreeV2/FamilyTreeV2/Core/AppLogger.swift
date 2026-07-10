@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-enum Log {
+nonisolated enum Log {
     private static let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "FamilyTreeV2",
         category: "App"

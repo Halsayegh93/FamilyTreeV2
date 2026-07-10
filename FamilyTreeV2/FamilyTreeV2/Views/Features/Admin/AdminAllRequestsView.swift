@@ -3455,7 +3455,6 @@ struct AdminAllRequestsView: View {
 
     // MARK: - Request Detail Sheet
 
-    @ViewBuilder
     /// شيت تفاصيل الطلب — تصميم موحّد لكل الأنواع.
     private func requestDetailSheet(_ detail: RequestDetail) -> some View {
         let meta = detailMeta(for: detail)
@@ -3552,7 +3551,7 @@ struct AdminAllRequestsView: View {
             return .init(icon: "rectangle.and.pencil.and.ellipsis", color: DS.Color.neonPurple,
                          title: L10n.t("تغيير اسم", "Name Change"),
                          timestamp: r.createdAt.map { formatRegistrationDate($0) })
-        case .diwaniya(let d):
+        case .diwaniya:
             return .init(icon: "tent.fill", color: DS.Color.gridDiwaniya,
                          title: L10n.t("طلب ديوانية", "Diwaniya Request"),
                          timestamp: nil)

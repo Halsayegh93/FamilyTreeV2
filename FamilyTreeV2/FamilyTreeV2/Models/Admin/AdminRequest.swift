@@ -1,7 +1,7 @@
 import Foundation
 
 // MARK: - Tree Edit Action (v3)
-enum TreeEditAction: String, Codable, CaseIterable, Identifiable {
+nonisolated enum TreeEditAction: String, Codable, CaseIterable, Identifiable {
     case add = "add"
     case editName = "edit_name"
     case editPhone = "edit_phone"

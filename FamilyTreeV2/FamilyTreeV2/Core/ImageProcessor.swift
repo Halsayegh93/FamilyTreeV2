@@ -4,7 +4,7 @@ import ImageIO
 // MARK: - ImageProcessor
 // معالج الصور المركزي — تصغير + ضغط + إزالة البيانات الوصفية
 
-enum ImageProcessor {
+nonisolated enum ImageProcessor {
 
     // MARK: - Use Cases
 
