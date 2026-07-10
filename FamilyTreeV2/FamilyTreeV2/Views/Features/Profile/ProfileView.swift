@@ -15,6 +15,7 @@ struct ProfileView: View {
 
     @State private var showAddChild = false
     @State private var editingChild: FamilyMember? = nil
+    @State private var editingFamilyMember: WomenFamilyEntry? = nil
     @State private var isReorderingChildren = false
     @State private var appeared = false
     @State private var isLoadingChildren = true
@@ -124,6 +125,11 @@ struct ProfileView: View {
                 Text(L10n.t("هل تريد الخروج من حسابك على هذا الجهاز؟", "Do you want to sign out of your account on this device?"))
             }
             .sheet(item: $editingChild) { child in EditChildSheet(member: child).presentationDragIndicator(.visible) }
+            .sheet(item: $editingFamilyMember) { entry in
+                WomanMemberEditSheet(memberVM: memberVM, entry: entry)
+                    .presentationDetents([.fraction(0.55)])
+                    .presentationDragIndicator(.visible)
+            }
             .onChange(of: showAddChild) { isPresented in
                 guard !isPresented, let currentUser = user else { return }
                 Task { await memberVM.fetchChildren(for: currentUser.id) }
@@ -531,9 +537,22 @@ struct ProfileView: View {
                 // عائلة شجرة النساء (الأم/الزوجة/الأبناء) — تظهر فقط عند «متزوج»
                 if isCurrentUserMarried {
                     ForEach(memberVM.currentMemberWomenFamily) { entry in
-                        womanFamilyGridCell(entry: entry)
+                        if authVM.canModerate {
+                            // قابل للتعديل (للإدارة حسب صلاحيات شجرة النساء)
+                            Button {
+                                editingFamilyMember = entry
+                            } label: {
+                                womanFamilyGridCell(entry: entry)
+                            }
+                            .buttonStyle(PlainButtonStyle())
                             .accessibilityElement(children: .ignore)
                             .accessibilityLabel(entry.member.firstName.isEmpty ? L10n.t("فرد", "Member") : entry.member.firstName)
+                            .accessibilityHint(L10n.t("تعديل", "Edit"))
+                        } else {
+                            womanFamilyGridCell(entry: entry)
+                                .accessibilityElement(children: .ignore)
+                                .accessibilityLabel(entry.member.firstName.isEmpty ? L10n.t("فرد", "Member") : entry.member.firstName)
+                        }
                     }
                 }
 
@@ -825,5 +844,134 @@ struct ProfileView: View {
         .buttonStyle(DSScaleButtonStyle())
         .padding(.horizontal, DS.Spacing.lg)
         .padding(.top, DS.Spacing.md)
+    }
+}
+
+// MARK: - Woman-tree family member edit sheet
+
+/// تعديل فرد من «عائلتي» (شجرة النساء): الاسم/تاريخ الميلاد/متوفى + حذف.
+struct WomanMemberEditSheet: View {
+    @ObservedObject var memberVM: MemberViewModel
+    let entry: WomenFamilyEntry
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var name: String
+    @State private var hasBirthDate: Bool
+    @State private var birthDate: Date
+    @State private var isDeceased: Bool
+    @State private var isSaving = false
+    @State private var showDeleteConfirm = false
+    @State private var errorBanner: String? = nil
+
+    init(memberVM: MemberViewModel, entry: WomenFamilyEntry) {
+        self.memberVM = memberVM
+        self.entry = entry
+        _name = State(initialValue: entry.member.firstName)
+        _isDeceased = State(initialValue: entry.member.isDeceased)
+        let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"
+        if let b = entry.member.birthDate, let d = f.date(from: b) {
+            _hasBirthDate = State(initialValue: true)
+            _birthDate = State(initialValue: d)
+        } else {
+            _hasBirthDate = State(initialValue: false)
+            _birthDate = State(initialValue: Date())
+        }
+    }
+
+    private var roleTitle: String { L10n.t(entry.role.label, entry.role.labelEn) }
+    private var canSave: Bool { !name.trimmingCharacters(in: .whitespaces).isEmpty && !isSaving }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: DS.Spacing.md) {
+                    DSCard(padding: 0) {
+                        DSSectionHeader(title: roleTitle, icon: "heart.text.square", iconColor: DS.Color.neonPink)
+                        VStack(spacing: 0) {
+                            DSLabeledFieldRow(icon: "textformat", iconColor: DS.Color.primary,
+                                              label: L10n.t("الاسم", "Name")) {
+                                TextField(L10n.t("الاسم", "Name"), text: $name)
+                                    .font(DS.Font.callout)
+                                    .foregroundColor(DS.Color.textPrimary)
+                            }
+                            DSDivider()
+                            DSLabeledFieldRow(icon: "calendar", iconColor: DS.Color.success,
+                                              label: L10n.t("تاريخ الميلاد", "Birth Date")) {
+                                Toggle("", isOn: $hasBirthDate).labelsHidden().tint(DS.Color.primary)
+                            }
+                            if hasBirthDate {
+                                DatePicker("", selection: $birthDate, displayedComponents: .date)
+                                    .datePickerStyle(.compact)
+                                    .labelsHidden()
+                                    .padding(.horizontal, DS.Spacing.lg)
+                                    .padding(.bottom, DS.Spacing.sm)
+                                    .environment(\.locale, Locale(identifier: "en"))
+                            }
+                            DSDivider()
+                            DSLabeledFieldRow(icon: "moon.zzz.fill", iconColor: DS.Color.error,
+                                              label: L10n.t("متوفى", "Deceased")) {
+                                Toggle("", isOn: $isDeceased).labelsHidden().tint(DS.Color.error)
+                            }
+                        }
+                    }
+
+                    if let errorBanner {
+                        Text(errorBanner).font(DS.Font.caption1).foregroundColor(DS.Color.error)
+                    }
+
+                    DSPrimaryButton(L10n.t("حفظ", "Save"), icon: "checkmark", isLoading: isSaving) { save() }
+                        .disabled(!canSave)
+                        .opacity(canSave ? 1 : 0.5)
+
+                    Button(role: .destructive) { showDeleteConfirm = true } label: {
+                        Label(L10n.t("حذف من العائلة", "Remove from family"), systemImage: "trash")
+                            .font(DS.Font.calloutBold)
+                            .foregroundColor(DS.Color.error)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, DS.Spacing.sm)
+                    }
+
+                    Spacer(minLength: DS.Spacing.xxl)
+                }
+                .padding(.horizontal, DS.Spacing.lg)
+                .padding(.top, DS.Spacing.md)
+            }
+            .background(DS.Color.background.ignoresSafeArea())
+            .navigationTitle(L10n.t("تعديل \(roleTitle)", "Edit \(roleTitle)"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(L10n.t("إلغاء", "Cancel")) { dismiss() }
+                        .foregroundColor(DS.Color.error)
+                        .disabled(isSaving)
+                }
+            }
+            .alert(L10n.t("حذف من العائلة", "Remove from family"), isPresented: $showDeleteConfirm) {
+                Button(L10n.t("حذف", "Delete"), role: .destructive) {
+                    Task {
+                        let ok = await memberVM.deleteWomanMember(id: entry.member.id)
+                        if ok { await MainActor.run { dismiss() } }
+                    }
+                }
+                Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
+            } message: {
+                Text(L10n.t("حذف «\(name)» من عائلتك؟", "Remove “\(name)” from your family?"))
+            }
+        }
+        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+    }
+
+    private func save() {
+        Task {
+            isSaving = true
+            let ok = await memberVM.updateWomanMember(
+                id: entry.member.id,
+                firstName: name,
+                birthDate: hasBirthDate ? birthDate : nil,
+                isDeceased: isDeceased
+            )
+            isSaving = false
+            if ok { dismiss() } else { errorBanner = memberVM.errorMessage }
+        }
     }
 }

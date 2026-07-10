@@ -346,6 +346,53 @@ class MemberViewModel: ObservableObject {
         }
     }
 
+    /// تعديل فرد من شجرة النساء (اسم/تاريخ ميلاد/متوفى). للإدارة (owner/admin/monitor)
+    /// حسب RLS. يُحدّث الصف ثم يُنعش عائلة المستخدم الحالي.
+    @discardableResult
+    func updateWomanMember(id: UUID, firstName: String, birthDate: Date?, isDeceased: Bool) async -> Bool {
+        guard NetworkMonitor.shared.requireOnline() else { return false }
+        let trimmed = firstName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return false }
+        // ملاحظة: لا نكتب full_name — فهو يحمل النسب الكامل (الاسم + سلسلة الآباء)
+        // وكتابته بالاسم الأول فقط تدمّره. نكتفي بـ first_name (وهو المعروض في التطبيق).
+        let payload: [String: AnyEncodable] = [
+            "first_name":  AnyEncodable(trimmed),
+            "is_deceased": AnyEncodable(isDeceased),
+            "birth_date":  AnyEncodable(birthDate.map { DateHelper.format($0) })  // nil يمسح
+        ]
+        do {
+            try await supabase.from("women_members")
+                .update(payload).eq("id", value: id.uuidString).execute()
+            Log.info("[Women] تعديل فرد: \(trimmed)")
+            if let uid = currentUser?.id { await fetchWomenFamily(for: uid) }
+            return true
+        } catch {
+            self.errorMessage = L10n.t("تعذّر حفظ التعديل.", "Failed to save changes.")
+            Log.error("[Women] خطأ تعديل فرد: \(error.localizedDescription)")
+            return false
+        }
+    }
+
+    /// حذف فرد من شجرة النساء. للإدارة (owner/admin/monitor) حسب RLS.
+    @discardableResult
+    func deleteWomanMember(id: UUID) async -> Bool {
+        guard NetworkMonitor.shared.requireOnline() else { return false }
+        // إزالة محلية تفاؤلية
+        let original = currentMemberWomenFamily
+        currentMemberWomenFamily.removeAll { $0.member.id == id }
+        do {
+            try await supabase.from("women_members")
+                .delete().eq("id", value: id.uuidString).execute()
+            Log.info("[Women] حذف فرد")
+            return true
+        } catch {
+            currentMemberWomenFamily = original
+            self.errorMessage = L10n.t("تعذّر الحذف.", "Failed to delete.")
+            Log.error("[Women] خطأ حذف فرد: \(error.localizedDescription)")
+            return false
+        }
+    }
+
     /// حفظ فوري لحالة الزواج فقط (عند الضغط على زر متزوج/أعزب) — لا يعتمد على زر
     /// الحفظ العام. يكتب is_married فقط (ليس ضمن مراقبة trigger النساء، فآمن).
     @discardableResult
