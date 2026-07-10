@@ -31,7 +31,12 @@ struct HomeNewsView: View {
     @State private var newsSearchTask: Task<Void, Never>?
 
     private enum HomeSubPage {
-        case archive, projects, contact, news
+        case archive, projects, contact, news, gallery
+    }
+
+    /// معرض الصور يظهر على الآيفون فقط (بحسب طلب التصميم).
+    private var isPhone: Bool {
+        UIDevice.current.userInterfaceIdiom == .phone
     }
 
     /// مقاييس التخطيط المتجاوبة — تتكيّف مع عرض الجهاز الفعلي + size class
@@ -199,6 +204,7 @@ struct HomeNewsView: View {
             case .archive: FamilyArchiveView()
             case .projects: FamilyProjectsView()
             case .contact: MemberContactFormView()
+            case .gallery: PhotoGalleryView()
             case .news: newsFullPage
             }
         }
@@ -237,6 +243,7 @@ struct HomeNewsView: View {
             case .archive: return L10n.t("أرشيف العائلة", "Family Archive")
             case .projects: return L10n.t("مشاريع العائلة", "Family Projects")
             case .contact: return L10n.t("التواصل", "Contact")
+            case .gallery: return L10n.t("معرض الصور", "Photo Gallery")
             case .news: return L10n.t("الأخبار والمناسبات", "News & Events")
             }
         }()
@@ -369,6 +376,17 @@ struct HomeNewsView: View {
                 count: nil,
                 action: { withAnimation(DS.Anim.snappy) { activeSubPage = .contact } }
             )
+            // معرض الصور — على الآيفون فقط
+            if isPhone {
+                unifiedTile(
+                    title: L10n.t("معرض الصور", "Photo Gallery"),
+                    icon: "photo.stack.fill",
+                    color: DS.Color.neonPink,
+                    imageURL: nil,
+                    count: nil,
+                    action: { withAnimation(DS.Anim.snappy) { activeSubPage = .gallery } }
+                )
+            }
         }
     }
 
