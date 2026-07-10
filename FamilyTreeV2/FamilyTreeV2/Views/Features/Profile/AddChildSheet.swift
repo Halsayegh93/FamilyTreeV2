@@ -44,7 +44,7 @@ struct AddChildSheet: View {
                     )
                 }
             }
-            .navigationTitle(L10n.t("إضافة ابن", "Add Child"))
+            .navigationTitle(L10n.t("إضافة فرد", "Add Member"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -63,7 +63,7 @@ struct AddChildSheet: View {
         .alert(L10n.t("تمت الإضافة", "Added Successfully"), isPresented: $showSuccessAlert) {
             Button(L10n.t("موافق", "OK")) { dismiss() }
         } message: {
-            Text(L10n.t("تمت إضافة الابن بنجاح.", "Child added successfully."))
+            Text(L10n.t("تمت الإضافة بنجاح.", "Added successfully."))
         }
         .alert(L10n.t("خطأ", "Error"), isPresented: $showErrorAlert) {
             Button(L10n.t("موافق", "OK"), role: .cancel) {}
@@ -112,16 +112,28 @@ struct AddChildSheet: View {
 
                     DSDivider()
 
-                    // Phone field — العنوان فوق الحقل، الحقل بدون إطار
-                    DSLabeledFieldRow(icon: "phone.fill", iconColor: DS.Color.success,
-                                      label: L10n.t("رقم الهاتف", "Phone Number")) {
-                        DSPhoneField(
-                            country: $selectedPhoneCountry,
-                            digits: $phoneNumber,
-                            placeholder: L10n.t("اختياري", "Optional"),
-                            compact: true,
-                            bordered: false
-                        )
+                    // اختيار الجنس — أنثى تُضاف لشجرة النساء، ذكر للشجرة العامة
+                    DSFormRow(icon: "person.2.fill", iconColor: DS.Color.accent,
+                              label: L10n.t("الجنس", "Gender")) {
+                        HStack(spacing: DS.Spacing.xs) {
+                            genderButton(title: L10n.t("ابن", "Son"), value: "male", color: DS.Color.primary)
+                            genderButton(title: L10n.t("ابنة", "Daughter"), value: "female", color: DS.Color.neonPink)
+                        }
+                    }
+
+                    // الهاتف — للابن (الذكر) فقط
+                    if selectedGender == "male" {
+                        DSDivider()
+                        DSLabeledFieldRow(icon: "phone.fill", iconColor: DS.Color.success,
+                                          label: L10n.t("رقم الهاتف", "Phone Number")) {
+                            DSPhoneField(
+                                country: $selectedPhoneCountry,
+                                digits: $phoneNumber,
+                                placeholder: L10n.t("اختياري", "Optional"),
+                                compact: true,
+                                bordered: false
+                            )
+                        }
                     }
 
                     DSDivider()
@@ -163,7 +175,7 @@ struct AddChildSheet: View {
 
     private var submitButton: some View {
         DSPrimaryButton(
-            L10n.t("إضافة الابن", "Add Child"),
+            L10n.t("إضافة", "Add"),
             icon: "checkmark.circle.fill",
             isLoading: memberVM.isLoading,
             action: saveChild
@@ -172,37 +184,68 @@ struct AddChildSheet: View {
         .disabled(firstName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || memberVM.isLoading)
     }
 
+    private func genderButton(title: String, value: String, color: Color) -> some View {
+        let selected = selectedGender == value
+        return Button { selectedGender = value } label: {
+            Text(title)
+                .font(DS.Font.caption1).fontWeight(.bold)
+                .foregroundColor(selected ? .white : DS.Color.textSecondary)
+                .padding(.horizontal, DS.Spacing.md)
+                .frame(height: 34)
+                .background(Capsule().fill(selected ? color : DS.Color.surface))
+                .overlay(Capsule().strokeBorder(selected ? Color.clear : DS.Color.textTertiary.opacity(0.3), lineWidth: 1))
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+    }
+
     private func saveChild() {
         Task {
+            let name = firstName.trimmingCharacters(in: .whitespacesAndNewlines)
             let formatter = DateFormatter()
             formatter.dateFormat = "yyyy-MM-dd"
             formatter.locale = Locale(identifier: "en_US_POSIX")
-
             let birthDateString: String? = formatter.string(from: birthDate)
             let deathDateString: String? = isDeceased ? formatter.string(from: deathDate) : nil
 
-            let childId = await memberVM.addChild(
-                firstNameOnly: firstName.trimmingCharacters(in: .whitespacesAndNewlines),
-                phoneNumber: KuwaitPhone.normalizedForStorage(
-                    country: selectedPhoneCountry,
-                    rawLocalDigits: phoneNumber
-                ) ?? "",
-                birthDate: birthDateString,
-                fatherId: member.id,
-                isDeceased: isDeceased,
-                deathDate: deathDateString,
-                gender: selectedGender
-            )
-
-            guard let childId else {
-                Log.error("فشل في إضافة الابن")
-                errorMessage = L10n.t("فشل في إضافة الابن. حاول مرة أخرى.", "Failed to add child. Please try again.")
-                showErrorAlert = true
-                return
-            }
-
-            if let image = selectedUIImage {
-                await memberVM.uploadAvatar(image: image, for: childId)
+            if selectedGender == "female" {
+                // أنثى → شجرة النساء عبر RPC add_family_child
+                let newId = await memberVM.addFamilyChild(
+                    parentId: member.id,
+                    name: name,
+                    gender: "female",
+                    birthDate: birthDate,
+                    isDeceased: isDeceased,
+                    deathDate: isDeceased ? deathDate : nil,
+                    parentFullName: member.fullName
+                )
+                guard newId != nil else {
+                    errorMessage = memberVM.errorMessage ?? L10n.t("فشل في الإضافة.", "Failed to add.")
+                    showErrorAlert = true
+                    return
+                }
+            } else {
+                // ذكر → الشجرة العامة (profiles) مع هاتف/صورة، وينعكس تلقائياً لشجرة النساء
+                let childId = await memberVM.addChild(
+                    firstNameOnly: name,
+                    phoneNumber: KuwaitPhone.normalizedForStorage(
+                        country: selectedPhoneCountry,
+                        rawLocalDigits: phoneNumber
+                    ) ?? "",
+                    birthDate: birthDateString,
+                    fatherId: member.id,
+                    isDeceased: isDeceased,
+                    deathDate: deathDateString,
+                    gender: "male"
+                )
+                guard let childId else {
+                    errorMessage = L10n.t("فشل في إضافة الابن. حاول مرة أخرى.", "Failed to add child. Please try again.")
+                    showErrorAlert = true
+                    return
+                }
+                if let image = selectedUIImage {
+                    await memberVM.uploadAvatar(image: image, for: childId)
+                }
             }
 
             await memberVM.fetchChildren(for: member.id)

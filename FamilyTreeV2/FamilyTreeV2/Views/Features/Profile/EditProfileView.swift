@@ -125,16 +125,22 @@ struct EditProfileView: View {
                                 iconColor: DS.Color.neonPink
                             )
 
-                                    // الحالة الاجتماعية — Picker مقسّم native (يتعامل مع RTL
-                                    // بشكل صحيح؛ الزرّان المخصّصان كان لهما خلل hit-testing في RTL)
-                                    Picker("", selection: Binding(
-                                        get: { isMarried },
-                                        set: { setMarried($0) }
-                                    )) {
-                                        Text(L10n.t("أعزب", "Single")).tag(false)
-                                        Text(L10n.t("متزوج", "Married")).tag(true)
+                                    // الحالة الاجتماعية — زرّان كبيران (يعملان بعد رفع zIndex القسم)
+                                    HStack(spacing: DS.Spacing.sm) {
+                                        maritalButton(
+                                            title: L10n.t("أعزب", "Single"),
+                                            icon: "person.fill",
+                                            selected: !isMarried,
+                                            color: DS.Color.textSecondary
+                                        ) { setMarried(false) }
+
+                                        maritalButton(
+                                            title: L10n.t("متزوج", "Married"),
+                                            icon: "heart.fill",
+                                            selected: isMarried,
+                                            color: DS.Color.neonPink
+                                        ) { setMarried(true) }
                                     }
-                                    .pickerStyle(.segmented)
                                     .padding(.horizontal, DS.Spacing.lg)
                                     .padding(.vertical, DS.Spacing.md)
                         }
@@ -671,6 +677,29 @@ struct EditProfileView: View {
         withAnimation(DS.Anim.quick) { isMarried = value }
         // حفظ فوري في القاعدة (is_married فقط — آمن، خارج مراقبة trigger النساء)
         Task { await memberVM.setMaritalStatus(memberId: member.id, isMarried: value) }
+    }
+
+    /// زر اختيار حالة اجتماعية كبير — ثابت لا يرجّ، مع منطقة نقر كاملة.
+    private func maritalButton(title: String, icon: String, selected: Bool, color: Color, action: @escaping () -> Void) -> some View {
+        Button { action() } label: {
+            HStack(spacing: DS.Spacing.xs) {
+                Image(systemName: icon).font(DS.Font.scaled(14, weight: .bold))
+                Text(title).font(DS.Font.calloutBold)
+            }
+            .foregroundColor(selected ? .white : DS.Color.textSecondary)
+            .frame(maxWidth: .infinity)
+            .frame(height: 52)
+            .background(
+                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                    .fill(selected ? color : DS.Color.surface)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                    .strokeBorder(selected ? Color.clear : DS.Color.textTertiary.opacity(0.25), lineWidth: 1)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     private func setupData() {

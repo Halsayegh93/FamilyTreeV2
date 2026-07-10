@@ -346,6 +346,48 @@ class MemberViewModel: ObservableObject {
         }
     }
 
+    /// إضافة ابن/ابنة للعائلة عبر RPC add_family_child مع توجيه حسب الجنس:
+    /// أنثى → شجرة النساء فقط، ذكر → الشجرة العامة (وينعكس تلقائياً للنساء).
+    @discardableResult
+    func addFamilyChild(parentId: UUID, name: String, gender: String,
+                        birthDate: Date?, isDeceased: Bool, deathDate: Date?,
+                        parentFullName: String) async -> UUID? {
+        guard NetworkMonitor.shared.requireOnline() else { return nil }
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+
+        struct Params: Encodable {
+            let p_parent_id: String
+            let p_name: String
+            let p_gender: String
+            let p_birth: String?
+            let p_deceased: Bool
+            let p_death: String?
+            let p_sort: Int
+            let p_parent_full_name: String
+        }
+        let params = Params(
+            p_parent_id: parentId.uuidString,
+            p_name: trimmed,
+            p_gender: gender,
+            p_birth: birthDate.map { DateHelper.format($0) },
+            p_deceased: isDeceased,
+            p_death: (isDeceased ? deathDate : nil).map { DateHelper.format($0) },
+            p_sort: 0,
+            p_parent_full_name: parentFullName
+        )
+        do {
+            let newId: UUID = try await supabase.rpc("add_family_child", params: params).execute().value
+            Log.info("[Family] إضافة \(gender == "female" ? "ابنة" : "ابن"): \(trimmed)")
+            await fetchChildren(for: parentId)   // يُنعش الشجرة العامة + شجرة النساء
+            return newId
+        } catch {
+            self.errorMessage = L10n.t("تعذّر إضافة الفرد.", "Failed to add member.")
+            Log.error("[Family] خطأ إضافة ابن: \(error.localizedDescription)")
+            return nil
+        }
+    }
+
     /// تعديل فرد من شجرة النساء (اسم/تاريخ ميلاد/متوفى). للإدارة (owner/admin/monitor)
     /// حسب RLS. يُحدّث الصف ثم يُنعش عائلة المستخدم الحالي.
     @discardableResult
