@@ -37,6 +37,8 @@ class MemberViewModel: ObservableObject {
     func member(byId id: UUID) -> FamilyMember? { _memberById[id] }
     
     @Published var currentMemberChildren: [FamilyMember] = []
+    /// أبناء العضو من شجرة النساء (بنات/أبناء مسجّلون في women_members) — عرض فقط.
+    @Published var currentMemberWomenChildren: [WomanMember] = []
     @Published var activePath: [UUID] = []
     @Published var isLoading: Bool = false
     @Published var errorMessage: String?
@@ -290,6 +292,28 @@ class MemberViewModel: ObservableObject {
             self.currentMemberChildren = response.filter(\.isCountable).sortedForDisplay()
         } catch {
             Log.fetchError("خطأ في جلب الأبناء", error)
+        }
+        // بالإضافة: أبناء العضو من شجرة النساء (نفس العائلة الظاهرة على الويب)
+        await fetchWomenChildren(for: fatherId)
+    }
+
+    /// جلب أبناء العضو من شجرة النساء (women_members) — عرض فقط في الآيفون.
+    /// عقدة الذكر في شجرة النساء تحمل نفس معرّف profiles، فالأبناء = parent_id == id.
+    func fetchWomenChildren(for parentId: UUID) async {
+        do {
+            let response: [WomanMember] = try await supabase.from("women_members")
+                .select()
+                .eq("parent_id", value: parentId)
+                .eq("is_hidden_from_tree", value: false)
+                .order("sort_order", ascending: true)
+                .execute()
+                .value
+            self.currentMemberWomenChildren = response
+                .filter { !$0.firstName.trimmingCharacters(in: .whitespaces).isEmpty }
+        } catch {
+            // الجدول قد لا يكون موجوداً في بعض البيئات — تجاهل بهدوء
+            self.currentMemberWomenChildren = []
+            Log.warning("[Women] تعذّر جلب أبناء شجرة النساء: \(error.localizedDescription)")
         }
     }
     

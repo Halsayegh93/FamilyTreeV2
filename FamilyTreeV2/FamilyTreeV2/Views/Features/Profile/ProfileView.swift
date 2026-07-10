@@ -206,12 +206,13 @@ struct ProfileView: View {
                     .clipShape(Capsule())
                     .overlay(Capsule().stroke(user.roleColor.opacity(0.2), lineWidth: 1))
 
-                    // عدد الأبناء
-                    if !memberVM.currentMemberChildren.isEmpty {
+                    // عدد الأبناء (شجرة الرجال + شجرة النساء)
+                    let totalChildren = memberVM.currentMemberChildren.count + memberVM.currentMemberWomenChildren.count
+                    if totalChildren > 0 {
                         HStack(spacing: DS.Spacing.xs) {
                             Image(systemName: "person.2.fill")
                                 .font(DS.Font.scaled(10, weight: .semibold))
-                            Text("\(memberVM.currentMemberChildren.count) " + L10n.t("أبناء", "children"))
+                            Text("\(totalChildren) " + L10n.t("أبناء", "children"))
                                 .font(DS.Font.scaled(11, weight: .bold))
                         }
                         .foregroundColor(DS.Color.textSecondary)
@@ -522,6 +523,13 @@ struct ProfileView: View {
                     .accessibilityHint(L10n.t("تعديل", "Edit"))
                 }
 
+                // أبناء شجرة النساء (زوجة/بنات مسجّلون على الويب) — عرض فقط
+                ForEach(memberVM.currentMemberWomenChildren, id: \.id) { woman in
+                    womanChildGridCell(woman: woman)
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(woman.firstName.isEmpty ? L10n.t("فرد", "Member") : woman.firstName)
+                }
+
                 // Add child as last grid cell
                 Button {
                     showAddChild = true
@@ -595,6 +603,72 @@ struct ProfileView: View {
             RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
                 .stroke(info.color.opacity(0.15), lineWidth: 1)
         )
+    }
+
+    /// خلية عرض لعضو من شجرة النساء (زوجة/بنت) — للقراءة فقط.
+    private func womanChildGridCell(woman: WomanMember) -> some View {
+        let accent = DS.Color.neonPink
+        return HStack(spacing: DS.Spacing.sm) {
+            // صورة أو أيقونة
+            Group {
+                if let urlStr = woman.displayImageUrl, let url = URL(string: urlStr) {
+                    CachedAsyncImage(url: url) { img in
+                        img.resizable().scaledToFill()
+                    } placeholder: {
+                        womanAvatarFallback(accent)
+                    }
+                } else {
+                    womanAvatarFallback(accent)
+                }
+            }
+            .frame(width: 44, height: 44)
+            .clipShape(Circle())
+            .overlay(Circle().strokeBorder(accent.opacity(0.25), lineWidth: 1))
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(woman.firstName.isEmpty ? L10n.t("الاسم", "Name") : woman.firstName)
+                    .font(DS.Font.caption1)
+                    .fontWeight(.bold)
+                    .foregroundColor(DS.Color.textPrimary)
+                    .lineLimit(1)
+
+                HStack(spacing: DS.Spacing.xs) {
+                    if let birth = woman.birthDate, !birth.isEmpty {
+                        Text(birth)
+                            .font(DS.Font.caption2)
+                            .foregroundColor(DS.Color.textSecondary)
+                            .lineLimit(1)
+                    }
+                    if woman.isDeceased {
+                        Text(L10n.t("متوفى", "Deceased"))
+                            .font(DS.Font.scaled(8, weight: .bold))
+                            .foregroundColor(DS.Color.textOnPrimary)
+                            .padding(.horizontal, DS.Spacing.xs)
+                            .padding(.vertical, 1)
+                            .background(DS.Color.error.opacity(0.8))
+                            .clipShape(Capsule())
+                    }
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(DS.Spacing.sm)
+        .background(DS.Color.surface)
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                .stroke(accent.opacity(0.15), lineWidth: 1)
+        )
+    }
+
+    private func womanAvatarFallback(_ accent: Color) -> some View {
+        ZStack {
+            accent.opacity(0.12)
+            Image(systemName: "person.fill")
+                .font(DS.Font.scaled(16, weight: .bold))
+                .foregroundColor(accent)
+        }
     }
 
     // MARK: - Reorder View (وضع الترتيب)
