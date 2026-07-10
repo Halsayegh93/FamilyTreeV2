@@ -34,6 +34,9 @@ struct EditProfileView: View {
     @State private var selectedPhoneCountry: KuwaitPhone.Country = KuwaitPhone.defaultCountry
     @State private var phoneNumber: String = ""
     @State private var birthDate: Date = Date()
+    /// هل يملك العضو تاريخ ميلاد فعلي (أو حدّده المستخدم الآن)؟ — نتجنّب كتابة
+    /// "اليوم" المفبرك لمن لا تاريخ له، لأن ذلك يُفعّل trigger السيرفر بلا داعٍ.
+    @State private var birthDateProvided: Bool = false
     @State private var isMarried: Bool = false
     @State private var isDeceased: Bool = false
     @State private var deathDate: Date = Date()
@@ -105,6 +108,7 @@ struct EditProfileView: View {
                                     DSDivider()
                                     modernDatePicker(label: L10n.t("تاريخ الميلاد", "Birth Date"), selection: $birthDate, icon: "calendar")
                                         .cooldownGuarded(.birthDate, cooldown: cooldown)
+                                        .onChange(of: birthDate) { _ in birthDateProvided = true }
                                     cooldownLabel(.birthDate)
 
                                     DSDivider()
@@ -122,15 +126,13 @@ struct EditProfileView: View {
                             )
 
                                     VStack(spacing: 0) {
+                                        // الحالة الاجتماعية حقل طبيعي قابل للتغيير — بلا قفل cooldown
                                         DSFormRow(icon: "heart.fill", iconColor: DS.Color.neonPink,
                                                   label: L10n.t("متزوج", "Married")) {
                                             Toggle("", isOn: $isMarried)
                                                 .labelsHidden()
                                                 .tint(DS.Color.primary)
                                         }
-                                        .cooldownGuarded(.isMarried, cooldown: cooldown)
-
-                                        cooldownLabel(.isMarried)
                                     }
                         }
                         .padding(.horizontal, DS.Spacing.lg)
@@ -667,7 +669,12 @@ struct EditProfileView: View {
         // تحميل المحطات الحياتية
         self.bioStations = member.bio ?? []
         let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"
-        if let b = member.birthDate, let date = f.date(from: b) { self.birthDate = date }
+        if let b = member.birthDate, let date = f.date(from: b) {
+            self.birthDate = date
+            self.birthDateProvided = true
+        } else {
+            self.birthDateProvided = false
+        }
         if let d = member.deathDate, let date = f.date(from: d) { self.deathDate = date }
         self.isPhoneHidden = member.isPhoneHidden ?? false
         self.email = member.email ?? ""
@@ -722,7 +729,7 @@ struct EditProfileView: View {
         if isPhoneHidden != (member.isPhoneHidden ?? false) { return true }
         if isDeceased && !(member.isDeceased ?? false) { return true }
         let oldBirthStr = member.birthDate ?? ""
-        if f.string(from: birthDate) != oldBirthStr { return true }
+        if birthDateProvided && f.string(from: birthDate) != oldBirthStr { return true }
         let trimmedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let oldEmail = (member.email ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         if trimmedEmail != oldEmail { return true }
@@ -747,8 +754,8 @@ struct EditProfileView: View {
         let newBioKey = bioStations.map { "\($0.year ?? "")|\($0.title)|\($0.details)" }.joined(separator: ";")
 
         return ChangedFields(
-            birthChanged: newBirthStr != oldBirthStr && cooldown.canEdit(.birthDate),
-            marriedChanged: isMarried != (member.isMarried ?? false) && cooldown.canEdit(.isMarried),
+            birthChanged: birthDateProvided && newBirthStr != oldBirthStr && cooldown.canEdit(.birthDate),
+            marriedChanged: isMarried != (member.isMarried ?? false),
             phoneHiddenChanged: isPhoneHidden != (member.isPhoneHidden ?? false) && cooldown.canEdit(.isPhoneHidden),
             phoneChanged: !normalizedPhone.isEmpty && (normalizedPhone != oldStoredPhone) && cooldown.canEdit(.phoneNumber),
             bioChanged: oldBioKey != newBioKey && cooldown.canEdit(.bio),
@@ -777,7 +784,7 @@ struct EditProfileView: View {
             memberId: member.id,
             fullName: fullName,
             phoneNumber: member.phoneNumber ?? "",
-            birthDate: birthDate,
+            birthDate: birthDateProvided ? birthDate : nil,
             isMarried: isMarried,
             isDeceased: member.isDeceased ?? false,
             deathDate: member.isDeceased ?? false ? deathDate : nil,
@@ -787,7 +794,7 @@ struct EditProfileView: View {
 
     private func recordCooldowns(changes: ChangedFields) {
         if changes.birthChanged { cooldown.recordEdit(.birthDate) }
-        if changes.marriedChanged { cooldown.recordEdit(.isMarried) }
+        // «متزوج» بلا cooldown — لا نسجّل قفلاً له
         if changes.phoneHiddenChanged { cooldown.recordEdit(.isPhoneHidden) }
         if changes.bioChanged { cooldown.recordEdit(.bio) }
         if changes.phoneChanged { cooldown.recordEdit(.phoneNumber) }

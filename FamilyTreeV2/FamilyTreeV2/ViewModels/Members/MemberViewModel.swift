@@ -828,7 +828,7 @@ class MemberViewModel: ObservableObject {
         memberId: UUID,
         fullName: String,
         phoneNumber: String,
-        birthDate: Date,
+        birthDate: Date?,
         isMarried: Bool,
         isDeceased: Bool,
         deathDate: Date?,
@@ -851,28 +851,55 @@ class MemberViewModel: ObservableObject {
 
         // استخراج الاسم الأول تلقائياً
         let firstName = fullName.components(separatedBy: " ").first ?? fullName
-
-        // 2. تجهيز مصفوفة البيانات وإضافة حقل الهاتف ✅
         let normalizedPhone = KuwaitPhone.normalizeForStorageFromInput(phoneNumber) ?? ""
-        var updateData: [String: AnyEncodable] = [
-            "full_name": AnyEncodable(fullName),
-            "first_name": AnyEncodable(firstName),
-            "phone_number": AnyEncodable(normalizedPhone),
-            "birth_date": AnyEncodable(DateHelper.format(birthDate)),
-            "is_married": AnyEncodable(isMarried),
-            "is_deceased": AnyEncodable(isDeceased),
-            "is_phone_hidden": AnyEncodable(isPhoneHidden)
-        ]
 
+        // التقط الحالة قبل التحديث للمقارنة
+        let oldMember = _memberById[memberId]
+
+        // 2. نكتب الحقول المتغيّرة فقط — حاسم: كتابة حقول لم تتغيّر (خصوصاً
+        //    birth_date/first_name/full_name) تُفعّل trigger مزامنة النساء على
+        //    السيرفر الذي قد يفصل الزوجة/الأبناء/الأم. تبديل «متزوج» وحده يكتب
+        //    is_married فقط (ليس ضمن مراقبة الـtrigger) → لا فقدان بيانات.
+        var updateData: [String: AnyEncodable] = [:]
+
+        if oldMember == nil || oldMember?.fullName != fullName {
+            updateData["full_name"]  = AnyEncodable(fullName)
+            updateData["first_name"] = AnyEncodable(firstName)
+        }
+        if !normalizedPhone.isEmpty, (oldMember?.phoneNumber ?? "") != normalizedPhone {
+            updateData["phone_number"] = AnyEncodable(normalizedPhone)
+        }
+        // birth_date يُكتب فقط إذا زُوّد فعلاً وتغيّر — لا نفبرك "اليوم" لمن لا تاريخ له
+        if let birthDate {
+            let newBirth = DateHelper.format(birthDate)
+            if (oldMember?.birthDate ?? "") != newBirth {
+                updateData["birth_date"] = AnyEncodable(newBirth)
+            }
+        }
+        if (oldMember?.isMarried ?? false) != isMarried {
+            updateData["is_married"] = AnyEncodable(isMarried)
+        }
+        if (oldMember?.isDeceased ?? false) != isDeceased {
+            updateData["is_deceased"] = AnyEncodable(isDeceased)
+        }
         if isDeceased, let dDate = deathDate {
-            updateData["death_date"] = AnyEncodable(DateHelper.format(dDate))
+            let newDeath = DateHelper.format(dDate)
+            if (oldMember?.deathDate ?? "") != newDeath {
+                updateData["death_date"] = AnyEncodable(newDeath)
+            }
+        }
+        if (oldMember?.isPhoneHidden ?? false) != isPhoneHidden {
+            updateData["is_phone_hidden"] = AnyEncodable(isPhoneHidden)
+        }
+
+        // لا شيء تغيّر فعلاً → لا نكتب (نتجنّب تفعيل triggers السيرفر بلا داعٍ)
+        guard !updateData.isEmpty else {
+            self.isLoading = false
+            return true
         }
 
         // تتبع المدير إذا كان يعدل بيانات عضو آخر
         updateData.merge(adminAuditFields(for: memberId)) { _, new in new }
-
-        // التقط الحالة قبل التحديث للمقارنة لاحقاً
-        let oldMember = _memberById[memberId]
 
         do {
             // 3. تنفيذ التحديث في Supabase
@@ -899,7 +926,7 @@ class MemberViewModel: ObservableObject {
             // إشعار المدراء بتفاصيل التغيير (إذا المدير عدّل عضو آخر)
             var changes: [AppNotification.NotificationDetails.ChangeEntry] = []
             if let old = oldMember {
-                let newBirth = DateHelper.format(birthDate)
+                let newBirth: String? = birthDate.map { DateHelper.format($0) }
                 let newDeath: String? = (isDeceased && deathDate != nil) ? DateHelper.format(deathDate!) : nil
                 let oldDeceased = old.isDeceased ?? false
                 let oldMarried = old.isMarried ?? false
@@ -908,10 +935,10 @@ class MemberViewModel: ObservableObject {
                 if old.fullName != fullName {
                     changes.append(.init(field: "full_name", before: old.fullName, after: fullName))
                 }
-                if (old.phoneNumber ?? "") != normalizedPhone {
+                if !normalizedPhone.isEmpty, (old.phoneNumber ?? "") != normalizedPhone {
                     changes.append(.init(field: "phone_number", before: old.phoneNumber, after: normalizedPhone))
                 }
-                if (old.birthDate ?? "") != newBirth {
+                if let newBirth, (old.birthDate ?? "") != newBirth {
                     changes.append(.init(field: "birth_date", before: old.birthDate, after: newBirth))
                 }
                 if oldMarried != isMarried {
