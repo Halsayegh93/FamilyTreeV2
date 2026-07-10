@@ -127,7 +127,6 @@ struct ProfileView: View {
             .sheet(item: $editingChild) { child in EditChildSheet(member: child).presentationDragIndicator(.visible) }
             .sheet(item: $editingFamilyMember) { entry in
                 WomanMemberEditSheet(memberVM: memberVM, entry: entry)
-                    .presentationDetents([.fraction(0.55)])
                     .presentationDragIndicator(.visible)
             }
             .onChange(of: showAddChild) { isPresented in
@@ -545,6 +544,12 @@ struct ProfileView: View {
                                 womanFamilyGridCell(entry: entry)
                             }
                             .buttonStyle(PlainButtonStyle())
+                            .overlay(alignment: .topLeading) {
+                                // أسهم ترتيب للأبناء فقط (عند وجود أكثر من ابن/ابنة)
+                                if entry.role == .child, womenChildrenList.count > 1 {
+                                    womanChildReorderControls(for: entry.member)
+                                }
+                            }
                             .accessibilityElement(children: .ignore)
                             .accessibilityLabel(entry.member.firstName.isEmpty ? L10n.t("فرد", "Member") : entry.member.firstName)
                             .accessibilityHint(L10n.t("تعديل", "Edit"))
@@ -638,6 +643,51 @@ struct ProfileView: View {
         case .wife:   return DS.Color.neonPink     // وردي
         case .child:  return DS.Color.secondary    // أخضر
         }
+    }
+
+    /// أبناء شجرة النساء بالترتيب الحالي (للترتيب).
+    private var womenChildrenList: [WomanMember] {
+        memberVM.currentMemberWomenFamily.filter { $0.role == .child }.map { $0.member }
+    }
+
+    /// نقل ابن/ابنة أعلى/أسفل في الترتيب.
+    private func moveWomanChild(_ child: WomanMember, up: Bool) {
+        var list = womenChildrenList
+        guard let idx = list.firstIndex(where: { $0.id == child.id }) else { return }
+        let target = up ? idx - 1 : idx + 1
+        guard target >= 0, target < list.count else { return }
+        list.swapAt(idx, target)
+        Task { await memberVM.reorderWomenChildren(list) }
+    }
+
+    /// أسهم أعلى/أسفل صغيرة لترتيب ابن/ابنة.
+    private func womanChildReorderControls(for child: WomanMember) -> some View {
+        let list = womenChildrenList
+        let idx = list.firstIndex(where: { $0.id == child.id }) ?? 0
+        return HStack(spacing: 3) {
+            Button { moveWomanChild(child, up: true) } label: {
+                Image(systemName: "chevron.up")
+                    .font(.system(size: 10, weight: .black))
+                    .foregroundColor(idx > 0 ? DS.Color.primary : DS.Color.textTertiary.opacity(0.4))
+                    .frame(width: 22, height: 22)
+                    .background(Circle().fill(DS.Color.surface))
+                    .overlay(Circle().strokeBorder(DS.Color.primary.opacity(0.15), lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+            .disabled(idx == 0)
+
+            Button { moveWomanChild(child, up: false) } label: {
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 10, weight: .black))
+                    .foregroundColor(idx < list.count - 1 ? DS.Color.primary : DS.Color.textTertiary.opacity(0.4))
+                    .frame(width: 22, height: 22)
+                    .background(Circle().fill(DS.Color.surface))
+                    .overlay(Circle().strokeBorder(DS.Color.primary.opacity(0.15), lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+            .disabled(idx >= list.count - 1)
+        }
+        .padding(6)
     }
 
     private func womanFamilyGridCell(entry: WomenFamilyEntry) -> some View {
@@ -859,6 +909,7 @@ struct WomanMemberEditSheet: View {
     @State private var hasBirthDate: Bool
     @State private var birthDate: Date
     @State private var isDeceased: Bool
+    @State private var selectedUIImage: UIImage? = nil
     @State private var isSaving = false
     @State private var showDeleteConfirm = false
     @State private var errorBanner: String? = nil
@@ -883,45 +934,58 @@ struct WomanMemberEditSheet: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: DS.Spacing.md) {
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: DS.Spacing.md) {
+                    // صورة — بنفس واجهة «تعديل الابن» القديمة
+                    DSProfilePhotoPicker(
+                        selectedImage: $selectedUIImage,
+                        existingURL: entry.member.displayImageUrl,
+                        enableCrop: true,
+                        cropShape: .circle,
+                        trailing: L10n.t("اختياري", "Optional"),
+                        compactEmptyState: true
+                    )
+                    .padding(.horizontal, DS.Spacing.lg)
+
                     DSCard(padding: 0) {
-                        DSSectionHeader(title: roleTitle, icon: "heart.text.square", iconColor: DS.Color.neonPink)
+                        DSSectionHeader(
+                            title: L10n.t("المعلومات الشخصية", "Personal Info"),
+                            icon: "person.text.rectangle",
+                            iconColor: DS.Color.primary
+                        )
                         VStack(spacing: 0) {
-                            DSLabeledFieldRow(icon: "textformat", iconColor: DS.Color.primary,
+                            DSLabeledFieldRow(icon: "person.fill", iconColor: DS.Color.primary,
                                               label: L10n.t("الاسم", "Name")) {
                                 TextField(L10n.t("الاسم", "Name"), text: $name)
                                     .font(DS.Font.callout)
                                     .foregroundColor(DS.Color.textPrimary)
                             }
                             DSDivider()
-                            DSLabeledFieldRow(icon: "calendar", iconColor: DS.Color.success,
-                                              label: L10n.t("تاريخ الميلاد", "Birth Date")) {
-                                Toggle("", isOn: $hasBirthDate).labelsHidden().tint(DS.Color.primary)
-                            }
-                            if hasBirthDate {
-                                DatePicker("", selection: $birthDate, displayedComponents: .date)
-                                    .datePickerStyle(.compact)
-                                    .labelsHidden()
-                                    .padding(.horizontal, DS.Spacing.lg)
-                                    .padding(.bottom, DS.Spacing.sm)
-                                    .environment(\.locale, Locale(identifier: "en"))
-                            }
+                            DSDateField(
+                                label: L10n.t("تاريخ الميلاد", "Birth Date"),
+                                date: $birthDate,
+                                range: ...Date(),
+                                labelAbove: true
+                            )
+                            .onChange(of: birthDate) { _ in hasBirthDate = true }
                             DSDivider()
-                            DSLabeledFieldRow(icon: "moon.zzz.fill", iconColor: DS.Color.error,
-                                              label: L10n.t("متوفى", "Deceased")) {
+                            DSFormRow(icon: "leaf.fill", iconColor: DS.Color.error,
+                                      label: L10n.t("متوفى", "Deceased")) {
                                 Toggle("", isOn: $isDeceased).labelsHidden().tint(DS.Color.error)
                             }
                         }
                     }
+                    .padding(.horizontal, DS.Spacing.lg)
 
                     if let errorBanner {
                         Text(errorBanner).font(DS.Font.caption1).foregroundColor(DS.Color.error)
+                            .padding(.horizontal, DS.Spacing.lg)
                     }
 
-                    DSPrimaryButton(L10n.t("حفظ", "Save"), icon: "checkmark", isLoading: isSaving) { save() }
+                    DSPrimaryButton(L10n.t("حفظ", "Save"), icon: "checkmark.circle.fill", isLoading: isSaving) { save() }
                         .disabled(!canSave)
                         .opacity(canSave ? 1 : 0.5)
+                        .padding(.horizontal, DS.Spacing.lg)
 
                     Button(role: .destructive) { showDeleteConfirm = true } label: {
                         Label(L10n.t("حذف من العائلة", "Remove from family"), systemImage: "trash")
@@ -930,11 +994,11 @@ struct WomanMemberEditSheet: View {
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, DS.Spacing.sm)
                     }
+                    .padding(.horizontal, DS.Spacing.lg)
 
                     Spacer(minLength: DS.Spacing.xxl)
                 }
-                .padding(.horizontal, DS.Spacing.lg)
-                .padding(.top, DS.Spacing.md)
+                .padding(.vertical, DS.Spacing.md)
             }
             .background(DS.Color.background.ignoresSafeArea())
             .navigationTitle(L10n.t("تعديل \(roleTitle)", "Edit \(roleTitle)"))
@@ -970,6 +1034,9 @@ struct WomanMemberEditSheet: View {
                 birthDate: hasBirthDate ? birthDate : nil,
                 isDeceased: isDeceased
             )
+            if ok, let img = selectedUIImage {
+                await memberVM.updateWomanAvatar(id: entry.member.id, image: img)
+            }
             isSaving = false
             if ok { dismiss() } else { errorBanner = memberVM.errorMessage }
         }

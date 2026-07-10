@@ -415,6 +415,51 @@ class MemberViewModel: ObservableObject {
         }
     }
 
+    /// إعادة ترتيب أبناء شجرة النساء (تحديث sort_order). ترتيب تفاؤلي محلي ثم كتابة.
+    func reorderWomenChildren(_ orderedChildren: [WomanMember]) async {
+        guard NetworkMonitor.shared.requireOnline() else { return }
+        // ترتيب محلي فوري: نعيد بناء القائمة بنفس أدوار الأم/الزوجة ثم الأبناء الجدد
+        let others = currentMemberWomenFamily.filter { $0.role != .child }
+        let reorderedChildEntries = orderedChildren.map { WomenFamilyEntry(member: $0, role: .child) }
+        currentMemberWomenFamily = others + reorderedChildEntries
+
+        for (index, child) in orderedChildren.enumerated() {
+            do {
+                try await supabase.from("women_members")
+                    .update(["sort_order": index]).eq("id", value: child.id.uuidString).execute()
+            } catch {
+                Log.error("[Women] خطأ ترتيب: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    /// رفع/تحديث صورة فرد من شجرة النساء (bucket avatars). للإدارة حسب RLS.
+    @discardableResult
+    func updateWomanAvatar(id: UUID, image: UIImage) async -> Bool {
+        guard NetworkMonitor.shared.requireOnline() else { return false }
+        let processed = await Task.detached(priority: .userInitiated) {
+            ImageProcessor.process(image, for: .avatar)
+        }.value
+        guard let data = processed else { return false }
+        let fileName = "women_\(id.uuidString).jpg"
+        do {
+            try await supabase.storage.from("avatars").upload(
+                fileName, data: data,
+                options: FileOptions(contentType: "image/jpeg", upsert: true))
+            let publicUrl = try supabase.storage.from("avatars").getPublicURL(path: fileName)
+            let busted = publicUrl.absoluteString + "?v=\(Int(Date().timeIntervalSince1970))"
+            try await supabase.from("women_members")
+                .update(["avatar_url": busted]).eq("id", value: id.uuidString).execute()
+            Log.info("[Women] رفع صورة فرد")
+            if let uid = currentUser?.id { await fetchWomenFamily(for: uid) }
+            return true
+        } catch {
+            self.errorMessage = L10n.t("تعذّر رفع الصورة.", "Failed to upload photo.")
+            Log.error("[Women] خطأ رفع صورة: \(error.localizedDescription)")
+            return false
+        }
+    }
+
     /// حذف فرد من شجرة النساء. للإدارة (owner/admin/monitor) حسب RLS.
     @discardableResult
     func deleteWomanMember(id: UUID) async -> Bool {
