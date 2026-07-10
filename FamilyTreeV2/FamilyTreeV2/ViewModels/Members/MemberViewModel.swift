@@ -388,6 +388,69 @@ class MemberViewModel: ObservableObject {
         }
     }
 
+    // MARK: - عائلة المستخدم نفسه (شجرة النساء عبر RPCs السيرفر)
+
+    /// إضافة زوجة للمستخدم نفسه (RPC add_self_wife).
+    @discardableResult
+    func addSelfWife(name: String) async -> Bool {
+        guard NetworkMonitor.shared.requireOnline(), let uid = currentUser?.id else { return false }
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return false }
+        struct P: Encodable { let p_name: String }
+        do {
+            _ = try await supabase.rpc("add_self_wife", params: P(p_name: trimmed)).execute()
+            await fetchWomenFamily(for: uid); return true
+        } catch {
+            self.errorMessage = L10n.t("تعذّر إضافة الزوجة.", "Failed to add wife.")
+            Log.error("[Women] addSelfWife: \(error.localizedDescription)"); return false
+        }
+    }
+
+    /// إضافة أمّ جديدة (زوجة للأب) للمستخدم نفسه (RPC add_self_mother).
+    @discardableResult
+    func addSelfMother(name: String) async -> Bool {
+        guard NetworkMonitor.shared.requireOnline(), let uid = currentUser?.id else { return false }
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return false }
+        struct P: Encodable { let p_name: String }
+        do {
+            _ = try await supabase.rpc("add_self_mother", params: P(p_name: trimmed)).execute()
+            await fetchWomenFamily(for: uid); return true
+        } catch {
+            self.errorMessage = L10n.t("تعذّر إضافة الأم.", "Failed to add mother.")
+            Log.error("[Women] addSelfMother: \(error.localizedDescription)"); return false
+        }
+    }
+
+    /// اختيار أمّ موجودة من زوجات الأب (RPC set_self_mother؛ nil لإزالة الاختيار).
+    @discardableResult
+    func setSelfMother(motherId: UUID?) async -> Bool {
+        guard NetworkMonitor.shared.requireOnline(), let uid = currentUser?.id else { return false }
+        struct P: Encodable { let p_mother_id: String? }
+        do {
+            _ = try await supabase.rpc("set_self_mother", params: P(p_mother_id: motherId?.uuidString)).execute()
+            await fetchWomenFamily(for: uid); return true
+        } catch {
+            self.errorMessage = L10n.t("تعذّر تعيين الأم.", "Failed to set mother.")
+            Log.error("[Women] setSelfMother: \(error.localizedDescription)"); return false
+        }
+    }
+
+    /// جلب زوجات الأب (للاختيار كأم) — women_members حيث husband_id == عقدة الأب.
+    func fetchFatherWives() async -> [WomanMember] {
+        guard let uid = currentUser?.id else { return [] }
+        do {
+            let selfRows: [WomanMember] = try await supabase.from("women_members")
+                .select().eq("id", value: uid.uuidString).limit(1).execute().value
+            guard let fatherNodeId = selfRows.first?.parentId else { return [] }
+            let wives: [WomanMember] = try await supabase.from("women_members")
+                .select().eq("husband_id", value: fatherNodeId.uuidString).execute().value
+            return wives.filter { !$0.firstName.trimmingCharacters(in: .whitespaces).isEmpty }
+        } catch {
+            Log.warning("[Women] fetchFatherWives: \(error.localizedDescription)"); return []
+        }
+    }
+
     /// تعديل فرد من شجرة النساء (اسم/تاريخ ميلاد/متوفى). للإدارة (owner/admin/monitor)
     /// حسب RLS. يُحدّث الصف ثم يُنعش عائلة المستخدم الحالي.
     @discardableResult

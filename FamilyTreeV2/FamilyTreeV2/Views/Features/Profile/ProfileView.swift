@@ -17,6 +17,13 @@ struct ProfileView: View {
     @State private var editingChild: FamilyMember? = nil
     @State private var editingFamilyMember: WomenFamilyEntry? = nil
     @State private var isReorderingChildren = false
+    // إضافة/اختيار الزوجة والأم
+    @State private var showAddWife = false
+    @State private var newWifeName = ""
+    @State private var showMotherOptions = false
+    @State private var showAddMotherName = false
+    @State private var newMotherName = ""
+    @State private var fatherWives: [WomanMember] = []
     @State private var appeared = false
     @State private var isLoadingChildren = true
 
@@ -24,6 +31,8 @@ struct ProfileView: View {
 
     /// عائلة شجرة النساء (الأم/الزوجة/الأبناء) تظهر فقط عند «متزوج».
     private var isCurrentUserMarried: Bool { authVM.currentUser?.isMarried ?? false }
+    private var hasWife: Bool { memberVM.currentMemberWomenFamily.contains { $0.role == .wife } }
+    private var hasMother: Bool { memberVM.currentMemberWomenFamily.contains { $0.role == .mother } }
 
     var body: some View {
         NavigationStack {
@@ -128,6 +137,37 @@ struct ProfileView: View {
             .sheet(item: $editingFamilyMember) { entry in
                 WomanMemberEditSheet(memberVM: memberVM, entry: entry)
                     .presentationDragIndicator(.visible)
+            }
+            .alert(L10n.t("إضافة زوجة", "Add Wife"), isPresented: $showAddWife) {
+                TextField(L10n.t("اسم الزوجة", "Wife's name"), text: $newWifeName)
+                Button(L10n.t("إضافة", "Add")) {
+                    let n = newWifeName
+                    Task { await memberVM.addSelfWife(name: n) }
+                }
+                Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
+            }
+            .confirmationDialog(L10n.t("الأم", "Mother"), isPresented: $showMotherOptions, titleVisibility: .visible) {
+                ForEach(fatherWives) { w in
+                    Button(w.firstName.isEmpty ? L10n.t("زوجة الأب", "Father's wife") : w.firstName) {
+                        Task { await memberVM.setSelfMother(motherId: w.id) }
+                    }
+                }
+                Button(L10n.t("إضافة أم جديدة", "Add new mother")) {
+                    newMotherName = ""; showAddMotherName = true
+                }
+                Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
+            } message: {
+                Text(fatherWives.isEmpty
+                     ? L10n.t("لا زوجات مسجّلة للأب — أضف أمّاً جديدة", "No registered father's wives — add a new mother")
+                     : L10n.t("اختر الأم من زوجات الأب، أو أضف جديدة", "Pick the mother from father's wives, or add new"))
+            }
+            .alert(L10n.t("إضافة أم", "Add Mother"), isPresented: $showAddMotherName) {
+                TextField(L10n.t("اسم الأم", "Mother's name"), text: $newMotherName)
+                Button(L10n.t("إضافة", "Add")) {
+                    let n = newMotherName
+                    Task { await memberVM.addSelfMother(name: n) }
+                }
+                Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
             }
             .onChange(of: showAddChild) { isPresented in
                 guard !isPresented, let currentUser = user else { return }
@@ -469,7 +509,7 @@ struct ProfileView: View {
 
                     Spacer()
 
-                    if memberVM.currentMemberChildren.count > 1 {
+                    if memberVM.currentMemberChildren.count > 1 || womenChildrenList.count > 1 {
                         Button {
                             withAnimation(DS.Anim.snappy) {
                                 isReorderingChildren.toggle()
@@ -502,11 +542,11 @@ struct ProfileView: View {
                     }
                     .padding(DS.Spacing.md)
                     .transition(.opacity)
-                } else if isReorderingChildren {
-                    // وضع الترتيب — قائمة عمودية مع أسهم
+                } else if isReorderingChildren && !memberVM.currentMemberChildren.isEmpty {
+                    // وضع ترتيب أبناء الشجرة العامة (قائمة عمودية بأسهم)
                     childrenReorderView
                 } else {
-                    // الوضع العادي — شبكة
+                    // الوضع العادي / ترتيب أبناء شجرة النساء (شبكة مع أسهم على الخلايا)
                     childrenGridView
                         .transition(.opacity)
                 }
@@ -517,6 +557,30 @@ struct ProfileView: View {
     }
 
     // MARK: - Grid View (الوضع العادي)
+    /// خلية إجراء إضافة (زوجة/أم) بنفس شكل خلية «إضافة ابن».
+    private func addFamilyActionCell(title: String, icon: String, color: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: DS.Spacing.sm) {
+                Image(systemName: icon)
+                    .font(DS.Font.scaled(15, weight: .bold))
+                    .foregroundColor(color)
+                    .frame(width: 36, height: 36)
+                    .background(color.opacity(0.12))
+                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
+                Text(title).font(DS.Font.caption1).fontWeight(.bold).foregroundColor(color).lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(DS.Spacing.sm)
+            .background(DS.Color.surface)
+            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                    .stroke(color.opacity(0.3), style: StrokeStyle(lineWidth: 1, dash: [5]))
+            )
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+
     private var childrenGridView: some View {
         VStack(spacing: 0) {
             let columns = [GridItem(.flexible()), GridItem(.flexible())]
@@ -545,8 +609,8 @@ struct ProfileView: View {
                             }
                             .buttonStyle(PlainButtonStyle())
                             .overlay(alignment: .topLeading) {
-                                // أسهم ترتيب للأبناء فقط (عند وجود أكثر من ابن/ابنة)
-                                if entry.role == .child, womenChildrenList.count > 1 {
+                                // أسهم الترتيب — فقط في وضع الترتيب (الزر بالأعلى) وللأبناء
+                                if isReorderingChildren, entry.role == .child, womenChildrenList.count > 1 {
                                     womanChildReorderControls(for: entry.member)
                                 }
                             }
@@ -589,6 +653,20 @@ struct ProfileView: View {
                     )
                 }
                 .buttonStyle(PlainButtonStyle())
+
+                // إضافة زوجة / أم — للمخوّلين عند عدم وجودهما
+                if isCurrentUserMarried, authVM.canModerate, !hasWife {
+                    addFamilyActionCell(title: L10n.t("إضافة زوجة", "Add Wife"),
+                                        icon: "heart.fill", color: DS.Color.neonPink) {
+                        newWifeName = ""; showAddWife = true
+                    }
+                }
+                if isCurrentUserMarried, authVM.canModerate, !hasMother {
+                    addFamilyActionCell(title: L10n.t("إضافة/اختيار الأم", "Add/Pick Mother"),
+                                        icon: "person.fill", color: DS.Color.accent) {
+                        Task { fatherWives = await memberVM.fetchFatherWives(); showMotherOptions = true }
+                    }
+                }
             }
             .padding(DS.Spacing.md)
         }
@@ -636,15 +714,6 @@ struct ProfileView: View {
         )
     }
 
-    /// خلية عرض لعضو من شجرة النساء (زوجة/بنت) — للقراءة فقط.
-    private func womanRoleAccent(_ role: WomenFamilyEntry.Role) -> Color {
-        switch role {
-        case .mother: return DS.Color.accent      // إنديغو
-        case .wife:   return DS.Color.neonPink     // وردي
-        case .child:  return DS.Color.secondary    // أخضر
-        }
-    }
-
     /// أبناء شجرة النساء بالترتيب الحالي (للترتيب).
     private var womenChildrenList: [WomanMember] {
         memberVM.currentMemberWomenFamily.filter { $0.role == .child }.map { $0.member }
@@ -690,50 +759,46 @@ struct ProfileView: View {
         .padding(6)
     }
 
+    // خلية فرد «عائلتي» — بنفس شكل خلايا الأبناء القديمة (صورة + اسم)، دور رمادي خفيف.
     private func womanFamilyGridCell(entry: WomenFamilyEntry) -> some View {
         let woman = entry.member
-        let accent = womanRoleAccent(entry.role)
         return HStack(spacing: DS.Spacing.sm) {
-            // صورة أو أيقونة
             Group {
                 if let urlStr = woman.displayImageUrl, let url = URL(string: urlStr) {
                     CachedAsyncImage(url: url) { img in
                         img.resizable().scaledToFill()
-                    } placeholder: {
-                        womanAvatarFallback(accent)
-                    }
+                    } placeholder: { womanAvatarFallback }
                 } else {
-                    womanAvatarFallback(accent)
+                    womanAvatarFallback
                 }
             }
             .frame(width: 44, height: 44)
             .clipShape(Circle())
-            .overlay(Circle().strokeBorder(accent.opacity(0.25), lineWidth: 1))
+            .overlay(Circle().strokeBorder(DS.Color.primary.opacity(0.12), lineWidth: 1))
 
             VStack(alignment: .leading, spacing: 2) {
-                // بشارة الدور (الأم/الزوجة/ابن)
-                Text(L10n.t(entry.role.label, entry.role.labelEn))
-                    .font(DS.Font.scaled(8, weight: .black))
-                    .foregroundColor(accent)
-                    .padding(.horizontal, DS.Spacing.xs)
-                    .padding(.vertical, 1)
-                    .background(accent.opacity(0.12))
-                    .clipShape(Capsule())
-
                 Text(woman.firstName.isEmpty ? L10n.t("الاسم", "Name") : woman.firstName)
                     .font(DS.Font.caption1)
                     .fontWeight(.bold)
                     .foregroundColor(DS.Color.textPrimary)
                     .lineLimit(1)
 
-                if woman.isDeceased {
-                    Text(L10n.t("متوفى", "Deceased"))
-                        .font(DS.Font.scaled(8, weight: .bold))
-                        .foregroundColor(DS.Color.textOnPrimary)
-                        .padding(.horizontal, DS.Spacing.xs)
-                        .padding(.vertical, 1)
-                        .background(DS.Color.error.opacity(0.8))
-                        .clipShape(Capsule())
+                HStack(spacing: DS.Spacing.xs) {
+                    // الدور نص رمادي خفيف بدل البشارة الملوّنة
+                    Text(L10n.t(entry.role.label, entry.role.labelEn))
+                        .font(DS.Font.caption2)
+                        .foregroundColor(DS.Color.textSecondary)
+                        .lineLimit(1)
+                    if let b = woman.birthDate, !b.isEmpty {
+                        Text(b).font(DS.Font.caption2).foregroundColor(DS.Color.textTertiary).lineLimit(1)
+                    }
+                    if woman.isDeceased {
+                        Text(L10n.t("متوفى", "Deceased"))
+                            .font(DS.Font.scaled(8, weight: .bold))
+                            .foregroundColor(DS.Color.textOnPrimary)
+                            .padding(.horizontal, DS.Spacing.xs).padding(.vertical, 1)
+                            .background(DS.Color.error.opacity(0.8)).clipShape(Capsule())
+                    }
                 }
             }
             Spacer(minLength: 0)
@@ -744,16 +809,16 @@ struct ProfileView: View {
         .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                .stroke(accent.opacity(0.20), lineWidth: 1)
+                .stroke(DS.Color.primary.opacity(0.12), lineWidth: 1)
         )
     }
 
-    private func womanAvatarFallback(_ accent: Color) -> some View {
+    private var womanAvatarFallback: some View {
         ZStack {
-            accent.opacity(0.12)
+            DS.Color.primary.opacity(0.08)
             Image(systemName: "person.fill")
                 .font(DS.Font.scaled(16, weight: .bold))
-                .foregroundColor(accent)
+                .foregroundColor(DS.Color.primary.opacity(0.6))
         }
     }
 
