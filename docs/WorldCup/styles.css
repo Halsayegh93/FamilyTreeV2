@@ -413,7 +413,7 @@ body { direction: rtl; font-size: 15px; line-height: 1.65; }
 
 .mfilter {
   display: flex; gap: 6px; margin: 4px 0 16px;
-  overflow-x: auto; -webkit-overflow-scrolling: touch;
+  justify-content: center; flex-wrap: wrap;
   padding: 2px; scrollbar-width: none;
 }
 .mfilter::-webkit-scrollbar { display: none; }
