@@ -402,7 +402,8 @@
       return first != null && Date.now() >= first;   // ربع النهائي انطلق
     }
 
-    // the losing side of a finished R16 match — knocked out, no longer pickable
+    // the losing side of ANY finished knockout match — knocked out of the cup,
+    // so no longer a valid champion pick (penalty-shootout losers included)
     function r16LoserOf(m) {
       if (!m.finished) return null;
       const d = Math.sign((m.home_score ?? 0) - (m.away_score ?? 0));
@@ -416,7 +417,9 @@
     function championCard() {
       if (championPicks === null) return '';   // table not created yet
       const r16 = matches.filter((x) => x.round === 'R16').sort((a, b) => a.id - b.id);
-      const out = new Set(r16.map(r16LoserOf).filter(Boolean));   // eliminated teams
+      // eliminated = the loser of ANY finished knockout match (R16, QF, SF …),
+      // so a team that goes out is removed from the champion list right away
+      const out = new Set(matches.map(r16LoserOf).filter(Boolean));
       const teams = [], seen = new Set();
       for (const m of r16) {
         for (const side of ['home', 'away']) {
