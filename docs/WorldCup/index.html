@@ -501,10 +501,10 @@
       const dayPassed = (m) => m.kickoff && new Date(m.kickoff).getTime() < startMs;
 
       // filters: status (قادمة/منتهية) + by round
-      // R32 is over — its chip is gone from the bar; the matches still show
+      // Finished rounds (R32, R16) have no chip here; their matches still show
       // under "المباريات السابقة" (the past filter lists every finished match).
       const ROUND_FILTERS = [
-        ['R16', 'دور 16'], ['QF', 'ربع'], ['SF', 'نص'], ['FINAL', 'النهائي'],
+        ['QF', 'ربع'], ['SF', 'نص'], ['FINAL', 'النهائي'],
       ];
       const roundCodes = ROUND_FILTERS.map(([c]) => c);
       const chip = (f, label) =>
