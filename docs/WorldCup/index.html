@@ -503,20 +503,12 @@
       const startMs = t0.getTime();
       const dayPassed = (m) => m.kickoff && new Date(m.kickoff).getTime() < startMs;
 
-      // filters: status (قادمة/منتهية) + by round
-      // Finished rounds (R32, R16) have no chip here; their matches still show
-      // under "المباريات السابقة" (the past filter lists every finished match).
-      const ROUND_FILTERS = [
-        ['QF', 'ربع'], ['SF', 'نص'], ['FINAL', 'النهائي'],
-      ];
-      const roundCodes = ROUND_FILTERS.map(([c]) => c);
-      const chip = (f, label) =>
-        `<button data-f="${f}" class="${matchFilter === f ? 'active' : ''}">${label}</button>`;
-      const filterBar = `<div class="mfilter">
-        ${chip('upcoming', 'القادمة')}
-        ${ROUND_FILTERS.map(([c, l]) => chip(c, l)).join('')}
-      </div>
-      <button class="past-btn ${matchFilter === 'past' ? 'active' : ''}" data-f="past">🏁 المباريات السابقة</button>`;
+      // No per-round filter chips: just two views — القادمة (default) and
+      // المباريات السابقة — flipped by a single toggle button.
+      const showingPast = matchFilter === 'past';
+      const filterBar =
+        `<button class="past-btn ${showingPast ? 'active' : ''}" data-f="${showingPast ? 'upcoming' : 'past'}">`
+        + `${showingPast ? '⚽️ المباريات القادمة' : '🏁 المباريات السابقة'}</button>`;
       const wireFilter = () => {
         viewMatches.querySelectorAll('[data-f]').forEach((b) => {
           b.onclick = () => { matchFilter = b.dataset.f; renderMatches(); };
@@ -524,12 +516,8 @@
       };
 
       let list;
-      if (matchFilter === 'past') {   // finished matches only
+      if (showingPast) {   // finished matches only
         list = matches.filter((m) => m.finished);
-      } else if (roundCodes.includes(matchFilter)) {
-        list = matches.filter((m) => matchFilter === 'FINAL'
-          ? (m.round === 'FINAL' || m.round === '3RD')
-          : m.round === matchFilter);
       } else { // القادمة: live + every upcoming match through the final
         list = matches.filter((m) => {
           if (m.finished) return false;
@@ -540,14 +528,12 @@
       }
 
       // champion pick sits at the top of the "القادمة" view
-      const champHTML = matchFilter === 'upcoming' ? championCard() : '';
+      const champHTML = showingPast ? '' : championCard();
 
       if (!list.length) {
-        const emptyMsg = matchFilter === 'past'
+        const emptyMsg = showingPast
           ? 'ما في مباريات سابقة بعد ⚽️'
-          : roundCodes.includes(matchFilter)
-            ? 'مباريات هذا الدور ما تحددت بعد ⚽️'
-            : 'ما في مباريات قادمة حالياً ⚽️';
+          : 'ما في مباريات قادمة حالياً ⚽️';
         viewMatches.innerHTML = filterBar + champHTML + `<div class="empty">${emptyMsg}</div>`;
         wireFilter();
         wireChampion();
