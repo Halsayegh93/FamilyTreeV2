@@ -23,8 +23,26 @@ async function client() {
   return _client;
 }
 
+// Active tournament (multi-tournament support). Everything below reads/writes
+// scoped to this id; it defaults to the World Cup so old links keep working.
+let currentTournament = 'wc26';
+export function setTournament(id) { if (id) currentTournament = id; }
+export function getTournament() { return currentTournament; }
+
+// The list of tournaments to offer in the picker (active ones, ordered).
+export async function loadTournaments() {
+  if (DEMO) return [{ id: 'wc26', name: 'كأس العالم', short_name: 'كأس العالم', format: 'knockout', active: true, sort: 1 }];
+  const sb = await client();
+  const { data, error } = await sb
+    .from('wc_tournaments').select('*').eq('active', true).order('sort', { ascending: true });
+  if (error || !data || !data.length)
+    return [{ id: 'wc26', name: 'كأس العالم', short_name: 'كأس العالم', format: 'knockout' }];
+  return data;
+}
+
 // Round metadata (Arabic labels + display order) ------------------------------
 export const ROUNDS = {
+  GROUP: { label: 'دور المجموعات',       order: 0 },
   R32:   { label: 'دور الـ32',           order: 1 },
   R16:   { label: 'دور الـ16',           order: 2 },
   QF:    { label: 'ربع النهائي',         order: 3 },
@@ -154,6 +172,7 @@ export async function loadMatches() {
   const { data, error } = await sb
     .from('wc_matches')
     .select('*')
+    .eq('tournament_id', currentTournament)
     .order('id', { ascending: true });
   if (error) throw error;
   return data || [];
@@ -164,7 +183,8 @@ export async function loadPredictions() {
   const sb = await client();
   const { data, error } = await sb
     .from('wc_predictions')
-    .select('*');
+    .select('*')
+    .eq('tournament_id', currentTournament);
   if (error) throw error;
   return data || [];
 }
@@ -178,6 +198,7 @@ export async function loadPredictionHistory() {
   const { data, error } = await sb
     .from('wc_prediction_history')
     .select('*')
+    .eq('tournament_id', currentTournament)
     .order('changed_at', { ascending: true });
   if (error) return null;   // table not created yet -> feature disabled
   return data || [];
@@ -189,7 +210,8 @@ export async function loadMaintenance() {
   if (DEMO) return false;
   const sb = await client();
   const { data, error } = await sb
-    .from('wc_settings').select('value').eq('key', 'maintenance').maybeSingle();
+    .from('wc_settings').select('value')
+    .eq('tournament_id', currentTournament).eq('key', 'maintenance').maybeSingle();
   if (error) return false;
   return !!data && data.value === 'on';
 }
@@ -197,7 +219,7 @@ export async function loadMaintenance() {
 export async function adminSetMaintenance(on, pin) {
   if (DEMO) { if (pin !== '1993') throw new Error('BAD_PIN'); return on ? 'on' : 'off'; }
   const sb = await client();
-  const { data, error } = await sb.rpc('wc_admin_set_maintenance', { p_on: on, p_pin: pin });
+  const { data, error } = await sb.rpc('wc_admin_set_maintenance', { p_on: on, p_pin: pin, p_tournament: currentTournament });
   if (error) throw error;
   return data;
 }
@@ -210,7 +232,8 @@ export async function loadRevealFinals() {
   if (DEMO) return true;
   const sb = await client();
   const { data, error } = await sb
-    .from('wc_settings').select('value').eq('key', 'reveal_finals').maybeSingle();
+    .from('wc_settings').select('value')
+    .eq('tournament_id', currentTournament).eq('key', 'reveal_finals').maybeSingle();
   if (error || !data) return true;   // switch not set up -> nothing hidden
   return data.value === 'on';
 }
@@ -218,7 +241,7 @@ export async function loadRevealFinals() {
 export async function adminSetRevealFinals(on, pin) {
   if (DEMO) { if (pin !== '1993') throw new Error('BAD_PIN'); return on ? 'on' : 'off'; }
   const sb = await client();
-  const { data, error } = await sb.rpc('wc_admin_set_reveal_finals', { p_on: on, p_pin: pin });
+  const { data, error } = await sb.rpc('wc_admin_set_reveal_finals', { p_on: on, p_pin: pin, p_tournament: currentTournament });
   if (error) throw error;
   return data;
 }
@@ -254,7 +277,8 @@ export function boardHiddenNow(ms, reveal) {
 export async function loadChampionPicks() {
   if (DEMO) return [];
   const sb = await client();
-  const { data, error } = await sb.from('wc_champion_picks').select('*');
+  const { data, error } = await sb.from('wc_champion_picks').select('*')
+    .eq('tournament_id', currentTournament);
   if (error) return null;
   return data || [];
 }
@@ -262,7 +286,7 @@ export async function loadChampionPicks() {
 export async function submitChampion(name, team) {
   if (DEMO) throw new Error('CHAMPION_LOCKED');
   const sb = await client();
-  const { data, error } = await sb.rpc('wc_submit_champion', { p_name: name, p_team: team });
+  const { data, error } = await sb.rpc('wc_submit_champion', { p_name: name, p_team: team, p_tournament: currentTournament });
   if (error) throw error;
   return data;
 }
@@ -271,7 +295,7 @@ export async function submitChampion(name, team) {
 export async function adminSetChampion(name, team, pin) {
   if (DEMO) { if (pin !== '1993') throw new Error('BAD_PIN'); return team; }
   const sb = await client();
-  const { data, error } = await sb.rpc('wc_admin_set_champion', { p_name: name, p_team: team, p_pin: pin });
+  const { data, error } = await sb.rpc('wc_admin_set_champion', { p_name: name, p_team: team, p_pin: pin, p_tournament: currentTournament });
   if (error) throw error;
   return data;
 }
@@ -280,7 +304,7 @@ export async function adminSetChampion(name, team, pin) {
 export async function adminDeleteChampion(name, pin) {
   if (DEMO) { if (pin !== '1993') throw new Error('BAD_PIN'); return 0; }
   const sb = await client();
-  const { data, error } = await sb.rpc('wc_admin_delete_champion', { p_name: name, p_pin: pin });
+  const { data, error } = await sb.rpc('wc_admin_delete_champion', { p_name: name, p_pin: pin, p_tournament: currentTournament });
   if (error) throw error;
   return data;
 }
@@ -292,6 +316,7 @@ export async function loadMyPredictions(name) {
   const { data, error } = await sb
     .from('wc_predictions')
     .select('*')
+    .eq('tournament_id', currentTournament)
     .eq('player_name', name);
   if (error) throw error;
   return data || [];
@@ -368,7 +393,7 @@ export async function adminReset(what, pin) {
     return demo.resetWhat(what);
   }
   const sb = await client();
-  const { data, error } = await sb.rpc('wc_admin_reset', { p_pin: pin, p_what: what });
+  const { data, error } = await sb.rpc('wc_admin_reset', { p_pin: pin, p_what: what, p_tournament: currentTournament });
   if (error) throw error;
   return data;
 }
@@ -408,7 +433,7 @@ export async function adminDeletePlayer(name, pin) {
     return demo.deletePlayer(name);
   }
   const sb = await client();
-  const { data, error } = await sb.rpc('wc_admin_delete_player', { p_name: name, p_pin: pin });
+  const { data, error } = await sb.rpc('wc_admin_delete_player', { p_name: name, p_pin: pin, p_tournament: currentTournament });
   if (error) throw error;
   return data;
 }
@@ -525,6 +550,44 @@ export function buildLeaderboard(matches, predictions, championPicks = []) {
   return [...players.values()].sort(
     (a, b) => b.points - a.points || b.correct - a.correct || a.name.localeCompare(b.name, 'ar'),
   );
+}
+
+// Group-stage standings, computed on the client from the group matches --------
+// Returns [{ group:'A', rows:[{team, flag, P, W, D, L, GF, GA, GD, pts}, ...] }]
+// ordered by group label. Only matches with a group_label count; stats come from
+// finished matches, but every team that appears in a group is listed.
+export function buildGroups(matches) {
+  const groups = new Map();   // label -> Map(team -> row)
+  const blank = (team, flag) => ({ team, flag, P: 0, W: 0, D: 0, L: 0, GF: 0, GA: 0, GD: 0, pts: 0 });
+
+  for (const m of matches || []) {
+    const g = m.group_label;
+    if (!g) continue;
+    if (!groups.has(g)) groups.set(g, new Map());
+    const tbl = groups.get(g);
+    for (const side of ['home', 'away']) {
+      const t = m[side + '_team'];
+      if (t && !tbl.has(t)) tbl.set(t, blank(t, m[side + '_flag']));
+    }
+    if (!m.finished || m.home_score == null || m.away_score == null) continue;
+    const h = tbl.get(m.home_team), a = tbl.get(m.away_team);
+    if (!h || !a) continue;
+    h.P++; a.P++;
+    h.GF += m.home_score; h.GA += m.away_score;
+    a.GF += m.away_score; a.GA += m.home_score;
+    if (m.home_score > m.away_score) { h.W++; a.L++; h.pts += 3; }
+    else if (m.home_score < m.away_score) { a.W++; h.L++; a.pts += 3; }
+    else { h.D++; a.D++; h.pts++; a.pts++; }
+  }
+
+  const out = [];
+  for (const [group, tbl] of [...groups.entries()].sort((x, y) => x[0].localeCompare(y[0]))) {
+    const rows = [...tbl.values()];
+    rows.forEach((r) => { r.GD = r.GF - r.GA; });
+    rows.sort((a, b) => b.pts - a.pts || b.GD - a.GD || b.GF - a.GF || a.team.localeCompare(b.team, 'ar'));
+    out.push({ group, rows });
+  }
+  return out;
 }
 
 // Friendly Arabic error messages for RPC failures -----------------------------

@@ -26,6 +26,27 @@
     .pred-when[open] .pr-when-hint { display: none; }
     .pr-when-detail { margin: 2px 0 6px; padding-inline-start: 26px; font-size: 12px;
       font-weight: 700; color: var(--primary); white-space: nowrap; }
+    /* tournament picker */
+    .tsel-bar { display: flex; align-items: center; gap: 10px; margin: 0 0 12px;
+      padding: 10px 14px; background: rgba(43,122,159,.08);
+      border: 1px solid rgba(43,122,159,.22); border-radius: 14px; }
+    .tsel-label { font-weight: 800; color: var(--primary); font-size: 14px; flex-shrink: 0; }
+    .tsel { flex: 1; min-width: 0; font-family: inherit; font-weight: 700; font-size: 15px;
+      color: var(--ink, #1a1a1a); background: #fff; border: 1px solid rgba(43,122,159,.35);
+      border-radius: 10px; padding: 8px 12px; cursor: pointer; }
+    /* group standings tables */
+    .grp-card { margin-bottom: 14px; }
+    .grp-title { font-weight: 900; color: var(--primary); font-size: 16px; margin: 0 0 8px; }
+    .grp-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .grp-table th, .grp-table td { padding: 7px 6px; text-align: center; white-space: nowrap; }
+    .grp-table th { color: var(--muted, #6b7280); font-weight: 700; font-size: 11px;
+      border-bottom: 1px solid rgba(0,0,0,.08); }
+    .grp-table td.grp-team { text-align: start; font-weight: 800; display: flex;
+      align-items: center; gap: 7px; }
+    .grp-table tbody tr { border-bottom: 1px solid rgba(0,0,0,.05); }
+    .grp-table tbody tr.grp-qualify { background: rgba(47,92,62,.08); }
+    .grp-pts { font-weight: 900; color: var(--primary); }
+    .grp-legend { font-size: 11px; color: var(--muted, #6b7280); margin-top: 4px; }
   </style>
 </head>
 <body>
@@ -39,8 +60,13 @@
         <span class="emblem-trophy">🏆</span>
         <span class="emblem-26">26</span>
       </div>
-      <h1>جماهير مباريات كأس العالم <span class="gold">الرميثية</span></h1>
-      <p>من دور الـ32 إلى النهائي — توقّع، واجمع النقاط</p>
+      <h1>جماهير مباريات <span id="hero-tname">كأس العالم</span> <span class="gold">الرميثية</span></h1>
+      <p id="hero-sub">من دور الـ32 إلى النهائي — توقّع، واجمع النقاط</p>
+    </div>
+
+    <div id="tsel-bar" class="tsel-bar" style="display:none">
+      <span class="tsel-label">🏆 البطولة</span>
+      <select id="tsel" class="tsel"></select>
     </div>
 
     <div class="namebar">
@@ -51,11 +77,13 @@
 
     <div class="tabs">
       <button id="tab-matches" class="active">المباريات</button>
+      <button id="tab-groups" style="display:none">المجموعات</button>
       <button id="tab-board">الترتيب</button>
       <button id="tab-rules">القوانين</button>
     </div>
 
     <div id="view-matches"></div>
+    <div id="view-groups" style="display:none"></div>
     <div id="view-board" style="display:none"></div>
     <div id="view-rules" style="display:none"></div>
   </div>
@@ -69,7 +97,8 @@
       scoreRow, isLocked, roundLabel, matchDay, flagHTML, ROUNDS, friendlyError, POINTS, watch,
       loadChampionPicks, submitChampion, loadMaintenance,
       loadRevealFinals, maskHiddenFinals, boardHiddenNow,
-    } from './app.js?v=32';
+      setTournament, loadTournaments, buildGroups,
+    } from './app.js?v=33';
 
     const $ = (s, r = document) => r.querySelector(s);
     const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) =>
@@ -78,9 +107,16 @@
     const playerEl = $('#player');
     const confirmBtn = $('#confirm-name');
     const viewMatches = $('#view-matches');
+    const viewGroups = $('#view-groups');
     const viewBoard = $('#view-board');
     const viewRules = $('#view-rules');
+    const tselBar = $('#tsel-bar');
+    const tselEl = $('#tsel');
+    const tabGroupsBtn = $('#tab-groups');
 
+    let tournaments = [];
+    let activeTournament = localStorage.getItem('wc_tournament') || 'wc26';
+    let activeFormat = 'knockout';   // 'knockout' | 'groups' — drives the groups tab
     let matches = [];
     let myPreds = new Map();   // match_id -> {home, away}
     let allPreds = [];
@@ -145,11 +181,11 @@
 
     // ----- tabs -----
     const tabBtns = {
-      matches: $('#tab-matches'),
+      matches: $('#tab-matches'), groups: tabGroupsBtn,
       board: $('#tab-board'), rules: $('#tab-rules'),
     };
     const tabViews = {
-      matches: viewMatches, board: viewBoard, rules: viewRules,
+      matches: viewMatches, groups: viewGroups, board: viewBoard, rules: viewRules,
     };
     function switchTab(which) {
       for (const k in tabViews) {
@@ -157,6 +193,7 @@
         tabBtns[k].classList.toggle('active', k === which);
       }
       if (which === 'board') renderBoard();
+      else if (which === 'groups') renderGroups();
     }
     for (const k in tabBtns) tabBtns[k].onclick = () => switchTab(k);
 
@@ -851,12 +888,85 @@
         return;
       }
       if (viewBoard.style.display !== 'none') renderBoard();
+      else if (viewGroups.style.display !== 'none') renderGroups();
       else if (viewRules.style.display !== 'none') renderRules();
       else if (!isEditing()) renderMatches();
     }
 
+    // ----- group-stage standings (computed on the client) -----
+    function renderGroups() {
+      if (maintenance) { viewGroups.innerHTML = MAINT_HTML; return; }
+      const groups = buildGroups(matches);
+      if (!groups.length) {
+        viewGroups.innerHTML = `<div class="empty">ما تحددت المجموعات بعد ⚽️</div>`;
+        return;
+      }
+      viewGroups.innerHTML = groups.map(({ group, rows }) => `
+        <div class="card grp-card">
+          <div class="grp-title">المجموعة ${esc(group)}</div>
+          <table class="grp-table">
+            <thead><tr>
+              <th style="text-align:start">الفريق</th>
+              <th>لعب</th><th>ف</th><th>ت</th><th>خ</th><th>له</th><th>عليه</th><th>±</th><th>نقاط</th>
+            </tr></thead>
+            <tbody>
+              ${rows.map((r, i) => `
+                <tr class="${i < 2 ? 'grp-qualify' : ''}">
+                  <td class="grp-team">${flagHTML(r.flag)}<span>${esc(r.team)}</span></td>
+                  <td>${r.P}</td><td>${r.W}</td><td>${r.D}</td><td>${r.L}</td>
+                  <td>${r.GF}</td><td>${r.GA}</td><td>${r.GD > 0 ? '+' : ''}${r.GD}</td>
+                  <td class="grp-pts">${r.pts}</td>
+                </tr>`).join('')}
+            </tbody>
+          </table>
+          <div class="grp-legend">🟢 أول فريقين يتأهلون لنصف النهائي</div>
+        </div>`).join('');
+    }
+
+    // ----- tournament picker -----
+    function applyActiveTournament(id) {
+      activeTournament = id;
+      localStorage.setItem('wc_tournament', id);
+      setTournament(id);
+      const t = tournaments.find((x) => x.id === id);
+      activeFormat = t ? t.format : 'knockout';
+      // the groups tab only exists for group-stage tournaments
+      tabGroupsBtn.style.display = activeFormat === 'groups' ? '' : 'none';
+      if (activeFormat !== 'groups' && viewGroups.style.display !== 'none') switchTab('matches');
+      // hero reflects the chosen tournament
+      const tn = $('#hero-tname'), ts = $('#hero-sub');
+      if (t && tn) tn.textContent = t.name;
+      if (ts) ts.textContent = id === 'wc26'
+        ? 'من دور الـ32 إلى النهائي — توقّع، واجمع النقاط'
+        : (activeFormat === 'groups'
+            ? 'من دور المجموعات إلى النهائي — توقّع، واجمع النقاط'
+            : 'من الأدوار الإقصائية إلى النهائي — توقّع، واجمع النقاط');
+    }
+
+    async function initTournaments() {
+      try { tournaments = await loadTournaments(); }
+      catch (_) { tournaments = [{ id: 'wc26', name: 'كأس العالم', format: 'knockout' }]; }
+      if (!tournaments.find((t) => t.id === activeTournament))
+        activeTournament = (tournaments[0] && tournaments[0].id) || 'wc26';
+      tselEl.innerHTML = tournaments
+        .map((t) => `<option value="${esc(t.id)}">${esc(t.name)}</option>`).join('');
+      tselEl.value = activeTournament;
+      tselBar.style.display = tournaments.length > 1 ? '' : 'none';
+      applyActiveTournament(activeTournament);
+      tselEl.onchange = async () => {
+        applyActiveTournament(tselEl.value);
+        matchFilter = 'upcoming';
+        lastSig = '';
+        await loadAll();
+        renderRules();
+        if (viewBoard.style.display !== 'none') renderBoard();
+        else if (viewGroups.style.display !== 'none') renderGroups();
+        else renderMatches();
+      };
+    }
+
     renderRules();
-    loadAll().then(() => {
+    initTournaments().then(loadAll).then(() => {
       lastSig = JSON.stringify([matches, allPreds]) + '|' + playerEl.value.trim() + '|' + phaseStr(matches);
       // re-render with the loaded maintenance state (covers a paused site at boot)
       renderRules();

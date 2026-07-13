@@ -31,6 +31,10 @@
     </div>
 
     <div id="panel" style="display:none">
+      <div id="tsel-bar" style="display:none;align-items:center;gap:10px;margin-bottom:16px;padding:10px 14px;background:rgba(43,122,159,.08);border:1px solid rgba(43,122,159,.22);border-radius:14px">
+        <span style="font-weight:800;color:var(--primary);font-size:14px;flex-shrink:0">🏆 البطولة</span>
+        <select id="tsel" style="flex:1;min-width:0;font-family:inherit;font-weight:700;font-size:15px;padding:8px 12px;border-radius:10px;border:1px solid rgba(43,122,159,.35);background:#fff"></select>
+      </div>
       <!-- quick navigation: one tile per admin section -->
       <div class="admin-grid">
         <button class="ag-tile" data-target="sec-matches"><span class="ag-ico">⚽️</span><span>المباريات</span></button>
@@ -121,7 +125,8 @@
       adminDeletePlayer, adminDeletePrediction, adminAddPrediction, adminReopenMatch, adminSetPoints, scoreRow, matchDay, flagHTML, watch,
       loadMaintenance, adminSetMaintenance, loadChampionPicks, adminDeleteChampion, adminSetChampion,
       loadRevealFinals, adminSetRevealFinals, loadPredictionHistory,
-    } from './app.js?v=32';
+      setTournament, loadTournaments,
+    } from './app.js?v=33';
 
     const $ = (s, r = document) => r.querySelector(s);
     const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) =>
@@ -236,6 +241,7 @@
           if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
         };
       });
+      await initAdminTournaments();
       setupAddPred();
       loadList();
       renderPlayers();
@@ -243,6 +249,34 @@
       refreshMaint();
       refreshReveal();
       startWatch();
+    }
+
+    // ----- tournament picker (admin can manage any tournament) -----
+    function reloadAdminData() {
+      matches = [];
+      setupAddPred();
+      loadList();
+      renderPlayers();
+      renderChampions();
+      refreshMaint();
+      refreshReveal();
+    }
+    async function initAdminTournaments() {
+      let ts = [];
+      try { ts = await loadTournaments(); }
+      catch (_) { ts = [{ id: 'wc26', name: 'كأس العالم' }]; }
+      let active = localStorage.getItem('wc_tournament') || 'wc26';
+      if (!ts.find((t) => t.id === active)) active = (ts[0] && ts[0].id) || 'wc26';
+      setTournament(active);
+      const sel = $('#tsel');
+      sel.innerHTML = ts.map((t) => `<option value="${esc(t.id)}">${esc(t.name)}</option>`).join('');
+      sel.value = active;
+      $('#tsel-bar').style.display = ts.length > 1 ? 'flex' : 'none';
+      sel.onchange = () => {
+        setTournament(sel.value);
+        localStorage.setItem('wc_tournament', sel.value);
+        reloadAdminData();
+      };
     }
 
     // ----- إحصائيات اللاعبين (admin-only fun stats) -----
