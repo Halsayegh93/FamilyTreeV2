@@ -58,7 +58,7 @@
     <div class="hero">
       <div class="emblem-badge">
         <span class="emblem-trophy">🏆</span>
-        <span class="emblem-26">26</span>
+        <span class="emblem-26" id="emblem-num">26</span>
       </div>
       <h1>جماهير مباريات <span id="hero-tname">كأس العالم</span> <span class="gold">الرميثية</span></h1>
       <p id="hero-sub">من دور الـ32 إلى النهائي — توقّع، واجمع النقاط</p>
@@ -934,8 +934,13 @@
       tabGroupsBtn.style.display = activeFormat === 'groups' ? '' : 'none';
       if (activeFormat !== 'groups' && viewGroups.style.display !== 'none') switchTab('matches');
       // hero reflects the chosen tournament
-      const tn = $('#hero-tname'), ts = $('#hero-sub');
+      const tn = $('#hero-tname'), ts = $('#hero-sub'), em = $('#emblem-num');
       if (t && tn) tn.textContent = t.name;
+      if (em) {   // decorative badge follows the tournament (edition/year)
+        const b = t && t.badge;
+        em.textContent = b || '';
+        em.style.display = b ? '' : 'none';
+      }
       if (ts) ts.textContent = id === 'wc26'
         ? 'من دور الـ32 إلى النهائي — توقّع، واجمع النقاط'
         : (activeFormat === 'groups'
