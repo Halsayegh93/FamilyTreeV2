@@ -421,6 +421,21 @@ class MemberViewModel: ObservableObject {
         }
     }
 
+    /// حذف/فكّ زوجة المستخدم نفسه (RPC remove_self_wife) — يعمل لأي دور.
+    /// يفكّ الارتباط، ويحذف الصف فقط إذا كانت زوجة بالاسم بلا روابط أخرى.
+    @discardableResult
+    func removeSelfWife(wifeId: UUID) async -> Bool {
+        guard NetworkMonitor.shared.requireOnline(), let uid = currentUser?.id else { return false }
+        struct P: Encodable { let p_wife_id: String }
+        do {
+            _ = try await supabase.rpc("remove_self_wife", params: P(p_wife_id: wifeId.uuidString)).execute()
+            await fetchWomenFamily(for: uid); return true
+        } catch {
+            self.errorMessage = L10n.t("تعذّر حذف الزوجة.", "Failed to remove wife.")
+            Log.error("[Women] removeSelfWife: \(error.localizedDescription)"); return false
+        }
+    }
+
     /// إضافة أمّ جديدة (زوجة للأب) للمستخدم نفسه (RPC add_self_mother).
     @discardableResult
     func addSelfMother(name: String) async -> Bool {

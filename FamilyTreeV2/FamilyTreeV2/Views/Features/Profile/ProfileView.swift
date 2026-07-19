@@ -630,7 +630,7 @@ struct ProfileView: View {
         let motherEntry = parents.first { $0.role == .mother }
         let wifeEntries = parents.filter { $0.role == .wife }
         let showParents = isCurrentUserMarried && (!parents.isEmpty || authVM.canModerate)
-        return VStack(spacing: DS.Spacing.md) {
+        return VStack(spacing: DS.Spacing.sm) {
             // ═══ الأم / الزوجة — أماكن ثابتة (البطاقة أو زر الإضافة/الاختيار) ═══
             if showParents {
                 LazyVGrid(columns: columns, spacing: DS.Spacing.md) {
@@ -653,7 +653,7 @@ struct ProfileView: View {
                         }
                     }
                 }
-                DSDivider().padding(.vertical, DS.Spacing.xs)
+                DSDivider().padding(.vertical, 0)
             }
 
             // ═══ الأبناء ═══
@@ -1235,11 +1235,15 @@ struct WomanMemberEditSheet: View {
             .alert(L10n.t("حذف من العائلة", "Remove from family"), isPresented: $showDeleteConfirm) {
                 Button(L10n.t("حذف", "Delete"), role: .destructive) {
                     Task {
-                        // الأم: فكّ الارتباط فقط (لا نحذف السجل المشترك ولا نمسّ الزوجة).
-                        // الزوجة/الابن: حذف السجل.
-                        let ok = entry.role == .mother
-                            ? await memberVM.setSelfMother(motherId: nil)
-                            : await memberVM.deleteWomanMember(id: entry.member.id)
+                        // الأم: فكّ الارتباط (RPC مقيّد على النفس).
+                        // الزوجة: حذف/فكّ مقيّد على النفس (يعمل لأي دور).
+                        // الابن: حذف السجل (للإدارة).
+                        let ok: Bool
+                        switch entry.role {
+                        case .mother: ok = await memberVM.setSelfMother(motherId: nil)
+                        case .wife:   ok = await memberVM.removeSelfWife(wifeId: entry.member.id)
+                        default:      ok = await memberVM.deleteWomanMember(id: entry.member.id)
+                        }
                         if ok { await MainActor.run { dismiss() } }
                     }
                 }
