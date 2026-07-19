@@ -807,3 +807,14 @@ begin
     perform public.wc_admin_rebuild_bracket('1993');
   end if;
 end $$;
+
+
+-- ---------------------------------------------------------------------------
+-- Heal England/Scotland flags stored as a bare U+1F3F4 black flag.
+-- wc_admin_save_match freezes team+flag once a match has predictions, so the
+-- auto-fetch can never fix these rows itself — patch them directly here.
+-- Idempotent: matches only the broken bare-flag value.
+update public.wc_matches set home_flag = '🏴󠁧󠁢󠁥󠁮󠁧󠁿' where home_team = 'England'  and home_flag = '🏴';
+update public.wc_matches set away_flag = '🏴󠁧󠁢󠁥󠁮󠁧󠁿' where away_team = 'England'  and away_flag = '🏴';
+update public.wc_matches set home_flag = '🏴󠁧󠁢󠁳󠁣󠁴󠁿' where home_team = 'Scotland' and home_flag = '🏴';
+update public.wc_matches set away_flag = '🏴󠁧󠁢󠁳󠁣󠁴󠁿' where away_team = 'Scotland' and away_flag = '🏴';
