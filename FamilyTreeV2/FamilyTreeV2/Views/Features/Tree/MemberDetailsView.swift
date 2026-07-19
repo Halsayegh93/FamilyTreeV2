@@ -226,16 +226,6 @@ struct MemberDetailsView: View {
                     avatarContent
                         .frame(width: 130, height: 130)
                         .clipShape(Circle())
-                        .overlay(
-                            Circle().stroke(
-                                LinearGradient(
-                                    colors: [DS.Color.primary, DS.Color.accent],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                lineWidth: 3
-                            )
-                        )
                         .dsGlowShadow()
                         .onTapGesture { showAvatarPreview = true }
 

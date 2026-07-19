@@ -15,6 +15,7 @@ struct AdminNotificationsView: View {
     // جدولة الإرسال
     @State private var scheduleEnabled = false
     @State private var scheduledDate = Date().addingTimeInterval(3600)
+    @State private var showScheduledSheet = false
 
     private var activeMembers: [FamilyMember] {
         memberVM.allMembers
@@ -38,6 +39,38 @@ struct AdminNotificationsView: View {
 
             VStack(spacing: 0) {
                 VStack(spacing: DS.Spacing.sm) {
+                    // بانر الإشعارات المجدولة — يظهر فقط عند وجود إشعارات معلّقة
+                    if !notificationVM.scheduledNotifications.isEmpty {
+                        Button {
+                            showScheduledSheet = true
+                        } label: {
+                            HStack(spacing: DS.Spacing.sm) {
+                                Image(systemName: "clock.badge.fill")
+                                    .font(DS.Font.scaled(16, weight: .semibold))
+                                    .foregroundColor(DS.Color.warning)
+                                Text(L10n.t(
+                                    "\(notificationVM.scheduledNotifications.count) إشعار مجدول بانتظار الإرسال",
+                                    "\(notificationVM.scheduledNotifications.count) scheduled — pending send"
+                                ))
+                                .font(DS.Font.calloutBold)
+                                .foregroundColor(DS.Color.textPrimary)
+                                .lineLimit(1)
+                                Spacer()
+                                Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
+                                    .font(DS.Font.scaled(12, weight: .bold))
+                                    .foregroundColor(DS.Color.textTertiary)
+                            }
+                            .padding(DS.Spacing.md)
+                            .background(DS.Color.warning.opacity(0.10))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: DS.Radius.md)
+                                    .stroke(DS.Color.warning.opacity(0.30), lineWidth: 1)
+                            )
+                            .cornerRadius(DS.Radius.md)
+                        }
+                        .buttonStyle(.plain)
+                    }
+
                     VStack(alignment: .trailing, spacing: DS.Spacing.xs) {
                         HStack(spacing: DS.Spacing.sm) {
                             Image(systemName: "bell.badge")
@@ -282,6 +315,12 @@ struct AdminNotificationsView: View {
             if memberVM.allMembers.isEmpty {
                 await memberVM.fetchAllMembers()
             }
+            await notificationVM.fetchScheduledNotifications()
+        }
+        .sheet(isPresented: $showScheduledSheet) {
+            ScheduledNotificationsSheet()
+                .environmentObject(notificationVM)
+                .environmentObject(memberVM)
         }
     }
 
@@ -359,7 +398,10 @@ struct AdminNotificationsView: View {
                 scheduledFor: scheduledDate,
                 kind: "admin_broadcast"
             )
-            if ok { dismiss() }
+            if ok {
+                await notificationVM.fetchScheduledNotifications()
+                dismiss()
+            }
         } else {
             await notificationVM.sendNotification(
                 title: title,
@@ -369,5 +411,141 @@ struct AdminNotificationsView: View {
             )
             dismiss()
         }
+    }
+}
+
+// MARK: - شيت الإشعارات المجدولة (عرض/إلغاء)
+
+private struct ScheduledNotificationsSheet: View {
+    @EnvironmentObject var notificationVM: NotificationViewModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var cancellingId: UUID? = nil
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                DS.Color.background.ignoresSafeArea()
+
+                if notificationVM.scheduledNotifications.isEmpty {
+                    VStack(spacing: DS.Spacing.md) {
+                        Image(systemName: "clock.badge.checkmark")
+                            .font(DS.Font.scaled(40, weight: .regular))
+                            .foregroundColor(DS.Color.textTertiary)
+                        Text(L10n.t("لا توجد إشعارات مجدولة", "No scheduled notifications"))
+                            .font(DS.Font.callout)
+                            .foregroundColor(DS.Color.textSecondary)
+                    }
+                } else {
+                    ScrollView(showsIndicators: false) {
+                        VStack(spacing: DS.Spacing.md) {
+                            ForEach(notificationVM.scheduledNotifications) { item in
+                                card(item)
+                            }
+                        }
+                        .padding(DS.Spacing.lg)
+                    }
+                }
+            }
+            .navigationTitle(L10n.t("الإشعارات المجدولة", "Scheduled"))
+            .navigationBarTitleDisplayMode(.inline)
+            .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(L10n.t("إغلاق", "Close")) { dismiss() }
+                        .font(DS.Font.calloutBold)
+                        .foregroundColor(DS.Color.primary)
+                }
+            }
+            .task { await notificationVM.fetchScheduledNotifications() }
+        }
+    }
+
+    private func card(_ item: NotificationViewModel.ScheduledNotification) -> some View {
+        DSCard {
+            VStack(alignment: .trailing, spacing: DS.Spacing.sm) {
+                // العنوان
+                HStack(spacing: DS.Spacing.sm) {
+                    Image(systemName: "bell.badge.fill")
+                        .font(DS.Font.scaled(14, weight: .semibold))
+                        .foregroundColor(DS.Color.warning)
+                    Text(item.title)
+                        .font(DS.Font.bodyBold)
+                        .foregroundColor(DS.Color.textPrimary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+
+                // النص (إن اختلف عن العنوان)
+                if !item.body.isEmpty && item.body != item.title {
+                    Text(item.body)
+                        .font(DS.Font.callout)
+                        .foregroundColor(DS.Color.textSecondary)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                        .multilineTextAlignment(.trailing)
+                }
+
+                DSDivider()
+
+                // الوقت + الجمهور
+                HStack(spacing: DS.Spacing.sm) {
+                    metaChip(icon: "calendar", text: timeText(item), color: DS.Color.primary)
+                    metaChip(
+                        icon: item.isBroadcast ? "person.3.fill" : "person.2.fill",
+                        text: item.isBroadcast
+                            ? L10n.t("للجميع", "Everyone")
+                            : L10n.t("\(item.targetCount) عضو", "\(item.targetCount) members"),
+                        color: DS.Color.accent
+                    )
+                    Spacer()
+                }
+
+                // إلغاء الجدولة
+                Button {
+                    Task {
+                        cancellingId = item.id
+                        await notificationVM.cancelScheduledNotification(item.id)
+                        cancellingId = nil
+                    }
+                } label: {
+                    HStack(spacing: DS.Spacing.xs) {
+                        if cancellingId == item.id {
+                            ProgressView().tint(DS.Color.error)
+                        } else {
+                            Image(systemName: "trash")
+                                .font(DS.Font.scaled(13, weight: .semibold))
+                        }
+                        Text(L10n.t("إلغاء الجدولة", "Cancel schedule"))
+                            .font(DS.Font.calloutBold)
+                    }
+                    .foregroundColor(DS.Color.error)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, DS.Spacing.sm)
+                    .background(DS.Color.error.opacity(0.10))
+                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
+                }
+                .buttonStyle(.plain)
+                .disabled(cancellingId != nil)
+            }
+        }
+    }
+
+    private func metaChip(icon: String, text: String, color: Color) -> some View {
+        HStack(spacing: DS.Spacing.xs) {
+            Image(systemName: icon).font(DS.Font.scaled(11, weight: .semibold))
+            Text(text).font(DS.Font.caption1).fontWeight(.semibold)
+        }
+        .foregroundColor(color)
+        .padding(.horizontal, DS.Spacing.sm)
+        .padding(.vertical, DS.Spacing.xs)
+        .background(color.opacity(0.10))
+        .clipShape(Capsule())
+    }
+
+    private func timeText(_ item: NotificationViewModel.ScheduledNotification) -> String {
+        guard let d = item.scheduledDate else { return item.scheduledFor }
+        let f = DateFormatter()
+        f.locale = LanguageManager.shared.locale
+        f.dateStyle = .medium
+        f.timeStyle = .short
+        return f.string(from: d)
     }
 }

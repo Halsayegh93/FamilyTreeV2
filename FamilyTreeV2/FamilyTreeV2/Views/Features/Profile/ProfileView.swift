@@ -20,6 +20,12 @@ struct ProfileView: View {
     // إضافة/اختيار الزوجة والأم
     @State private var showAddWife = false
     @State private var newWifeName = ""
+    // مصدر إضافة الزوجة: بالاسم أو اختيار من العائلة
+    @State private var showWifeSource = false
+    @State private var showWifePicker = false
+    @State private var wifeCandidates: [FamilyMember] = []
+    @State private var wifeSearch = ""
+    @State private var isLoadingWifeCandidates = false
     @State private var showMotherOptions = false
     @State private var showAddMotherName = false
     @State private var newMotherName = ""
@@ -146,6 +152,26 @@ struct ProfileView: View {
                 }
                 Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
             }
+            // مصدر إضافة الزوجة: بالاسم أو اختيار من العائلة (مثل شجرة النساء)
+            .confirmationDialog(L10n.t("إضافة زوجة", "Add Wife"),
+                                isPresented: $showWifeSource, titleVisibility: .visible) {
+                Button(L10n.t("اختيار من العائلة", "Choose from family")) {
+                    Task {
+                        isLoadingWifeCandidates = true
+                        wifeCandidates = await loadWifeCandidates()
+                        isLoadingWifeCandidates = false
+                        showWifePicker = true
+                    }
+                }
+                Button(L10n.t("إضافة بالاسم", "Add by name")) {
+                    // تأخير بسيط لتفادي تعارض عرض التنبيه بعد إغلاق الحوار
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                        newWifeName = ""; showAddWife = true
+                    }
+                }
+                Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
+            }
+            .sheet(isPresented: $showWifePicker) { wifePickerSheet }
             .confirmationDialog(L10n.t("الأم", "Mother"), isPresented: $showMotherOptions, titleVisibility: .visible) {
                 ForEach(fatherWives) { w in
                     Button(w.firstName.isEmpty ? L10n.t("زوجة الأب", "Father's wife") : w.firstName) {
@@ -562,7 +588,7 @@ struct ProfileView: View {
         Button(action: action) {
             HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: icon)
-                    .font(DS.Font.scaled(15, weight: .bold))
+                    .font(DS.Font.scaled(16, weight: .bold))
                     .foregroundColor(color)
                     .frame(width: 36, height: 36)
                     .background(color.opacity(0.12))
@@ -619,10 +645,11 @@ struct ProfileView: View {
                     }
                     // خانة الزوجة (ثابتة بعد الأم)
                     ForEach(wifeEntries) { entry in familyMemberButton(entry) }
-                    if authVM.canModerate, !hasWife {
+                    // إضافة الزوجة متاحة لأي عضو متزوّج (مو المدير فقط) — اختياري لا إجبار
+                    if !hasWife {
                         addFamilyActionCell(title: L10n.t("إضافة زوجة", "Add Wife"),
                                             icon: "heart.fill", color: DS.Color.neonPink) {
-                            newWifeName = ""; showAddWife = true
+                            showWifeSource = true
                         }
                     }
                 }
@@ -692,7 +719,7 @@ struct ProfileView: View {
         let info = childIconInfo(for: son)
 
         return HStack(spacing: DS.Spacing.sm) {
-            childAvatarView(for: son, iconFont: 16, size: 44)
+            childAvatarView(for: son, iconFont: 16, size: 36)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(son.firstName.isEmpty ? L10n.t("الاسم", "Name") : son.firstName)
@@ -723,6 +750,88 @@ struct ProfileView: View {
     }
 
     /// أبناء شجرة النساء بالترتيب الحالي (للترتيب).
+    // MARK: - اختيار الزوجة من العائلة
+
+    /// إناث شجرة النساء المتاحات (بلا زوج) — مرشّحات «زوجة من العائلة».
+    private func loadWifeCandidates() async -> [FamilyMember] {
+        guard let me = authVM.currentUser?.id else { return [] }
+        let all = (try? await WomenStore.fetch()) ?? []
+        return all
+            .filter {
+                $0.isFemale
+                && $0.husbandId == nil                                              // غير مرتبطة بزوج
+                && $0.id != me
+                && WomenStore.linkedUserByWoman[$0.id] == nil                        // ليست عضواً بحساب
+                && !$0.fullName.trimmingCharacters(in: .whitespaces).isEmpty         // لها اسم
+            }
+            .sorted { $0.fullName.localizedCompare($1.fullName) == .orderedAscending }
+    }
+
+    /// ربط أنثى موجودة كزوجة للمستخدم الحالي (RPC مقيّد على النفس — يعمل لأي دور).
+    private func linkWife(_ womanId: UUID) {
+        showWifePicker = false; wifeSearch = ""
+        Task { await memberVM.setSelfWife(wifeId: womanId) }
+    }
+
+    /// شيت اختيار زوجة من العائلة (مع بحث).
+    private var wifePickerSheet: some View {
+        let list = wifeSearch.trimmingCharacters(in: .whitespaces).isEmpty
+            ? wifeCandidates
+            : wifeCandidates.filter { $0.fullName.contains(wifeSearch) || $0.firstName.contains(wifeSearch) }
+        return NavigationStack {
+            Group {
+                if wifeCandidates.isEmpty {
+                    VStack(spacing: DS.Spacing.md) {
+                        Image(systemName: "person.2.slash")
+                            .font(DS.Font.scaled(36, weight: .regular))
+                            .foregroundColor(DS.Color.textTertiary)
+                        Text(L10n.t("لا توجد إناث متاحات في العائلة", "No available family women"))
+                            .font(DS.Font.callout)
+                            .foregroundColor(DS.Color.textSecondary)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    List(list) { m in
+                        Button { linkWife(m.id) } label: {
+                            HStack(spacing: DS.Spacing.md) {
+                                wifePickerAvatar(m)
+                                Text(m.fullName.isEmpty ? m.firstName : m.fullName)
+                                    .font(DS.Font.callout)
+                                    .foregroundColor(DS.Color.textPrimary)
+                                Spacer()
+                            }
+                        }
+                    }
+                    .searchable(text: $wifeSearch, prompt: L10n.t("بحث بالاسم", "Search by name"))
+                }
+            }
+            .navigationTitle(L10n.t("اختيار زوجة من العائلة", "Choose wife"))
+            .navigationBarTitleDisplayMode(.inline)
+            .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(L10n.t("إلغاء", "Cancel")) { showWifePicker = false; wifeSearch = "" }
+                }
+            }
+        }
+        .presentationDetents([.large])
+    }
+
+    private func wifePickerAvatar(_ m: FamilyMember) -> some View {
+        Group {
+            if let url = m.avatarUrl ?? m.photoURL, let u = URL(string: url) {
+                CachedAsyncImage(url: u) { img in img.resizable().scaledToFill() }
+                    placeholder: { DS.Color.primary.opacity(0.1) }
+            } else {
+                DS.Color.primary.opacity(0.1)
+                    .overlay(Image(systemName: "person.fill").foregroundColor(DS.Color.primary.opacity(0.5)))
+            }
+        }
+        .frame(width: 36, height: 36)
+        .clipShape(Circle())
+        .overlay(Circle().stroke(DS.Color.primary.opacity(0.18), lineWidth: 1))
+    }
+
     private var womenChildrenList: [WomanMember] {
         memberVM.currentMemberWomenFamily.filter { $0.role == .child }.map { $0.member }
     }
@@ -780,7 +889,7 @@ struct ProfileView: View {
                     womanAvatarFallback
                 }
             }
-            .frame(width: 44, height: 44)
+            .frame(width: 36, height: 36)
             .clipShape(Circle())
             .overlay(Circle().strokeBorder(DS.Color.primary.opacity(0.12), lineWidth: 1))
 
@@ -1046,13 +1155,15 @@ struct WomanMemberEditSheet: View {
                                     .font(DS.Font.callout)
                                     .foregroundColor(DS.Color.textPrimary)
                             }
-                            DSDivider()
-                            // اختيار الجنس — نفس واجهة إضافة الابن
-                            DSFormRow(icon: "person.2.fill", iconColor: DS.Color.accent,
-                                      label: L10n.t("الجنس", "Gender")) {
-                                HStack(spacing: DS.Spacing.xs) {
-                                    genderButton(title: L10n.t("ذكر", "Male"), value: "male", color: DS.Color.primary)
-                                    genderButton(title: L10n.t("أنثى", "Female"), value: "female", color: DS.Color.neonPink)
+                            // اختيار الجنس — للأبناء فقط (الأم/الزوجة أنثى دائمًا)
+                            if entry.role == .child {
+                                DSDivider()
+                                DSFormRow(icon: "person.2.fill", iconColor: DS.Color.accent,
+                                          label: L10n.t("الجنس", "Gender")) {
+                                    HStack(spacing: DS.Spacing.xs) {
+                                        genderButton(title: L10n.t("ذكر", "Male"), value: "male", color: DS.Color.primary)
+                                        genderButton(title: L10n.t("أنثى", "Female"), value: "female", color: DS.Color.neonPink)
+                                    }
                                 }
                             }
                             DSDivider()

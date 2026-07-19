@@ -406,6 +406,21 @@ class MemberViewModel: ObservableObject {
         }
     }
 
+    /// ربط أنثى موجودة (غير مرتبطة بزوج) كزوجة للمستخدم نفسه (RPC set_self_wife).
+    /// يعمل لأي دور — الدالة SECURITY DEFINER مقيّدة على عقدة المستخدم.
+    @discardableResult
+    func setSelfWife(wifeId: UUID) async -> Bool {
+        guard NetworkMonitor.shared.requireOnline(), let uid = currentUser?.id else { return false }
+        struct P: Encodable { let p_wife_id: String }
+        do {
+            _ = try await supabase.rpc("set_self_wife", params: P(p_wife_id: wifeId.uuidString)).execute()
+            await fetchWomenFamily(for: uid); return true
+        } catch {
+            self.errorMessage = L10n.t("تعذّر ربط الزوجة.", "Failed to link wife.")
+            Log.error("[Women] setSelfWife: \(error.localizedDescription)"); return false
+        }
+    }
+
     /// إضافة أمّ جديدة (زوجة للأب) للمستخدم نفسه (RPC add_self_mother).
     @discardableResult
     func addSelfMother(name: String) async -> Bool {
@@ -426,9 +441,11 @@ class MemberViewModel: ObservableObject {
     @discardableResult
     func setSelfMother(motherId: UUID?) async -> Bool {
         guard NetworkMonitor.shared.requireOnline(), let uid = currentUser?.id else { return false }
-        struct P: Encodable { let p_mother_id: String? }
         do {
-            _ = try await supabase.rpc("set_self_mother", params: P(p_mother_id: motherId?.uuidString)).execute()
+            // نمرّر null صريحًا عند الإزالة — struct المولّد يحذف الحقل عند nil (encodeIfPresent)
+            // فيصل الـ RPC بلا وسيط ويفشل، فلا تنحذف الأم. AnyEncodable يُرسل null صريح.
+            _ = try await supabase.rpc("set_self_mother",
+                                       params: ["p_mother_id": AnyEncodable(motherId?.uuidString)]).execute()
             await fetchWomenFamily(for: uid); return true
         } catch {
             self.errorMessage = L10n.t("تعذّر تعيين الأم.", "Failed to set mother.")

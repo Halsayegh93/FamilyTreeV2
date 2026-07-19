@@ -84,10 +84,15 @@ struct WomenTreeView: View {
         if let rows = try? await WomenStore.fetch() { allMembers = rows }
     }
 
-    /// عقدة المستخدم في شجرة النساء — تلقائيًا: أولًا بالربط، وإلا بمطابقة الاسم الكامل.
+    /// عقدة المستخدم في شجرة النساء — تلقائيًا لكل مستخدم حسب هويّته:
+    /// ١) عقدة بنفس معرّفه (mirror للذكور) · ٢) عقدة مرتبطة بحسابه · ٣) مطابقة بالاسم.
     private func resolveMyWomanId() -> UUID? {
         guard let me = authVM.currentUser else { return nil }
+        // ١) الأدقّ: عقدة تحمل نفس معرّف المستخدم (الذكور مُمثّلون بنفس المعرّف)
+        if allMembers.contains(where: { $0.id == me.id }) { return me.id }
+        // ٢) عقدة مرتبطة بالحساب (للإناث المربوطات)
         if let linked = WomenStore.womanByLinkedUser[me.id] { return linked }
+        // ٣) مطابقة بالاسم (احتياطي أخير)
         let target = normalizeName(me.fullName)
         guard !target.isEmpty else { return nil }
         // مطابقة تامّة، وإلا تطابق أول ٣ كلمات (الاسم + الأب + الجد).
@@ -478,16 +483,6 @@ private struct WomanDetailSheet: View {
 
                 ZStack {
                     avatar(woman, size: 130)
-                        .overlay(
-                            Circle().stroke(
-                                LinearGradient(
-                                    colors: [DS.Color.primary, DS.Color.accent],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                lineWidth: 3
-                            )
-                        )
                         .dsGlowShadow()
 
                     if woman.isDeceased == true {
