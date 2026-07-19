@@ -16,6 +16,34 @@ struct DrillDownTreeView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @Binding var selectedTab: Int
 
+    // ── حقن اختياري (يُستخدم لعرض شجرة النساء بإعادة استخدام نفس المحرّك) ──
+    /// أعضاء محقونون (شجرة النساء). عند وجودهم، تُبنى الشجرة منهم بدل memberVM.allMembers.
+    var injectedMembers: [FamilyMember]? = nil
+    /// اعتراض فتح التفاصيل (شجرة النساء تعرض شيتها الخاص بدل MemberDetailsView).
+    var onOpenDetails: ((FamilyMember) -> Void)? = nil
+    /// عنوان/عنوان فرعي مخصّص للهيدر (شجرة النساء = «النساء»).
+    var headerTitle: String? = nil
+    var headerSubtitle: String? = nil
+    /// تبويب علوي [عائلة/نساء] — يظهر تحت الهيدر عند تمريره.
+    var treeTab: Binding<Int>? = nil
+    /// مُحلّل «أنا» (شجرة النساء تربط الحساب باسم أنثى).
+    var meResolver: (() -> FamilyMember?)? = nil
+
+    /// مصدر البيانات الفعلي — المحقون إن وُجد، وإلا كل الأعضاء.
+    private var allData: [FamilyMember] { injectedMembers ?? memberVM.allMembers }
+    /// وضع شجرة النساء — يفعّل تنسيق خاص (إناث بلا صورة، الزوجات ملتصقات بالأزواج).
+    private var isWomenMode: Bool { injectedMembers != nil }
+    /// زوجات عضو (إناث husband_id = العضو) — يظهرن كشارة عليه لا كعُقد مستقلة.
+    private func wives(of memberId: UUID) -> [FamilyMember] {
+        guard isWomenMode else { return [] }
+        return allData.filter { $0.husbandId == memberId && $0.isFemale }
+            .sorted { $0.sortOrder < $1.sortOrder }
+    }
+    /// فتح التفاصيل — يعترضه الحقن (شجرة النساء) وإلا يفتح MemberDetailsView.
+    private func openDetails(_ m: FamilyMember) {
+        if let onOpenDetails { onOpenDetails(m) } else { selectedMemberForDetails = m }
+    }
+
     /// السلسلة الكاملة: الجذر → الأقرب. آخر عضو = النشط.
     @State private var chain: [FamilyMember] = []
     @State private var selectedMemberForDetails: FamilyMember? = nil
@@ -57,7 +85,9 @@ struct DrillDownTreeView: View {
     // MARK: - Helpers
 
     private var roots: [FamilyMember] {
-        let visible = memberVM.allMembers.filter(\.isCountable)
+        // في وضع النساء تُستبعد الزوجات (يظهرن كشارة على الزوج لا كجذور).
+        let base = isWomenMode ? allData.filter { !($0.isFemale && $0.husbandId != nil) } : allData
+        let visible = base.filter(\.isCountable)
         let byId = Dictionary(uniqueKeysWithValues: visible.map { ($0.id, $0) })
         let fatherIds = Set(visible.compactMap(\.fatherId))
         return visible.filter { m in
@@ -67,8 +97,9 @@ struct DrillDownTreeView: View {
     }
 
     private func children(of memberId: UUID) -> [FamilyMember] {
-        memberVM.allMembers
-            .filter { $0.fatherId == memberId && $0.isCountable }
+        allData
+            .filter { $0.fatherId == memberId && $0.isCountable
+                && !(isWomenMode && $0.isFemale && $0.husbandId != nil) }
             .sortedForDisplay()
     }
 
@@ -102,9 +133,15 @@ struct DrillDownTreeView: View {
                     MainHeaderView(
                         selectedTab: $selectedTab,
                         showingNotifications: $showingNotifications,
-                        title: L10n.t("الشجرة", "Family Tree"),
-                        subtitle: L10n.t("تصفّح بالتفرّع", "Drill-down")
+                        title: headerTitle ?? L10n.t("الشجرة", "Family Tree"),
+                        subtitle: headerSubtitle ?? L10n.t("تصفّح بالتفرّع", "Drill-down")
                     )
+
+                    // تبويب علوي [شجرة العائلة / النساء] — مطابق للأندرويد
+                    if let treeTab {
+                        FamilyTreeTabBar(selection: treeTab)
+                            .padding(.top, DS.Spacing.sm)
+                    }
 
                     // أزرار الإجراءات — تختفي عند فتح البحث (الإغلاق صار داخل مربع البحث)
                     if !showSearchBar {
@@ -120,7 +157,7 @@ struct DrillDownTreeView: View {
                         searchInlinePanel
                             .frame(maxHeight: .infinity)
                             .transition(.opacity)
-                    } else if memberVM.allMembers.isEmpty {
+                    } else if allData.isEmpty {
                         Spacer()
                         emptyState
                         Spacer()
@@ -186,7 +223,7 @@ struct DrillDownTreeView: View {
             }
             .toolbar(.hidden, for: .navigationBar)
             .onAppear { initializeChainIfNeeded() }
-            .onChange(of: memberVM.allMembers.count) { _ in initializeChainIfNeeded() }
+            .onChange(of: allData.count) { _ in initializeChainIfNeeded() }
             .onReceive(NotificationCenter.default.publisher(for: .showKinshipPath)) { note in
                 handleKinshipNotification(note)
             }
@@ -210,7 +247,7 @@ struct DrillDownTreeView: View {
     /// مربّع عضو في وضع القرابة — نفس مربّع الشجرة، النقر يفتح التفاصيل.
     private func kinshipSquareButton(_ member: FamilyMember) -> some View {
         Button {
-            selectedMemberForDetails = member
+            openDetails(member)
         } label: {
             memberSquareContent(
                 member,
@@ -221,7 +258,7 @@ struct DrillDownTreeView: View {
         .buttonStyle(DSScaleButtonStyle())
         .simultaneousGesture(
             LongPressGesture(minimumDuration: 0.4).onEnded { _ in
-                selectedMemberForDetails = member
+                openDetails(member)
             }
         )
         .id(member.id)
@@ -443,7 +480,7 @@ struct DrillDownTreeView: View {
 
             Spacer()
 
-            if let me = authVM.currentUser {
+            if let me = (meResolver?() ?? authVM.currentUser) {
                 Button { jumpTo(me) } label: {
                     iconButton(icon: "location.fill", color: DS.Color.primary)
                 }
@@ -476,7 +513,7 @@ struct DrillDownTreeView: View {
                     if chain.count > 1 {
                         collapseLastLevel()
                     } else {
-                        selectedMemberForDetails = member
+                        openDetails(member)
                     }
                 } else {
                     // سلف: نقرة تخليه النشط (يقطع السلسلة عند هذا المستوى)
@@ -488,7 +525,7 @@ struct DrillDownTreeView: View {
             .buttonStyle(DSScaleButtonStyle())
             .simultaneousGesture(
                 LongPressGesture(minimumDuration: 0.4).onEnded { _ in
-                    selectedMemberForDetails = member
+                    openDetails(member)
                 }
             )
             .accessibilityHint(L10n.t(
@@ -506,23 +543,35 @@ struct DrillDownTreeView: View {
         let birthY = year(from: member.birthDate)
         let deathY = year(from: member.deathDate)
         let hasDates = birthY != nil || deathY != nil
+        // في وضع النساء: الإناث بدون صورة (حرف على خلفية وردية).
+        let isFemaleNode = isWomenMode && member.isFemale
+        let avatarSize: CGFloat = isActive ? 46 : 42
+        let memberWives = wives(of: member.id)
 
         return VStack(spacing: 2) {
-            // الصورة + علامة المتوفى (نقطة داكنة بأعلى الزاوية)
+            // الصورة + علامة المتوفى (أعلى يمين) + شارة الزوجة (أعلى يسار)
             ZStack(alignment: .topTrailing) {
                 DSMemberAvatar(
                     name: member.firstName,
-                    avatarUrl: member.avatarUrl,
-                    size: isActive ? 46 : 42,
-                    roleColor: member.roleColor
+                    avatarUrl: isFemaleNode ? nil : member.avatarUrl,   // الإناث بدون صورة
+                    size: avatarSize,
+                    roleColor: isFemaleNode ? DS.Color.neonPink : member.roleColor
                 )
                 .overlay(
                     Circle().strokeBorder(
-                        deceasedAwareBorderColor(isActive: isActive, isDeceased: isDeceased),
+                        isFemaleNode ? DS.Color.neonPink.opacity(isActive ? 0.9 : 0.55)
+                                     : deceasedAwareBorderColor(isActive: isActive, isDeceased: isDeceased),
                         lineWidth: isActive ? 2.5 : 1.5
                     )
                 )
                 .saturation(isDeceased ? 0.55 : 1.0)
+                // شارة الزوجة — وردية بأعلى اليسار، ملتصقة بالزوج (وضع النساء).
+                .overlay(alignment: .topLeading) {
+                    if let wife = memberWives.first {
+                        wifeBadge(wife: wife, extra: memberWives.count - 1)
+                            .offset(x: -3, y: -3)
+                    }
+                }
 
                 if isDeceased {
                     Image(systemName: "sparkle")
@@ -634,6 +683,28 @@ struct DrillDownTreeView: View {
         }
     }
 
+    /// شارة الزوجة — دائرة وردية بحرف الزوجة (أو عددهن) + قلب صغير، ملتصقة بالزوج.
+    private func wifeBadge(wife: FamilyMember, extra: Int) -> some View {
+        ZStack {
+            Circle().fill(DS.Color.neonPink)
+            Circle().strokeBorder(Color.white, lineWidth: 1.5)
+            Text(extra > 0 ? "\(extra + 1)" : String(wife.firstName.prefix(1)))
+                .font(.system(size: extra > 0 ? 9 : 10, weight: .black))
+                .foregroundColor(.white)
+        }
+        .frame(width: 19, height: 19)
+        .overlay(alignment: .bottomLeading) {
+            Image(systemName: "heart.fill")
+                .font(.system(size: 7, weight: .bold))
+                .foregroundColor(DS.Color.neonPink)
+                .padding(1.5)
+                .background(Circle().fill(Color.white))
+                .offset(x: -3, y: 3)
+        }
+        .shadow(color: .black.opacity(0.18), radius: 1.5, x: 0, y: 1)
+        .accessibilityLabel(L10n.t("زوجة", "Wife"))
+    }
+
     private func deceasedAwareBorderColor(isActive: Bool, isDeceased: Bool) -> Color {
         if isDeceased {
             return DS.Color.deceased.opacity(isActive ? 0.55 : 0.40)
@@ -702,7 +773,7 @@ struct DrillDownTreeView: View {
                                 .buttonStyle(DSScaleButtonStyle())
                                 .simultaneousGesture(
                                     LongPressGesture(minimumDuration: 0.4).onEnded { _ in
-                                        selectedMemberForDetails = child
+                                        openDetails(child)
                                     }
                                 )
                                 .accessibilityHint(L10n.t(

@@ -581,42 +581,76 @@ struct ProfileView: View {
         .buttonStyle(PlainButtonStyle())
     }
 
+    /// خلية فرد عائلة (أم/زوجة) — زر تعديل للمخوّل، وإلا عرض فقط.
+    @ViewBuilder
+    private func familyMemberButton(_ entry: WomenFamilyEntry) -> some View {
+        if authVM.canModerate {
+            Button { editingFamilyMember = entry } label: { womanFamilyGridCell(entry: entry) }
+                .buttonStyle(PlainButtonStyle())
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(entry.member.firstName.isEmpty ? L10n.t("فرد", "Member") : entry.member.firstName)
+                .accessibilityHint(L10n.t("تعديل", "Edit"))
+        } else {
+            womanFamilyGridCell(entry: entry)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(entry.member.firstName.isEmpty ? L10n.t("فرد", "Member") : entry.member.firstName)
+        }
+    }
+
     private var childrenGridView: some View {
-        VStack(spacing: 0) {
-            let columns = [GridItem(.flexible()), GridItem(.flexible())]
+        let columns = [GridItem(.flexible()), GridItem(.flexible())]
+        let parents = memberVM.currentMemberWomenFamily.filter { $0.role == .mother || $0.role == .wife }
+        let womenKids = memberVM.currentMemberWomenFamily.filter { $0.role == .child }
+        let motherEntry = parents.first { $0.role == .mother }
+        let wifeEntries = parents.filter { $0.role == .wife }
+        let showParents = isCurrentUserMarried && (!parents.isEmpty || authVM.canModerate)
+        return VStack(spacing: DS.Spacing.md) {
+            // ═══ الأم / الزوجة — أماكن ثابتة (البطاقة أو زر الإضافة/الاختيار) ═══
+            if showParents {
+                LazyVGrid(columns: columns, spacing: DS.Spacing.md) {
+                    // خانة الأم (ثابتة أولاً)
+                    if let motherEntry {
+                        familyMemberButton(motherEntry)
+                    } else if authVM.canModerate {
+                        addFamilyActionCell(title: L10n.t("إضافة/اختيار الأم", "Add/Pick Mother"),
+                                            icon: "person.fill", color: DS.Color.accent) {
+                            Task { fatherWives = await memberVM.fetchFatherWives(); showMotherOptions = true }
+                        }
+                    }
+                    // خانة الزوجة (ثابتة بعد الأم)
+                    ForEach(wifeEntries) { entry in familyMemberButton(entry) }
+                    if authVM.canModerate, !hasWife {
+                        addFamilyActionCell(title: L10n.t("إضافة زوجة", "Add Wife"),
+                                            icon: "heart.fill", color: DS.Color.neonPink) {
+                            newWifeName = ""; showAddWife = true
+                        }
+                    }
+                }
+                DSDivider().padding(.vertical, DS.Spacing.xs)
+            }
+
+            // ═══ الأبناء ═══
             LazyVGrid(columns: columns, spacing: DS.Spacing.md) {
                 ForEach(memberVM.currentMemberChildren, id: \.id) { son in
-                    Button {
-                        editingChild = son
-                    } label: {
-                        childGridCell(son: son)
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel(son.firstName.isEmpty ? L10n.t("ابن بدون اسم", "Unnamed child") : son.firstName)
-                    .accessibilityHint(L10n.t("تعديل", "Edit"))
+                    Button { editingChild = son } label: { childGridCell(son: son) }
+                        .buttonStyle(PlainButtonStyle())
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(son.firstName.isEmpty ? L10n.t("ابن بدون اسم", "Unnamed child") : son.firstName)
+                        .accessibilityHint(L10n.t("تعديل", "Edit"))
                 }
-
-                // عائلة شجرة النساء (الأم/الزوجة/الأبناء) — تظهر فقط عند «متزوج»
                 if isCurrentUserMarried {
-                    ForEach(memberVM.currentMemberWomenFamily) { entry in
+                    ForEach(womenKids) { entry in
                         if authVM.canModerate {
-                            // قابل للتعديل (للإدارة حسب صلاحيات شجرة النساء)
-                            Button {
-                                editingFamilyMember = entry
-                            } label: {
-                                womanFamilyGridCell(entry: entry)
-                            }
-                            .buttonStyle(PlainButtonStyle())
-                            .overlay(alignment: .topLeading) {
-                                // أسهم الترتيب — فقط في وضع الترتيب (الزر بالأعلى) وللأبناء
-                                if isReorderingChildren, entry.role == .child, womenChildrenList.count > 1 {
-                                    womanChildReorderControls(for: entry.member)
+                            Button { editingFamilyMember = entry } label: { womanFamilyGridCell(entry: entry) }
+                                .buttonStyle(PlainButtonStyle())
+                                .overlay(alignment: .topLeading) {
+                                    if isReorderingChildren, entry.role == .child, womenChildrenList.count > 1 {
+                                        womanChildReorderControls(for: entry.member)
+                                    }
                                 }
-                            }
-                            .accessibilityElement(children: .ignore)
-                            .accessibilityLabel(entry.member.firstName.isEmpty ? L10n.t("فرد", "Member") : entry.member.firstName)
-                            .accessibilityHint(L10n.t("تعديل", "Edit"))
+                                .accessibilityElement(children: .ignore)
+                                .accessibilityLabel(entry.member.firstName.isEmpty ? L10n.t("فرد", "Member") : entry.member.firstName)
+                                .accessibilityHint(L10n.t("تعديل", "Edit"))
                         } else {
                             womanFamilyGridCell(entry: entry)
                                 .accessibilityElement(children: .ignore)
@@ -624,11 +658,8 @@ struct ProfileView: View {
                         }
                     }
                 }
-
-                // Add child as last grid cell
-                Button {
-                    showAddChild = true
-                } label: {
+                // إضافة ابن
+                Button { showAddChild = true } label: {
                     HStack(spacing: DS.Spacing.sm) {
                         Image(systemName: "plus")
                             .font(DS.Font.scaled(16, weight: .bold))
@@ -636,7 +667,6 @@ struct ProfileView: View {
                             .frame(width: 36, height: 36)
                             .background(DS.Color.primary.opacity(0.12))
                             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
-
                         Text(L10n.t("إضافة ابن", "Add Child"))
                             .font(DS.Font.caption1)
                             .fontWeight(.bold)
@@ -653,23 +683,9 @@ struct ProfileView: View {
                     )
                 }
                 .buttonStyle(PlainButtonStyle())
-
-                // إضافة زوجة / أم — للمخوّلين عند عدم وجودهما
-                if isCurrentUserMarried, authVM.canModerate, !hasWife {
-                    addFamilyActionCell(title: L10n.t("إضافة زوجة", "Add Wife"),
-                                        icon: "heart.fill", color: DS.Color.neonPink) {
-                        newWifeName = ""; showAddWife = true
-                    }
-                }
-                if isCurrentUserMarried, authVM.canModerate, !hasMother {
-                    addFamilyActionCell(title: L10n.t("إضافة/اختيار الأم", "Add/Pick Mother"),
-                                        icon: "person.fill", color: DS.Color.accent) {
-                        Task { fatherWives = await memberVM.fetchFatherWives(); showMotherOptions = true }
-                    }
-                }
             }
-            .padding(DS.Spacing.md)
         }
+        .padding(DS.Spacing.md)
     }
 
     private func childGridCell(son: FamilyMember) -> some View {
@@ -685,22 +701,14 @@ struct ProfileView: View {
                     .foregroundColor(DS.Color.textPrimary)
                     .lineLimit(1)
 
-                HStack(spacing: DS.Spacing.xs) {
-                    if let birth = son.birthDate, !birth.isEmpty {
-                        Text(birth)
-                            .font(DS.Font.caption2)
-                            .foregroundColor(DS.Color.textSecondary)
-                            .lineLimit(1)
-                    }
-                    if son.isDeceased ?? false {
-                        Text(L10n.t("متوفى", "Deceased"))
-                            .font(DS.Font.scaled(8, weight: .bold))
-                            .foregroundColor(DS.Color.textOnPrimary)
-                            .padding(.horizontal, DS.Spacing.xs)
-                            .padding(.vertical, 1)
-                            .background(DS.Color.error.opacity(0.8))
-                            .clipShape(Capsule())
-                    }
+                if son.isDeceased ?? false {
+                    Text(L10n.t("متوفى", "Deceased"))
+                        .font(DS.Font.scaled(8, weight: .bold))
+                        .foregroundColor(DS.Color.textOnPrimary)
+                        .padding(.horizontal, DS.Spacing.xs)
+                        .padding(.vertical, 1)
+                        .background(DS.Color.error.opacity(0.8))
+                        .clipShape(Capsule())
                 }
             }
         }
@@ -784,13 +792,12 @@ struct ProfileView: View {
                     .lineLimit(1)
 
                 HStack(spacing: DS.Spacing.xs) {
-                    // الدور نص رمادي خفيف بدل البشارة الملوّنة
-                    Text(L10n.t(entry.role.label, entry.role.labelEn))
-                        .font(DS.Font.caption2)
-                        .foregroundColor(DS.Color.textSecondary)
-                        .lineLimit(1)
-                    if let b = woman.birthDate, !b.isEmpty {
-                        Text(b).font(DS.Font.caption2).foregroundColor(DS.Color.textTertiary).lineLimit(1)
+                    // الدور (زوجة/أم) — يُخفى للأبناء
+                    if entry.role != .child {
+                        Text(L10n.t(entry.role.label, entry.role.labelEn))
+                            .font(DS.Font.caption2)
+                            .foregroundColor(DS.Color.textSecondary)
+                            .lineLimit(1)
                     }
                     if woman.isDeceased {
                         Text(L10n.t("متوفى", "Deceased"))
@@ -974,16 +981,21 @@ struct WomanMemberEditSheet: View {
     @State private var hasBirthDate: Bool
     @State private var birthDate: Date
     @State private var isDeceased: Bool
+    @State private var selectedGender: String
+    @State private var deathDate: Date
+    @State private var hasDeathDate: Bool
     @State private var selectedUIImage: UIImage? = nil
     @State private var isSaving = false
     @State private var showDeleteConfirm = false
     @State private var errorBanner: String? = nil
+    @State private var sheetHeight: CGFloat = 480
 
     init(memberVM: MemberViewModel, entry: WomenFamilyEntry) {
         self.memberVM = memberVM
         self.entry = entry
         _name = State(initialValue: entry.member.firstName)
         _isDeceased = State(initialValue: entry.member.isDeceased)
+        _selectedGender = State(initialValue: entry.member.gender)
         let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"
         if let b = entry.member.birthDate, let d = f.date(from: b) {
             _hasBirthDate = State(initialValue: true)
@@ -991,6 +1003,13 @@ struct WomanMemberEditSheet: View {
         } else {
             _hasBirthDate = State(initialValue: false)
             _birthDate = State(initialValue: Date())
+        }
+        if let dd = entry.member.deathDate, let d = f.date(from: dd) {
+            _hasDeathDate = State(initialValue: true)
+            _deathDate = State(initialValue: d)
+        } else {
+            _hasDeathDate = State(initialValue: false)
+            _deathDate = State(initialValue: Date())
         }
     }
 
@@ -1001,16 +1020,18 @@ struct WomanMemberEditSheet: View {
         NavigationStack {
             ScrollView(showsIndicators: false) {
                 VStack(spacing: DS.Spacing.md) {
-                    // صورة — بنفس واجهة «تعديل الابن» القديمة
-                    DSProfilePhotoPicker(
-                        selectedImage: $selectedUIImage,
-                        existingURL: entry.member.displayImageUrl,
-                        enableCrop: true,
-                        cropShape: .circle,
-                        trailing: L10n.t("اختياري", "Optional"),
-                        compactEmptyState: true
-                    )
-                    .padding(.horizontal, DS.Spacing.lg)
+                    // الصورة للذكر فقط — الأنثى بلا خيار صورة
+                    if selectedGender != "female" {
+                        DSProfilePhotoPicker(
+                            selectedImage: $selectedUIImage,
+                            existingURL: entry.member.displayImageUrl,
+                            enableCrop: true,
+                            cropShape: .circle,
+                            trailing: L10n.t("اختياري", "Optional"),
+                            compactEmptyState: true
+                        )
+                        .padding(.horizontal, DS.Spacing.lg)
+                    }
 
                     DSCard(padding: 0) {
                         DSSectionHeader(
@@ -1026,6 +1047,15 @@ struct WomanMemberEditSheet: View {
                                     .foregroundColor(DS.Color.textPrimary)
                             }
                             DSDivider()
+                            // اختيار الجنس — نفس واجهة إضافة الابن
+                            DSFormRow(icon: "person.2.fill", iconColor: DS.Color.accent,
+                                      label: L10n.t("الجنس", "Gender")) {
+                                HStack(spacing: DS.Spacing.xs) {
+                                    genderButton(title: L10n.t("ذكر", "Male"), value: "male", color: DS.Color.primary)
+                                    genderButton(title: L10n.t("أنثى", "Female"), value: "female", color: DS.Color.neonPink)
+                                }
+                            }
+                            DSDivider()
                             DSDateField(
                                 label: L10n.t("تاريخ الميلاد", "Birth Date"),
                                 date: $birthDate,
@@ -1037,6 +1067,18 @@ struct WomanMemberEditSheet: View {
                             DSFormRow(icon: "leaf.fill", iconColor: DS.Color.error,
                                       label: L10n.t("متوفى", "Deceased")) {
                                 Toggle("", isOn: $isDeceased).labelsHidden().tint(DS.Color.error)
+                            }
+                            .animation(.default, value: isDeceased)
+                            if isDeceased {
+                                DSDivider()
+                                DSDateField(
+                                    label: L10n.t("تاريخ الوفاة", "Death Date"),
+                                    date: $deathDate,
+                                    icon: "calendar",
+                                    iconColor: DS.Color.error,
+                                    range: ...Date()
+                                )
+                                .onChange(of: deathDate) { _ in hasDeathDate = true }
                             }
                         }
                     }
@@ -1061,9 +1103,13 @@ struct WomanMemberEditSheet: View {
                     }
                     .padding(.horizontal, DS.Spacing.lg)
 
-                    Spacer(minLength: DS.Spacing.xxl)
                 }
                 .padding(.vertical, DS.Spacing.md)
+                .background(
+                    GeometryReader { proxy in
+                        Color.clear.preference(key: SheetContentHeightKey.self, value: proxy.size.height)
+                    }
+                )
             }
             .background(DS.Color.background.ignoresSafeArea())
             .navigationTitle(L10n.t("تعديل \(roleTitle)", "Edit \(roleTitle)"))
@@ -1078,16 +1124,42 @@ struct WomanMemberEditSheet: View {
             .alert(L10n.t("حذف من العائلة", "Remove from family"), isPresented: $showDeleteConfirm) {
                 Button(L10n.t("حذف", "Delete"), role: .destructive) {
                     Task {
-                        let ok = await memberVM.deleteWomanMember(id: entry.member.id)
+                        // الأم: فكّ الارتباط فقط (لا نحذف السجل المشترك ولا نمسّ الزوجة).
+                        // الزوجة/الابن: حذف السجل.
+                        let ok = entry.role == .mother
+                            ? await memberVM.setSelfMother(motherId: nil)
+                            : await memberVM.deleteWomanMember(id: entry.member.id)
                         if ok { await MainActor.run { dismiss() } }
                     }
                 }
                 Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
             } message: {
-                Text(L10n.t("حذف «\(name)» من عائلتك؟", "Remove “\(name)” from your family?"))
+                Text(entry.role == .mother
+                     ? L10n.t("إزالة الأم «\(name)» من عائلتك؟ (لن تُحذف من الشجرة)", "Unlink mother “\(name)”?")
+                     : L10n.t("حذف «\(name)» من عائلتك؟", "Remove “\(name)” from your family?"))
             }
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+        .onPreferenceChange(SheetContentHeightKey.self) { h in
+            if h > 0 { sheetHeight = min(h + 40, 760) }
+        }
+        .presentationDetents([.height(sheetHeight)])
+        .presentationDragIndicator(.visible)
+    }
+
+    private func genderButton(title: String, value: String, color: Color) -> some View {
+        let selected = selectedGender == value
+        return Button { selectedGender = value } label: {
+            Text(title)
+                .font(DS.Font.caption1).fontWeight(.bold)
+                .foregroundColor(selected ? .white : DS.Color.textSecondary)
+                .padding(.horizontal, DS.Spacing.md)
+                .frame(height: 34)
+                .background(Capsule().fill(selected ? color : DS.Color.surface))
+                .overlay(Capsule().strokeBorder(selected ? Color.clear : DS.Color.textTertiary.opacity(0.3), lineWidth: 1))
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
     }
 
     private func save() {
@@ -1097,7 +1169,9 @@ struct WomanMemberEditSheet: View {
                 id: entry.member.id,
                 firstName: name,
                 birthDate: hasBirthDate ? birthDate : nil,
-                isDeceased: isDeceased
+                isDeceased: isDeceased,
+                deathDate: hasDeathDate ? deathDate : nil,
+                gender: selectedGender
             )
             if ok, let img = selectedUIImage {
                 await memberVM.updateWomanAvatar(id: entry.member.id, image: img)

@@ -10,6 +10,8 @@ nonisolated struct FamilyMember: Identifiable, Codable, Equatable, Sendable {
     var isDeceased: Bool?
     var role: UserRole
     var fatherId: UUID?
+    var motherId: UUID?
+    var husbandId: UUID?
     var photoURL: String?
     let isPhoneHidden: Bool?
     let isBirthDateHidden: Bool?
@@ -37,6 +39,8 @@ nonisolated struct FamilyMember: Identifiable, Codable, Equatable, Sendable {
         isDeceased: Bool? = nil,
         role: UserRole = .member,
         fatherId: UUID? = nil,
+        motherId: UUID? = nil,
+        husbandId: UUID? = nil,
         photoURL: String? = nil,
         isPhoneHidden: Bool? = nil,
         isBirthDateHidden: Bool? = nil,
@@ -63,6 +67,8 @@ nonisolated struct FamilyMember: Identifiable, Codable, Equatable, Sendable {
         self.isDeceased = isDeceased
         self.role = role
         self.fatherId = fatherId
+        self.motherId = motherId
+        self.husbandId = husbandId
         self.photoURL = photoURL
         self.isPhoneHidden = isPhoneHidden
         self.isBirthDateHidden = isBirthDateHidden
@@ -102,6 +108,8 @@ nonisolated struct FamilyMember: Identifiable, Codable, Equatable, Sendable {
         }
         
         self.fatherId = try container.decodeIfPresent(UUID.self, forKey: .fatherId)
+        self.motherId = try container.decodeIfPresent(UUID.self, forKey: .motherId)
+        self.husbandId = try container.decodeIfPresent(UUID.self, forKey: .husbandId)
         self.photoURL = try container.decodeIfPresent(String.self, forKey: .photoURL)
         self.isPhoneHidden = try container.decodeIfPresent(Bool.self, forKey: .isPhoneHidden)
         self.isBirthDateHidden = try container.decodeIfPresent(Bool.self, forKey: .isBirthDateHidden)
@@ -147,6 +155,8 @@ nonisolated struct FamilyMember: Identifiable, Codable, Equatable, Sendable {
             && lhs.deathDate == rhs.deathDate
             && lhs.gender == rhs.gender
             && lhs.fatherId == rhs.fatherId
+            && lhs.motherId == rhs.motherId
+            && lhs.husbandId == rhs.husbandId
             && lhs.sortOrder == rhs.sortOrder
             && lhs.bio == rhs.bio
             && lhs.isMarried == rhs.isMarried
@@ -177,6 +187,11 @@ nonisolated struct FamilyMember: Identifiable, Codable, Equatable, Sendable {
     // حالة الحذف أو التجميد
     var isDeleted: Bool {
         return status == .frozen
+    }
+
+    /// أنثى؟ — يُستخدم في شجرة النساء (women_members) لتمييز الإناث عن العُقد المنعكسة للرجال.
+    var isFemale: Bool {
+        return (gender ?? "").lowercased() == "female"
     }
     
     /// الاسم العلني للمستوى — المالك يظهر كـ "مدير" للباقي
@@ -260,6 +275,8 @@ nonisolated struct FamilyMember: Identifiable, Codable, Equatable, Sendable {
         case deathDate = "death_date"
         case isDeceased = "is_deceased"
         case fatherId = "father_id"
+        case motherId = "mother_id"
+        case husbandId = "husband_id"
         case photoURL = "photo_url"
         case isPhoneHidden = "is_phone_hidden"
         case isBirthDateHidden = "is_birth_date_hidden"

@@ -27,6 +27,29 @@ interface Payload {
 Deno.serve(async (req) => {
   if (req.method !== "POST") return new Response("Method not allowed", { status: 405 });
 
+  // أمان: لا يُسمح بالإرسال إلا عبر سرّ الويب-هوك (استدعاء النظام) أو مستخدم إداري.
+  // بدون ذلك كان أي عضو مسجّل يقدر يبثّ إشعارات تصيّد لكل المدراء عبر service_role.
+  {
+    const WEBHOOK_SECRET = Deno.env.get("PUSH_WEBHOOK_SECRET");
+    const providedSecret = req.headers.get("x-webhook-secret");
+    const secretOk = !!WEBHOOK_SECRET && providedSecret === WEBHOOK_SECRET;
+    if (!secretOk) {
+      const token = (req.headers.get("authorization") ?? "").replace("Bearer ", "");
+      const authClient = createClient(SUPABASE_URL, SERVICE_ROLE);
+      const { data: { user } } = await authClient.auth.getUser(token);
+      let role: string | null = null;
+      if (user) {
+        const { data: prof } = await authClient.from("profiles").select("role").eq("id", user.id).single();
+        role = prof?.role ?? null;
+      }
+      if (!user || !["owner", "admin", "monitor", "supervisor"].includes(role ?? "")) {
+        return new Response(JSON.stringify({ ok: false, message: "Unauthorized" }), {
+          status: 403, headers: { "Content-Type": "application/json" },
+        });
+      }
+    }
+  }
+
   try {
     const payload = (await req.json()) as Payload;
     const supabase = createClient(SUPABASE_URL, SERVICE_ROLE);

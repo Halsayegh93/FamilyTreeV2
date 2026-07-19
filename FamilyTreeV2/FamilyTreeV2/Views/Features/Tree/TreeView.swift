@@ -113,6 +113,8 @@ struct TreeView: View {
     @EnvironmentObject var memberVM: MemberViewModel
     @EnvironmentObject var adminRequestVM: AdminRequestViewModel
     @Binding var selectedTab: Int
+    /// تبويب علوي [عائلة/نساء] — يظهر تحت الهيدر عند تمريره.
+    var treeTab: Binding<Int>? = nil
     @State private var showingNotifications = false
     @State private var selectedMember: FamilyMember? = nil
     @State private var scrollTarget: UUID? = nil
@@ -269,10 +271,7 @@ struct TreeView: View {
                                     }
                                 )
                                 .onPreferenceChange(TreeContentSizeKey.self) { treeContentSize = $0 }
-                                .simultaneousGesture(
-                                    SpatialTapGesture(count: 2, coordinateSpace: .local)
-                                        .onEnded { value in handleDoubleTap(at: value.location) }
-                                )
+                                // الزوم ثابت — أُلغي النقر المزدوج للتكبير
                                 .scaleEffect(scale, anchor: zoomAnchor)
                                 .frame(
                                     minWidth: geometry.size.width,
@@ -284,21 +283,7 @@ struct TreeView: View {
                                 .padding(.bottom, DS.Spacing.xxxxl * 3)
                                 .padding(.horizontal, DS.Spacing.xxxxl)
                             }
-                            .simultaneousGesture(
-                                MagnificationGesture()
-                                    .onChanged { value in
-                                        // Note: MagnificationGesture (iOS 16+) ما يعطي startLocation
-                                        // فنستخدم مركز الشاشة كنقطة زوم افتراضية
-                                        zoomAnchor = .center
-                                        let newScale = baseScale * value
-                                        scale = min(max(newScale, TreeConst.minScale), TreeConst.maxScale)
-                                    }
-                                    .onEnded { value in
-                                        let newScale = baseScale * value
-                                        scale = min(max(newScale, TreeConst.minScale), TreeConst.maxScale)
-                                        baseScale = scale
-                                    }
-                            )
+                            // الزوم ثابت — أُلغيت إيماءة التكبير باللمس (pinch) في شجرة العائلة
                             .onChange(of: scrollCounter) { _ in
                                 if let id = scrollTarget {
                                     withAnimation(.easeInOut(duration: 0.3)) {
@@ -319,7 +304,7 @@ struct TreeView: View {
                             backgroundGradient: DS.Color.gradientPrimary
                         )
 
-                        // تحت الهيدر: إمّا البحث (مع الفلاتر) أو صف الأدوات (إعادة موضع + موقعي).
+                        // تحت الهيدر: إمّا البحث (مع الفلاتر) أو صف الأدوات (تبويب + بحث + بداية + موقعي).
                         Group {
                             if showSearch {
                                 TreeSearchOverlay(
@@ -620,6 +605,7 @@ struct TreeView: View {
     // MARK: - صف الأدوات تحت الهيدر — مطابق للتفرّع (بحث / البداية / موقعي) أيقونات فقط
     private var classicToolbarRow: some View {
         HStack(spacing: DS.Spacing.sm) {
+            // الترتيب: بحث → البداية → تبويب [عائلة/نساء] → موقعي
             Button {
                 withAnimation(DS.Anim.smooth) { showSearch = true }
             } label: {
@@ -643,6 +629,14 @@ struct TreeView: View {
 
             Spacer()
 
+            // التبويب [شجرة العائلة / النساء] بالنص
+            if let treeTab {
+                FamilyTreeTabBar(selection: treeTab)
+            }
+
+            Spacer()
+
+            // زر موقعي — آخر شي
             if authVM.currentUser != nil {
                 Button {
                     if let currentUserID = authVM.currentUser?.id,
@@ -665,13 +659,16 @@ struct TreeView: View {
         }
     }
 
-    /// زر دائري بأيقونة فقط — نفس ستايل التفرّع.
+    /// زر دائري بأيقونة — تضليل خفيف (مو شفاف 100%).
     private func toolbarIconButton(icon: String, color: Color = DS.Color.primary) -> some View {
         Image(systemName: icon)
             .font(DS.Font.scaled(16, weight: .bold))
             .foregroundColor(color)
             .frame(width: 40, height: 40)
-            .background(Circle().fill(color.opacity(0.12)))
+            .background(DS.Color.surface, in: Circle())           // غير شفاف
+            .overlay(Circle().strokeBorder(DS.Color.primary.opacity(0.15), lineWidth: 1))
+            .dsSubtleShadow()
+            .contentShape(Circle())
     }
 
     // MARK: - أدوات التحديث — Glassy (أُزيلت أدوات الزوم؛ التكبير باللمس)

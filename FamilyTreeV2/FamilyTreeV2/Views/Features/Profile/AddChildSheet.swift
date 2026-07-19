@@ -30,7 +30,8 @@ struct AddChildSheet: View {
 
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: DS.Spacing.md) {
-                        heroHeader
+                        // الصورة للذكر فقط — الأنثى بلا خيار صورة
+                        if selectedGender != "female" { heroHeader }
                         basicInfoCard
                             .padding(.horizontal, DS.Spacing.lg)
                         submitButton
@@ -116,8 +117,8 @@ struct AddChildSheet: View {
                     DSFormRow(icon: "person.2.fill", iconColor: DS.Color.accent,
                               label: L10n.t("الجنس", "Gender")) {
                         HStack(spacing: DS.Spacing.xs) {
-                            genderButton(title: L10n.t("ابن", "Son"), value: "male", color: DS.Color.primary)
-                            genderButton(title: L10n.t("ابنة", "Daughter"), value: "female", color: DS.Color.neonPink)
+                            genderButton(title: L10n.t("ذكر", "Male"), value: "male", color: DS.Color.primary)
+                            genderButton(title: L10n.t("أنثى", "Female"), value: "female", color: DS.Color.neonPink)
                         }
                     }
 

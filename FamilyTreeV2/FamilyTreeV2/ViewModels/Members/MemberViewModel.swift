@@ -454,17 +454,20 @@ class MemberViewModel: ObservableObject {
     /// تعديل فرد من شجرة النساء (اسم/تاريخ ميلاد/متوفى). للإدارة (owner/admin/monitor)
     /// حسب RLS. يُحدّث الصف ثم يُنعش عائلة المستخدم الحالي.
     @discardableResult
-    func updateWomanMember(id: UUID, firstName: String, birthDate: Date?, isDeceased: Bool) async -> Bool {
+    func updateWomanMember(id: UUID, firstName: String, birthDate: Date?, isDeceased: Bool,
+                           deathDate: Date? = nil, gender: String? = nil) async -> Bool {
         guard NetworkMonitor.shared.requireOnline() else { return false }
         let trimmed = firstName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return false }
         // ملاحظة: لا نكتب full_name — فهو يحمل النسب الكامل (الاسم + سلسلة الآباء)
         // وكتابته بالاسم الأول فقط تدمّره. نكتفي بـ first_name (وهو المعروض في التطبيق).
-        let payload: [String: AnyEncodable] = [
+        var payload: [String: AnyEncodable] = [
             "first_name":  AnyEncodable(trimmed),
             "is_deceased": AnyEncodable(isDeceased),
-            "birth_date":  AnyEncodable(birthDate.map { DateHelper.format($0) })  // nil يمسح
+            "birth_date":  AnyEncodable(birthDate.map { DateHelper.format($0) }),  // nil يمسح
+            "death_date":  AnyEncodable(isDeceased ? deathDate.map { DateHelper.format($0) } : Optional<String>.none)
         ]
+        if let gender { payload["gender"] = AnyEncodable(gender) }
         do {
             try await supabase.from("women_members")
                 .update(payload).eq("id", value: id.uuidString).execute()

@@ -736,46 +736,16 @@ class NotificationViewModel: ObservableObject {
         }
     }
     
-    /// إرسال push حقيقي لأعضاء محددين أو للجميع عبر Edge Function
+    /// (مُعطّلة عمداً) إرسال push مباشر عبر `push-notify`.
+    ///
+    /// الدفع صار يُدار تلقائياً عبر DB trigger `trg_push_on_notification` الذي
+    /// يستدعي `push-on-notification` (APNs + FCM) عند إدراج أي صف في جدول
+    /// `notifications` — نفس المسار الموحّد للتطبيق والويب والأندرويد. كان
+    /// استدعاء `push-notify` (APNs فقط) هنا بالإضافة إلى إدراج الإشعار يسبب
+    /// وصول **إشعارين** لأجهزة iOS (مرّة من الـ trigger ومرّة من هذا الاستدعاء).
+    /// أُبقيت الدالة no-op للحفاظ على مواضع الاستدعاء الحالية دون تغييرها.
     func sendPushToMembers(title: String, body: String, kind: String = "general", targetMemberIds: [UUID]? = nil) async {
-        let targetCount = targetMemberIds?.count ?? 0
-        Log.info("[PUSH] إرسال push-notify: targets=\(targetCount == 0 ? "ALL" : "\(targetCount)"), kind=\(kind)")
-        do {
-            var payload: [String: AnyEncodable] = [
-                "title": AnyEncodable(title),
-                "body": AnyEncodable(body),
-                "kind": AnyEncodable(kind)
-            ]
-            if let ids = targetMemberIds, !ids.isEmpty {
-                payload["member_ids"] = AnyEncodable(ids.map { $0.uuidString })
-            }
-
-            try await supabase.functions
-                .invoke(
-                    "push-notify",
-                    options: FunctionInvokeOptions(body: payload)
-                )
-
-            Log.info("[PUSH] push-notify اكتمل بنجاح")
-        } catch {
-            Log.warning("[PUSH] push-notify فشل، محاولة تحديث الجلسة: \(error.localizedDescription)")
-            // إعادة محاولة بعد refresh session
-            do {
-                _ = try await supabase.auth.refreshSession()
-                var retryPayload: [String: AnyEncodable] = [
-                    "title": AnyEncodable(title),
-                    "body": AnyEncodable(body),
-                    "kind": AnyEncodable(kind)
-                ]
-                if let ids = targetMemberIds, !ids.isEmpty {
-                    retryPayload["member_ids"] = AnyEncodable(ids.map { $0.uuidString })
-                }
-                try await supabase.functions.invoke("push-notify", options: FunctionInvokeOptions(body: retryPayload))
-                Log.info("[PUSH] push-notify نجح بعد تحديث الجلسة")
-            } catch {
-                Log.error("[PUSH] push-notify فشل نهائياً: \(error.localizedDescription)")
-            }
-        }
+        // no-op — الدفع يُطلَق تلقائياً عبر trigger على جدول notifications عند الإدراج.
     }
     
     // MARK: - Notifications
