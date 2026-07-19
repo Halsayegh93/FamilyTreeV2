@@ -818,3 +818,17 @@ update public.wc_matches set home_flag = '🏴󠁧󠁢󠁥󠁮󠁧󠁿' where ho
 update public.wc_matches set away_flag = '🏴󠁧󠁢󠁥󠁮󠁧󠁿' where away_team = 'England'  and away_flag = '🏴';
 update public.wc_matches set home_flag = '🏴󠁧󠁢󠁳󠁣󠁴󠁿' where home_team = 'Scotland' and home_flag = '🏴';
 update public.wc_matches set away_flag = '🏴󠁧󠁢󠁳󠁣󠁴󠁿' where away_team = 'Scotland' and away_flag = '🏴';
+
+-- ---------------------------------------------------------------------------
+-- Activate Gulf Cup 27 + Asia Cup 2027 in the tournament picker (one-shot).
+-- Guarded by a settings marker so a later manual deactivation from the
+-- dashboard is respected — this block never re-activates after its first run.
+do $$ begin
+  if not exists (select 1 from public.wc_settings
+                  where tournament_id = 'wc26' and key = 'gulf_asia_activated') then
+    update public.wc_tournaments set active = true where id in ('gulf27', 'asia27');
+    insert into public.wc_settings (tournament_id, key, value, updated_at)
+    values ('wc26', 'gulf_asia_activated', '1', now())
+    on conflict (tournament_id, key) do nothing;
+  end if;
+end $$;
