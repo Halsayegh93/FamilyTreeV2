@@ -832,3 +832,17 @@ do $$ begin
     on conflict (tournament_id, key) do nothing;
   end if;
 end $$;
+
+-- ---------------------------------------------------------------------------
+-- Hide the World Cup from the tournament picker (one-shot, owner request).
+-- Same marker pattern as the activation block above: runs once, so manually
+-- re-activating wc26 later from the dashboard stays respected.
+do $$ begin
+  if not exists (select 1 from public.wc_settings
+                  where tournament_id = 'wc26' and key = 'wc26_hidden') then
+    update public.wc_tournaments set active = false where id = 'wc26';
+    insert into public.wc_settings (tournament_id, key, value, updated_at)
+    values ('wc26', 'wc26_hidden', '1', now())
+    on conflict (tournament_id, key) do nothing;
+  end if;
+end $$;
