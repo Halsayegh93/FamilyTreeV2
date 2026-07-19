@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=33" />
+  <link rel="stylesheet" href="styles.css?v=35" />
   <style>
     /* predictors list: click a player to reveal WHEN they predicted */
     .pred-when.pred-row { display: block; }   /* stack summary + time, not side-by-side */
@@ -495,6 +495,41 @@
       </div>`;
     }
 
+    // Everyone's champion pick + the date it was made — shown on the home page.
+    // Same reveal rule as the picker: the list appears once YOUR pick is saved
+    // (or picking has locked), so nobody browses picks while still able to choose.
+    function championPicksListCard() {
+      if (!championPicks || !championPicks.length) return '';
+      const name = playerEl.value.trim();
+      const mine = championPicks.find((p) => p.player_name === name);
+      if (!mine && !champLocked()) return '';
+      const flags = new Map();
+      for (const m of matches) {
+        if (m.home_team) flags.set(m.home_team, m.home_flag);
+        if (m.away_team) flags.set(m.away_team, m.away_flag);
+      }
+      // eliminated teams get a strike-through — same rule as the picker grid
+      const out = new Set(matches.map(r16LoserOf).filter(Boolean));
+      const rows = championPicks.slice()
+        .sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0))
+        .map((p) => {
+          const d = p.created_at ? new Date(p.created_at) : null;
+          const when = d ? d.toLocaleDateString('ar', { day: 'numeric', month: 'long' }) : '—';
+          const gone = out.has(p.team);
+          return `<div class="champ-pick-row${p.player_name === name ? ' me' : ''}${gone ? ' out' : ''}">
+            <span class="cp-name">${esc(p.player_name)}</span>
+            <span class="cp-team">${flagHTML(flags.get(p.team) || '')}<span>${esc(p.team)}</span></span>
+            <span class="cp-date">🗓 ${esc(when)}</span>
+          </div>`;
+        }).join('');
+      return `<div class="card champ-card">
+        <div class="round-title" style="margin:0 0 4px">🏆 توقّعات بطل كأس العالم
+          <span class="champ-pts">+${POINTS.champion} نقطة</span></div>
+        <div class="champ-sub">توقّع كل مشارك وتاريخ تسجيله — التوقّع نهائي وما يتغيّر 🔒</div>
+        <div class="champ-list">${rows}</div>
+      </div>`;
+    }
+
     function wireChampion() {
       const card = viewMatches.querySelector('.champ-card');
       if (!card) return;
@@ -564,8 +599,9 @@
         });
       }
 
-      // champion pick card removed from the home page
-      const champHTML = '';
+      // champion PICKER card removed from the home page — instead we show
+      // everyone's saved pick with its date (once revealed).
+      const champHTML = championPicksListCard();
 
       if (!list.length) {
         const emptyMsg = showingPast

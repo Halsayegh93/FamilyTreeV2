@@ -37,7 +37,7 @@ const FLAGS = {
   'mexico': '🇲🇽', 'south africa': '🇿🇦', 'south korea': '🇰🇷', 'korea republic': '🇰🇷',
   'czech republic': '🇨🇿', 'czechia': '🇨🇿', 'canada': '🇨🇦', 'switzerland': '🇨🇭',
   'qatar': '🇶🇦', 'bosnia and herzegovina': '🇧🇦', 'brazil': '🇧🇷', 'morocco': '🇲🇦',
-  'scotland': '🏴', 'haiti': '🇭🇹', 'united states': '🇺🇸', 'usa': '🇺🇸', 'paraguay': '🇵🇾',
+  'scotland': '🏴󠁧󠁢󠁳󠁣󠁴󠁿', 'haiti': '🇭🇹', 'united states': '🇺🇸', 'usa': '🇺🇸', 'paraguay': '🇵🇾',
   'australia': '🇦🇺', 'turkey': '🇹🇷', 'türkiye': '🇹🇷', 'turkiye': '🇹🇷', 'germany': '🇩🇪',
   'curaçao': '🇨🇼', 'curacao': '🇨🇼', 'costa rica': '🇨🇷', 'ecuador': '🇪🇨',
   'netherlands': '🇳🇱', 'japan': '🇯🇵', 'tunisia': '🇹🇳', 'sweden': '🇸🇪', 'belgium': '🇧🇪',
@@ -45,7 +45,7 @@ const FLAGS = {
   'cape verde': '🇨🇻', 'cabo verde': '🇨🇻', 'saudi arabia': '🇸🇦', 'uruguay': '🇺🇾',
   'france': '🇫🇷', 'senegal': '🇸🇳', 'norway': '🇳🇴', 'iraq': '🇮🇶', 'argentina': '🇦🇷',
   'algeria': '🇩🇿', 'austria': '🇦🇹', 'jordan': '🇯🇴', 'portugal': '🇵🇹', 'colombia': '🇨🇴',
-  'uzbekistan': '🇺🇿', 'dr congo': '🇨🇩', 'congo dr': '🇨🇩', 'england': '🏴',
+  'uzbekistan': '🇺🇿', 'dr congo': '🇨🇩', 'congo dr': '🇨🇩', 'england': '🏴󠁧󠁢󠁥󠁮󠁧󠁿',
   'croatia': '🇭🇷', 'ghana': '🇬🇭', 'panama': '🇵🇦',
   'ivory coast': '🇨🇮', "cote d'ivoire": '🇨🇮', 'côte d’ivoire': '🇨🇮',
 };
