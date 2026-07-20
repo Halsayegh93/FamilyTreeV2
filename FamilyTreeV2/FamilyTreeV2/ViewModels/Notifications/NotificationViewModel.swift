@@ -981,17 +981,19 @@ class NotificationViewModel: ObservableObject {
         return false
     }
 
-    func sendNotification(title: String, body: String, targetMemberIds: [UUID]?, sendPush: Bool = true, kind: String = "admin") async {
-        guard authVM?.isAdmin == true, let creator = currentUser?.id else { return }
-        guard notificationsFeatureAvailable else { return }
+    @discardableResult
+    func sendNotification(title: String, body: String, targetMemberIds: [UUID]?, sendPush: Bool = true, kind: String = "admin") async -> Bool {
+        guard authVM?.isAdmin == true, let creator = currentUser?.id else { return false }
+        guard notificationsFeatureAvailable else { return false }
 
         let dedupKey = "T|\(kind)|\(title)|\(body)|\(targetMemberIds?.map { $0.uuidString }.sorted().joined(separator: ",") ?? "ALL")"
         if isDuplicateNotification(dedupKey) {
             Log.warning("[Notif] تجاهل إشعار مكرر (نقرة مزدوجة محتملة)")
-            return
+            return true
         }
 
         self.isLoading = true
+        var ok = false
 
         do {
             if let ids = targetMemberIds, !ids.isEmpty {
@@ -1026,6 +1028,7 @@ class NotificationViewModel: ObservableObject {
             }
 
             await fetchNotifications(force: true)
+            ok = true
         } catch {
             if ErrorHelper.isMissingTable(error, table: "notifications") {
                 notificationsFeatureAvailable = false
@@ -1033,8 +1036,9 @@ class NotificationViewModel: ObservableObject {
                 Log.error("خطأ إرسال الإشعار: \(error.localizedDescription)")
             }
         }
-        
+
         self.isLoading = false
+        return ok
     }
 
     /// إبلاغ عام عن محتوى (مشروع/أرشيف/ديوانية/عضو/تعليق…) — سياسة Apple للمحتوى

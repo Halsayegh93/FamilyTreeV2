@@ -16,6 +16,8 @@ struct AdminNotificationsView: View {
     @State private var scheduleEnabled = false
     @State private var scheduledDate = Date().addingTimeInterval(3600)
     @State private var showScheduledSheet = false
+    @State private var showSendConfirm = false
+    @State private var showSendError = false
 
     private var activeMembers: [FamilyMember] {
         memberVM.allMembers
@@ -279,7 +281,7 @@ struct AdminNotificationsView: View {
                         icon: scheduleEnabled ? "clock.badge.checkmark" : "paperplane.fill",
                         isLoading: notificationVM.isLoading
                     ) {
-                        Task { await sendNotification() }
+                        showSendConfirm = true
                     }
                     .disabled(
                         title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -322,6 +324,43 @@ struct AdminNotificationsView: View {
                 .environmentObject(notificationVM)
                 .environmentObject(memberVM)
         }
+        // تأكيد الإرسال — يذكر الجمهور صراحةً (البثّ للجميع إجراء لا رجعة فيه)
+        .confirmationDialog(
+            scheduleEnabled ? L10n.t("تأكيد الجدولة", "Confirm Schedule")
+                            : L10n.t("تأكيد الإرسال", "Confirm Send"),
+            isPresented: $showSendConfirm, titleVisibility: .visible
+        ) {
+            Button(
+                isBroadcastSend
+                    ? L10n.t("إرسال للجميع (\(sendAudienceCount))", "Send to all (\(sendAudienceCount))")
+                    : L10n.t("إرسال لـ \(sendAudienceCount) عضو", "Send to \(sendAudienceCount) members"),
+                role: isBroadcastSend ? .destructive : nil
+            ) {
+                Task { await sendNotification() }
+            }
+            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
+        } message: {
+            Text(isBroadcastSend
+                 ? L10n.t("سيصل هذا الإشعار إلى جميع الأعضاء (\(sendAudienceCount)).",
+                          "This will reach all \(sendAudienceCount) members.")
+                 : L10n.t("سيصل إلى \(sendAudienceCount) عضو محدّد.",
+                          "Will reach \(sendAudienceCount) selected members."))
+        }
+        .alert(L10n.t("تعذّر الإرسال", "Send Failed"), isPresented: $showSendError) {
+            Button(L10n.t("حسناً", "OK"), role: .cancel) {}
+        } message: {
+            Text(L10n.t("حدث خطأ أثناء الإرسال. حاول مرة أخرى.", "Something went wrong. Please try again."))
+        }
+    }
+
+    /// هل الإرسال بثّ للجميع (تحديد فارغ أو كل النشطين).
+    private var isBroadcastSend: Bool {
+        let activeMemberIds = Set(activeMembers.map(\.id))
+        return selectedMemberIds.isEmpty || selectedMemberIds == activeMemberIds
+    }
+    /// عدد المستلمين للإرسال الحالي.
+    private var sendAudienceCount: Int {
+        isBroadcastSend ? activeMembers.count : selectedMemberIds.count
     }
 
     // MARK: - Member Row
@@ -403,13 +442,13 @@ struct AdminNotificationsView: View {
                 dismiss()
             }
         } else {
-            await notificationVM.sendNotification(
+            let ok = await notificationVM.sendNotification(
                 title: title,
                 body: finalBody,
                 targetMemberIds: targetIds,
                 kind: "admin_broadcast"
             )
-            dismiss()
+            if ok { dismiss() } else { showSendError = true }
         }
     }
 }

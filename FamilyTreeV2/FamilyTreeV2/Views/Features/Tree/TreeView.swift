@@ -664,7 +664,7 @@ struct TreeView: View {
         Image(systemName: icon)
             .font(DS.Font.scaled(16, weight: .bold))
             .foregroundColor(color)
-            .frame(width: 40, height: 40)
+            .frame(width: 44, height: 44)                         // هدف لمس ≥44pt
             .background(DS.Color.surface, in: Circle())           // غير شفاف
             .overlay(Circle().strokeBorder(DS.Color.primary.opacity(0.15), lineWidth: 1))
             .dsSubtleShadow()

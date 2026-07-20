@@ -855,23 +855,25 @@ struct ProfileView: View {
                 Image(systemName: "chevron.up")
                     .font(.system(size: 10, weight: .black))
                     .foregroundColor(idx > 0 ? DS.Color.primary : DS.Color.textTertiary.opacity(0.4))
-                    .frame(width: 22, height: 22)
+                    .frame(width: 30, height: 30)
                     .background(Circle().fill(DS.Color.surface))
                     .overlay(Circle().strokeBorder(DS.Color.primary.opacity(0.15), lineWidth: 1))
             }
             .buttonStyle(.plain)
             .disabled(idx == 0)
+            .accessibilityLabel(L10n.t("نقل لأعلى", "Move up"))
 
             Button { moveWomanChild(child, up: false) } label: {
                 Image(systemName: "chevron.down")
                     .font(.system(size: 10, weight: .black))
                     .foregroundColor(idx < list.count - 1 ? DS.Color.primary : DS.Color.textTertiary.opacity(0.4))
-                    .frame(width: 22, height: 22)
+                    .frame(width: 30, height: 30)
                     .background(Circle().fill(DS.Color.surface))
                     .overlay(Circle().strokeBorder(DS.Color.primary.opacity(0.15), lineWidth: 1))
             }
             .buttonStyle(.plain)
             .disabled(idx >= list.count - 1)
+            .accessibilityLabel(L10n.t("نقل لأسفل", "Move down"))
         }
         .padding(6)
     }

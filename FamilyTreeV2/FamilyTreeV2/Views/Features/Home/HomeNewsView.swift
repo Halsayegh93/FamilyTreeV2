@@ -271,7 +271,10 @@ struct HomeNewsView: View {
                         .background(DS.Color.surface)
                         .clipShape(Circle())
                         .overlay(Circle().strokeBorder(DS.Color.primary.opacity(0.08), lineWidth: 1))
+                        .frame(width: 44, height: 44)          // هدف لمس ≥44pt (الحجم البصري يبقى 38)
+                        .contentShape(Rectangle())
                 }
+                .accessibilityLabel(showNewsSearch ? L10n.t("إغلاق البحث", "Close search") : L10n.t("بحث", "Search"))
             }
         }
         .padding(.horizontal, DS.Spacing.lg)

@@ -187,6 +187,9 @@ struct LoginView: View {
             }
             .disabled(isDisabled)
 
+            // رسالة الخطأ/الحالة في خطوة الرقم أيضاً — كان الفشل صامتاً هنا
+            statusMessage
+                .animation(DS.Anim.snappy, value: authVM.otpErrorMessage)
         }
         .padding(DS.Spacing.lg)
         .background(DS.Color.surface)

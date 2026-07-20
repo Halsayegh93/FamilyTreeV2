@@ -104,13 +104,13 @@ enum DS {
         // Text
         static let textPrimary   = SwiftUI.Color.adaptive(light: "#0A0E18", dark: "#F0F4FF") // Deep Navy / Cool White
         static let textSecondary = SwiftUI.Color.adaptive(light: "#5A6070", dark: "#8A90A0") // Slate
-        static let textTertiary  = SwiftUI.Color.adaptive(light: "#8A90A0", dark: "#5A6070") // Light Slate
+        static let textTertiary  = SwiftUI.Color.adaptive(light: "#6B7280", dark: "#8A93A0") // Slate — مقروء (AA)
         static let textOnPrimary = SwiftUI.Color.white
         static let textGold      = SwiftUI.Color.adaptive(light: "#10B981", dark: "#0D9488") // Emerald
 
         // Semantic
-        static let success = SwiftUI.Color.adaptive(light: "#32E875", dark: "#28C060") // Emerald
-        static let warning = SwiftUI.Color.adaptive(light: "#D4960A", dark: "#F0B040") // Amber
+        static let success = SwiftUI.Color.adaptive(light: "#157F3C", dark: "#45BC72") // Emerald — يعدّي AA (~5:1) كنص وكتعبئة
+        static let warning = SwiftUI.Color.adaptive(light: "#9A6A0A", dark: "#F0B040") // Amber — يعدّي AA للنص بالوضع الفاتح
         static let error   = SwiftUI.Color.adaptive(light: "#D32F2F", dark: "#EF5350") // أحمر صافي
         static let info    = SwiftUI.Color.adaptive(light: "#357DED", dark: "#5C9AF2") // Blue
 
@@ -296,9 +296,10 @@ enum DS {
     enum Shadow {
         static let card     = ShadowStyle(color: .black.opacity(0.06), radius: 8, x: 0, y: 2)
         static let subtle   = ShadowStyle(color: .black.opacity(0.03), radius: 4, x: 0, y: 1)
-        static let glow     = ShadowStyle(color: .clear, radius: 0, x: 0, y: 0)
-        static let glowAccent = ShadowStyle(color: .clear, radius: 0, x: 0, y: 0)
-        static let neon     = ShadowStyle(color: .clear, radius: 0, x: 0, y: 0)
+        // ظلال «التوهّج» — تدرّج ارتفاع حقيقي بلمسة لون العلامة (كانت clear/معطّلة)
+        static let glow     = ShadowStyle(color: SwiftUI.Color(hex: "#1E5474").opacity(0.16), radius: 14, x: 0, y: 4)
+        static let glowAccent = ShadowStyle(color: SwiftUI.Color(hex: "#2C6E49").opacity(0.16), radius: 12, x: 0, y: 4)
+        static let neon     = ShadowStyle(color: SwiftUI.Color(hex: "#1E5474").opacity(0.14), radius: 12, x: 0, y: 3)
         static let none     = ShadowStyle(color: .clear, radius: 0, x: 0, y: 0)
     }
 
