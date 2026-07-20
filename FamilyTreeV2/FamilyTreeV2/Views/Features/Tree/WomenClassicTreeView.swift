@@ -93,14 +93,7 @@ struct WomenClassicTreeView: View {
         var depth: [UUID: Int] = [:]
         var stubs: Set<UUID> = []   // آباء لديهم أبناء ظاهرون (لرسم الوصلة)
         var heights: [UUID: CGFloat] = [:]   // ارتفاع صندوق كل عقدة (متغيّر)
-        var childRows: [UUID: [[UUID]]] = [:]   // صفوف أبناء كل أب — لخطوط الربط الحقيقية
         var size: CGSize = .zero
-    }
-
-    /// مقطع خط ربط واحد (view متحرك — ينزلق مع العقد).
-    private struct WSeg: Identifiable {
-        let id: String
-        let rect: CGRect
     }
 
     /// ارتفاع صندوق العقدة — يطابق الارتفاع الفعلي بدقّة (لمحاذاة الأسماء بين الأعمدة).
@@ -212,7 +205,6 @@ struct WomenClassicTreeView: View {
                     place(k.id, x + rowBoxes[j].width / 2, rowTop, d)
                     x += rowBoxes[j].width + H_GAP
                 }
-                L.childRows[pid, default: []].append(rowKids.map { $0.id })   // لخطوط الربط
                 rowTop += rowH + ROW_GAP
                 i += per
             }
@@ -278,16 +270,15 @@ struct WomenClassicTreeView: View {
                     .frame(width: geo.size.width, height: geo.size.height)
                     .overlay(alignment: .topLeading) {
                         ZStack(alignment: .topLeading) {
-                            // خطوط الربط الحقيقية: عمود من الأب → ناقل أفقي → نازل لكل ابن
-                            ForEach(connectorSegs) { seg in
-                                Capsule(style: .continuous)
-                                    .fill(DS.Color.primary.opacity(0.45))
-                                    .frame(width: seg.rect.width, height: seg.rect.height)
-                                    .position(x: seg.rect.midX, y: seg.rect.midY)
-                                    .transition(.asymmetric(
-                                        insertion: AnyTransition.opacity.animation(.easeIn(duration: 0.22).delay(0.1)),
-                                        removal: AnyTransition.opacity.animation(.easeOut(duration: 0.1))
-                                    ))
+                            // الوصلات — خط قصير تحت الأب فقط (النمط الأصلي)
+                            ForEach(Array(layout.stubs), id: \.self) { pid in
+                                if let a = layout.positions[pid] {
+                                    let ph = layout.heights[pid] ?? NODE_H
+                                    Rectangle()
+                                        .fill(DS.Color.primary.opacity(0.5))
+                                        .frame(width: 2, height: STUB)
+                                        .position(x: a.x + NODE_W / 2, y: a.y + ph + (V_GAP - STUB) / 2 + STUB / 2)
+                                }
                             }
                             // العُقد
                             ForEach(members.filter { layout.positions[$0.id] != nil }, id: \.id) { m in
@@ -343,44 +334,6 @@ struct WomenClassicTreeView: View {
         let L = computeLayout()
         layout = L
         return L
-    }
-
-    /// مقاطع خطوط الربط من التخطيط الحالي — كل مقطع view بمعرّف ثابت (يتحرك مع العقد).
-    private var connectorSegs: [WSeg] {
-        var segs: [WSeg] = []
-        let w: CGFloat = 1.5
-        for (pid, rows) in layout.childRows {
-            guard let pp = layout.positions[pid] else { continue }
-            let ph = layout.heights[pid] ?? NODE_H
-            let pcx = pp.x + NODE_W / 2
-            let pBottom = pp.y + ph
-            var maxBusY = pBottom
-            for (ri, row) in rows.enumerated() {
-                let pts = row.compactMap { layout.positions[$0] }
-                guard !pts.isEmpty else { continue }
-                let rowTop = pts.map(\.y).min() ?? pBottom
-                let busY = rowTop - V_GAP * 0.5
-                maxBusY = max(maxBusY, busY)
-                let centers = pts.map { $0.x + NODE_W / 2 }
-                let minX = min(pcx, centers.min() ?? pcx)
-                let maxX = max(pcx, centers.max() ?? pcx)
-                if maxX - minX > 0.5 {
-                    segs.append(WSeg(id: "\(pid)-bus\(ri)",
-                                     rect: CGRect(x: minX, y: busY - w / 2, width: maxX - minX, height: w)))
-                }
-                for (ci, pt) in pts.enumerated() {
-                    let c = pt.x + NODE_W / 2
-                    let riserId = ci < row.count ? "\(pid)-c\(row[ci])" : "\(pid)-r\(ri)c\(ci)"
-                    segs.append(WSeg(id: riserId,
-                                     rect: CGRect(x: c - w / 2, y: busY, width: w, height: max(pt.y - busY, 1))))
-                }
-            }
-            if maxBusY > pBottom {
-                segs.append(WSeg(id: "\(pid)-drop",
-                                 rect: CGRect(x: pcx - w / 2, y: pBottom, width: w, height: maxBusY - pBottom)))
-            }
-        }
-        return segs
     }
 
     // ─── شريط الأدوات العلوي — مطابق لشجرة العائلة ───
