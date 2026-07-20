@@ -3,6 +3,7 @@ import SwiftUI
 struct ProfileView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var memberVM: MemberViewModel
+    @EnvironmentObject var adminRequestVM: AdminRequestViewModel
     @Binding var selectedTab: Int
     @State private var showingNotifications = false
     @ObservedObject private var langManager = LanguageManager.shared
@@ -32,6 +33,8 @@ struct ProfileView: View {
     @State private var fatherWives: [WomanMember] = []
     @State private var appeared = false
     @State private var isLoadingChildren = true
+    /// الطلب المُختار للإلغاء — يشغّل حوار تأكيد السحب في «طلباتي».
+    @State private var requestToCancel: AdminRequest? = nil
 
     var user: FamilyMember? { authVM.currentUser }
 
@@ -75,6 +78,11 @@ struct ProfileView: View {
                                     .opacity(appeared ? 1 : 0)
                                     .offset(y: appeared ? 0 : 25)
 
+                                // طلباتي — الطلبات المعلّقة التي أرسلها العضو للإدارة
+                                myRequestsSection
+                                    .opacity(appeared ? 1 : 0)
+                                    .offset(y: appeared ? 0 : 26)
+
                                 // المفضلة
                                 favoritesSection
                                     .opacity(appeared ? 1 : 0)
@@ -97,11 +105,13 @@ struct ProfileView: View {
                         .refreshable {
                             await memberVM.fetchAllMembers(force: true)
                             await memberVM.fetchChildren(for: currentUser.id)
+                            await adminRequestVM.fetchMyPendingRequests(force: true)
                         }
                         .task {
                             isLoadingChildren = true
                             await memberVM.fetchChildren(for: currentUser.id)
                             isLoadingChildren = false
+                            await adminRequestVM.fetchMyPendingRequests()
                         }
                         .onAppear {
                             guard !appeared else { return }
@@ -138,6 +148,25 @@ struct ProfileView: View {
                 Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
             } message: {
                 Text(L10n.t("هل تريد الخروج من حسابك على هذا الجهاز؟", "Do you want to sign out of your account on this device?"))
+            }
+            .confirmationDialog(
+                L10n.t("سحب الطلب", "Withdraw Request"),
+                isPresented: Binding(
+                    get: { requestToCancel != nil },
+                    set: { if !$0 { requestToCancel = nil } }
+                ),
+                titleVisibility: .visible,
+                presenting: requestToCancel
+            ) { request in
+                Button(L10n.t("سحب الطلب", "Withdraw"), role: .destructive) {
+                    Task { await adminRequestVM.cancelMyRequest(request) }
+                }
+                Button(L10n.t("تراجع", "Keep"), role: .cancel) {}
+            } message: { _ in
+                Text(L10n.t(
+                    "سيتم إلغاء هذا الطلب ولن يصل للإدارة.",
+                    "This request will be cancelled and won't be sent to the admins."
+                ))
             }
             .sheet(item: $editingChild) { child in EditChildSheet(member: child).presentationDragIndicator(.visible) }
             .sheet(item: $editingFamilyMember) { entry in
@@ -197,11 +226,20 @@ struct ProfileView: View {
             }
             .onChange(of: showAddChild) { isPresented in
                 guard !isPresented, let currentUser = user else { return }
-                Task { await memberVM.fetchChildren(for: currentUser.id) }
+                Task {
+                    await memberVM.fetchChildren(for: currentUser.id)
+                    // إضافة ابن تُنشئ طلب موافقة → حدّث «طلباتي»
+                    await adminRequestVM.fetchMyPendingRequests(force: true)
+                }
             }
             .onChange(of: editingChild) { newValue in
                 guard newValue == nil, let currentUser = user else { return }
                 Task { await memberVM.fetchChildren(for: currentUser.id) }
+            }
+            .onChange(of: showEditProfile) { isPresented in
+                // إغلاق «تعديل البيانات» قد يعني إرسال طلب رقم/وفاة/اسم → حدّث «طلباتي»
+                guard !isPresented else { return }
+                Task { await adminRequestVM.fetchMyPendingRequests(force: true) }
             }
 
         }
@@ -519,6 +557,149 @@ struct ProfileView: View {
                 }
             }
             .padding(.horizontal, DS.Spacing.lg)
+        }
+    }
+
+    // MARK: - طلباتي (My Requests)
+
+    /// الطلبات المعلّقة التي أرسلها العضو للإدارة — عرض + متابعة + سحب.
+    @ViewBuilder
+    private var myRequestsSection: some View {
+        let requests = adminRequestVM.myPendingRequests
+        if !requests.isEmpty {
+            DSCard(padding: 0) {
+                DSSectionHeader(
+                    title: L10n.t("طلباتي", "My Requests"),
+                    icon: "clock.badge.exclamationmark.fill",
+                    trailing: "\(requests.count)",
+                    iconColor: DS.Color.warning
+                )
+
+                VStack(spacing: 0) {
+                    ForEach(Array(requests.enumerated()), id: \.element.id) { index, request in
+                        if index > 0 { DSDivider() }
+                        myRequestRow(request)
+                    }
+                }
+                .padding(.horizontal, DS.Spacing.md)
+                .padding(.bottom, DS.Spacing.md)
+            }
+            .padding(.horizontal, DS.Spacing.lg)
+        }
+    }
+
+    private func myRequestRow(_ request: AdminRequest) -> some View {
+        let info = myRequestDisplay(for: request)
+        return HStack(spacing: DS.Spacing.md) {
+            ZStack {
+                Circle()
+                    .fill(info.color.opacity(0.12))
+                    .frame(width: 36, height: 36)
+                Image(systemName: info.icon)
+                    .font(DS.Font.scaled(14, weight: .semibold))
+                    .foregroundColor(info.color)
+            }
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(info.title)
+                    .font(DS.Font.calloutBold)
+                    .foregroundColor(DS.Color.textPrimary)
+                    .lineLimit(1)
+
+                if let target = info.target, !target.isEmpty {
+                    Text(target)
+                        .font(DS.Font.caption1)
+                        .foregroundColor(DS.Color.textSecondary)
+                        .lineLimit(1)
+                }
+
+                // badge «تحت المراجعة» — نفس نمط الديوانيات
+                HStack(spacing: DS.Spacing.xs) {
+                    Image(systemName: "clock.badge.questionmark")
+                        .font(DS.Font.scaled(10, weight: .bold))
+                    Text(L10n.t("تحت المراجعة", "Under Review"))
+                        .font(DS.Font.scaled(10, weight: .bold))
+                }
+                .foregroundColor(DS.Color.warning)
+            }
+
+            Spacer(minLength: DS.Spacing.sm)
+
+            // سحب/إلغاء الطلب
+            Button { requestToCancel = request } label: {
+                Text(L10n.t("سحب", "Withdraw"))
+                    .font(DS.Font.caption1)
+                    .fontWeight(.bold)
+                    .foregroundColor(DS.Color.error)
+                    .padding(.horizontal, DS.Spacing.md)
+                    .padding(.vertical, DS.Spacing.xs + 1)
+                    .background(DS.Color.error.opacity(0.1))
+                    .clipShape(Capsule())
+            }
+            .buttonStyle(DSScaleButtonStyle())
+            .accessibilityLabel(L10n.t("سحب الطلب", "Withdraw request"))
+        }
+        .padding(.vertical, DS.Spacing.sm + 2)
+    }
+
+    private struct MyRequestDisplay {
+        let icon: String
+        let color: Color
+        let title: String
+        let target: String?
+    }
+
+    /// يشتق أيقونة/لون/عنوان/هدف الطلب حسب نوعه للعرض في «طلباتي».
+    private func myRequestDisplay(for request: AdminRequest) -> MyRequestDisplay {
+        let selfId = authVM.currentUser?.id
+        // اسم العضو المستهدف — نُخفيه إن كان العضو نفسه (زائد بلا فائدة)
+        let targetName: String? = {
+            guard let m = request.member, m.id != selfId else { return nil }
+            return m.fullName
+        }()
+
+        switch request.requestType {
+        case RequestType.treeEdit.rawValue:
+            let action = request.treeEditPayload?.resolvedAction
+            let name = request.treeEditPayload?.targetMemberName
+                ?? request.treeEditPayload?.newMemberName
+                ?? targetName
+            return MyRequestDisplay(
+                icon: action?.iconName ?? "square.and.pencil",
+                color: treeEditColor(for: action),
+                title: L10n.t(action?.arabicLabel ?? "طلب تعديل", action?.englishLabel ?? "Edit request"),
+                target: name
+            )
+        case RequestType.nameChange.rawValue:
+            return .init(icon: "pencil.line", color: DS.Color.info,
+                         title: L10n.t("تغيير الاسم", "Name change"),
+                         target: request.newValue ?? targetName)
+        case RequestType.phoneChange.rawValue:
+            return .init(icon: "phone.arrow.up.right", color: DS.Color.primary,
+                         title: L10n.t("تغيير رقم الهاتف", "Phone change"), target: targetName)
+        case RequestType.deceasedReport.rawValue:
+            return .init(icon: "heart.slash", color: DS.Color.textTertiary,
+                         title: L10n.t("تسجيل وفاة", "Deceased report"), target: targetName)
+        case RequestType.childAdd.rawValue:
+            return .init(icon: "person.badge.plus", color: DS.Color.success,
+                         title: L10n.t("إضافة ابن", "Add child"), target: targetName)
+        default:
+            return .init(icon: "clock", color: DS.Color.warning,
+                         title: L10n.t("طلب", "Request"), target: targetName)
+        }
+    }
+
+    private func treeEditColor(for action: TreeEditAction?) -> Color {
+        switch action {
+        case .add: return DS.Color.success
+        case .editName: return DS.Color.info
+        case .editPhone: return DS.Color.primary
+        case .editBirth: return DS.Color.warning
+        case .deceased, .addDeathDate: return DS.Color.textTertiary
+        case .addPhoto: return DS.Color.primary
+        case .delete: return DS.Color.error
+        case .other: return DS.Color.accent
+        case .none: return DS.Color.warning
         }
     }
 

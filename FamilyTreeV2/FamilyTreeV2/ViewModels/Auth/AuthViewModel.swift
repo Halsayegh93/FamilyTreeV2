@@ -77,6 +77,8 @@ class AuthViewModel: ObservableObject {
     @Published var otpErrorMessage: String?
     @Published var otpStatusMessage: String = ""
     @Published var deleteAccountError: String?
+    /// خطأ تسجيل يُعرض للمستخدم في شاشة التسجيل — يُمسح في بداية كل محاولة تسجيل.
+    @Published var registrationError: String?
     @Published var bannedPhones: [BannedPhone] = []
 
     enum AuthStatus {
@@ -1252,6 +1254,7 @@ class AuthViewModel: ObservableObject {
     
     func registerNewUser(firstName: String, familyName: String, birthDate: Date, gender: String, fatherId: UUID? = nil, avatarImage: UIImage? = nil) async {
         self.isLoading = true
+        self.registrationError = nil
         guard let user = try? await supabase.auth.session.user else { return }
         
         let normalizedPhone = user.phone ?? self.phoneNumber
@@ -1314,6 +1317,7 @@ class AuthViewModel: ObservableObject {
 
             // التحقق من نجاح الإنشاء
             let verifyProfile = await loadProfile(by: user.id)
+            let profileVerified = (verifyProfile != nil)
             if let vp = verifyProfile {
                 Log.info("[REGISTER] ✅ تم إنشاء البروفايل بنجاح: \(vp.fullName), UUID: \(user.id), role: \(vp.role)")
             } else {
@@ -1363,14 +1367,28 @@ class AuthViewModel: ObservableObject {
                 "details": AnyEncodable(matchInfo)
             ]
             
+            var joinRequestSucceeded = false
             do {
                 _ = try await supabase
                     .from("admin_requests")
                     .insert(joinRequestData)
                     .execute()
+                joinRequestSucceeded = true
                 Log.info("[REGISTER] ✅ تم إنشاء طلب الانضمام في admin_requests")
             } catch {
                 Log.error("[REGISTER] ❌ فشل إنشاء طلب الانضمام: \(error.localizedDescription) — memberId=\(user.id.uuidString.prefix(8))")
+            }
+
+            // فشل إنشاء البروفايل (RLS) أو طلب الانضمام → لا نُجبر شاشة الانتظار: المستخدم
+            // سينتظر موافقة لا يمكن أن تصل. نعرض خطأً ونُبقيه في شاشة التسجيل ليعيد المحاولة.
+            guard profileVerified, joinRequestSucceeded else {
+                Log.error("[REGISTER] ⛔️ تسجيل غير مكتمل — profileVerified=\(profileVerified), joinRequestSucceeded=\(joinRequestSucceeded)")
+                self.registrationError = L10n.t(
+                    "تعذّر إكمال طلب الانضمام. تأكد من اتصالك بالإنترنت وحاول مرة أخرى.",
+                    "Couldn't complete your join request. Check your internet connection and try again."
+                )
+                self.isLoading = false
+                return
             }
 
             // إشعار المدير مع عدد المطابقات
@@ -1409,12 +1427,17 @@ class AuthViewModel: ObservableObject {
             
         } catch {
             Log.error("خطأ في التسجيل: \(error.localizedDescription)")
-            // حتى في حالة الخطأ، نعيد محاولة فحص البروفايل بدل البقاء في شاشة التسجيل
+            // فشل التسجيل (شبكة/خادم) → أظهر خطأً للمستخدم بدل الطرد الصامت،
+            // ثم أعد فحص البروفايل (يُبقيه في شاشة التسجيل إن لم يُنشأ السجل).
+            self.registrationError = L10n.t(
+                "تعذّر إكمال التسجيل. تأكد من اتصالك بالإنترنت وحاول مرة أخرى.",
+                "Registration couldn't be completed. Check your internet connection and try again."
+            )
             await checkUserProfile()
         }
         self.isLoading = false
     }
-    
+
     // MARK: - Contact
 
     func sendContactMessage(category: String, message: String, preferredContact: String?) async -> Bool {

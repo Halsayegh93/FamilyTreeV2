@@ -24,8 +24,10 @@ enum DS {
         static let neonPink     = SwiftUI.Color.adaptive(light: "#B24C63", dark: "#CC6A80") // Berry Rose
 
         // Gradients
+        // التدرّج الرئيسي — أزرق → نيلي (blue → indigo). الأخضر محفوظ للأدوار الثانوية/النجاح فقط،
+        // حتى لا يفقد النص الأبيض على أزرار CTA تباينه على الذيل الأخضر ولا تنقلب هوية العلامة لِتيل/فنتك.
         static let gradientPrimary = LinearGradient(
-            colors: [primaryDark, primary, SwiftUI.Color.adaptive(light: "#4DC9A0", dark: "#2A9D78")],
+            colors: [primaryDark, primary, accent],
             startPoint: .bottomTrailing, endPoint: .topLeading
         )
         static let gradientAccent = LinearGradient(
@@ -212,9 +214,17 @@ enum DS {
 
     // MARK: Typography — خطوط حديثة ونظيفة مع دعم Dynamic Type
     enum Font {
-        static let hero        = SwiftUI.Font.system(.largeTitle, design: .default).weight(.black)
-        static let largeTitle  = SwiftUI.Font.system(.largeTitle, design: .default).weight(.bold)
-        static let title1      = SwiftUI.Font.system(.title, design: .default).weight(.bold)
+        /// الصوت الطباعي المميّز لهوية العائلة التراثية — أدفأ وأكثر تميّزاً من SF Pro.
+        /// SF Rounded يدعم العربية (SF Arabic Rounded) فيظهر الدفء على اسم العائلة والعناوين
+        /// العربية والإنجليزية معاً، بعكس الخط السيريفي (New York) الذي لا يملك محارف عربية.
+        /// يُطبَّق على العناوين الكبرى فقط؛ ويبقى نص المحتوى على خط النظام (SF Pro) لأقصى وضوح.
+        static let displayDesign: SwiftUI.Font.Design = .rounded
+
+        // العناوين الكبرى — الصوت الطباعي المميّز (display voice)
+        static let hero        = SwiftUI.Font.system(.largeTitle, design: displayDesign).weight(.black)
+        static let largeTitle  = SwiftUI.Font.system(.largeTitle, design: displayDesign).weight(.bold)
+        static let title1      = SwiftUI.Font.system(.title, design: displayDesign).weight(.bold)
+        // العناوين الأصغر ونص المحتوى — خط النظام للوضوح الأقصى
         static let title2      = SwiftUI.Font.system(.title2, design: .default).weight(.bold)
         static let title3      = SwiftUI.Font.system(.title3, design: .default).weight(.semibold)
         static let headline    = SwiftUI.Font.system(.headline, design: .default).weight(.bold)
@@ -228,7 +238,7 @@ enum DS {
         static let caption2    = SwiftUI.Font.system(.caption2, design: .default)
 
         /// خط مرن يدعم Dynamic Type - يُستخدم بدل .system(size:weight:)
-        static func scaled(_ size: CGFloat, weight: SwiftUI.Font.Weight = .regular) -> SwiftUI.Font {
+        static func scaled(_ size: CGFloat, weight: SwiftUI.Font.Weight = .regular, design: SwiftUI.Font.Design = .default) -> SwiftUI.Font {
             let style: SwiftUI.Font.TextStyle
             switch size {
             case ...10: style = .caption2
@@ -244,7 +254,12 @@ enum DS {
             case 28...35: style = .title
             default: style = .largeTitle
             }
-            return SwiftUI.Font.system(style, design: .default).weight(weight)
+            return SwiftUI.Font.system(style, design: design).weight(weight)
+        }
+
+        /// الخط المميّز (display) بحجم مخصّص — لاسم العائلة والعناوين الكبيرة، مع دعم Dynamic Type.
+        static func display(_ size: CGFloat, weight: SwiftUI.Font.Weight = .bold) -> SwiftUI.Font {
+            scaled(size, weight: weight, design: displayDesign)
         }
     }
 
@@ -318,6 +333,12 @@ enum DS {
         static let elastic   = Animation.spring(response: 0.45, dampingFraction: 0.55, blendDuration: 0)
         static let quick     = Animation.easeOut(duration: 0.18)
         static let medium    = Animation.easeInOut(duration: 0.32)
+
+        /// يحترم "تقليل الحركة" (Reduce Motion): يُعيد الأنيميشن كما هو عند تفعيل الحركة،
+        /// و`nil` (بلا حركة) عند تفعيله — لإيقاف الأنيميشن المتكرر/السبرنق مع احترام إعدادات الوصول.
+        static func respectingMotion(_ animation: Animation, reduceMotion: Bool) -> Animation? {
+            reduceMotion ? nil : animation
+        }
     }
 
     // MARK: Layout — تخطيط متجاوب حسب موديل الجهاز (العرض الحقيقي + size class)
@@ -568,6 +589,7 @@ struct DSPulseBadge: View {
     let count: Int
     var color: SwiftUI.Color = DS.Color.error
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isPulsing = false
 
     private var displayText: String { count > 99 ? "99+" : "\(count)" }
@@ -583,10 +605,11 @@ struct DSPulseBadge: View {
             .clipShape(Capsule())
             .scaleEffect(isPulsing ? 1.15 : 1.0)
             .animation(
-                .easeInOut(duration: 0.8).repeatForever(autoreverses: true),
+                DS.Anim.respectingMotion(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), reduceMotion: reduceMotion),
                 value: isPulsing
             )
-            .onAppear { isPulsing = true }
+            // يحترم "تقليل الحركة": يبقى الباج ثابتاً بلا نبض متكرر
+            .onAppear { isPulsing = !reduceMotion }
     }
 }
 
@@ -638,7 +661,8 @@ struct DSPrimaryButton: View {
             .foregroundColor(.white)
             .padding(.horizontal, DS.Spacing.lg)
             .frame(maxWidth: .infinity)
-            .frame(height: 58)
+            // minHeight بدل الارتفاع الثابت — يسمح للنص بالنمو بدل القص في أحجام Dynamic Type الكبيرة
+            .frame(minHeight: 58)
             .background(
                 ZStack {
                     RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
@@ -695,7 +719,8 @@ struct DSSecondaryButton: View {
             .font(DS.Font.calloutBold)
             .foregroundColor(color)
             .frame(maxWidth: .infinity)
-            .frame(height: 52)
+            // minHeight بدل الارتفاع الثابت — يسمح للنص بالنمو بدل القص في أحجام Dynamic Type الكبيرة
+            .frame(minHeight: 52)
             .background(.ultraThinMaterial)
             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
             .overlay(

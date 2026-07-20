@@ -8,6 +8,7 @@ struct FrozenAccountView: View {
     @State private var iconScale: CGFloat = 0.5
     @State private var iconOpacity: Double = 0
     @State private var textOpacity: Double = 0
+    @State private var showContactSheet = false
 
     var body: some View {
         ZStack {
@@ -72,6 +73,15 @@ struct FrozenAccountView: View {
                 }
                 .padding(.horizontal, DS.Spacing.lg)
 
+                // زر التواصل مع الإدارة
+                DSSecondaryButton(
+                    t("تواصل مع الإدارة", "Contact Admin"),
+                    icon: "envelope.fill"
+                ) {
+                    showContactSheet = true
+                }
+                .padding(.horizontal, DS.Spacing.lg)
+
                 // زر تسجيل الخروج
                 DSSecondaryButton(
                     t("تسجيل الخروج", "Sign Out"),
@@ -94,6 +104,27 @@ struct FrozenAccountView: View {
             withAnimation(DS.Anim.smooth.delay(0.5)) {
                 textOpacity = 1.0
             }
+        }
+        .sheet(isPresented: $showContactSheet) {
+            NavigationStack {
+                MemberContactFormView()
+                    .navigationTitle(t("تواصل مع الإدارة", "Contact Admin"))
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .topBarLeading) {
+                            Button { showContactSheet = false } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(DS.Font.scaled(22, weight: .medium))
+                                    .foregroundStyle(DS.Color.textTertiary)
+                                    .symbolRenderingMode(.hierarchical)
+                            }
+                            .accessibilityLabel(t("إغلاق", "Close"))
+                        }
+                    }
+            }
+            .environmentObject(authVM)
+            .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+            .presentationDragIndicator(.visible)
         }
     }
 }

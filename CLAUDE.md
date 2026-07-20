@@ -59,7 +59,7 @@ FamilyTreeV2/                         ← Xcode project root
 │   │   ├── MainTabView.swift         ← 5-tab navigation
 │   │   └── MainContentView.swift     ← Auth state router (alternative)
 │   └── Features/
-│       ├── Auth/                     ← LoginView, RegistrationView, WaitingForApprovalView, TrialExpiredView
+│       ├── Auth/                     ← LoginView, RegistrationView, WaitingForApprovalView, FrozenAccountView, DeviceLimitView
 │       ├── Home/                     ← HomeNewsView, ContactCenterView, NotificationsCenterView
 │       ├── Tree/                     ← TreeView, TreeViewPrototype, MemberDetailsView
 │       │   └── AdminView/            ← AdminMemberControlView, AdminMemberDetailSheet
@@ -99,14 +99,13 @@ Auth is managed by `AuthViewModel` with these states:
 ```
 unauthenticated → (OTP login) → checking → authenticatedNoProfile → (register)
                                          → pendingApproval → (admin approves)
-                                         → trialExpired
+                                         → accountFrozen (frozen by admin)
                                          → fullyAuthenticated → MainTabView
 ```
 
 - **OTP delivery:** SMS (default), WhatsApp, Voice call via `OTPDeliveryChannel`
 - **Roles:** `owner`, `admin`, `monitor`, `supervisor`, `member`, `pending` (defined in `FamilyMember.UserRole`)
 - **Member statuses:** `pending`, `active`, `frozen`
-- **Trial system:** 7-day trial period tracked via `trialStartedAt`/`trialEndsAt`
 - **Moderation:** `canModerate` = owner OR admin OR monitor OR supervisor (controls Admin tab visibility)
 
 ### صلاحيات فريق الإدارة
@@ -163,7 +162,7 @@ IMPORTANT: All UI must use the centralized `DS` enum from `Components/Shared/Des
 
 ### Typography — `DS.Font`
 
-- Uses SF Rounded (`.system(.style, design: .rounded)`)
+- Uses the system font (SF) — `.system(.style, design: .default)`
 - Scale: `hero`, `largeTitle`, `title1`-`title3`, `headline`, `body`, `bodyBold`, `callout`, `calloutBold`, `subheadline`, `footnote`, `caption1`, `caption2`
 - Dynamic Type: use `DS.Font.scaled(size, weight:)` instead of `.system(size:)` — maps sizes to appropriate text styles
 
@@ -173,7 +172,7 @@ IMPORTANT: All UI must use the centralized `DS` enum from `Components/Shared/Des
 
 ### Corner Radius — `DS.Radius`
 
-- `sm: 6` | `md: 10` | `lg: 14` | `xl: 18` | `xxl: 22` | `xxxl: 26` | `full: 999`
+- `sm: 8` | `md: 12` | `lg: 16` | `xl: 20` | `xxl: 24` | `xxxl: 28` | `full: 999`
 
 ### Icons — `DS.Icon`
 
@@ -245,7 +244,7 @@ struct FamilyMember: Identifiable, Codable, Equatable
 Key fields: `id`, `firstName`, `fullName`, `phoneNumber`, `birthDate`, `deathDate`, `isDeceased`, `role` (UserRole), `fatherId`, `photoURL`, `isPhoneHidden`, `isHiddenFromTree`, `sortOrder`, `bio` ([BioStation]), `status` (MemberStatus), `avatarUrl`, `isMarried`, `gender`, `createdAt`
 
 **Nested types:**
-- `UserRole`: `admin`, `supervisor`, `member`, `pending` — each has a `.color` property
+- `UserRole`: `owner`, `admin`, `monitor`, `supervisor`, `member`, `pending` — each has a `.color` property
 - `MemberStatus`: `pending`, `active`, `frozen`
 - `BioStation`: `year`, `title`, `details` — for biographical timeline
 

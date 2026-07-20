@@ -80,6 +80,17 @@ struct RegistrationView: View {
         }
         .toolbar(.hidden, for: .navigationBar)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+        .alert(
+            L10n.t("تعذّر التسجيل", "Registration Failed"),
+            isPresented: Binding(
+                get: { authVM.registrationError != nil },
+                set: { if !$0 { authVM.registrationError = nil } }
+            )
+        ) {
+            Button(L10n.t("حسناً", "OK"), role: .cancel) { authVM.registrationError = nil }
+        } message: {
+            Text(authVM.registrationError ?? "")
+        }
         .onAppear {
             Log.info("[REGISTRATION] RegistrationView ظهرت — البروفايل غير موجود. phone=\(Log.masked(authVM.phoneNumber))")
             withAnimation(DS.Anim.elastic.delay(0.2)) {

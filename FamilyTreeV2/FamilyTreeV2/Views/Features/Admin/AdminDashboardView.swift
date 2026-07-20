@@ -234,8 +234,8 @@ struct AdminDashboardView: View {
                                 .padding(.horizontal, DS.Spacing.lg)
                             }
 
-                            // المدراء والمشرفين — المدير + المالك
-                            if authVM.isAdmin {
+                            // فريق الإدارة + دليل الصلاحيات — مرئي لكل الفريق (أدوات الإدارة تبقى للمالك داخليًا)
+                            if authVM.canModerate {
                                 DSCard(padding: 0) {
                                     DSSectionHeader(
                                         title: L10n.t("فريق الإدارة", "Admin Team"),
