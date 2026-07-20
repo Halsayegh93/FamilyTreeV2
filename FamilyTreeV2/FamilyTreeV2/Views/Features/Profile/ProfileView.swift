@@ -703,6 +703,13 @@ struct ProfileView: View {
         }
     }
 
+    /// يمكن ترتيب الأبناء (شجرة الرجال — profiles) لأي عضو لعائلته نفسه.
+    private var canReorderSons: Bool { memberVM.currentMemberChildren.count > 1 }
+    /// ترتيب البنات (شجرة النساء — women_members) مقيّد على الإدارة حسب RLS.
+    private var canReorderDaughters: Bool { authVM.canModerate && womenChildrenList.count > 1 }
+    /// هل يوجد ما يمكن لهذا العضو ترتيبه فعلاً؟ (يتحكم بظهور زر «ترتيب» ووضع الترتيب)
+    private var canReorderChildren: Bool { canReorderSons || canReorderDaughters }
+
     private var serverSonsSection: some View {
         VStack(alignment: .leading, spacing: 0) {
             DSCard(padding: 0) {
@@ -716,7 +723,7 @@ struct ProfileView: View {
 
                     Spacer()
 
-                    if memberVM.currentMemberChildren.count > 1 || womenChildrenList.count > 1 {
+                    if canReorderChildren {
                         Button {
                             withAnimation(DS.Anim.snappy) {
                                 isReorderingChildren.toggle()
@@ -749,11 +756,11 @@ struct ProfileView: View {
                     }
                     .padding(DS.Spacing.md)
                     .transition(.opacity)
-                } else if isReorderingChildren && !memberVM.currentMemberChildren.isEmpty {
-                    // وضع ترتيب أبناء الشجرة العامة (قائمة عمودية بأسهم)
+                } else if isReorderingChildren && canReorderChildren {
+                    // وضع ترتيب موحّد — الأبناء (وللإدارة: البنات أيضاً) في قائمة واحدة
                     childrenReorderView
                 } else {
-                    // الوضع العادي / ترتيب أبناء شجرة النساء (شبكة مع أسهم على الخلايا)
+                    // الوضع العادي — شبكة قابلة للنقر للتعديل
                     childrenGridView
                         .transition(.opacity)
                 }
@@ -788,20 +795,15 @@ struct ProfileView: View {
         .buttonStyle(PlainButtonStyle())
     }
 
-    /// خلية فرد عائلة (أم/زوجة) — زر تعديل للمخوّل، وإلا عرض فقط.
-    @ViewBuilder
+    /// خلية فرد عائلة (أم/زوجة/ابنة) — قابلة للنقر لأي عضو لإدارة عائلته نفسه.
+    /// إجراءات الإضافة/الإزالة داخل الورقة مقيّدة على النفس (RPCs)، والتعديل المباشر
+    /// يظهر خطأً واضحاً إن رفضته RLS — لا صمت.
     private func familyMemberButton(_ entry: WomenFamilyEntry) -> some View {
-        if authVM.canModerate {
-            Button { editingFamilyMember = entry } label: { womanFamilyGridCell(entry: entry) }
-                .buttonStyle(PlainButtonStyle())
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(entry.member.firstName.isEmpty ? L10n.t("فرد", "Member") : entry.member.firstName)
-                .accessibilityHint(L10n.t("تعديل", "Edit"))
-        } else {
-            womanFamilyGridCell(entry: entry)
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(entry.member.firstName.isEmpty ? L10n.t("فرد", "Member") : entry.member.firstName)
-        }
+        Button { editingFamilyMember = entry } label: { womanFamilyGridCell(entry: entry) }
+            .buttonStyle(PlainButtonStyle())
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(entry.member.firstName.isEmpty ? L10n.t("فرد", "Member") : entry.member.firstName)
+            .accessibilityHint(L10n.t("تعديل", "Edit"))
     }
 
     private var childrenGridView: some View {
@@ -810,7 +812,8 @@ struct ProfileView: View {
         let womenKids = memberVM.currentMemberWomenFamily.filter { $0.role == .child }
         let motherEntry = parents.first { $0.role == .mother }
         let wifeEntries = parents.filter { $0.role == .wife }
-        let showParents = isCurrentUserMarried && (!parents.isEmpty || authVM.canModerate)
+        // صف الأم/الزوجة (وخانات الإضافة) يظهر لأي عضو متزوّج — الإضافة/الاختيار مقيّدة على النفس.
+        let showParents = isCurrentUserMarried
         return VStack(spacing: DS.Spacing.sm) {
             // ═══ الأم / الزوجة — أماكن ثابتة (البطاقة أو زر الإضافة/الاختيار) ═══
             if showParents {
@@ -818,7 +821,8 @@ struct ProfileView: View {
                     // خانة الأم (ثابتة أولاً)
                     if let motherEntry {
                         familyMemberButton(motherEntry)
-                    } else if authVM.canModerate {
+                    } else {
+                        // إضافة/اختيار الأم متاحة لأي عضو (set_self_mother/add_self_mother مقيّدة على النفس)
                         addFamilyActionCell(title: L10n.t("إضافة/اختيار الأم", "Add/Pick Mother"),
                                             icon: "person.fill", color: DS.Color.accent) {
                             Task { fatherWives = await memberVM.fetchFatherWives(); showMotherOptions = true }
@@ -847,24 +851,8 @@ struct ProfileView: View {
                         .accessibilityHint(L10n.t("تعديل", "Edit"))
                 }
                 if isCurrentUserMarried {
-                    ForEach(womenKids) { entry in
-                        if authVM.canModerate {
-                            Button { editingFamilyMember = entry } label: { womanFamilyGridCell(entry: entry) }
-                                .buttonStyle(PlainButtonStyle())
-                                .overlay(alignment: .topLeading) {
-                                    if isReorderingChildren, entry.role == .child, womenChildrenList.count > 1 {
-                                        womanChildReorderControls(for: entry.member)
-                                    }
-                                }
-                                .accessibilityElement(children: .ignore)
-                                .accessibilityLabel(entry.member.firstName.isEmpty ? L10n.t("فرد", "Member") : entry.member.firstName)
-                                .accessibilityHint(L10n.t("تعديل", "Edit"))
-                        } else {
-                            womanFamilyGridCell(entry: entry)
-                                .accessibilityElement(children: .ignore)
-                                .accessibilityLabel(entry.member.firstName.isEmpty ? L10n.t("فرد", "Member") : entry.member.firstName)
-                        }
-                    }
+                    // البنات — قابلة للنقر للتعديل لأي عضو؛ الترتيب انتقل للوضع الموحّد.
+                    ForEach(womenKids) { entry in familyMemberButton(entry) }
                 }
                 // إضافة ابن
                 Button { showAddChild = true } label: {
@@ -1027,38 +1015,6 @@ struct ProfileView: View {
         Task { await memberVM.reorderWomenChildren(list) }
     }
 
-    /// أسهم أعلى/أسفل صغيرة لترتيب ابن/ابنة.
-    private func womanChildReorderControls(for child: WomanMember) -> some View {
-        let list = womenChildrenList
-        let idx = list.firstIndex(where: { $0.id == child.id }) ?? 0
-        return HStack(spacing: 3) {
-            Button { moveWomanChild(child, up: true) } label: {
-                Image(systemName: "chevron.up")
-                    .font(.system(size: 10, weight: .black))
-                    .foregroundColor(idx > 0 ? DS.Color.primary : DS.Color.textTertiary.opacity(0.4))
-                    .frame(width: 30, height: 30)
-                    .background(Circle().fill(DS.Color.surface))
-                    .overlay(Circle().strokeBorder(DS.Color.primary.opacity(0.15), lineWidth: 1))
-            }
-            .buttonStyle(.plain)
-            .disabled(idx == 0)
-            .accessibilityLabel(L10n.t("نقل لأعلى", "Move up"))
-
-            Button { moveWomanChild(child, up: false) } label: {
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 10, weight: .black))
-                    .foregroundColor(idx < list.count - 1 ? DS.Color.primary : DS.Color.textTertiary.opacity(0.4))
-                    .frame(width: 30, height: 30)
-                    .background(Circle().fill(DS.Color.surface))
-                    .overlay(Circle().strokeBorder(DS.Color.primary.opacity(0.15), lineWidth: 1))
-            }
-            .buttonStyle(.plain)
-            .disabled(idx >= list.count - 1)
-            .accessibilityLabel(L10n.t("نقل لأسفل", "Move down"))
-        }
-        .padding(6)
-    }
-
     // خلية فرد «عائلتي» — بنفس شكل خلايا الأبناء القديمة (صورة + اسم)، دور رمادي خفيف.
     private func womanFamilyGridCell(entry: WomenFamilyEntry) -> some View {
         let woman = entry.member
@@ -1121,77 +1077,131 @@ struct ProfileView: View {
         }
     }
 
-    // MARK: - Reorder View (وضع الترتيب)
+    // MARK: - Reorder View (وضع ترتيب موحّد — الأبناء + البنات)
+    /// قائمة ترتيب واحدة تجمع الأبناء (شجرة الرجال) والبنات (شجرة النساء، للإدارة)
+    /// بنفس عناصر التحكم. كل فئة تحفظ ترتيبها في جدولها عبر دوال الـ repo القائمة.
     private var childrenReorderView: some View {
-        VStack(spacing: 0) {
-            let children = memberVM.currentMemberChildren
-            ForEach(Array(children.enumerated()), id: \.element.id) { index, son in
+        let sons = memberVM.currentMemberChildren
+        // البنات تظهر في وضع الترتيب فقط لمن يملك صلاحية حفظ ترتيبها (RLS إدارية).
+        let daughters = canReorderDaughters ? womenChildrenList : []
+        return VStack(spacing: 0) {
+            ForEach(Array(sons.enumerated()), id: \.element.id) { index, son in
                 if index > 0 { DSDivider() }
-
-                let info = childIconInfo(for: son)
-
-                HStack(spacing: DS.Spacing.md) {
-                    // رقم الترتيب
-                    Text("\(index + 1)")
-                        .font(DS.Font.scaled(13, weight: .bold))
-                        .foregroundColor(DS.Color.textOnPrimary)
-                        .frame(width: 28, height: 28)
-                        .background(info.color.opacity(0.8))
-                        .clipShape(Circle())
-
-                    // صورة
-                    childAvatarView(for: son, iconFont: 14, size: 44)
-
-                    // الاسم
-                    Text(son.firstName.isEmpty ? L10n.t("الاسم", "Name") : son.firstName)
-                        .font(DS.Font.callout)
-                        .fontWeight(.bold)
-                        .foregroundColor(DS.Color.textPrimary)
-                        .lineLimit(1)
-
-                    Spacer()
-
-                    // أزرار أعلى/أسفل
-                    VStack(spacing: 4) {
-                        Button {
-                            guard index > 0 else { return }
-                            var reordered = children
-                            reordered.swapAt(index, index - 1)
-                            Task {
-                                await memberVM.reorderChildren(reordered)
-                            }
-                        } label: {
-                            Image(systemName: "chevron.up")
-                                .font(DS.Font.scaled(14, weight: .bold))
-                                .foregroundColor(index > 0 ? DS.Color.primary : DS.Color.textTertiary.opacity(0.3))
-                                .frame(width: 44, height: 44)
-                                .contentShape(Rectangle())
-                        }
-                        .disabled(index == 0)
-
-                        Button {
-                            guard index < children.count - 1 else { return }
-                            var reordered = children
-                            reordered.swapAt(index, index + 1)
-                            Task {
-                                await memberVM.reorderChildren(reordered)
-                            }
-                        } label: {
-                            Image(systemName: "chevron.down")
-                                .font(DS.Font.scaled(14, weight: .bold))
-                                .foregroundColor(index < children.count - 1 ? DS.Color.primary : DS.Color.textTertiary.opacity(0.3))
-                                .frame(width: 44, height: 44)
-                                .contentShape(Rectangle())
-                        }
-                        .disabled(index >= children.count - 1)
-                    }
-                }
-                .padding(.horizontal, DS.Spacing.lg)
-                .padding(.vertical, DS.Spacing.xs)
+                sonReorderRow(son, index: index, total: sons.count)
+            }
+            if !sons.isEmpty && !daughters.isEmpty { DSDivider() }
+            ForEach(Array(daughters.enumerated()), id: \.element.id) { index, daughter in
+                if index > 0 { DSDivider() }
+                daughterReorderRow(daughter, index: index, total: daughters.count)
             }
         }
         .padding(.vertical, DS.Spacing.xs)
         .transition(.opacity.combined(with: .move(edge: .top)))
+    }
+
+    /// صف ترتيب ابن (شجرة الرجال — يحفظ في profiles.sort_order).
+    private func sonReorderRow(_ son: FamilyMember, index: Int, total: Int) -> some View {
+        let info = childIconInfo(for: son)
+        return HStack(spacing: DS.Spacing.md) {
+            reorderIndexBadge(index + 1, color: info.color)
+            childAvatarView(for: son, iconFont: 14, size: 44)
+            Text(son.firstName.isEmpty ? L10n.t("الاسم", "Name") : son.firstName)
+                .font(DS.Font.callout)
+                .fontWeight(.bold)
+                .foregroundColor(DS.Color.textPrimary)
+                .lineLimit(1)
+            Spacer()
+            reorderArrows(
+                canUp: index > 0,
+                canDown: index < total - 1,
+                up: {
+                    var r = memberVM.currentMemberChildren
+                    r.swapAt(index, index - 1)
+                    Task { await memberVM.reorderChildren(r) }
+                },
+                down: {
+                    var r = memberVM.currentMemberChildren
+                    r.swapAt(index, index + 1)
+                    Task { await memberVM.reorderChildren(r) }
+                }
+            )
+        }
+        .padding(.horizontal, DS.Spacing.lg)
+        .padding(.vertical, DS.Spacing.xs)
+    }
+
+    /// صف ترتيب ابنة (شجرة النساء — يحفظ في women_members.sort_order).
+    private func daughterReorderRow(_ daughter: WomanMember, index: Int, total: Int) -> some View {
+        let color = daughter.isDeceased ? DS.Color.error : DS.Color.neonPink
+        return HStack(spacing: DS.Spacing.md) {
+            reorderIndexBadge(index + 1, color: color)
+            womanReorderAvatar(daughter)
+            Text(daughter.firstName.isEmpty ? L10n.t("الاسم", "Name") : daughter.firstName)
+                .font(DS.Font.callout)
+                .fontWeight(.bold)
+                .foregroundColor(DS.Color.textPrimary)
+                .lineLimit(1)
+            Spacer()
+            reorderArrows(
+                canUp: index > 0,
+                canDown: index < total - 1,
+                up: { moveWomanChild(daughter, up: true) },
+                down: { moveWomanChild(daughter, up: false) }
+            )
+        }
+        .padding(.horizontal, DS.Spacing.lg)
+        .padding(.vertical, DS.Spacing.xs)
+    }
+
+    /// شارة رقم الترتيب.
+    private func reorderIndexBadge(_ number: Int, color: Color) -> some View {
+        Text("\(number)")
+            .font(DS.Font.scaled(13, weight: .bold))
+            .foregroundColor(DS.Color.textOnPrimary)
+            .frame(width: 28, height: 28)
+            .background(color.opacity(0.8))
+            .clipShape(Circle())
+    }
+
+    /// صورة مصغّرة لابنة شجرة النساء (لصف الترتيب).
+    private func womanReorderAvatar(_ woman: WomanMember) -> some View {
+        Group {
+            if let urlStr = woman.displayImageUrl, let url = URL(string: urlStr) {
+                CachedAsyncImage(url: url) { img in img.resizable().scaledToFill() }
+                placeholder: { womanAvatarFallback }
+            } else {
+                womanAvatarFallback
+            }
+        }
+        .frame(width: 44, height: 44)
+        .clipShape(Circle())
+        .overlay(Circle().strokeBorder(DS.Color.primary.opacity(0.12), lineWidth: 1))
+    }
+
+    /// أسهم أعلى/أسفل موحّدة (≥44pt) مع تسميات وصول — تُستخدم للأبناء والبنات.
+    private func reorderArrows(canUp: Bool, canDown: Bool,
+                               up: @escaping () -> Void, down: @escaping () -> Void) -> some View {
+        VStack(spacing: 4) {
+            Button(action: up) {
+                Image(systemName: "chevron.up")
+                    .font(DS.Font.scaled(14, weight: .bold))
+                    .foregroundColor(canUp ? DS.Color.primary : DS.Color.textTertiary.opacity(0.3))
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .disabled(!canUp)
+            .accessibilityLabel(L10n.t("نقل لأعلى", "Move up"))
+
+            Button(action: down) {
+                Image(systemName: "chevron.down")
+                    .font(DS.Font.scaled(14, weight: .bold))
+                    .foregroundColor(canDown ? DS.Color.primary : DS.Color.textTertiary.opacity(0.3))
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .disabled(!canDown)
+            .accessibilityLabel(L10n.t("نقل لأسفل", "Move down"))
+        }
     }
 
     // MARK: - Helpers
@@ -1418,16 +1428,25 @@ struct WomanMemberEditSheet: View {
             .alert(L10n.t("حذف من العائلة", "Remove from family"), isPresented: $showDeleteConfirm) {
                 Button(L10n.t("حذف", "Delete"), role: .destructive) {
                     Task {
-                        // الأم: فكّ الارتباط (RPC مقيّد على النفس).
+                        // الأم: فكّ الارتباط (RPC مقيّد على النفس — يعمل لأي دور).
                         // الزوجة: حذف/فكّ مقيّد على النفس (يعمل لأي دور).
-                        // الابن: حذف السجل (للإدارة).
+                        // الابنة: حذف السجل (مقيّد على الإدارة حسب RLS).
                         let ok: Bool
                         switch entry.role {
                         case .mother: ok = await memberVM.setSelfMother(motherId: nil)
                         case .wife:   ok = await memberVM.removeSelfWife(wifeId: entry.member.id)
                         default:      ok = await memberVM.deleteWomanMember(id: entry.member.id)
                         }
-                        if ok { await MainActor.run { dismiss() } }
+                        // نجاح → إغلاق؛ فشل (مثلاً رفض RLS) → رسالة واضحة بدل لا-عمل صامت.
+                        await MainActor.run {
+                            if ok {
+                                dismiss()
+                            } else {
+                                errorBanner = memberVM.errorMessage
+                                    ?? L10n.t("تعذّر الحذف — قد يتطلب موافقة الإدارة.",
+                                              "Couldn't remove — this may require an admin.")
+                            }
+                        }
                     }
                 }
                 Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}

@@ -13,6 +13,8 @@ struct AddChildSheet: View {
     @State private var selectedPhoneCountry: KuwaitPhone.Country = KuwaitPhone.defaultCountry
     @State private var phoneNumber: String = ""
     @State private var birthDate: Date = Date()
+    /// هل حدّد المستخدم تاريخ ميلاد فعلاً؟ — نتجنّب كتابة «اليوم» المفبرك لمن لم يُحدَّد له.
+    @State private var birthDateProvided: Bool = false
     @State private var selectedGender: String = "male"
     @State private var isDeceased: Bool = false
     @State private var deathDate: Date = Date()
@@ -139,13 +141,14 @@ struct AddChildSheet: View {
 
                     DSDivider()
 
-                    // Birth date — صف موحّد
+                    // Birth date — صف موحّد (اختياري: يُرسل فقط إذا حدّده المستخدم)
                     DSDateField(
                         label: L10n.t("تاريخ الميلاد", "Birth Date"),
                         date: $birthDate,
                         range: ...Date(),
                         labelAbove: true
                     )
+                    .onChange(of: birthDate) { _ in birthDateProvided = true }
 
                     DSDivider()
 
@@ -206,7 +209,8 @@ struct AddChildSheet: View {
             let formatter = DateFormatter()
             formatter.dateFormat = "yyyy-MM-dd"
             formatter.locale = Locale(identifier: "en_US_POSIX")
-            let birthDateString: String? = formatter.string(from: birthDate)
+            // تاريخ الميلاد اختياري: لا نكتبه إن لم يحدّده المستخدم (بدل «اليوم» الخاطئ).
+            let birthDateString: String? = birthDateProvided ? formatter.string(from: birthDate) : nil
             let deathDateString: String? = isDeceased ? formatter.string(from: deathDate) : nil
 
             if selectedGender == "female" {
@@ -215,7 +219,7 @@ struct AddChildSheet: View {
                     parentId: member.id,
                     name: name,
                     gender: "female",
-                    birthDate: birthDate,
+                    birthDate: birthDateProvided ? birthDate : nil,
                     isDeceased: isDeceased,
                     deathDate: isDeceased ? deathDate : nil,
                     parentFullName: member.fullName

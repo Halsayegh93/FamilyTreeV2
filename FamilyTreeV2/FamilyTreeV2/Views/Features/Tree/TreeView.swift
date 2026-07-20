@@ -271,7 +271,12 @@ struct TreeView: View {
                                     }
                                 )
                                 .onPreferenceChange(TreeContentSizeKey.self) { treeContentSize = $0 }
-                                // الزوم ثابت — أُلغي النقر المزدوج للتكبير
+                                // نقر مزدوج للتكبير نحو نقطة اللمس (قبل scaleEffect ليطابق
+                                // الإحداثي مقاس المحتوى treeContentSize) — يتركّب مع سحب ScrollView.
+                                .simultaneousGesture(
+                                    SpatialTapGesture(count: 2)
+                                        .onEnded { handleDoubleTap(at: $0.location) }
+                                )
                                 .scaleEffect(scale, anchor: zoomAnchor)
                                 .frame(
                                     minWidth: geometry.size.width,
@@ -283,7 +288,8 @@ struct TreeView: View {
                                 .padding(.bottom, DS.Spacing.xxxxl * 3)
                                 .padding(.horizontal, DS.Spacing.xxxxl)
                             }
-                            // الزوم ثابت — أُلغيت إيماءة التكبير باللمس (pinch) في شجرة العائلة
+                            // تكبير باللمس (pinch) — يعمل بالتوازي مع سحب/تمرير ScrollView
+                            .simultaneousGesture(magnifyGesture)
                             .onChange(of: scrollCounter) { _ in
                                 if let id = scrollTarget {
                                     withAnimation(.easeInOut(duration: 0.3)) {
@@ -341,6 +347,7 @@ struct TreeView: View {
                                             searchedMemberID = nil
                                             scale = TreeConst.defaultScale
                                             baseScale = TreeConst.defaultScale
+                                            zoomAnchor = .center
                                         }
                                     } label: {
                                         Image(systemName: "xmark.circle.fill")
@@ -463,6 +470,7 @@ struct TreeView: View {
                 withAnimation(.easeInOut(duration: 0.3)) {
                     scale = TreeConst.kinshipScale
                     baseScale = TreeConst.kinshipScale
+                    zoomAnchor = .center
                 }
 
                 // سكرول للجد المشترك — عشان يكون بنص الشاشة
@@ -525,6 +533,7 @@ struct TreeView: View {
         }
         // فتح المسار بأنيميشن سريعة
         withAnimation(.easeInOut(duration: 0.25)) {
+            zoomAnchor = .center   // تمركز دقيق بعد أي تكبير نقر-مزدوج سابق
             activePath = ancestors
             activePath.insert(member.id)
         }
@@ -550,6 +559,7 @@ struct TreeView: View {
         }
         
         withAnimation(.easeInOut(duration: 0.25)) {
+            zoomAnchor = .center   // تمركز دقيق بعد أي تكبير نقر-مزدوج سابق
             activePath = ancestors
             if includeFocusedMemberInPath {
                 activePath.insert(member.id)
@@ -587,6 +597,7 @@ struct TreeView: View {
             let updates = {
                 scale = preferredBaseScale
                 baseScale = preferredBaseScale
+                zoomAnchor = .center
                 activePath = expandedIds
                 searchedMemberID = nil
                 treeID = UUID()
@@ -718,6 +729,20 @@ struct TreeView: View {
             }
             .padding(.horizontal, DS.Spacing.lg)
         }
+    }
+
+    /// إيماءة التكبير باللمس (pinch) — تُحدّث المقياس ضمن TreeConst.minScale…maxScale،
+    /// مبنيّة على baseScale، وتتركّب مع السحب عبر .simultaneousGesture. السحب/التمرير
+    /// يبقى من مسؤولية ScrollView، لذا لا نلمس zoomAnchor هنا (نتفادى القفزات).
+    private var magnifyGesture: some Gesture {
+        MagnificationGesture()
+            .onChanged { value in
+                let newScale = baseScale * value
+                scale = min(TreeConst.maxScale, max(TreeConst.minScale, newScale))
+            }
+            .onEnded { _ in
+                baseScale = scale
+            }
     }
 
     /// نقر مزدوج: تكبير نحو نقطة اللمس، أو تصغير للوضع الافتراضي إذا كان مكبّراً
@@ -927,12 +952,14 @@ struct RecursiveTreeBranch: View {
                     }
                 }
 
+                // ملاحظة: لا نغيّر المقياس (scale/baseScale) عند الفتح/الطي —
+                // نحافظ على تكبير وتمرير المستخدم الحالي، ونكتفي بتحريك الكاميرا
+                // للعقدة عبر scrollTarget أدناه. إعادة الزوم للوضع الافتراضي تبقى
+                // حصراً على زر «البداية».
                 withAnimation(.easeInOut(duration: 0.2)) {
                     if !isExpanded {
                         // فتح — نضيف العقدة للمسار (تظهر كل أبنائها لعدم وجود مسار أعمق)
                         activePath.insert(member.id)
-                        scale = TreeConst.openNodeScale
-                        baseScale = TreeConst.openNodeScale
                     } else if hasDeeperPath {
                         // مفتوحة وفيها مسار أعمق → سطّح لهالعقدة عشان تظهر كل أبنائها
                         // (نشيل الذرية من المسار ونبقي العقدة نفسها)
@@ -940,16 +967,12 @@ struct RecursiveTreeBranch: View {
                         collectDescendants(of: member.id, into: &idsToRemove)
                         activePath.subtract(idsToRemove)
                         searchedMemberID = nil
-                        scale = TreeConst.openNodeScale
-                        baseScale = TreeConst.openNodeScale
                     } else {
                         // طي — نقفل العقدة وكل ذريتها
                         var idsToRemove: Set<UUID> = [member.id]
                         collectDescendants(of: member.id, into: &idsToRemove)
                         activePath.subtract(idsToRemove)
                         searchedMemberID = nil
-                        scale = TreeConst.closeNodeScale
-                        baseScale = TreeConst.closeNodeScale
                     }
                 }
                 Task {
@@ -1217,6 +1240,7 @@ struct TreeMemberNode: View {
                             }
                             .frame(width: interactiveNodeSize, height: interactiveNodeSize)
                             .clipShape(Circle())
+                            .saturation(member.isDeceased == true ? 0 : 1)   // المتوفّى: صورة غير ملوّنة
                         } else {
                             Image(systemName: "person.fill")
                                 .resizable()
@@ -1255,9 +1279,20 @@ struct TreeMemberNode: View {
                             .onAppear { isPulsing = true }
                     }
                 }
-                .overlay {
-                    // شريط المتوفى — overlay أخير ليكون فوق الدائرة الزرقاء
-                    if member.isDeceased ?? false { deathTag }
+                .overlay(alignment: .bottomTrailing) {
+                    // شارة الوفاة — قلب مكسور رمادي في الزاوية (نفس نمط شجرة النساء والتفاصيل)
+                    if member.isDeceased ?? false {
+                        Circle()
+                            .fill(DS.Color.background)
+                            .frame(width: 30, height: 30)
+                            .overlay(
+                                Image(systemName: "heart.slash.fill")
+                                    .font(DS.Font.scaled(15, weight: .bold))
+                                    .foregroundColor(DS.Color.textTertiary)
+                            )
+                            .overlay(Circle().stroke(DS.Color.deceased.opacity(0.35), lineWidth: 1))
+                            .offset(x: -6, y: -6)
+                    }
                 }
                 .overlay(alignment: .top) {
                     // علامة "أنت هنا" — overlay لا يأثر على الـ layout
@@ -1325,26 +1360,18 @@ struct TreeMemberNode: View {
                     .offset(y: -1)
                     .zIndex(0)
                 }
+
+                // سنوات الميلاد–الوفاة كتعليق خافت تحت الاسم (بدل الشريط الأحمر السابق)
+                if member.isDeceased ?? false {
+                    Text(getLifeSpan())
+                        .font(DS.Font.scaled(11, weight: .semibold))
+                        .foregroundColor(DS.Color.textSecondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                        .padding(.top, DS.Spacing.xs)
+                }
             }.fixedSize()
         }
-    }
-
-    private var deathTag: some View {
-        VStack {
-            Spacer()
-            Text(getLifeSpan())
-                .font(DS.Font.scaled(14, weight: .black))
-                .foregroundColor(DS.Color.textOnPrimary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-                .frame(width: interactiveLabelWidth, height: interactiveLabelHeight)
-                .background(
-                    Capsule()
-                        .fill(DS.Color.error)
-                )
-                .offset(y: 5)
-        }
-        .frame(width: interactiveNodeSize, height: interactiveNodeSize)
     }
 
     func getLifeSpan() -> String {

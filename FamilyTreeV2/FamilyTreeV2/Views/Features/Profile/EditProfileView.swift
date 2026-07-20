@@ -785,9 +785,12 @@ struct EditProfileView: View {
         let deceasedChanged: Bool
     }
 
+    /// «تعديلات غير محفوظة» يشمل فقط الحقول التي تُحفظ عبر زر «حفظ التغييرات» أو
+    /// تُرسل كطلب موافقة عند الإغلاق. يُستثنى منها ما يُحفظ فوراً (الصورة + الحالة
+    /// الاجتماعية) حتى لا يظهر تنبيه «تجاهل التعديلات؟» لتغييرات ثبتت أصلاً.
     private var hasUnsavedChanges: Bool {
         let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"
-        if isMarried != (member.isMarried ?? false) { return true }
+        // ملاحظة: الحالة الاجتماعية (isMarried) تُحفظ فوراً في setMarried — لا تُحتسب هنا.
         if isPhoneHidden != (member.isPhoneHidden ?? false) { return true }
         if isDeceased && !(member.isDeceased ?? false) { return true }
         let oldBirthStr = member.birthDate ?? ""

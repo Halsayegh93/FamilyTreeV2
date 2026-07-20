@@ -11,6 +11,8 @@ struct EditChildSheet: View {
     @State private var selectedPhoneCountry: KuwaitPhone.Country = KuwaitPhone.defaultCountry
     @State private var phoneNumber: String = ""
     @State private var birthDate: Date = Date()
+    /// هل للابن تاريخ ميلاد فعلي (أو حدّده المستخدم الآن)؟ — لا نكتب «اليوم» المفبرك.
+    @State private var birthDateProvided: Bool = false
     @State private var selectedGender: String = "male"
     @State private var isDeceased: Bool = false
     @State private var deathDate: Date = Date()
@@ -140,13 +142,14 @@ struct EditChildSheet: View {
 
                     DSDivider()
 
-                    // Birth date — صف موحّد
+                    // Birth date — صف موحّد (يُرسل فقط إذا كان معروفاً/حدّده المستخدم)
                     DSDateField(
                         label: L10n.t("تاريخ الميلاد", "Birth Date"),
                         date: $birthDate,
                         range: ...Date(),
                         labelAbove: true
                     )
+                    .onChange(of: birthDate) { _ in birthDateProvided = true }
 
                     DSDivider()
 
@@ -215,6 +218,7 @@ struct EditChildSheet: View {
 
         if let birth = member.birthDate, !birth.isEmpty, let parsed = formatter.date(from: birth) {
             birthDate = parsed
+            birthDateProvided = true
         }
 
         if let death = member.deathDate, !death.isEmpty, let parsed = formatter.date(from: death) {
@@ -232,7 +236,8 @@ struct EditChildSheet: View {
             formatter.dateFormat = "yyyy-MM-dd"
             formatter.locale = Locale(identifier: "en_US_POSIX")
 
-            let birthDateString: String? = formatter.string(from: birthDate)
+            // اختياري: نُرسل nil (غير معروف) إن لم يُحدَّد تاريخ ميلاد — بدل «اليوم» الخاطئ.
+            let birthDateString: String? = birthDateProvided ? formatter.string(from: birthDate) : nil
             let deathDateString: String? = isDeceased ? formatter.string(from: deathDate) : nil
 
             let cleanFirst = firstName.trimmingCharacters(in: .whitespacesAndNewlines)

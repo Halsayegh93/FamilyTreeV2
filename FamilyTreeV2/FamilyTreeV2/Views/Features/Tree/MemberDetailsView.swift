@@ -85,6 +85,9 @@ struct MemberDetailsView: View {
 
                             // المعلومات تظهر فقط عند توسيع الشيت (الحجم الكبير)
                             if detent == .large {
+                                // مسار لأعلى — الأب (يظهر فقط عند وجود أب)
+                                fatherCell
+
                                 basicInfoCard
                                     .padding(.horizontal, DS.Spacing.lg)
 
@@ -336,6 +339,51 @@ struct MemberDetailsView: View {
             .clipShape(Capsule())
         }
         .buttonStyle(DSScaleButtonStyle())
+    }
+
+    // MARK: - Father Cell (مسار لأعلى — الأب)
+
+    /// خلية الأب القابلة للضغط — تنقل الشيت والشجرة للأب (مسار لأعلى في الشجرة).
+    /// تظهر فقط عند وجود أب، وتحاكي خلايا الأم/الزوج في شيت النساء (relationCell).
+    @ViewBuilder
+    private var fatherCell: some View {
+        if let father = cachedFather {
+            Button {
+                openMemberInTree(father.id)
+            } label: {
+                HStack(spacing: DS.Spacing.sm) {
+                    ZStack {
+                        Circle()
+                            .fill(DS.Color.primary.opacity(0.12))
+                            .frame(width: 34, height: 34)
+                        Image(systemName: "person.fill")
+                            .font(DS.Font.scaled(14, weight: .semibold))
+                            .foregroundColor(DS.Color.primary)
+                    }
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(L10n.t("الأب", "Father"))
+                            .font(DS.Font.caption2)
+                            .foregroundColor(DS.Color.textSecondary)
+                        Text(father.firstName.isEmpty ? father.fullName : father.firstName)
+                            .font(DS.Font.calloutBold)
+                            .foregroundColor(DS.Color.textPrimary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.6)
+                    }
+                    Spacer(minLength: 0)
+                    Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
+                        .font(DS.Font.scaled(11, weight: .bold))
+                        .foregroundColor(DS.Color.textTertiary)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(DS.Spacing.sm)
+                .background(DS.Color.surface)
+                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+                .dsSubtleShadow()
+            }
+            .buttonStyle(DSScaleButtonStyle())
+            .padding(.horizontal, DS.Spacing.lg)
+        }
     }
 
     // MARK: - Basic Info Card
