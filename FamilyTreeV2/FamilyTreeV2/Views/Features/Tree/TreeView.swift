@@ -850,7 +850,7 @@ struct TreeView: View {
         withAnimation(.easeInOut(duration: 0.3)) {
             if zoomedIn {
                 scale = ns; baseScale = ns
-                offset = clampOffset(CGSize(width: (viewport.width - layout.size.width * ns) / 2, height: 150))
+                offset = centeredOffset(scale: ns, in: viewport, layout: layout)
                 baseOffset = offset
             } else {
                 offset = clampOffset(CGSize(width: location.x - (location.x - offset.width) * r,
@@ -1041,13 +1041,24 @@ struct TreeView: View {
         baseOffset = offset
     }
 
-    /// يلائم عرض الشجرة الحالية للشاشة ويضع الجذر تحت الهيدر.
+    /// يلائم الشجرة للشاشة ويوسّطها أفقياً وعمودياً (بمنتصف المساحة تحت الهيدر).
     private func fitCanvas(in size: CGSize, layout L: FamilyLayout) {
         guard L.size.width > 0, size.width > 0 else { return }
         let s = max(0.28, min(1.1, (size.width - 48) / L.size.width))
         scale = s; baseScale = s; fittedScale = s
-        offset = CGSize(width: (size.width - L.size.width * s) / 2, height: 160)
+        offset = centeredOffset(scale: s, in: size, layout: L)
         baseOffset = offset
+    }
+
+    /// إزاحة توسيط المحتوى: أفقياً بالمنتصف، وعمودياً بمنتصف المساحة المتاحة
+    /// تحت الهيدر العائم — وإذا كانت الشجرة أطول من الشاشة تبدأ من تحت الهيدر.
+    private func centeredOffset(scale s: CGFloat, in size: CGSize, layout L: FamilyLayout) -> CGSize {
+        let headerInset: CGFloat = 150
+        let contentW = L.size.width * s
+        let contentH = L.size.height * s
+        let availH = max(size.height - headerInset, 0)
+        let y = contentH < availH ? headerInset + (availH - contentH) / 2 : headerInset
+        return CGSize(width: (size.width - contentW) / 2, height: y)
     }
 
     /// يُبقي الشجرة داخل حدود معقولة مع هامش overscroll.
