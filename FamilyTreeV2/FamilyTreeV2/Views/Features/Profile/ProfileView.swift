@@ -706,7 +706,7 @@ struct ProfileView: View {
     /// يمكن ترتيب الأبناء (شجرة الرجال — profiles) لأي عضو لعائلته نفسه.
     private var canReorderSons: Bool { memberVM.currentMemberChildren.count > 1 }
     /// ترتيب البنات (شجرة النساء — women_members) مقيّد على الإدارة حسب RLS.
-    private var canReorderDaughters: Bool { authVM.canModerate && womenChildrenList.count > 1 }
+    private var canReorderDaughters: Bool { womenChildrenList.count > 1 }   // self-service عبر RPC مقيّد على النفس
     /// هل يوجد ما يمكن لهذا العضو ترتيبه فعلاً؟ (يتحكم بظهور زر «ترتيب» ووضع الترتيب)
     private var canReorderChildren: Bool { canReorderSons || canReorderDaughters }
 
@@ -1012,7 +1012,7 @@ struct ProfileView: View {
         let target = up ? idx - 1 : idx + 1
         guard target >= 0, target < list.count else { return }
         list.swapAt(idx, target)
-        Task { await memberVM.reorderWomenChildren(list) }
+        Task { await memberVM.reorderSelfWomenChildren(list.map { $0.id }) }
     }
 
     // خلية فرد «عائلتي» — بنفس شكل خلايا الأبناء القديمة (صورة + اسم)، دور رمادي خفيف.
@@ -1428,14 +1428,13 @@ struct WomanMemberEditSheet: View {
             .alert(L10n.t("حذف من العائلة", "Remove from family"), isPresented: $showDeleteConfirm) {
                 Button(L10n.t("حذف", "Delete"), role: .destructive) {
                     Task {
-                        // الأم: فكّ الارتباط (RPC مقيّد على النفس — يعمل لأي دور).
-                        // الزوجة: حذف/فكّ مقيّد على النفس (يعمل لأي دور).
-                        // الابنة: حذف السجل (مقيّد على الإدارة حسب RLS).
+                        // كلها RPCs مقيّدة على النفس — تعمل لأي دور (الأب/الزوج نفسه).
+                        // الأم: فكّ الارتباط · الزوجة: حذف/فكّ · الابنة: حذف السجل.
                         let ok: Bool
                         switch entry.role {
                         case .mother: ok = await memberVM.setSelfMother(motherId: nil)
                         case .wife:   ok = await memberVM.removeSelfWife(wifeId: entry.member.id)
-                        default:      ok = await memberVM.deleteWomanMember(id: entry.member.id)
+                        default:      ok = await memberVM.removeSelfWomanChild(id: entry.member.id)
                         }
                         // نجاح → إغلاق؛ فشل (مثلاً رفض RLS) → رسالة واضحة بدل لا-عمل صامت.
                         await MainActor.run {
@@ -1482,14 +1481,27 @@ struct WomanMemberEditSheet: View {
     private func save() {
         Task {
             isSaving = true
-            let ok = await memberVM.updateWomanMember(
-                id: entry.member.id,
-                firstName: name,
-                birthDate: hasBirthDate ? birthDate : nil,
-                isDeceased: isDeceased,
-                deathDate: hasDeathDate ? deathDate : nil,
-                gender: selectedGender
-            )
+            let ok: Bool
+            if entry.role == .child {
+                // ابنة العضو نفسه — RPC مقيّد على النفس (يعمل لأي دور). تغيير الجنس
+                // (نقل بين الشجرتين) يبقى للإدارة؛ هنا الاسم/الميلاد/الوفاة فقط.
+                ok = await memberVM.updateSelfWomanChild(
+                    id: entry.member.id,
+                    firstName: name,
+                    birthDate: hasBirthDate ? birthDate : nil,
+                    isDeceased: isDeceased,
+                    deathDate: hasDeathDate ? deathDate : nil
+                )
+            } else {
+                ok = await memberVM.updateWomanMember(
+                    id: entry.member.id,
+                    firstName: name,
+                    birthDate: hasBirthDate ? birthDate : nil,
+                    isDeceased: isDeceased,
+                    deathDate: hasDeathDate ? deathDate : nil,
+                    gender: selectedGender
+                )
+            }
             if ok, let img = selectedUIImage {
                 await memberVM.updateWomanAvatar(id: entry.member.id, image: img)
             }

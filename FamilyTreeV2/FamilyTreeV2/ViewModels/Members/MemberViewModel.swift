@@ -436,6 +436,59 @@ class MemberViewModel: ObservableObject {
         }
     }
 
+    // MARK: - بنات «عائلتي» (self-service للأب نفسه — RPCs مقيّدة على النفس)
+
+    /// تعديل بيانات ابنة للمستخدم نفسه (RPC update_self_woman_child).
+    @discardableResult
+    func updateSelfWomanChild(id: UUID, firstName: String, birthDate: Date?, isDeceased: Bool, deathDate: Date?) async -> Bool {
+        guard NetworkMonitor.shared.requireOnline(), let uid = currentUser?.id else { return false }
+        struct P: Encodable {
+            let p_child_id: String; let p_first_name: String; let p_full_name: String
+            let p_birth: String?; let p_deceased: Bool; let p_death: String?
+        }
+        let params = P(
+            p_child_id: id.uuidString,
+            p_first_name: firstName,
+            p_full_name: firstName,
+            p_birth: birthDate.map { DateHelper.format($0) },
+            p_deceased: isDeceased,
+            p_death: (isDeceased ? deathDate : nil).map { DateHelper.format($0) }
+        )
+        do {
+            _ = try await supabase.rpc("update_self_woman_child", params: params).execute()
+            await fetchWomenFamily(for: uid); return true
+        } catch {
+            self.errorMessage = L10n.t("تعذّر تعديل الابنة.", "Failed to update daughter.")
+            Log.error("[Women] updateSelfWomanChild: \(error.localizedDescription)"); return false
+        }
+    }
+
+    /// حذف ابنة للمستخدم نفسه (RPC remove_self_woman_child).
+    @discardableResult
+    func removeSelfWomanChild(id: UUID) async -> Bool {
+        guard NetworkMonitor.shared.requireOnline(), let uid = currentUser?.id else { return false }
+        struct P: Encodable { let p_child_id: String }
+        do {
+            _ = try await supabase.rpc("remove_self_woman_child", params: P(p_child_id: id.uuidString)).execute()
+            await fetchWomenFamily(for: uid); return true
+        } catch {
+            self.errorMessage = L10n.t("تعذّر حذف الابنة.", "Failed to remove daughter.")
+            Log.error("[Women] removeSelfWomanChild: \(error.localizedDescription)"); return false
+        }
+    }
+
+    /// ترتيب بنات المستخدم نفسه (RPC reorder_self_women_children).
+    func reorderSelfWomenChildren(_ orderedIds: [UUID]) async {
+        guard NetworkMonitor.shared.requireOnline(), let uid = currentUser?.id else { return }
+        struct P: Encodable { let p_ids: [String] }
+        do {
+            _ = try await supabase.rpc("reorder_self_women_children", params: P(p_ids: orderedIds.map { $0.uuidString })).execute()
+            await fetchWomenFamily(for: uid)
+        } catch {
+            Log.error("[Women] reorderSelfWomenChildren: \(error.localizedDescription)")
+        }
+    }
+
     /// إضافة أمّ جديدة (زوجة للأب) للمستخدم نفسه (RPC add_self_mother).
     @discardableResult
     func addSelfMother(name: String) async -> Bool {
