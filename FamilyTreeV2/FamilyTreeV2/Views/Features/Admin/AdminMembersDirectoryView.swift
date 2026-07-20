@@ -175,7 +175,8 @@ struct AdminMembersDirectoryView: View {
                                 trailing: DS.Spacing.lg
                             ))
                             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                if authVM.canEditMembers && member.isDeceased != true {
+                                // التجميد/التفعيل للمدير فقط (كان canEditMembers يشمل المراقب)
+                                if authVM.canFreezeMembers && member.isDeceased != true {
                                     if member.status == .frozen {
                                         Button {
                                             memberToActivate = member

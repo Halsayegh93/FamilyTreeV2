@@ -364,8 +364,8 @@ struct TreeSearchOverlay: View {
         let raw = query.trimmingCharacters(in: .whitespacesAndNewlines)
         if raw.isEmpty { searchResults = []; return }
 
-        // snapshot البيانات مرة وحدة
-        let members = memberVM.allMembers.filter { $0.isHiddenFromTree != true }
+        // snapshot البيانات مرة وحدة — isCountable يستثني المعلّق/المجمّد/المخفي (يُبقي المتوفّى)
+        let members = memberVM.allMembers.filter { $0.isCountable }
         let lookup = memberVM._memberById
 
         searchTask = Task {
@@ -397,7 +397,8 @@ struct TreeSearchOverlay: View {
             let normalizedFirst = ArabicTextNormalizer.normalizeForSearch(member.firstName)
 
             if isDigitSearch && searchDigits.count >= 4 {
-                if let phone = member.phoneNumber {
+                // احترام الهاتف المخفي — لا يُطابَق بالرقم
+                if let phone = member.phoneNumber, member.isPhoneHidden != true {
                     let phoneSuffix = String(phone.filter(\.isNumber).suffix(8))
                     if phoneSuffix.contains(searchDigits) || searchDigits.contains(phoneSuffix) {
                         score += 90

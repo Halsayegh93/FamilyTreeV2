@@ -158,7 +158,7 @@ class AuthViewModel: ObservableObject {
     var canSendNotifications: Bool { isAdmin }
 
     /// تسجيل عضو جديد مباشرة — مدير + مشرف + مالك
-    var canRegisterMembers: Bool { canModerate }
+    var canRegisterMembers: Bool { isAdmin }   // المالك + المدير فقط (كان canModerate يشمل المراقب/المشرف)
 
     var canAutoPublishNews: Bool {
         canModerate

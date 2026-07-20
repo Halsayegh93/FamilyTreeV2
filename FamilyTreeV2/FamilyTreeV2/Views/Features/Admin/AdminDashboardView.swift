@@ -187,8 +187,9 @@ struct AdminDashboardView: View {
                                 }
                             .padding(.horizontal, DS.Spacing.lg)
 
-                            // تسجيل عضو جديد — مدير + مشرف + مالك
-                            if authVM.canModerate {
+                            // النظام (تسجيل/إشعارات/تقارير/إعدادات) — المدير والمالك فقط
+                            // (كان canModerate يكشف «تسجيل عضو» للمراقب/المشرف)
+                            if authVM.isAdmin {
                                 DSCard(padding: 0) {
                                     DSSectionHeader(
                                         title: L10n.t("النظام", "System"),
