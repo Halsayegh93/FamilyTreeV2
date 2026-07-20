@@ -394,6 +394,11 @@ struct TreeView: View {
                             }
                         }
                         .padding(.horizontal, DS.Spacing.sm)
+
+                        // شريط المسار — علوي، تحت شريط الأدوات (يظهر عند التعمق)
+                        if breadcrumbChain.count > 1 {
+                            breadcrumbBar
+                        }
                     }
                     .zIndex(101)
 
@@ -782,17 +787,13 @@ struct TreeView: View {
         .dsSubtleShadow()
         .frame(maxWidth: .infinity)
         .padding(.horizontal, DS.Spacing.lg)
-        .transition(.move(edge: .bottom).combined(with: .opacity))
+        .transition(.move(edge: .top).combined(with: .opacity))
     }
 
     // MARK: - أدوات التحديث — Glassy (أُزيلت أدوات الزوم؛ التكبير باللمس)
     private var overlayTools: some View {
-        VStack(spacing: DS.Spacing.sm) {
+        VStack {
             Spacer()
-            // شريط المسار — يظهر أول ما تتعمّق في الشجرة
-            if breadcrumbChain.count > 1 {
-                breadcrumbBar
-            }
             HStack {
                 Spacer()
                 VStack(spacing: 0) {
@@ -1050,15 +1051,15 @@ struct TreeView: View {
         baseOffset = offset
     }
 
-    /// إزاحة توسيط المحتوى: أفقياً بالمنتصف، وعمودياً بمنتصف المساحة المتاحة
-    /// تحت الهيدر العائم — وإذا كانت الشجرة أطول من الشاشة تبدأ من تحت الهيدر.
+    /// إزاحة التوسيط: الكانفس بالمنتصف أفقياً، والجذر بمنتصف الشاشة عمودياً
+    /// (نفس سلوك المحرّك السابق — scrollTo(root, anchor: .center)).
     private func centeredOffset(scale s: CGFloat, in size: CGSize, layout L: FamilyLayout) -> CGSize {
-        let headerInset: CGFloat = 150
-        let contentW = L.size.width * s
-        let contentH = L.size.height * s
-        let availH = max(size.height - headerInset, 0)
-        let y = contentH < availH ? headerInset + (availH - contentH) / 2 : headerInset
-        return CGSize(width: (size.width - contentW) / 2, height: y)
+        var rootCY: CGFloat = CANVAS_PAD + NODE_H_DEFAULT / 2
+        if let root = primaryRootMember, let p = L.positions[root.id] {
+            rootCY = p.y + (L.heights[root.id] ?? NODE_H_DEFAULT) / 2
+        }
+        let y = size.height * 0.45 - rootCY * s   // منتصف بصري (مع حساب الهيدر العائم)
+        return CGSize(width: (size.width - L.size.width * s) / 2, height: y)
     }
 
     /// يُبقي الشجرة داخل حدود معقولة مع هامش overscroll.
