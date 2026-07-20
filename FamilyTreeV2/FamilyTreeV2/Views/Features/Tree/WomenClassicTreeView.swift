@@ -518,19 +518,19 @@ struct WomenClassicTreeView: View {
                 .background(Capsule().fill(DS.Color.surface))
                 .overlay(Capsule().stroke(accent.opacity(0.4), lineWidth: 1))
 
-            // سنوات الوفاة–الميلاد للمتوفّى في صندوق ملوّن — بلا فراغ لغير المتوفّى
+            // سنوات الوفاة–الميلاد للمتوفّى — رمادي خافت (المتوفّى غير ملوّن، يطابق شجرة العائلة)
             if deceased, let ls = lifeSpanNeat(m) {
                 Text(ls)
                     .font(.system(size: 8.5, weight: .bold))
-                    .foregroundColor(DS.Color.error)
+                    .foregroundColor(DS.Color.textSecondary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
                     .environment(\.layoutDirection, .leftToRight)
                     .padding(.horizontal, 5)
                     .frame(maxWidth: NODE_W)
                     .frame(height: LIFE_H)
-                    .background(Capsule().fill(DS.Color.error.opacity(0.12)))
-                    .overlay(Capsule().stroke(DS.Color.error.opacity(0.25), lineWidth: 0.5))
+                    .background(Capsule().fill(DS.Color.textTertiary.opacity(0.12)))
+                    .overlay(Capsule().stroke(DS.Color.textTertiary.opacity(0.25), lineWidth: 0.5))
             }
 
             if !kids.isEmpty {

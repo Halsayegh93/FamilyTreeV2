@@ -107,6 +107,60 @@ private struct ConditionalDrawingGroup: ViewModifier {
     }
 }
 
+// MARK: - تخطيط الكانفس (إحداثيات مطلقة — نفس محرّك تبويب النساء)
+/// نتيجة حساب مواضع كل العقد المرئية بإحداثيات مطلقة داخل كانفس ثابت.
+private struct FamilyLayout {
+    var positions: [UUID: CGPoint] = [:]     // الزاوية العليا-اليسرى لكل عقدة
+    var depth: [UUID: Int] = [:]
+    var heights: [UUID: CGFloat] = [:]       // ارتفاع صندوق كل عقدة
+    var childRows: [UUID: [[UUID]]] = [:]     // صفوف أبناء كل أب (لرسم خطوط الربط)
+    var size: CGSize = .zero
+}
+
+/// قرصة التكبير مع تثبيت النقطة تحت الأصابع (iOS 17+) — نسخة شجرة العائلة.
+private struct TreePinchZoomModifier: ViewModifier {
+    @Binding var scale: CGFloat
+    @Binding var baseScale: CGFloat
+    @Binding var offset: CGSize
+    @Binding var baseOffset: CGSize
+    @Binding var userInteracted: Bool
+    let clamp: (CGSize) -> CGSize
+
+    func body(content: Content) -> some View {
+        if #available(iOS 17.0, *) {
+            content.simultaneousGesture(
+                MagnifyGesture()
+                    .onChanged { v in
+                        userInteracted = true
+                        let ns = min(TreeConst.maxScale, max(TreeConst.minScale, baseScale * v.magnification))
+                        let f = v.startLocation
+                        let r = scale > 0 ? ns / scale : 1
+                        offset = CGSize(width: f.x - (f.x - offset.width) * r,
+                                        height: f.y - (f.y - offset.height) * r)
+                        scale = ns
+                    }
+                    .onEnded { _ in
+                        baseScale = scale
+                        let t = clamp(offset)
+                        withAnimation(.easeOut(duration: 0.25)) { offset = t }
+                        baseOffset = t
+                    }
+            )
+        } else {
+            content.simultaneousGesture(
+                MagnificationGesture()
+                    .onChanged { v in userInteracted = true; scale = min(TreeConst.maxScale, max(TreeConst.minScale, baseScale * v)) }
+                    .onEnded { _ in
+                        baseScale = scale
+                        let t = clamp(offset)
+                        withAnimation(.easeOut(duration: 0.25)) { offset = t }
+                        baseOffset = t
+                    }
+            )
+        }
+    }
+}
+
 // MARK: - 1. واجهة الشجرة الرئيسية — Liquid Glass
 struct TreeView: View {
     @EnvironmentObject var authVM: AuthViewModel
@@ -117,8 +171,6 @@ struct TreeView: View {
     var treeTab: Binding<Int>? = nil
     @State private var showingNotifications = false
     @State private var selectedMember: FamilyMember? = nil
-    @State private var scrollTarget: UUID? = nil
-    @State private var scrollCounter: Int = 0
     @State private var currentLocationMemberID: UUID? = nil
     @State private var isRefreshing = false
 
@@ -128,14 +180,34 @@ struct TreeView: View {
     @State private var highlightTask: Task<Void, Never>?
     @State private var locationHighlightTask: Task<Void, Never>?
 
-    @State private var scale: CGFloat = TreeConst.closeNodeScale
+    // ── محرّك الكانفس (إحداثيات مطلقة، يطابق تبويب النساء — زوم حقيقي + سحب بزخم) ──
+    @State private var scale: CGFloat = TreeConst.defaultScale
+    @State private var baseScale: CGFloat = TreeConst.defaultScale
+    @State private var offset: CGSize = .zero
+    @State private var baseOffset: CGSize = .zero
+    @State private var viewport: CGSize = .zero
+    @State private var layout = FamilyLayout()
+    @State private var userInteracted = false
+    @State private var fittedScale: CGFloat = TreeConst.defaultScale
     /// إظهار حقل البحث (مخفي افتراضياً خلف زر — العرض الكلاسيكي).
     @State private var showSearch = false
-    @State private var treeID = UUID()
-    @State private var currentAnchor: UnitPoint = .center
-    @State private var baseScale: CGFloat = TreeConst.closeNodeScale
-    @State private var zoomAnchor: UnitPoint = .center
-    @State private var treeContentSize: CGSize = .zero
+
+    // أبعاد العقدة الدائرية + فجوات الكانفس (النقل يحافظ على شكل العقد الحالي)
+    private let NODE_W: CGFloat = 124        // عرض صندوق العقدة (الدائرة 105 + الإطار)
+    private let CIRCLE_FULL: CGFloat = 112   // ارتفاع الدائرة + حلقة الرتبة
+    private let NAME_H: CGFloat = 32         // كبسولة الاسم
+    private let BADGE_H: CGFloat = 28        // شارة العدّاد (نصف دائرة)
+    private let LIFE_H: CGFloat = 20         // سطر سنوات المتوفّى
+    private let H_GAP: CGFloat = 22          // بين الإخوة أفقيًا
+    private let V_GAP: CGFloat = 48          // بين الأب وأبنائه عموديًا
+    private let ROW_GAP: CGFloat = 22        // بين صفوف الأبناء الملتفّة
+    private let CANVAS_PAD: CGFloat = 60     // هامش حول الشجرة
+    private let PER_ROW = 3                  // أبناء لكل صف قبل الالتفاف
+    private var NODE_H_DEFAULT: CGFloat { CIRCLE_FULL + NAME_H }
+    /// ارتفاع صندوق العقدة حسب الحالة (يطابق ترتيب TreeMemberNode: دائرة+اسم[+عدّاد][+سنوات]).
+    private func nodeBoxHeight(deceased: Bool, hasKids: Bool) -> CGFloat {
+        CIRCLE_FULL + NAME_H + (hasKids ? BADGE_H : 0) + (deceased ? LIFE_H : 0)
+    }
 
     @Environment(\.verticalSizeClass) var verticalSizeClass
     @Environment(\.colorScheme) var colorScheme
@@ -251,52 +323,43 @@ struct TreeView: View {
                     if cachedVisibleMembers.isEmpty {
                         emptyStateView
                     } else {
-                        ScrollViewReader { proxy in
-                            ScrollView([.horizontal, .vertical], showsIndicators: false) {
-                                VStack(spacing: 0) {
-                                    if let root = primaryRootMember {
-                                        rootBranch(for: root)
-                                            .id(treeID)
-                                            .frame(maxWidth: .infinity, alignment: .center)
-                                    }
-                                }
-                                // drawingGroup() فقط للأشجار الكبيرة جداً —
-                                // للأشجار الصغيرة، يضيف overhead أكثر من الفائدة
-                                // ويعيد الـ rasterize عند كل zoom gesture مما يهنّق الواجهة
-                                .modifier(ConditionalDrawingGroup(enabled: cachedVisibleMembers.count > 300))
-                                .background(
-                                    GeometryReader { g in
-                                        SwiftUI.Color.clear
-                                            .preference(key: TreeContentSizeKey.self, value: g.size)
-                                    }
-                                )
-                                .onPreferenceChange(TreeContentSizeKey.self) { treeContentSize = $0 }
-                                // نقر مزدوج للتكبير نحو نقطة اللمس (قبل scaleEffect ليطابق
-                                // الإحداثي مقاس المحتوى treeContentSize) — يتركّب مع سحب ScrollView.
-                                .simultaneousGesture(
-                                    SpatialTapGesture(count: 2)
-                                        .onEnded { handleDoubleTap(at: $0.location) }
-                                )
-                                .scaleEffect(scale, anchor: zoomAnchor)
-                                .frame(
-                                    minWidth: geometry.size.width,
-                                    minHeight: geometry.size.height,
-                                    alignment: .center
-                                )
-                                // top padding = مسافة تكفي لنزول الشجرة تحت الهيدر العائم (~120pt)
-                                .padding(.top, DS.Spacing.xxxxl * 3)
-                                .padding(.bottom, DS.Spacing.xxxxl * 3)
-                                .padding(.horizontal, DS.Spacing.xxxxl)
-                            }
-                            // تكبير باللمس (pinch) — يعمل بالتوازي مع سحب/تمرير ScrollView
-                            .simultaneousGesture(magnifyGesture)
-                            .onChange(of: scrollCounter) { _ in
-                                if let id = scrollTarget {
-                                    withAnimation(.easeInOut(duration: 0.3)) {
-                                        proxy.scrollTo(id, anchor: currentAnchor)
-                                    }
+                        ZStack(alignment: .topLeading) {
+                            ZStack(alignment: .topLeading) {
+                                // خطوط الربط الحقيقية (خلف العُقد): عمود من الأب → ناقل أفقي → نازل لكل ابن
+                                connectorPath(kinshipOnly: false)
+                                    .stroke(DS.Color.primary.opacity(0.45),
+                                            style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
+                                connectorPath(kinshipOnly: true)
+                                    .stroke(DS.Color.warning,
+                                            style: StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round))
+                                // العُقد — نفس شكل TreeMemberNode الدائري (بلا تغيير)
+                                ForEach(cachedVisibleMembers.filter { layout.positions[$0.id] != nil }, id: \.id) { m in
+                                    canvasNode(m)
                                 }
                             }
+                            .frame(width: layout.size.width, height: layout.size.height, alignment: .topLeading)
+                            .scaleEffect(scale, anchor: .topLeading)
+                            .offset(offset)
+                        }
+                        // الكانفس مثبّت LTR → اتجاه السحب صحيح في واجهة RTL
+                        .environment(\.layoutDirection, .leftToRight)
+                        .frame(width: geometry.size.width, height: geometry.size.height, alignment: .topLeading)
+                        .contentShape(Rectangle())
+                        .clipped()
+                        .gesture(dragGesture)
+                        .simultaneousGesture(SpatialTapGesture(count: 2).onEnded { handleDoubleTap(at: $0.location) })
+                        .modifier(TreePinchZoomModifier(scale: $scale, baseScale: $baseScale,
+                                                        offset: $offset, baseOffset: $baseOffset,
+                                                        userInteracted: $userInteracted, clamp: clampOffset))
+                        .onAppear {
+                            viewport = geometry.size
+                            if activePath.isEmpty, let root = primaryRootMember { activePath = [root.id] }
+                            let L = rebuildLayout()
+                            if !userInteracted { fitCanvas(in: geometry.size, layout: L) }
+                        }
+                        .onChange(of: geometry.size) { newSize in
+                            viewport = newSize
+                            if !userInteracted { fitCanvas(in: newSize, layout: layout) }
                         }
                     }
 
@@ -343,11 +406,11 @@ struct TreeView: View {
                                         withAnimation(DS.Anim.snappy) {
                                             kinshipBanner = nil
                                             kinshipHighlightedIds = []
-                                            activePath = []
                                             searchedMemberID = nil
-                                            scale = TreeConst.defaultScale
-                                            baseScale = TreeConst.defaultScale
-                                            zoomAnchor = .center
+                                            userInteracted = false
+                                            if let root = primaryRootMember { activePath = [root.id] }
+                                            let L = rebuildLayout()
+                                            fitCanvas(in: viewport, layout: L)
                                         }
                                     } label: {
                                         Image(systemName: "xmark.circle.fill")
@@ -404,6 +467,9 @@ struct TreeView: View {
                     }.value
                     withAnimation(DS.Anim.snappy) {
                         applyCache(cache)
+                        if activePath.isEmpty, let root = cache.roots.first { activePath = [root.id] }
+                        let L = rebuildLayout()
+                        if !userInteracted { fitCanvas(in: viewport, layout: L) }
                     }
                 }
             }
@@ -466,26 +532,15 @@ struct TreeView: View {
                     kinshipBanner = relationship
                 }
 
-                // تصغير الزوم عشان يبان المسار كامل
-                withAnimation(.easeInOut(duration: 0.3)) {
+                // تصغير الزوم لإظهار المسار كامل + التمركز على الجد المشترك (كانفس)
+                let scrollToId = commonAncestor ?? memberId
+                userInteracted = true
+                withAnimation(.easeInOut(duration: 0.4)) {
                     scale = TreeConst.kinshipScale
                     baseScale = TreeConst.kinshipScale
-                    zoomAnchor = .center
-                }
-
-                // سكرول للجد المشترك — عشان يكون بنص الشاشة
-                let scrollToId = commonAncestor ?? memberId
-                Task {
-                    try? await Task.sleep(nanoseconds: TreeConst.kinshipScrollDelay)
-                    currentAnchor = .center
-                    scrollTarget = scrollToId
-                    scrollCounter += 1
-
-                    // سكرول ثاني للتأكد من التمركز بعد ما الشجرة تتحدث
-                    try? await Task.sleep(nanoseconds: TreeConst.kinshipSecondScroll)
-                    currentAnchor = .center
-                    scrollTarget = scrollToId
-                    scrollCounter += 1
+                    fittedScale = TreeConst.kinshipScale
+                    let L = rebuildLayout()
+                    centerOn(scrollToId, in: L)
                 }
 
                 // إخفاء البانر والهايلايت بعد 12 ثانية
@@ -494,6 +549,7 @@ struct TreeView: View {
                     withAnimation(DS.Anim.snappy) {
                         kinshipBanner = nil
                         kinshipHighlightedIds = []
+                        rebuildLayout()
                     }
                 }
             }
@@ -531,18 +587,12 @@ struct TreeView: View {
             ancestors.insert(pId)
             currentParentId = cachedMemberById[pId]?.fatherId
         }
-        // فتح المسار بأنيميشن سريعة
-        withAnimation(.easeInOut(duration: 0.25)) {
-            zoomAnchor = .center   // تمركز دقيق بعد أي تكبير نقر-مزدوج سابق
-            activePath = ancestors
-            activePath.insert(member.id)
-        }
-        // الانتقال للعضو بعد بناء العقد
-        Task {
-            try? await Task.sleep(nanoseconds: TreeConst.scrollDelay)
-            guard !Task.isCancelled else { return }
-            scrollTarget = member.id
-            scrollCounter += 1
+        ancestors.insert(member.id)
+        activePath = ancestors
+        userInteracted = true
+        withAnimation(.easeInOut(duration: 0.35)) {
+            let L = rebuildLayout()
+            centerOn(member.id, in: L)
         }
     }
 
@@ -550,36 +600,22 @@ struct TreeView: View {
         var ancestors = Set<UUID>()
         var currentParentId = member.fatherId
         var visited = Set<UUID>()
-        
         while let pId = currentParentId {
             if visited.contains(pId) { break }
             visited.insert(pId)
             ancestors.insert(pId)
             currentParentId = cachedMemberById[pId]?.fatherId
         }
-        
-        withAnimation(.easeInOut(duration: 0.25)) {
-            zoomAnchor = .center   // تمركز دقيق بعد أي تكبير نقر-مزدوج سابق
-            activePath = ancestors
-            if includeFocusedMemberInPath {
-                activePath.insert(member.id)
-            }
-            if highlight {
-                searchedMemberID = member.id
-            } else {
-                searchedMemberID = nil
-            }
-        }
-        
-        Task {
-            try? await Task.sleep(nanoseconds: TreeConst.scrollDelay)
-            guard !Task.isCancelled else { return }
-            currentAnchor = .center
-            scrollTarget = member.id
-            scrollCounter += 1
+        if includeFocusedMemberInPath { ancestors.insert(member.id) }
+        activePath = ancestors
+        searchedMemberID = highlight ? member.id : nil
+        userInteracted = true
+        withAnimation(.easeInOut(duration: 0.35)) {
+            let L = rebuildLayout()
+            centerOn(member.id, in: L)
         }
 
-        // Remove highlight after 5 seconds
+        // إزالة التظليل بعد ٥ ثوانٍ
         if highlight {
             highlightTask?.cancel()
             highlightTask = Task {
@@ -591,25 +627,16 @@ struct TreeView: View {
     }
 
     private func resetToTopRoot(animated: Bool = true) {
-        if let root = primaryRootMember {
-            // الجذر فقط مفتوح — الأبناء يظهرون، وأبناؤهم لما يضغط المستخدم
-            let expandedIds: Set<UUID> = [root.id]
-            let updates = {
-                scale = preferredBaseScale
-                baseScale = preferredBaseScale
-                zoomAnchor = .center
-                activePath = expandedIds
-                searchedMemberID = nil
-                treeID = UUID()
-                currentAnchor = .center
-                scrollTarget = root.id
-                scrollCounter += 1
-            }
-            if animated {
-                withAnimation(.easeInOut(duration: 0.3)) { updates() }
-            } else {
-                updates()
-            }
+        guard let root = primaryRootMember else { return }
+        // الجذر فقط مفتوح — الأبناء يظهرون، وأبناؤهم لما يضغط المستخدم
+        userInteracted = false
+        activePath = [root.id]
+        searchedMemberID = nil
+        let L = rebuildLayout()
+        if animated {
+            withAnimation(.easeInOut(duration: 0.4)) { fitCanvas(in: viewport, layout: L) }
+        } else {
+            fitCanvas(in: viewport, layout: L)
         }
     }
 
@@ -627,10 +654,6 @@ struct TreeView: View {
 
             Button {
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                withAnimation(.easeInOut(duration: 0.3)) {
-                    scale = TreeConst.defaultScale
-                    baseScale = TreeConst.defaultScale
-                }
                 resetToTopRoot()
             } label: {
                 toolbarIconButton(icon: "house.fill")
@@ -731,67 +754,276 @@ struct TreeView: View {
         }
     }
 
-    /// إيماءة التكبير باللمس (pinch) — تُحدّث المقياس ضمن TreeConst.minScale…maxScale،
-    /// مبنيّة على baseScale، وتتركّب مع السحب عبر .simultaneousGesture. السحب/التمرير
-    /// يبقى من مسؤولية ScrollView، لذا لا نلمس zoomAnchor هنا (نتفادى القفزات).
-    private var magnifyGesture: some Gesture {
-        MagnificationGesture()
-            .onChanged { value in
-                let newScale = baseScale * value
-                scale = min(TreeConst.maxScale, max(TreeConst.minScale, newScale))
-            }
-            .onEnded { _ in
-                baseScale = scale
-            }
-    }
+    // MARK: - محرّك الكانفس (إحداثيات مطلقة) — يصلّح الزوم المعطوب ويضيف خطوط ربط حقيقية
 
-    /// نقر مزدوج: تكبير نحو نقطة اللمس، أو تصغير للوضع الافتراضي إذا كان مكبّراً
+    /// نقر مزدوج: تكبير نحو نقطة اللمس، أو رجوع لملاءمة الشاشة إذا كان مكبّراً.
     private func handleDoubleTap(at location: CGPoint) {
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-        if scale > TreeConst.defaultScale + 0.05 {
-            // مكبّر حالياً → رجوع للوضع الافتراضي من المركز
-            withAnimation(.easeInOut(duration: 0.3)) {
-                zoomAnchor = .center
-                scale = TreeConst.defaultScale
-                baseScale = scale
-            }
-        } else {
-            // تكبير نحو نقطة اللمس
-            guard treeContentSize.width > 0, treeContentSize.height > 0 else { return }
-            let anchor = UnitPoint(
-                x: min(max(location.x / treeContentSize.width, 0), 1),
-                y: min(max(location.y / treeContentSize.height, 0), 1)
-            )
-            withAnimation(.easeInOut(duration: 0.3)) {
-                zoomAnchor = anchor
-                scale = min(TreeConst.defaultScale * 2.2, TreeConst.maxScale)
-                baseScale = scale
+        userInteracted = true
+        let zoomedIn = scale > fittedScale + 0.05
+        let ns: CGFloat = zoomedIn ? fittedScale : min(TreeConst.maxScale, max(fittedScale * 2, 0.95))
+        let r = scale > 0 ? ns / scale : 1
+        withAnimation(.easeInOut(duration: 0.3)) {
+            if zoomedIn {
+                scale = ns; baseScale = ns
+                offset = clampOffset(CGSize(width: (viewport.width - layout.size.width * ns) / 2, height: 150))
+                baseOffset = offset
+            } else {
+                offset = clampOffset(CGSize(width: location.x - (location.x - offset.width) * r,
+                                            height: location.y - (location.y - offset.height) * r))
+                scale = ns; baseScale = ns; baseOffset = offset
             }
         }
     }
 
+    /// إعادة حساب التخطيط من activePath الحالي وتخزينه.
+    @discardableResult
+    private func rebuildLayout() -> FamilyLayout {
+        let L = computeLayout()
+        layout = L
+        return L
+    }
+
+    /// يحسب مواضع كل العقد المرئية بإحداثيات مطلقة (أبوي، صفوف بحدّ PER_ROW، بلا فصل جنسين).
+    private func computeLayout() -> FamilyLayout {
+        var L = FamilyLayout()
+        guard let root = primaryRootMember else { return L }
+        let cOf = cachedChildrenByFatherId
+        let byId = cachedMemberById
+        var sizeCache: [UUID: CGSize] = [:]
+        var seen = Set<UUID>()
+
+        func boxH(_ id: UUID) -> CGFloat {
+            nodeBoxHeight(deceased: byId[id]?.isDeceased == true, hasKids: !((cOf[id] ?? []).isEmpty))
+        }
+        // الأبناء الظاهرون: العقدة يجب أن تكون في activePath، ثم نركّز على الفرع المفتوح (مثل السلوك السابق).
+        func visKids(_ id: UUID) -> [FamilyMember] {
+            guard activePath.contains(id) else { return [] }
+            let all = (cOf[id] ?? []).filter { $0.id != id }
+            if !kinshipHighlightedIds.isEmpty { return all.filter { kinshipHighlightedIds.contains($0.id) } }
+            let focused = all.filter { activePath.contains($0.id) }
+            return focused.isEmpty ? all : focused
+        }
+        func blockDims(_ boxes: [CGSize]) -> CGSize {
+            var w: CGFloat = 0, h: CGFloat = 0, i = 0
+            while i < boxes.count {
+                let row = Array(boxes[i..<min(i + PER_ROW, boxes.count)])
+                let rowW = row.reduce(0) { $0 + $1.width } + H_GAP * CGFloat(row.count - 1)
+                let rowH = row.map(\.height).max() ?? 0
+                w = max(w, rowW); h += (i > 0 ? ROW_GAP : 0) + rowH
+                i += PER_ROW
+            }
+            return CGSize(width: w, height: h)
+        }
+        func measure(_ id: UUID) -> CGSize {
+            let bh = boxH(id); L.heights[id] = bh
+            if seen.contains(id) { return CGSize(width: NODE_W, height: bh) }
+            seen.insert(id)
+            let kids = visKids(id)
+            if kids.isEmpty { let b = CGSize(width: NODE_W, height: bh); sizeCache[id] = b; return b }
+            let childBlock = blockDims(kids.map { measure($0.id) })
+            let b = CGSize(width: max(NODE_W, childBlock.width), height: bh + V_GAP + childBlock.height)
+            sizeCache[id] = b; return b
+        }
+        var placed = Set<UUID>()
+        func place(_ id: UUID, _ cx: CGFloat, _ top: CGFloat, _ d: Int) {
+            if placed.contains(id) { return }
+            placed.insert(id)
+            L.positions[id] = CGPoint(x: cx - NODE_W / 2, y: top)
+            L.depth[id] = d
+            L.heights[id] = boxH(id)
+            let kids = visKids(id)
+            if kids.isEmpty { return }
+            var rows: [[UUID]] = []
+            var rowTop = top + boxH(id) + V_GAP
+            var i = 0
+            while i < kids.count {
+                let rowKids = Array(kids[i..<min(i + PER_ROW, kids.count)])
+                let rowBoxes = rowKids.map { sizeCache[$0.id] ?? CGSize(width: NODE_W, height: boxH($0.id)) }
+                let rowW = rowBoxes.reduce(0) { $0 + $1.width } + H_GAP * CGFloat(rowBoxes.count - 1)
+                let rowH = rowBoxes.map(\.height).max() ?? 0
+                var x = cx - rowW / 2
+                for (j, k) in rowKids.enumerated() {
+                    place(k.id, x + rowBoxes[j].width / 2, rowTop, d + 1)
+                    x += rowBoxes[j].width + H_GAP
+                }
+                rows.append(rowKids.map { $0.id })
+                rowTop += rowH + ROW_GAP
+                i += PER_ROW
+            }
+            L.childRows[id] = rows
+        }
+
+        let rootBox = measure(root.id)
+        place(root.id, CANVAS_PAD + rootBox.width / 2, CANVAS_PAD, 0)
+        let width = rootBox.width + CANVAS_PAD * 2
+        let height = rootBox.height + CANVAS_PAD * 2
+        // مرآة أفقية → ترتيب الإخوة يمين‑لليسار (RTL) مثل تبويب النساء
+        for (id, p) in L.positions { L.positions[id] = CGPoint(x: width - p.x - NODE_W, y: p.y) }
+        L.size = CGSize(width: width, height: height)
+        return L
+    }
+
+    /// خطوط الربط: عمود من أسفل الأب → ناقل أفقي لكل صف → نازل قصير لأعلى كل ابن.
+    private func connectorPath(kinshipOnly: Bool) -> Path {
+        var path = Path()
+        for (pid, rows) in layout.childRows {
+            let isKin = kinshipHighlightedIds.contains(pid)
+            if isKin != kinshipOnly { continue }
+            guard let pp = layout.positions[pid] else { continue }
+            let ph = layout.heights[pid] ?? NODE_H_DEFAULT
+            let pcx = pp.x + NODE_W / 2
+            let pBottom = pp.y + ph
+            var maxBusY = pBottom
+            for row in rows {
+                let pts = row.compactMap { layout.positions[$0] }
+                guard !pts.isEmpty else { continue }
+                let rowTop = pts.map(\.y).min() ?? pBottom
+                let busY = rowTop - V_GAP * 0.45
+                maxBusY = max(maxBusY, busY)
+                let centers = pts.map { $0.x + NODE_W / 2 }
+                let minX = min(pcx, centers.min() ?? pcx)
+                let maxX = max(pcx, centers.max() ?? pcx)
+                path.move(to: CGPoint(x: minX, y: busY))
+                path.addLine(to: CGPoint(x: maxX, y: busY))
+                for pt in pts {
+                    let c = pt.x + NODE_W / 2
+                    path.move(to: CGPoint(x: c, y: busY))
+                    path.addLine(to: CGPoint(x: c, y: pt.y))
+                }
+            }
+            // العمود الرئيسي من أسفل الأب إلى أدنى ناقل (يمرّ خلف العقد فيختفي تحتها)
+            path.move(to: CGPoint(x: pcx, y: pBottom))
+            path.addLine(to: CGPoint(x: pcx, y: maxBusY))
+        }
+        return path
+    }
+
+    /// عقدة واحدة بشكل TreeMemberNode الدائري، موضوعة بإحداثيات مطلقة.
     @ViewBuilder
-    private func rootBranch(for root: FamilyMember) -> some View {
-        RecursiveTreeBranch(
-            member: root,
-            childrenByFatherId: cachedChildrenByFatherId,
-            ancestorIDs: [],
-            activePath: $activePath,
+    private func canvasNode(_ m: FamilyMember) -> some View {
+        let p = layout.positions[m.id] ?? .zero
+        let h = layout.heights[m.id] ?? NODE_H_DEFAULT
+        TreeMemberNode(
+            member: m,
+            isExpanded: activePath.contains(m.id),
             searchedMemberID: $searchedMemberID,
-            selectedMember: $selectedMember,
-            scrollTarget: $scrollTarget,
-            scrollAnchor: $currentAnchor,
-            scrollCounter: $scrollCounter,
-            scale: $scale,
-            baseScale: $baseScale,
-            level: 0,
+            hasChildren: !((cachedChildrenByFatherId[m.id] ?? []).isEmpty),
+            childrenCount: (cachedChildrenByFatherId[m.id] ?? []).count,
+            showName: true,
             viewMode: viewMode,
-            lightweightFullTree: lightweightFullTree,
+            lightweightFullTree: false,
+            level: layout.depth[m.id] ?? 0,
             currentLocationMemberID: currentLocationMemberID,
-            renderedCount: .constant(0),
-            maxRendered: maxRenderedNodes,
-            kinshipHighlightedIds: kinshipHighlightedIds
+            isKinshipHighlighted: kinshipHighlightedIds.contains(m.id),
+            onTap: { selectedMember = m },
+            onToggle: { toggleNode(m) }
         )
+        .frame(width: NODE_W, height: h, alignment: .top)
+        .position(x: p.x + NODE_W / 2, y: p.y + h / 2)
+    }
+
+    /// فتح/طيّ عقدة (نفس منطق التفرّع السابق) ثم تحريك الكاميرا.
+    private func toggleNode(_ member: FamilyMember) {
+        let kids = cachedChildrenByFatherId[member.id] ?? []
+        guard !kids.isEmpty else { return }
+        let wasExpanded = activePath.contains(member.id)
+        let hasDeeper = kids.contains { activePath.contains($0.id) }
+        if !wasExpanded {
+            activePath.insert(member.id)
+        } else if hasDeeper {
+            var rm = Set<UUID>(); collectDescendants(of: member.id, into: &rm)
+            activePath.subtract(rm); searchedMemberID = nil
+        } else {
+            var rm: Set<UUID> = [member.id]; collectDescendants(of: member.id, into: &rm)
+            activePath.subtract(rm); searchedMemberID = nil
+        }
+        userInteracted = true
+        let opening = !wasExpanded || hasDeeper
+        withAnimation(DS.Anim.snappy) {
+            let L = rebuildLayout()
+            if opening { scrollNodeToTop(member.id, in: L) }
+            else { centerOn(member.fatherId ?? member.id, in: L) }
+        }
+    }
+
+    private func collectDescendants(of parentId: UUID, into set: inout Set<UUID>) {
+        for child in cachedChildrenByFatherId[parentId] ?? [] where child.id != parentId {
+            if set.insert(child.id).inserted {
+                collectDescendants(of: child.id, into: &set)
+            }
+        }
+    }
+
+    // ─── الكاميرا (offset) ───
+
+    /// يُمركز عقدة في وسط الشاشة.
+    private func centerOn(_ id: UUID, in L: FamilyLayout) {
+        guard let p = L.positions[id], viewport.width > 0 else { return }
+        userInteracted = true
+        let s = scale
+        let h = L.heights[id] ?? NODE_H_DEFAULT
+        let cx = (p.x + NODE_W / 2) * s
+        let cy = (p.y + h / 2) * s
+        offset = clampOffset(CGSize(width: viewport.width / 2 - cx, height: viewport.height / 2 - cy))
+        baseOffset = offset
+    }
+
+    /// يُنزل العقدة قرب أعلى الشاشة (تحت الهيدر) لتظهر أبناؤها تحتها.
+    private func scrollNodeToTop(_ id: UUID, in L: FamilyLayout) {
+        guard let p = L.positions[id], viewport.width > 0 else { return }
+        userInteracted = true
+        let s = scale
+        let topMargin: CGFloat = 160
+        let cx = (p.x + NODE_W / 2) * s
+        offset = clampOffset(CGSize(width: viewport.width / 2 - cx, height: topMargin - p.y * s))
+        baseOffset = offset
+    }
+
+    /// يلائم عرض الشجرة الحالية للشاشة ويضع الجذر تحت الهيدر.
+    private func fitCanvas(in size: CGSize, layout L: FamilyLayout) {
+        guard L.size.width > 0, size.width > 0 else { return }
+        let s = max(0.28, min(1.1, (size.width - 48) / L.size.width))
+        scale = s; baseScale = s; fittedScale = s
+        offset = CGSize(width: (size.width - L.size.width * s) / 2, height: 160)
+        baseOffset = offset
+    }
+
+    /// يُبقي الشجرة داخل حدود معقولة مع هامش overscroll.
+    private func clampOffset(_ o: CGSize) -> CGSize {
+        guard viewport.width > 0, viewport.height > 0 else { return o }
+        let overscroll: CGFloat = 120
+        let contentW = layout.size.width * scale
+        let contentH = layout.size.height * scale
+        func clampAxis(_ v: CGFloat, content: CGFloat, view: CGFloat, topHi: CGFloat) -> CGFloat {
+            if content <= view {
+                let slack = view - content
+                return min(max(v, -overscroll), slack + overscroll)
+            }
+            let lo = view - content - overscroll
+            return min(max(v, lo), topHi)
+        }
+        return CGSize(
+            width: clampAxis(o.width, content: contentW, view: viewport.width, topHi: overscroll),
+            height: clampAxis(o.height, content: contentH, view: viewport.height, topHi: viewport.height * 0.5)
+        )
+    }
+
+    private var dragGesture: some Gesture {
+        DragGesture()
+            .onChanged { v in
+                userInteracted = true
+                offset = clampOffset(CGSize(width: baseOffset.width + v.translation.width,
+                                            height: baseOffset.height + v.translation.height))
+            }
+            .onEnded { v in
+                // زخم مثل ScrollView: يكمل حسب السرعة ثم يستقر داخل الحدود.
+                let projected = CGSize(width: baseOffset.width + v.predictedEndTranslation.width,
+                                       height: baseOffset.height + v.predictedEndTranslation.height)
+                let target = clampOffset(projected)
+                withAnimation(.easeOut(duration: 0.4)) { offset = target }
+                baseOffset = target
+            }
     }
 
     // MARK: - حالة فارغة
@@ -840,206 +1072,6 @@ struct TreeView: View {
 
 }
 
-
-// MARK: - 2. فرع الشجرة (الإخوان جنب بعض)
-struct RecursiveTreeBranch: View {
-    let member: FamilyMember
-    let childrenByFatherId: [UUID: [FamilyMember]]
-    let ancestorIDs: Set<UUID>
-    @Binding var activePath: Set<UUID>
-    @Binding var searchedMemberID: UUID?
-    @Binding var selectedMember: FamilyMember?
-    @Binding var scrollTarget: UUID?
-    @Binding var scrollAnchor: UnitPoint
-    @Binding var scrollCounter: Int
-    @Binding var scale: CGFloat
-    @Binding var baseScale: CGFloat
-    let level: Int
-
-    var viewMode: TreeDisplayMode
-    let lightweightFullTree: Bool
-    let currentLocationMemberID: UUID?
-    @Binding var renderedCount: Int
-    let maxRendered: Int
-    var kinshipHighlightedIds: Set<UUID> = []
-
-    /// الفتح يعتمد على activePath كمصدر وحيد للحقيقة
-    private var isExpanded: Bool {
-        activePath.contains(member.id)
-    }
-
-    init(member: FamilyMember, childrenByFatherId: [UUID: [FamilyMember]], ancestorIDs: Set<UUID>, activePath: Binding<Set<UUID>>, searchedMemberID: Binding<UUID?>, selectedMember: Binding<FamilyMember?>, scrollTarget: Binding<UUID?>, scrollAnchor: Binding<UnitPoint>, scrollCounter: Binding<Int>, scale: Binding<CGFloat>, baseScale: Binding<CGFloat>, level: Int, viewMode: TreeDisplayMode, lightweightFullTree: Bool, currentLocationMemberID: UUID?, renderedCount: Binding<Int>, maxRendered: Int, kinshipHighlightedIds: Set<UUID> = []) {
-        self.member = member
-        self.childrenByFatherId = childrenByFatherId
-        self.ancestorIDs = ancestorIDs
-        self._activePath = activePath
-        self._searchedMemberID = searchedMemberID
-        self._selectedMember = selectedMember
-        self._scrollTarget = scrollTarget
-        self._scrollAnchor = scrollAnchor
-        self._scrollCounter = scrollCounter
-        self._scale = scale
-        self._baseScale = baseScale
-        self.level = level
-        self.viewMode = viewMode
-        self.lightweightFullTree = lightweightFullTree
-        self.currentLocationMemberID = currentLocationMemberID
-        self._renderedCount = renderedCount
-        self.maxRendered = maxRendered
-        self.kinshipHighlightedIds = kinshipHighlightedIds
-    }
-
-    private var visibleChildren: [FamilyMember] {
-        let allChildren = (childrenByFatherId[member.id] ?? [])
-            .filter { $0.id != member.id && !ancestorIDs.contains($0.id) }
-
-        if viewMode == .fullTree {
-            return allChildren
-        }
-
-        // عند عرض صلة القرابة — فقط الأبناء اللي بمسار القرابة، وإذا ما فيه نرجع فاضي
-        if !kinshipHighlightedIds.isEmpty {
-            return allChildren.filter { kinshipHighlightedIds.contains($0.id) }
-        }
-
-        // إذا فيه فروع مفتوحة، نعرض كل الفروع المفتوحة
-        let focusedChildren = allChildren.filter { activePath.contains($0.id) }
-        if !focusedChildren.isEmpty {
-            return focusedChildren
-        }
-        return allChildren
-    }
-
-    // لون الخطوط — ذهبي عريض إذا جزء من مسار القرابة
-    private var isKinshipPath: Bool {
-        kinshipHighlightedIds.contains(member.id)
-    }
-
-    private var connectorColor: Color {
-        isKinshipPath ? DS.Color.warning : DS.Color.primary.opacity(0.6)
-    }
-
-    private var connectorWidth: CGFloat {
-        isKinshipPath ? 5 : 2
-    }
-
-    var body: some View {
-        VStack(spacing: 0) {
-            TreeMemberNode(
-                member: member,
-                isExpanded: isExpanded,
-                searchedMemberID: $searchedMemberID,
-                hasChildren: !(childrenByFatherId[member.id] ?? []).isEmpty,
-                childrenCount: (childrenByFatherId[member.id] ?? []).count,
-                showName: true,
-                viewMode: viewMode,
-                lightweightFullTree: lightweightFullTree,
-                level: level,
-                currentLocationMemberID: currentLocationMemberID,
-                isKinshipHighlighted: isKinshipPath
-            ) {
-                selectedMember = member
-            } onToggle: {
-                // هل لهالعقدة مسار أعمق مفتوح (أحد أبنائها ضمن activePath)؟
-                let hasDeeperPath = (childrenByFatherId[member.id] ?? []).contains { activePath.contains($0.id) }
-                // نركّز على العقدة في حالتي: الفتح، أو التسطيح (إظهار كل الأبناء)
-                let focusOnNode = !isExpanded || hasDeeperPath
-
-                func collectDescendants(of parentId: UUID, into set: inout Set<UUID>) {
-                    for child in childrenByFatherId[parentId] ?? [] {
-                        set.insert(child.id)
-                        collectDescendants(of: child.id, into: &set)
-                    }
-                }
-
-                // ملاحظة: لا نغيّر المقياس (scale/baseScale) عند الفتح/الطي —
-                // نحافظ على تكبير وتمرير المستخدم الحالي، ونكتفي بتحريك الكاميرا
-                // للعقدة عبر scrollTarget أدناه. إعادة الزوم للوضع الافتراضي تبقى
-                // حصراً على زر «البداية».
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    if !isExpanded {
-                        // فتح — نضيف العقدة للمسار (تظهر كل أبنائها لعدم وجود مسار أعمق)
-                        activePath.insert(member.id)
-                    } else if hasDeeperPath {
-                        // مفتوحة وفيها مسار أعمق → سطّح لهالعقدة عشان تظهر كل أبنائها
-                        // (نشيل الذرية من المسار ونبقي العقدة نفسها)
-                        var idsToRemove: Set<UUID> = []
-                        collectDescendants(of: member.id, into: &idsToRemove)
-                        activePath.subtract(idsToRemove)
-                        searchedMemberID = nil
-                    } else {
-                        // طي — نقفل العقدة وكل ذريتها
-                        var idsToRemove: Set<UUID> = [member.id]
-                        collectDescendants(of: member.id, into: &idsToRemove)
-                        activePath.subtract(idsToRemove)
-                        searchedMemberID = nil
-                    }
-                }
-                Task {
-                    try? await Task.sleep(nanoseconds: TreeConst.scrollDelay)
-                    guard !Task.isCancelled else { return }
-                    scrollAnchor = .center
-                    scrollTarget = focusOnNode ? member.id : (member.fatherId ?? member.id)
-                    scrollCounter += 1
-                }
-            }.id(member.id)
-            .onAppear { renderedCount += 1 }
-
-            // ما نعرض الأبناء إلا إذا العقدة مفتوحة فعلياً (في المسار النشط)
-            // الوضع التفاعلي: الأبناء يظهرون لما المستخدم يضغط على العقدة فقط
-            let isPathOpen = viewMode == .fullTree || activePath.contains(member.id)
-            if isPathOpen && renderedCount < maxRendered {
-                let childrenToDisplay = self.visibleChildren
-
-                if !childrenToDisplay.isEmpty {
-                    let verticalSpacing: CGFloat = viewMode == .fullTree ? 6 : 8
-                    let rowSpacing: CGFloat = viewMode == .fullTree ? 16 : 28
-                    let connectorHeight: CGFloat = viewMode == .fullTree ? 12 : 16
-
-                    VStack(spacing: verticalSpacing) {
-                        Rectangle()
-                            .fill(connectorColor)
-                            .frame(width: connectorWidth, height: connectorHeight)
-
-                        let chunkSize = viewMode == .fullTree ? 4 : 3
-                        let chunkedChildren = stride(from: 0, to: childrenToDisplay.count, by: chunkSize).map {
-                            Array(childrenToDisplay[$0..<min($0 + chunkSize, childrenToDisplay.count)])
-                        }
-
-                        ForEach(0..<chunkedChildren.count, id: \.self) { rowIndex in
-                            let row = chunkedChildren[rowIndex]
-                            HStack(alignment: .top, spacing: rowSpacing) {
-                                ForEach(row) { child in
-                                    RecursiveTreeBranch(
-                                        member: child,
-                                        childrenByFatherId: childrenByFatherId,
-                                        ancestorIDs: ancestorIDs.union([member.id]),
-                                        activePath: $activePath,
-                                        searchedMemberID: $searchedMemberID,
-                                        selectedMember: $selectedMember,
-                                        scrollTarget: $scrollTarget,
-                                        scrollAnchor: $scrollAnchor,
-                                        scrollCounter: $scrollCounter,
-                                        scale: $scale,
-                                        baseScale: $baseScale,
-                                        level: level + 1,
-                                        viewMode: viewMode,
-                                        lightweightFullTree: lightweightFullTree,
-                                        currentLocationMemberID: currentLocationMemberID,
-                                        renderedCount: $renderedCount,
-                                        maxRendered: maxRendered,
-                                        kinshipHighlightedIds: kinshipHighlightedIds
-                                    )
-                                }
-                            }
-                        }
-                    }
-                    .padding(.top, viewMode == .fullTree ? 4 : 8)
-                }
-            }
-        }
-    }
-}
 
 // MARK: - 3. عقدة الفرد — Liquid Glass
 struct TreeMemberNode: View {
