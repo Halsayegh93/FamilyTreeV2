@@ -330,27 +330,31 @@ struct TreeView: View {
                     if cachedVisibleMembers.isEmpty {
                         emptyStateView
                     } else {
-                        ZStack(alignment: .topLeading) {
-                            ZStack(alignment: .topLeading) {
-                                // وصلة قصيرة تحت الأب المفتوح (النمط الأصلي — بلا خطوط ممتدة بين العقد)
-                                ForEach(connectorStubs) { stub in
-                                    RoundedRectangle(cornerRadius: 2)
-                                        .fill(stub.kinship ? DS.Color.warning : DS.Color.primary.opacity(0.6))
-                                        .frame(width: stub.kinship ? 5 : 2.5, height: 16)
-                                        .position(x: stub.x, y: stub.y)
+                        // حاوية بحجم الشاشة بالضبط + الكانفس كـ overlay لا يؤثر على تخطيطها —
+                        // يمنع انزياح الشجرة يساراً عندما يكون الكانفس أعرض من الشاشة
+                        // (الحاوية السابقة كانت تتمدد لحجم الكانفس فينحرف التمركز).
+                        SwiftUI.Color.clear
+                            .frame(width: geometry.size.width, height: geometry.size.height)
+                            .overlay(alignment: .topLeading) {
+                                ZStack(alignment: .topLeading) {
+                                    // وصلة قصيرة تحت الأب المفتوح (النمط الأصلي — بلا خطوط ممتدة بين العقد)
+                                    ForEach(connectorStubs) { stub in
+                                        RoundedRectangle(cornerRadius: 2)
+                                            .fill(stub.kinship ? DS.Color.warning : DS.Color.primary.opacity(0.6))
+                                            .frame(width: stub.kinship ? 5 : 2.5, height: 16)
+                                            .position(x: stub.x, y: stub.y)
+                                    }
+                                    // العُقد — نفس شكل TreeMemberNode الدائري (بلا تغيير)
+                                    ForEach(cachedVisibleMembers.filter { layout.positions[$0.id] != nil }, id: \.id) { m in
+                                        canvasNode(m)
+                                    }
                                 }
-                                // العُقد — نفس شكل TreeMemberNode الدائري (بلا تغيير)
-                                ForEach(cachedVisibleMembers.filter { layout.positions[$0.id] != nil }, id: \.id) { m in
-                                    canvasNode(m)
-                                }
+                                .frame(width: layout.size.width, height: layout.size.height, alignment: .topLeading)
+                                .scaleEffect(scale, anchor: .topLeading)
+                                .offset(offset)
                             }
-                            .frame(width: layout.size.width, height: layout.size.height, alignment: .topLeading)
-                            .scaleEffect(scale, anchor: .topLeading)
-                            .offset(offset)
-                        }
                         // الكانفس مثبّت LTR → اتجاه السحب صحيح في واجهة RTL
                         .environment(\.layoutDirection, .leftToRight)
-                        .frame(width: geometry.size.width, height: geometry.size.height, alignment: .topLeading)
                         .contentShape(Rectangle())
                         .clipped()
                         .gesture(dragGesture)
@@ -1004,7 +1008,8 @@ struct TreeView: View {
         let opening = !wasExpanded || hasDeeper
         withAnimation(DS.Anim.snappy) {
             let L = rebuildLayout()
-            if opening { scrollNodeToTop(member.id, in: L) }
+            // الفتح والطي كلاهما يمركز العقدة بمنتصف الشاشة (مثل المحرّك السابق)
+            if opening { centerOn(member.id, in: L) }
             else { centerOn(member.fatherId ?? member.id, in: L) }
         }
     }

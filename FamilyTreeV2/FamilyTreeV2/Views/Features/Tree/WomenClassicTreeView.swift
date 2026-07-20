@@ -272,32 +272,34 @@ struct WomenClassicTreeView: View {
 
             // ── منطقة الشجرة (حركة محصورة داخل صندوقها فقط) ──
             GeometryReader { geo in
-                ZStack(alignment: .topLeading) {
-                    DS.Color.background
-                    ZStack(alignment: .topLeading) {
-                        // خطوط الربط الحقيقية: عمود من الأب → ناقل أفقي → نازل لكل ابن
-                        ForEach(connectorSegs) { seg in
-                            Capsule(style: .continuous)
-                                .fill(DS.Color.primary.opacity(0.45))
-                                .frame(width: seg.rect.width, height: seg.rect.height)
-                                .position(x: seg.rect.midX, y: seg.rect.midY)
-                                .transition(.asymmetric(
-                                    insertion: AnyTransition.opacity.animation(.easeIn(duration: 0.22).delay(0.1)),
-                                    removal: AnyTransition.opacity.animation(.easeOut(duration: 0.1))
-                                ))
+                // حاوية بحجم الشاشة + الكانفس كـ overlay — يمنع انزياح الشجرة
+                // عندما يكون الكانفس أعرض من الشاشة (الحاوية لا تتمدد لحجمه).
+                DS.Color.background
+                    .frame(width: geo.size.width, height: geo.size.height)
+                    .overlay(alignment: .topLeading) {
+                        ZStack(alignment: .topLeading) {
+                            // خطوط الربط الحقيقية: عمود من الأب → ناقل أفقي → نازل لكل ابن
+                            ForEach(connectorSegs) { seg in
+                                Capsule(style: .continuous)
+                                    .fill(DS.Color.primary.opacity(0.45))
+                                    .frame(width: seg.rect.width, height: seg.rect.height)
+                                    .position(x: seg.rect.midX, y: seg.rect.midY)
+                                    .transition(.asymmetric(
+                                        insertion: AnyTransition.opacity.animation(.easeIn(duration: 0.22).delay(0.1)),
+                                        removal: AnyTransition.opacity.animation(.easeOut(duration: 0.1))
+                                    ))
+                            }
+                            // العُقد
+                            ForEach(members.filter { layout.positions[$0.id] != nil }, id: \.id) { m in
+                                nodeView(m, at: layout.positions[m.id]!)
+                            }
                         }
-                        // العُقد
-                        ForEach(members.filter { layout.positions[$0.id] != nil }, id: \.id) { m in
-                            nodeView(m, at: layout.positions[m.id]!)
-                        }
+                        .frame(width: layout.size.width, height: layout.size.height, alignment: .topLeading)
+                        .scaleEffect(scale, anchor: .topLeading)
+                        .offset(offset)
                     }
-                    .frame(width: layout.size.width, height: layout.size.height, alignment: .topLeading)
-                    .scaleEffect(scale, anchor: .topLeading)
-                    .offset(offset)
-                }
                 // الـ canvas مثبّت LTR — يمنع انعكاس اتجاه السحب في بيئة RTL.
                 .environment(\.layoutDirection, .leftToRight)
-                .frame(width: geo.size.width, height: geo.size.height)
                 .contentShape(Rectangle())
                 .clipped()                                   // الحركة لا تتجاوز حدود الصندوق
                 .gesture(dragGesture)
