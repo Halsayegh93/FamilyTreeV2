@@ -117,10 +117,11 @@ private struct FamilyLayout {
     var size: CGSize = .zero
 }
 
-/// مقطع خط ربط واحد (كـ view قابل للتحريك — ينزلق مع العقد أثناء الأنيميشن).
-private struct ConnectorSeg: Identifiable {
-    let id: String
-    let rect: CGRect
+/// وصلة قصيرة تحت أب مفتوح — النمط الأصلي البسيط.
+private struct ConnectorStub: Identifiable {
+    let id: UUID
+    let x: CGFloat
+    let y: CGFloat
     let kinship: Bool
 }
 
@@ -195,8 +196,6 @@ struct TreeView: View {
     @State private var layout = FamilyLayout()
     @State private var userInteracted = false
     @State private var fittedScale: CGFloat = TreeConst.defaultScale
-    /// آخر عقدة فُتحت — أبناؤها يدخلون بتدرّج (stagger)
-    @State private var lastToggledParentId: UUID? = nil
     /// إظهار حقل البحث (مخفي افتراضياً خلف زر — العرض الكلاسيكي).
     @State private var showSearch = false
 
@@ -333,16 +332,12 @@ struct TreeView: View {
                     } else {
                         ZStack(alignment: .topLeading) {
                             ZStack(alignment: .topLeading) {
-                                // خطوط الربط (خلف العُقد): مقاطع كـ views — تنزلق مع العقد أثناء الأنيميشن
-                                ForEach(connectorSegs) { seg in
-                                    Capsule(style: .continuous)
-                                        .fill(seg.kinship ? DS.Color.warning : DS.Color.primary.opacity(0.42))
-                                        .frame(width: seg.rect.width, height: seg.rect.height)
-                                        .position(x: seg.rect.midX, y: seg.rect.midY)
-                                        .transition(.asymmetric(
-                                            insertion: AnyTransition.opacity.animation(.easeIn(duration: 0.25).delay(0.12)),
-                                            removal: AnyTransition.opacity.animation(.easeOut(duration: 0.1))
-                                        ))
+                                // وصلة قصيرة تحت الأب المفتوح (النمط الأصلي — بلا خطوط ممتدة بين العقد)
+                                ForEach(connectorStubs) { stub in
+                                    RoundedRectangle(cornerRadius: 2)
+                                        .fill(stub.kinship ? DS.Color.warning : DS.Color.primary.opacity(0.6))
+                                        .frame(width: stub.kinship ? 5 : 2.5, height: 16)
+                                        .position(x: stub.x, y: stub.y)
                                 }
                                 // العُقد — نفس شكل TreeMemberNode الدائري (بلا تغيير)
                                 ForEach(cachedVisibleMembers.filter { layout.positions[$0.id] != nil }, id: \.id) { m in
@@ -714,10 +709,90 @@ struct TreeView: View {
             .contentShape(Circle())
     }
 
+    // MARK: - شريط المسار (فتات النسب) — يوضّح وين أنت وترجع لأي مستوى بضغطة
+    /// سلسلة النسب المفتوحة حالياً: الجذر ← ... ← أعمق عقدة مفتوحة.
+    private var breadcrumbChain: [FamilyMember] {
+        guard let root = primaryRootMember, activePath.contains(root.id) else { return [] }
+        var chain = [root]
+        var cur = root
+        var guardCounter = 0
+        while guardCounter < 40 {
+            guardCounter += 1
+            let kids = cachedChildrenByFatherId[cur.id] ?? []
+            guard let next = kids.first(where: { activePath.contains($0.id) && $0.id != cur.id }) else { break }
+            chain.append(next)
+            cur = next
+        }
+        return chain
+    }
+
+    /// الرجوع لمستوى معيّن: يطوي كل ما تحته ويتمركز عليه.
+    private func jumpToBreadcrumb(_ member: FamilyMember) {
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        var rm = Set<UUID>()
+        collectDescendants(of: member.id, into: &rm)
+        activePath.subtract(rm)
+        activePath.insert(member.id)
+        searchedMemberID = nil
+        userInteracted = true
+        withAnimation(.easeInOut(duration: 0.3)) {
+            let L = rebuildLayout()
+            centerOn(member.id, in: L)
+        }
+    }
+
+    private var breadcrumbBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: DS.Spacing.xs) {
+                ForEach(Array(breadcrumbChain.enumerated()), id: \.element.id) { idx, m in
+                    let isLast = idx == breadcrumbChain.count - 1
+                    Button {
+                        jumpToBreadcrumb(m)
+                    } label: {
+                        HStack(spacing: 4) {
+                            if idx == 0 {
+                                Image(systemName: "house.fill")
+                                    .font(DS.Font.scaled(10, weight: .bold))
+                            }
+                            Text(m.firstName.isEmpty ? "—" : m.firstName)
+                                .font(DS.Font.scaled(12, weight: isLast ? .heavy : .semibold))
+                                .lineLimit(1)
+                        }
+                        .foregroundColor(isLast ? DS.Color.textOnPrimary : DS.Color.textPrimary)
+                        .padding(.horizontal, DS.Spacing.md)
+                        .padding(.vertical, 6)
+                        .background(isLast ? AnyShapeStyle(DS.Color.primary) : AnyShapeStyle(DS.Color.surface), in: Capsule())
+                        .overlay(Capsule().stroke(DS.Color.primary.opacity(isLast ? 0 : 0.25), lineWidth: 1))
+                    }
+                    .buttonStyle(DSScaleButtonStyle())
+                    .accessibilityLabel(L10n.t("الرجوع إلى \(m.firstName)", "Back to \(m.firstName)"))
+
+                    if !isLast {
+                        Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
+                            .font(DS.Font.scaled(9, weight: .bold))
+                            .foregroundColor(DS.Color.textTertiary)
+                    }
+                }
+            }
+            .padding(.horizontal, DS.Spacing.md)
+            .padding(.vertical, 6)
+        }
+        .background(.ultraThinMaterial, in: Capsule())
+        .overlay(Capsule().stroke(DS.Color.mutedBackground, lineWidth: 1))
+        .dsSubtleShadow()
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, DS.Spacing.lg)
+        .transition(.move(edge: .bottom).combined(with: .opacity))
+    }
+
     // MARK: - أدوات التحديث — Glassy (أُزيلت أدوات الزوم؛ التكبير باللمس)
     private var overlayTools: some View {
-        VStack {
+        VStack(spacing: DS.Spacing.sm) {
             Spacer()
+            // شريط المسار — يظهر أول ما تتعمّق في الشجرة
+            if breadcrumbChain.count > 1 {
+                breadcrumbBar
+            }
             HStack {
                 Spacer()
                 VStack(spacing: 0) {
@@ -873,48 +948,16 @@ struct TreeView: View {
         return L
     }
 
-    /// مقاطع خطوط الربط: عمود من أسفل الأب → ناقل أفقي لكل صف → نازل لأعلى كل ابن.
-    /// كل مقطع view مستقل بمعرّف ثابت — فيتحرك (يتمدد/ينزلق) بسلاسة مع تغيّر التخطيط.
-    private var connectorSegs: [ConnectorSeg] {
-        var segs: [ConnectorSeg] = []
-        for (pid, rows) in layout.childRows {
-            guard let pp = layout.positions[pid] else { continue }
-            let kin = kinshipHighlightedIds.contains(pid)
-            let w: CGFloat = kin ? 4 : 2
+    /// وصلات قصيرة تحت الآباء المفتوحين — النمط الأصلي البسيط.
+    private var connectorStubs: [ConnectorStub] {
+        layout.childRows.compactMap { pid, rows in
+            guard !rows.isEmpty, let pp = layout.positions[pid] else { return nil }
             let ph = layout.heights[pid] ?? NODE_H_DEFAULT
-            let pcx = pp.x + NODE_W / 2
-            let pBottom = pp.y + ph
-            var maxBusY = pBottom
-            for (ri, row) in rows.enumerated() {
-                let pts = row.compactMap { layout.positions[$0] }
-                guard !pts.isEmpty else { continue }
-                let rowTop = pts.map(\.y).min() ?? pBottom
-                let busY = rowTop - V_GAP * 0.45
-                maxBusY = max(maxBusY, busY)
-                let centers = pts.map { $0.x + NODE_W / 2 }
-                let minX = min(pcx, centers.min() ?? pcx)
-                let maxX = max(pcx, centers.max() ?? pcx)
-                if maxX - minX > 0.5 {
-                    segs.append(ConnectorSeg(id: "\(pid)-bus\(ri)",
-                                             rect: CGRect(x: minX, y: busY - w / 2, width: maxX - minX, height: w),
-                                             kinship: kin))
-                }
-                for (ci, pt) in pts.enumerated() {
-                    let c = pt.x + NODE_W / 2
-                    let riserId = ci < row.count ? "\(pid)-c\(row[ci])" : "\(pid)-r\(ri)c\(ci)"
-                    segs.append(ConnectorSeg(id: riserId,
-                                             rect: CGRect(x: c - w / 2, y: busY, width: w, height: max(pt.y - busY, 1)),
-                                             kinship: kin))
-                }
-            }
-            // العمود الرئيسي من أسفل الأب إلى أدنى ناقل (يمرّ خلف العقد فيختفي تحتها)
-            if maxBusY > pBottom {
-                segs.append(ConnectorSeg(id: "\(pid)-drop",
-                                         rect: CGRect(x: pcx - w / 2, y: pBottom, width: w, height: maxBusY - pBottom),
-                                         kinship: kin))
-            }
+            return ConnectorStub(id: pid,
+                                 x: pp.x + NODE_W / 2,
+                                 y: pp.y + ph + 10,
+                                 kinship: kinshipHighlightedIds.contains(pid))
         }
-        return segs
     }
 
     /// عقدة واحدة بشكل TreeMemberNode الدائري، موضوعة بإحداثيات مطلقة.
@@ -939,22 +982,6 @@ struct TreeView: View {
         )
         .frame(width: NODE_W, height: h, alignment: .top)
         .position(x: p.x + NODE_W / 2, y: p.y + h / 2)
-        // دخول متدرّج: أبناء العقدة المفتوحة ينزلون واحدًا بعد الآخر
-        .transition(.asymmetric(
-            insertion: AnyTransition.scale(scale: 0.55, anchor: .top)
-                .combined(with: .offset(y: -18))
-                .combined(with: .opacity)
-                .animation(DS.Anim.snappy.delay(staggerDelay(m))),
-            removal: AnyTransition.opacity.animation(.easeOut(duration: 0.12))
-        ))
-    }
-
-    /// تأخير الدخول لكل ابن حسب ترتيبه بين إخوته (حد أقصى 0.35 ث).
-    private func staggerDelay(_ m: FamilyMember) -> Double {
-        guard let pid = lastToggledParentId, m.fatherId == pid,
-              let sibs = cachedChildrenByFatherId[pid],
-              let idx = sibs.firstIndex(where: { $0.id == m.id }) else { return 0 }
-        return min(0.35, Double(idx) * 0.05)
     }
 
     /// فتح/طيّ عقدة (نفس منطق التفرّع السابق) ثم تحريك الكاميرا.
@@ -974,7 +1001,6 @@ struct TreeView: View {
         }
         userInteracted = true
         let opening = !wasExpanded || hasDeeper
-        lastToggledParentId = opening ? member.id : nil
         withAnimation(DS.Anim.snappy) {
             let L = rebuildLayout()
             if opening { scrollNodeToTop(member.id, in: L) }
