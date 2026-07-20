@@ -48,6 +48,8 @@ struct WomenClassicTreeView: View {
     @State private var layout = Layout()
     @State private var cChildrenOf: [UUID: [FamilyMember]] = [:]
     @State private var cWives: [UUID: [FamilyMember]] = [:]
+    /// آخر عقدة توسّعت — أبناؤها يدخلون بتدرّج
+    @State private var lastExpandedId: UUID? = nil
 
     // ─── بيانات الشجرة ───
     private var byId: [UUID: FamilyMember] {
@@ -91,7 +93,14 @@ struct WomenClassicTreeView: View {
         var depth: [UUID: Int] = [:]
         var stubs: Set<UUID> = []   // آباء لديهم أبناء ظاهرون (لرسم الوصلة)
         var heights: [UUID: CGFloat] = [:]   // ارتفاع صندوق كل عقدة (متغيّر)
+        var childRows: [UUID: [[UUID]]] = [:]   // صفوف أبناء كل أب — لخطوط الربط الحقيقية
         var size: CGSize = .zero
+    }
+
+    /// مقطع خط ربط واحد (view متحرك — ينزلق مع العقد).
+    private struct WSeg: Identifiable {
+        let id: String
+        let rect: CGRect
     }
 
     /// ارتفاع صندوق العقدة — يطابق الارتفاع الفعلي بدقّة (لمحاذاة الأسماء بين الأعمدة).
@@ -190,7 +199,7 @@ struct WomenClassicTreeView: View {
         }
 
         var placed = Set<UUID>()
-        func placeBlock(_ list: [FamilyMember], _ cx: CGFloat, _ top: CGFloat, _ d: Int, _ per: Int) {
+        func placeBlock(_ pid: UUID, _ list: [FamilyMember], _ cx: CGFloat, _ top: CGFloat, _ d: Int, _ per: Int) {
             var rowTop = top
             var i = 0
             while i < list.count {
@@ -203,6 +212,7 @@ struct WomenClassicTreeView: View {
                     place(k.id, x + rowBoxes[j].width / 2, rowTop, d)
                     x += rowBoxes[j].width + H_GAP
                 }
+                L.childRows[pid, default: []].append(rowKids.map { $0.id })   // لخطوط الربط
                 rowTop += rowH + ROW_GAP
                 i += per
             }
@@ -222,25 +232,25 @@ struct WomenClassicTreeView: View {
             switch arrange(males.count, females.count) {
             case .single:
                 let list = males.isEmpty ? females : males
-                placeBlock(list, cx, rowTop, d + 1, perRowH(list.count))
+                placeBlock(id, list, cx, rowTop, d + 1, perRowH(list.count))
             case .stacked:
                 // الأكبر أفقيًا فوق، والأقلية أفقيًا تحته — متمركزين.
                 let mB = cachedBlock(males, perRowH(males.count))
-                placeBlock(males, cx, rowTop, d + 1, perRowH(males.count))
-                placeBlock(females, cx, rowTop + mB.height + stackGap, d + 1, perRowH(females.count))
+                placeBlock(id, males, cx, rowTop, d + 1, perRowH(males.count))
+                placeBlock(id, females, cx, rowTop + mB.height + stackGap, d + 1, perRowH(females.count))
             case .sideBySide:
                 let pm = perRowV(males.count), pf = perRowV(females.count)
                 let mW = cachedBlock(males, pm).width, fW = cachedBlock(females, pf).width
                 let totalW = mW + GENDER_GAP + fW
                 var bx = cx - totalW / 2
-                placeBlock(males, bx + mW / 2, rowTop, d + 1, pm); bx += mW + GENDER_GAP
-                placeBlock(females, bx + fW / 2, rowTop, d + 1, pf)
+                placeBlock(id, males, bx + mW / 2, rowTop, d + 1, pm); bx += mW + GENDER_GAP
+                placeBlock(id, females, bx + fW / 2, rowTop, d + 1, pf)
             case .pair:
                 let mW = cachedBlock(males, 1).width, fW = cachedBlock(females, 1).width
                 let totalW = mW + pairGap + fW
                 var bx = cx - totalW / 2
-                placeBlock(males, bx + mW / 2, rowTop, d + 1, 1); bx += mW + pairGap
-                placeBlock(females, bx + fW / 2, rowTop, d + 1, 1)
+                placeBlock(id, males, bx + mW / 2, rowTop, d + 1, 1); bx += mW + pairGap
+                placeBlock(id, females, bx + fW / 2, rowTop, d + 1, 1)
             }
         }
 
@@ -265,15 +275,16 @@ struct WomenClassicTreeView: View {
                 ZStack(alignment: .topLeading) {
                     DS.Color.background
                     ZStack(alignment: .topLeading) {
-                        // الوصلات
-                        ForEach(Array(layout.stubs), id: \.self) { pid in
-                            if let a = layout.positions[pid] {
-                                let ph = layout.heights[pid] ?? NODE_H
-                                Rectangle()
-                                    .fill(DS.Color.primary.opacity(0.5))
-                                    .frame(width: 2, height: STUB)
-                                    .position(x: a.x + NODE_W / 2, y: a.y + ph + (V_GAP - STUB) / 2 + STUB / 2)
-                            }
+                        // خطوط الربط الحقيقية: عمود من الأب → ناقل أفقي → نازل لكل ابن
+                        ForEach(connectorSegs) { seg in
+                            Capsule(style: .continuous)
+                                .fill(DS.Color.primary.opacity(0.45))
+                                .frame(width: seg.rect.width, height: seg.rect.height)
+                                .position(x: seg.rect.midX, y: seg.rect.midY)
+                                .transition(.asymmetric(
+                                    insertion: AnyTransition.opacity.animation(.easeIn(duration: 0.22).delay(0.1)),
+                                    removal: AnyTransition.opacity.animation(.easeOut(duration: 0.1))
+                                ))
                         }
                         // العُقد
                         ForEach(members.filter { layout.positions[$0.id] != nil }, id: \.id) { m in
@@ -307,12 +318,15 @@ struct WomenClassicTreeView: View {
                     if !userInteracted { fit(in: geo.size, layout: L) }
                 }
                 .onChange(of: collapsed) { _ in
-                    let L = rebuild()
-                    if let exp = pendingExpandScroll, L.positions[exp] != nil {
-                        pendingExpandScroll = nil
-                        scrollNodeToTop(exp, in: L)          // ينزل ليُظهر الأبناء والأب فوقهم
-                    } else if !userInteracted {
-                        withAnimation(DS.Anim.snappy) { fit(in: geo.size, layout: L) }
+                    // كل تغيّر التخطيط داخل الـ transaction — العقد والخطوط تتحرك بسلاسة
+                    withAnimation(DS.Anim.snappy) {
+                        let L = rebuild()
+                        if let exp = pendingExpandScroll, L.positions[exp] != nil {
+                            pendingExpandScroll = nil
+                            scrollNodeToTop(exp, in: L)      // ينزل ليُظهر الأبناء والأب فوقهم
+                        } else if !userInteracted {
+                            fit(in: geo.size, layout: L)
+                        }
                     }
                 }
             }
@@ -327,6 +341,44 @@ struct WomenClassicTreeView: View {
         let L = computeLayout()
         layout = L
         return L
+    }
+
+    /// مقاطع خطوط الربط من التخطيط الحالي — كل مقطع view بمعرّف ثابت (يتحرك مع العقد).
+    private var connectorSegs: [WSeg] {
+        var segs: [WSeg] = []
+        let w: CGFloat = 1.5
+        for (pid, rows) in layout.childRows {
+            guard let pp = layout.positions[pid] else { continue }
+            let ph = layout.heights[pid] ?? NODE_H
+            let pcx = pp.x + NODE_W / 2
+            let pBottom = pp.y + ph
+            var maxBusY = pBottom
+            for (ri, row) in rows.enumerated() {
+                let pts = row.compactMap { layout.positions[$0] }
+                guard !pts.isEmpty else { continue }
+                let rowTop = pts.map(\.y).min() ?? pBottom
+                let busY = rowTop - V_GAP * 0.5
+                maxBusY = max(maxBusY, busY)
+                let centers = pts.map { $0.x + NODE_W / 2 }
+                let minX = min(pcx, centers.min() ?? pcx)
+                let maxX = max(pcx, centers.max() ?? pcx)
+                if maxX - minX > 0.5 {
+                    segs.append(WSeg(id: "\(pid)-bus\(ri)",
+                                     rect: CGRect(x: minX, y: busY - w / 2, width: maxX - minX, height: w)))
+                }
+                for (ci, pt) in pts.enumerated() {
+                    let c = pt.x + NODE_W / 2
+                    let riserId = ci < row.count ? "\(pid)-c\(row[ci])" : "\(pid)-r\(ri)c\(ci)"
+                    segs.append(WSeg(id: riserId,
+                                     rect: CGRect(x: c - w / 2, y: busY, width: w, height: max(pt.y - busY, 1))))
+                }
+            }
+            if maxBusY > pBottom {
+                segs.append(WSeg(id: "\(pid)-drop",
+                                 rect: CGRect(x: pcx - w / 2, y: pBottom, width: w, height: maxBusY - pBottom)))
+            }
+        }
+        return segs
     }
 
     // ─── شريط الأدوات العلوي — مطابق لشجرة العائلة ───
@@ -544,12 +596,33 @@ struct WomenClassicTreeView: View {
         }
         .frame(width: NODE_W, height: layout.heights[m.id] ?? NODE_H, alignment: .top)  // ارتفاع ثابت → الأسماء بنفس المستوى
         .position(x: p.x + NODE_W / 2, y: p.y + (layout.heights[m.id] ?? NODE_H) / 2)
+        // دخول متدرّج: أبناء العقدة المتوسّعة ينزلون واحدًا بعد الآخر
+        .transition(.asymmetric(
+            insertion: AnyTransition.scale(scale: 0.55, anchor: .top)
+                .combined(with: .offset(y: -10))
+                .combined(with: .opacity)
+                .animation(DS.Anim.snappy.delay(staggerDelay(m))),
+            removal: AnyTransition.opacity.animation(.easeOut(duration: 0.12))
+        ))
         .onTapGesture {
             if !kids.isEmpty {
-                if collapsed.contains(m.id) { pendingExpandScroll = m.id }   // توسّع → انزل للأبناء
+                if collapsed.contains(m.id) {
+                    pendingExpandScroll = m.id    // توسّع → انزل للأبناء
+                    lastExpandedId = m.id         // أبناؤه يدخلون بتدرّج
+                } else {
+                    lastExpandedId = nil
+                }
                 withAnimation(DS.Anim.snappy) { toggle(m.id) }
             }
         }
+    }
+
+    /// تأخير الدخول لكل ابن حسب ترتيبه بين إخوته (حد أقصى 0.35 ث).
+    private func staggerDelay(_ m: FamilyMember) -> Double {
+        guard let pid = lastExpandedId, m.fatherId == pid,
+              let sibs = cChildrenOf[pid],
+              let idx = sibs.firstIndex(where: { $0.id == m.id }) else { return 0 }
+        return min(0.35, Double(idx) * 0.05)
     }
 
     /// سنوات المتوفّى «ميلاد–وفاة»، و«؟» للمفقود. إن غاب الاثنان → لا تُعرض.

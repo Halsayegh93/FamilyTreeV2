@@ -5,6 +5,9 @@ struct AdminAnalyticsView: View {
     @EnvironmentObject var memberVM: MemberViewModel
     @EnvironmentObject var newsVM: NewsViewModel
 
+    /// بيانات شجرة النساء (women_members) — كاش فوري ثم جلب عند الحاجة.
+    @State private var womenData: [FamilyMember] = WomenStore.cache
+
     // البيانات المحسوبة — مبنية على المعيار القانوني (FamilyMember.isCountable)
     // عشان تطابق "أعضاء العائلة" في الشجرة + الويب + التقارير
     private var countableMembers: [FamilyMember] {
@@ -51,6 +54,9 @@ struct AdminAnalyticsView: View {
                     // توزيع الجنس
                     genderSection
 
+                    // شجرة النساء
+                    womenSection
+
                     // الحالة الاجتماعية
                     maritalSection
 
@@ -80,6 +86,80 @@ struct AdminAnalyticsView: View {
         .navigationTitle(L10n.t("إحصائيات متقدمة", "Analytics"))
         .navigationBarTitleDisplayMode(.inline)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+        .task {
+            // جلب بيانات شجرة النساء إن لم تكن محمّلة (كاش التبويب يغني عن الجلب غالباً)
+            if womenData.isEmpty, let fetched = try? await WomenStore.fetch() {
+                womenData = fetched
+            }
+        }
+    }
+
+    // MARK: - Women Tree — شجرة النساء
+    private var womenSection: some View {
+        let women = womenData.filter { $0.isFemale }
+        let wives = women.filter { $0.husbandId != nil }.count
+        let daughters = women.filter { $0.husbandId == nil }.count
+        let deceasedW = women.filter { $0.isDeceased == true }.count
+        let aliveW = women.count - deceasedW
+        let linked = women.filter { WomenStore.linkedUserByWoman[$0.id] != nil }.count
+
+        return DSCard(padding: 0) {
+            DSSectionHeader(
+                title: L10n.t("شجرة النساء", "Women Tree"),
+                icon: "figure.dress.line.vertical.figure",
+                iconColor: DS.Color.neonPink
+            )
+
+            if women.isEmpty {
+                Text(L10n.t("جاري تحميل بيانات النساء…", "Loading women data…"))
+                    .font(DS.Font.caption1)
+                    .foregroundColor(DS.Color.textTertiary)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(DS.Spacing.lg)
+            } else {
+                let columns = [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())]
+                LazyVGrid(columns: columns, spacing: DS.Spacing.md) {
+                    overviewCell(
+                        value: "\(women.count)",
+                        label: L10n.t("إجمالي النساء", "Total women"),
+                        icon: "person.fill",
+                        color: DS.Color.neonPink
+                    )
+                    overviewCell(
+                        value: "\(daughters)",
+                        label: L10n.t("بنات العائلة", "Daughters"),
+                        icon: "figure.child",
+                        color: DS.Color.info
+                    )
+                    overviewCell(
+                        value: "\(wives)",
+                        label: L10n.t("زوجات", "Wives"),
+                        icon: "heart.fill",
+                        color: DS.Color.accent
+                    )
+                    overviewCell(
+                        value: "\(aliveW)",
+                        label: L10n.t("على قيد الحياة", "Alive"),
+                        icon: "heart.circle.fill",
+                        color: DS.Color.success
+                    )
+                    overviewCell(
+                        value: "\(deceasedW)",
+                        label: L10n.t("متوفيات", "Deceased"),
+                        icon: "heart.slash.fill",
+                        color: DS.Color.error
+                    )
+                    overviewCell(
+                        value: "\(linked)",
+                        label: L10n.t("مرتبطة بحساب", "Linked accounts"),
+                        icon: "link.circle.fill",
+                        color: DS.Color.warning
+                    )
+                }
+                .padding(DS.Spacing.md)
+            }
+        }
+        .padding(.horizontal, DS.Spacing.lg)
     }
 
     // MARK: - Overview

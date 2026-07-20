@@ -117,6 +117,13 @@ private struct FamilyLayout {
     var size: CGSize = .zero
 }
 
+/// مقطع خط ربط واحد (كـ view قابل للتحريك — ينزلق مع العقد أثناء الأنيميشن).
+private struct ConnectorSeg: Identifiable {
+    let id: String
+    let rect: CGRect
+    let kinship: Bool
+}
+
 /// قرصة التكبير مع تثبيت النقطة تحت الأصابع (iOS 17+) — نسخة شجرة العائلة.
 private struct TreePinchZoomModifier: ViewModifier {
     @Binding var scale: CGFloat
@@ -178,7 +185,6 @@ struct TreeView: View {
 
     @State private var searchedMemberID: UUID? = nil
     @State private var highlightTask: Task<Void, Never>?
-    @State private var locationHighlightTask: Task<Void, Never>?
 
     // ── محرّك الكانفس (إحداثيات مطلقة، يطابق تبويب النساء — زوم حقيقي + سحب بزخم) ──
     @State private var scale: CGFloat = TreeConst.defaultScale
@@ -189,6 +195,8 @@ struct TreeView: View {
     @State private var layout = FamilyLayout()
     @State private var userInteracted = false
     @State private var fittedScale: CGFloat = TreeConst.defaultScale
+    /// آخر عقدة فُتحت — أبناؤها يدخلون بتدرّج (stagger)
+    @State private var lastToggledParentId: UUID? = nil
     /// إظهار حقل البحث (مخفي افتراضياً خلف زر — العرض الكلاسيكي).
     @State private var showSearch = false
 
@@ -325,13 +333,17 @@ struct TreeView: View {
                     } else {
                         ZStack(alignment: .topLeading) {
                             ZStack(alignment: .topLeading) {
-                                // خطوط الربط الحقيقية (خلف العُقد): عمود من الأب → ناقل أفقي → نازل لكل ابن
-                                connectorPath(kinshipOnly: false)
-                                    .stroke(DS.Color.primary.opacity(0.45),
-                                            style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
-                                connectorPath(kinshipOnly: true)
-                                    .stroke(DS.Color.warning,
-                                            style: StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round))
+                                // خطوط الربط (خلف العُقد): مقاطع كـ views — تنزلق مع العقد أثناء الأنيميشن
+                                ForEach(connectorSegs) { seg in
+                                    Capsule(style: .continuous)
+                                        .fill(seg.kinship ? DS.Color.warning : DS.Color.primary.opacity(0.42))
+                                        .frame(width: seg.rect.width, height: seg.rect.height)
+                                        .position(x: seg.rect.midX, y: seg.rect.midY)
+                                        .transition(.asymmetric(
+                                            insertion: AnyTransition.opacity.animation(.easeIn(duration: 0.25).delay(0.12)),
+                                            removal: AnyTransition.opacity.animation(.easeOut(duration: 0.1))
+                                        ))
+                                }
                                 // العُقد — نفس شكل TreeMemberNode الدائري (بلا تغيير)
                                 ForEach(cachedVisibleMembers.filter { layout.positions[$0.id] != nil }, id: \.id) { m in
                                     canvasNode(m)
@@ -453,11 +465,13 @@ struct TreeView: View {
                 }
             }
             .onDisappear {
-                // إلغاء أي highlight/location tasks عالقة لتفادي memory leaks عند التنقل السريع
+                // إلغاء أي highlight tasks عالقة لتفادي memory leaks عند التنقل السريع
                 highlightTask?.cancel()
                 highlightTask = nil
-                locationHighlightTask?.cancel()
-                locationHighlightTask = nil
+            }
+            // «أنت هنا» دائم — يتبع حساب المستخدم الحالي
+            .onChange(of: authVM.currentUser?.id) { newId in
+                currentLocationMemberID = newId
             }
             .onChange(of: memberVM.membersVersion) { _ in
                 Task {
@@ -675,14 +689,9 @@ struct TreeView: View {
                 Button {
                     if let currentUserID = authVM.currentUser?.id,
                        let userMember = cachedMemberById[currentUserID] ?? memberVM.member(byId: currentUserID) {
+                        // التمييز «أنت هنا» دائم — الزر يفتح المسار ويتمركز فقط
                         currentLocationMemberID = userMember.id
                         centerOnMember(userMember, highlight: true, includeFocusedMemberInPath: false)
-                        locationHighlightTask?.cancel()
-                        locationHighlightTask = Task {
-                            try? await Task.sleep(nanoseconds: TreeConst.highlightDuration)
-                            guard !Task.isCancelled else { return }
-                            withAnimation { currentLocationMemberID = nil }
-                        }
                     }
                 } label: {
                     toolbarIconButton(icon: "location.fill")
@@ -864,18 +873,19 @@ struct TreeView: View {
         return L
     }
 
-    /// خطوط الربط: عمود من أسفل الأب → ناقل أفقي لكل صف → نازل قصير لأعلى كل ابن.
-    private func connectorPath(kinshipOnly: Bool) -> Path {
-        var path = Path()
+    /// مقاطع خطوط الربط: عمود من أسفل الأب → ناقل أفقي لكل صف → نازل لأعلى كل ابن.
+    /// كل مقطع view مستقل بمعرّف ثابت — فيتحرك (يتمدد/ينزلق) بسلاسة مع تغيّر التخطيط.
+    private var connectorSegs: [ConnectorSeg] {
+        var segs: [ConnectorSeg] = []
         for (pid, rows) in layout.childRows {
-            let isKin = kinshipHighlightedIds.contains(pid)
-            if isKin != kinshipOnly { continue }
             guard let pp = layout.positions[pid] else { continue }
+            let kin = kinshipHighlightedIds.contains(pid)
+            let w: CGFloat = kin ? 4 : 2
             let ph = layout.heights[pid] ?? NODE_H_DEFAULT
             let pcx = pp.x + NODE_W / 2
             let pBottom = pp.y + ph
             var maxBusY = pBottom
-            for row in rows {
+            for (ri, row) in rows.enumerated() {
                 let pts = row.compactMap { layout.positions[$0] }
                 guard !pts.isEmpty else { continue }
                 let rowTop = pts.map(\.y).min() ?? pBottom
@@ -884,19 +894,27 @@ struct TreeView: View {
                 let centers = pts.map { $0.x + NODE_W / 2 }
                 let minX = min(pcx, centers.min() ?? pcx)
                 let maxX = max(pcx, centers.max() ?? pcx)
-                path.move(to: CGPoint(x: minX, y: busY))
-                path.addLine(to: CGPoint(x: maxX, y: busY))
-                for pt in pts {
+                if maxX - minX > 0.5 {
+                    segs.append(ConnectorSeg(id: "\(pid)-bus\(ri)",
+                                             rect: CGRect(x: minX, y: busY - w / 2, width: maxX - minX, height: w),
+                                             kinship: kin))
+                }
+                for (ci, pt) in pts.enumerated() {
                     let c = pt.x + NODE_W / 2
-                    path.move(to: CGPoint(x: c, y: busY))
-                    path.addLine(to: CGPoint(x: c, y: pt.y))
+                    let riserId = ci < row.count ? "\(pid)-c\(row[ci])" : "\(pid)-r\(ri)c\(ci)"
+                    segs.append(ConnectorSeg(id: riserId,
+                                             rect: CGRect(x: c - w / 2, y: busY, width: w, height: max(pt.y - busY, 1)),
+                                             kinship: kin))
                 }
             }
             // العمود الرئيسي من أسفل الأب إلى أدنى ناقل (يمرّ خلف العقد فيختفي تحتها)
-            path.move(to: CGPoint(x: pcx, y: pBottom))
-            path.addLine(to: CGPoint(x: pcx, y: maxBusY))
+            if maxBusY > pBottom {
+                segs.append(ConnectorSeg(id: "\(pid)-drop",
+                                         rect: CGRect(x: pcx - w / 2, y: pBottom, width: w, height: maxBusY - pBottom),
+                                         kinship: kin))
+            }
         }
-        return path
+        return segs
     }
 
     /// عقدة واحدة بشكل TreeMemberNode الدائري، موضوعة بإحداثيات مطلقة.
@@ -921,6 +939,22 @@ struct TreeView: View {
         )
         .frame(width: NODE_W, height: h, alignment: .top)
         .position(x: p.x + NODE_W / 2, y: p.y + h / 2)
+        // دخول متدرّج: أبناء العقدة المفتوحة ينزلون واحدًا بعد الآخر
+        .transition(.asymmetric(
+            insertion: AnyTransition.scale(scale: 0.55, anchor: .top)
+                .combined(with: .offset(y: -18))
+                .combined(with: .opacity)
+                .animation(DS.Anim.snappy.delay(staggerDelay(m))),
+            removal: AnyTransition.opacity.animation(.easeOut(duration: 0.12))
+        ))
+    }
+
+    /// تأخير الدخول لكل ابن حسب ترتيبه بين إخوته (حد أقصى 0.35 ث).
+    private func staggerDelay(_ m: FamilyMember) -> Double {
+        guard let pid = lastToggledParentId, m.fatherId == pid,
+              let sibs = cachedChildrenByFatherId[pid],
+              let idx = sibs.firstIndex(where: { $0.id == m.id }) else { return 0 }
+        return min(0.35, Double(idx) * 0.05)
     }
 
     /// فتح/طيّ عقدة (نفس منطق التفرّع السابق) ثم تحريك الكاميرا.
@@ -940,6 +974,7 @@ struct TreeView: View {
         }
         userInteracted = true
         let opening = !wasExpanded || hasDeeper
+        lastToggledParentId = opening ? member.id : nil
         withAnimation(DS.Anim.snappy) {
             let L = rebuildLayout()
             if opening { scrollNodeToTop(member.id, in: L) }
@@ -1250,16 +1285,12 @@ struct TreeMemberNode: View {
             VStack(spacing: 0) {
                 Button(action: onTap) {
                     ZStack {
-                        // حلقة خارجية بتدرج لون الرتبة
-                        Circle()
-                            .stroke(borderGradient, lineWidth: 3)
-                            .frame(width: interactiveNodeSize + 4, height: interactiveNodeSize + 4)
-
-                        // الشكل الدائري الرئيسي — تدرج
+                        // الدائرة الرئيسية — ظل ملوّن ناعم بلون الرتبة (عمق أنظف)
                         Circle()
                             .fill(nodeGradient)
                             .frame(width: interactiveNodeSize, height: interactiveNodeSize)
-                            .dsSubtleShadow()
+                            .shadow(color: nodeAccentColor.opacity(member.isDeceased == true ? 0.12 : 0.26),
+                                    radius: 10, x: 0, y: 5)
 
                         // الصورة أو الأيقونة
                         if shouldLoadImage, let urlStr = member.avatarUrl, let url = URL(string: urlStr) {
@@ -1281,6 +1312,23 @@ struct TreeMemberNode: View {
                                 .foregroundColor(DS.Color.overlayTextMuted)
                         }
 
+                        // فاصل داخلي بلون السطح — يفصل الصورة عن الحلقة (مظهر أنظف)
+                        Circle()
+                            .stroke(DS.Color.surface, lineWidth: 2.5)
+                            .frame(width: interactiveNodeSize, height: interactiveNodeSize)
+
+                        // حلقة خارجية بتدرج لون الرتبة (رمادية للمتوفّى — تمييز أوضح)
+                        Circle()
+                            .stroke(borderGradient, lineWidth: 3)
+                            .frame(width: interactiveNodeSize + 6, height: interactiveNodeSize + 6)
+                    }
+                }
+                .overlay {
+                    // «أنت هنا» — حلقة زرقاء ثابتة دائمة حول عقدتك
+                    if isCurrentLocationMember {
+                        Circle()
+                            .stroke(DS.Color.currentLocation.opacity(0.9), lineWidth: 3)
+                            .frame(width: interactiveNodeSize + 16, height: interactiveNodeSize + 16)
                     }
                 }
                 .overlay {
@@ -1383,7 +1431,11 @@ struct TreeMemberNode: View {
                         .dynamicTypeSize(...DynamicTypeSize.xLarge)
                         .foregroundColor(.white)
                         .frame(width: 60, height: 28)
-                        .background(isKinshipHighlighted ? DS.Color.warning : DS.Color.primaryDark)
+                        .background(
+                            isKinshipHighlighted
+                                ? DS.Color.warning
+                                : (member.isDeceased == true ? DS.Color.textTertiary : DS.Color.primaryDark)
+                        )
                         .clipShape(SemiCircleShape())
                     }
                     .accessibilityLabel(isExpanded
