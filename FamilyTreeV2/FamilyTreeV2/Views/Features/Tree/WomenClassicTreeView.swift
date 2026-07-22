@@ -417,7 +417,7 @@ struct WomenClassicTreeView: View {
         .background {
             RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
                 .fill(.ultraThinMaterial)
-                .opacity(0.5)
+                .opacity(0.75)
         }
         .overlay(
             RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
@@ -433,7 +433,7 @@ struct WomenClassicTreeView: View {
             .font(DS.Font.scaled(14, weight: .bold))
             .foregroundColor(DS.Color.primary)
             .frame(width: 34, height: 34)
-            .background(DS.Color.surface.opacity(0.55), in: Circle())  // مخفف — مائل للشفاف
+            .background(DS.Color.surface.opacity(0.8), in: Circle())   // أغمق (طلب المالك)
             .overlay(Circle().strokeBorder(DS.Color.primary.opacity(0.15), lineWidth: 1))
             .dsSubtleShadow()
             .contentShape(Circle())

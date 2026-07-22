@@ -29,7 +29,7 @@ struct FamilyTreeTabBar: View {
             segment(L10n.t("النساء", "Women"), 1)
         }
         .padding(3)
-        .background(DS.Color.surface.opacity(0.55), in: Capsule())  // مخفف — مائل للشفاف
+        .background(DS.Color.surface.opacity(0.8), in: Capsule())   // أغمق (طلب المالك)
         .overlay(Capsule().strokeBorder(DS.Color.primary.opacity(0.25), lineWidth: 1))
         .dsSubtleShadow()
         .dynamicTypeSize(.large)
