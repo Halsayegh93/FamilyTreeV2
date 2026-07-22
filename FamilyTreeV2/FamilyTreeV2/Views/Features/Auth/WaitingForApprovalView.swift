@@ -12,6 +12,7 @@ struct WaitingForApprovalView: View {
     @State private var contentOpacity: CGFloat = 0
     @State private var iconBounce: CGFloat = 0
     @State private var buttonsAppeared = false
+    @State private var showContactSheet = false
 
     var body: some View {
         ZStack {
@@ -52,6 +53,27 @@ struct WaitingForApprovalView: View {
         }
         .onAppear {
             startAnimations()
+        }
+        .sheet(isPresented: $showContactSheet) {
+            NavigationStack {
+                MemberContactFormView()
+                    .navigationTitle(L10n.t("تواصل مع الإدارة", "Contact Admin"))
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .topBarLeading) {
+                            Button { showContactSheet = false } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(DS.Font.scaled(22, weight: .medium))
+                                    .foregroundStyle(DS.Color.textTertiary)
+                                    .symbolRenderingMode(.hierarchical)
+                            }
+                            .accessibilityLabel(L10n.t("إغلاق", "Close"))
+                        }
+                    }
+            }
+            .environmentObject(authVM)
+            .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+            .presentationDragIndicator(.visible)
         }
     }
 
@@ -184,6 +206,14 @@ struct WaitingForApprovalView: View {
                 icon: "pencil"
             ) {
                 authVM.status = .authenticatedNoProfile
+            }
+            .padding(.horizontal, DS.Spacing.xl)
+
+            DSSecondaryButton(
+                L10n.t("تواصل مع الإدارة", "Contact Admin"),
+                icon: "envelope.fill"
+            ) {
+                showContactSheet = true
             }
             .padding(.horizontal, DS.Spacing.xl)
 

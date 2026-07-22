@@ -13,6 +13,7 @@ struct WomanMember: Identifiable, Codable, Equatable {
     let gender: String
     let isDeceased: Bool
     let birthDate: String?
+    let deathDate: String?
     let avatarUrl: String?
     let photoUrl: String?
     let sortOrder: Int
@@ -34,6 +35,7 @@ struct WomanMember: Identifiable, Codable, Equatable {
         case gender
         case isDeceased = "is_deceased"
         case birthDate  = "birth_date"
+        case deathDate  = "death_date"
         case avatarUrl  = "avatar_url"
         case photoUrl   = "photo_url"
         case sortOrder  = "sort_order"
@@ -41,10 +43,11 @@ struct WomanMember: Identifiable, Codable, Equatable {
 
     init(id: UUID, firstName: String, fullName: String, parentId: UUID?, husbandId: UUID?,
          motherId: UUID?, gender: String, isDeceased: Bool, birthDate: String?,
-         avatarUrl: String?, photoUrl: String?, sortOrder: Int) {
+         deathDate: String? = nil, avatarUrl: String?, photoUrl: String?, sortOrder: Int) {
         self.id = id; self.firstName = firstName; self.fullName = fullName
         self.parentId = parentId; self.husbandId = husbandId; self.motherId = motherId
         self.gender = gender; self.isDeceased = isDeceased; self.birthDate = birthDate
+        self.deathDate = deathDate
         self.avatarUrl = avatarUrl; self.photoUrl = photoUrl; self.sortOrder = sortOrder
     }
 
@@ -59,6 +62,7 @@ struct WomanMember: Identifiable, Codable, Equatable {
         gender     = try c.decodeIfPresent(String.self, forKey: .gender) ?? "female"
         isDeceased = try c.decodeIfPresent(Bool.self, forKey: .isDeceased) ?? false
         birthDate  = try c.decodeIfPresent(String.self, forKey: .birthDate)
+        deathDate  = try c.decodeIfPresent(String.self, forKey: .deathDate)
         avatarUrl  = try c.decodeIfPresent(String.self, forKey: .avatarUrl)
         photoUrl   = try c.decodeIfPresent(String.self, forKey: .photoUrl)
         sortOrder  = try c.decodeIfPresent(Int.self, forKey: .sortOrder) ?? 0

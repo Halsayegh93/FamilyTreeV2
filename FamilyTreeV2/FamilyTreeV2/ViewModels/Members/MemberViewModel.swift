@@ -406,6 +406,89 @@ class MemberViewModel: ObservableObject {
         }
     }
 
+    /// ربط أنثى موجودة (غير مرتبطة بزوج) كزوجة للمستخدم نفسه (RPC set_self_wife).
+    /// يعمل لأي دور — الدالة SECURITY DEFINER مقيّدة على عقدة المستخدم.
+    @discardableResult
+    func setSelfWife(wifeId: UUID) async -> Bool {
+        guard NetworkMonitor.shared.requireOnline(), let uid = currentUser?.id else { return false }
+        struct P: Encodable { let p_wife_id: String }
+        do {
+            _ = try await supabase.rpc("set_self_wife", params: P(p_wife_id: wifeId.uuidString)).execute()
+            await fetchWomenFamily(for: uid); return true
+        } catch {
+            self.errorMessage = L10n.t("تعذّر ربط الزوجة.", "Failed to link wife.")
+            Log.error("[Women] setSelfWife: \(error.localizedDescription)"); return false
+        }
+    }
+
+    /// حذف/فكّ زوجة المستخدم نفسه (RPC remove_self_wife) — يعمل لأي دور.
+    /// يفكّ الارتباط، ويحذف الصف فقط إذا كانت زوجة بالاسم بلا روابط أخرى.
+    @discardableResult
+    func removeSelfWife(wifeId: UUID) async -> Bool {
+        guard NetworkMonitor.shared.requireOnline(), let uid = currentUser?.id else { return false }
+        struct P: Encodable { let p_wife_id: String }
+        do {
+            _ = try await supabase.rpc("remove_self_wife", params: P(p_wife_id: wifeId.uuidString)).execute()
+            await fetchWomenFamily(for: uid); return true
+        } catch {
+            self.errorMessage = L10n.t("تعذّر حذف الزوجة.", "Failed to remove wife.")
+            Log.error("[Women] removeSelfWife: \(error.localizedDescription)"); return false
+        }
+    }
+
+    // MARK: - بنات «عائلتي» (self-service للأب نفسه — RPCs مقيّدة على النفس)
+
+    /// تعديل بيانات ابنة للمستخدم نفسه (RPC update_self_woman_child).
+    @discardableResult
+    func updateSelfWomanChild(id: UUID, firstName: String, birthDate: Date?, isDeceased: Bool, deathDate: Date?) async -> Bool {
+        guard NetworkMonitor.shared.requireOnline(), let uid = currentUser?.id else { return false }
+        struct P: Encodable {
+            let p_child_id: String; let p_first_name: String; let p_full_name: String
+            let p_birth: String?; let p_deceased: Bool; let p_death: String?
+        }
+        let params = P(
+            p_child_id: id.uuidString,
+            p_first_name: firstName,
+            p_full_name: firstName,
+            p_birth: birthDate.map { DateHelper.format($0) },
+            p_deceased: isDeceased,
+            p_death: (isDeceased ? deathDate : nil).map { DateHelper.format($0) }
+        )
+        do {
+            _ = try await supabase.rpc("update_self_woman_child", params: params).execute()
+            await fetchWomenFamily(for: uid); return true
+        } catch {
+            self.errorMessage = L10n.t("تعذّر تعديل الابنة.", "Failed to update daughter.")
+            Log.error("[Women] updateSelfWomanChild: \(error.localizedDescription)"); return false
+        }
+    }
+
+    /// حذف ابنة للمستخدم نفسه (RPC remove_self_woman_child).
+    @discardableResult
+    func removeSelfWomanChild(id: UUID) async -> Bool {
+        guard NetworkMonitor.shared.requireOnline(), let uid = currentUser?.id else { return false }
+        struct P: Encodable { let p_child_id: String }
+        do {
+            _ = try await supabase.rpc("remove_self_woman_child", params: P(p_child_id: id.uuidString)).execute()
+            await fetchWomenFamily(for: uid); return true
+        } catch {
+            self.errorMessage = L10n.t("تعذّر حذف الابنة.", "Failed to remove daughter.")
+            Log.error("[Women] removeSelfWomanChild: \(error.localizedDescription)"); return false
+        }
+    }
+
+    /// ترتيب بنات المستخدم نفسه (RPC reorder_self_women_children).
+    func reorderSelfWomenChildren(_ orderedIds: [UUID]) async {
+        guard NetworkMonitor.shared.requireOnline(), let uid = currentUser?.id else { return }
+        struct P: Encodable { let p_ids: [String] }
+        do {
+            _ = try await supabase.rpc("reorder_self_women_children", params: P(p_ids: orderedIds.map { $0.uuidString })).execute()
+            await fetchWomenFamily(for: uid)
+        } catch {
+            Log.error("[Women] reorderSelfWomenChildren: \(error.localizedDescription)")
+        }
+    }
+
     /// إضافة أمّ جديدة (زوجة للأب) للمستخدم نفسه (RPC add_self_mother).
     @discardableResult
     func addSelfMother(name: String) async -> Bool {
@@ -426,9 +509,11 @@ class MemberViewModel: ObservableObject {
     @discardableResult
     func setSelfMother(motherId: UUID?) async -> Bool {
         guard NetworkMonitor.shared.requireOnline(), let uid = currentUser?.id else { return false }
-        struct P: Encodable { let p_mother_id: String? }
         do {
-            _ = try await supabase.rpc("set_self_mother", params: P(p_mother_id: motherId?.uuidString)).execute()
+            // نمرّر null صريحًا عند الإزالة — struct المولّد يحذف الحقل عند nil (encodeIfPresent)
+            // فيصل الـ RPC بلا وسيط ويفشل، فلا تنحذف الأم. AnyEncodable يُرسل null صريح.
+            _ = try await supabase.rpc("set_self_mother",
+                                       params: ["p_mother_id": AnyEncodable(motherId?.uuidString)]).execute()
             await fetchWomenFamily(for: uid); return true
         } catch {
             self.errorMessage = L10n.t("تعذّر تعيين الأم.", "Failed to set mother.")
@@ -454,17 +539,20 @@ class MemberViewModel: ObservableObject {
     /// تعديل فرد من شجرة النساء (اسم/تاريخ ميلاد/متوفى). للإدارة (owner/admin/monitor)
     /// حسب RLS. يُحدّث الصف ثم يُنعش عائلة المستخدم الحالي.
     @discardableResult
-    func updateWomanMember(id: UUID, firstName: String, birthDate: Date?, isDeceased: Bool) async -> Bool {
+    func updateWomanMember(id: UUID, firstName: String, birthDate: Date?, isDeceased: Bool,
+                           deathDate: Date? = nil, gender: String? = nil) async -> Bool {
         guard NetworkMonitor.shared.requireOnline() else { return false }
         let trimmed = firstName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return false }
         // ملاحظة: لا نكتب full_name — فهو يحمل النسب الكامل (الاسم + سلسلة الآباء)
         // وكتابته بالاسم الأول فقط تدمّره. نكتفي بـ first_name (وهو المعروض في التطبيق).
-        let payload: [String: AnyEncodable] = [
+        var payload: [String: AnyEncodable] = [
             "first_name":  AnyEncodable(trimmed),
             "is_deceased": AnyEncodable(isDeceased),
-            "birth_date":  AnyEncodable(birthDate.map { DateHelper.format($0) })  // nil يمسح
+            "birth_date":  AnyEncodable(birthDate.map { DateHelper.format($0) }),  // nil يمسح
+            "death_date":  AnyEncodable(isDeceased ? deathDate.map { DateHelper.format($0) } : Optional<String>.none)
         ]
+        if let gender { payload["gender"] = AnyEncodable(gender) }
         do {
             try await supabase.from("women_members")
                 .update(payload).eq("id", value: id.uuidString).execute()

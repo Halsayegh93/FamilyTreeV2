@@ -28,13 +28,15 @@ struct MemberDetailsView: View {
 
     @State private var showDeleteBioAlert = false
 
-    @State private var showActionSheet = false
+    @State private var showEditActions = false
     @State private var pendingEditAction: TreeEditAction? = nil
     @State private var showReportConfirm = false
     @State private var reportReason = ""
     @State private var reportSent = false
     @State private var childrenExpanded = false
     @State private var showChildrenSheet = false
+    /// حجم الشيت: متوسط = صورة+اسم+قرابة+عمر فقط، كبير = كل المعلومات.
+    @State private var detent: PresentationDetent = .fraction(0.46)
 
     // MARK: - Cached State (تحسب مرة عند تغيير العضو لتفادي إعادة الحساب O(n) في كل rebuild)
 
@@ -74,28 +76,37 @@ struct MemberDetailsView: View {
                     deletedMemberView
                 } else {
                     ScrollView(showsIndicators: false) {
-                        VStack(spacing: DS.Spacing.lg) {
+                        VStack(spacing: DS.Spacing.md) {
                             compactHeroSection
-                                .padding(.top, DS.Spacing.xxxl)
+                                .padding(.top, DS.Spacing.lg)
 
                             quickActionsRow
                                 .padding(.horizontal, DS.Spacing.lg)
 
-                            basicInfoCard
-                                .padding(.horizontal, DS.Spacing.lg)
+                            // المعلومات تظهر فقط عند توسيع الشيت (الحجم الكبير)
+                            if detent == .large {
+                                // مسار لأعلى — الأب (يظهر فقط عند وجود أب)
+                                fatherCell
 
-                            familyCard
-                                .padding(.horizontal, DS.Spacing.lg)
+                                basicInfoCard
+                                    .padding(.horizontal, DS.Spacing.lg)
 
-                            bioCard
-                                .padding(.horizontal, DS.Spacing.lg)
+                                bioCard
+                                    .padding(.horizontal, DS.Spacing.lg)
 
-                            pendingRequestsCard
-                                .padding(.horizontal, DS.Spacing.lg)
+                                pendingRequestsCard
+                                    .padding(.horizontal, DS.Spacing.lg)
 
-                            actionButtonsSection
-                                .padding(.horizontal, DS.Spacing.lg)
-                                .padding(.top, DS.Spacing.md)
+                                actionButtonsSection
+                                    .padding(.horizontal, DS.Spacing.lg)
+                                    .padding(.top, DS.Spacing.md)
+                            } else {
+                                // تلميح: اسحب لأعلى لعرض المزيد
+                                Text(L10n.t("اسحب لأعلى لعرض التفاصيل", "Swipe up for details"))
+                                    .font(DS.Font.caption1)
+                                    .foregroundColor(DS.Color.textTertiary)
+                                    .padding(.top, DS.Spacing.md)
+                            }
 
                             Spacer(minLength: 60)
                         }
@@ -110,6 +121,8 @@ struct MemberDetailsView: View {
             .onChange(of: adminRequestVM.treeEditRequests.count) { _ in recomputeCache() }
             .toolbar(.hidden, for: .navigationBar)
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+            .presentationDetents([.fraction(0.46), .large], selection: $detent)
+            .presentationDragIndicator(.visible)
             .sheet(isPresented: $showAdminControl) {
                 if authVM.canEditMembers {
                     // ملاحظة: لا نضع .id(membersVersion) هنا — كان يُعيد بناء
@@ -118,12 +131,6 @@ struct MemberDetailsView: View {
                     // الـsheet يتحدث طبيعياً عبر @EnvironmentObject memberVM.
                     AdminMemberDetailSheet(member: member)
                 }
-            }
-            .sheet(isPresented: $showActionSheet) {
-                MemberActionSheet(member: member) { action in
-                    pendingEditAction = action
-                }
-                .presentationDetents([.medium, .large])
             }
             .sheet(item: $pendingEditAction) { action in
                 TreeEditRequestView(member: member, action: action)
@@ -216,16 +223,6 @@ struct MemberDetailsView: View {
                     avatarContent
                         .frame(width: 130, height: 130)
                         .clipShape(Circle())
-                        .overlay(
-                            Circle().stroke(
-                                LinearGradient(
-                                    colors: [DS.Color.primary, DS.Color.accent],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                lineWidth: 3
-                            )
-                        )
                         .dsGlowShadow()
                         .onTapGesture { showAvatarPreview = true }
 
@@ -270,12 +267,9 @@ struct MemberDetailsView: View {
 
     @ViewBuilder
     private var quickActionsRow: some View {
-        // «إضافة صورة» انتقل إلى «طلب تعديل لهذا العضو» (addPhoto) ويظهر في
-        // طلبات المراجعة كبقية طلبات الشجرة — فلم يعد زراً مباشراً هنا.
         let showKinship = !isViewingSelf && !member.isDeleted
-
-        if showKinship {
-            HStack(spacing: DS.Spacing.sm) {
+        HStack(spacing: DS.Spacing.sm) {
+            if showKinship {
                 quickPill(
                     icon: "point.3.connected.trianglepath.dotted",
                     label: L10n.t("صلة القرابة", "Kinship"),
@@ -283,7 +277,45 @@ struct MemberDetailsView: View {
                     action: showKinshipPath
                 )
             }
+            // العمر جنب القرابة (مع مؤشّر متوفّى)
+            agePill
         }
+    }
+
+    /// حبّة العمر — تظهر جنب زر القرابة. للمتوفّى: رمادي + رمز يوضّح الوفاة.
+    @ViewBuilder
+    private var agePill: some View {
+        let isDeceased = member.isDeceased == true
+        let by = year(from: member.birthDate)
+        let dy = year(from: member.deathDate)
+        if let byStr = by, let byInt = Int(byStr) {
+            let end: Int? = isDeceased ? Int(dy ?? "") : Calendar.current.component(.year, from: Date())
+            if let end, end >= byInt, end - byInt < 130 {
+                let age = end - byInt
+                let color = isDeceased ? DS.Color.textSecondary : DS.Color.info
+                HStack(spacing: DS.Spacing.xs) {
+                    Image(systemName: isDeceased ? "heart.slash.fill" : "timelapse")
+                        .font(DS.Font.scaled(11, weight: .semibold))
+                    Text("\(age) " + L10n.t("سنة", "yrs"))
+                        .font(DS.Font.scaled(12, weight: .bold))
+                    if isDeceased {
+                        Text(L10n.t("· متوفّى", "· deceased"))
+                            .font(DS.Font.scaled(11, weight: .semibold))
+                    }
+                }
+                .foregroundColor(color)
+                .padding(.horizontal, DS.Spacing.md)
+                .padding(.vertical, DS.Spacing.xs + 2)
+                .background(color.opacity(0.12))
+                .clipShape(Capsule())
+            }
+        }
+    }
+
+    private func year(from s: String?) -> String? {
+        guard let s = s?.trimmingCharacters(in: .whitespaces), !s.isEmpty,
+              let r = s.range(of: "\\d{4}", options: .regularExpression) else { return nil }
+        return String(s[r])
     }
 
     private func quickPill(icon: String, label: String, color: Color, action: @escaping () -> Void) -> some View {
@@ -303,6 +335,51 @@ struct MemberDetailsView: View {
         .buttonStyle(DSScaleButtonStyle())
     }
 
+    // MARK: - Father Cell (مسار لأعلى — الأب)
+
+    /// خلية الأب القابلة للضغط — تنقل الشيت والشجرة للأب (مسار لأعلى في الشجرة).
+    /// تظهر فقط عند وجود أب، وتحاكي خلايا الأم/الزوج في شيت النساء (relationCell).
+    @ViewBuilder
+    private var fatherCell: some View {
+        if let father = cachedFather {
+            Button {
+                openMemberInTree(father.id)
+            } label: {
+                HStack(spacing: DS.Spacing.sm) {
+                    ZStack {
+                        Circle()
+                            .fill(DS.Color.primary.opacity(0.12))
+                            .frame(width: 34, height: 34)
+                        Image(systemName: "person.fill")
+                            .font(DS.Font.scaled(14, weight: .semibold))
+                            .foregroundColor(DS.Color.primary)
+                    }
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(L10n.t("الأب", "Father"))
+                            .font(DS.Font.caption2)
+                            .foregroundColor(DS.Color.textSecondary)
+                        Text(father.firstName.isEmpty ? father.fullName : father.firstName)
+                            .font(DS.Font.calloutBold)
+                            .foregroundColor(DS.Color.textPrimary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.6)
+                    }
+                    Spacer(minLength: 0)
+                    Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
+                        .font(DS.Font.scaled(11, weight: .bold))
+                        .foregroundColor(DS.Color.textTertiary)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(DS.Spacing.sm)
+                .background(DS.Color.surface)
+                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+                .dsSubtleShadow()
+            }
+            .buttonStyle(DSScaleButtonStyle())
+            .padding(.horizontal, DS.Spacing.lg)
+        }
+    }
+
     // MARK: - Basic Info Card
 
     private struct StatItem: Identifiable {
@@ -314,17 +391,8 @@ struct MemberDetailsView: View {
 
     private func computeStats(isDeceased: Bool, birthYear: String?, deathYear: String?) -> [StatItem] {
         var s: [StatItem] = []
-        if let byStr = birthYear, let by = Int(byStr) {
-            let end: Int? = isDeceased
-                ? Int(deathYear ?? "")
-                : Calendar.current.component(.year, from: Date())
-            if let end = end, end >= by, end - by < 130 {
-                s.append(.init(
-                    value: "\(end - by)",
-                    label: isDeceased ? L10n.t("العمر عند الوفاة", "Age at death") : L10n.t("العمر", "Age"),
-                    color: DS.Color.textPrimary
-                ))
-            }
+        // ملاحظة: العمر انتقل إلى حبّة جنب زر القرابة (agePill) — لا يُكرّر هنا.
+        if let byStr = birthYear {
             s.append(.init(value: byStr, label: L10n.t("سنة الميلاد", "Birth year"), color: DS.Color.textPrimary))
         }
         if isDeceased {
@@ -339,40 +407,66 @@ struct MemberDetailsView: View {
         return s
     }
 
+    /// بطاقة موحّدة: المعلومات الأساسية (الميلاد/الهاتف/الوفاة) + الأبناء داخل نفس
+    /// المربّع. بلا العمر (انتقل لحبّة القرابة) وبلا الأب (فقط الأبناء)، ويتوسّع داخليًا.
     @ViewBuilder
     private var basicInfoCard: some View {
-        let isDeceased = member.isDeceased == true
-        let isSelf = member.id == authVM.currentUser?.id
-        let canMod = authVM.canModerate
-        let birth = (member.birthDate ?? "").trimmingCharacters(in: .whitespaces)
-        let death = (member.deathDate ?? "").trimmingCharacters(in: .whitespaces)
-        let phone = (member.phoneNumber ?? "").trimmingCharacters(in: .whitespaces)
-        let birthHidden = (member.isBirthDateHidden == true) && !isSelf && !canMod
-        let phoneHidden = (member.isPhoneHidden == true) && !isSelf && !canMod
-        let birthYear: String? = (!birth.isEmpty && !birthHidden) ? Self.yearOnly(birth) : nil
-        let deathYear: String? = !death.isEmpty ? Self.yearOnly(death) : nil
+        let rows = cachedBasicInfoRows          // الميلاد · الهاتف · الوفاة (صفوف عريضة مقروءة)
+        let hasChildren = !cachedChildren.isEmpty
 
-        let chips = buildChips(
-            isDeceased: isDeceased, birthYear: birthYear, deathYear: deathYear,
-            phone: phone, phoneHidden: phoneHidden
-        )
-
-        if !chips.isEmpty {
+        if !rows.isEmpty || hasChildren {
             DSCard(padding: 0) {
                 VStack(spacing: 0) {
                     DSSectionHeader(
-                        title: L10n.t("المعلومات الأساسية", "Basic Info"),
+                        title: L10n.t("المعلومات", "Info"),
                         icon: "person.text.rectangle.fill",
                         iconColor: DS.Color.primary
                     )
-                    // دوائر صغيرة: الحالة · الميلاد · العمر · الهاتف.
-                    HStack(alignment: .top, spacing: DS.Spacing.md) {
-                        ForEach(chips) { c in circleView(c) }
+
+                    // أيقونات (ميلاد · هاتف · وفاة) والمعلومة تحت كل أيقونة.
+                    if !rows.isEmpty {
+                        HStack(alignment: .top, spacing: DS.Spacing.sm) {
+                            ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
+                                infoTile(row: row)
+                            }
+                        }
+                        .padding(.horizontal, DS.Spacing.md)
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding(.horizontal, DS.Spacing.md)
-                    .padding(.bottom, DS.Spacing.md)
+
+                    // الأبناء فقط (بلا الأب) — الكلمة والسهم بالنص، ويتوسّع داخل المربّع.
+                    if hasChildren {
+                        if !rows.isEmpty {
+                            Divider().overlay(DS.Color.textTertiary.opacity(0.15))
+                                .padding(.horizontal, DS.Spacing.lg)
+                        }
+                        Button {
+                            withAnimation(DS.Anim.snappy) { childrenExpanded.toggle() }
+                        } label: {
+                            HStack(spacing: DS.Spacing.sm) {
+                                Image(systemName: "person.3.fill")
+                                    .font(DS.Font.scaled(13, weight: .semibold))
+                                    .foregroundColor(DS.Color.primary)
+                                Text(L10n.t("الأبناء", "Children") + " (\(cachedChildren.count))")
+                                    .font(DS.Font.calloutBold)
+                                    .foregroundColor(DS.Color.textPrimary)
+                                Image(systemName: "chevron.down")
+                                    .font(DS.Font.scaled(11, weight: .semibold))
+                                    .foregroundColor(DS.Color.textTertiary)
+                                    .rotationEffect(.degrees(childrenExpanded ? 180 : 0))
+                            }
+                            .frame(maxWidth: .infinity)      // بالنص
+                            .padding(.vertical, DS.Spacing.sm + 2)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+
+                        if childrenExpanded {
+                            childrenInlineGrid
+                                .padding(.horizontal, DS.Spacing.lg)
+                        }
+                    }
                 }
+                .padding(.bottom, DS.Spacing.md)
             }
         }
     }
@@ -457,7 +551,7 @@ struct MemberDetailsView: View {
     }
 
     /// صف تفصيلي احترافي: أيقونة دائرية ملوّنة + تسمية + قيمة بمحاذاة النهاية.
-    private func detailRow(icon: String, color: Color, label: String, value: String) -> some View {
+    private func detailRow(icon: String, color: Color, label: String, value: String, ltrValue: Bool = false) -> some View {
         HStack(spacing: DS.Spacing.md) {
             ZStack {
                 Circle()
@@ -476,6 +570,7 @@ struct MemberDetailsView: View {
                 .foregroundColor(DS.Color.textPrimary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
+                .environment(\.layoutDirection, ltrValue ? .leftToRight : LanguageManager.shared.layoutDirection)
         }
         .padding(.vertical, DS.Spacing.sm + 2)
     }
@@ -498,7 +593,8 @@ struct MemberDetailsView: View {
                 .font(DS.Font.calloutBold)
                 .foregroundColor(DS.Color.textPrimary)
                 .lineLimit(1)
-                .minimumScaleFactor(0.75)
+                .minimumScaleFactor(0.6)
+                .environment(\.layoutDirection, row.icon == "phone.fill" ? .leftToRight : LanguageManager.shared.layoutDirection)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, DS.Spacing.md)
@@ -714,28 +810,51 @@ struct MemberDetailsView: View {
         .presentationDragIndicator(.visible)
     }
 
-    /// شريط أفقي قابل للتمرير من صور الأبناء — تصميم احترافي مثل الآيفون.
+    private func childButton(_ child: FamilyMember) -> some View {
+        Button {
+            // الشيت يبقى مفتوح — يتحدث محتواه + الشجرة تتزامن خلفه
+            let childId = child.id
+            currentMemberId = childId
+            NotificationCenter.default.post(
+                name: .openMemberInTree,
+                object: nil,
+                userInfo: ["memberId": childId]
+            )
+        } label: {
+            childTileFirstName(child)
+                .frame(width: 52)
+        }
+        .buttonStyle(DSScaleButtonStyle())
+    }
+
+    /// صور الأبناء — صف واحد حتى ٥، وسطران إذا أكثر من ٥.
     private var childrenInlineGrid: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(alignment: .top, spacing: DS.Spacing.md) {
-                ForEach(cachedChildren) { child in
-                    Button {
-                        // الشيت يبقى مفتوح — يتحدث محتواه + الشجرة تتزامن خلفه
-                        let childId = child.id
-                        currentMemberId = childId
-                        NotificationCenter.default.post(
-                            name: .openMemberInTree,
-                            object: nil,
-                            userInfo: ["memberId": childId]
-                        )
-                    } label: {
-                        childTileFirstName(child)
-                            .frame(width: 46)
+        Group {
+            if cachedChildren.count > 5 {
+                let mid = (cachedChildren.count + 1) / 2
+                let row1 = Array(cachedChildren.prefix(mid))
+                let row2 = Array(cachedChildren.dropFirst(mid))
+                ScrollView(.horizontal, showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: DS.Spacing.md) {
+                        HStack(alignment: .top, spacing: DS.Spacing.md) {
+                            ForEach(row1) { childButton($0) }
+                        }
+                        HStack(alignment: .top, spacing: DS.Spacing.md) {
+                            ForEach(row2) { childButton($0) }
+                        }
                     }
-                    .buttonStyle(DSScaleButtonStyle())
+                    .padding(.vertical, DS.Spacing.xs)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                }
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(alignment: .top, spacing: DS.Spacing.md) {
+                        ForEach(cachedChildren) { childButton($0) }
+                    }
+                    .padding(.vertical, DS.Spacing.xs)
+                    .frame(maxWidth: .infinity, alignment: .center)
                 }
             }
-            .padding(.vertical, DS.Spacing.xs)
         }
         .padding(.top, DS.Spacing.sm)
         .padding(.bottom, DS.Spacing.xs)
@@ -1031,33 +1150,129 @@ struct MemberDetailsView: View {
     @ViewBuilder
     private var actionButtonsSection: some View {
         if !member.isDeleted {
-            HStack(alignment: .top, spacing: DS.Spacing.xxl) {
-                if !isViewingSelf {
-                    circleActionButton(
-                        icon: "pencil.and.list.clipboard",
-                        label: L10n.t("طلب تعديل", "Request Edit"),
-                        tint: DS.Color.primary,
-                        filled: true
-                    ) { showActionSheet = true }
+            VStack(spacing: DS.Spacing.lg) {
+                HStack(alignment: .top, spacing: DS.Spacing.xxl) {
+                    if !isViewingSelf {
+                        circleActionButton(
+                            icon: "pencil.and.list.clipboard",
+                            label: L10n.t("طلب تعديل", "Request Edit"),
+                            tint: DS.Color.primary,
+                            filled: true
+                        ) { withAnimation(DS.Anim.snappy) { showEditActions.toggle() } }
 
-                    // إبلاغ عن العضو — متاح لغير صاحب الملف (سياسة Apple)
-                    circleActionButton(
-                        icon: "exclamationmark.bubble",
-                        label: L10n.t("إبلاغ", "Report"),
-                        tint: DS.Color.warning
-                    ) { showReportConfirm = true }
-                }
+                        // إبلاغ عن العضو — متاح لغير صاحب الملف (سياسة Apple)
+                        circleActionButton(
+                            icon: "exclamationmark.bubble",
+                            label: L10n.t("إبلاغ", "Report"),
+                            tint: DS.Color.warning
+                        ) { showReportConfirm = true }
+                    }
 
-                if authVM.canEditMembers {
-                    circleActionButton(
-                        icon: "pencil",
-                        label: L10n.t("تعديل مباشر", "Direct Edit"),
-                        tint: DS.Color.primary
-                    ) { showAdminControl = true }
+                    if authVM.canEditMembers {
+                        circleActionButton(
+                            icon: "pencil",
+                            label: L10n.t("تعديل مباشر", "Direct Edit"),
+                            tint: DS.Color.primary
+                        ) { showAdminControl = true }
+                    }
                 }
+                .frame(maxWidth: .infinity)
+
+                // شبكة أنواع الطلبات مدمجة داخل التفاصيل — تدفق واحد:
+                // كان المسار 3 شيتات متتالية (تفاصيل ← اختيار نوع ← نموذج) مع تأخير 0.3 ثانية؛
+                // الآن النوع يُختار هنا والنموذج يفتح مباشرة فوق التفاصيل.
+                if showEditActions && !isViewingSelf {
+                    editActionsGrid
+                        .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .top)))
+                }
+            }
+        }
+    }
+
+    /// شبكة أنواع طلبات التعديل — مدمجة داخل شيت التفاصيل (بدل الشيت الوسيط السابق).
+    private var editActionsGrid: some View {
+        VStack(spacing: DS.Spacing.md) {
+            Text(L10n.t("اختر نوع الطلب", "Choose Request Type"))
+                .font(DS.Font.calloutBold)
+                .foregroundColor(DS.Color.textSecondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            LazyVGrid(
+                columns: Array(repeating: GridItem(.flexible(), spacing: DS.Spacing.md), count: 3),
+                spacing: DS.Spacing.lg
+            ) {
+                ForEach(availableEditActions, id: \.rawValue) { action in
+                    editActionCircle(for: action)
+                }
+            }
+        }
+        .padding(DS.Spacing.lg)
+        .background(DS.Color.surface)
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
+    }
+
+    private var availableEditActions: [TreeEditAction] {
+        if member.isDeceased == true {
+            return [.add, .editName, .editBirth, .addDeathDate, .addPhoto, .delete]
+        }
+        return [.add, .editName, .editPhone, .editBirth, .addPhoto, .deceased, .delete]
+    }
+
+    private func editActionColor(for action: TreeEditAction) -> Color {
+        switch action {
+        case .add: return DS.Color.success
+        case .editName: return DS.Color.info
+        case .editPhone: return DS.Color.primary
+        case .editBirth: return DS.Color.warning
+        case .deceased: return DS.Color.textTertiary
+        case .addDeathDate: return DS.Color.textTertiary
+        case .addPhoto: return DS.Color.primary
+        case .delete: return DS.Color.error
+        case .other: return DS.Color.accent
+        }
+    }
+
+    private func editActionLabel(for action: TreeEditAction) -> String {
+        switch action {
+        case .add: return L10n.t("إضافة ابن", "Add Son")
+        case .editName: return L10n.t("تعديل اسم", "Edit Name")
+        case .editPhone: return L10n.t("تعديل رقم", "Edit Phone")
+        case .editBirth: return L10n.t("تعديل ميلاد", "Edit Birth")
+        case .deceased: return L10n.t("تسجيل وفاة", "Deceased")
+        case .addDeathDate: return L10n.t("تاريخ وفاة", "Death Date")
+        case .addPhoto: return L10n.t("إضافة صورة", "Add Photo")
+        case .delete: return L10n.t("حذف", "Delete")
+        case .other: return L10n.t("طلب آخر", "Other")
+        }
+    }
+
+    private func editActionCircle(for action: TreeEditAction) -> some View {
+        let tint = editActionColor(for: action)
+        return Button {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            pendingEditAction = action
+        } label: {
+            VStack(spacing: DS.Spacing.xs) {
+                ZStack {
+                    Circle()
+                        .fill(tint.opacity(0.12))
+                        .overlay(Circle().stroke(tint.opacity(0.28), lineWidth: 1))
+                        .frame(width: 64, height: 64)
+                    Image(systemName: action.iconName)
+                        .font(DS.Font.scaled(24, weight: .semibold))
+                        .foregroundColor(tint)
+                }
+                Text(editActionLabel(for: action))
+                    .font(DS.Font.caption1)
+                    .fontWeight(.semibold)
+                    .foregroundColor(DS.Color.textSecondary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.center)
             }
             .frame(maxWidth: .infinity)
         }
+        .buttonStyle(DSScaleButtonStyle())
+        .accessibilityLabel(editActionLabel(for: action))
     }
 
     /// زر دائري بأيقونة + تسمية قصيرة (بديل الأزرار الممتدة في الأسفل).

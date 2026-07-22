@@ -17,6 +17,8 @@ struct MainHeaderView<TrailingContent: View>: View {
     let hasDropShadow: Bool
     let showNotificationBell: Bool
     let subtitleAbove: Bool
+    /// عرض العنوان الفرعي ككبسولة زجاجية (مثل عدد الأفراد في الشجرة)
+    let subtitleChip: Bool
     let trailingContent: TrailingContent
 
     init(
@@ -29,6 +31,7 @@ struct MainHeaderView<TrailingContent: View>: View {
         hasDropShadow: Bool = true,
         showNotificationBell: Bool = false,
         subtitleAbove: Bool = false,
+        subtitleChip: Bool = false,
         @ViewBuilder trailingContent: () -> TrailingContent = { EmptyView() }
     ) {
         self._selectedTab = selectedTab
@@ -40,6 +43,7 @@ struct MainHeaderView<TrailingContent: View>: View {
         self.hasDropShadow = hasDropShadow
         self.showNotificationBell = showNotificationBell
         self.subtitleAbove = subtitleAbove
+        self.subtitleChip = subtitleChip
         self.trailingContent = trailingContent()
     }
     
@@ -66,9 +70,21 @@ struct MainHeaderView<TrailingContent: View>: View {
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.7)
                             if !subtitleAbove, let customSubtitle = customSubtitle, !customSubtitle.isEmpty {
-                                Text(customSubtitle)
-                                    .font(DS.Font.scaled(13, weight: .medium))
-                                    .foregroundColor(DS.Color.overlayText)
+                                if subtitleChip {
+                                    // كبسولة زجاجية بنفس لغة أيقونات الهيدر (خلفية شفافة + إطار خفيف)
+                                    Text(customSubtitle)
+                                        .font(DS.Font.scaled(12, weight: .bold))
+                                        .foregroundColor(DS.Color.textOnPrimary)
+                                        .padding(.horizontal, DS.Spacing.sm + 2)
+                                        .padding(.vertical, 3)
+                                        .background(DS.Color.overlayIcon, in: Capsule())
+                                        .overlay(Capsule().stroke(DS.Color.overlayIconBorder, lineWidth: 1))
+                                        .padding(.top, 2)
+                                } else {
+                                    Text(customSubtitle)
+                                        .font(DS.Font.scaled(13, weight: .medium))
+                                        .foregroundColor(DS.Color.overlayText)
+                                }
                             }
                         }
                         .offset(x: isAnimating ? 0 : 15)

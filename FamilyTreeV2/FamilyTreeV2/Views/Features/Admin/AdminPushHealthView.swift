@@ -717,16 +717,23 @@ struct AdminPushHealthView: View {
         testResultMessage = nil
         defer { isSendingTest = false }
 
-        // نستخدم نفس المسار اللي يستخدمه التطبيق — sendPushToMembers
-        await notificationVM.sendPushToMembers(
-            title: L10n.t("اختبار إشعار ✓", "Test Notification ✓"),
-            body: L10n.t(
-                "إذا وصلك هذا الإشعار، المنظومة تعمل بشكل كامل.",
-                "If you received this, the system is fully working."
-            ),
-            kind: "test",
-            targetMemberIds: [memberId]
-        )
+        // إدراج إشعار اختبار — الـ trigger على جدول notifications يوصّل الـ push
+        // (نفس مسار التوصيل الموحّد للتطبيق والويب والأندرويد: APNs + FCM).
+        do {
+            let payload: [String: AnyEncodable] = [
+                "target_member_id": AnyEncodable(memberId.uuidString),
+                "title": AnyEncodable(L10n.t("اختبار إشعار ✓", "Test Notification ✓")),
+                "body": AnyEncodable(L10n.t(
+                    "إذا وصلك هذا الإشعار، المنظومة تعمل بشكل كامل.",
+                    "If you received this, the system is fully working."
+                )),
+                "kind": AnyEncodable("test"),
+                "created_by": AnyEncodable(memberId.uuidString)
+            ]
+            try await SupabaseConfig.client.from("notifications").insert(payload).execute()
+        } catch {
+            Log.error("[PushHealth] فشل إرسال إشعار الاختبار: \(error.localizedDescription)")
+        }
 
         withAnimation {
             testResultMessage = L10n.t(

@@ -22,6 +22,8 @@ class AdminRequestViewModel: ObservableObject {
     @Published var treeEditRequests: [AdminRequest] = []
     @Published var nameChangeRequests: [AdminRequest] = []
     @Published var contactMessages: [AdminRequest] = []
+    /// طلبات العضو الحالي المعلّقة — يتابعها ويلغيها من «حسابي» (طلباتي).
+    @Published var myPendingRequests: [AdminRequest] = []
     @Published var isLoading: Bool = false
     @Published var mergeResult: MergeResult? = nil
     @Published var errorMessage: String? = nil
@@ -248,6 +250,69 @@ class AdminRequestViewModel: ObservableObject {
         } catch {
             Log.error("[TreeEdit] Submit failed: \(error.localizedDescription)")
             return false
+        }
+    }
+
+    // MARK: - My Requests (member-scoped tracking)
+
+    /// أنواع الطلبات التي يتابعها العضو في «طلباتي» (طلبات تغيير بيانات تحتاج موافقة).
+    /// نستبعد البلاغات ورسائل التواصل وطلبات الانضمام (ليست تغييرات يتابعها العضو).
+    private static let myTrackedRequestTypes: [String] = [
+        RequestType.treeEdit.rawValue,
+        RequestType.nameChange.rawValue,
+        RequestType.phoneChange.rawValue,
+        RequestType.deceasedReport.rawValue,
+        RequestType.childAdd.rawValue
+    ]
+
+    /// جلب طلبات العضو الحالي المعلّقة — يقرأ صفوفه فقط (RLS: requester_id = auth.uid()).
+    func fetchMyPendingRequests(force: Bool = false) async {
+        guard let uid = currentUser?.id else {
+            myPendingRequests = []
+            return
+        }
+        guard throttler.canFetch(key: "myRequests", interval: 20, force: force) || myPendingRequests.isEmpty else { return }
+        throttler.didFetch(key: "myRequests")
+        do {
+            let requests: [AdminRequest] = try await supabase
+                .from("admin_requests")
+                .select("*, member:profiles!member_id(*)")
+                .eq("requester_id", value: uid.uuidString)
+                .eq("status", value: ApprovalStatus.pending.rawValue)
+                .in("request_type", values: Self.myTrackedRequestTypes)
+                .order("created_at", ascending: false)
+                .execute()
+                .value
+            self.myPendingRequests = requests
+        } catch {
+            Log.fetchError("فشل جلب طلباتي المعلّقة", error)
+        }
+    }
+
+    /// سحب/إلغاء طلب معلّق للعضو نفسه — حذف الصف من admin_requests.
+    /// RLS يسمح للعضو بحذف صفوفه فقط (requester_id = auth.uid()).
+    func cancelMyRequest(_ request: AdminRequest) async {
+        guard NetworkMonitor.shared.requireOnline() else { return }
+        guard let uid = currentUser?.id, request.requesterId == uid else {
+            Log.warning("[MyRequests] محاولة إلغاء طلب لا يخص المستخدم — تم التجاهل")
+            return
+        }
+        // إزالة فورية محلياً ثم حذف بالخلفية
+        withAnimation(.snappy(duration: 0.25)) {
+            myPendingRequests.removeAll { $0.id == request.id }
+        }
+        do {
+            try await supabase
+                .from("admin_requests")
+                .delete()
+                .eq("id", value: request.id.uuidString)
+                .eq("requester_id", value: uid.uuidString)
+                .execute()
+            Log.info("[MyRequests] تم إلغاء الطلب: \(request.id)")
+        } catch {
+            Log.error("[MyRequests] فشل إلغاء الطلب: \(error.localizedDescription)")
+            // فشل الحذف → أعد التحميل لاستعادة الحالة الصحيحة
+            await fetchMyPendingRequests(force: true)
         }
     }
 
@@ -1833,6 +1898,23 @@ class AdminRequestViewModel: ObservableObject {
         }
 
         Task { [weak self] in
+            // إشعار المتقدّم المرفوض قبل حذف ملفه — الإدراج يُطلق push تلقائياً عبر
+            // trigger على جدول notifications. (الصف نفسه سيُحذف مع الملف [cascade]،
+            // لكن الدفع يخرج لحظة الإدراج فيصل المتقدّم على جهازه.)
+            if let creator = self?.currentUser?.id {
+                let rejectNotif: [String: AnyEncodable] = [
+                    "target_member_id": AnyEncodable(memberId.uuidString),
+                    "title": AnyEncodable(L10n.t("طلب الانضمام", "Join Request")),
+                    "body": AnyEncodable(L10n.t(
+                        "لم تتم الموافقة على طلب انضمامك — تواصل مع إدارة العائلة",
+                        "Your join request was not approved — please contact the family administration"
+                    )),
+                    "kind": AnyEncodable("request_rejected"),
+                    "created_by": AnyEncodable(creator.uuidString)
+                ]
+                _ = try? await self?.supabase.from("notifications").insert(rejectNotif).execute()
+            }
+
             do {
                 _ = try? await self?.supabase
                     .from("profiles")

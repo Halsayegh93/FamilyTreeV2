@@ -187,8 +187,9 @@ struct AdminDashboardView: View {
                                 }
                             .padding(.horizontal, DS.Spacing.lg)
 
-                            // تسجيل عضو جديد — مدير + مشرف + مالك
-                            if authVM.canModerate {
+                            // النظام (تسجيل/إشعارات/تقارير/إعدادات) — المدير والمالك فقط
+                            // (كان canModerate يكشف «تسجيل عضو» للمراقب/المشرف)
+                            if authVM.isAdmin {
                                 DSCard(padding: 0) {
                                     DSSectionHeader(
                                         title: L10n.t("النظام", "System"),
@@ -233,8 +234,8 @@ struct AdminDashboardView: View {
                                 .padding(.horizontal, DS.Spacing.lg)
                             }
 
-                            // المدراء والمشرفين — المدير + المالك
-                            if authVM.isAdmin {
+                            // فريق الإدارة + دليل الصلاحيات — مرئي لكل الفريق (أدوات الإدارة تبقى للمالك داخليًا)
+                            if authVM.canModerate {
                                 DSCard(padding: 0) {
                                     DSSectionHeader(
                                         title: L10n.t("فريق الإدارة", "Admin Team"),

@@ -207,7 +207,8 @@ struct AdminModeratorsView: View {
                         .foregroundColor(DS.Color.textOnPrimary)
                         .padding(.horizontal, DS.Spacing.sm)
                         .padding(.vertical, 2)
-                        .background(member.role.color)
+                        // المالك يظهر بنفس لون المدير — لا يتميّز عنه بصرياً
+                        .background(member.role == .owner ? FamilyMember.UserRole.admin.color : member.role.color)
                         .clipShape(Capsule())
 
                     if member.id == authVM.currentUser?.id {
@@ -370,34 +371,37 @@ struct AdminModeratorsView: View {
 
     // MARK: - جدول الصلاحيات
     private var permissionsGuide: some View {
+        // الأعمدة الأربعة: المالك ⊇ المدير ⊇ (المراقب / المشرف). المالك يملك كل الصلاحيات.
         let roles: [(String, Color)] = [
+            (L10n.t("المالك", "Owner"), DS.Color.ownerRole),
             (L10n.t("مدير", "Admin"), DS.Color.adminRole),
             (L10n.t("مراقب", "Monitor"), DS.Color.monitorRole),
             (L10n.t("مشرف", "Supervisor"), DS.Color.supervisorRole)
         ]
 
+        // ترتيب القيم لكل صف: [المالك، المدير، المراقب، المشرف]
         let permissions: [(String, [Bool])] = [
-            // الكل ✅✅✅
-            (L10n.t("دخول لوحة الإدارة", "Access admin panel"), [true, true, true]),
-            (L10n.t("قبول الطلبات", "Approve requests"), [true, true, true]),
-            // مدير + مراقب ✅✅❌
-            (L10n.t("رفض الطلبات", "Reject requests"), [true, true, false]),
-            (L10n.t("حذف أخبار", "Delete news"), [true, true, false]),
-            (L10n.t("حذف تعليقات", "Delete comments"), [true, true, false]),
-            (L10n.t("حذف قصص", "Delete stories"), [true, true, false]),
-            (L10n.t("حذف صور", "Delete photos"), [true, true, false]),
-            // مدير + مشرف ✅❌✅
-            (L10n.t("تسجيل عضو جديد", "Register members"), [true, false, true]),
-            // مدير فقط ✅❌❌
-            (L10n.t("حذف أعضاء", "Delete members"), [true, false, false]),
-            (L10n.t("تجميد حسابات", "Freeze accounts"), [true, false, false]),
-            (L10n.t("حذف ديوانيات", "Delete diwaniyas"), [true, false, false]),
-            (L10n.t("حذف مشاريع", "Delete projects"), [true, false, false]),
-            (L10n.t("إرسال إشعارات", "Send notifications"), [true, false, false]),
-            (L10n.t("إحصائيات", "Statistics"), [true, false, false]),
-            // المالك فقط ❌❌❌
-            (L10n.t("إدارة الأدوار", "Manage roles"), [false, false, false]),
-            (L10n.t("إعدادات النظام", "System Settings"), [false, false, false]),
+            // الكل ✅✅✅✅
+            (L10n.t("دخول لوحة الإدارة", "Access admin panel"), [true, true, true, true]),
+            (L10n.t("قبول الطلبات", "Approve requests"), [true, true, true, true]),
+            // المالك + المدير + المراقب ✅✅✅❌
+            (L10n.t("رفض الطلبات", "Reject requests"), [true, true, true, false]),
+            (L10n.t("تعديل الأعضاء", "Edit members"), [true, true, true, false]),
+            (L10n.t("حذف أخبار", "Delete news"), [true, true, true, false]),
+            (L10n.t("حذف تعليقات", "Delete comments"), [true, true, true, false]),
+            (L10n.t("حذف قصص", "Delete stories"), [true, true, true, false]),
+            (L10n.t("حذف صور", "Delete photos"), [true, true, true, false]),
+            // المالك + المدير ✅✅❌❌
+            (L10n.t("تسجيل عضو جديد", "Register members"), [true, true, false, false]),
+            (L10n.t("حذف أعضاء", "Delete members"), [true, true, false, false]),
+            (L10n.t("تجميد حسابات", "Freeze accounts"), [true, true, false, false]),
+            (L10n.t("حذف ديوانيات", "Delete diwaniyas"), [true, true, false, false]),
+            (L10n.t("حذف مشاريع", "Delete projects"), [true, true, false, false]),
+            (L10n.t("إرسال إشعارات", "Send notifications"), [true, true, false, false]),
+            (L10n.t("إحصائيات", "Statistics"), [true, true, false, false]),
+            // المالك فقط ✅❌❌❌
+            (L10n.t("إدارة الأدوار", "Manage roles"), [true, false, false, false]),
+            (L10n.t("إعدادات النظام", "System Settings"), [true, false, false, false]),
         ]
 
         return VStack(spacing: 0) {
@@ -411,7 +415,7 @@ struct AdminModeratorsView: View {
                     Text(roles[i].0)
                         .font(DS.Font.scaled(12, weight: .bold))
                         .foregroundColor(roles[i].1)
-                        .frame(width: 50)
+                        .frame(width: 44)
                         .multilineTextAlignment(.center)
                 }
             }
@@ -434,7 +438,7 @@ struct AdminModeratorsView: View {
                         Image(systemName: permissions[row].1[col] ? "checkmark.circle.fill" : "xmark.circle.fill")
                             .font(DS.Font.scaled(16))
                             .foregroundColor(permissions[row].1[col] ? DS.Color.success : DS.Color.textTertiary.opacity(0.4))
-                            .frame(width: 50)
+                            .frame(width: 44)
                     }
                 }
                 .padding(.horizontal, DS.Spacing.md)

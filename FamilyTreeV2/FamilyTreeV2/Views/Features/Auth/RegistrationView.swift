@@ -80,6 +80,17 @@ struct RegistrationView: View {
         }
         .toolbar(.hidden, for: .navigationBar)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+        .alert(
+            L10n.t("تعذّر التسجيل", "Registration Failed"),
+            isPresented: Binding(
+                get: { authVM.registrationError != nil },
+                set: { if !$0 { authVM.registrationError = nil } }
+            )
+        ) {
+            Button(L10n.t("حسناً", "OK"), role: .cancel) { authVM.registrationError = nil }
+        } message: {
+            Text(authVM.registrationError ?? "")
+        }
         .onAppear {
             Log.info("[REGISTRATION] RegistrationView ظهرت — البروفايل غير موجود. phone=\(Log.masked(authVM.phoneNumber))")
             withAnimation(DS.Anim.elastic.delay(0.2)) {
@@ -95,14 +106,15 @@ struct RegistrationView: View {
     // MARK: - Top Bar
     private var topBar: some View {
         HStack {
+            // كان مكتوبًا «رجوع» لكنه يسجّل الخروج فعليًا — تسمية صادقة بدل الطرد الصامت
             Button(action: { Task { await authVM.signOut() } }) {
                 HStack(spacing: DS.Spacing.xs) {
-                    Image(systemName: "chevron.backward")
+                    Image(systemName: "rectangle.portrait.and.arrow.right")
                         .font(DS.Font.scaled(13, weight: .bold))
-                    Text(L10n.t("رجوع", "Back"))
+                    Text(L10n.t("تسجيل الخروج", "Sign out"))
                 }
                 .font(DS.Font.subheadline)
-                .foregroundColor(DS.Color.primary)
+                .foregroundColor(DS.Color.textSecondary)
             }
             Spacer()
         }

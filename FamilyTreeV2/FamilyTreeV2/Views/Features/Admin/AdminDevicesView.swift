@@ -3,6 +3,7 @@ import SwiftUI
 struct AdminDevicesView: View {
     @EnvironmentObject var notificationVM: NotificationViewModel
     @EnvironmentObject var memberVM: MemberViewModel
+    @EnvironmentObject var authVM: AuthViewModel
 
     private func t(_ ar: String, _ en: String) -> String { L10n.t(ar, en) }
 
@@ -245,23 +246,26 @@ struct AdminDevicesView: View {
 
             Spacer()
 
-            Button {
-                deviceToRemove = device
-            } label: {
-                HStack(spacing: DS.Spacing.xs) {
-                    Image(systemName: "trash.fill")
-                        .font(DS.Font.scaled(11, weight: .bold))
-                    Text(t("إزالة", "Remove"))
-                        .font(DS.Font.scaled(11, weight: .bold))
+            // فصل الأجهزة للمالك فقط (إجراء أمني — كان بلا بوابة)
+            if authVM.canManageDevices {
+                Button {
+                    deviceToRemove = device
+                } label: {
+                    HStack(spacing: DS.Spacing.xs) {
+                        Image(systemName: "trash.fill")
+                            .font(DS.Font.scaled(11, weight: .bold))
+                        Text(t("إزالة", "Remove"))
+                            .font(DS.Font.scaled(11, weight: .bold))
+                    }
+                    .foregroundColor(DS.Color.error)
+                    .padding(.horizontal, DS.Spacing.md)
+                    .padding(.vertical, DS.Spacing.xs + 2)
+                    .background(DS.Color.error.opacity(0.1))
+                    .clipShape(Capsule())
                 }
-                .foregroundColor(DS.Color.error)
-                .padding(.horizontal, DS.Spacing.md)
-                .padding(.vertical, DS.Spacing.xs + 2)
-                .background(DS.Color.error.opacity(0.1))
-                .clipShape(Capsule())
+                .buttonStyle(.plain)
+                .disabled(isRemoving)
             }
-            .buttonStyle(.plain)
-            .disabled(isRemoving)
         }
         .padding(.horizontal, DS.Spacing.lg)
         .padding(.vertical, DS.Spacing.xs)

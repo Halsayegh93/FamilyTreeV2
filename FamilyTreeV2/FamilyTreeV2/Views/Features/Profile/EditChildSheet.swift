@@ -11,6 +11,8 @@ struct EditChildSheet: View {
     @State private var selectedPhoneCountry: KuwaitPhone.Country = KuwaitPhone.defaultCountry
     @State private var phoneNumber: String = ""
     @State private var birthDate: Date = Date()
+    /// هل للابن تاريخ ميلاد فعلي (أو حدّده المستخدم الآن)؟ — لا نكتب «اليوم» المفبرك.
+    @State private var birthDateProvided: Bool = false
     @State private var selectedGender: String = "male"
     @State private var isDeceased: Bool = false
     @State private var deathDate: Date = Date()
@@ -28,7 +30,8 @@ struct EditChildSheet: View {
 
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: DS.Spacing.md) {
-                        heroHeader
+                        // الصورة للذكر فقط — الأنثى بلا خيار صورة
+                        if selectedGender != "female" { heroHeader }
                         basicInfoCard
                             .padding(.horizontal, DS.Spacing.lg)
                         submitButton
@@ -113,27 +116,40 @@ struct EditChildSheet: View {
 
                     DSDivider()
 
-                    // Phone field — العنوان فوق الحقل، الحقل بدون إطار
-                    DSLabeledFieldRow(icon: "phone.fill", iconColor: DS.Color.success,
-                                      label: L10n.t("رقم الهاتف", "Phone Number")) {
-                        DSPhoneField(
-                            country: $selectedPhoneCountry,
-                            digits: $phoneNumber,
-                            placeholder: L10n.t("اختياري", "Optional"),
-                            compact: true,
-                            bordered: false
-                        )
+                    // اختيار الجنس — ذكر/أنثى (نفس واجهة الإضافة)
+                    DSFormRow(icon: "person.2.fill", iconColor: DS.Color.accent,
+                              label: L10n.t("الجنس", "Gender")) {
+                        HStack(spacing: DS.Spacing.xs) {
+                            genderButton(title: L10n.t("ذكر", "Male"), value: "male", color: DS.Color.primary)
+                            genderButton(title: L10n.t("أنثى", "Female"), value: "female", color: DS.Color.neonPink)
+                        }
+                    }
+
+                    // الهاتف — للذكر فقط
+                    if selectedGender == "male" {
+                        DSDivider()
+                        DSLabeledFieldRow(icon: "phone.fill", iconColor: DS.Color.success,
+                                          label: L10n.t("رقم الهاتف", "Phone Number")) {
+                            DSPhoneField(
+                                country: $selectedPhoneCountry,
+                                digits: $phoneNumber,
+                                placeholder: L10n.t("اختياري", "Optional"),
+                                compact: true,
+                                bordered: false
+                            )
+                        }
                     }
 
                     DSDivider()
 
-                    // Birth date — صف موحّد
+                    // Birth date — صف موحّد (يُرسل فقط إذا كان معروفاً/حدّده المستخدم)
                     DSDateField(
                         label: L10n.t("تاريخ الميلاد", "Birth Date"),
                         date: $birthDate,
                         range: ...Date(),
                         labelAbove: true
                     )
+                    .onChange(of: birthDate) { _ in birthDateProvided = true }
 
                     DSDivider()
 
@@ -173,6 +189,21 @@ struct EditChildSheet: View {
         .disabled(firstName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSaving)
     }
 
+    private func genderButton(title: String, value: String, color: Color) -> some View {
+        let selected = selectedGender == value
+        return Button { selectedGender = value } label: {
+            Text(title)
+                .font(DS.Font.caption1).fontWeight(.bold)
+                .foregroundColor(selected ? .white : DS.Color.textSecondary)
+                .padding(.horizontal, DS.Spacing.md)
+                .frame(height: 34)
+                .background(Capsule().fill(selected ? color : DS.Color.surface))
+                .overlay(Capsule().strokeBorder(selected ? Color.clear : DS.Color.textTertiary.opacity(0.3), lineWidth: 1))
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+    }
+
     private func setupData() {
         firstName = member.firstName
         selectedGender = member.gender ?? "male"
@@ -187,6 +218,7 @@ struct EditChildSheet: View {
 
         if let birth = member.birthDate, !birth.isEmpty, let parsed = formatter.date(from: birth) {
             birthDate = parsed
+            birthDateProvided = true
         }
 
         if let death = member.deathDate, !death.isEmpty, let parsed = formatter.date(from: death) {
@@ -204,7 +236,8 @@ struct EditChildSheet: View {
             formatter.dateFormat = "yyyy-MM-dd"
             formatter.locale = Locale(identifier: "en_US_POSIX")
 
-            let birthDateString: String? = formatter.string(from: birthDate)
+            // اختياري: نُرسل nil (غير معروف) إن لم يُحدَّد تاريخ ميلاد — بدل «اليوم» الخاطئ.
+            let birthDateString: String? = birthDateProvided ? formatter.string(from: birthDate) : nil
             let deathDateString: String? = isDeceased ? formatter.string(from: deathDate) : nil
 
             let cleanFirst = firstName.trimmingCharacters(in: .whitespacesAndNewlines)

@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct SplashScreenView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var logoScale: CGFloat = 0.5
     @State private var logoOpacity: Double = 0
     @State private var textOpacity: Double = 0
@@ -141,9 +142,10 @@ struct SplashScreenView: View {
                             Circle()
                                 .fill(DS.Color.primary)
                                 .frame(width: 8, height: 8)
-                                .scaleEffect(dotCount == i + 1 ? 1.3 : 0.7)
+                                // Reduce Motion: بلا نبض حجمي — يبقى التبديل على الشفافية فقط
+                                .scaleEffect(reduceMotion ? 1.0 : (dotCount == i + 1 ? 1.3 : 0.7))
                                 .opacity(dotCount == i + 1 ? 1.0 : 0.3)
-                                .animation(DS.Anim.bouncy, value: dotCount)
+                                .animation(reduceMotion ? .easeInOut(duration: 0.25) : DS.Anim.bouncy, value: dotCount)
                         }
                     }
 
@@ -161,6 +163,17 @@ struct SplashScreenView: View {
             }
         }
         .onAppear {
+            // احترام "تقليل الحركة": ظهور ناعم بالشفافية فقط — بلا سبرنق/نبض/دوران/لمعان
+            guard !reduceMotion else {
+                logoScale = 1.0
+                withAnimation(.easeIn(duration: 0.3)) {
+                    logoOpacity = 1.0
+                    textOpacity = 1.0
+                    glowOpacity = 1.0
+                }
+                return
+            }
+
             // أنيميشن اللوقو — elastic spring
             withAnimation(DS.Anim.elastic) {
                 logoScale = 1.0

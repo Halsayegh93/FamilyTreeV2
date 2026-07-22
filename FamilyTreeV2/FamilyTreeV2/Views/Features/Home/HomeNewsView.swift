@@ -31,12 +31,7 @@ struct HomeNewsView: View {
     @State private var newsSearchTask: Task<Void, Never>?
 
     private enum HomeSubPage {
-        case archive, projects, contact, news, gallery
-    }
-
-    /// معرض الصور يظهر على الآيفون فقط (بحسب طلب التصميم).
-    private var isPhone: Bool {
-        UIDevice.current.userInterfaceIdiom == .phone
+        case archive, projects, contact, news
     }
 
     /// مقاييس التخطيط المتجاوبة — تتكيّف مع عرض الجهاز الفعلي + size class
@@ -204,7 +199,6 @@ struct HomeNewsView: View {
             case .archive: FamilyArchiveView()
             case .projects: FamilyProjectsView()
             case .contact: MemberContactFormView()
-            case .gallery: PhotoGalleryView()
             case .news: newsFullPage
             }
         }
@@ -243,7 +237,6 @@ struct HomeNewsView: View {
             case .archive: return L10n.t("أرشيف العائلة", "Family Archive")
             case .projects: return L10n.t("مشاريع العائلة", "Family Projects")
             case .contact: return L10n.t("التواصل", "Contact")
-            case .gallery: return L10n.t("معرض الصور", "Photo Gallery")
             case .news: return L10n.t("الأخبار والمناسبات", "News & Events")
             }
         }()
@@ -278,7 +271,10 @@ struct HomeNewsView: View {
                         .background(DS.Color.surface)
                         .clipShape(Circle())
                         .overlay(Circle().strokeBorder(DS.Color.primary.opacity(0.08), lineWidth: 1))
+                        .frame(width: 44, height: 44)          // هدف لمس ≥44pt (الحجم البصري يبقى 38)
+                        .contentShape(Rectangle())
                 }
+                .accessibilityLabel(showNewsSearch ? L10n.t("إغلاق البحث", "Close search") : L10n.t("بحث", "Search"))
             }
         }
         .padding(.horizontal, DS.Spacing.lg)
@@ -295,11 +291,11 @@ struct HomeNewsView: View {
             // 2) الشجرة + الديوانيات — مربعين بنفس ستايل التايل
             primaryTilesRow
 
-            // 3) آخر الأخبار
-            newsBentoCard
-
-            // 4) شبكة الوصول السريع — أرشيف / مشاريع / تواصل
+            // 3) شبكة الوصول السريع — أرشيف / مشاريع / تواصل (تحت الشجرة والديوانيات، فوق الأخبار)
             quickAccessGrid
+
+            // 4) آخر الأخبار
+            newsBentoCard
         }
         .padding(.horizontal, DS.Spacing.lg)
         // حد أقصى للعرض على الأجهزة الواسعة (iPad) حتى لا تتمدد الكروت بشكل مبالغ
@@ -376,17 +372,6 @@ struct HomeNewsView: View {
                 count: nil,
                 action: { withAnimation(DS.Anim.snappy) { activeSubPage = .contact } }
             )
-            // معرض الصور — على الآيفون فقط
-            if isPhone {
-                unifiedTile(
-                    title: L10n.t("معرض الصور", "Photo Gallery"),
-                    icon: "photo.stack.fill",
-                    color: DS.Color.neonPink,
-                    imageURL: nil,
-                    count: nil,
-                    action: { withAnimation(DS.Anim.snappy) { activeSubPage = .gallery } }
-                )
-            }
         }
     }
 

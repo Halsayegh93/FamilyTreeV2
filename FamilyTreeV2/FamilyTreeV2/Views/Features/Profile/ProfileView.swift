@@ -3,6 +3,7 @@ import SwiftUI
 struct ProfileView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var memberVM: MemberViewModel
+    @EnvironmentObject var adminRequestVM: AdminRequestViewModel
     @Binding var selectedTab: Int
     @State private var showingNotifications = false
     @ObservedObject private var langManager = LanguageManager.shared
@@ -20,12 +21,20 @@ struct ProfileView: View {
     // إضافة/اختيار الزوجة والأم
     @State private var showAddWife = false
     @State private var newWifeName = ""
+    // مصدر إضافة الزوجة: بالاسم أو اختيار من العائلة
+    @State private var showWifeSource = false
+    @State private var showWifePicker = false
+    @State private var wifeCandidates: [FamilyMember] = []
+    @State private var wifeSearch = ""
+    @State private var isLoadingWifeCandidates = false
     @State private var showMotherOptions = false
     @State private var showAddMotherName = false
     @State private var newMotherName = ""
     @State private var fatherWives: [WomanMember] = []
     @State private var appeared = false
     @State private var isLoadingChildren = true
+    /// الطلب المُختار للإلغاء — يشغّل حوار تأكيد السحب في «طلباتي».
+    @State private var requestToCancel: AdminRequest? = nil
 
     var user: FamilyMember? { authVM.currentUser }
 
@@ -69,6 +78,11 @@ struct ProfileView: View {
                                     .opacity(appeared ? 1 : 0)
                                     .offset(y: appeared ? 0 : 25)
 
+                                // طلباتي — الطلبات المعلّقة التي أرسلها العضو للإدارة
+                                myRequestsSection
+                                    .opacity(appeared ? 1 : 0)
+                                    .offset(y: appeared ? 0 : 26)
+
                                 // المفضلة
                                 favoritesSection
                                     .opacity(appeared ? 1 : 0)
@@ -91,11 +105,13 @@ struct ProfileView: View {
                         .refreshable {
                             await memberVM.fetchAllMembers(force: true)
                             await memberVM.fetchChildren(for: currentUser.id)
+                            await adminRequestVM.fetchMyPendingRequests(force: true)
                         }
                         .task {
                             isLoadingChildren = true
                             await memberVM.fetchChildren(for: currentUser.id)
                             isLoadingChildren = false
+                            await adminRequestVM.fetchMyPendingRequests()
                         }
                         .onAppear {
                             guard !appeared else { return }
@@ -133,6 +149,25 @@ struct ProfileView: View {
             } message: {
                 Text(L10n.t("هل تريد الخروج من حسابك على هذا الجهاز؟", "Do you want to sign out of your account on this device?"))
             }
+            .confirmationDialog(
+                L10n.t("سحب الطلب", "Withdraw Request"),
+                isPresented: Binding(
+                    get: { requestToCancel != nil },
+                    set: { if !$0 { requestToCancel = nil } }
+                ),
+                titleVisibility: .visible,
+                presenting: requestToCancel
+            ) { request in
+                Button(L10n.t("سحب الطلب", "Withdraw"), role: .destructive) {
+                    Task { await adminRequestVM.cancelMyRequest(request) }
+                }
+                Button(L10n.t("تراجع", "Keep"), role: .cancel) {}
+            } message: { _ in
+                Text(L10n.t(
+                    "سيتم إلغاء هذا الطلب ولن يصل للإدارة.",
+                    "This request will be cancelled and won't be sent to the admins."
+                ))
+            }
             .sheet(item: $editingChild) { child in EditChildSheet(member: child).presentationDragIndicator(.visible) }
             .sheet(item: $editingFamilyMember) { entry in
                 WomanMemberEditSheet(memberVM: memberVM, entry: entry)
@@ -146,6 +181,26 @@ struct ProfileView: View {
                 }
                 Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
             }
+            // مصدر إضافة الزوجة: بالاسم أو اختيار من العائلة (مثل شجرة النساء)
+            .confirmationDialog(L10n.t("إضافة زوجة", "Add Wife"),
+                                isPresented: $showWifeSource, titleVisibility: .visible) {
+                Button(L10n.t("اختيار من العائلة", "Choose from family")) {
+                    Task {
+                        isLoadingWifeCandidates = true
+                        wifeCandidates = await loadWifeCandidates()
+                        isLoadingWifeCandidates = false
+                        showWifePicker = true
+                    }
+                }
+                Button(L10n.t("إضافة بالاسم", "Add by name")) {
+                    // تأخير بسيط لتفادي تعارض عرض التنبيه بعد إغلاق الحوار
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                        newWifeName = ""; showAddWife = true
+                    }
+                }
+                Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
+            }
+            .sheet(isPresented: $showWifePicker) { wifePickerSheet }
             .confirmationDialog(L10n.t("الأم", "Mother"), isPresented: $showMotherOptions, titleVisibility: .visible) {
                 ForEach(fatherWives) { w in
                     Button(w.firstName.isEmpty ? L10n.t("زوجة الأب", "Father's wife") : w.firstName) {
@@ -171,11 +226,20 @@ struct ProfileView: View {
             }
             .onChange(of: showAddChild) { isPresented in
                 guard !isPresented, let currentUser = user else { return }
-                Task { await memberVM.fetchChildren(for: currentUser.id) }
+                Task {
+                    await memberVM.fetchChildren(for: currentUser.id)
+                    // إضافة ابن تُنشئ طلب موافقة → حدّث «طلباتي»
+                    await adminRequestVM.fetchMyPendingRequests(force: true)
+                }
             }
             .onChange(of: editingChild) { newValue in
                 guard newValue == nil, let currentUser = user else { return }
                 Task { await memberVM.fetchChildren(for: currentUser.id) }
+            }
+            .onChange(of: showEditProfile) { isPresented in
+                // إغلاق «تعديل البيانات» قد يعني إرسال طلب رقم/وفاة/اسم → حدّث «طلباتي»
+                guard !isPresented else { return }
+                Task { await adminRequestVM.fetchMyPendingRequests(force: true) }
             }
 
         }
@@ -496,6 +560,156 @@ struct ProfileView: View {
         }
     }
 
+    // MARK: - طلباتي (My Requests)
+
+    /// الطلبات المعلّقة التي أرسلها العضو للإدارة — عرض + متابعة + سحب.
+    @ViewBuilder
+    private var myRequestsSection: some View {
+        let requests = adminRequestVM.myPendingRequests
+        if !requests.isEmpty {
+            DSCard(padding: 0) {
+                DSSectionHeader(
+                    title: L10n.t("طلباتي", "My Requests"),
+                    icon: "clock.badge.exclamationmark.fill",
+                    trailing: "\(requests.count)",
+                    iconColor: DS.Color.warning
+                )
+
+                VStack(spacing: 0) {
+                    ForEach(Array(requests.enumerated()), id: \.element.id) { index, request in
+                        if index > 0 { DSDivider() }
+                        myRequestRow(request)
+                    }
+                }
+                .padding(.horizontal, DS.Spacing.md)
+                .padding(.bottom, DS.Spacing.md)
+            }
+            .padding(.horizontal, DS.Spacing.lg)
+        }
+    }
+
+    private func myRequestRow(_ request: AdminRequest) -> some View {
+        let info = myRequestDisplay(for: request)
+        return HStack(spacing: DS.Spacing.md) {
+            ZStack {
+                Circle()
+                    .fill(info.color.opacity(0.12))
+                    .frame(width: 36, height: 36)
+                Image(systemName: info.icon)
+                    .font(DS.Font.scaled(14, weight: .semibold))
+                    .foregroundColor(info.color)
+            }
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(info.title)
+                    .font(DS.Font.calloutBold)
+                    .foregroundColor(DS.Color.textPrimary)
+                    .lineLimit(1)
+
+                if let target = info.target, !target.isEmpty {
+                    Text(target)
+                        .font(DS.Font.caption1)
+                        .foregroundColor(DS.Color.textSecondary)
+                        .lineLimit(1)
+                }
+
+                // badge «تحت المراجعة» — نفس نمط الديوانيات
+                HStack(spacing: DS.Spacing.xs) {
+                    Image(systemName: "clock.badge.questionmark")
+                        .font(DS.Font.scaled(10, weight: .bold))
+                    Text(L10n.t("تحت المراجعة", "Under Review"))
+                        .font(DS.Font.scaled(10, weight: .bold))
+                }
+                .foregroundColor(DS.Color.warning)
+            }
+
+            Spacer(minLength: DS.Spacing.sm)
+
+            // سحب/إلغاء الطلب
+            Button { requestToCancel = request } label: {
+                Text(L10n.t("سحب", "Withdraw"))
+                    .font(DS.Font.caption1)
+                    .fontWeight(.bold)
+                    .foregroundColor(DS.Color.error)
+                    .padding(.horizontal, DS.Spacing.md)
+                    .padding(.vertical, DS.Spacing.xs + 1)
+                    .background(DS.Color.error.opacity(0.1))
+                    .clipShape(Capsule())
+            }
+            .buttonStyle(DSScaleButtonStyle())
+            .accessibilityLabel(L10n.t("سحب الطلب", "Withdraw request"))
+        }
+        .padding(.vertical, DS.Spacing.sm + 2)
+    }
+
+    private struct MyRequestDisplay {
+        let icon: String
+        let color: Color
+        let title: String
+        let target: String?
+    }
+
+    /// يشتق أيقونة/لون/عنوان/هدف الطلب حسب نوعه للعرض في «طلباتي».
+    private func myRequestDisplay(for request: AdminRequest) -> MyRequestDisplay {
+        let selfId = authVM.currentUser?.id
+        // اسم العضو المستهدف — نُخفيه إن كان العضو نفسه (زائد بلا فائدة)
+        let targetName: String? = {
+            guard let m = request.member, m.id != selfId else { return nil }
+            return m.fullName
+        }()
+
+        switch request.requestType {
+        case RequestType.treeEdit.rawValue:
+            let action = request.treeEditPayload?.resolvedAction
+            let name = request.treeEditPayload?.targetMemberName
+                ?? request.treeEditPayload?.newMemberName
+                ?? targetName
+            return MyRequestDisplay(
+                icon: action?.iconName ?? "square.and.pencil",
+                color: treeEditColor(for: action),
+                title: L10n.t(action?.arabicLabel ?? "طلب تعديل", action?.englishLabel ?? "Edit request"),
+                target: name
+            )
+        case RequestType.nameChange.rawValue:
+            return .init(icon: "pencil.line", color: DS.Color.info,
+                         title: L10n.t("تغيير الاسم", "Name change"),
+                         target: request.newValue ?? targetName)
+        case RequestType.phoneChange.rawValue:
+            return .init(icon: "phone.arrow.up.right", color: DS.Color.primary,
+                         title: L10n.t("تغيير رقم الهاتف", "Phone change"), target: targetName)
+        case RequestType.deceasedReport.rawValue:
+            return .init(icon: "heart.slash", color: DS.Color.textTertiary,
+                         title: L10n.t("تسجيل وفاة", "Deceased report"), target: targetName)
+        case RequestType.childAdd.rawValue:
+            return .init(icon: "person.badge.plus", color: DS.Color.success,
+                         title: L10n.t("إضافة ابن", "Add child"), target: targetName)
+        default:
+            return .init(icon: "clock", color: DS.Color.warning,
+                         title: L10n.t("طلب", "Request"), target: targetName)
+        }
+    }
+
+    private func treeEditColor(for action: TreeEditAction?) -> Color {
+        switch action {
+        case .add: return DS.Color.success
+        case .editName: return DS.Color.info
+        case .editPhone: return DS.Color.primary
+        case .editBirth: return DS.Color.warning
+        case .deceased, .addDeathDate: return DS.Color.textTertiary
+        case .addPhoto: return DS.Color.primary
+        case .delete: return DS.Color.error
+        case .other: return DS.Color.accent
+        case .none: return DS.Color.warning
+        }
+    }
+
+    /// يمكن ترتيب الأبناء (شجرة الرجال — profiles) لأي عضو لعائلته نفسه.
+    private var canReorderSons: Bool { memberVM.currentMemberChildren.count > 1 }
+    /// ترتيب البنات (شجرة النساء — women_members) مقيّد على الإدارة حسب RLS.
+    private var canReorderDaughters: Bool { womenChildrenList.count > 1 }   // self-service عبر RPC مقيّد على النفس
+    /// هل يوجد ما يمكن لهذا العضو ترتيبه فعلاً؟ (يتحكم بظهور زر «ترتيب» ووضع الترتيب)
+    private var canReorderChildren: Bool { canReorderSons || canReorderDaughters }
+
     private var serverSonsSection: some View {
         VStack(alignment: .leading, spacing: 0) {
             DSCard(padding: 0) {
@@ -509,7 +723,7 @@ struct ProfileView: View {
 
                     Spacer()
 
-                    if memberVM.currentMemberChildren.count > 1 || womenChildrenList.count > 1 {
+                    if canReorderChildren {
                         Button {
                             withAnimation(DS.Anim.snappy) {
                                 isReorderingChildren.toggle()
@@ -542,11 +756,11 @@ struct ProfileView: View {
                     }
                     .padding(DS.Spacing.md)
                     .transition(.opacity)
-                } else if isReorderingChildren && !memberVM.currentMemberChildren.isEmpty {
-                    // وضع ترتيب أبناء الشجرة العامة (قائمة عمودية بأسهم)
+                } else if isReorderingChildren && canReorderChildren {
+                    // وضع ترتيب موحّد — الأبناء (وللإدارة: البنات أيضاً) في قائمة واحدة
                     childrenReorderView
                 } else {
-                    // الوضع العادي / ترتيب أبناء شجرة النساء (شبكة مع أسهم على الخلايا)
+                    // الوضع العادي — شبكة قابلة للنقر للتعديل
                     childrenGridView
                         .transition(.opacity)
                 }
@@ -562,7 +776,7 @@ struct ProfileView: View {
         Button(action: action) {
             HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: icon)
-                    .font(DS.Font.scaled(15, weight: .bold))
+                    .font(DS.Font.scaled(16, weight: .bold))
                     .foregroundColor(color)
                     .frame(width: 36, height: 36)
                     .background(color.opacity(0.12))
@@ -581,54 +795,67 @@ struct ProfileView: View {
         .buttonStyle(PlainButtonStyle())
     }
 
-    private var childrenGridView: some View {
-        VStack(spacing: 0) {
-            let columns = [GridItem(.flexible()), GridItem(.flexible())]
-            LazyVGrid(columns: columns, spacing: DS.Spacing.md) {
-                ForEach(memberVM.currentMemberChildren, id: \.id) { son in
-                    Button {
-                        editingChild = son
-                    } label: {
-                        childGridCell(son: son)
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel(son.firstName.isEmpty ? L10n.t("ابن بدون اسم", "Unnamed child") : son.firstName)
-                    .accessibilityHint(L10n.t("تعديل", "Edit"))
-                }
+    /// خلية فرد عائلة (أم/زوجة/ابنة) — قابلة للنقر لأي عضو لإدارة عائلته نفسه.
+    /// إجراءات الإضافة/الإزالة داخل الورقة مقيّدة على النفس (RPCs)، والتعديل المباشر
+    /// يظهر خطأً واضحاً إن رفضته RLS — لا صمت.
+    private func familyMemberButton(_ entry: WomenFamilyEntry) -> some View {
+        Button { editingFamilyMember = entry } label: { womanFamilyGridCell(entry: entry) }
+            .buttonStyle(PlainButtonStyle())
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(entry.member.firstName.isEmpty ? L10n.t("فرد", "Member") : entry.member.firstName)
+            .accessibilityHint(L10n.t("تعديل", "Edit"))
+    }
 
-                // عائلة شجرة النساء (الأم/الزوجة/الأبناء) — تظهر فقط عند «متزوج»
-                if isCurrentUserMarried {
-                    ForEach(memberVM.currentMemberWomenFamily) { entry in
-                        if authVM.canModerate {
-                            // قابل للتعديل (للإدارة حسب صلاحيات شجرة النساء)
-                            Button {
-                                editingFamilyMember = entry
-                            } label: {
-                                womanFamilyGridCell(entry: entry)
-                            }
-                            .buttonStyle(PlainButtonStyle())
-                            .overlay(alignment: .topLeading) {
-                                // أسهم الترتيب — فقط في وضع الترتيب (الزر بالأعلى) وللأبناء
-                                if isReorderingChildren, entry.role == .child, womenChildrenList.count > 1 {
-                                    womanChildReorderControls(for: entry.member)
-                                }
-                            }
-                            .accessibilityElement(children: .ignore)
-                            .accessibilityLabel(entry.member.firstName.isEmpty ? L10n.t("فرد", "Member") : entry.member.firstName)
-                            .accessibilityHint(L10n.t("تعديل", "Edit"))
-                        } else {
-                            womanFamilyGridCell(entry: entry)
-                                .accessibilityElement(children: .ignore)
-                                .accessibilityLabel(entry.member.firstName.isEmpty ? L10n.t("فرد", "Member") : entry.member.firstName)
+    private var childrenGridView: some View {
+        let columns = [GridItem(.flexible()), GridItem(.flexible())]
+        let parents = memberVM.currentMemberWomenFamily.filter { $0.role == .mother || $0.role == .wife }
+        let womenKids = memberVM.currentMemberWomenFamily.filter { $0.role == .child }
+        let motherEntry = parents.first { $0.role == .mother }
+        let wifeEntries = parents.filter { $0.role == .wife }
+        // صف الأم/الزوجة (وخانات الإضافة) يظهر لأي عضو متزوّج — الإضافة/الاختيار مقيّدة على النفس.
+        let showParents = isCurrentUserMarried
+        return VStack(spacing: DS.Spacing.sm) {
+            // ═══ الأم / الزوجة — أماكن ثابتة (البطاقة أو زر الإضافة/الاختيار) ═══
+            if showParents {
+                LazyVGrid(columns: columns, spacing: DS.Spacing.md) {
+                    // خانة الأم (ثابتة أولاً)
+                    if let motherEntry {
+                        familyMemberButton(motherEntry)
+                    } else {
+                        // إضافة/اختيار الأم متاحة لأي عضو (set_self_mother/add_self_mother مقيّدة على النفس)
+                        addFamilyActionCell(title: L10n.t("إضافة/اختيار الأم", "Add/Pick Mother"),
+                                            icon: "person.fill", color: DS.Color.accent) {
+                            Task { fatherWives = await memberVM.fetchFatherWives(); showMotherOptions = true }
+                        }
+                    }
+                    // خانة الزوجة (ثابتة بعد الأم)
+                    ForEach(wifeEntries) { entry in familyMemberButton(entry) }
+                    // إضافة الزوجة متاحة لأي عضو متزوّج (مو المدير فقط) — اختياري لا إجبار
+                    if !hasWife {
+                        addFamilyActionCell(title: L10n.t("إضافة زوجة", "Add Wife"),
+                                            icon: "heart.fill", color: DS.Color.neonPink) {
+                            showWifeSource = true
                         }
                     }
                 }
+                DSDivider().padding(.vertical, 0)
+            }
 
-                // Add child as last grid cell
-                Button {
-                    showAddChild = true
-                } label: {
+            // ═══ الأبناء ═══
+            LazyVGrid(columns: columns, spacing: DS.Spacing.md) {
+                ForEach(memberVM.currentMemberChildren, id: \.id) { son in
+                    Button { editingChild = son } label: { childGridCell(son: son) }
+                        .buttonStyle(PlainButtonStyle())
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(son.firstName.isEmpty ? L10n.t("ابن بدون اسم", "Unnamed child") : son.firstName)
+                        .accessibilityHint(L10n.t("تعديل", "Edit"))
+                }
+                if isCurrentUserMarried {
+                    // البنات — قابلة للنقر للتعديل لأي عضو؛ الترتيب انتقل للوضع الموحّد.
+                    ForEach(womenKids) { entry in familyMemberButton(entry) }
+                }
+                // إضافة ابن
+                Button { showAddChild = true } label: {
                     HStack(spacing: DS.Spacing.sm) {
                         Image(systemName: "plus")
                             .font(DS.Font.scaled(16, weight: .bold))
@@ -636,7 +863,6 @@ struct ProfileView: View {
                             .frame(width: 36, height: 36)
                             .background(DS.Color.primary.opacity(0.12))
                             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
-
                         Text(L10n.t("إضافة ابن", "Add Child"))
                             .font(DS.Font.caption1)
                             .fontWeight(.bold)
@@ -653,30 +879,16 @@ struct ProfileView: View {
                     )
                 }
                 .buttonStyle(PlainButtonStyle())
-
-                // إضافة زوجة / أم — للمخوّلين عند عدم وجودهما
-                if isCurrentUserMarried, authVM.canModerate, !hasWife {
-                    addFamilyActionCell(title: L10n.t("إضافة زوجة", "Add Wife"),
-                                        icon: "heart.fill", color: DS.Color.neonPink) {
-                        newWifeName = ""; showAddWife = true
-                    }
-                }
-                if isCurrentUserMarried, authVM.canModerate, !hasMother {
-                    addFamilyActionCell(title: L10n.t("إضافة/اختيار الأم", "Add/Pick Mother"),
-                                        icon: "person.fill", color: DS.Color.accent) {
-                        Task { fatherWives = await memberVM.fetchFatherWives(); showMotherOptions = true }
-                    }
-                }
             }
-            .padding(DS.Spacing.md)
         }
+        .padding(DS.Spacing.md)
     }
 
     private func childGridCell(son: FamilyMember) -> some View {
         let info = childIconInfo(for: son)
 
         return HStack(spacing: DS.Spacing.sm) {
-            childAvatarView(for: son, iconFont: 16, size: 44)
+            childAvatarView(for: son, iconFont: 16, size: 36)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(son.firstName.isEmpty ? L10n.t("الاسم", "Name") : son.firstName)
@@ -685,22 +897,14 @@ struct ProfileView: View {
                     .foregroundColor(DS.Color.textPrimary)
                     .lineLimit(1)
 
-                HStack(spacing: DS.Spacing.xs) {
-                    if let birth = son.birthDate, !birth.isEmpty {
-                        Text(birth)
-                            .font(DS.Font.caption2)
-                            .foregroundColor(DS.Color.textSecondary)
-                            .lineLimit(1)
-                    }
-                    if son.isDeceased ?? false {
-                        Text(L10n.t("متوفى", "Deceased"))
-                            .font(DS.Font.scaled(8, weight: .bold))
-                            .foregroundColor(DS.Color.textOnPrimary)
-                            .padding(.horizontal, DS.Spacing.xs)
-                            .padding(.vertical, 1)
-                            .background(DS.Color.error.opacity(0.8))
-                            .clipShape(Capsule())
-                    }
+                if son.isDeceased ?? false {
+                    Text(L10n.t("متوفى", "Deceased"))
+                        .font(DS.Font.scaled(8, weight: .bold))
+                        .foregroundColor(DS.Color.textOnPrimary)
+                        .padding(.horizontal, DS.Spacing.xs)
+                        .padding(.vertical, 1)
+                        .background(DS.Color.error.opacity(0.8))
+                        .clipShape(Capsule())
                 }
             }
         }
@@ -715,6 +919,88 @@ struct ProfileView: View {
     }
 
     /// أبناء شجرة النساء بالترتيب الحالي (للترتيب).
+    // MARK: - اختيار الزوجة من العائلة
+
+    /// إناث شجرة النساء المتاحات (بلا زوج) — مرشّحات «زوجة من العائلة».
+    private func loadWifeCandidates() async -> [FamilyMember] {
+        guard let me = authVM.currentUser?.id else { return [] }
+        let all = (try? await WomenStore.fetch()) ?? []
+        return all
+            .filter {
+                $0.isFemale
+                && $0.husbandId == nil                                              // غير مرتبطة بزوج
+                && $0.id != me
+                && WomenStore.linkedUserByWoman[$0.id] == nil                        // ليست عضواً بحساب
+                && !$0.fullName.trimmingCharacters(in: .whitespaces).isEmpty         // لها اسم
+            }
+            .sorted { $0.fullName.localizedCompare($1.fullName) == .orderedAscending }
+    }
+
+    /// ربط أنثى موجودة كزوجة للمستخدم الحالي (RPC مقيّد على النفس — يعمل لأي دور).
+    private func linkWife(_ womanId: UUID) {
+        showWifePicker = false; wifeSearch = ""
+        Task { await memberVM.setSelfWife(wifeId: womanId) }
+    }
+
+    /// شيت اختيار زوجة من العائلة (مع بحث).
+    private var wifePickerSheet: some View {
+        let list = wifeSearch.trimmingCharacters(in: .whitespaces).isEmpty
+            ? wifeCandidates
+            : wifeCandidates.filter { $0.fullName.contains(wifeSearch) || $0.firstName.contains(wifeSearch) }
+        return NavigationStack {
+            Group {
+                if wifeCandidates.isEmpty {
+                    VStack(spacing: DS.Spacing.md) {
+                        Image(systemName: "person.2.slash")
+                            .font(DS.Font.scaled(36, weight: .regular))
+                            .foregroundColor(DS.Color.textTertiary)
+                        Text(L10n.t("لا توجد إناث متاحات في العائلة", "No available family women"))
+                            .font(DS.Font.callout)
+                            .foregroundColor(DS.Color.textSecondary)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    List(list) { m in
+                        Button { linkWife(m.id) } label: {
+                            HStack(spacing: DS.Spacing.md) {
+                                wifePickerAvatar(m)
+                                Text(m.fullName.isEmpty ? m.firstName : m.fullName)
+                                    .font(DS.Font.callout)
+                                    .foregroundColor(DS.Color.textPrimary)
+                                Spacer()
+                            }
+                        }
+                    }
+                    .searchable(text: $wifeSearch, prompt: L10n.t("بحث بالاسم", "Search by name"))
+                }
+            }
+            .navigationTitle(L10n.t("اختيار زوجة من العائلة", "Choose wife"))
+            .navigationBarTitleDisplayMode(.inline)
+            .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(L10n.t("إلغاء", "Cancel")) { showWifePicker = false; wifeSearch = "" }
+                }
+            }
+        }
+        .presentationDetents([.large])
+    }
+
+    private func wifePickerAvatar(_ m: FamilyMember) -> some View {
+        Group {
+            if let url = m.avatarUrl ?? m.photoURL, let u = URL(string: url) {
+                CachedAsyncImage(url: u) { img in img.resizable().scaledToFill() }
+                    placeholder: { DS.Color.primary.opacity(0.1) }
+            } else {
+                DS.Color.primary.opacity(0.1)
+                    .overlay(Image(systemName: "person.fill").foregroundColor(DS.Color.primary.opacity(0.5)))
+            }
+        }
+        .frame(width: 36, height: 36)
+        .clipShape(Circle())
+        .overlay(Circle().stroke(DS.Color.primary.opacity(0.18), lineWidth: 1))
+    }
+
     private var womenChildrenList: [WomanMember] {
         memberVM.currentMemberWomenFamily.filter { $0.role == .child }.map { $0.member }
     }
@@ -726,37 +1012,7 @@ struct ProfileView: View {
         let target = up ? idx - 1 : idx + 1
         guard target >= 0, target < list.count else { return }
         list.swapAt(idx, target)
-        Task { await memberVM.reorderWomenChildren(list) }
-    }
-
-    /// أسهم أعلى/أسفل صغيرة لترتيب ابن/ابنة.
-    private func womanChildReorderControls(for child: WomanMember) -> some View {
-        let list = womenChildrenList
-        let idx = list.firstIndex(where: { $0.id == child.id }) ?? 0
-        return HStack(spacing: 3) {
-            Button { moveWomanChild(child, up: true) } label: {
-                Image(systemName: "chevron.up")
-                    .font(.system(size: 10, weight: .black))
-                    .foregroundColor(idx > 0 ? DS.Color.primary : DS.Color.textTertiary.opacity(0.4))
-                    .frame(width: 22, height: 22)
-                    .background(Circle().fill(DS.Color.surface))
-                    .overlay(Circle().strokeBorder(DS.Color.primary.opacity(0.15), lineWidth: 1))
-            }
-            .buttonStyle(.plain)
-            .disabled(idx == 0)
-
-            Button { moveWomanChild(child, up: false) } label: {
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 10, weight: .black))
-                    .foregroundColor(idx < list.count - 1 ? DS.Color.primary : DS.Color.textTertiary.opacity(0.4))
-                    .frame(width: 22, height: 22)
-                    .background(Circle().fill(DS.Color.surface))
-                    .overlay(Circle().strokeBorder(DS.Color.primary.opacity(0.15), lineWidth: 1))
-            }
-            .buttonStyle(.plain)
-            .disabled(idx >= list.count - 1)
-        }
-        .padding(6)
+        Task { await memberVM.reorderSelfWomenChildren(list.map { $0.id }) }
     }
 
     // خلية فرد «عائلتي» — بنفس شكل خلايا الأبناء القديمة (صورة + اسم)، دور رمادي خفيف.
@@ -772,7 +1028,7 @@ struct ProfileView: View {
                     womanAvatarFallback
                 }
             }
-            .frame(width: 44, height: 44)
+            .frame(width: 36, height: 36)
             .clipShape(Circle())
             .overlay(Circle().strokeBorder(DS.Color.primary.opacity(0.12), lineWidth: 1))
 
@@ -784,13 +1040,12 @@ struct ProfileView: View {
                     .lineLimit(1)
 
                 HStack(spacing: DS.Spacing.xs) {
-                    // الدور نص رمادي خفيف بدل البشارة الملوّنة
-                    Text(L10n.t(entry.role.label, entry.role.labelEn))
-                        .font(DS.Font.caption2)
-                        .foregroundColor(DS.Color.textSecondary)
-                        .lineLimit(1)
-                    if let b = woman.birthDate, !b.isEmpty {
-                        Text(b).font(DS.Font.caption2).foregroundColor(DS.Color.textTertiary).lineLimit(1)
+                    // الدور (زوجة/أم) — يُخفى للأبناء
+                    if entry.role != .child {
+                        Text(L10n.t(entry.role.label, entry.role.labelEn))
+                            .font(DS.Font.caption2)
+                            .foregroundColor(DS.Color.textSecondary)
+                            .lineLimit(1)
                     }
                     if woman.isDeceased {
                         Text(L10n.t("متوفى", "Deceased"))
@@ -822,77 +1077,131 @@ struct ProfileView: View {
         }
     }
 
-    // MARK: - Reorder View (وضع الترتيب)
+    // MARK: - Reorder View (وضع ترتيب موحّد — الأبناء + البنات)
+    /// قائمة ترتيب واحدة تجمع الأبناء (شجرة الرجال) والبنات (شجرة النساء، للإدارة)
+    /// بنفس عناصر التحكم. كل فئة تحفظ ترتيبها في جدولها عبر دوال الـ repo القائمة.
     private var childrenReorderView: some View {
-        VStack(spacing: 0) {
-            let children = memberVM.currentMemberChildren
-            ForEach(Array(children.enumerated()), id: \.element.id) { index, son in
+        let sons = memberVM.currentMemberChildren
+        // البنات تظهر في وضع الترتيب فقط لمن يملك صلاحية حفظ ترتيبها (RLS إدارية).
+        let daughters = canReorderDaughters ? womenChildrenList : []
+        return VStack(spacing: 0) {
+            ForEach(Array(sons.enumerated()), id: \.element.id) { index, son in
                 if index > 0 { DSDivider() }
-
-                let info = childIconInfo(for: son)
-
-                HStack(spacing: DS.Spacing.md) {
-                    // رقم الترتيب
-                    Text("\(index + 1)")
-                        .font(DS.Font.scaled(13, weight: .bold))
-                        .foregroundColor(DS.Color.textOnPrimary)
-                        .frame(width: 28, height: 28)
-                        .background(info.color.opacity(0.8))
-                        .clipShape(Circle())
-
-                    // صورة
-                    childAvatarView(for: son, iconFont: 14, size: 44)
-
-                    // الاسم
-                    Text(son.firstName.isEmpty ? L10n.t("الاسم", "Name") : son.firstName)
-                        .font(DS.Font.callout)
-                        .fontWeight(.bold)
-                        .foregroundColor(DS.Color.textPrimary)
-                        .lineLimit(1)
-
-                    Spacer()
-
-                    // أزرار أعلى/أسفل
-                    VStack(spacing: 4) {
-                        Button {
-                            guard index > 0 else { return }
-                            var reordered = children
-                            reordered.swapAt(index, index - 1)
-                            Task {
-                                await memberVM.reorderChildren(reordered)
-                            }
-                        } label: {
-                            Image(systemName: "chevron.up")
-                                .font(DS.Font.scaled(14, weight: .bold))
-                                .foregroundColor(index > 0 ? DS.Color.primary : DS.Color.textTertiary.opacity(0.3))
-                                .frame(width: 44, height: 44)
-                                .contentShape(Rectangle())
-                        }
-                        .disabled(index == 0)
-
-                        Button {
-                            guard index < children.count - 1 else { return }
-                            var reordered = children
-                            reordered.swapAt(index, index + 1)
-                            Task {
-                                await memberVM.reorderChildren(reordered)
-                            }
-                        } label: {
-                            Image(systemName: "chevron.down")
-                                .font(DS.Font.scaled(14, weight: .bold))
-                                .foregroundColor(index < children.count - 1 ? DS.Color.primary : DS.Color.textTertiary.opacity(0.3))
-                                .frame(width: 44, height: 44)
-                                .contentShape(Rectangle())
-                        }
-                        .disabled(index >= children.count - 1)
-                    }
-                }
-                .padding(.horizontal, DS.Spacing.lg)
-                .padding(.vertical, DS.Spacing.xs)
+                sonReorderRow(son, index: index, total: sons.count)
+            }
+            if !sons.isEmpty && !daughters.isEmpty { DSDivider() }
+            ForEach(Array(daughters.enumerated()), id: \.element.id) { index, daughter in
+                if index > 0 { DSDivider() }
+                daughterReorderRow(daughter, index: index, total: daughters.count)
             }
         }
         .padding(.vertical, DS.Spacing.xs)
         .transition(.opacity.combined(with: .move(edge: .top)))
+    }
+
+    /// صف ترتيب ابن (شجرة الرجال — يحفظ في profiles.sort_order).
+    private func sonReorderRow(_ son: FamilyMember, index: Int, total: Int) -> some View {
+        let info = childIconInfo(for: son)
+        return HStack(spacing: DS.Spacing.md) {
+            reorderIndexBadge(index + 1, color: info.color)
+            childAvatarView(for: son, iconFont: 14, size: 44)
+            Text(son.firstName.isEmpty ? L10n.t("الاسم", "Name") : son.firstName)
+                .font(DS.Font.callout)
+                .fontWeight(.bold)
+                .foregroundColor(DS.Color.textPrimary)
+                .lineLimit(1)
+            Spacer()
+            reorderArrows(
+                canUp: index > 0,
+                canDown: index < total - 1,
+                up: {
+                    var r = memberVM.currentMemberChildren
+                    r.swapAt(index, index - 1)
+                    Task { await memberVM.reorderChildren(r) }
+                },
+                down: {
+                    var r = memberVM.currentMemberChildren
+                    r.swapAt(index, index + 1)
+                    Task { await memberVM.reorderChildren(r) }
+                }
+            )
+        }
+        .padding(.horizontal, DS.Spacing.lg)
+        .padding(.vertical, DS.Spacing.xs)
+    }
+
+    /// صف ترتيب ابنة (شجرة النساء — يحفظ في women_members.sort_order).
+    private func daughterReorderRow(_ daughter: WomanMember, index: Int, total: Int) -> some View {
+        let color = daughter.isDeceased ? DS.Color.error : DS.Color.neonPink
+        return HStack(spacing: DS.Spacing.md) {
+            reorderIndexBadge(index + 1, color: color)
+            womanReorderAvatar(daughter)
+            Text(daughter.firstName.isEmpty ? L10n.t("الاسم", "Name") : daughter.firstName)
+                .font(DS.Font.callout)
+                .fontWeight(.bold)
+                .foregroundColor(DS.Color.textPrimary)
+                .lineLimit(1)
+            Spacer()
+            reorderArrows(
+                canUp: index > 0,
+                canDown: index < total - 1,
+                up: { moveWomanChild(daughter, up: true) },
+                down: { moveWomanChild(daughter, up: false) }
+            )
+        }
+        .padding(.horizontal, DS.Spacing.lg)
+        .padding(.vertical, DS.Spacing.xs)
+    }
+
+    /// شارة رقم الترتيب.
+    private func reorderIndexBadge(_ number: Int, color: Color) -> some View {
+        Text("\(number)")
+            .font(DS.Font.scaled(13, weight: .bold))
+            .foregroundColor(DS.Color.textOnPrimary)
+            .frame(width: 28, height: 28)
+            .background(color.opacity(0.8))
+            .clipShape(Circle())
+    }
+
+    /// صورة مصغّرة لابنة شجرة النساء (لصف الترتيب).
+    private func womanReorderAvatar(_ woman: WomanMember) -> some View {
+        Group {
+            if let urlStr = woman.displayImageUrl, let url = URL(string: urlStr) {
+                CachedAsyncImage(url: url) { img in img.resizable().scaledToFill() }
+                placeholder: { womanAvatarFallback }
+            } else {
+                womanAvatarFallback
+            }
+        }
+        .frame(width: 44, height: 44)
+        .clipShape(Circle())
+        .overlay(Circle().strokeBorder(DS.Color.primary.opacity(0.12), lineWidth: 1))
+    }
+
+    /// أسهم أعلى/أسفل موحّدة (≥44pt) مع تسميات وصول — تُستخدم للأبناء والبنات.
+    private func reorderArrows(canUp: Bool, canDown: Bool,
+                               up: @escaping () -> Void, down: @escaping () -> Void) -> some View {
+        VStack(spacing: 4) {
+            Button(action: up) {
+                Image(systemName: "chevron.up")
+                    .font(DS.Font.scaled(14, weight: .bold))
+                    .foregroundColor(canUp ? DS.Color.primary : DS.Color.textTertiary.opacity(0.3))
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .disabled(!canUp)
+            .accessibilityLabel(L10n.t("نقل لأعلى", "Move up"))
+
+            Button(action: down) {
+                Image(systemName: "chevron.down")
+                    .font(DS.Font.scaled(14, weight: .bold))
+                    .foregroundColor(canDown ? DS.Color.primary : DS.Color.textTertiary.opacity(0.3))
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .disabled(!canDown)
+            .accessibilityLabel(L10n.t("نقل لأسفل", "Move down"))
+        }
     }
 
     // MARK: - Helpers
@@ -974,16 +1283,21 @@ struct WomanMemberEditSheet: View {
     @State private var hasBirthDate: Bool
     @State private var birthDate: Date
     @State private var isDeceased: Bool
+    @State private var selectedGender: String
+    @State private var deathDate: Date
+    @State private var hasDeathDate: Bool
     @State private var selectedUIImage: UIImage? = nil
     @State private var isSaving = false
     @State private var showDeleteConfirm = false
     @State private var errorBanner: String? = nil
+    @State private var sheetHeight: CGFloat = 480
 
     init(memberVM: MemberViewModel, entry: WomenFamilyEntry) {
         self.memberVM = memberVM
         self.entry = entry
         _name = State(initialValue: entry.member.firstName)
         _isDeceased = State(initialValue: entry.member.isDeceased)
+        _selectedGender = State(initialValue: entry.member.gender)
         let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"
         if let b = entry.member.birthDate, let d = f.date(from: b) {
             _hasBirthDate = State(initialValue: true)
@@ -991,6 +1305,13 @@ struct WomanMemberEditSheet: View {
         } else {
             _hasBirthDate = State(initialValue: false)
             _birthDate = State(initialValue: Date())
+        }
+        if let dd = entry.member.deathDate, let d = f.date(from: dd) {
+            _hasDeathDate = State(initialValue: true)
+            _deathDate = State(initialValue: d)
+        } else {
+            _hasDeathDate = State(initialValue: false)
+            _deathDate = State(initialValue: Date())
         }
     }
 
@@ -1001,16 +1322,18 @@ struct WomanMemberEditSheet: View {
         NavigationStack {
             ScrollView(showsIndicators: false) {
                 VStack(spacing: DS.Spacing.md) {
-                    // صورة — بنفس واجهة «تعديل الابن» القديمة
-                    DSProfilePhotoPicker(
-                        selectedImage: $selectedUIImage,
-                        existingURL: entry.member.displayImageUrl,
-                        enableCrop: true,
-                        cropShape: .circle,
-                        trailing: L10n.t("اختياري", "Optional"),
-                        compactEmptyState: true
-                    )
-                    .padding(.horizontal, DS.Spacing.lg)
+                    // الصورة للذكر فقط — الأنثى بلا خيار صورة
+                    if selectedGender != "female" {
+                        DSProfilePhotoPicker(
+                            selectedImage: $selectedUIImage,
+                            existingURL: entry.member.displayImageUrl,
+                            enableCrop: true,
+                            cropShape: .circle,
+                            trailing: L10n.t("اختياري", "Optional"),
+                            compactEmptyState: true
+                        )
+                        .padding(.horizontal, DS.Spacing.lg)
+                    }
 
                     DSCard(padding: 0) {
                         DSSectionHeader(
@@ -1025,6 +1348,17 @@ struct WomanMemberEditSheet: View {
                                     .font(DS.Font.callout)
                                     .foregroundColor(DS.Color.textPrimary)
                             }
+                            // اختيار الجنس — للأبناء فقط (الأم/الزوجة أنثى دائمًا)
+                            if entry.role == .child {
+                                DSDivider()
+                                DSFormRow(icon: "person.2.fill", iconColor: DS.Color.accent,
+                                          label: L10n.t("الجنس", "Gender")) {
+                                    HStack(spacing: DS.Spacing.xs) {
+                                        genderButton(title: L10n.t("ذكر", "Male"), value: "male", color: DS.Color.primary)
+                                        genderButton(title: L10n.t("أنثى", "Female"), value: "female", color: DS.Color.neonPink)
+                                    }
+                                }
+                            }
                             DSDivider()
                             DSDateField(
                                 label: L10n.t("تاريخ الميلاد", "Birth Date"),
@@ -1037,6 +1371,18 @@ struct WomanMemberEditSheet: View {
                             DSFormRow(icon: "leaf.fill", iconColor: DS.Color.error,
                                       label: L10n.t("متوفى", "Deceased")) {
                                 Toggle("", isOn: $isDeceased).labelsHidden().tint(DS.Color.error)
+                            }
+                            .animation(.default, value: isDeceased)
+                            if isDeceased {
+                                DSDivider()
+                                DSDateField(
+                                    label: L10n.t("تاريخ الوفاة", "Death Date"),
+                                    date: $deathDate,
+                                    icon: "calendar",
+                                    iconColor: DS.Color.error,
+                                    range: ...Date()
+                                )
+                                .onChange(of: deathDate) { _ in hasDeathDate = true }
                             }
                         }
                     }
@@ -1061,9 +1407,13 @@ struct WomanMemberEditSheet: View {
                     }
                     .padding(.horizontal, DS.Spacing.lg)
 
-                    Spacer(minLength: DS.Spacing.xxl)
                 }
                 .padding(.vertical, DS.Spacing.md)
+                .background(
+                    GeometryReader { proxy in
+                        Color.clear.preference(key: SheetContentHeightKey.self, value: proxy.size.height)
+                    }
+                )
             }
             .background(DS.Color.background.ignoresSafeArea())
             .navigationTitle(L10n.t("تعديل \(roleTitle)", "Edit \(roleTitle)"))
@@ -1078,27 +1428,80 @@ struct WomanMemberEditSheet: View {
             .alert(L10n.t("حذف من العائلة", "Remove from family"), isPresented: $showDeleteConfirm) {
                 Button(L10n.t("حذف", "Delete"), role: .destructive) {
                     Task {
-                        let ok = await memberVM.deleteWomanMember(id: entry.member.id)
-                        if ok { await MainActor.run { dismiss() } }
+                        // كلها RPCs مقيّدة على النفس — تعمل لأي دور (الأب/الزوج نفسه).
+                        // الأم: فكّ الارتباط · الزوجة: حذف/فكّ · الابنة: حذف السجل.
+                        let ok: Bool
+                        switch entry.role {
+                        case .mother: ok = await memberVM.setSelfMother(motherId: nil)
+                        case .wife:   ok = await memberVM.removeSelfWife(wifeId: entry.member.id)
+                        default:      ok = await memberVM.removeSelfWomanChild(id: entry.member.id)
+                        }
+                        // نجاح → إغلاق؛ فشل (مثلاً رفض RLS) → رسالة واضحة بدل لا-عمل صامت.
+                        await MainActor.run {
+                            if ok {
+                                dismiss()
+                            } else {
+                                errorBanner = memberVM.errorMessage
+                                    ?? L10n.t("تعذّر الحذف — قد يتطلب موافقة الإدارة.",
+                                              "Couldn't remove — this may require an admin.")
+                            }
+                        }
                     }
                 }
                 Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
             } message: {
-                Text(L10n.t("حذف «\(name)» من عائلتك؟", "Remove “\(name)” from your family?"))
+                Text(entry.role == .mother
+                     ? L10n.t("إزالة الأم «\(name)» من عائلتك؟ (لن تُحذف من الشجرة)", "Unlink mother “\(name)”?")
+                     : L10n.t("حذف «\(name)» من عائلتك؟", "Remove “\(name)” from your family?"))
             }
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+        .onPreferenceChange(SheetContentHeightKey.self) { h in
+            if h > 0 { sheetHeight = min(h + 40, 760) }
+        }
+        .presentationDetents([.height(sheetHeight)])
+        .presentationDragIndicator(.visible)
+    }
+
+    private func genderButton(title: String, value: String, color: Color) -> some View {
+        let selected = selectedGender == value
+        return Button { selectedGender = value } label: {
+            Text(title)
+                .font(DS.Font.caption1).fontWeight(.bold)
+                .foregroundColor(selected ? .white : DS.Color.textSecondary)
+                .padding(.horizontal, DS.Spacing.md)
+                .frame(height: 34)
+                .background(Capsule().fill(selected ? color : DS.Color.surface))
+                .overlay(Capsule().strokeBorder(selected ? Color.clear : DS.Color.textTertiary.opacity(0.3), lineWidth: 1))
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
     }
 
     private func save() {
         Task {
             isSaving = true
-            let ok = await memberVM.updateWomanMember(
-                id: entry.member.id,
-                firstName: name,
-                birthDate: hasBirthDate ? birthDate : nil,
-                isDeceased: isDeceased
-            )
+            let ok: Bool
+            if entry.role == .child {
+                // ابنة العضو نفسه — RPC مقيّد على النفس (يعمل لأي دور). تغيير الجنس
+                // (نقل بين الشجرتين) يبقى للإدارة؛ هنا الاسم/الميلاد/الوفاة فقط.
+                ok = await memberVM.updateSelfWomanChild(
+                    id: entry.member.id,
+                    firstName: name,
+                    birthDate: hasBirthDate ? birthDate : nil,
+                    isDeceased: isDeceased,
+                    deathDate: hasDeathDate ? deathDate : nil
+                )
+            } else {
+                ok = await memberVM.updateWomanMember(
+                    id: entry.member.id,
+                    firstName: name,
+                    birthDate: hasBirthDate ? birthDate : nil,
+                    isDeceased: isDeceased,
+                    deathDate: hasDeathDate ? deathDate : nil,
+                    gender: selectedGender
+                )
+            }
             if ok, let img = selectedUIImage {
                 await memberVM.updateWomanAvatar(id: entry.member.id, image: img)
             }

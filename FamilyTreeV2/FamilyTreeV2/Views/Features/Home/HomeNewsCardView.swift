@@ -134,6 +134,8 @@ struct HomeNewsCardView: View {
                             .background(.ultraThinMaterial)
                             .clipShape(Circle())
                             .overlay(Circle().stroke(DS.Color.textTertiary.opacity(0.3), lineWidth: 0.75))
+                            .frame(width: 44, height: 44)   // هدف لمس ≥44pt
+                            .contentShape(Rectangle())
                     }
                 }
             }
@@ -339,6 +341,8 @@ struct HomeNewsCardView: View {
                 .overlay(Capsule().stroke(DS.Color.textTertiary.opacity(0.25), lineWidth: 0.75))
             }
             .buttonStyle(.plain)
+            .frame(minHeight: 44)                 // هدف لمس ≥44pt
+            .contentShape(Rectangle())
             .accessibilityLabel(isLiked ? L10n.t("إلغاء الإعجاب", "Unlike") : L10n.t("إعجاب", "Like"))
             .accessibilityValue(likeCount > 0 ? "\(likeCount)" : "")
 
@@ -365,6 +369,8 @@ struct HomeNewsCardView: View {
                 .overlay(Capsule().stroke(DS.Color.textTertiary.opacity(0.25), lineWidth: 0.75))
             }
             .buttonStyle(.plain)
+            .frame(minHeight: 44)                 // هدف لمس ≥44pt
+            .contentShape(Rectangle())
             .accessibilityLabel(L10n.t("تعليقات", "Comments"))
             .accessibilityValue(commentCount > 0 ? "\(commentCount)" : "")
 

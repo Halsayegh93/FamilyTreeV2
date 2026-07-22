@@ -15,6 +15,9 @@ class NotificationViewModel: ObservableObject {
     @Published var isLoading: Bool = false
     @Published var linkedDevices: [LinkedDevice] = []
 
+    /// الإشعارات المجدولة المعلّقة (لم تُرسل بعد) — لعرضها في لوحة الإدارة.
+    @Published var scheduledNotifications: [ScheduledNotification] = []
+
     /// طلب انضمام/ربط جاءت إشعاره من خارج التطبيق — يُستخدم لفتح شيت التفاصيل
     /// (مع شاشة التطابقات) تلقائياً بعد فتح مركز الإشعارات.
     /// يُمسح بعد الاستهلاك.
@@ -736,46 +739,16 @@ class NotificationViewModel: ObservableObject {
         }
     }
     
-    /// إرسال push حقيقي لأعضاء محددين أو للجميع عبر Edge Function
+    /// (مُعطّلة عمداً) إرسال push مباشر عبر `push-notify`.
+    ///
+    /// الدفع صار يُدار تلقائياً عبر DB trigger `trg_push_on_notification` الذي
+    /// يستدعي `push-on-notification` (APNs + FCM) عند إدراج أي صف في جدول
+    /// `notifications` — نفس المسار الموحّد للتطبيق والويب والأندرويد. كان
+    /// استدعاء `push-notify` (APNs فقط) هنا بالإضافة إلى إدراج الإشعار يسبب
+    /// وصول **إشعارين** لأجهزة iOS (مرّة من الـ trigger ومرّة من هذا الاستدعاء).
+    /// أُبقيت الدالة no-op للحفاظ على مواضع الاستدعاء الحالية دون تغييرها.
     func sendPushToMembers(title: String, body: String, kind: String = "general", targetMemberIds: [UUID]? = nil) async {
-        let targetCount = targetMemberIds?.count ?? 0
-        Log.info("[PUSH] إرسال push-notify: targets=\(targetCount == 0 ? "ALL" : "\(targetCount)"), kind=\(kind)")
-        do {
-            var payload: [String: AnyEncodable] = [
-                "title": AnyEncodable(title),
-                "body": AnyEncodable(body),
-                "kind": AnyEncodable(kind)
-            ]
-            if let ids = targetMemberIds, !ids.isEmpty {
-                payload["member_ids"] = AnyEncodable(ids.map { $0.uuidString })
-            }
-
-            try await supabase.functions
-                .invoke(
-                    "push-notify",
-                    options: FunctionInvokeOptions(body: payload)
-                )
-
-            Log.info("[PUSH] push-notify اكتمل بنجاح")
-        } catch {
-            Log.warning("[PUSH] push-notify فشل، محاولة تحديث الجلسة: \(error.localizedDescription)")
-            // إعادة محاولة بعد refresh session
-            do {
-                _ = try await supabase.auth.refreshSession()
-                var retryPayload: [String: AnyEncodable] = [
-                    "title": AnyEncodable(title),
-                    "body": AnyEncodable(body),
-                    "kind": AnyEncodable(kind)
-                ]
-                if let ids = targetMemberIds, !ids.isEmpty {
-                    retryPayload["member_ids"] = AnyEncodable(ids.map { $0.uuidString })
-                }
-                try await supabase.functions.invoke("push-notify", options: FunctionInvokeOptions(body: retryPayload))
-                Log.info("[PUSH] push-notify نجح بعد تحديث الجلسة")
-            } catch {
-                Log.error("[PUSH] push-notify فشل نهائياً: \(error.localizedDescription)")
-            }
-        }
+        // no-op — الدفع يُطلَق تلقائياً عبر trigger على جدول notifications عند الإدراج.
     }
     
     // MARK: - Notifications
@@ -1008,17 +981,19 @@ class NotificationViewModel: ObservableObject {
         return false
     }
 
-    func sendNotification(title: String, body: String, targetMemberIds: [UUID]?, sendPush: Bool = true, kind: String = "admin") async {
-        guard authVM?.isAdmin == true, let creator = currentUser?.id else { return }
-        guard notificationsFeatureAvailable else { return }
+    @discardableResult
+    func sendNotification(title: String, body: String, targetMemberIds: [UUID]?, sendPush: Bool = true, kind: String = "admin") async -> Bool {
+        guard authVM?.isAdmin == true, let creator = currentUser?.id else { return false }
+        guard notificationsFeatureAvailable else { return false }
 
         let dedupKey = "T|\(kind)|\(title)|\(body)|\(targetMemberIds?.map { $0.uuidString }.sorted().joined(separator: ",") ?? "ALL")"
         if isDuplicateNotification(dedupKey) {
             Log.warning("[Notif] تجاهل إشعار مكرر (نقرة مزدوجة محتملة)")
-            return
+            return true
         }
 
         self.isLoading = true
+        var ok = false
 
         do {
             if let ids = targetMemberIds, !ids.isEmpty {
@@ -1053,6 +1028,7 @@ class NotificationViewModel: ObservableObject {
             }
 
             await fetchNotifications(force: true)
+            ok = true
         } catch {
             if ErrorHelper.isMissingTable(error, table: "notifications") {
                 notificationsFeatureAvailable = false
@@ -1060,8 +1036,9 @@ class NotificationViewModel: ObservableObject {
                 Log.error("خطأ إرسال الإشعار: \(error.localizedDescription)")
             }
         }
-        
+
         self.isLoading = false
+        return ok
     }
 
     /// إبلاغ عام عن محتوى (مشروع/أرشيف/ديوانية/عضو/تعليق…) — سياسة Apple للمحتوى
@@ -1160,6 +1137,83 @@ class NotificationViewModel: ObservableObject {
             } else {
                 Log.error("[SCHEDULE] تعذّر جدولة الإشعار: \(error.localizedDescription)")
             }
+            return false
+        }
+    }
+
+    // MARK: - الإشعارات المجدولة (عرض/إلغاء)
+
+    /// نموذج إشعار مجدول (صف من scheduled_notifications).
+    struct ScheduledNotification: Identifiable, Decodable, Equatable {
+        let id: UUID
+        let title: String
+        let body: String
+        let kind: String
+        let targetMemberIds: [UUID]?
+        let scheduledFor: String
+        let status: String
+
+        enum CodingKeys: String, CodingKey {
+            case id, title, body, kind, status
+            case targetMemberIds = "target_member_ids"
+            case scheduledFor = "scheduled_for"
+        }
+
+        private static let isoFrac: ISO8601DateFormatter = {
+            let f = ISO8601DateFormatter(); f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]; return f
+        }()
+        private static let isoPlain: ISO8601DateFormatter = {
+            let f = ISO8601DateFormatter(); f.formatOptions = [.withInternetDateTime]; return f
+        }()
+
+        /// وقت الإرسال المجدول كـ Date (يحاول صيغتين: مع/بدون أجزاء الثانية).
+        var scheduledDate: Date? {
+            Self.isoFrac.date(from: scheduledFor) ?? Self.isoPlain.date(from: scheduledFor)
+        }
+
+        /// nil/فارغ = إشعار عام للجميع.
+        var isBroadcast: Bool { targetMemberIds?.isEmpty ?? true }
+        var targetCount: Int { targetMemberIds?.count ?? 0 }
+    }
+
+    /// جلب الإشعارات المجدولة المعلّقة (status=pending) مرتّبة بأقربها وقتاً.
+    /// متاح للمالك/المدير فقط (الـ RLS يفرض ذلك أيضاً).
+    func fetchScheduledNotifications() async {
+        guard authVM?.isAdmin == true else { scheduledNotifications = []; return }
+        do {
+            let rows: [ScheduledNotification] = try await supabase
+                .from("scheduled_notifications")
+                .select()
+                .eq("status", value: "pending")
+                .order("scheduled_for", ascending: true)
+                .execute()
+                .value
+            self.scheduledNotifications = rows
+        } catch {
+            if ErrorHelper.isMissingTable(error, table: "scheduled_notifications") {
+                Log.warning("[SCHEDULE] جدول scheduled_notifications غير موجود — تجاهُل")
+            } else {
+                Log.error("[SCHEDULE] تعذّر جلب الإشعارات المجدولة: \(error.localizedDescription)")
+            }
+            self.scheduledNotifications = []
+        }
+    }
+
+    /// إلغاء إشعار مجدول قبل موعد إرساله (حذف الصف). يرجع true عند النجاح.
+    @discardableResult
+    func cancelScheduledNotification(_ id: UUID) async -> Bool {
+        guard authVM?.isAdmin == true else { return false }
+        do {
+            try await supabase
+                .from("scheduled_notifications")
+                .delete()
+                .eq("id", value: id.uuidString)
+                .execute()
+            self.scheduledNotifications.removeAll { $0.id == id }
+            Log.info("[SCHEDULE] أُلغي إشعار مجدول \(id)")
+            return true
+        } catch {
+            Log.error("[SCHEDULE] تعذّر إلغاء الإشعار المجدول: \(error.localizedDescription)")
             return false
         }
     }

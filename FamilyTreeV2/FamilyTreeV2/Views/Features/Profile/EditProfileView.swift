@@ -56,6 +56,8 @@ struct EditProfileView: View {
     @State private var isSubmittingName = false
     @State private var showAvatarCooldownAlert = false
     @State private var showDiscardAlert = false
+    /// يظهر تأكيد «قيد المراجعة» بعد إرسال طلب تغيير (رقم/وفاة) للإدارة قبل الإغلاق.
+    @State private var showRequestSentAlert = false
 
     private let cooldown = ProfileEditCooldown.shared
 
@@ -223,6 +225,17 @@ struct EditProfileView: View {
                 Button(L10n.t("حسناً", "OK"), role: .cancel) {}
             } message: {
                 Text(L10n.t("تعذر الحفظ. حاول مرة أخرى.", "Save failed. Try again."))
+            }
+            .alert(
+                L10n.t("تم إرسال طلب التغيير للإدارة", "Change Request Sent"),
+                isPresented: $showRequestSentAlert
+            ) {
+                Button(L10n.t("حسناً", "OK"), role: .cancel) { dismiss() }
+            } message: {
+                Text(L10n.t(
+                    "طلبك الآن قيد المراجعة، وستصلك النتيجة بعد موافقة الإدارة.",
+                    "Your request is now pending review — you'll be notified once the admins respond."
+                ))
             }
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
@@ -738,7 +751,13 @@ struct EditProfileView: View {
             let success = await submitMemberData()
             if success {
                 recordCooldowns(changes: changes)
-                dismiss()
+                // الرقم/الوفاة يُرسلان كطلب موافقة (لا يُحفظان فوراً مثل بقية الحقول) —
+                // أظهر تأكيد «قيد المراجعة» بدل الإغلاق الصامت، ثم أغلق عند الضغط على حسناً.
+                if changes.phoneChanged || changes.deceasedChanged {
+                    showRequestSentAlert = true
+                } else {
+                    dismiss()
+                }
             } else {
                 showSaveError = true
             }
@@ -766,9 +785,12 @@ struct EditProfileView: View {
         let deceasedChanged: Bool
     }
 
+    /// «تعديلات غير محفوظة» يشمل فقط الحقول التي تُحفظ عبر زر «حفظ التغييرات» أو
+    /// تُرسل كطلب موافقة عند الإغلاق. يُستثنى منها ما يُحفظ فوراً (الصورة + الحالة
+    /// الاجتماعية) حتى لا يظهر تنبيه «تجاهل التعديلات؟» لتغييرات ثبتت أصلاً.
     private var hasUnsavedChanges: Bool {
         let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"
-        if isMarried != (member.isMarried ?? false) { return true }
+        // ملاحظة: الحالة الاجتماعية (isMarried) تُحفظ فوراً في setMarried — لا تُحتسب هنا.
         if isPhoneHidden != (member.isPhoneHidden ?? false) { return true }
         if isDeceased && !(member.isDeceased ?? false) { return true }
         let oldBirthStr = member.birthDate ?? ""

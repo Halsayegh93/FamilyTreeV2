@@ -1,70 +1,53 @@
 import SwiftUI
 
-/// مغلّف لتاب الشجرة — يسمح بالتبديل بين الواجهة الكلاسيكية (TreeView)
-/// والتجربة الجديدة (DrillDownTreeView) عبر زر مدمج.
-/// التفضيل محفوظ في AppStorage فيتذكّره التطبيق بين الجلسات.
+/// مغلّف تاب الشجرة — تبويب علوي [شجرة العائلة / النساء] فقط.
+///  - شجرة العائلة دائمًا كلاسيكية (TreeView).
+///  - النساء: WomenTreeView.
 struct TreeTabContainer: View {
     @Binding var selectedTab: Int
-    @AppStorage("treeViewMode_useDrillDown") private var useDrillDown = false
+    /// تبويب الشجرة: 0 = شجرة العائلة (كلاسيكية)، 1 = النساء.
+    @State private var treeTab = 0
 
     var body: some View {
-        ZStack(alignment: .bottomLeading) {
-            Group {
-                if useDrillDown {
-                    DrillDownTreeView(selectedTab: $selectedTab)
-                } else {
-                    TreeView(selectedTab: $selectedTab)
-                }
-            }
-
-            toggleButton
-                .padding(.leading, DS.Spacing.lg)
-                .padding(.bottom, DS.Spacing.lg)
-        }
-    }
-
-    // MARK: - Toggle Pill
-
-    private var toggleButton: some View {
-        HStack(spacing: 0) {
-            segment(
-                label: L10n.t("الكلاسيكية", "Classic"),
-                icon: "tree.fill",
-                active: !useDrillDown
-            ) {
-                withAnimation(DS.Anim.snappy) { useDrillDown = false }
-            }
-            segment(
-                label: L10n.t("التفرّع", "Drill"),
-                icon: "rectangle.grid.2x2.fill",
-                active: useDrillDown
-            ) {
-                withAnimation(DS.Anim.snappy) { useDrillDown = true }
+        Group {
+            if treeTab == 1 {
+                WomenTreeView(selectedTab: $selectedTab, treeTab: $treeTab)
+            } else {
+                TreeView(selectedTab: $selectedTab, treeTab: $treeTab)
             }
         }
-        .padding(3)
-        .background(.ultraThinMaterial)
-        .clipShape(Capsule())
-        .overlay(
-            Capsule()
-                .strokeBorder(DS.Color.primary.opacity(0.20), lineWidth: 1)
-        )
-        .shadow(color: .black.opacity(0.10), radius: 8, x: 0, y: 2)
-    }
-
-    private func segment(label: String, icon: String, active: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: icon)
-                .font(DS.Font.scaled(13, weight: .bold))
-                .foregroundColor(active ? .white : DS.Color.textSecondary)
-                .frame(width: 32, height: 32)
-                .background(
-                    Circle()
-                        .fill(active ? DS.Color.primary : Color.clear)
-                )
-                .accessibilityLabel(label)
-        }
-        .buttonStyle(DSScaleButtonStyle())
     }
 }
 
+/// تبويب علوي كبسولي [شجرة العائلة / النساء] — مطابق للأندرويد و iOS الأصلي.
+struct FamilyTreeTabBar: View {
+    @Binding var selection: Int
+
+    var body: some View {
+        HStack(spacing: 2) {
+            segment(L10n.t("شجرة العائلة", "Family"), 0)
+            segment(L10n.t("النساء", "Women"), 1)
+        }
+        .padding(3)
+        .background(DS.Color.surface.opacity(0.55), in: Capsule())  // مخفف — مائل للشفاف
+        .overlay(Capsule().strokeBorder(DS.Color.primary.opacity(0.25), lineWidth: 1))
+        .dsSubtleShadow()
+        .dynamicTypeSize(.large)
+    }
+
+    private func segment(_ label: String, _ idx: Int) -> some View {
+        Button {
+            withAnimation(DS.Anim.snappy) { selection = idx }
+        } label: {
+            Text(label)
+                .font(DS.Font.scaled(11, weight: .bold))
+                .foregroundColor(selection == idx ? .white : DS.Color.textSecondary)
+                .lineLimit(1)
+                .padding(.horizontal, DS.Spacing.sm)
+                .frame(minHeight: 30)                       // مقاس مدمّج أصغر للبار العلوي
+                .background(Capsule().fill(selection == idx ? DS.Color.primary : Color.clear))
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+    }
+}
