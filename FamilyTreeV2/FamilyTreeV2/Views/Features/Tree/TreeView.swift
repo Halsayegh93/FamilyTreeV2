@@ -152,11 +152,18 @@ struct TreeView: View {
     /// الشاشة ليتوسّع الإخوة جنب بعض بدل التكديس (طلب المالك)
     private var PER_ROW: Int {
         guard viewport.width > viewport.height, viewport.width > 0 else { return 3 }
-        // أفقياً: بلا التفاف إطلاقاً — كل الإخوة بصف واحد جنب بعض، ومقياس
-        // الملاءمة يصغّر تلقائياً ليستوعبهم كلهم (طلب المالك).
+        // أفقياً: صف واحد ما دام العدد معقولاً، وإذا كثر فسطران متساويان
+        // (طلب المالك) — دالة perRow(for:) تتكفّل بالتقسيم لكل أب على حدة.
         return 99
     }
     private var NODE_H_DEFAULT: CGFloat { CIRCLE_FULL + NAME_H }
+    /// عدد الأبناء في الصف الواحد لهذا الأب:
+    /// عمودي ٣ · أفقي: صف واحد حتى ١٠، وإذا كثروا فسطران متساويان (طلب المالك).
+    private func perRow(for count: Int) -> Int {
+        guard viewport.width > viewport.height else { return 3 }
+        if count <= 10 { return max(1, count) }
+        return Int(ceil(Double(count) / 2.0))
+    }
     /// ارتفاع صندوق العقدة حسب الحالة (يطابق ترتيب TreeMemberNode: دائرة+اسم[+سنوات]).
     /// شريحة التوسيع أُزيلت — العدّاد صار شارة فوق الصورة (طلب المالك).
     private func nodeBoxHeight(deceased: Bool, hasKids: Bool) -> CGFloat {
@@ -684,7 +691,7 @@ struct TreeView: View {
 
     /// بار جانبي عمودي للوضع الأفقي — نفس أدوات البار العلوي (طلب المالك)
     private var landscapeSideToolbar: some View {
-        VStack(spacing: DS.Spacing.sm) {
+        VStack(spacing: DS.Spacing.xs) {
             Button {
                 withAnimation(DS.Anim.smooth) { showSearch = true }
             } label: {
@@ -723,7 +730,7 @@ struct TreeView: View {
                 .accessibilityLabel(L10n.t("موقعي", "Me"))
             }
         }
-        .padding(6)
+        .padding(4)
         .background(glassCardBackground)
         .overlay(glassCardStroke)
         .dsSubtleShadow()
@@ -736,8 +743,8 @@ struct TreeView: View {
             Text(title)
                 .font(DS.Font.scaled(11, weight: .bold))
                 .foregroundColor(treeTab.wrappedValue == idx ? DS.Color.textOnPrimary : DS.Color.textSecondary)
-                .padding(.horizontal, 8)
-                .frame(minWidth: 58, minHeight: 26)
+                .padding(.horizontal, 6)
+                .frame(minWidth: 46, minHeight: 22)
                 .background(Capsule().fill(treeTab.wrappedValue == idx ? DS.Color.primary : DS.Color.surface.opacity(0.8)))
         }
         .buttonStyle(DSScaleButtonStyle())
@@ -974,11 +981,11 @@ struct TreeView: View {
         func blockDims(_ boxes: [CGSize]) -> CGSize {
             var w: CGFloat = 0, h: CGFloat = 0, i = 0
             while i < boxes.count {
-                let row = Array(boxes[i..<min(i + PER_ROW, boxes.count)])
+                let row = Array(boxes[i..<min(i + perRow(for: boxes.count), boxes.count)])
                 let rowW = row.reduce(0) { $0 + $1.width } + H_GAP * CGFloat(row.count - 1)
                 let rowH = row.map(\.height).max() ?? 0
                 w = max(w, rowW); h += (i > 0 ? ROW_GAP : 0) + rowH
-                i += PER_ROW
+                i += perRow(for: boxes.count)
             }
             return CGSize(width: w, height: h)
         }
@@ -1003,9 +1010,10 @@ struct TreeView: View {
             if kids.isEmpty { return }
             var rows: [[UUID]] = []
             var rowTop = top + boxH(id) + V_GAP
+            let per = perRow(for: kids.count)
             var i = 0
             while i < kids.count {
-                let rowKids = Array(kids[i..<min(i + PER_ROW, kids.count)])
+                let rowKids = Array(kids[i..<min(i + per, kids.count)])
                 let rowBoxes = rowKids.map { sizeCache[$0.id] ?? CGSize(width: NODE_W, height: boxH($0.id)) }
                 let rowW = rowBoxes.reduce(0) { $0 + $1.width } + H_GAP * CGFloat(rowBoxes.count - 1)
                 let rowH = rowBoxes.map(\.height).max() ?? 0
@@ -1016,7 +1024,7 @@ struct TreeView: View {
                 }
                 rows.append(rowKids.map { $0.id })
                 rowTop += rowH + ROW_GAP
-                i += PER_ROW
+                i += per
             }
             L.childRows[id] = rows
         }
@@ -1129,14 +1137,16 @@ struct TreeView: View {
             // عند الفتح يرتفع الأب حسب عدد صفوف أبنائه: صف واحد 42%،
             // صفّان 34%، ثلاثة صفوف وأكثر (٧+ أبناء) 26% — ليظهر الصف الأخير.
             if opening {
-                let rowCount = (kids.count + PER_ROW - 1) / PER_ROW
+                let per = perRow(for: kids.count)
+                let rowCount = (kids.count + per - 1) / per
                 adaptiveCenter(on: member.id, rowCount: rowCount, in: L)
             } else {
                 // عند الطي: تمركز على الأب بنفس المنطق التكيّفي حسب صفوف أبنائه —
                 // الشجرة تنزل ويظهر جميع الإخوة (طلب المالك)
                 let pid = member.fatherId ?? member.id
                 let sibs = cachedChildrenByFatherId[pid] ?? []
-                let rowCount = max(1, (sibs.count + PER_ROW - 1) / PER_ROW)
+                let per2 = perRow(for: sibs.count)
+                let rowCount = max(1, (sibs.count + per2 - 1) / per2)
                 adaptiveCenter(on: pid, rowCount: rowCount, in: L)
             }
         }

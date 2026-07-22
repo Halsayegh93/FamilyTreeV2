@@ -136,14 +136,19 @@ struct WomenClassicTreeView: View {
         // أفقي (لفّ): ٣ كحدّ أقصى في الصف الواحد للذكور (مثلاً ٤ → ٣+١ · ٥ → ٣+٢).
         // الوضع الأفقي: عدد الإخوة في الصف يُحسب تلقائياً من عرض الشاشة
         // (كل عقدة NODE_W + الفجوة) فيتوسّعون جنب بعض بدل التكديس — طلب المالك
-        // أفقياً: بلا التفاف — كل الإخوة بصف واحد، والملاءمة تصغّر تلقائياً
-        let maxPerRow: Int = (viewport.width > viewport.height) ? 99 : MAX_PER_ROW
-        func perRowH(_ n: Int) -> Int { n <= maxPerRow ? max(1, n) : maxPerRow }
+        // أفقياً: صف واحد حتى ١٠، وإذا كثروا فسطران متساويان (طلب المالك)
+        let landscapeWide = viewport.width > viewport.height
+        func splitRow(_ n: Int) -> Int {
+            guard landscapeWide else { return min(MAX_PER_ROW, max(1, n)) }
+            return n <= 10 ? max(1, n) : Int(ceil(Double(n) / 2.0))
+        }
+        let maxPerRow: Int = landscapeWide ? 99 : MAX_PER_ROW
+        func perRowH(_ n: Int) -> Int { splitRow(n) }
         // عمودي (أعمدة جنسية): عمود واحد حتى ٤ · خمسة → عمودان والأخير تحتهم (٢+٢+١
         // — طلب المالك) · أكثر → ~٤ لكل عمود فرعي.
         func perRowV(_ n: Int) -> Int {
             // أفقياً: وزّع كل جنس على أعمدة أوسع (نصف ما تتحمّله الشاشة لكل جنس)
-            if viewport.width > viewport.height { return max(1, n) }   // صف واحد لكل جنس
+            if landscapeWide { return splitRow(n) }   // صف/سطران لكل جنس
             if n <= 4 { return 1 }
             if n == 5 { return 2 }
             return Int(ceil(Double(n) / 4.0))
@@ -471,7 +476,7 @@ struct WomenClassicTreeView: View {
 
     /// بار جانبي عمودي للوضع الأفقي — نفس أدوات البار العلوي (طلب المالك)
     private var landscapeSideToolbar: some View {
-        VStack(spacing: DS.Spacing.sm) {
+        VStack(spacing: DS.Spacing.xs) {
             Button {
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
                 goHome()
@@ -499,7 +504,7 @@ struct WomenClassicTreeView: View {
             }
             .buttonStyle(DSScaleButtonStyle())
         }
-        .padding(6)
+        .padding(4)
         .background {
             RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
                 .fill(.ultraThinMaterial)
@@ -519,8 +524,8 @@ struct WomenClassicTreeView: View {
             Text(title)
                 .font(DS.Font.scaled(11, weight: .bold))
                 .foregroundColor(treeTab.wrappedValue == idx ? DS.Color.textOnPrimary : DS.Color.textSecondary)
-                .padding(.horizontal, 8)
-                .frame(minWidth: 58, minHeight: 26)
+                .padding(.horizontal, 6)
+                .frame(minWidth: 46, minHeight: 22)
                 .background(Capsule().fill(treeTab.wrappedValue == idx ? DS.Color.primary : DS.Color.surface.opacity(0.8)))
         }
         .buttonStyle(DSScaleButtonStyle())
