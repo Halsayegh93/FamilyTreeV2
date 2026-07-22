@@ -20,6 +20,9 @@ struct AdminNotificationsView: View {
     @State private var showScheduledSheet = false
     /// شاشة تحديد وقت الجدولة (منتقي الوقت + المجدولة الحالية)
     @State private var showScheduleComposer = false
+    /// البحث مخفي خلف زر — يظهر عند الطلب
+    @State private var showSearchField = false
+    @FocusState private var searchFocused: Bool
     @State private var showSendConfirm = false
     @State private var showSendError = false
 
@@ -28,7 +31,13 @@ struct AdminNotificationsView: View {
     private var activeMembers: [FamilyMember] {
         memberVM.allMembers
             .filter { $0.role != .pending && !($0.isDeceased ?? false) }
-            .filter { countryFilter == nil || KuwaitPhone.detectCountryAndLocal($0.phoneNumber).country.isoCode == countryFilter }
+            .filter { m in
+                guard let iso = countryFilter else { return true }
+                // بلا رقم هاتف = بلا دولة معروفة (٩٨٪ من الأعضاء) فلا يدخل الشريحة
+                let phone = (m.phoneNumber ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !phone.isEmpty else { return false }
+                return KuwaitPhone.detectCountryAndLocal(phone).country.isoCode == iso
+            }
             .sorted { $0.fullName < $1.fullName }
     }
 
@@ -191,26 +200,49 @@ struct AdminNotificationsView: View {
                     // تصفية حسب دولة التسجيل — طلب المالك
                     countryFilterBar
 
-                    HStack(spacing: DS.Spacing.sm) {
-                        Image(systemName: "magnifyingglass")
-                            .foregroundColor(DS.Color.textTertiary)
-                            .font(DS.Font.scaled(14, weight: .medium))
-                        TextField(L10n.t("بحث بالاسم أو الرقم...", "Search by name or phone..."), text: $searchText)
-                            .font(DS.Font.callout)
-                            .onChange(of: searchText) { _ in displayLimit = 20 }
-                        if !searchText.isEmpty {
-                            Button { searchText = "" } label: {
+                    // البحث خلف زر — لا يشغل مساحة إلا عند الحاجة (طلب المالك)
+                    if showSearchField {
+                        HStack(spacing: DS.Spacing.sm) {
+                            Image(systemName: "magnifyingglass")
+                                .foregroundColor(DS.Color.textTertiary)
+                                .font(DS.Font.scaled(14, weight: .medium))
+                            TextField(L10n.t("بحث بالاسم أو الرقم...", "Search by name or phone..."), text: $searchText)
+                                .font(DS.Font.callout)
+                                .focused($searchFocused)
+                                .onChange(of: searchText) { _ in displayLimit = 20 }
+                            Button {
+                                withAnimation(DS.Anim.snappy) {
+                                    searchText = ""
+                                    showSearchField = false
+                                }
+                            } label: {
                                 Image(systemName: "xmark.circle.fill")
                                     .foregroundColor(DS.Color.textTertiary)
                             }
-                            .accessibilityLabel(L10n.t("مسح البحث", "Clear search"))
+                            .accessibilityLabel(L10n.t("إغلاق البحث", "Close search"))
                         }
+                        .padding(DS.Spacing.md)
+                        .background(DS.Color.surface)
+                        .cornerRadius(DS.Radius.md)
+                        .transition(.opacity.combined(with: .move(edge: .top)))
                     }
-                    .padding(DS.Spacing.md)
-                    .background(DS.Color.surface)
-                    .cornerRadius(DS.Radius.md)
 
                     HStack(spacing: DS.Spacing.sm) {
+                        // زر البحث — يفتح حقل البحث عند الحاجة فقط
+                        Button {
+                            withAnimation(DS.Anim.snappy) { showSearchField.toggle() }
+                            if showSearchField { searchFocused = true }
+                        } label: {
+                            Image(systemName: showSearchField ? "magnifyingglass.circle.fill" : "magnifyingglass")
+                                .font(DS.Font.scaled(13, weight: .bold))
+                                .foregroundColor(DS.Color.primary)
+                                .padding(.horizontal, DS.Spacing.md)
+                                .padding(.vertical, DS.Spacing.xs)
+                                .background(DS.Color.primary.opacity(0.1))
+                                .clipShape(Capsule())
+                        }
+                        .accessibilityLabel(L10n.t("بحث", "Search"))
+
                         Button {
                             selectedMemberIds = Set(filteredMembers.map(\.id))
                         } label: {
@@ -305,24 +337,8 @@ struct AdminNotificationsView: View {
 
                 VStack(spacing: DS.Spacing.xs) {
                     // زر الجدولة جنب زر الإرسال — طلب المالك
+                    // زرّان متطابقان — الإرسال أولاً ثم الجدولة (معكوسان — طلب المالك)
                     HStack(spacing: DS.Spacing.sm) {
-                        Button {
-                            showScheduleComposer = true
-                        } label: {
-                            HStack(spacing: 6) {
-                                Image(systemName: "clock.badge")
-                                Text(L10n.t("جدولة", "Schedule"))
-                            }
-                            .font(DS.Font.calloutBold)
-                            .foregroundColor(DS.Color.primary)
-                            .frame(maxWidth: .infinity, minHeight: 52)
-                            .background(DS.Color.surface, in: Capsule())
-                            .overlay(Capsule().stroke(DS.Color.primary.opacity(0.35), lineWidth: 1.5))
-                        }
-                        .buttonStyle(DSScaleButtonStyle())
-                        .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                        .frame(maxWidth: 130)
-
                         DSPrimaryButton(
                             L10n.t("إرسال الآن", "Send Now"),
                             icon: "paperplane.fill",
@@ -334,6 +350,17 @@ struct AdminNotificationsView: View {
                         .disabled(
                             title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                         )
+
+                        DSPrimaryButton(
+                            L10n.t("جدولة", "Schedule"),
+                            icon: "clock.badge",
+                            isLoading: false,
+                            useGradient: false,
+                            color: DS.Color.accent
+                        ) {
+                            showScheduleComposer = true
+                        }
+                        .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     }
 
                     let targetText = selectedMemberIds.isEmpty
@@ -540,7 +567,7 @@ private struct ScheduleComposerSheet: View {
                                 in: Date()...,
                                 displayedComponents: [.date, .hourAndMinute]
                             )
-                            .datePickerStyle(.graphical)
+                            .datePickerStyle(.wheel)
                             .labelsHidden()
                             .tint(DS.Color.primary)
                             .environment(\.locale, LanguageManager.shared.locale)
@@ -591,6 +618,8 @@ private struct ScheduleComposerSheet: View {
             }
             .task { await notificationVM.fetchScheduledNotifications() }
         }
+        .presentationDetents([.height(430), .large])
+        .presentationDragIndicator(.visible)
     }
 }
 
