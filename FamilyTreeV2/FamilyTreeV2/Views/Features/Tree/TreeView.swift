@@ -319,8 +319,20 @@ struct TreeView: View {
                             if !userInteracted { fitCanvas(in: geometry.size, layout: L) }
                         }
                         .onChange(of: geometry.size) { newSize in
+                            // تدوير الشاشة: أعد ضبط موضع الشجرة للاتجاه الجديد (طلب المالك)
+                            let orientationFlipped = (viewport.width > viewport.height) != (newSize.width > newSize.height)
                             viewport = newSize
-                            if !userInteracted { fitCanvas(in: newSize, layout: layout) }
+                            if orientationFlipped {
+                                if userInteracted {
+                                    // المستخدم متعمّق — أعد الشجرة داخل حدود الشاشة الجديدة
+                                    fitCanvas(in: newSize, layout: layout)
+                                    userInteracted = true
+                                } else {
+                                    fitCanvas(in: newSize, layout: layout)
+                                }
+                            } else if !userInteracted {
+                                fitCanvas(in: newSize, layout: layout)
+                            }
                         }
                     }
 
@@ -1162,8 +1174,9 @@ struct TreeView: View {
     /// يلائم الشجرة للشاشة ويوسّطها أفقياً وعمودياً (بمنتصف المساحة تحت الهيدر).
     private func fitCanvas(in size: CGSize, layout L: FamilyLayout) {
         guard L.size.width > 0, size.width > 0 else { return }
-        // الوضع الأفقي: سقف زوم أصغر — الارتفاع قصير فلازم تبان مستويات أكثر
-        let maxS: CGFloat = size.width > size.height ? 0.75 : 1.1
+        // الوضع الأفقي: سقف زوم أصغر — الارتفاع قصير فلازم يبان الجذر وأبناؤه
+        // بأسمائهم كاملة فوق البار السفلي
+        let maxS: CGFloat = size.width > size.height ? 0.65 : 1.1
         let s = max(0.28, min(maxS, (size.width - 48) / L.size.width))
         scale = s; baseScale = s; fittedScale = s
         offset = centeredOffset(scale: s, in: size, layout: L)
@@ -1177,7 +1190,9 @@ struct TreeView: View {
         if let root = primaryRootMember, let p = L.positions[root.id] {
             rootCY = p.y + (L.heights[root.id] ?? NODE_H_DEFAULT) / 2
         }
-        let y = size.height * 0.37 - rootCY * s   // أعلى من المنتصف قليلاً (طلب المالك — رفع الجذر)
+        // عمودي: 0.37 (رفع الجذر — طلب المالك) · أفقي: 0.30 ليتّسع الجيل الأول بأسمائه
+        let rootAnchor: CGFloat = size.width > size.height ? 0.30 : 0.37
+        let y = size.height * rootAnchor - rootCY * s
         return CGSize(width: (size.width - L.size.width * s) / 2, height: y)
     }
 

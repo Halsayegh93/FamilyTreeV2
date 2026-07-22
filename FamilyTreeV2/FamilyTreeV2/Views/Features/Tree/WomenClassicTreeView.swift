@@ -112,8 +112,12 @@ struct WomenClassicTreeView: View {
     private func visibleChildren(_ id: UUID, _ cOf: [UUID: [FamilyMember]]) -> [FamilyMember] {
         if collapsed.contains(id) { return [] }
         let all = cOf[id] ?? []
-        let expanded = all.filter { !collapsed.contains($0.id) && !(cOf[$0.id]?.isEmpty ?? true) }
-        return expanded.isEmpty ? all : expanded
+        func isLeaf(_ m: FamilyMember) -> Bool { cOf[m.id]?.isEmpty ?? true }
+        // لا فرع مفتوح → كل الأبناء
+        guard all.contains(where: { !collapsed.contains($0.id) && !isLeaf($0) }) else { return all }
+        // فرع مفتوح: تُخفى الفروع الأخرى (تبقى الشجرة مركّزة كما كانت)،
+        // لكن الأبناء بلا ذرية — البنات غالباً — يظلّون ظاهرين (طلب المالك)
+        return all.filter { isLeaf($0) || !collapsed.contains($0.id) }
     }
 
     private func computeLayout() -> Layout {
@@ -339,7 +343,15 @@ struct WomenClassicTreeView: View {
                     let L = rebuild()
                     fit(in: geo.size, layout: L)
                 }
-                .onChange(of: geo.size) { newSize in viewport = newSize }
+                .onChange(of: geo.size) { newSize in
+                    // تدوير الشاشة: أعد ضبط موضع الشجرة للاتجاه الجديد (طلب المالك)
+                    let orientationFlipped = (viewport.width > viewport.height) != (newSize.width > newSize.height)
+                    viewport = newSize
+                    if orientationFlipped {
+                        let L = rebuild()
+                        fit(in: newSize, layout: L)
+                    }
+                }
                 .onChange(of: members.count) { _ in
                     initedRoot = nil
                     initIfNeeded()
