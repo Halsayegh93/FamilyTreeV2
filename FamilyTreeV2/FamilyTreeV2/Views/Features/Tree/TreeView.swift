@@ -171,6 +171,7 @@ struct TreeView: View {
     }
 
     @Environment(\.verticalSizeClass) var verticalSizeClass
+    private var isLandscapeMode: Bool { verticalSizeClass == .compact }
     @Environment(\.colorScheme) var colorScheme
     @State private var activePath: Set<UUID> = []
     @State private var kinshipBanner: String? = nil
@@ -695,7 +696,7 @@ struct TreeView: View {
             Button {
                 withAnimation(DS.Anim.smooth) { showSearch = true }
             } label: {
-                toolbarIconButton(icon: "magnifyingglass")
+                toolbarIconButton(icon: "magnifyingglass", compact: true)
             }
             .buttonStyle(DSScaleButtonStyle())
             .accessibilityLabel(L10n.t("بحث", "Search"))
@@ -704,7 +705,7 @@ struct TreeView: View {
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
                 resetToTopRoot()
             } label: {
-                toolbarIconButton(icon: "house.fill")
+                toolbarIconButton(icon: "house.fill", compact: true)
             }
             .buttonStyle(DSScaleButtonStyle())
             .accessibilityLabel(L10n.t("البداية", "Start"))
@@ -724,7 +725,7 @@ struct TreeView: View {
                         centerOnMember(userMember, highlight: true, includeFocusedMemberInPath: false)
                     }
                 } label: {
-                    toolbarIconButton(icon: "location.fill")
+                    toolbarIconButton(icon: "location.fill", compact: true)
                 }
                 .buttonStyle(DSScaleButtonStyle())
                 .accessibilityLabel(L10n.t("موقعي", "Me"))
@@ -741,10 +742,10 @@ struct TreeView: View {
             withAnimation(DS.Anim.snappy) { treeTab.wrappedValue = idx }
         } label: {
             Text(title)
-                .font(DS.Font.scaled(11, weight: .bold))
+                .font(DS.Font.scaled(10, weight: .bold))
                 .foregroundColor(treeTab.wrappedValue == idx ? DS.Color.textOnPrimary : DS.Color.textSecondary)
-                .padding(.horizontal, 6)
-                .frame(minWidth: 46, minHeight: 22)
+                .padding(.horizontal, 5)
+                .frame(minWidth: 40, minHeight: 20)
                 .background(Capsule().fill(treeTab.wrappedValue == idx ? DS.Color.primary : DS.Color.surface.opacity(0.8)))
         }
         .buttonStyle(DSScaleButtonStyle())
@@ -798,11 +799,11 @@ struct TreeView: View {
     }
 
     /// زر دائري بأيقونة — تضليل خفيف (مو شفاف 100%).
-    private func toolbarIconButton(icon: String, color: Color = DS.Color.primary) -> some View {
+    private func toolbarIconButton(icon: String, color: Color = DS.Color.primary, compact: Bool = false) -> some View {
         Image(systemName: icon)
-            .font(DS.Font.scaled(14, weight: .bold))
+            .font(DS.Font.scaled(compact ? 12 : 14, weight: .bold))
             .foregroundColor(color)
-            .frame(width: 34, height: 34)                         // بار مدمّج أصغر
+            .frame(width: compact ? 27 : 34, height: compact ? 27 : 34)                         // بار مدمّج أصغر
             .background(DS.Color.surface.opacity(0.8), in: Circle())   // أغمق (طلب المالك)
             .overlay(Circle().strokeBorder(DS.Color.primary.opacity(0.15), lineWidth: 1))
             .dsSubtleShadow()
@@ -853,15 +854,15 @@ struct TreeView: View {
                         HStack(spacing: 3) {
                             if idx == 0 {
                                 Image(systemName: "house.fill")
-                                    .font(DS.Font.scaled(8, weight: .bold))
+                                    .font(DS.Font.scaled(isLandscapeMode ? 11 : 8, weight: .bold))
                             }
                             Text(m.firstName.isEmpty ? "—" : m.firstName)
-                                .font(DS.Font.scaled(10, weight: isLast ? .heavy : .semibold))
+                                .font(DS.Font.scaled(isLandscapeMode ? 13 : 10, weight: isLast ? .heavy : .semibold))
                                 .lineLimit(1)
                         }
                         .foregroundColor(isLast ? DS.Color.textOnPrimary : DS.Color.textPrimary)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 1)
+                        .padding(.horizontal, isLandscapeMode ? 10 : 6)
+                        .padding(.vertical, isLandscapeMode ? 5 : 1)
                         .background(isLast ? AnyShapeStyle(DS.Color.primary) : AnyShapeStyle(DS.Color.surface), in: Capsule())
                         .overlay(Capsule().stroke(DS.Color.primary.opacity(isLast ? 0 : 0.2), lineWidth: 1))
                     }
@@ -870,7 +871,7 @@ struct TreeView: View {
 
                     if !isLast {
                         Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
-                            .font(DS.Font.scaled(7, weight: .bold))
+                            .font(DS.Font.scaled(isLandscapeMode ? 9 : 7, weight: .bold))
                             .foregroundColor(DS.Color.textTertiary)
                     }
                 }

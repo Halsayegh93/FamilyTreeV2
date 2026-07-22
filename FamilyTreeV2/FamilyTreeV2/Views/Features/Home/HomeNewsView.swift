@@ -303,7 +303,7 @@ struct HomeNewsView: View {
 
                     // عمود الأخبار أضيق — البلاطات تأخذ المساحة الأوسع (طلب المالك)
                     newsBentoCard
-                        .frame(maxWidth: max(260, UIScreen.main.bounds.width * 0.36), alignment: .top)
+                        .frame(maxWidth: max(230, UIScreen.main.bounds.width * 0.29), alignment: .top)
                 }
             } else {
                 VStack(spacing: DS.Spacing.sm) {

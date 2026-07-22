@@ -196,7 +196,7 @@ struct MainHeaderView<TrailingContent: View>: View {
                 .opacity(isAnimating ? 1.0 : 0.0)
             }
             .padding(.horizontal, DS.Spacing.lg)
-            .padding(.horizontal, physicallyLandscape ? DS.Spacing.xl : 0)
+            .padding(.horizontal, physicallyLandscape ? DS.Spacing.xs : 0)
             .padding(.bottom, isLandscape ? DS.Spacing.xs : DS.Spacing.sm)
             .padding(.top, isLandscape ? DS.Spacing.xs : 0)
             .frame(minHeight: isLandscape ? 46 : 70, alignment: .bottom)

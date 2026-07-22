@@ -481,7 +481,7 @@ struct WomenClassicTreeView: View {
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
                 goHome()
             } label: {
-                toolbarIcon("house.fill")
+                toolbarIcon("house.fill", compact: true)
             }
             .buttonStyle(DSScaleButtonStyle())
 
@@ -500,7 +500,7 @@ struct WomenClassicTreeView: View {
                     centerOn(root, in: layout)
                 }
             } label: {
-                toolbarIcon("location.fill")
+                toolbarIcon("location.fill", compact: true)
             }
             .buttonStyle(DSScaleButtonStyle())
         }
@@ -524,18 +524,18 @@ struct WomenClassicTreeView: View {
             Text(title)
                 .font(DS.Font.scaled(11, weight: .bold))
                 .foregroundColor(treeTab.wrappedValue == idx ? DS.Color.textOnPrimary : DS.Color.textSecondary)
-                .padding(.horizontal, 6)
-                .frame(minWidth: 46, minHeight: 22)
+                .padding(.horizontal, 5)
+                .frame(minWidth: 40, minHeight: 20)
                 .background(Capsule().fill(treeTab.wrappedValue == idx ? DS.Color.primary : DS.Color.surface.opacity(0.8)))
         }
         .buttonStyle(DSScaleButtonStyle())
     }
 
-    private func toolbarIcon(_ icon: String) -> some View {
+    private func toolbarIcon(_ icon: String, compact: Bool = false) -> some View {
         Image(systemName: icon)
-            .font(DS.Font.scaled(14, weight: .bold))
+            .font(DS.Font.scaled(compact ? 12 : 14, weight: .bold))
             .foregroundColor(DS.Color.primary)
-            .frame(width: 34, height: 34)
+            .frame(width: compact ? 27 : 34, height: compact ? 27 : 34)
             .background(DS.Color.surface.opacity(0.8), in: Circle())   // أغمق (طلب المالك)
             .overlay(Circle().strokeBorder(DS.Color.primary.opacity(0.15), lineWidth: 1))
             .dsSubtleShadow()
