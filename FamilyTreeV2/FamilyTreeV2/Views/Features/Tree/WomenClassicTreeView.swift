@@ -698,9 +698,12 @@ struct WomenClassicTreeView: View {
     }
 
     /// اسم الزوجة المختصر: الاسم الأول والأخير فقط (طلب المالك).
+    /// نفضّل الاسم الكامل متى ما كان فيه أكثر من كلمة — بعض السجلات تخزّن
+    /// كلمة وحدة فقط في حقل الاسم الأول والباقي في الاسم الكامل.
     private func wifeShortName(_ w: FamilyMember) -> String {
-        let src = (w.firstName.isEmpty ? w.fullName : w.firstName)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let full = w.fullName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let first = w.firstName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let src = full.split(separator: " ").count >= 2 ? full : (first.isEmpty ? full : first)
         let parts = src.split(separator: " ")
         guard let f = parts.first else { return "" }
         guard parts.count > 1, let l = parts.last else { return String(f) }
