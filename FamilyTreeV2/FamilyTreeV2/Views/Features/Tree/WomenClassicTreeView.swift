@@ -525,7 +525,8 @@ struct WomenClassicTreeView: View {
         guard let p = L.positions[id], viewport.width > 0 else { return }
         userInteracted = true
         let s = baseScale
-        let topMargin: CGFloat = 70
+        // أفقي: بلا بار علوي — هامش أصغر يعطي مساحة أكبر للأبناء
+        let topMargin: CGFloat = viewport.width > viewport.height ? 16 : 70
         let cx = (p.x + NODE_W / 2) * s
         withAnimation(DS.Anim.smooth) {
             offset = clampOffset(CGSize(width: viewport.width / 2 - cx,
@@ -807,10 +808,12 @@ struct WomenClassicTreeView: View {
 
     private func fit(in size: CGSize, layout L: Layout) {
         guard L.size.width > 0, size.width > 0 else { return }
-        let s = max(0.35, min(1.2, (size.width - 32) / L.size.width))
+        // الوضع الأفقي: سقف زوم أصغر + بلا بار علوي فالهامش أصغر
+        let landscape = size.width > size.height
+        let s = max(0.35, min(landscape ? 0.85 : 1.2, (size.width - 32) / L.size.width))
         scale = s; baseScale = s
-        // 72 = ارتفاع البار العائم — الجذر يبدأ تحته لا خلفه
-        offset = CGSize(width: (size.width - L.size.width * s) / 2, height: 72)
+        // عمودي: 72 = ارتفاع البار العائم — الجذر يبدأ تحته لا خلفه
+        offset = CGSize(width: (size.width - L.size.width * s) / 2, height: landscape ? 16 : 72)
         baseOffset = offset
     }
 

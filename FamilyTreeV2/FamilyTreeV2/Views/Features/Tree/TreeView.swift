@@ -1109,16 +1109,14 @@ struct TreeView: View {
             // صفّان 34%، ثلاثة صفوف وأكثر (٧+ أبناء) 26% — ليظهر الصف الأخير.
             if opening {
                 let rowCount = (kids.count + PER_ROW - 1) / PER_ROW
-                let anchor: CGFloat = rowCount >= 3 ? 0.26 : (rowCount == 2 ? 0.34 : 0.42)
-                centerOn(member.id, in: L, verticalAnchor: anchor)
+                adaptiveCenter(on: member.id, rowCount: rowCount, in: L)
             } else {
                 // عند الطي: تمركز على الأب بنفس المنطق التكيّفي حسب صفوف أبنائه —
                 // الشجرة تنزل ويظهر جميع الإخوة (طلب المالك)
                 let pid = member.fatherId ?? member.id
                 let sibs = cachedChildrenByFatherId[pid] ?? []
                 let rowCount = max(1, (sibs.count + PER_ROW - 1) / PER_ROW)
-                let anchor: CGFloat = rowCount >= 3 ? 0.26 : (rowCount == 2 ? 0.34 : 0.42)
-                centerOn(pid, in: L, verticalAnchor: anchor)
+                adaptiveCenter(on: pid, rowCount: rowCount, in: L)
             }
         }
     }
@@ -1128,6 +1126,21 @@ struct TreeView: View {
             if set.insert(child.id).inserted {
                 collectDescendants(of: child.id, into: &set)
             }
+        }
+    }
+
+    /// تمركز تكيّفي بعد التوسيع/الطي — يراعي اتجاه الشاشة:
+    /// عمودي: نفس النقاط المعتادة · أفقي: زوم أبعد + نقاط أعلى ليظهر الأب وكل صفوف
+    /// الأبناء داخل الارتفاع القصير (طلب المالك)
+    private func adaptiveCenter(on id: UUID, rowCount: Int, in L: FamilyLayout) {
+        if viewport.width > viewport.height {
+            let s: CGFloat = rowCount >= 3 ? 0.45 : (rowCount == 2 ? 0.55 : 0.7)
+            scale = s; baseScale = s
+            let anchor: CGFloat = rowCount >= 3 ? 0.18 : (rowCount == 2 ? 0.24 : 0.32)
+            centerOn(id, in: L, verticalAnchor: anchor)
+        } else {
+            let anchor: CGFloat = rowCount >= 3 ? 0.26 : (rowCount == 2 ? 0.34 : 0.42)
+            centerOn(id, in: L, verticalAnchor: anchor)
         }
     }
 
@@ -1149,7 +1162,9 @@ struct TreeView: View {
     /// يلائم الشجرة للشاشة ويوسّطها أفقياً وعمودياً (بمنتصف المساحة تحت الهيدر).
     private func fitCanvas(in size: CGSize, layout L: FamilyLayout) {
         guard L.size.width > 0, size.width > 0 else { return }
-        let s = max(0.28, min(1.1, (size.width - 48) / L.size.width))
+        // الوضع الأفقي: سقف زوم أصغر — الارتفاع قصير فلازم تبان مستويات أكثر
+        let maxS: CGFloat = size.width > size.height ? 0.75 : 1.1
+        let s = max(0.28, min(maxS, (size.width - 48) / L.size.width))
         scale = s; baseScale = s; fittedScale = s
         offset = centeredOffset(scale: s, in: size, layout: L)
         baseOffset = offset

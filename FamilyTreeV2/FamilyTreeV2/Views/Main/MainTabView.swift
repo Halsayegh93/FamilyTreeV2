@@ -36,7 +36,7 @@ struct MainTabView: View {
             HomeNewsView(selectedTab: $selectedTab)
                 .tabItem {
                     Image(systemName: selectedTab == 0 ? "house.fill" : "house")
-                    if verticalSizeClass != .compact { Text(L10n.t("الرئيسية", "Home")) }
+                    Text(verticalSizeClass == .compact ? "" : L10n.t("الرئيسية", "Home"))
                 }
                 .tag(0)
 
@@ -44,7 +44,7 @@ struct MainTabView: View {
             TreeTabContainer(selectedTab: $selectedTab)
                 .tabItem {
                     Image(systemName: selectedTab == 1 ? "tree.fill" : "tree")
-                    if verticalSizeClass != .compact { Text(L10n.t("الشجرة", "Tree")) }
+                    Text(verticalSizeClass == .compact ? "" : L10n.t("الشجرة", "Tree"))
                 }
                 .tag(1)
 
@@ -52,7 +52,7 @@ struct MainTabView: View {
                 DiwaniyasView(selectedTab: $selectedTab)
                     .tabItem {
                         Image(systemName: selectedTab == 2 ? "map.fill" : "map")
-                        if verticalSizeClass != .compact { Text(L10n.t("الديوانيات", "Diwaniyas")) }
+                        Text(verticalSizeClass == .compact ? "" : L10n.t("الديوانيات", "Diwaniyas"))
                     }
                     .tag(2)
             }
@@ -60,7 +60,7 @@ struct MainTabView: View {
             ProfileView(selectedTab: $selectedTab)
                 .tabItem {
                     Image(systemName: selectedTab == 3 ? "person.crop.circle.fill" : "person.crop.circle")
-                    if verticalSizeClass != .compact { Text(L10n.t("حسابي", "Profile")) }
+                    Text(verticalSizeClass == .compact ? "" : L10n.t("حسابي", "Profile"))
                 }
                 .tag(3)
 
@@ -68,7 +68,7 @@ struct MainTabView: View {
                 AdminDashboardView(selectedTab: $selectedTab)
                     .tabItem {
                         Image(systemName: selectedTab == 4 ? "gearshape.2.fill" : "gearshape.2")
-                        if verticalSizeClass != .compact { Text(L10n.t("الإدارة", "Admin")) }
+                        Text(verticalSizeClass == .compact ? "" : L10n.t("الإدارة", "Admin"))
                     }
                     .tag(4)
             }
