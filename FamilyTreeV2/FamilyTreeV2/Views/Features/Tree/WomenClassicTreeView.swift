@@ -136,20 +136,14 @@ struct WomenClassicTreeView: View {
         // أفقي (لفّ): ٣ كحدّ أقصى في الصف الواحد للذكور (مثلاً ٤ → ٣+١ · ٥ → ٣+٢).
         // الوضع الأفقي: عدد الإخوة في الصف يُحسب تلقائياً من عرض الشاشة
         // (كل عقدة NODE_W + الفجوة) فيتوسّعون جنب بعض بدل التكديس — طلب المالك
-        let maxPerRow: Int = {
-            guard viewport.width > viewport.height, viewport.width > 0 else { return MAX_PER_ROW }
-            let fit = Int((viewport.width - PAD * 2) / (NODE_W + H_GAP))
-            return max(MAX_PER_ROW, min(8, fit))
-        }()
+        // أفقياً: بلا التفاف — كل الإخوة بصف واحد، والملاءمة تصغّر تلقائياً
+        let maxPerRow: Int = (viewport.width > viewport.height) ? 99 : MAX_PER_ROW
         func perRowH(_ n: Int) -> Int { n <= maxPerRow ? max(1, n) : maxPerRow }
         // عمودي (أعمدة جنسية): عمود واحد حتى ٤ · خمسة → عمودان والأخير تحتهم (٢+٢+١
         // — طلب المالك) · أكثر → ~٤ لكل عمود فرعي.
         func perRowV(_ n: Int) -> Int {
             // أفقياً: وزّع كل جنس على أعمدة أوسع (نصف ما تتحمّله الشاشة لكل جنس)
-            if viewport.width > viewport.height {
-                let half = max(2, maxPerRow / 2)
-                return n <= half ? max(1, n) : half
-            }
+            if viewport.width > viewport.height { return max(1, n) }   // صف واحد لكل جنس
             if n <= 4 { return 1 }
             if n == 5 { return 2 }
             return Int(ceil(Double(n) / 4.0))
