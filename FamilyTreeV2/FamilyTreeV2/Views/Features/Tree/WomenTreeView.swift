@@ -13,6 +13,7 @@ struct WomenTreeView: View {
     @State private var isLoading = WomenStore.cache.isEmpty
     @State private var selectedWoman: FamilyMember? = nil
     @State private var showingNotifications = false
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
 
     var body: some View {
         Group {
@@ -32,15 +33,18 @@ struct WomenTreeView: View {
                 }
             } else {
                 VStack(spacing: 0) {
-                    MainHeaderView(
-                        selectedTab: $selectedTab,
-                        showingNotifications: $showingNotifications,
-                        title: L10n.t("النساء", "Women"),
-                        subtitle: "\(allMembers.count) " + L10n.t("فرد", "members"),
-                        icon: "leaf.fill",
-                        backgroundGradient: DS.Color.gradientPrimary,
-                        subtitleChip: true
-                    )
+                    // الوضع الأفقي: بلا هيدر — مساحة كاملة للشجرة (طلب المالك)
+                    if verticalSizeClass != .compact {
+                        MainHeaderView(
+                            selectedTab: $selectedTab,
+                            showingNotifications: $showingNotifications,
+                            title: L10n.t("النساء", "Women"),
+                            subtitle: "\(allMembers.count) " + L10n.t("فرد", "members"),
+                            icon: "leaf.fill",
+                            backgroundGradient: DS.Color.gradientPrimary,
+                            subtitleChip: true
+                        )
+                    }
                     WomenClassicTreeView(
                         members: allMembers,
                         onSelect: { selectedWoman = $0 },

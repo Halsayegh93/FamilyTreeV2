@@ -324,7 +324,35 @@ struct TreeView: View {
                         }
                     }
 
-                    VStack(spacing: DS.Spacing.sm) {
+                    if verticalSizeClass == .compact {
+                        // ── الوضع الأفقي: بلا هيدر — شريط المسار بمكانه أعلى الشاشة فقط ──
+                        VStack(spacing: DS.Spacing.sm) {
+                            if showSearch {
+                                TreeSearchOverlay(
+                                    onSelect: { member in selectMemberFromSearch(member) },
+                                    autoFocus: true,
+                                    onClose: { withAnimation(DS.Anim.snappy) { showSearch = false } },
+                                    showFiltersWhenEmpty: true
+                                )
+                            } else if breadcrumbChain.count > 1 {
+                                breadcrumbStrip
+                                    .padding(.horizontal, DS.Spacing.sm)
+                                    .padding(.vertical, 3)
+                                    .background(glassCardBackground)
+                                    .overlay(glassCardStroke)
+                                    .dsSubtleShadow()
+                            }
+                        }
+                        .padding(.horizontal, DS.Spacing.sm)
+                        .zIndex(101)
+
+                        // البار الجانبي — نفس أدوات البار العلوي عمودياً (طلب المالك)
+                        landscapeSideToolbar
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+                            .padding(.leading, DS.Spacing.sm)
+                            .zIndex(101)
+                    } else {
+                        VStack(spacing: DS.Spacing.sm) {
                         MainHeaderView(
                             selectedTab: $selectedTab,
                             showingNotifications: $showingNotifications,
@@ -359,22 +387,16 @@ struct TreeView: View {
                                 }
                                 .padding(.horizontal, DS.Spacing.sm)
                                 .padding(.vertical, 3)
-                                // مادة مخففة (50%) — مائلة للشفافية لكن مو شفافة بالكامل
-                                .background {
-                                    RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                                        .fill(.ultraThinMaterial)
-                                        .opacity(0.75)
-                                }
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                                        .stroke(DS.Color.mutedBackground.opacity(0.7), lineWidth: 1)
-                                )
+                                // مادة مخففة — مائلة للشفافية لكن مو شفافة بالكامل
+                                .background(glassCardBackground)
+                                .overlay(glassCardStroke)
                                 .dsSubtleShadow()
                             }
                         }
                         .padding(.horizontal, DS.Spacing.sm)
+                        }
+                        .zIndex(101)
                     }
-                    .zIndex(101)
 
                     if !cachedVisibleMembers.isEmpty {
                         overlayTools
@@ -628,6 +650,78 @@ struct TreeView: View {
     }
 
     // MARK: - صف الأدوات تحت الهيدر — مطابق للتفرّع (بحث / البداية / موقعي) أيقونات فقط
+    /// خلفية البطاقة الزجاجية الموحّدة (مادة 75%)
+    private var glassCardBackground: some View {
+        RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+            .fill(.ultraThinMaterial)
+            .opacity(0.75)
+    }
+    private var glassCardStroke: some View {
+        RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+            .stroke(DS.Color.mutedBackground.opacity(0.7), lineWidth: 1)
+    }
+
+    /// بار جانبي عمودي للوضع الأفقي — نفس أدوات البار العلوي (طلب المالك)
+    private var landscapeSideToolbar: some View {
+        VStack(spacing: DS.Spacing.sm) {
+            Button {
+                withAnimation(DS.Anim.smooth) { showSearch = true }
+            } label: {
+                toolbarIconButton(icon: "magnifyingglass")
+            }
+            .buttonStyle(DSScaleButtonStyle())
+            .accessibilityLabel(L10n.t("بحث", "Search"))
+
+            Button {
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                resetToTopRoot()
+            } label: {
+                toolbarIconButton(icon: "house.fill")
+            }
+            .buttonStyle(DSScaleButtonStyle())
+            .accessibilityLabel(L10n.t("البداية", "Start"))
+
+            if let treeTab {
+                VStack(spacing: 4) {
+                    sideTabChip(L10n.t("العائلة", "Family"), idx: 0, treeTab: treeTab)
+                    sideTabChip(L10n.t("النساء", "Women"), idx: 1, treeTab: treeTab)
+                }
+            }
+
+            if authVM.currentUser != nil {
+                Button {
+                    if let currentUserID = authVM.currentUser?.id,
+                       let userMember = cachedMemberById[currentUserID] ?? memberVM.member(byId: currentUserID) {
+                        currentLocationMemberID = userMember.id
+                        centerOnMember(userMember, highlight: true, includeFocusedMemberInPath: false)
+                    }
+                } label: {
+                    toolbarIconButton(icon: "location.fill")
+                }
+                .buttonStyle(DSScaleButtonStyle())
+                .accessibilityLabel(L10n.t("موقعي", "Me"))
+            }
+        }
+        .padding(6)
+        .background(glassCardBackground)
+        .overlay(glassCardStroke)
+        .dsSubtleShadow()
+    }
+
+    private func sideTabChip(_ title: String, idx: Int, treeTab: Binding<Int>) -> some View {
+        Button {
+            withAnimation(DS.Anim.snappy) { treeTab.wrappedValue = idx }
+        } label: {
+            Text(title)
+                .font(DS.Font.scaled(11, weight: .bold))
+                .foregroundColor(treeTab.wrappedValue == idx ? DS.Color.textOnPrimary : DS.Color.textSecondary)
+                .padding(.horizontal, 8)
+                .frame(minWidth: 58, minHeight: 26)
+                .background(Capsule().fill(treeTab.wrappedValue == idx ? DS.Color.primary : DS.Color.surface.opacity(0.8)))
+        }
+        .buttonStyle(DSScaleButtonStyle())
+    }
+
     private var classicToolbarRow: some View {
         HStack(spacing: DS.Spacing.sm) {
             // الترتيب: بحث → البداية → تبويب [عائلة/نساء] → موقعي

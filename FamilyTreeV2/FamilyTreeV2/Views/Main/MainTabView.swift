@@ -6,6 +6,7 @@ struct MainTabView: View {
     @EnvironmentObject var appSettingsVM: AppSettingsViewModel
     @ObservedObject private var langManager = LanguageManager.shared
     @State private var selectedTab = 0
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
     @State private var showNotificationAlert = false
     @AppStorage("notificationAlertDismissCount") private var dismissCount = 0
 
@@ -35,7 +36,7 @@ struct MainTabView: View {
             HomeNewsView(selectedTab: $selectedTab)
                 .tabItem {
                     Image(systemName: selectedTab == 0 ? "house.fill" : "house")
-                    Text(L10n.t("الرئيسية", "Home"))
+                    if verticalSizeClass != .compact { Text(L10n.t("الرئيسية", "Home")) }
                 }
                 .tag(0)
 
@@ -43,7 +44,7 @@ struct MainTabView: View {
             TreeTabContainer(selectedTab: $selectedTab)
                 .tabItem {
                     Image(systemName: selectedTab == 1 ? "tree.fill" : "tree")
-                    Text(L10n.t("الشجرة", "Tree"))
+                    if verticalSizeClass != .compact { Text(L10n.t("الشجرة", "Tree")) }
                 }
                 .tag(1)
 
@@ -51,7 +52,7 @@ struct MainTabView: View {
                 DiwaniyasView(selectedTab: $selectedTab)
                     .tabItem {
                         Image(systemName: selectedTab == 2 ? "map.fill" : "map")
-                        Text(L10n.t("الديوانيات", "Diwaniyas"))
+                        if verticalSizeClass != .compact { Text(L10n.t("الديوانيات", "Diwaniyas")) }
                     }
                     .tag(2)
             }
@@ -59,7 +60,7 @@ struct MainTabView: View {
             ProfileView(selectedTab: $selectedTab)
                 .tabItem {
                     Image(systemName: selectedTab == 3 ? "person.crop.circle.fill" : "person.crop.circle")
-                    Text(L10n.t("حسابي", "Profile"))
+                    if verticalSizeClass != .compact { Text(L10n.t("حسابي", "Profile")) }
                 }
                 .tag(3)
 
@@ -67,7 +68,7 @@ struct MainTabView: View {
                 AdminDashboardView(selectedTab: $selectedTab)
                     .tabItem {
                         Image(systemName: selectedTab == 4 ? "gearshape.2.fill" : "gearshape.2")
-                        Text(L10n.t("الإدارة", "Admin"))
+                        if verticalSizeClass != .compact { Text(L10n.t("الإدارة", "Admin")) }
                     }
                     .tag(4)
             }

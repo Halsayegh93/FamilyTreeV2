@@ -32,6 +32,8 @@ struct WomenClassicTreeView: View {
 
     private let rose = DS.Color.female
 
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
+
     @State private var collapsed: Set<UUID> = []
     @State private var initedRoot: UUID? = nil
     @State private var fittedRoot: UUID? = nil
@@ -363,8 +365,16 @@ struct WomenClassicTreeView: View {
             }
 
             // ── شريط الأدوات يطفو فوق الشجرة (شفافيته تبان لما تمر العقد تحته) ──
-            toolbarRow
-                .zIndex(101)
+            // الوضع الأفقي: البار يصير جانبياً عمودياً (طلب المالك)
+            if verticalSizeClass == .compact {
+                landscapeSideToolbar
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+                    .padding(.leading, DS.Spacing.sm)
+                    .zIndex(101)
+            } else {
+                toolbarRow
+                    .zIndex(101)
+            }
         }
     }
 
@@ -426,6 +436,63 @@ struct WomenClassicTreeView: View {
         .dsSubtleShadow()
         .padding(.horizontal, DS.Spacing.sm)
         .padding(.top, DS.Spacing.sm)
+    }
+
+    /// بار جانبي عمودي للوضع الأفقي — نفس أدوات البار العلوي (طلب المالك)
+    private var landscapeSideToolbar: some View {
+        VStack(spacing: DS.Spacing.sm) {
+            Button {
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                goHome()
+            } label: {
+                toolbarIcon("house.fill")
+            }
+            .buttonStyle(DSScaleButtonStyle())
+
+            if let treeTab {
+                VStack(spacing: 4) {
+                    sideTabChip(L10n.t("العائلة", "Family"), idx: 0, treeTab: treeTab)
+                    sideTabChip(L10n.t("النساء", "Women"), idx: 1, treeTab: treeTab)
+                }
+            }
+
+            Button {
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                if let mid = meWomanId {
+                    locate(mid)
+                } else if let root = activeRoot {
+                    centerOn(root, in: layout)
+                }
+            } label: {
+                toolbarIcon("location.fill")
+            }
+            .buttonStyle(DSScaleButtonStyle())
+        }
+        .padding(6)
+        .background {
+            RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .opacity(0.75)
+        }
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                .stroke(DS.Color.mutedBackground.opacity(0.7), lineWidth: 1)
+        )
+        .dsSubtleShadow()
+    }
+
+    private func sideTabChip(_ title: String, idx: Int, treeTab: Binding<Int>) -> some View {
+        Button {
+            withAnimation(DS.Anim.snappy) { treeTab.wrappedValue = idx }
+        } label: {
+            Text(title)
+                .font(DS.Font.scaled(11, weight: .bold))
+                .foregroundColor(treeTab.wrappedValue == idx ? DS.Color.textOnPrimary : DS.Color.textSecondary)
+                .padding(.horizontal, 8)
+                .frame(minWidth: 58, minHeight: 26)
+                .background(Capsule().fill(treeTab.wrappedValue == idx ? DS.Color.primary : DS.Color.surface.opacity(0.8)))
+        }
+        .buttonStyle(DSScaleButtonStyle())
     }
 
     private func toolbarIcon(_ icon: String) -> some View {
