@@ -22,6 +22,16 @@ struct AdminNotificationsView: View {
     @State private var showScheduleComposer = false
     /// البحث مخفي خلف زر — يظهر عند الطلب
     @State private var showSearchField = false
+    /// العنوان: قائمة جاهزة افتراضياً، ويمكن كتابة عنوان مخصّص
+    @State private var useCustomTitle = false
+    static let presetTitles = [
+        "عائلة المحمدعلي 🌿",
+        "إعلان من الإدارة",
+        "تذكير",
+        "دعوة",
+        "تهنئة",
+        "تنبيه مهم"
+    ]
     @FocusState private var searchFocused: Bool
     @State private var showSendConfirm = false
     @State private var showSendError = false
@@ -137,29 +147,54 @@ struct AdminNotificationsView: View {
                         .buttonStyle(.plain)
                     }
 
-                    VStack(alignment: .trailing, spacing: DS.Spacing.xs) {
-                        HStack(spacing: DS.Spacing.sm) {
-                            Image(systemName: "bell.badge")
-                                .foregroundColor(DS.Color.textTertiary)
-                                .font(DS.Font.scaled(14, weight: .medium))
+                    // العنوان — قائمة منسدلة بعناوين جاهزة (مضغوطة) مع خيار «عنوان مخصّص»
+                    HStack(spacing: DS.Spacing.sm) {
+                        Image(systemName: "bell.badge")
+                            .foregroundColor(DS.Color.textTertiary)
+                            .font(DS.Font.scaled(13, weight: .medium))
+
+                        if useCustomTitle {
                             TextField(L10n.t("عنوان الإشعار", "Notification title"), text: $title)
                                 .font(DS.Font.callout)
                                 .onChange(of: title) { _ in
                                     if title.count > 100 { title = String(title.prefix(100)) }
                                 }
-                            if !title.isEmpty {
-                                Button { title = "" } label: {
-                                    Image(systemName: "xmark.circle.fill")
+                            Button {
+                                withAnimation(DS.Anim.snappy) {
+                                    useCustomTitle = false
+                                    title = Self.presetTitles.first ?? title
+                                }
+                            } label: {
+                                Image(systemName: "list.bullet")
+                                    .font(DS.Font.scaled(13, weight: .bold))
+                                    .foregroundColor(DS.Color.primary)
+                            }
+                            .accessibilityLabel(L10n.t("عناوين جاهزة", "Preset titles"))
+                        } else {
+                            Menu {
+                                ForEach(Self.presetTitles, id: \.self) { preset in
+                                    Button(preset) { title = preset }
+                                }
+                                Divider()
+                                Button(L10n.t("عنوان مخصّص…", "Custom title…")) {
+                                    withAnimation(DS.Anim.snappy) { useCustomTitle = true }
+                                }
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Text(title.isEmpty ? L10n.t("اختر عنواناً", "Choose a title") : title)
+                                        .font(DS.Font.callout)
+                                        .foregroundColor(title.isEmpty ? DS.Color.textTertiary : DS.Color.textPrimary)
+                                        .lineLimit(1)
+                                    Spacer(minLength: 0)
+                                    Image(systemName: "chevron.up.chevron.down")
+                                        .font(DS.Font.scaled(11, weight: .bold))
                                         .foregroundColor(DS.Color.textTertiary)
                                 }
-                                .accessibilityLabel(L10n.t("مسح العنوان", "Clear title"))
                             }
                         }
-                        Text("\(title.count)/100")
-                            .font(DS.Font.caption2)
-                            .foregroundColor(title.count > 90 ? DS.Color.error : DS.Color.textTertiary)
                     }
-                    .padding(DS.Spacing.md)
+                    .padding(.horizontal, DS.Spacing.md)
+                    .frame(height: 44)
                     .background(DS.Color.surface)
                     .cornerRadius(DS.Radius.md)
 
@@ -179,7 +214,7 @@ struct AdminNotificationsView: View {
                                 }
                                 TextEditor(text: $bodyText)
                                     .font(DS.Font.callout)
-                                    .frame(minHeight: 60, maxHeight: 100)
+                                    .frame(minHeight: 44, maxHeight: 72)
                                     .scrollContentBackground(.hidden)
                                     .background(Color.clear)
                                     .onChange(of: bodyText) { _ in
