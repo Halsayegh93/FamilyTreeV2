@@ -592,17 +592,33 @@ private struct ScheduleComposerSheet: View {
 
                 VStack(spacing: DS.Spacing.md) {
                     // عجلة الوقت — بلا خلفية، مباشرة على خلفية الشيت (طلب المالك)
-                    DatePicker(
-                        "",
-                        selection: $scheduledDate,
-                        in: Date()...,
-                        displayedComponents: [.date, .hourAndMinute]
-                    )
-                    .datePickerStyle(.wheel)
-                    .labelsHidden()
+                    // التاريخ والوقت عجلتان منفصلتان بينهما مسافة (طلب المالك)
+                    HStack(spacing: DS.Spacing.xxl) {
+                        VStack(spacing: 2) {
+                            Text(L10n.t("التاريخ", "Date"))
+                                .font(DS.Font.caption2)
+                                .foregroundColor(DS.Color.textTertiary)
+                            DatePicker("", selection: $scheduledDate, in: Date()...,
+                                       displayedComponents: [.date])
+                                .datePickerStyle(.wheel)
+                                .labelsHidden()
+                                .environment(\.locale, LanguageManager.shared.locale)
+                        }
+                        VStack(spacing: 2) {
+                            Text(L10n.t("الوقت", "Time"))
+                                .font(DS.Font.caption2)
+                                .foregroundColor(DS.Color.textTertiary)
+                            DatePicker("", selection: $scheduledDate, in: Date()...,
+                                       displayedComponents: [.hourAndMinute])
+                                .datePickerStyle(.wheel)
+                                .labelsHidden()
+                                .environment(\.locale, LanguageManager.shared.locale)
+                        }
+                        .frame(width: 130)
+                    }
                     .tint(DS.Color.primary)
-                    .environment(\.locale, LanguageManager.shared.locale)
-                    .frame(maxHeight: 190)
+                    .frame(maxHeight: 180)
+                    .padding(.horizontal, DS.Spacing.md)
 
                     // ملخّص الوقت المختار — سطر واحد هادئ
                     Text(summaryText)
