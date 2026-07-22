@@ -591,27 +591,18 @@ private struct ScheduleComposerSheet: View {
                 DS.Color.background.ignoresSafeArea()
 
                 VStack(spacing: DS.Spacing.md) {
-                    // عجلة الوقت — بلا خلفية، مباشرة على خلفية الشيت (طلب المالك)
-                    // عجلتان متجاورتان بفارق بسيط بينهما فقط (طلب المالك)
-                    HStack(spacing: DS.Spacing.md) {
-                        DatePicker("", selection: $scheduledDate, in: Date()...,
-                                   displayedComponents: [.date])
-                            .datePickerStyle(.wheel)
-                            .labelsHidden()
-                            .environment(\.locale, LanguageManager.shared.locale)
-                            .frame(maxWidth: .infinity)
-
-                        DatePicker("", selection: $scheduledDate, in: Date()...,
-                                   displayedComponents: [.hourAndMinute])
-                            .datePickerStyle(.wheel)
-                            .labelsHidden()
-                            .environment(\.locale, LanguageManager.shared.locale)
-                            .frame(width: 118)
-                    }
+                    // عجلة واحدة (تاريخ + وقت) — الشكل السابق المرتّب (طلب المالك)
+                    DatePicker(
+                        "",
+                        selection: $scheduledDate,
+                        in: Date()...,
+                        displayedComponents: [.date, .hourAndMinute]
+                    )
+                    .datePickerStyle(.wheel)
+                    .labelsHidden()
                     .tint(DS.Color.primary)
-                    .frame(height: 150)
-                    .clipped()
-                    .padding(.horizontal, DS.Spacing.lg)
+                    .environment(\.locale, LanguageManager.shared.locale)
+                    .frame(maxHeight: 190)
 
                     // ملخّص الوقت المختار — سطر واحد هادئ
                     Text(summaryText)
@@ -678,6 +669,9 @@ private struct ScheduleComposerSheet: View {
         .presentationDetents([.height(420)])
         .presentationDragIndicator(.visible)
     }
+
+
+
 
     private var summaryText: String {
         let f = DateFormatter()
