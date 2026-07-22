@@ -280,8 +280,9 @@ struct HomeNewsView: View {
                 .accessibilityLabel(showNewsSearch ? L10n.t("إغلاق البحث", "Close search") : L10n.t("بحث", "Search"))
             }
         }
-        .padding(.horizontal, DS.Spacing.lg)
+        .padding(.horizontal, isLandscape ? DS.Spacing.xs : DS.Spacing.lg)
         .padding(.vertical, isLandscape ? DS.Spacing.xs : DS.Spacing.sm)
+        .frame(maxWidth: .infinity)
         .background(DS.Color.background)
     }
 
