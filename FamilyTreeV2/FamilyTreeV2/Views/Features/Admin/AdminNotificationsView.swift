@@ -11,6 +11,8 @@ struct AdminNotificationsView: View {
     @State private var selectedMemberIds: Set<UUID> = []
     @State private var searchText = ""
     @State private var displayLimit = 20
+    /// تصفية حسب دولة التسجيل (ISO) — nil = الكل
+    @State private var countryFilter: String? = nil
 
     // جدولة الإرسال
     @State private var scheduleEnabled = false
@@ -19,10 +21,26 @@ struct AdminNotificationsView: View {
     @State private var showSendConfirm = false
     @State private var showSendError = false
 
+    /// المستلمون المحتملون — بلا المعلّقين وبلا المتوفّين (طلب المالك):
+    /// المتوفّى لا جهاز له ولا معنى لإرسال إشعار باسمه.
     private var activeMembers: [FamilyMember] {
         memberVM.allMembers
-            .filter { $0.role != .pending }
+            .filter { $0.role != .pending && !($0.isDeceased ?? false) }
+            .filter { countryFilter == nil || KuwaitPhone.detectCountryAndLocal($0.phoneNumber).country.isoCode == countryFilter }
             .sorted { $0.fullName < $1.fullName }
+    }
+
+    /// الدول المتاحة للتصفية — فقط التي يوجد بها أعضاء فعلاً.
+    private var availableCountries: [(country: KuwaitPhone.Country, count: Int)] {
+        let base = memberVM.allMembers.filter { $0.role != .pending && !($0.isDeceased ?? false) }
+        var counts: [String: Int] = [:]
+        for m in base where !(m.phoneNumber ?? "").isEmpty {
+            let iso = KuwaitPhone.detectCountryAndLocal(m.phoneNumber).country.isoCode
+            counts[iso, default: 0] += 1
+        }
+        return KuwaitPhone.supportedCountries
+            .compactMap { c in counts[c.isoCode].map { (c, $0) } }
+            .sorted { $0.count > $1.count }
     }
 
     private var filteredMembers: [FamilyMember] {
@@ -33,6 +51,41 @@ struct AdminNotificationsView: View {
             $0.firstName.localizedCaseInsensitiveContains(trimmed) ||
             ($0.phoneNumber ?? "").contains(trimmed)
         }
+    }
+
+    /// شريط تصفية حسب دولة التسجيل (رقم الهاتف) — طلب المالك.
+    private var countryFilterBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: DS.Spacing.sm) {
+                countryChip(title: L10n.t("كل الدول", "All"), iso: nil, count: nil)
+                ForEach(availableCountries, id: \.country.isoCode) { item in
+                    countryChip(title: "\(item.country.flag) \(L10n.isArabic ? item.country.nameArabic : item.country.isoCode)",
+                                iso: item.country.isoCode, count: item.count)
+                }
+            }
+            .padding(.horizontal, DS.Spacing.lg)
+        }
+    }
+
+    private func countryChip(title: String, iso: String?, count: Int?) -> some View {
+        let active = countryFilter == iso
+        return Button {
+            withAnimation(DS.Anim.snappy) {
+                countryFilter = iso
+                selectedMemberIds = []      // التحديد يخصّ الشريحة الحالية
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Text(title).font(DS.Font.scaled(12, weight: .bold))
+                if let count { Text("\(count)").font(DS.Font.scaled(11, weight: .heavy)).opacity(0.8) }
+            }
+            .foregroundColor(active ? DS.Color.textOnPrimary : DS.Color.textSecondary)
+            .padding(.horizontal, DS.Spacing.md)
+            .frame(height: 30)
+            .background(Capsule().fill(active ? DS.Color.primary : DS.Color.surface))
+            .overlay(Capsule().stroke(DS.Color.mutedBackground, lineWidth: active ? 0 : 1))
+        }
+        .buttonStyle(DSScaleButtonStyle())
     }
 
     var body: some View {
@@ -131,35 +184,10 @@ struct AdminNotificationsView: View {
                     .background(DS.Color.surface)
                     .cornerRadius(DS.Radius.md)
 
-                    // جدولة الإرسال — وقت محدد للإرسال لاحقاً
-                    VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                        Toggle(isOn: $scheduleEnabled.animation(DS.Anim.snappy)) {
-                            HStack(spacing: DS.Spacing.sm) {
-                                Image(systemName: "clock.badge")
-                                    .foregroundColor(DS.Color.primary)
-                                    .font(DS.Font.scaled(14, weight: .medium))
-                                Text(L10n.t("جدولة الإرسال", "Schedule send"))
-                                    .font(DS.Font.callout)
-                                    .foregroundColor(DS.Color.textPrimary)
-                            }
-                        }
-                        .tint(DS.Color.primary)
+                    // (الجدولة انتقلت لشاشتها المستقلة — زر «الإشعارات المجدولة» أعلى الصفحة)
 
-                        if scheduleEnabled {
-                            DatePicker(
-                                L10n.t("وقت الإرسال", "Send time"),
-                                selection: $scheduledDate,
-                                in: Date()...,
-                                displayedComponents: [.date, .hourAndMinute]
-                            )
-                            .font(DS.Font.callout)
-                            .tint(DS.Color.primary)
-                            .environment(\.locale, LanguageManager.shared.locale)
-                        }
-                    }
-                    .padding(DS.Spacing.md)
-                    .background(DS.Color.surface)
-                    .cornerRadius(DS.Radius.md)
+                    // تصفية حسب دولة التسجيل — طلب المالك
+                    countryFilterBar
 
                     HStack(spacing: DS.Spacing.sm) {
                         Image(systemName: "magnifyingglass")
@@ -274,13 +302,30 @@ struct AdminNotificationsView: View {
                 }
 
                 VStack(spacing: DS.Spacing.xs) {
+                    // الجدولة لها شاشتها المستقلة — طلب المالك
+                    Button {
+                        scheduleEnabled = true
+                        showScheduledSheet = true
+                    } label: {
+                        HStack(spacing: DS.Spacing.sm) {
+                            Image(systemName: "clock.badge")
+                            Text(L10n.t("جدولة الإرسال لوقت لاحق", "Schedule for later"))
+                        }
+                        .font(DS.Font.calloutBold)
+                        .foregroundColor(DS.Color.primary)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .background(DS.Color.surface, in: Capsule())
+                        .overlay(Capsule().stroke(DS.Color.primary.opacity(0.3), lineWidth: 1))
+                    }
+                    .buttonStyle(DSScaleButtonStyle())
+                    .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
                     DSPrimaryButton(
-                        scheduleEnabled
-                            ? L10n.t("جدولة الإشعار", "Schedule Notification")
-                            : L10n.t("إرسال الإشعار", "Send Notification"),
-                        icon: scheduleEnabled ? "clock.badge.checkmark" : "paperplane.fill",
+                        L10n.t("إرسال الإشعار الآن", "Send Notification"),
+                        icon: "paperplane.fill",
                         isLoading: notificationVM.isLoading
                     ) {
+                        scheduleEnabled = false
                         showSendConfirm = true
                     }
                     .disabled(
