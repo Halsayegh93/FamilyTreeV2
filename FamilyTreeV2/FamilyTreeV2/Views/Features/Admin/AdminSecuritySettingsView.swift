@@ -13,6 +13,8 @@ struct AdminSecuritySettingsView: View {
 
             ScrollView(showsIndicators: false) {
                 VStack(spacing: DS.Spacing.md) {
+                    // الوضع الأفقي: البطاقات على عمودين
+                    AdaptiveCardStack(spacing: DS.Spacing.md, landscapeMinimum: 340) {
 
                     // ── الإعدادات العامة ──
                     DSCard(padding: 0) {
@@ -108,6 +110,7 @@ struct AdminSecuritySettingsView: View {
                         }
                     }
                     .padding(.horizontal, DS.Spacing.lg)
+                    }
 
                     Spacer(minLength: DS.Spacing.xxxl)
                 }

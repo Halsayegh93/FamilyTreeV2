@@ -21,6 +21,9 @@ struct AdminRegisterMemberView: View {
     @State private var headerScale: CGFloat = 0.8
     @State private var headerOpacity: CGFloat = 0
     @State private var cardsAppeared = false
+    @Environment(\.verticalSizeClass) private var vSizeClass
+    /// الوضع الأفقي — عمودان
+    private var isLandscape: Bool { vSizeClass == .compact }
 
     var body: some View {
         ZStack {
@@ -33,6 +36,44 @@ struct AdminRegisterMemberView: View {
 
             VStack(spacing: 0) {
                 ScrollView(showsIndicators: false) {
+                    if isLandscape {
+                        // الوضع الأفقي: الصورة والعنوان بعمود، والحقول بعمود
+                        HStack(alignment: .top, spacing: DS.Spacing.lg) {
+                            VStack(spacing: DS.Spacing.lg) {
+                                photoSection
+                                    .scaleEffect(headerScale)
+                                    .opacity(headerOpacity)
+
+                                VStack(spacing: DS.Spacing.sm) {
+                                    Text(L10n.t("عائلة المحمدعلي", "Al-Mohammadali Family"))
+                                        .font(DS.Font.title2)
+                                        .fontWeight(.black)
+                                        .foregroundColor(DS.Color.textPrimary)
+                                        .multilineTextAlignment(.center)
+
+                                    Text(L10n.t("أدخل بيانات العضو الجديد", "Enter the new member's details"))
+                                        .font(DS.Font.callout)
+                                        .foregroundColor(DS.Color.textSecondary)
+                                        .multilineTextAlignment(.center)
+                                }
+                                .opacity(headerOpacity)
+                            }
+                            .frame(maxWidth: .infinity)
+
+                            VStack(spacing: DS.Spacing.md) {
+                                nameFieldSection
+                                familyNameSection
+                                birthDateSection
+                                phoneSection
+                                submitButton
+                            }
+                            .padding(.top, DS.Spacing.xl)
+                            .frame(maxWidth: .infinity)
+                            .opacity(cardsAppeared ? 1 : 0)
+                        }
+                        .padding(.horizontal, DS.Spacing.lg)
+                        .padding(.bottom, DS.Spacing.xxxl)
+                    } else {
                     VStack(spacing: DS.Spacing.xl) {
                         // الصورة الشخصية — في الأعلى مثل فورم التسجيل
                         photoSection
@@ -79,6 +120,7 @@ struct AdminRegisterMemberView: View {
                         submitButton
                             .opacity(cardsAppeared ? 1 : 0)
                             .offset(y: cardsAppeared ? 0 : 50)
+                    }
                     }
                 }
             }

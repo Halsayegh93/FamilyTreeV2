@@ -12,10 +12,19 @@ struct PhotoGalleryView: View {
 
     @State private var showingCreateAlbum = false
 
-    private let gridColumns: [GridItem] = [
-        GridItem(.flexible(), spacing: DS.Spacing.sm),
-        GridItem(.flexible(), spacing: DS.Spacing.sm)
-    ]
+    @Environment(\.verticalSizeClass) private var vSizeClass
+    /// الوضع الأفقي — أعمدة أكثر لاستغلال العرض
+    private var isLandscape: Bool { vSizeClass == .compact }
+
+    private var gridColumns: [GridItem] {
+        if isLandscape {
+            return [GridItem(.adaptive(minimum: 190, maximum: .infinity), spacing: DS.Spacing.sm, alignment: .top)]
+        }
+        return [
+            GridItem(.flexible(), spacing: DS.Spacing.sm),
+            GridItem(.flexible(), spacing: DS.Spacing.sm)
+        ]
+    }
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -224,11 +233,20 @@ struct GalleryAlbumDetailView: View {
     @State private var photoToDelete: GalleryPhoto? = nil
     @State private var showDeleteAlbumAlert = false
 
-    private let gridColumns: [GridItem] = [
-        GridItem(.flexible(), spacing: 3),
-        GridItem(.flexible(), spacing: 3),
-        GridItem(.flexible(), spacing: 3)
-    ]
+    @Environment(\.verticalSizeClass) private var vSizeClass
+    /// الوضع الأفقي — صور أكثر بالصف
+    private var isLandscape: Bool { vSizeClass == .compact }
+
+    private var gridColumns: [GridItem] {
+        if isLandscape {
+            return [GridItem(.adaptive(minimum: 110, maximum: .infinity), spacing: 3, alignment: .top)]
+        }
+        return [
+            GridItem(.flexible(), spacing: 3),
+            GridItem(.flexible(), spacing: 3),
+            GridItem(.flexible(), spacing: 3)
+        ]
+    }
 
     /// نسخة محدّثة من الألبوم من الـVM (لعكس تعديل العنوان/السنة فوراً).
     private var currentAlbum: GalleryAlbum {

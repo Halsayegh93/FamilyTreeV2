@@ -20,6 +20,8 @@ struct AdminAppSettingsView: View {
 
             ScrollView(showsIndicators: false) {
                 VStack(spacing: DS.Spacing.xxl) {
+                    // الوضع الأفقي: الأقسام على عمودين
+                    AdaptiveCardStack(spacing: DS.Spacing.xxl, landscapeMinimum: 340) {
 
                     // إشعار وضع القراءة فقط (لغير المالك)
                     if !canEdit {
@@ -48,6 +50,7 @@ struct AdminAppSettingsView: View {
 
                     // إعادة تعيين — يبقى مرئيّ بس مُعطّل لغير المالك
                     resetSection
+                    }
 
                     Spacer(minLength: DS.Spacing.xxxl)
                 }

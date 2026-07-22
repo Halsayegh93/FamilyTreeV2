@@ -24,10 +24,19 @@ struct FamilyProjectsView: View {
     @State private var reportReason = ""
     @State private var reportSent = false
 
-    private let gridColumns: [GridItem] = [
-        GridItem(.flexible(), spacing: DS.Spacing.md),
-        GridItem(.flexible(), spacing: DS.Spacing.md)
-    ]
+    @Environment(\.verticalSizeClass) private var vSizeClass
+    /// الوضع الأفقي — أعمدة أكثر لاستغلال العرض
+    private var isLandscape: Bool { vSizeClass == .compact }
+
+    private var gridColumns: [GridItem] {
+        if isLandscape {
+            return [GridItem(.adaptive(minimum: 200, maximum: .infinity), spacing: DS.Spacing.md, alignment: .top)]
+        }
+        return [
+            GridItem(.flexible(), spacing: DS.Spacing.md),
+            GridItem(.flexible(), spacing: DS.Spacing.md)
+        ]
+    }
 
     enum ProjectsFilter: Hashable {
         case approved

@@ -171,7 +171,7 @@ struct AdminTreeEditRequestsView: View {
 
     private var requestsList: some View {
         ScrollView(showsIndicators: false) {
-            LazyVStack(spacing: DS.Spacing.md) {
+            AdaptiveLazyStack(spacing: DS.Spacing.md, landscapeMinimum: 360) {
                 ForEach(filteredRequests) { request in
                     requestCard(for: request)
                 }

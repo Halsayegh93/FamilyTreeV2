@@ -10,10 +10,60 @@ struct FrozenAccountView: View {
     @State private var textOpacity: Double = 0
     @State private var showContactSheet = false
 
+    @Environment(\.verticalSizeClass) private var vSizeClass
+    /// الوضع الأفقي — نلف المحتوى بـScrollView حتى لا يُقتص
+    private var isLandscape: Bool { vSizeClass == .compact }
+
     var body: some View {
         ZStack {
             DS.Color.background.ignoresSafeArea()
 
+            Group {
+                if isLandscape {
+                    ScrollView(showsIndicators: false) {
+                        frozenContent
+                            .padding(.vertical, DS.Spacing.lg)
+                    }
+                } else {
+                    frozenContent
+                }
+            }
+        }
+        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+        .onAppear {
+            withAnimation(DS.Anim.elastic.delay(0.2)) {
+                iconScale = 1.0
+                iconOpacity = 1.0
+            }
+            withAnimation(DS.Anim.smooth.delay(0.5)) {
+                textOpacity = 1.0
+            }
+        }
+        .sheet(isPresented: $showContactSheet) {
+            NavigationStack {
+                MemberContactFormView()
+                    .navigationTitle(t("تواصل مع الإدارة", "Contact Admin"))
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .topBarLeading) {
+                            Button { showContactSheet = false } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(DS.Font.scaled(22, weight: .medium))
+                                    .foregroundStyle(DS.Color.textTertiary)
+                                    .symbolRenderingMode(.hierarchical)
+                            }
+                            .accessibilityLabel(t("إغلاق", "Close"))
+                        }
+                    }
+            }
+            .environmentObject(authVM)
+            .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+            .presentationDragIndicator(.visible)
+        }
+    }
+
+    /// محتوى شاشة التجميد — نفسه في الوضعين
+    private var frozenContent: some View {
             VStack(spacing: DS.Spacing.xxl) {
 
                 Spacer()
@@ -94,37 +144,5 @@ struct FrozenAccountView: View {
                 .padding(.horizontal, DS.Spacing.lg)
                 .padding(.bottom, DS.Spacing.xxxxl)
             }
-        }
-        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-        .onAppear {
-            withAnimation(DS.Anim.elastic.delay(0.2)) {
-                iconScale = 1.0
-                iconOpacity = 1.0
-            }
-            withAnimation(DS.Anim.smooth.delay(0.5)) {
-                textOpacity = 1.0
-            }
-        }
-        .sheet(isPresented: $showContactSheet) {
-            NavigationStack {
-                MemberContactFormView()
-                    .navigationTitle(t("تواصل مع الإدارة", "Contact Admin"))
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        ToolbarItem(placement: .topBarLeading) {
-                            Button { showContactSheet = false } label: {
-                                Image(systemName: "xmark.circle.fill")
-                                    .font(DS.Font.scaled(22, weight: .medium))
-                                    .foregroundStyle(DS.Color.textTertiary)
-                                    .symbolRenderingMode(.hierarchical)
-                            }
-                            .accessibilityLabel(t("إغلاق", "Close"))
-                        }
-                    }
-            }
-            .environmentObject(authVM)
-            .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-            .presentationDragIndicator(.visible)
-        }
     }
 }

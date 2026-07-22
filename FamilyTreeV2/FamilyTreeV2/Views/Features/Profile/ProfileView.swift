@@ -35,6 +35,9 @@ struct ProfileView: View {
     @State private var isLoadingChildren = true
     /// الطلب المُختار للإلغاء — يشغّل حوار تأكيد السحب في «طلباتي».
     @State private var requestToCancel: AdminRequest? = nil
+    @Environment(\.verticalSizeClass) private var vSizeClass
+    /// الوضع الأفقي — الأقسام تتوزع على عمودين
+    private var isLandscape: Bool { vSizeClass == .compact }
 
     var user: FamilyMember? { authVM.currentUser }
 
@@ -66,39 +69,65 @@ struct ProfileView: View {
                         }
 
                         ScrollView(showsIndicators: false) {
-                            VStack(spacing: DS.Spacing.md) {
-                                // Profile Header
-                                profileHeader(user: currentUser)
-                                    .padding(.top, DS.Spacing.md)
-                                    .opacity(appeared ? 1 : 0)
-                                    .offset(y: appeared ? 0 : 20)
+                            Group {
+                                if isLandscape {
+                                    // الوضع الأفقي: عمودان — يمين (الملف + المعلومات) ويسار (الطلبات + المفضلة + العائلة)
+                                    HStack(alignment: .top, spacing: DS.Spacing.md) {
+                                        VStack(spacing: DS.Spacing.md) {
+                                            profileHeader(user: currentUser)
+                                                .padding(.top, DS.Spacing.md)
+                                            personalInfoSection(user: currentUser)
+                                        }
+                                        .frame(maxWidth: .infinity)
 
-                                // Personal Info section
-                                personalInfoSection(user: currentUser)
+                                        VStack(spacing: DS.Spacing.md) {
+                                            myRequestsSection
+                                            favoritesSection
+                                            if isCurrentUserMarried {
+                                                serverSonsSection
+                                            }
+                                            signOutButton
+                                        }
+                                        .padding(.top, DS.Spacing.md)
+                                        .frame(maxWidth: .infinity)
+                                    }
                                     .opacity(appeared ? 1 : 0)
-                                    .offset(y: appeared ? 0 : 25)
+                                } else {
+                                    VStack(spacing: DS.Spacing.md) {
+                                        // Profile Header
+                                        profileHeader(user: currentUser)
+                                            .padding(.top, DS.Spacing.md)
+                                            .opacity(appeared ? 1 : 0)
+                                            .offset(y: appeared ? 0 : 20)
 
-                                // طلباتي — الطلبات المعلّقة التي أرسلها العضو للإدارة
-                                myRequestsSection
-                                    .opacity(appeared ? 1 : 0)
-                                    .offset(y: appeared ? 0 : 26)
+                                        // Personal Info section
+                                        personalInfoSection(user: currentUser)
+                                            .opacity(appeared ? 1 : 0)
+                                            .offset(y: appeared ? 0 : 25)
 
-                                // المفضلة
-                                favoritesSection
-                                    .opacity(appeared ? 1 : 0)
-                                    .offset(y: appeared ? 0 : 28)
+                                        // طلباتي — الطلبات المعلّقة التي أرسلها العضو للإدارة
+                                        myRequestsSection
+                                            .opacity(appeared ? 1 : 0)
+                                            .offset(y: appeared ? 0 : 26)
 
-                                // قسم «عائلتي» — يظهر فقط عند «متزوج»، ويختفي كاملاً عند «أعزب»
-                                if isCurrentUserMarried {
-                                    serverSonsSection
-                                        .opacity(appeared ? 1 : 0)
-                                        .offset(y: appeared ? 0 : 30)
+                                        // المفضلة
+                                        favoritesSection
+                                            .opacity(appeared ? 1 : 0)
+                                            .offset(y: appeared ? 0 : 28)
+
+                                        // قسم «عائلتي» — يظهر فقط عند «متزوج»، ويختفي كاملاً عند «أعزب»
+                                        if isCurrentUserMarried {
+                                            serverSonsSection
+                                                .opacity(appeared ? 1 : 0)
+                                                .offset(y: appeared ? 0 : 30)
+                                        }
+
+                                        // زر تسجيل الخروج بأسفل الصفحة
+                                        signOutButton
+                                            .opacity(appeared ? 1 : 0)
+                                            .offset(y: appeared ? 0 : 35)
+                                    }
                                 }
-
-                                // زر تسجيل الخروج بأسفل الصفحة
-                                signOutButton
-                                    .opacity(appeared ? 1 : 0)
-                                    .offset(y: appeared ? 0 : 35)
                             }
                             .padding(.bottom, DS.Spacing.xxl)
                         } // closes ScrollView

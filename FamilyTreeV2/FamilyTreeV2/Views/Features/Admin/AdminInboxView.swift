@@ -71,7 +71,7 @@ struct AdminInboxView: View {
                     }
 
                     ScrollView {
-                        LazyVStack(spacing: DS.Spacing.sm) {
+                        AdaptiveLazyStack(spacing: DS.Spacing.sm, landscapeMinimum: 340) {
                             ForEach(filteredMessages) { msg in
                                 Button {
                                     if isSelectMode {

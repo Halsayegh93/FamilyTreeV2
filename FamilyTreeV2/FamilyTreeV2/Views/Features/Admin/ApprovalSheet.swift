@@ -24,6 +24,10 @@ struct ApprovalSheet: View {
             .map { $0 }
     }
 
+    @Environment(\.verticalSizeClass) private var vSizeClass
+    /// الوضع الأفقي — نلف المحتوى بـScrollView
+    private var isLandscape: Bool { vSizeClass == .compact }
+
     var body: some View {
         NavigationStack {
             VStack(spacing: DS.Spacing.xl) {
@@ -131,6 +135,8 @@ struct ApprovalSheet: View {
                 .padding(.horizontal, DS.Spacing.xs)
             }
             .padding(DS.Spacing.lg)
+            // الوضع الأفقي: تمرير حتى لا يُقتص المحتوى
+            .modifier(LandscapeScrollWrapper(isLandscape: isLandscape))
             .navigationTitle(L10n.t("إجراءات الموافقة", "Approval Actions"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

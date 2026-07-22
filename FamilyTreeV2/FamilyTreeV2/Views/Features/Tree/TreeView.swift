@@ -148,7 +148,13 @@ struct TreeView: View {
     private let V_GAP: CGFloat = 48          // بين الأب وأبنائه عموديًا (عُوّضت مساحة شريحة التوسيع المحذوفة)
     private let ROW_GAP: CGFloat = 14        // بين صفوف الأبناء الملتفّة
     private let CANVAS_PAD: CGFloat = 60     // هامش حول الشجرة
-    private let PER_ROW = 3                  // أبناء لكل صف قبل الالتفاف
+    /// أبناء لكل صف قبل الالتفاف — عمودياً ٣، وأفقياً يُحسب تلقائياً من عرض
+    /// الشاشة ليتوسّع الإخوة جنب بعض بدل التكديس (طلب المالك)
+    private var PER_ROW: Int {
+        guard viewport.width > viewport.height, viewport.width > 0 else { return 3 }
+        let fit = Int((viewport.width - CANVAS_PAD * 2) / (NODE_W + H_GAP))
+        return max(3, min(7, fit))
+    }
     private var NODE_H_DEFAULT: CGFloat { CIRCLE_FULL + NAME_H }
     /// ارتفاع صندوق العقدة حسب الحالة (يطابق ترتيب TreeMemberNode: دائرة+اسم[+سنوات]).
     /// شريحة التوسيع أُزيلت — العدّاد صار شارة فوق الصورة (طلب المالك).
@@ -1564,7 +1570,9 @@ struct TreeMemberNode: View {
 
     func getLifeSpan() -> String {
         let birth = member.birthDate?.prefix(4); let death = member.deathDate?.prefix(4)
-        if (birth == nil || birth == "") && (death == nil || death == "") { return L10n.t("متوفى", "Deceased") }
+        if (birth == nil || birth == "") && (death == nil || death == "") {
+            return L10n.t(member.isFemale ? "متوفية" : "متوفى", "Deceased")
+        }
         // سنة الميلاد أولاً ثم الوفاة (معكوس — طلب المالك)
         // كل سنة تُلحق بـ«م» (ميلادي)، والمجهولة تُعرض «0000م»
         let b = (birth == nil || birth == "") ? "0000م" : "\(birth!)م"

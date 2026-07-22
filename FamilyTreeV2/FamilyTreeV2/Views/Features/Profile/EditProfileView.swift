@@ -61,6 +61,10 @@ struct EditProfileView: View {
 
     private let cooldown = ProfileEditCooldown.shared
 
+    @Environment(\.verticalSizeClass) private var vSizeClass
+    /// الوضع الأفقي — النموذج يتوزع على عمودين
+    private var isLandscape: Bool { vSizeClass == .compact }
+
 
 
     private var editScreenTitle: String {
@@ -78,6 +82,25 @@ struct EditProfileView: View {
 
 
                 ScrollView(showsIndicators: false) {
+                    if isLandscape {
+                        // الوضع الأفقي: عمودان — يمين (الصورة + الحالة) ويسار (البيانات + المحطات + الحفظ)
+                        HStack(alignment: .top, spacing: DS.Spacing.md) {
+                            VStack(spacing: DS.Spacing.md) {
+                                avatarPickerBlock
+                                statusCard
+                            }
+                            .frame(maxWidth: .infinity)
+
+                            VStack(spacing: DS.Spacing.md) {
+                                personalInfoCard
+                                bioStationsSection
+                                    .cooldownGuarded(.bio, cooldown: cooldown)
+                                saveButton
+                            }
+                            .frame(maxWidth: .infinity)
+                        }
+                        .padding(.vertical, DS.Spacing.xs)
+                    } else {
                     VStack(spacing: DS.Spacing.md) {
 
                         // 1. قسم الصورة الشخصية (تصميم دائري مع ظل فخم)
@@ -160,6 +183,7 @@ struct EditProfileView: View {
 
                     }
                     .padding(.vertical, DS.Spacing.xs)
+                    }
                 }
             }
             .navigationTitle(editScreenTitle)
@@ -239,6 +263,83 @@ struct EditProfileView: View {
             }
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+    }
+
+    // MARK: - كتل التخطيط (تُستخدم في الوضع الأفقي)
+
+    /// قسم الصورة الشخصية — نفس محتوى الوضع العمودي
+    private var avatarPickerBlock: some View {
+        VStack(spacing: DS.Spacing.xs) {
+            imagePickerHeader
+                .cooldownGuarded(.avatar, cooldown: cooldown)
+            Label(
+                L10n.t("اضغط على الصورة لتغييرها", "Tap the photo to change it"),
+                systemImage: "camera.fill"
+            )
+            .font(DS.Font.footnote)
+            .foregroundColor(DS.Color.primary)
+            cooldownLabel(.avatar)
+        }
+    }
+
+    /// بطاقة المعلومات الشخصية — نفس محتوى الوضع العمودي
+    private var personalInfoCard: some View {
+        DSCard(padding: 0) {
+            DSSectionHeader(
+                title: L10n.t("المعلومات الشخصية", "Personal Info"),
+                icon: "person.text.rectangle",
+                iconColor: DS.Color.primary
+            )
+
+            VStack(spacing: 0) {
+                nameFieldWithChangeRequest
+                DSDivider()
+                modernPhoneField
+                    .cooldownGuarded(.phoneNumber, cooldown: cooldown)
+                cooldownLabel(.phoneNumber)
+
+                DSDivider()
+                modernDatePicker(label: L10n.t("تاريخ الميلاد", "Birth Date"), selection: $birthDate, icon: "calendar")
+                    .cooldownGuarded(.birthDate, cooldown: cooldown)
+                    .onChange(of: birthDate) { _ in birthDateProvided = true }
+                cooldownLabel(.birthDate)
+
+                DSDivider()
+                emailField
+            }
+        }
+        .padding(.horizontal, DS.Spacing.lg)
+    }
+
+    /// بطاقة الحالة الاجتماعية — نفس محتوى الوضع العمودي
+    private var statusCard: some View {
+        DSCard(padding: 0) {
+            DSSectionHeader(
+                title: L10n.t("الحالة الاجتماعية", "Status"),
+                icon: "heart.text.square",
+                iconColor: DS.Color.neonPink
+            )
+
+            HStack(spacing: DS.Spacing.sm) {
+                maritalButton(
+                    title: L10n.t("أعزب", "Single"),
+                    icon: "person.fill",
+                    selected: !isMarried,
+                    color: DS.Color.textSecondary
+                ) { setMarried(false) }
+
+                maritalButton(
+                    title: L10n.t("متزوج", "Married"),
+                    icon: "heart.fill",
+                    selected: isMarried,
+                    color: DS.Color.neonPink
+                ) { setMarried(true) }
+            }
+            .padding(.horizontal, DS.Spacing.lg)
+            .padding(.vertical, DS.Spacing.md)
+        }
+        .padding(.horizontal, DS.Spacing.lg)
+        .zIndex(1)
     }
 
     // MARK: - المكونات المصممة (Custom Components)

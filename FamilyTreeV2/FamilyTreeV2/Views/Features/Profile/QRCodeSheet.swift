@@ -19,8 +19,12 @@ struct QRCodeSheet: View {
         return path.prefix(8).map(\.firstName).joined(separator: " ")
     }
 
+    @Environment(\.verticalSizeClass) private var vSizeClass
+    /// الوضع الأفقي — نضغط المقاسات ونسمح بالتمرير
+    private var isLandscape: Bool { vSizeClass == .compact }
+
     var body: some View {
-        VStack(spacing: DS.Spacing.lg) {
+        VStack(spacing: isLandscape ? DS.Spacing.sm : DS.Spacing.lg) {
             // هيدر
             HStack {
                 Button(action: { dismiss() }) {
@@ -41,12 +45,12 @@ struct QRCodeSheet: View {
             .padding(.top, DS.Spacing.sm)
 
             if let qrImage {
-                // الباركود
+                // الباركود — أصغر في الوضع الأفقي حتى يظهر كل المحتوى
                 Image(uiImage: qrImage)
                     .interpolation(.none)
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 200, height: 200)
+                    .frame(width: isLandscape ? 130 : 200, height: isLandscape ? 130 : 200)
 
                 // الاسم
                 Text(lineage)
@@ -101,7 +105,8 @@ struct QRCodeSheet: View {
                     .tint(DS.Color.primary)
             }
         }
-        .padding(.bottom, DS.Spacing.xl)
+        .padding(.bottom, isLandscape ? DS.Spacing.md : DS.Spacing.xl)
+        .modifier(LandscapeScrollWrapper(isLandscape: isLandscape))
         .fullScreenCover(isPresented: $showScanner) {
             QRScannerView(selectedTab: $selectedTab)
         }

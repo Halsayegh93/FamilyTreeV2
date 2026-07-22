@@ -10,6 +10,9 @@ struct HomeNewsView: View {
     @EnvironmentObject var projectsVM: ProjectsViewModel
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.horizontalSizeClass) private var hSizeClass
+    @Environment(\.verticalSizeClass) private var vSizeClass
+    /// الوضع الأفقي على الجوال — نعيد توزيع البنتو على عمودين
+    private var isLandscape: Bool { vSizeClass == .compact }
     @State private var contentWidth: CGFloat = 0
     @Binding var selectedTab: Int
     @State private var showingAddNews = false
@@ -278,24 +281,37 @@ struct HomeNewsView: View {
             }
         }
         .padding(.horizontal, DS.Spacing.lg)
-        .padding(.vertical, DS.Spacing.sm)
+        .padding(.vertical, isLandscape ? DS.Spacing.xs : DS.Spacing.sm)
         .background(DS.Color.background)
     }
 
     // MARK: - Bento Grid Section — توزيع عائلي احترافي
     private var bentoSection: some View {
-        VStack(spacing: DS.Spacing.sm) {
-            // 1) Hero ترحيب (يفتح حسابي عند الضغط)
-            greetingCard
+        Group {
+            if isLandscape {
+                // الوضع الأفقي: عمودان — يسار (ترحيب + كل المربعات) ويمين (الأخبار)
+                HStack(alignment: .top, spacing: DS.Spacing.sm) {
+                    VStack(spacing: DS.Spacing.sm) {
+                        greetingCard
+                        landscapeTilesGrid
+                    }
+                    newsBentoCard
+                }
+            } else {
+                VStack(spacing: DS.Spacing.sm) {
+                    // 1) Hero ترحيب (يفتح حسابي عند الضغط)
+                    greetingCard
 
-            // 2) الشجرة + الديوانيات — مربعين بنفس ستايل التايل
-            primaryTilesRow
+                    // 2) الشجرة + الديوانيات — مربعين بنفس ستايل التايل
+                    primaryTilesRow
 
-            // 3) شبكة الوصول السريع — أرشيف / مشاريع / تواصل (تحت الشجرة والديوانيات، فوق الأخبار)
-            quickAccessGrid
+                    // 3) شبكة الوصول السريع — أرشيف / مشاريع / تواصل (تحت الشجرة والديوانيات، فوق الأخبار)
+                    quickAccessGrid
 
-            // 4) آخر الأخبار
-            newsBentoCard
+                    // 4) آخر الأخبار
+                    newsBentoCard
+                }
+            }
         }
         .padding(.horizontal, DS.Spacing.lg)
         // حد أقصى للعرض على الأجهزة الواسعة (iPad) حتى لا تتمدد الكروت بشكل مبالغ
@@ -370,6 +386,65 @@ struct HomeNewsView: View {
                 color: DS.Color.gridMessaging,
                 imageURL: nil,
                 count: nil,
+                action: { withAnimation(DS.Anim.snappy) { activeSubPage = .contact } }
+            )
+        }
+    }
+
+    // MARK: - شبكة المربعات في الوضع الأفقي
+    /// الوضع الأفقي: كل المربعات الخمسة في شبكة تكيّفية واحدة بارتفاع أقصر
+    /// حتى لا يضيع الارتفاع القصير للشاشة.
+    private var landscapeTilesGrid: some View {
+        let projectImageURL: String? = projectsVM.projects.first?.logoUrl
+        let tileHeight = max(66, layout.tileHeight - 18)
+
+        return LazyVGrid(
+            columns: [GridItem(.adaptive(minimum: 110), spacing: layout.gridSpacing)],
+            spacing: layout.gridSpacing
+        ) {
+            unifiedTile(
+                title: L10n.t("شجرة العائلة", "Family Tree"),
+                icon: "tree.fill",
+                color: DS.Color.secondary,
+                imageURL: nil,
+                count: nil,
+                height: tileHeight,
+                action: { selectedTab = 1 }
+            )
+            unifiedTile(
+                title: L10n.t("الديوانيات", "Diwaniyas"),
+                icon: "map.fill",
+                color: DS.Color.accent,
+                imageURL: nil,
+                count: nil,
+                height: tileHeight,
+                action: { selectedTab = 2 }
+            )
+            unifiedTile(
+                title: L10n.t("أرشيف العائلة", "Family Archive"),
+                icon: "archivebox.fill",
+                color: DS.Color.primary,
+                imageURL: nil,
+                count: nil,
+                height: tileHeight,
+                action: { withAnimation(DS.Anim.snappy) { activeSubPage = .archive } }
+            )
+            unifiedTile(
+                title: L10n.t("مشاريع العائلة", "Family Projects"),
+                icon: "briefcase.fill",
+                color: DS.Color.warning,
+                imageURL: projectImageURL,
+                count: projectsVM.projects.count,
+                height: tileHeight,
+                action: { withAnimation(DS.Anim.snappy) { activeSubPage = .projects } }
+            )
+            unifiedTile(
+                title: L10n.t("التواصل", "Contact"),
+                icon: "envelope.fill",
+                color: DS.Color.gridMessaging,
+                imageURL: nil,
+                count: nil,
+                height: tileHeight,
                 action: { withAnimation(DS.Anim.snappy) { activeSubPage = .contact } }
             )
         }
@@ -1421,20 +1496,37 @@ struct HomeNewsView: View {
     }
 
     private var newsListView: some View {
-        LazyVStack(spacing: DS.Spacing.lg) {
-            ForEach(filteredNews) { news in
-                newsCard(for: news)
-                    .opacity(appeared ? 1 : 0)
-                    .offset(y: appeared ? 0 : 20)
-                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                        if authVM.canDeleteNews {
-                            Button(role: .destructive) {
-                                postToDelete = news
-                            } label: {
-                                Label(L10n.t("حذف", "Delete"), systemImage: "trash.fill")
-                            }
-                        }
+        Group {
+            if isLandscape {
+                // الوضع الأفقي: عمودان من بطاقات الأخبار لاستغلال العرض
+                LazyVGrid(
+                    columns: [GridItem(.adaptive(minimum: 340), spacing: DS.Spacing.lg, alignment: .top)],
+                    alignment: .center,
+                    spacing: DS.Spacing.lg
+                ) {
+                    ForEach(filteredNews) { news in
+                        newsCard(for: news)
+                            .opacity(appeared ? 1 : 0)
+                            .offset(y: appeared ? 0 : 20)
                     }
+                }
+            } else {
+                LazyVStack(spacing: DS.Spacing.lg) {
+                    ForEach(filteredNews) { news in
+                        newsCard(for: news)
+                            .opacity(appeared ? 1 : 0)
+                            .offset(y: appeared ? 0 : 20)
+                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                if authVM.canDeleteNews {
+                                    Button(role: .destructive) {
+                                        postToDelete = news
+                                    } label: {
+                                        Label(L10n.t("حذف", "Delete"), systemImage: "trash.fill")
+                                    }
+                                }
+                            }
+                    }
+                }
             }
         }
         .padding(.horizontal, DS.Spacing.md)

@@ -137,7 +137,7 @@ struct AdminBannedPhonesView: View {
     // MARK: - List
     private var phonesList: some View {
         ScrollView {
-            LazyVStack(spacing: DS.Spacing.md) {
+            AdaptiveLazyStack(spacing: DS.Spacing.md, landscapeMinimum: 330) {
                 ForEach(filteredPhones) { banned in
                     bannedPhoneCard(banned)
                 }

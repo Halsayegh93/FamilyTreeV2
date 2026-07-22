@@ -271,7 +271,8 @@ struct AdminReportsView: View {
 
     var body: some View {
         ScrollView(showsIndicators: false) {
-            VStack(spacing: DS.Spacing.md) {
+            // الوضع الأفقي: الإعدادات/النتائج/التصدير على عمودين
+            AdaptiveCardStack(spacing: DS.Spacing.md, landscapeMinimum: 340) {
                 settingsCard
                 resultsSection
                 exportSection

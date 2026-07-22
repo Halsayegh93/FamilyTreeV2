@@ -27,6 +27,9 @@ struct AdminDashboardView: View {
     @State private var deceasedMembersCount: Int = 0
     @State private var isInitialLoading = true
     @Environment(\.dismiss) var dismiss
+    @Environment(\.verticalSizeClass) private var vSizeClass
+    /// الوضع الأفقي — إحصائيات بصف واحد وبطاقات على عمودين
+    private var isLandscape: Bool { vSizeClass == .compact }
 
     // Admin theme accent (purple #6C5CE7)
     private let adminAccent = DS.Color.gridTree
@@ -143,6 +146,8 @@ struct AdminDashboardView: View {
                                     .offset(y: appeared ? 0 : 20)
                             }
 
+                            // في الوضع الأفقي: بطاقات الأقسام تتوزع على عمودين
+                            AdaptiveCardStack(spacing: DS.Spacing.md, landscapeMinimum: 340) {
                             // طلبات المراجعة — الكل (مالك + مدير + مشرف)
                             DSCard(padding: 0) {
                                 DSSectionHeader(
@@ -255,6 +260,7 @@ struct AdminDashboardView: View {
                                     }
                                 .padding(.horizontal, DS.Spacing.lg)
                             }
+                            }
 
                             Spacer(minLength: DS.Spacing.xxxl)
                         }
@@ -322,6 +328,41 @@ struct AdminDashboardView: View {
         Group {
             if isInitialLoading {
                 adminStatsSkeleton
+            } else if isLandscape {
+                // الوضع الأفقي: كل الإحصائيات بصف واحد
+                HStack(spacing: DS.Spacing.md) {
+                    adminColorfulStatCard(
+                        title: L10n.t("الأعضاء", "Members"),
+                        value: totalMembersCount,
+                        icon: "person.2.fill",
+                        color: DS.Color.primary
+                    )
+                    adminColorfulStatCard(
+                        title: L10n.t("الأحياء", "Alive"),
+                        value: aliveMembersCount,
+                        icon: "heart.fill",
+                        color: DS.Color.success
+                    )
+                    adminColorfulStatCard(
+                        title: L10n.t("المتوفين", "Deceased"),
+                        value: deceasedMembersCount,
+                        icon: "heart.slash.fill",
+                        color: DS.Color.deceased
+                    )
+                    adminColorfulStatCard(
+                        title: L10n.t("انتظار", "Pending"),
+                        value: pendingCount,
+                        icon: "clock.fill",
+                        color: DS.Color.secondary
+                    )
+                    adminColorfulStatCard(
+                        title: L10n.t("طلبات", "Requests"),
+                        value: totalReviewRequestsCount,
+                        icon: "tray.full.fill",
+                        color: DS.Color.warning
+                    )
+                }
+                .transition(.opacity)
             } else {
                 VStack(spacing: DS.Spacing.sm) {
                     // السطر الأول: الأعضاء + الأحياء + المتوفين

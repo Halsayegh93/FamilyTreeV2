@@ -28,20 +28,23 @@ struct AdminPushHealthView: View {
 
             ScrollView(showsIndicators: false) {
                 VStack(spacing: DS.Spacing.xxl) {
-                    overviewSection
-                        .padding(.top, DS.Spacing.md)
+                    // الوضع الأفقي: الأقسام على عمودين
+                    AdaptiveCardStack(spacing: DS.Spacing.xxl, landscapeMinimum: 340) {
+                        overviewSection
+                            .padding(.top, DS.Spacing.md)
 
-                    tokenHealthSection
+                        tokenHealthSection
 
-                    tokenOwnersSection
+                        tokenOwnersSection
 
-                    environmentBreakdownSection
+                        environmentBreakdownSection
 
-                    lastActivitySection
+                        lastActivitySection
 
-                    testPushSection
+                        testPushSection
 
-                    cleanupSection
+                        cleanupSection
+                    }
 
                     Spacer(minLength: DS.Spacing.xxxl)
                 }

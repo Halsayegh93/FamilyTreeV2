@@ -127,12 +127,38 @@ struct ProjectDetailView: View {
         return user.id == project.ownerId || authVM.isAdmin
     }
     
+    @Environment(\.verticalSizeClass) private var vSizeClass
+    /// الوضع الأفقي — عمودان
+    private var isLandscape: Bool { vSizeClass == .compact }
+
     var body: some View {
         NavigationStack {
             ZStack {
                 DS.Color.background.ignoresSafeArea()
                 
                 ScrollView(showsIndicators: false) {
+                    Group {
+                        if isLandscape {
+                            // الوضع الأفقي: الشعار والعنوان يمين، وباقي التفاصيل يسار
+                            HStack(alignment: .top, spacing: DS.Spacing.lg) {
+                                projectHeader
+                                    .frame(maxWidth: .infinity)
+
+                                VStack(spacing: DS.Spacing.md) {
+                                    if let desc = project.description, !desc.isEmpty {
+                                        descriptionSection(desc)
+                                    }
+                                    ownerSection
+                                    if project.hasSocialLinks {
+                                        socialLinksSection
+                                    }
+                                    if isOwnerOrAdmin {
+                                        deleteSection
+                                    }
+                                }
+                                .frame(maxWidth: .infinity)
+                            }
+                        } else {
                     VStack(spacing: DS.Spacing.md) {
                         // Logo + Title
                         projectHeader
@@ -153,6 +179,8 @@ struct ProjectDetailView: View {
                         // Delete button for owner/admin
                         if isOwnerOrAdmin {
                             deleteSection
+                        }
+                    }
                         }
                     }
                     .padding(DS.Spacing.lg)

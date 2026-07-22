@@ -81,7 +81,7 @@ struct AdminDevicesView: View {
 
                     // Device list
                     ScrollView(showsIndicators: false) {
-                        LazyVStack(spacing: DS.Spacing.md) {
+                        AdaptiveLazyStack(spacing: DS.Spacing.md, landscapeMinimum: 340) {
                             ForEach(filteredGroups, id: \.memberId) { group in
                                 memberDeviceCard(group)
                             }

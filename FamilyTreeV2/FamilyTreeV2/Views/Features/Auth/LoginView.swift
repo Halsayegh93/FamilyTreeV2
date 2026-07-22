@@ -45,12 +45,53 @@ struct LoginView: View {
     }
 
     @State private var otpText: String = ""
+    @Environment(\.verticalSizeClass) private var vSizeClass
+    /// الوضع الأفقي — نلف المحتوى بـScrollView
+    private var isLandscape: Bool { vSizeClass == .compact }
 
     var body: some View {
         ZStack {
             // خلفية ديناميكية متحركة
             backgroundView
 
+            Group {
+                if isLandscape {
+                    // الوضع الأفقي: المحتوى داخل ScrollView حتى لا يُقتص شيء
+                    ScrollView(showsIndicators: false) {
+                        loginContent
+                            .padding(.vertical, DS.Spacing.lg)
+                    }
+                } else {
+                    loginContent
+                }
+            }
+        }
+        .onTapGesture {
+            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        }
+        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+        .animation(DS.Anim.bouncy, value: authVM.isOtpSent)
+        .onAppear {
+            withAnimation(DS.Anim.elastic.delay(0.15)) {
+                logoScale = 1.0
+                logoOpacity = 1.0
+            }
+        }
+        .task(id: timeRemaining) {
+            guard timeRemaining > 0 else { return }
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            if !Task.isCancelled { timeRemaining -= 1 }
+        }
+        .task(id: otpTimeRemaining) {
+            guard otpTimeRemaining > 0, authVM.isOtpSent else { return }
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            if !Task.isCancelled { otpTimeRemaining -= 1 }
+        }
+
+    }
+
+    /// محتوى شاشة الدخول — نفسه في الوضعين، يُلف بـScrollView أفقياً فقط
+    private var loginContent: some View {
             VStack(spacing: 0) {
                 Spacer()
 
@@ -58,7 +99,7 @@ struct LoginView: View {
                 logoSection
                     .scaleEffect(logoScale)
                     .opacity(logoOpacity)
-                    .padding(.bottom, DS.Spacing.xxxxl)
+                    .padding(.bottom, isLandscape ? DS.Spacing.xl : DS.Spacing.xxxxl)
 
                 // مؤشر التقدم — خطوة ١ / خطوة ٢
                 HStack(spacing: DS.Spacing.sm) {
@@ -88,29 +129,6 @@ struct LoginView: View {
 
                 Spacer()
             }
-        }
-        .onTapGesture {
-            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-        }
-        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-        .animation(DS.Anim.bouncy, value: authVM.isOtpSent)
-        .onAppear {
-            withAnimation(DS.Anim.elastic.delay(0.15)) {
-                logoScale = 1.0
-                logoOpacity = 1.0
-            }
-        }
-        .task(id: timeRemaining) {
-            guard timeRemaining > 0 else { return }
-            try? await Task.sleep(nanoseconds: 1_000_000_000)
-            if !Task.isCancelled { timeRemaining -= 1 }
-        }
-        .task(id: otpTimeRemaining) {
-            guard otpTimeRemaining > 0, authVM.isOtpSent else { return }
-            try? await Task.sleep(nanoseconds: 1_000_000_000)
-            if !Task.isCancelled { otpTimeRemaining -= 1 }
-        }
-
     }
 
     // MARK: - Background

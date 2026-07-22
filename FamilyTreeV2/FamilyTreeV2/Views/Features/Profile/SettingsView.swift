@@ -24,6 +24,8 @@ struct SettingsView: View {
 
             ScrollView {
                 VStack(spacing: DS.Spacing.md) {
+                    // في الوضع الأفقي: البطاقات تتوزع على عمودين تلقائياً
+                    AdaptiveCardStack(spacing: DS.Spacing.md, landscapeMinimum: 330) {
                     // ── الحساب ──
                     DSCard(padding: 0) {
                         DSSectionHeader(
@@ -141,6 +143,7 @@ struct SettingsView: View {
                         }
                         .buttonStyle(DSBoldButtonStyle())
                     }
+                    }
 
                     versionLabel
                 }
@@ -239,7 +242,7 @@ struct NotificationsAndPrivacyView: View {
             DS.Color.background.ignoresSafeArea()
 
             ScrollView {
-                VStack(spacing: DS.Spacing.md) {
+                AdaptiveCardStack(spacing: DS.Spacing.md, landscapeMinimum: 330) {
                     // ── Notifications: Master ──
                     DSCard(padding: 0) {
                         DSSectionHeader(
@@ -440,7 +443,7 @@ struct AppearanceSettingsView: View {
             DS.Color.background.ignoresSafeArea()
 
             ScrollView {
-                VStack(spacing: DS.Spacing.md) {
+                AdaptiveCardStack(spacing: DS.Spacing.md, landscapeMinimum: 330) {
                     // Appearance picker (segmented)
                     DSCard(padding: 0) {
                         DSSectionHeader(

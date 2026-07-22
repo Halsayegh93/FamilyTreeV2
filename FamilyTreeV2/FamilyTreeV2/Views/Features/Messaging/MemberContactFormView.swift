@@ -5,6 +5,9 @@ import SwiftUI
 struct MemberContactFormView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.verticalSizeClass) private var vSizeClass
+    /// الوضع الأفقي — نوزّع النموذج على عمودين
+    private var isLandscape: Bool { vSizeClass == .compact }
 
     @State private var selectedCategory: ContactCategory = .inquiry
     @State private var message: String = ""
@@ -33,20 +36,42 @@ struct MemberContactFormView: View {
     // MARK: - حالة الإدخال
     private var formState: some View {
         ScrollView(showsIndicators: false) {
-            VStack(alignment: .leading, spacing: DS.Spacing.xl) {
-                introCard
+            Group {
+                if isLandscape {
+                    // الوضع الأفقي: عمودان — يمين (تعريف + تصنيف) ويسار (الرسالة + الإرسال)
+                    HStack(alignment: .top, spacing: DS.Spacing.lg) {
+                        VStack(alignment: .leading, spacing: DS.Spacing.lg) {
+                            introCard
+                            categoryPicker
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
 
-                categoryPicker
+                        VStack(alignment: .leading, spacing: DS.Spacing.lg) {
+                            messageField
+                            if let err = errorText {
+                                errorBanner(err)
+                            }
+                            sendButton
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                } else {
+                    VStack(alignment: .leading, spacing: DS.Spacing.xl) {
+                        introCard
 
-                messageField
+                        categoryPicker
 
-                if let err = errorText {
-                    errorBanner(err)
+                        messageField
+
+                        if let err = errorText {
+                            errorBanner(err)
+                        }
+
+                        sendButton
+
+                        Spacer(minLength: DS.Spacing.xxxl)
+                    }
                 }
-
-                sendButton
-
-                Spacer(minLength: DS.Spacing.xxxl)
             }
             .padding(.horizontal, DS.Spacing.lg)
             .padding(.top, DS.Spacing.md)
@@ -236,9 +261,9 @@ struct MemberContactFormView: View {
             ZStack {
                 Circle()
                     .fill(DS.Color.success.opacity(0.15))
-                    .frame(width: 120, height: 120)
+                    .frame(width: isLandscape ? 76 : 120, height: isLandscape ? 76 : 120)
                 Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 80, weight: .bold))
+                    .font(.system(size: isLandscape ? 50 : 80, weight: .bold))
                     .foregroundColor(DS.Color.success)
             }
 
@@ -275,7 +300,7 @@ struct MemberContactFormView: View {
                     )
             }
             .buttonStyle(DSScaleButtonStyle())
-            .padding(.bottom, DS.Spacing.xxxl)
+            .padding(.bottom, isLandscape ? DS.Spacing.md : DS.Spacing.xxxl)
         }
         .frame(maxWidth: .infinity)
     }

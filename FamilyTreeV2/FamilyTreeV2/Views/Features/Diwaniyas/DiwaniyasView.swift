@@ -15,6 +15,9 @@ struct DiwaniyasView: View {
     @State private var reportSent = false
     @State private var appeared = false
     @State private var cachedFilteredDiwaniyas: [Diwaniya] = []
+    @Environment(\.verticalSizeClass) private var vSizeClass
+    /// الوضع الأفقي — بطاقات على عمودين
+    private var isLandscape: Bool { vSizeClass == .compact }
 
     var body: some View {
         NavigationStack {
@@ -40,12 +43,30 @@ struct DiwaniyasView: View {
                         emptyStateView
                     } else {
                         ScrollView(showsIndicators: false) {
-                            LazyVStack(spacing: DS.Spacing.md) {
-                                ForEach(Array(filteredDiwaniyas.enumerated()), id: \.element.id) { index, diwaniya in
-                                    diwaniyaCard(for: diwaniya)
-                                        .opacity(appeared ? 1 : 0)
-                                        .offset(y: appeared ? 0 : 30)
-                                        .animation(DS.Anim.smooth.delay(Double(min(index, 6)) * 0.06), value: appeared)
+                            Group {
+                                if isLandscape {
+                                    // الوضع الأفقي: عمودان من بطاقات الديوانيات
+                                    LazyVGrid(
+                                        columns: [GridItem(.adaptive(minimum: 340), spacing: DS.Spacing.md, alignment: .top)],
+                                        alignment: .center,
+                                        spacing: DS.Spacing.md
+                                    ) {
+                                        ForEach(Array(filteredDiwaniyas.enumerated()), id: \.element.id) { index, diwaniya in
+                                            diwaniyaCard(for: diwaniya)
+                                                .opacity(appeared ? 1 : 0)
+                                                .offset(y: appeared ? 0 : 30)
+                                                .animation(DS.Anim.smooth.delay(Double(min(index, 6)) * 0.06), value: appeared)
+                                        }
+                                    }
+                                } else {
+                                    LazyVStack(spacing: DS.Spacing.md) {
+                                        ForEach(Array(filteredDiwaniyas.enumerated()), id: \.element.id) { index, diwaniya in
+                                            diwaniyaCard(for: diwaniya)
+                                                .opacity(appeared ? 1 : 0)
+                                                .offset(y: appeared ? 0 : 30)
+                                                .animation(DS.Anim.smooth.delay(Double(min(index, 6)) * 0.06), value: appeared)
+                                        }
+                                    }
                                 }
                             }
                             .padding(DS.Spacing.lg)

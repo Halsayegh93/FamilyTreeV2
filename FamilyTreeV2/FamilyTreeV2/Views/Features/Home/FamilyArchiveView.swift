@@ -28,10 +28,19 @@ struct FamilyArchiveView: View {
     @State private var selectedIDs: Set<UUID> = []
     @State private var showBatchDeleteAlert = false
 
-    private let gridColumns: [GridItem] = [
-        GridItem(.flexible(), spacing: DS.Spacing.sm),
-        GridItem(.flexible(), spacing: DS.Spacing.sm)
-    ]
+    @Environment(\.verticalSizeClass) private var vSizeClass
+    /// الوضع الأفقي — أعمدة أكثر لاستغلال العرض
+    private var isLandscape: Bool { vSizeClass == .compact }
+
+    private var gridColumns: [GridItem] {
+        if isLandscape {
+            return [GridItem(.adaptive(minimum: 190, maximum: .infinity), spacing: DS.Spacing.sm, alignment: .top)]
+        }
+        return [
+            GridItem(.flexible(), spacing: DS.Spacing.sm),
+            GridItem(.flexible(), spacing: DS.Spacing.sm)
+        ]
+    }
 
     var body: some View {
         ZStack(alignment: .bottom) {

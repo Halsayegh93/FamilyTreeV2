@@ -37,6 +37,9 @@ struct MemberDetailsView: View {
     @State private var showChildrenSheet = false
     /// حجم الشيت: متوسط = صورة+اسم+قرابة+عمر فقط، كبير = كل المعلومات.
     @State private var detent: PresentationDetent = .fraction(0.46)
+    @Environment(\.verticalSizeClass) private var vSizeClass
+    /// الوضع الأفقي — الشيت يملأ الشاشة، نعرض كل التفاصيل بعمودين
+    private var isLandscape: Bool { vSizeClass == .compact }
 
     // MARK: - Cached State (تحسب مرة عند تغيير العضو لتفادي إعادة الحساب O(n) في كل rebuild)
 
@@ -76,6 +79,38 @@ struct MemberDetailsView: View {
                     deletedMemberView
                 } else {
                     ScrollView(showsIndicators: false) {
+                        if isLandscape {
+                            // الوضع الأفقي: الشيت يملأ الشاشة — نعرض كل التفاصيل على عمودين
+                            HStack(alignment: .top, spacing: DS.Spacing.md) {
+                                VStack(spacing: DS.Spacing.md) {
+                                    compactHeroSection
+                                        .padding(.top, DS.Spacing.lg)
+
+                                    quickActionsRow
+                                        .padding(.horizontal, DS.Spacing.lg)
+
+                                    fatherCell
+                                }
+                                .frame(maxWidth: .infinity)
+
+                                VStack(spacing: DS.Spacing.md) {
+                                    basicInfoCard
+                                        .padding(.horizontal, DS.Spacing.lg)
+
+                                    bioCard
+                                        .padding(.horizontal, DS.Spacing.lg)
+
+                                    pendingRequestsCard
+                                        .padding(.horizontal, DS.Spacing.lg)
+
+                                    actionButtonsSection
+                                        .padding(.horizontal, DS.Spacing.lg)
+                                }
+                                .padding(.top, DS.Spacing.lg)
+                                .frame(maxWidth: .infinity)
+                            }
+                            .padding(.bottom, DS.Spacing.xxxl)
+                        } else {
                         VStack(spacing: DS.Spacing.md) {
                             compactHeroSection
                                 .padding(.top, DS.Spacing.lg)
@@ -109,6 +144,7 @@ struct MemberDetailsView: View {
                             }
 
                             Spacer(minLength: 60)
+                        }
                         }
                     }
                 }

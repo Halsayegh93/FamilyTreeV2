@@ -103,6 +103,9 @@ struct NotificationsCenterView: View {
     @EnvironmentObject var memberVM: MemberViewModel
     @EnvironmentObject var adminRequestVM: AdminRequestViewModel
     @Environment(\.dismiss) var dismiss
+    @Environment(\.verticalSizeClass) private var vSizeClass
+    /// الوضع الأفقي — نضغط المسافات العمودية حتى لا يُقتص المحتوى
+    private var isLandscape: Bool { vSizeClass == .compact }
 
     @AppStorage("notif_comments") private var notifComments: Bool = true
     @AppStorage("notif_likes") private var notifLikes: Bool = true
@@ -893,7 +896,7 @@ struct NotificationsCenterView: View {
             ScrollView(showsIndicators: false) {
                 VStack(spacing: relatedMember == nil ? DS.Spacing.sm : DS.Spacing.md) {
                     detailHero(notification: notification, iconInfo: iconInfo, date: date)
-                        .padding(.top, DS.Spacing.xxxl)
+                        .padding(.top, isLandscape ? DS.Spacing.lg : DS.Spacing.xxxl)
 
                     if let member = relatedMember {
                         detailMemberCard(member: member, iconInfo: iconInfo)

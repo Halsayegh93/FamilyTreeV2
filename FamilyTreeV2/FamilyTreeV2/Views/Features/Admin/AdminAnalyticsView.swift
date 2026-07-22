@@ -44,6 +44,8 @@ struct AdminAnalyticsView: View {
 
             ScrollView(showsIndicators: false) {
                 VStack(spacing: DS.Spacing.xxl) {
+                    // الوضع الأفقي: الأقسام على عمودين
+                    AdaptiveCardStack(spacing: DS.Spacing.xxl, landscapeMinimum: 340) {
                     // ملخص عام
                     overviewSection
                         .padding(.top, DS.Spacing.md)
@@ -76,6 +78,7 @@ struct AdminAnalyticsView: View {
 
                     // الأخبار
                     newsSection
+                    }
 
                     Spacer(minLength: DS.Spacing.xxxl)
                 }

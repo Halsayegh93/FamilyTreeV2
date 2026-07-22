@@ -8,7 +8,11 @@ struct MainHeaderView<TrailingContent: View>: View {
     
     @State private var isAnimating = false
     @State private var showSignOutConfirm = false
-    
+
+    /// الوضع الأفقي (ارتفاع قصير) — هيدر مضغوط حتى يظهر كاملاً بلا اقتصاص
+    @Environment(\.verticalSizeClass) private var vSizeClass
+    private var isLandscape: Bool { vSizeClass == .compact }
+
     // Customization properties
     let customTitle: String?
     let customSubtitle: String?
@@ -51,13 +55,44 @@ struct MainHeaderView<TrailingContent: View>: View {
         VStack(spacing: 0) {
             HStack(spacing: DS.Spacing.md) {
                 if let customTitle = customTitle {
-                    HStack(spacing: DS.Spacing.md) {
+                    HStack(spacing: isLandscape ? DS.Spacing.sm : DS.Spacing.md) {
                         if let icon = customIcon {
                             leadingIcon(symbol: icon)
                                 .scaleEffect(isAnimating ? 1.0 : 0.8)
                                 .opacity(isAnimating ? 1.0 : 0.0)
                         }
 
+                        if isLandscape {
+                            // الوضع الأفقي: العنوان والعنوان الفرعي على سطر واحد (ارتفاع أقل)
+                            HStack(spacing: DS.Spacing.sm) {
+                                Text(customTitle)
+                                    .font(DS.Font.scaled(17, weight: .black))
+                                    .foregroundColor(DS.Color.textOnPrimary)
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.6)
+
+                                if let customSubtitle = customSubtitle, !customSubtitle.isEmpty {
+                                    if subtitleChip {
+                                        Text(customSubtitle)
+                                            .font(DS.Font.scaled(11, weight: .bold))
+                                            .foregroundColor(DS.Color.textOnPrimary)
+                                            .lineLimit(1)
+                                            .padding(.horizontal, DS.Spacing.sm)
+                                            .padding(.vertical, 2)
+                                            .background(DS.Color.overlayIcon, in: Capsule())
+                                            .overlay(Capsule().stroke(DS.Color.overlayIconBorder, lineWidth: 1))
+                                    } else {
+                                        Text(customSubtitle)
+                                            .font(DS.Font.scaled(11, weight: .medium))
+                                            .foregroundColor(DS.Color.overlayText)
+                                            .lineLimit(1)
+                                            .minimumScaleFactor(0.7)
+                                    }
+                                }
+                            }
+                            .offset(x: isAnimating ? 0 : 15)
+                            .opacity(isAnimating ? 1.0 : 0.0)
+                        } else {
                         VStack(alignment: .leading, spacing: 2) {
                             if subtitleAbove, let customSubtitle = customSubtitle, !customSubtitle.isEmpty {
                                 Text(customSubtitle)
@@ -89,22 +124,24 @@ struct MainHeaderView<TrailingContent: View>: View {
                         }
                         .offset(x: isAnimating ? 0 : 15)
                         .opacity(isAnimating ? 1.0 : 0.0)
+                        }
                     }
                 } else {
                     Button(action: { selectedTab = 3 }) {
-                        HStack(spacing: DS.Spacing.md) {
+                        HStack(spacing: isLandscape ? DS.Spacing.sm : DS.Spacing.md) {
                             leadingInitial
                                 .scaleEffect(isAnimating ? 1.0 : 0.8)
                                 .opacity(isAnimating ? 1.0 : 0.0)
 
-                            VStack(alignment: .leading, spacing: 3) {
+                            VStack(alignment: .leading, spacing: isLandscape ? 0 : 3) {
                                 Text(L10n.t("مرحباً بك", "Welcome Back"))
-                                    .font(DS.Font.scaled(12, weight: .semibold))
+                                    .font(DS.Font.scaled(isLandscape ? 10 : 12, weight: .semibold))
                                     .foregroundColor(DS.Color.overlayText)
                                 Text(authVM.currentUser?.displayName ?? "Member")
-                                    .font(DS.Font.scaled(21, weight: .bold))
+                                    .font(DS.Font.scaled(isLandscape ? 17 : 21, weight: .bold))
                                     .foregroundColor(DS.Color.textOnPrimary)
                                     .lineLimit(1)
+                                    .minimumScaleFactor(isLandscape ? 0.7 : 1.0)
                             }
                             .offset(x: isAnimating ? 0 : 15)
                             .opacity(isAnimating ? 1.0 : 0.0)
@@ -116,7 +153,7 @@ struct MainHeaderView<TrailingContent: View>: View {
 
                 Spacer()
 
-                HStack(spacing: DS.Spacing.md) {
+                HStack(spacing: isLandscape ? DS.Spacing.sm : DS.Spacing.md) {
                     trailingContent
 
                     if customTitle == nil {
@@ -155,10 +192,10 @@ struct MainHeaderView<TrailingContent: View>: View {
                 .scaleEffect(isAnimating ? 1.0 : 0.5)
                 .opacity(isAnimating ? 1.0 : 0.0)
             }
-            .padding(.horizontal, DS.Spacing.lg)
-            .padding(.bottom, DS.Spacing.sm)
-            .padding(.top, 0)
-            .frame(minHeight: 70, alignment: .bottom)
+            .padding(.horizontal, isLandscape ? DS.Spacing.md : DS.Spacing.lg)
+            .padding(.bottom, isLandscape ? DS.Spacing.xs : DS.Spacing.sm)
+            .padding(.top, isLandscape ? DS.Spacing.xs : 0)
+            .frame(minHeight: isLandscape ? 46 : 70, alignment: .bottom)
 
             Rectangle()
                 .fill(DS.Color.headerBorder)
@@ -199,12 +236,12 @@ struct MainHeaderView<TrailingContent: View>: View {
         ZStack {
             Circle()
                 .fill(DS.Color.overlayIcon)
-                .frame(width: 52, height: 52)
+                .frame(width: isLandscape ? 38 : 52, height: isLandscape ? 38 : 52)
                 .overlay(
                     Circle().stroke(DS.Color.overlayIconBorder, lineWidth: 1.5)
                 )
             Text(String(authVM.currentUser?.fullName.first ?? "U"))
-                .font(DS.Font.scaled(20, weight: .bold))
+                .font(DS.Font.scaled(isLandscape ? 16 : 20, weight: .bold))
                 .foregroundColor(DS.Color.textOnPrimary)
         }
     }
@@ -213,26 +250,26 @@ struct MainHeaderView<TrailingContent: View>: View {
         ZStack {
             Circle()
                 .fill(DS.Color.overlayIcon)
-                .frame(width: 52, height: 52)
+                .frame(width: isLandscape ? 38 : 52, height: isLandscape ? 38 : 52)
                 .overlay(
                     Circle().stroke(DS.Color.overlayIconBorder, lineWidth: 1.5)
                 )
             Image(systemName: symbol)
-                .font(DS.Font.scaled(20, weight: .bold))
+                .font(DS.Font.scaled(isLandscape ? 16 : 20, weight: .bold))
                 .foregroundColor(DS.Color.textOnPrimary)
         }
     }
-    
+
     private func headerIconView(icon: String) -> some View {
         ZStack {
             Circle()
                 .fill(DS.Color.overlayIcon)
-                .frame(width: 44, height: 44)
+                .frame(width: isLandscape ? 36 : 44, height: isLandscape ? 36 : 44)
                 .overlay(
                     Circle().stroke(DS.Color.overlayIconBorder, lineWidth: 1.5)
                 )
             Image(systemName: icon)
-                .font(DS.Font.scaled(18, weight: .bold))
+                .font(DS.Font.scaled(isLandscape ? 15 : 18, weight: .bold))
                 .foregroundColor(DS.Color.textOnPrimary)
         }
         .contentShape(Circle())

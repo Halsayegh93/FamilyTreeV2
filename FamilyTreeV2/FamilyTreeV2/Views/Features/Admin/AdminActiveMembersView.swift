@@ -29,6 +29,8 @@ struct AdminActiveMembersView: View {
                     refreshButton
                         .padding(.horizontal, DS.Spacing.lg)
 
+                    // الوضع الأفقي: بطاقات النشاط على عمودين
+                    AdaptiveCardStack(spacing: DS.Spacing.lg, landscapeMinimum: 340) {
                     // ── النشطون الآن (آخر 5 دقائق) ──
                     DSCard(padding: 0) {
                         DSSectionHeader(
@@ -103,6 +105,7 @@ struct AdminActiveMembersView: View {
                         }
                     }
                     .padding(.horizontal, DS.Spacing.lg)
+                    }
 
                     Spacer(minLength: DS.Spacing.xxxl)
                 }

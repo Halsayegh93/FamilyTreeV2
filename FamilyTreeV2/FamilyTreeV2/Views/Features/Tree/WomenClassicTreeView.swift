@@ -14,7 +14,7 @@ struct WomenClassicTreeView: View {
     var meWomanId: UUID? = nil
 
     // أبعاد
-    private let CIRCLE: CGFloat = 40        // حجم شكل العضو (squircle) — أصغر
+    private let CIRCLE: CGFloat = 44        // حجم شكل العضو (squircle) — أكبر قليلاً ليقارب مربع الاسم
     private let CORNER: CGFloat = 12        // نعومة الحواف
     private let RING: CGFloat = 1.5         // إطار أخف
     private let PILL_H: CGFloat = 22
@@ -72,10 +72,15 @@ struct WomenClassicTreeView: View {
     private var childrenOf: [UUID: [FamilyMember]] {
         var map: [UUID: [FamilyMember]] = [:]
         let ids = Set(members.map(\.id))
-        for m in members where !isWife(m) {
-            let key = (m.fatherId != nil && ids.contains(m.fatherId!)) ? m.fatherId! : nil
-            if let key { map[key, default: []].append(m) }
-            else { map[Self.rootKey, default: []].append(m) }
+        // البنت المتزوّجة تظهر تحت أبيها **و** ككبسولة زوجة جنب زوجها معاً —
+        // سابقاً كانت تُستثنى من الأبناء كلياً فتختفي من فرع أبيها (طلب المالك).
+        // أما الزوجة الوافدة (بلا أب في الشجرة) فتبقى ككبسولة زوجة فقط.
+        for m in members {
+            if let fid = m.fatherId, ids.contains(fid) {
+                map[fid, default: []].append(m)
+            } else if !isWife(m) {
+                map[Self.rootKey, default: []].append(m)
+            }
         }
         for k in map.keys {
             map[k]?.sort {
@@ -112,12 +117,10 @@ struct WomenClassicTreeView: View {
     private func visibleChildren(_ id: UUID, _ cOf: [UUID: [FamilyMember]]) -> [FamilyMember] {
         if collapsed.contains(id) { return [] }
         let all = cOf[id] ?? []
-        func isLeaf(_ m: FamilyMember) -> Bool { cOf[m.id]?.isEmpty ?? true }
-        // لا فرع مفتوح → كل الأبناء
-        guard all.contains(where: { !collapsed.contains($0.id) && !isLeaf($0) }) else { return all }
-        // فرع مفتوح: تُخفى الفروع الأخرى (تبقى الشجرة مركّزة كما كانت)،
-        // لكن الأبناء بلا ذرية — البنات غالباً — يظلّون ظاهرين (طلب المالك)
-        return all.filter { isLeaf($0) || !collapsed.contains($0.id) }
+        // عند فتح أحد الأبناء (وله أبناء) نُخفي بقية الإخوة والأخوات
+        // للتركيز على الفرع المتفرّع فقط (السلوك الأصلي — طلب المالك)
+        let expanded = all.filter { !collapsed.contains($0.id) && !(cOf[$0.id]?.isEmpty ?? true) }
+        return expanded.isEmpty ? all : expanded
     }
 
     private func computeLayout() -> Layout {
@@ -129,10 +132,22 @@ struct WomenClassicTreeView: View {
 
         // ── منطق التوزيعة ──
         // أفقي (لفّ): ٣ كحدّ أقصى في الصف الواحد للذكور (مثلاً ٤ → ٣+١ · ٥ → ٣+٢).
-        func perRowH(_ n: Int) -> Int { n <= 3 ? max(1, n) : 3 }
+        // الوضع الأفقي: عدد الإخوة في الصف يُحسب تلقائياً من عرض الشاشة
+        // (كل عقدة NODE_W + الفجوة) فيتوسّعون جنب بعض بدل التكديس — طلب المالك
+        let maxPerRow: Int = {
+            guard viewport.width > viewport.height, viewport.width > 0 else { return MAX_PER_ROW }
+            let fit = Int((viewport.width - PAD * 2) / (NODE_W + H_GAP))
+            return max(MAX_PER_ROW, min(8, fit))
+        }()
+        func perRowH(_ n: Int) -> Int { n <= maxPerRow ? max(1, n) : maxPerRow }
         // عمودي (أعمدة جنسية): عمود واحد حتى ٤ · خمسة → عمودان والأخير تحتهم (٢+٢+١
         // — طلب المالك) · أكثر → ~٤ لكل عمود فرعي.
         func perRowV(_ n: Int) -> Int {
+            // أفقياً: وزّع كل جنس على أعمدة أوسع (نصف ما تتحمّله الشاشة لكل جنس)
+            if viewport.width > viewport.height {
+                let half = max(2, maxPerRow / 2)
+                return n <= half ? max(1, n) : half
+            }
             if n <= 4 { return 1 }
             if n == 5 { return 2 }
             return Int(ceil(Double(n) / 4.0))
@@ -143,7 +158,9 @@ struct WomenClassicTreeView: View {
         enum Arrange { case single, stacked, sideBySide, pair }
         func arrange(_ mCount: Int, _ fCount: Int) -> Arrange {
             if mCount == 0 || fCount == 0 { return .single }
-            if mCount == 1 && fCount == 1 { return .pair }         // ذكر واحد + أنثى واحدة → جنب بعض متلاصقين
+            // حتى ٤ أبناء مختلطين → صف أفقي واحد (ذكور ثم إناث) بدل تكديس
+            // الإناث تحت الذكور — التكديس كان يوهم أن الأخوات بنات لأخيهن
+            if mCount + fCount <= (viewport.width > viewport.height ? maxPerRow : 4) { return .pair }
             if min(mCount, fCount) == 1 { return .stacked }
             return .sideBySide
         }
@@ -199,8 +216,8 @@ struct WomenClassicTreeView: View {
                 let fB = measureBlock(females, perRowV(females.count))
                 childBlock = CGSize(width: mB.width + GENDER_GAP + fB.width, height: max(mB.height, fB.height))
             case .pair:
-                let mB = measureBlock(males, 1)
-                let fB = measureBlock(females, 1)
+                let mB = measureBlock(males, max(1, males.count))
+                let fB = measureBlock(females, max(1, females.count))
                 childBlock = CGSize(width: mB.width + pairGap + fB.width, height: max(mB.height, fB.height))
             }
             let b = CGSize(width: max(NODE_W, childBlock.width), height: bh + V_GAP + childBlock.height)
@@ -256,11 +273,12 @@ struct WomenClassicTreeView: View {
                 placeBlock(id, males, bx + mW / 2, rowTop, d + 1, pm); bx += mW + GENDER_GAP
                 placeBlock(id, females, bx + fW / 2, rowTop, d + 1, pf)
             case .pair:
-                let mW = cachedBlock(males, 1).width, fW = cachedBlock(females, 1).width
+                let pm = max(1, males.count), pf = max(1, females.count)
+                let mW = cachedBlock(males, pm).width, fW = cachedBlock(females, pf).width
                 let totalW = mW + pairGap + fW
                 var bx = cx - totalW / 2
-                placeBlock(id, males, bx + mW / 2, rowTop, d + 1, 1); bx += mW + pairGap
-                placeBlock(id, females, bx + fW / 2, rowTop, d + 1, 1)
+                placeBlock(id, males, bx + mW / 2, rowTop, d + 1, pm); bx += mW + pairGap
+                placeBlock(id, females, bx + fW / 2, rowTop, d + 1, pf)
             }
         }
 
@@ -699,7 +717,7 @@ struct WomenClassicTreeView: View {
                         .frame(maxWidth: NODE_W)
                         .frame(height: PILL_H)
                         .background(DS.Color.surface)
-                    Text(lifeSpanNeat(m) ?? L10n.t("متوفى", "Deceased"))
+                    Text(lifeSpanNeat(m) ?? L10n.t(m.isFemale ? "متوفية" : "متوفى", "Deceased"))
                         .font(.system(size: 8.5, weight: .heavy))
                         .foregroundColor(.white)
                         .lineLimit(1)
