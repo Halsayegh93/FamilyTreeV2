@@ -369,8 +369,12 @@ struct WomenClassicTreeView: View {
                     let orientationFlipped = (viewport.width > viewport.height) != (newSize.width > newSize.height)
                     viewport = newSize
                     if orientationFlipped {
-                        let L = rebuild()
-                        fit(in: newSize, layout: L)
+                        // تدوير: أعد البناء ثم مركّز العقدة الحالية بالمنتصف تلقائياً
+                        withAnimation(DS.Anim.smooth) {
+                            let L = rebuild()
+                            fit(in: newSize, layout: L)
+                            if let r = activeRoot { centerOn(r, in: L) }
+                        }
                     }
                 }
                 .onChange(of: members.count) { _ in
@@ -812,7 +816,8 @@ struct WomenClassicTreeView: View {
         guard m.isDeceased == true else { return nil }
         let by = year(m.birthDate), dy = year(m.deathDate)
         guard by != nil || dy != nil else { return nil }   // كلاهما مفقود → «متوفى» في الشريط
-        return "\(by ?? "0000")م - \(dy ?? "0000")م"
+        // عزل كل سنة (U+2066…U+2069) لتبقى «م» بجانب رقمها — طلب المالك
+        return "\u{2066}\(by ?? "0000")م\u{2069} - \u{2066}\(dy ?? "0000")م\u{2069}"
     }
     private func year(_ s: String?) -> String? {
         guard let s, let r = s.range(of: "\\d{4}", options: .regularExpression) else { return nil }

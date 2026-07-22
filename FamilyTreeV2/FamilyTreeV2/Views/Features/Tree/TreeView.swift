@@ -329,12 +329,14 @@ struct TreeView: View {
                             let orientationFlipped = (viewport.width > viewport.height) != (newSize.width > newSize.height)
                             viewport = newSize
                             if orientationFlipped {
-                                if userInteracted {
-                                    // المستخدم متعمّق — أعد الشجرة داخل حدود الشاشة الجديدة
-                                    fitCanvas(in: newSize, layout: layout)
-                                    userInteracted = true
-                                } else {
-                                    fitCanvas(in: newSize, layout: layout)
+                                // تدوير: أعد بناء التخطيط (عدد الأعمدة يتغيّر) ثم مركّز
+                                // العقدة المفتوحة الحالية بمنتصف الشاشة تلقائياً (طلب المالك)
+                                withAnimation(DS.Anim.smooth) {
+                                    let L = rebuildLayout()
+                                    fitCanvas(in: newSize, layout: L)
+                                    if let focus = breadcrumbChain.last ?? primaryRootMember {
+                                        centerOn(focus.id, in: L, verticalAnchor: 0.5)
+                                    }
                                 }
                             } else if !userInteracted {
                                 fitCanvas(in: newSize, layout: layout)
@@ -1575,9 +1577,13 @@ struct TreeMemberNode: View {
         }
         // سنة الميلاد أولاً ثم الوفاة (معكوس — طلب المالك)
         // كل سنة تُلحق بـ«م» (ميلادي)، والمجهولة تُعرض «0000م»
-        let b = (birth == nil || birth == "") ? "0000م" : "\(birth!)م"
-        let d = (death == nil || death == "") ? "0000م" : "\(death!)م"
-        return "\(b) - \(d)"
+        // كل سنة داخل عزل LTR (U+2066…U+2069) فتبقى «م» ملتصقة بيمين رقمها
+        // ولا تنتقل لجهة السنة الأخرى مهما كان اتجاه الواجهة (طلب المالك)
+        func iso(_ y: String?) -> String {
+            let v = (y == nil || y == "") ? "0000" : y!
+            return "\u{2066}\(v)م\u{2069}"
+        }
+        return "\(iso(birth.map(String.init))) - \(iso(death.map(String.init)))"
     }
 
     private var displayName: String {

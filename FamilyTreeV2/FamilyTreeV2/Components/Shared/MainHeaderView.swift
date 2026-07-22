@@ -11,7 +11,10 @@ struct MainHeaderView<TrailingContent: View>: View {
 
     /// الوضع الأفقي (ارتفاع قصير) — هيدر مضغوط حتى يظهر كاملاً بلا اقتصاص
     @Environment(\.verticalSizeClass) private var vSizeClass
-    private var isLandscape: Bool { vSizeClass == .compact }
+    /// الهيدر يظهر كاملاً في الوضعين — لا نضغطه أفقياً (طلب المالك)
+    private var isLandscape: Bool { false }
+    /// أفقي فعلاً — للهوامش الجانبية فقط (النوتش)
+    private var physicallyLandscape: Bool { vSizeClass == .compact }
 
     // Customization properties
     let customTitle: String?
@@ -192,7 +195,8 @@ struct MainHeaderView<TrailingContent: View>: View {
                 .scaleEffect(isAnimating ? 1.0 : 0.5)
                 .opacity(isAnimating ? 1.0 : 0.0)
             }
-            .padding(.horizontal, isLandscape ? DS.Spacing.md : DS.Spacing.lg)
+            .padding(.horizontal, DS.Spacing.lg)
+            .padding(.horizontal, physicallyLandscape ? DS.Spacing.xl : 0)
             .padding(.bottom, isLandscape ? DS.Spacing.xs : DS.Spacing.sm)
             .padding(.top, isLandscape ? DS.Spacing.xs : 0)
             .frame(minHeight: isLandscape ? 46 : 70, alignment: .bottom)
