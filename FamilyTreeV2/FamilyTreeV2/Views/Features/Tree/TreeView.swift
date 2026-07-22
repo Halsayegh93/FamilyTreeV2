@@ -145,7 +145,7 @@ struct TreeView: View {
     private let BADGE_H: CGFloat = 40        // شريحة التوسيع (36 + فجوة 4)
     private let LIFE_H: CGFloat = 20         // سطر سنوات المتوفّى
     private let H_GAP: CGFloat = 14          // بين الإخوة أفقيًا
-    private let V_GAP: CGFloat = 22          // بين الأب وأبنائه عموديًا
+    private let V_GAP: CGFloat = 48          // بين الأب وأبنائه عموديًا (عُوّضت مساحة شريحة التوسيع المحذوفة)
     private let ROW_GAP: CGFloat = 14        // بين صفوف الأبناء الملتفّة
     private let CANVAS_PAD: CGFloat = 60     // هامش حول الشجرة
     private let PER_ROW = 3                  // أبناء لكل صف قبل الالتفاف
