@@ -152,8 +152,12 @@ struct TreeView: View {
     /// الشاشة ليتوسّع الإخوة جنب بعض بدل التكديس (طلب المالك)
     private var PER_ROW: Int {
         guard viewport.width > viewport.height, viewport.width > 0 else { return 3 }
-        let fit = Int((viewport.width - CANVAS_PAD * 2) / (NODE_W + H_GAP))
-        return max(3, min(7, fit))
+        // الشجرة تُعرض بمقياس ملاءمة (~0.65 أفقياً) فالعقدة تشغل أقل من عرضها
+        // الحقيقي على الشاشة — نحسب على أساس العرض الفعلي المرئي حتى يتّسع
+        // صف الإخوة لأكبر عدد ممكن (طلب المالك: أبناء الجذر بصف واحد).
+        let effectiveNode = (NODE_W + H_GAP) * 0.62
+        let fit = Int((viewport.width - CANVAS_PAD) / effectiveNode)
+        return max(4, min(8, fit))
     }
     private var NODE_H_DEFAULT: CGFloat { CIRCLE_FULL + NAME_H }
     /// ارتفاع صندوق العقدة حسب الحالة (يطابق ترتيب TreeMemberNode: دائرة+اسم[+سنوات]).

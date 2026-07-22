@@ -75,7 +75,7 @@ struct HomeNewsView: View {
                                 .opacity(appeared ? 1 : 0)
                                 .offset(y: appeared ? 0 : 20)
                                 .padding(.top, DS.Spacing.md)
-                                .padding(.bottom, DS.Spacing.xxxxl)
+                                .padding(.bottom, isLandscape ? DS.Spacing.xxxxl + 44 : DS.Spacing.xxxxl)
                                 .onAppear {
                                     guard !appeared else { return }
                                     withAnimation(DS.Anim.smooth.delay(0.1)) { appeared = true }
@@ -213,7 +213,7 @@ struct HomeNewsView: View {
             ScrollView(showsIndicators: false) {
                 newsFeedSection
                     .padding(.top, DS.Spacing.sm)
-                    .padding(.bottom, DS.Spacing.xxxxl)
+                    .padding(.bottom, isLandscape ? DS.Spacing.xxxxl + 44 : DS.Spacing.xxxxl)
             }
             .refreshable { await refreshNews(notifyIfNew: true, force: true) }
 
@@ -290,12 +290,19 @@ struct HomeNewsView: View {
         Group {
             if isLandscape {
                 // الوضع الأفقي: عمودان — يسار (ترحيب + كل المربعات) ويمين (الأخبار)
-                HStack(alignment: .top, spacing: DS.Spacing.sm) {
+                // الوضع الأفقي: عمود الوصول السريع (ترحيب مضغوط + بلاطات) وعمود الأخبار
+                // عمودان متساويان بارتفاع طبيعي — بلا ارتفاع مفروض حتى لا يُقتطع
+                HStack(alignment: .top, spacing: DS.Spacing.md) {
                     VStack(spacing: DS.Spacing.sm) {
                         greetingCard
+                            .frame(height: 92)      // لا تتمدد لتطابق طول البلاطات
                         landscapeTilesGrid
+                        Spacer(minLength: 0)
                     }
+                    .frame(maxWidth: .infinity, alignment: .top)
+
                     newsBentoCard
+                        .frame(maxWidth: .infinity, alignment: .top)
                 }
             } else {
                 VStack(spacing: DS.Spacing.sm) {
@@ -394,12 +401,18 @@ struct HomeNewsView: View {
     // MARK: - شبكة المربعات في الوضع الأفقي
     /// الوضع الأفقي: كل المربعات الخمسة في شبكة تكيّفية واحدة بارتفاع أقصر
     /// حتى لا يضيع الارتفاع القصير للشاشة.
+    /// ارتفاع قسم الأفقي: ترحيب (92) + صفّا بلاطات + الفواصل.
+    private var landscapeBentoHeight: CGFloat {
+        let tileH = max(66, layout.tileHeight - 18)
+        return 92 + DS.Spacing.sm + tileH * 2 + layout.gridSpacing + DS.Spacing.sm
+    }
+
     private var landscapeTilesGrid: some View {
         let projectImageURL: String? = projectsVM.projects.first?.logoUrl
         let tileHeight = max(66, layout.tileHeight - 18)
 
         return LazyVGrid(
-            columns: [GridItem(.adaptive(minimum: 110), spacing: layout.gridSpacing)],
+            columns: Array(repeating: GridItem(.flexible(), spacing: layout.gridSpacing), count: 3),
             spacing: layout.gridSpacing
         ) {
             unifiedTile(
