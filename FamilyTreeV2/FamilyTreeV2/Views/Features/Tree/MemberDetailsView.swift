@@ -28,7 +28,7 @@ struct MemberDetailsView: View {
 
     @State private var showDeleteBioAlert = false
 
-    @State private var showActionSheet = false
+    @State private var showEditActions = false
     @State private var pendingEditAction: TreeEditAction? = nil
     @State private var showReportConfirm = false
     @State private var reportReason = ""
@@ -131,12 +131,6 @@ struct MemberDetailsView: View {
                     // الـsheet يتحدث طبيعياً عبر @EnvironmentObject memberVM.
                     AdminMemberDetailSheet(member: member)
                 }
-            }
-            .sheet(isPresented: $showActionSheet) {
-                MemberActionSheet(member: member) { action in
-                    pendingEditAction = action
-                }
-                .presentationDetents([.medium, .large])
             }
             .sheet(item: $pendingEditAction) { action in
                 TreeEditRequestView(member: member, action: action)
@@ -1156,33 +1150,129 @@ struct MemberDetailsView: View {
     @ViewBuilder
     private var actionButtonsSection: some View {
         if !member.isDeleted {
-            HStack(alignment: .top, spacing: DS.Spacing.xxl) {
-                if !isViewingSelf {
-                    circleActionButton(
-                        icon: "pencil.and.list.clipboard",
-                        label: L10n.t("طلب تعديل", "Request Edit"),
-                        tint: DS.Color.primary,
-                        filled: true
-                    ) { showActionSheet = true }
+            VStack(spacing: DS.Spacing.lg) {
+                HStack(alignment: .top, spacing: DS.Spacing.xxl) {
+                    if !isViewingSelf {
+                        circleActionButton(
+                            icon: "pencil.and.list.clipboard",
+                            label: L10n.t("طلب تعديل", "Request Edit"),
+                            tint: DS.Color.primary,
+                            filled: true
+                        ) { withAnimation(DS.Anim.snappy) { showEditActions.toggle() } }
 
-                    // إبلاغ عن العضو — متاح لغير صاحب الملف (سياسة Apple)
-                    circleActionButton(
-                        icon: "exclamationmark.bubble",
-                        label: L10n.t("إبلاغ", "Report"),
-                        tint: DS.Color.warning
-                    ) { showReportConfirm = true }
-                }
+                        // إبلاغ عن العضو — متاح لغير صاحب الملف (سياسة Apple)
+                        circleActionButton(
+                            icon: "exclamationmark.bubble",
+                            label: L10n.t("إبلاغ", "Report"),
+                            tint: DS.Color.warning
+                        ) { showReportConfirm = true }
+                    }
 
-                if authVM.canEditMembers {
-                    circleActionButton(
-                        icon: "pencil",
-                        label: L10n.t("تعديل مباشر", "Direct Edit"),
-                        tint: DS.Color.primary
-                    ) { showAdminControl = true }
+                    if authVM.canEditMembers {
+                        circleActionButton(
+                            icon: "pencil",
+                            label: L10n.t("تعديل مباشر", "Direct Edit"),
+                            tint: DS.Color.primary
+                        ) { showAdminControl = true }
+                    }
                 }
+                .frame(maxWidth: .infinity)
+
+                // شبكة أنواع الطلبات مدمجة داخل التفاصيل — تدفق واحد:
+                // كان المسار 3 شيتات متتالية (تفاصيل ← اختيار نوع ← نموذج) مع تأخير 0.3 ثانية؛
+                // الآن النوع يُختار هنا والنموذج يفتح مباشرة فوق التفاصيل.
+                if showEditActions && !isViewingSelf {
+                    editActionsGrid
+                        .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .top)))
+                }
+            }
+        }
+    }
+
+    /// شبكة أنواع طلبات التعديل — مدمجة داخل شيت التفاصيل (بدل الشيت الوسيط السابق).
+    private var editActionsGrid: some View {
+        VStack(spacing: DS.Spacing.md) {
+            Text(L10n.t("اختر نوع الطلب", "Choose Request Type"))
+                .font(DS.Font.calloutBold)
+                .foregroundColor(DS.Color.textSecondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            LazyVGrid(
+                columns: Array(repeating: GridItem(.flexible(), spacing: DS.Spacing.md), count: 3),
+                spacing: DS.Spacing.lg
+            ) {
+                ForEach(availableEditActions, id: \.rawValue) { action in
+                    editActionCircle(for: action)
+                }
+            }
+        }
+        .padding(DS.Spacing.lg)
+        .background(DS.Color.surface)
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
+    }
+
+    private var availableEditActions: [TreeEditAction] {
+        if member.isDeceased == true {
+            return [.add, .editName, .editBirth, .addDeathDate, .addPhoto, .delete]
+        }
+        return [.add, .editName, .editPhone, .editBirth, .addPhoto, .deceased, .delete]
+    }
+
+    private func editActionColor(for action: TreeEditAction) -> Color {
+        switch action {
+        case .add: return DS.Color.success
+        case .editName: return DS.Color.info
+        case .editPhone: return DS.Color.primary
+        case .editBirth: return DS.Color.warning
+        case .deceased: return DS.Color.textTertiary
+        case .addDeathDate: return DS.Color.textTertiary
+        case .addPhoto: return DS.Color.primary
+        case .delete: return DS.Color.error
+        case .other: return DS.Color.accent
+        }
+    }
+
+    private func editActionLabel(for action: TreeEditAction) -> String {
+        switch action {
+        case .add: return L10n.t("إضافة ابن", "Add Son")
+        case .editName: return L10n.t("تعديل اسم", "Edit Name")
+        case .editPhone: return L10n.t("تعديل رقم", "Edit Phone")
+        case .editBirth: return L10n.t("تعديل ميلاد", "Edit Birth")
+        case .deceased: return L10n.t("تسجيل وفاة", "Deceased")
+        case .addDeathDate: return L10n.t("تاريخ وفاة", "Death Date")
+        case .addPhoto: return L10n.t("إضافة صورة", "Add Photo")
+        case .delete: return L10n.t("حذف", "Delete")
+        case .other: return L10n.t("طلب آخر", "Other")
+        }
+    }
+
+    private func editActionCircle(for action: TreeEditAction) -> some View {
+        let tint = editActionColor(for: action)
+        return Button {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            pendingEditAction = action
+        } label: {
+            VStack(spacing: DS.Spacing.xs) {
+                ZStack {
+                    Circle()
+                        .fill(tint.opacity(0.12))
+                        .overlay(Circle().stroke(tint.opacity(0.28), lineWidth: 1))
+                        .frame(width: 64, height: 64)
+                    Image(systemName: action.iconName)
+                        .font(DS.Font.scaled(24, weight: .semibold))
+                        .foregroundColor(tint)
+                }
+                Text(editActionLabel(for: action))
+                    .font(DS.Font.caption1)
+                    .fontWeight(.semibold)
+                    .foregroundColor(DS.Color.textSecondary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.center)
             }
             .frame(maxWidth: .infinity)
         }
+        .buttonStyle(DSScaleButtonStyle())
+        .accessibilityLabel(editActionLabel(for: action))
     }
 
     /// زر دائري بأيقونة + تسمية قصيرة (بديل الأزرار الممتدة في الأسفل).

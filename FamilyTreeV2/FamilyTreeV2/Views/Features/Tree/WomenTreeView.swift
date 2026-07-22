@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// شجرة النساء (women_members) — عرض فقط لكل الأعضاء.
-/// تعيد استخدام محرّك DrillDownTreeView ببيانات محقونة (النساء كعُقد).
+/// تعرض WomenClassicTreeView (كانفس كلاسيكي بإحداثيات مطلقة).
 struct WomenTreeView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @Binding var selectedTab: Int
@@ -38,7 +38,8 @@ struct WomenTreeView: View {
                         title: L10n.t("النساء", "Women"),
                         subtitle: "\(allMembers.count) " + L10n.t("فرد", "members"),
                         icon: "leaf.fill",
-                        backgroundGradient: DS.Color.gradientPrimary
+                        backgroundGradient: DS.Color.gradientPrimary,
+                        subtitleChip: true
                     )
                     WomenClassicTreeView(
                         members: allMembers,
@@ -113,7 +114,7 @@ struct WomenTreeView: View {
 /// شاشة تحميل شجرة النساء — أيقونة نابضة + عُقد وهمية (skeleton) عند التحوّل.
 private struct WomenLoadingView: View {
     @State private var pulse = false
-    private let rose = Color(hex: "#C07A8C")
+    private let rose = DS.Color.female
 
     var body: some View {
         ZStack {
@@ -608,7 +609,7 @@ private struct WomanDetailSheet: View {
                         relationCell(icon: "heart.fill",
                                      label: wives.count == 1 ? L10n.t("الزوجة", "Wife") : L10n.t("الزوجات", "Wives"),
                                      value: wives.map { shortName($0) }.joined(separator: "، "),
-                                     color: Color(hex: "#C07A8C"),
+                                     color: DS.Color.female,
                                      onTap: {
                                          if wives.count == 1 { onOpenMember?(wives[0].id) }
                                          else { showWifeNav = true }
@@ -724,7 +725,7 @@ private struct WomanDetailSheet: View {
             LazyVGrid(columns: cols, spacing: DS.Spacing.lg) {
                 adminCircle("ابن", "Child", "person.badge.plus", DS.Color.primary) { showChildGender = true }
                 if !woman.isFemale {
-                    adminCircle("زوجة", "Wife", "heart", Color(hex: "#C07A8C")) { showWifeSource = true }
+                    adminCircle("زوجة", "Wife", "heart", DS.Color.female) { showWifeSource = true }
                 }
                 adminCircle("أم", "Mother", "figure.dress", DS.Color.accent) { showMotherPicker = true }
                 adminCircle("تعديل الاسم", "Rename", "pencil", DS.Color.info) {
@@ -954,7 +955,7 @@ private struct WomanDetailSheet: View {
         guard m.isDeceased == true else { return nil }
         let by = year(m.birthDate), dy = year(m.deathDate)
         guard by != nil || dy != nil else { return nil }   // كلاهما مفقود → لا تعرض
-        return "\(dy ?? "؟") – \(by ?? "؟")"   // وفاة – ميلاد
+        return "\(dy ?? "٠٠") – \(by ?? "٠٠")"   // وفاة – ميلاد (المجهول «٠٠»)
     }
 
     private func avatar(_ m: FamilyMember, size: CGFloat) -> some View {

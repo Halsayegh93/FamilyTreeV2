@@ -139,6 +139,8 @@ enum DS {
         static let deceased         = SwiftUI.Color.adaptive(light: "#A0A0A0", dark: "#808080") // رمادي هادي
         static let currentLocation  = SwiftUI.Color.adaptive(light: "#00C853", dark: "#69F0AE") // أخضر
         static let likeAction       = SwiftUI.Color.adaptive(light: "#B24C63", dark: "#CC6A80") // Berry Rose
+        /// لون الإناث في شجرة النساء — وردي تراثي موحّد (بدل القيم المرمّزة يدوياً في WomenTreeView/WomenClassicTreeView)
+        static let female           = SwiftUI.Color.adaptive(light: "#C07A8C", dark: "#D493A3") // وردي تراثي
 
         // Quick Access Grid Colors
         static let gridTree      = primary
@@ -311,10 +313,10 @@ enum DS {
     enum Shadow {
         static let card     = ShadowStyle(color: .black.opacity(0.06), radius: 8, x: 0, y: 2)
         static let subtle   = ShadowStyle(color: .black.opacity(0.03), radius: 4, x: 0, y: 1)
-        // ظلال «التوهّج» — تدرّج ارتفاع حقيقي بلمسة لون العلامة (كانت clear/معطّلة)
-        static let glow     = ShadowStyle(color: SwiftUI.Color(hex: "#1E5474").opacity(0.16), radius: 14, x: 0, y: 4)
-        static let glowAccent = ShadowStyle(color: SwiftUI.Color(hex: "#2C6E49").opacity(0.16), radius: 12, x: 0, y: 4)
-        static let neon     = ShadowStyle(color: SwiftUI.Color(hex: "#1E5474").opacity(0.14), radius: 12, x: 0, y: 3)
+        // ظلال «التوهّج» — بلمسة لون العلامة الحالية (أزرق/نيلي) بعد توحيدها مع الهوية
+        static let glow     = ShadowStyle(color: SwiftUI.Color(hex: "#2460C0").opacity(0.16), radius: 14, x: 0, y: 4)
+        static let glowAccent = ShadowStyle(color: SwiftUI.Color(hex: "#5438DC").opacity(0.16), radius: 12, x: 0, y: 4)
+        static let neon     = ShadowStyle(color: SwiftUI.Color(hex: "#2460C0").opacity(0.14), radius: 12, x: 0, y: 3)
         static let none     = ShadowStyle(color: .clear, radius: 0, x: 0, y: 0)
     }
 

@@ -10,18 +10,11 @@ extension Notification.Name {
     static let openMemberInTree = Notification.Name("openMemberInTree")
 }
 
-// MARK: - أنماط العرض
-enum TreeDisplayMode: Hashable {
-    case interactive // تفاعلي: صور وتفاصيل + ترتيب شبكي
-    case fullTree    // كامل: أداء عالي (نص فقط) + ترتيب أفقي كامل (الإخوان جنب بعض)
-}
-
 // MARK: - ثوابت الشجرة
 private enum TreeConst {
     // Zoom
     static let minScale: CGFloat = 0.2
     static let maxScale: CGFloat = 3.0
-    static let zoomStep: CGFloat = 0.05
     static let defaultScale: CGFloat = 0.60
     static let openNodeScale: CGFloat = 0.75
     static let closeNodeScale: CGFloat = 0.80
@@ -40,73 +33,6 @@ private enum TreeConst {
     static let dividerWidth: CGFloat = 30
 }
 
-// MARK: - Branch Connector Style
-/// نمط الخطوط بين الأب وأبنائه. مخزّن في @AppStorage لذا يبقى عبر التشغيل.
-enum BranchConnectorStyle: String {
-    case arc   // قوس (bezier)
-    case angle // زاوية (L-shape)
-}
-
-// MARK: - Branch Connector Shape
-/// يرسم فروع من نقطة الأب أعلى إلى نقاط الأبناء أسفل.
-/// `branchCount`: عدد الفروع (1-3). الأبناء من الـ4 فما فوق لا يُرسم لهم فرع
-/// (طلب صريح من المالك — الشجرة الكبيرة ما تنرسم).
-/// `style`: قوس أو زاوية.
-struct BranchConnector: Shape {
-    let branchCount: Int
-    let style: BranchConnectorStyle
-
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        guard branchCount > 0 else { return path }
-        let count = min(3, branchCount)
-        let topCenter = CGPoint(x: rect.midX, y: 0)
-
-        // نقاط النهاية أسفل — تطابق مراكز الأبناء في HStack بتوزيع متساوٍ.
-        // عند 3 أبناء: نشيل الخط الأوسط (طلب صريح) — فقط الأطراف.
-        let endpoints: [CGFloat]
-        switch count {
-        case 1: endpoints = [rect.midX]
-        case 2: endpoints = [rect.width * 0.25, rect.width * 0.75]
-        default: endpoints = [rect.width / 6, rect.width * 5 / 6] // 3 أبناء — أطراف فقط بدون الأوسط
-        }
-
-        for endX in endpoints {
-            switch style {
-            case .arc:
-                // bezier curve ناعم من نقطة الأب إلى نقطة الابن
-                path.move(to: topCenter)
-                let c1 = CGPoint(x: topCenter.x, y: rect.height * 0.55)
-                let c2 = CGPoint(x: endX, y: rect.height * 0.55)
-                let end = CGPoint(x: endX, y: rect.height)
-                path.addCurve(to: end, control1: c1, control2: c2)
-            case .angle:
-                // L-shape: عمودي → أفقي → عمودي
-                let elbowY = rect.height * 0.5
-                path.move(to: topCenter)
-                path.addLine(to: CGPoint(x: topCenter.x, y: elbowY))
-                path.addLine(to: CGPoint(x: endX, y: elbowY))
-                path.addLine(to: CGPoint(x: endX, y: rect.height))
-            }
-        }
-        return path
-    }
-}
-
-/// تطبيق `.drawingGroup()` بشكل مشروط — يفعّله فقط للأشجار الكبيرة
-/// لتجنب overhead الـ rasterization على الأشجار الصغيرة.
-private struct ConditionalDrawingGroup: ViewModifier {
-    let enabled: Bool
-
-    func body(content: Content) -> some View {
-        if enabled {
-            content.drawingGroup()
-        } else {
-            content
-        }
-    }
-}
-
 // MARK: - تخطيط الكانفس (إحداثيات مطلقة — نفس محرّك تبويب النساء)
 /// نتيجة حساب مواضع كل العقد المرئية بإحداثيات مطلقة داخل كانفس ثابت.
 private struct FamilyLayout {
@@ -122,6 +48,21 @@ private struct ConnectorStub: Identifiable {
     let id: UUID
     let x: CGFloat
     let y: CGFloat
+    let kinship: Bool
+}
+
+/// خط ربط حقيقي بين أسفل شارة الأب وأعلى دائرة الابن (يُرسم كمنحنى بيزيه في Canvas).
+private struct ConnectorLink {
+    let from: CGPoint   // أسفل شارة الأب
+    let to: CGPoint     // أعلى دائرة الابن
+    let kinship: Bool   // جزء من مسار القرابة — لون ذهبي وسماكة أكبر
+}
+
+/// قوس بين الأب وصفّ أبنائه الأول (من الابن الأول إلى الثالث) — للآباء بأكثر من ٤ أبناء.
+private struct ConnectorArc {
+    let from: CGPoint     // أعلى دائرة أول ابن في الصف الأول
+    let control: CGPoint  // نقطة التحكم — أسفل شارة الأب (قمة القوس بين الأب والأبناء)
+    let to: CGPoint       // أعلى دائرة آخر ابن في الصف الأول
     let kinship: Bool
 }
 
@@ -182,8 +123,6 @@ struct TreeView: View {
     @State private var currentLocationMemberID: UUID? = nil
     @State private var isRefreshing = false
 
-    private let viewMode: TreeDisplayMode = .interactive
-
     @State private var searchedMemberID: UUID? = nil
     @State private var highlightTask: Task<Void, Never>?
 
@@ -203,17 +142,18 @@ struct TreeView: View {
     private let NODE_W: CGFloat = 124        // عرض صندوق العقدة (الدائرة 105 + الإطار)
     private let CIRCLE_FULL: CGFloat = 112   // ارتفاع الدائرة + حلقة الرتبة
     private let NAME_H: CGFloat = 32         // كبسولة الاسم
-    private let BADGE_H: CGFloat = 28        // شارة العدّاد (نصف دائرة)
+    private let BADGE_H: CGFloat = 40        // شريحة التوسيع (36 + فجوة 4)
     private let LIFE_H: CGFloat = 20         // سطر سنوات المتوفّى
-    private let H_GAP: CGFloat = 22          // بين الإخوة أفقيًا
-    private let V_GAP: CGFloat = 48          // بين الأب وأبنائه عموديًا
-    private let ROW_GAP: CGFloat = 22        // بين صفوف الأبناء الملتفّة
+    private let H_GAP: CGFloat = 14          // بين الإخوة أفقيًا
+    private let V_GAP: CGFloat = 22          // بين الأب وأبنائه عموديًا
+    private let ROW_GAP: CGFloat = 14        // بين صفوف الأبناء الملتفّة
     private let CANVAS_PAD: CGFloat = 60     // هامش حول الشجرة
     private let PER_ROW = 3                  // أبناء لكل صف قبل الالتفاف
     private var NODE_H_DEFAULT: CGFloat { CIRCLE_FULL + NAME_H }
-    /// ارتفاع صندوق العقدة حسب الحالة (يطابق ترتيب TreeMemberNode: دائرة+اسم[+عدّاد][+سنوات]).
+    /// ارتفاع صندوق العقدة حسب الحالة (يطابق ترتيب TreeMemberNode: دائرة+اسم[+سنوات]).
+    /// شريحة التوسيع أُزيلت — العدّاد صار شارة فوق الصورة (طلب المالك).
     private func nodeBoxHeight(deceased: Bool, hasKids: Bool) -> CGFloat {
-        CIRCLE_FULL + NAME_H + (hasKids ? BADGE_H : 0) + (deceased ? LIFE_H : 0)
+        CIRCLE_FULL + NAME_H + (deceased ? LIFE_H : 0)
     }
 
     @Environment(\.verticalSizeClass) var verticalSizeClass
@@ -228,29 +168,6 @@ struct TreeView: View {
     @State private var cachedRootMembers: [FamilyMember] = []
     @State private var cachedChildrenByFatherId: [UUID: [FamilyMember]] = [:]
     @State private var cachedMemberIds: Set<UUID> = []
-
-    private var lightweightFullTree: Bool {
-        cachedVisibleMembers.count > 90
-    }
-
-    /// الحد الأقصى لعدد العقد المرسومة في وقت واحد لتجنب التهنيق
-    private var maxRenderedNodes: Int {
-        let count = cachedVisibleMembers.count
-        if count > 8000 { return 30 }
-        if count > 5000 { return 50 }
-        if count > 2000 { return 70 }
-        if count > 500  { return 100 }
-        return 150
-    }
-
-    private var preferredBaseScale: CGFloat { TreeConst.defaultScale }
-
-    private func preferredScaleForCurrentExpansion() -> CGFloat { TreeConst.defaultScale }
-
-    private var currentZoomPercentText: String {
-        let zoom = Int((scale * 100).rounded())
-        return "\(max(40, min(300, zoom)))%"
-    }
 
     private var primaryRootMember: FamilyMember? {
         cachedRootMembers.first
@@ -337,7 +254,40 @@ struct TreeView: View {
                             .frame(width: geometry.size.width, height: geometry.size.height)
                             .overlay(alignment: .topLeading) {
                                 ZStack(alignment: .topLeading) {
-                                    // وصلة قصيرة تحت الأب المفتوح (النمط الأصلي — بلا خطوط ممتدة بين العقد)
+                                    // خطوط الربط الحقيقية بين الأب وأبنائه (صف واحد ≤3 أبناء) — قوس عميق
+                                    Canvas { ctx, _ in
+                                        for link in connectorLinks {
+                                            var p = Path()
+                                            p.move(to: link.from)
+                                            let dy = link.to.y - link.from.y
+                                            // نقاط تحكم بعيدة (80%) — قوس مقوّس واضح بدل الخط شبه المستقيم
+                                            p.addCurve(to: link.to,
+                                                       control1: CGPoint(x: link.from.x, y: link.from.y + dy * 0.8),
+                                                       control2: CGPoint(x: link.to.x, y: link.to.y - dy * 0.8))
+                                            ctx.stroke(p,
+                                                       with: .color(link.kinship ? DS.Color.warning : DS.Color.primary.opacity(0.45)),
+                                                       style: StrokeStyle(lineWidth: link.kinship ? 3.5 : 2, lineCap: .round))
+                                        }
+                                        // قوس الآباء الملتفّة صفوفهم (>٣ أبناء مهما كثروا) — من أول ابن
+                                        // لثالث ابن، بقمة فيها كسرة خفيفة تحت الأب (منحنيان يلتقيان بزاوية)
+                                        for arc in connectorArcs {
+                                            var p = Path()
+                                            let apex = arc.control
+                                            p.move(to: arc.from)
+                                            p.addQuadCurve(to: apex,
+                                                           control: CGPoint(x: arc.from.x + (apex.x - arc.from.x) * 0.5,
+                                                                            y: arc.from.y))
+                                            p.addQuadCurve(to: arc.to,
+                                                           control: CGPoint(x: apex.x + (arc.to.x - apex.x) * 0.5,
+                                                                            y: arc.to.y))
+                                            ctx.stroke(p,
+                                                       with: .color(arc.kinship ? DS.Color.warning : DS.Color.primary.opacity(0.45)),
+                                                       style: StrokeStyle(lineWidth: arc.kinship ? 3.5 : 2, lineCap: .round, lineJoin: .round))
+                                        }
+                                    }
+                                    .frame(width: layout.size.width, height: layout.size.height, alignment: .topLeading)
+                                    .allowsHitTesting(false)
+                                    // وصلة قصيرة تحت الأب المفتوح (للآباء بأكثر من 3 أبناء — الشجرة الكبيرة ما تنرسم بخطوط)
                                     ForEach(connectorStubs) { stub in
                                         RoundedRectangle(cornerRadius: 2)
                                             .fill(stub.kinship ? DS.Color.warning : DS.Color.primary.opacity(0.6))
@@ -374,17 +324,19 @@ struct TreeView: View {
                         }
                     }
 
-                    VStack(spacing: DS.Spacing.md) {
+                    VStack(spacing: DS.Spacing.sm) {
                         MainHeaderView(
                             selectedTab: $selectedTab,
                             showingNotifications: $showingNotifications,
                             title: L10n.t("شجرة العائلة", "Family Tree"),
                             subtitle: "\(cachedVisibleMembers.count) " + L10n.t("فرد", "members"),
                             icon: "leaf.fill",
-                            backgroundGradient: DS.Color.gradientPrimary
+                            backgroundGradient: DS.Color.gradientPrimary,
+                            subtitleChip: true
                         )
 
-                        // تحت الهيدر: إمّا البحث (مع الفلاتر) أو صف الأدوات (تبويب + بحث + بداية + موقعي).
+                        // تحت الهيدر: إمّا البحث (مع الفلاتر) أو الشريط الموحّد
+                        // (أدوات + شريط المسار مدمجين في بطاقة واحدة مدمّجة).
                         Group {
                             if showSearch {
                                 TreeSearchOverlay(
@@ -394,15 +346,33 @@ struct TreeView: View {
                                     showFiltersWhenEmpty: true
                                 )
                             } else {
-                                classicToolbarRow
+                                VStack(spacing: 4) {
+                                    classicToolbarRow
+
+                                    // شريط المسار مدمج داخل نفس البطاقة — يظهر عند التعمق فقط
+                                    if breadcrumbChain.count > 1 {
+                                        DS.Color.mutedBackground
+                                            .frame(height: 1)
+                                            .padding(.horizontal, DS.Spacing.xs)
+                                        breadcrumbStrip
+                                    }
+                                }
+                                .padding(.horizontal, DS.Spacing.sm)
+                                .padding(.vertical, 3)
+                                // مادة مخففة (50%) — مائلة للشفافية لكن مو شفافة بالكامل
+                                .background {
+                                    RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                                        .fill(.ultraThinMaterial)
+                                        .opacity(0.5)
+                                }
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                                        .stroke(DS.Color.mutedBackground.opacity(0.7), lineWidth: 1)
+                                )
+                                .dsSubtleShadow()
                             }
                         }
                         .padding(.horizontal, DS.Spacing.sm)
-
-                        // شريط المسار — علوي، تحت شريط الأدوات (يظهر عند التعمق)
-                        if breadcrumbChain.count > 1 {
-                            breadcrumbBar
-                        }
                     }
                     .zIndex(101)
 
@@ -455,9 +425,8 @@ struct TreeView: View {
             }
             .toolbar(.hidden, for: .navigationBar)
             .sheet(item: $selectedMember) { member in
+                // الارتفاعات تُدار داخل MemberDetailsView (0.46/large) — مصدر واحد بلا تعارض
                 MemberDetailsView(member: member)
-                    .presentationDetents([.fraction(0.42), .large])
-                    .presentationDragIndicator(.visible)
             }
             .task {
                 if cachedVisibleMembers.isEmpty {
@@ -709,10 +678,10 @@ struct TreeView: View {
     /// زر دائري بأيقونة — تضليل خفيف (مو شفاف 100%).
     private func toolbarIconButton(icon: String, color: Color = DS.Color.primary) -> some View {
         Image(systemName: icon)
-            .font(DS.Font.scaled(16, weight: .bold))
+            .font(DS.Font.scaled(14, weight: .bold))
             .foregroundColor(color)
-            .frame(width: 44, height: 44)                         // هدف لمس ≥44pt
-            .background(DS.Color.surface, in: Circle())           // غير شفاف
+            .frame(width: 34, height: 34)                         // بار مدمّج أصغر
+            .background(DS.Color.surface.opacity(0.55), in: Circle())  // مخفف — مائل للشفاف
             .overlay(Circle().strokeBorder(DS.Color.primary.opacity(0.15), lineWidth: 1))
             .dsSubtleShadow()
             .contentShape(Circle())
@@ -750,59 +719,53 @@ struct TreeView: View {
         }
     }
 
-    private var breadcrumbBar: some View {
+    /// شريط المسار المدمّج — نسخة أصغر مدمجة داخل بطاقة الأدوات (يظهر عند التعمق فقط).
+    private var breadcrumbStrip: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: DS.Spacing.xs) {
+            HStack(spacing: 2) {
                 ForEach(Array(breadcrumbChain.enumerated()), id: \.element.id) { idx, m in
                     let isLast = idx == breadcrumbChain.count - 1
                     Button {
                         jumpToBreadcrumb(m)
                     } label: {
-                        HStack(spacing: 4) {
+                        HStack(spacing: 3) {
                             if idx == 0 {
                                 Image(systemName: "house.fill")
-                                    .font(DS.Font.scaled(10, weight: .bold))
+                                    .font(DS.Font.scaled(8, weight: .bold))
                             }
                             Text(m.firstName.isEmpty ? "—" : m.firstName)
-                                .font(DS.Font.scaled(12, weight: isLast ? .heavy : .semibold))
+                                .font(DS.Font.scaled(10, weight: isLast ? .heavy : .semibold))
                                 .lineLimit(1)
                         }
                         .foregroundColor(isLast ? DS.Color.textOnPrimary : DS.Color.textPrimary)
-                        .padding(.horizontal, DS.Spacing.md)
-                        .padding(.vertical, 6)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 1)
                         .background(isLast ? AnyShapeStyle(DS.Color.primary) : AnyShapeStyle(DS.Color.surface), in: Capsule())
-                        .overlay(Capsule().stroke(DS.Color.primary.opacity(isLast ? 0 : 0.25), lineWidth: 1))
+                        .overlay(Capsule().stroke(DS.Color.primary.opacity(isLast ? 0 : 0.2), lineWidth: 1))
                     }
                     .buttonStyle(DSScaleButtonStyle())
                     .accessibilityLabel(L10n.t("الرجوع إلى \(m.firstName)", "Back to \(m.firstName)"))
 
                     if !isLast {
                         Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
-                            .font(DS.Font.scaled(9, weight: .bold))
+                            .font(DS.Font.scaled(7, weight: .bold))
                             .foregroundColor(DS.Color.textTertiary)
                     }
                 }
             }
-            .padding(.horizontal, DS.Spacing.md)
-            .padding(.vertical, 6)
+            .padding(.horizontal, 2)
+            .padding(.vertical, 1)
         }
-        .background(.ultraThinMaterial, in: Capsule())
-        .overlay(Capsule().stroke(DS.Color.mutedBackground, lineWidth: 1))
-        .dsSubtleShadow()
-        .frame(maxWidth: .infinity)
-        .padding(.horizontal, DS.Spacing.lg)
         .transition(.move(edge: .top).combined(with: .opacity))
     }
 
-    // MARK: - أدوات التحديث — Glassy (أُزيلت أدوات الزوم؛ التكبير باللمس)
+    // MARK: - أداة التحديث — Glassy
     private var overlayTools: some View {
         VStack {
             Spacer()
             HStack {
                 Spacer()
                 VStack(spacing: 0) {
-                    // أُزيلت أدوات الزوم (+/−/%) — التكبير يبقى باللمس/الإيماءة.
-                    // نُبقي زر التحديث فقط.
                     Button(action: {
                         guard !isRefreshing else { return }
                         isRefreshing = true
@@ -953,10 +916,51 @@ struct TreeView: View {
         return L
     }
 
-    /// وصلات قصيرة تحت الآباء المفتوحين — النمط الأصلي البسيط.
+    /// نقاط خطوط الربط الحقيقية — فقط للآباء بصف واحد (≤3 أبناء ظاهرين).
+    /// أكثر من ذلك تبقى الوصلة القصيرة (طلب صريح سابق من المالك — الشجرة الكبيرة ما تنرسم بخطوط).
+    private var connectorLinks: [ConnectorLink] {
+        layout.childRows.flatMap { pid, rows -> [ConnectorLink] in
+            guard rows.count == 1, let kids = rows.first, !kids.isEmpty, kids.count <= 3,
+                  let pp = layout.positions[pid] else { return [] }
+            let ph = layout.heights[pid] ?? NODE_H_DEFAULT
+            let start = CGPoint(x: pp.x + NODE_W / 2, y: pp.y + ph - 2)
+            return kids.compactMap { cid in
+                guard let cp = layout.positions[cid] else { return nil }
+                let end = CGPoint(x: cp.x + NODE_W / 2, y: cp.y + 4)
+                let kin = kinshipHighlightedIds.contains(pid) && kinshipHighlightedIds.contains(cid)
+                return ConnectorLink(from: start, to: end, kinship: kin)
+            }
+        }
+    }
+
+    /// أقواس الآباء الملتفّة صفوفهم (أكثر من ٣ أبناء — حتى ٦ وأكثر): قوس يمتد من أول
+    /// ابن إلى ثالث ابن في الصف الأول، وقمته أسفل شارة الأب (بين الأب والأبناء).
+    private var connectorArcs: [ConnectorArc] {
+        layout.childRows.compactMap { pid, rows -> ConnectorArc? in
+            let total = rows.reduce(0) { $0 + $1.count }
+            guard total > 3, let firstRow = rows.first, firstRow.count >= 2,
+                  let pp = layout.positions[pid],
+                  let firstId = firstRow.first, let lastId = firstRow.last,
+                  let fp = layout.positions[firstId], let lp = layout.positions[lastId]
+            else { return nil }
+            let ph = layout.heights[pid] ?? NODE_H_DEFAULT
+            return ConnectorArc(
+                from: CGPoint(x: fp.x + NODE_W / 2, y: fp.y + 4),
+                control: CGPoint(x: pp.x + NODE_W / 2, y: pp.y + ph - 2),
+                to: CGPoint(x: lp.x + NODE_W / 2, y: lp.y + 4),
+                kinship: kinshipHighlightedIds.contains(pid)
+            )
+        }
+    }
+
+    /// وصلات قصيرة تحت الآباء المفتوحين — فقط لمن تجاوز أبناؤه حدّ رسم الخطوط (صف ملتفّ).
     private var connectorStubs: [ConnectorStub] {
         layout.childRows.compactMap { pid, rows in
             guard !rows.isEmpty, let pp = layout.positions[pid] else { return nil }
+            // الآباء بصف واحد (≤3) لهم خطوط ربط حقيقية — لا وصلة قصيرة
+            if rows.count == 1, let kids = rows.first, kids.count <= 3 { return nil }
+            // الآباء الملتفّة صفوفهم لهم قوس يصل للأب — الوصلة القصيرة تصير زائدة
+            if let firstRow = rows.first, firstRow.count >= 2 { return nil }
             let ph = layout.heights[pid] ?? NODE_H_DEFAULT
             return ConnectorStub(id: pid,
                                  x: pp.x + NODE_W / 2,
@@ -977,8 +981,6 @@ struct TreeView: View {
             hasChildren: !((cachedChildrenByFatherId[m.id] ?? []).isEmpty),
             childrenCount: (cachedChildrenByFatherId[m.id] ?? []).count,
             showName: true,
-            viewMode: viewMode,
-            lightweightFullTree: false,
             level: layout.depth[m.id] ?? 0,
             currentLocationMemberID: currentLocationMemberID,
             isKinshipHighlighted: kinshipHighlightedIds.contains(m.id),
@@ -1006,11 +1008,24 @@ struct TreeView: View {
         }
         userInteracted = true
         let opening = !wasExpanded || hasDeeper
-        withAnimation(DS.Anim.snappy) {
+        withAnimation(DS.Anim.smooth) {
             let L = rebuildLayout()
-            // الفتح والطي كلاهما يمركز العقدة بمنتصف الشاشة (مثل المحرّك السابق)
-            if opening { centerOn(member.id, in: L) }
-            else { centerOn(member.fatherId ?? member.id, in: L) }
+            // التمركز على العقدة بعد كل توسيع/طي — الشجرة تبقى بالمنتصف دائماً.
+            // عند الفتح يرتفع الأب حسب عدد صفوف أبنائه: صف واحد 42%،
+            // صفّان 34%، ثلاثة صفوف وأكثر (٧+ أبناء) 26% — ليظهر الصف الأخير.
+            if opening {
+                let rowCount = (kids.count + PER_ROW - 1) / PER_ROW
+                let anchor: CGFloat = rowCount >= 3 ? 0.26 : (rowCount == 2 ? 0.34 : 0.42)
+                centerOn(member.id, in: L, verticalAnchor: anchor)
+            } else {
+                // عند الطي: تمركز على الأب بنفس المنطق التكيّفي حسب صفوف أبنائه —
+                // الشجرة تنزل ويظهر جميع الإخوة (طلب المالك)
+                let pid = member.fatherId ?? member.id
+                let sibs = cachedChildrenByFatherId[pid] ?? []
+                let rowCount = max(1, (sibs.count + PER_ROW - 1) / PER_ROW)
+                let anchor: CGFloat = rowCount >= 3 ? 0.26 : (rowCount == 2 ? 0.34 : 0.42)
+                centerOn(pid, in: L, verticalAnchor: anchor)
+            }
         }
     }
 
@@ -1024,26 +1039,16 @@ struct TreeView: View {
 
     // ─── الكاميرا (offset) ───
 
-    /// يُمركز عقدة في وسط الشاشة.
-    private func centerOn(_ id: UUID, in L: FamilyLayout) {
+    /// يُمركز عقدة في الشاشة — أفقياً بالمنتصف دائماً، وعمودياً عند `verticalAnchor`
+    /// (0.5 = منتصف تماماً، 0.42 = أعلى قليلاً لتظهر الأبناء تحتها بعد التوسيع).
+    private func centerOn(_ id: UUID, in L: FamilyLayout, verticalAnchor: CGFloat = 0.5) {
         guard let p = L.positions[id], viewport.width > 0 else { return }
         userInteracted = true
         let s = scale
         let h = L.heights[id] ?? NODE_H_DEFAULT
         let cx = (p.x + NODE_W / 2) * s
         let cy = (p.y + h / 2) * s
-        offset = clampOffset(CGSize(width: viewport.width / 2 - cx, height: viewport.height / 2 - cy))
-        baseOffset = offset
-    }
-
-    /// يُنزل العقدة قرب أعلى الشاشة (تحت الهيدر) لتظهر أبناؤها تحتها.
-    private func scrollNodeToTop(_ id: UUID, in L: FamilyLayout) {
-        guard let p = L.positions[id], viewport.width > 0 else { return }
-        userInteracted = true
-        let s = scale
-        let topMargin: CGFloat = 160
-        let cx = (p.x + NODE_W / 2) * s
-        offset = clampOffset(CGSize(width: viewport.width / 2 - cx, height: topMargin - p.y * s))
+        offset = clampOffset(CGSize(width: viewport.width / 2 - cx, height: viewport.height * verticalAnchor - cy))
         baseOffset = offset
     }
 
@@ -1063,7 +1068,7 @@ struct TreeView: View {
         if let root = primaryRootMember, let p = L.positions[root.id] {
             rootCY = p.y + (L.heights[root.id] ?? NODE_H_DEFAULT) / 2
         }
-        let y = size.height * 0.45 - rootCY * s   // منتصف بصري (مع حساب الهيدر العائم)
+        let y = size.height * 0.37 - rootCY * s   // أعلى من المنتصف قليلاً (طلب المالك — رفع الجذر)
         return CGSize(width: (size.width - L.size.width * s) / 2, height: y)
     }
 
@@ -1117,6 +1122,23 @@ struct TreeView: View {
                     resetToTopRoot()
                 }
             })
+        } else if memberVM.membersVersion > 0 && !memberVM.isLoading {
+            // التحميل تم فعلاً لكن لا يوجد أعضاء — رسالة مختلفة عن "جاري المزامنة"
+            DSEmptyState(
+                icon: "leaf",
+                title: L10n.t("لا يوجد أفراد في الشجرة بعد", "No family members yet"),
+                subtitle: L10n.t("اسحب للتحديث أو تواصل مع الإدارة", "Pull to refresh or contact the admin"),
+                buttonTitle: L10n.t("تحديث", "Refresh"),
+                buttonAction: {
+                    Task {
+                        await memberVM.fetchAllMembers(force: true)
+                        guard !Task.isCancelled else { return }
+                        await rebuildCacheBackground()
+                        resetToTopRoot()
+                    }
+                },
+                buttonIcon: "arrow.clockwise"
+            )
         } else {
             VStack(spacing: DS.Spacing.xl) {
                 Spacer()
@@ -1159,8 +1181,6 @@ struct TreeMemberNode: View {
     let hasChildren: Bool
     let childrenCount: Int
     let showName: Bool
-    var viewMode: TreeDisplayMode
-    let lightweightFullTree: Bool
     var level: Int = 0
     let currentLocationMemberID: UUID?
     var isKinshipHighlighted: Bool = false
@@ -1212,121 +1232,17 @@ struct TreeMemberNode: View {
     }
 
     var body: some View {
-        if viewMode == .fullTree {
-            if lightweightFullTree {
-                // نسخة خفيفة Bold
-                Button(action: onTap) {
-                    HStack(spacing: 6) {
-                        Circle()
-                            .fill(
-                                member.isDeceased == true
-                                    ? DS.Color.muted
-                                    : nodeAccentColor
-                            )
-                            .frame(width: 14, height: 14)
-
-                        Text(fullDisplayName)
-                            .font(DS.Font.scaled(12, weight: .bold))
-                            .foregroundColor(DS.Color.textPrimary)
-                            .lineLimit(nil)
-                            .multilineTextAlignment(.center)
-                            .fixedSize(horizontal: false, vertical: true)
-
-                        if member.isDeceased ?? false {
-                            Text(getLifeSpan())
-                                .font(DS.Font.scaled(9, weight: .black))
-                                .foregroundColor(DS.Color.textSecondary)
-                                .lineLimit(1)
-                        }
-                    }
-                    .padding(.horizontal, 10)
-                    .frame(height: 28)
-                    .background(DS.Color.surface)
-                    .clipShape(Capsule())
-                    .overlay(
-                        Capsule().stroke(borderColor, lineWidth: 2.5)
-                    )
-                    .overlay {
-                        if isCurrentLocationMember {
-                            Capsule()
-                                .stroke(DS.Color.currentLocation, lineWidth: 2.8)
-                                .scaleEffect(isPulsing ? 1.3 : 1.0)
-                                .opacity(isPulsing ? 0.0 : 0.9)
-                                .shadow(color: DS.Color.currentLocation.opacity(0.45), radius: 7)
-                                .animation(Animation.easeOut(duration: 1.25).repeatCount(4, autoreverses: false), value: isPulsing)
-                                .onAppear { isPulsing = true }
-                        }
-                    }
-                }
-                .buttonStyle(.plain)
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(nodeAccessibilityLabel)
-                .accessibilityHint(L10n.t("افتح التفاصيل", "Open details"))
-                .frame(minWidth: 114, alignment: .top)
-                .zIndex(5)
-            } else {
-                // الوضع الكامل — Bold مع تدرج
-                VStack(spacing: 5) {
-                    Button(action: onTap) {
-                        ZStack {
-                            Circle()
-                                .fill(nodeAccentColor)
-                                .frame(width: 56, height: 56)
-                                .dsSubtleShadow()
-
-                            Text(String(fullDisplayName.prefix(1)))
-                                .font(DS.Font.scaled(19, weight: .black))
-                                .foregroundColor(DS.Color.textOnPrimary)
-                        }
-                    }
-                    .overlay {
-                        if isCurrentLocationMember {
-                            Circle()
-                                .stroke(DS.Color.currentLocation, lineWidth: 4.2)
-                                .frame(width: 64, height: 64)
-                                .scaleEffect(isPulsing ? 1.4 : 1.0)
-                                .opacity(isPulsing ? 0.0 : 0.9)
-                                .shadow(color: DS.Color.currentLocation.opacity(0.5), radius: 10)
-                                .animation(Animation.easeOut(duration: 1.25).repeatCount(4, autoreverses: false), value: isPulsing)
-                                .onAppear { isPulsing = true }
-                        }
-                    }
-                    .overlay(alignment: .top) {
-                        if isCurrentLocationMember {
-                            Text(L10n.t("أنت هنا", "You"))
-                                .font(DS.Font.scaled(10, weight: .bold))
-                                .foregroundColor(DS.Color.textOnPrimary)
-                                .padding(.horizontal, 7)
-                                .padding(.vertical, 2)
-                                .background(DS.Color.currentLocation)
-                                .clipShape(Capsule())
-                                .offset(y: -14)
-                        }
-                    }
-
-                    Text(fullDisplayName)
-                        .font(DS.Font.scaled(12, weight: .bold))
-                        .foregroundColor(DS.Color.textPrimary)
-                        .multilineTextAlignment(.center)
-                        .lineLimit(nil)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.horizontal, 10)
-                        .frame(minWidth: 60, minHeight: 24)
-                        .background(DS.Color.surface)
-                        .clipShape(Capsule())
-                        .overlay(Capsule().stroke(borderColor, lineWidth: 2.5))
-                }
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(nodeAccessibilityLabel)
-                .accessibilityHint(L10n.t("افتح التفاصيل", "Open details"))
-                .frame(minWidth: 126, alignment: .top)
-                .zIndex(5)
-            }
-
-        } else {
             // الوضع التفاعلي — دائري
             VStack(spacing: 0) {
-                Button(action: onTap) {
+                // الصورة: توسيع/طي الأبناء — وبلا أبناء تفتح التفاصيل (طلب المالك)
+                Button {
+                    if hasChildren {
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        onToggle()
+                    } else {
+                        onTap()
+                    }
+                } label: {
                     ZStack {
                         // الدائرة الرئيسية — ظل ملوّن ناعم بلون الرتبة (عمق أنظف)
                         Circle()
@@ -1417,6 +1333,25 @@ struct TreeMemberNode: View {
                             .offset(x: -6, y: -6)
                     }
                 }
+                .overlay(alignment: .topLeading) {
+                    // شارة عدد الأبناء + سهم — فوق يسار الصورة (رقم أكبر — طلب المالك)
+                    if hasChildren {
+                        HStack(spacing: 2) {
+                            Text("\(childrenCount)")
+                                .font(DS.Font.scaled(16, weight: .heavy))
+                            Image(systemName: "chevron.down")
+                                .font(DS.Font.scaled(11, weight: .heavy))
+                                .rotationEffect(.degrees(isExpanded ? 180 : 0))
+                        }
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 8)
+                        .frame(minWidth: 34, minHeight: 32)
+                        .background(Capsule().fill(isKinshipHighlighted ? DS.Color.warning : DS.Color.primaryDark))   // أغمق من لون العضو بلا صورة
+                        .overlay(Capsule().stroke(DS.Color.textOnPrimary.opacity(0.45), lineWidth: 1.2))
+                        .shadow(color: DS.Color.primary.opacity(0.4), radius: 4, y: 2)
+                        .offset(x: -2, y: 0)
+                    }
+                }
                 .overlay(alignment: .top) {
                     // علامة "أنت هنا" — overlay لا يأثر على الـ layout
                     if isCurrentLocationMember {
@@ -1442,70 +1377,75 @@ struct TreeMemberNode: View {
                 }
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(nodeAccessibilityLabel)
-                .accessibilityHint(L10n.t("افتح التفاصيل", "Open details"))
+                .accessibilityHint(hasChildren
+                    ? L10n.t("توسيع أو طي الأبناء", "Expand or collapse children")
+                    : L10n.t("افتح التفاصيل", "Open details"))
 
-                // الاسم
-                Button(action: onToggle) {
-                    if showName {
-                        Text(displayName)
-                            .font(DS.Font.scaled(15, weight: .bold))
-                            .foregroundColor(DS.Color.textPrimary)
-                            .lineLimit(1)
-                            .multilineTextAlignment(.center)
-                            .minimumScaleFactor(0.75)
-                            .padding(.horizontal, DS.Spacing.lg)
-                            .frame(minWidth: interactiveLabelWidth)
-                            .frame(height: interactiveLabelHeight + 2, alignment: .center)
-                            .background(DS.Color.surface)
-                            .clipShape(Capsule())
-                            .overlay(Capsule().stroke(borderGradient, lineWidth: 2.5))
-                    }
-                }.foregroundColor(DS.Color.textOnPrimary).zIndex(1)
-
-                // سهم التوسيع — نص دائرة أسفل الاسم
-                if hasChildren {
-                    Button(action: onToggle) {
-                        HStack(spacing: DS.Spacing.xs) {
-                            Text("\(childrenCount)")
-                                .font(DS.Font.scaled(15, weight: .heavy))
-                            Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                                .font(DS.Font.scaled(14, weight: .heavy))
+                // الاسم — كبسولة مستقلة، وتحتها مربع التاريخ المنفصل للمتوفى.
+                // نموذج تفاعل موحّد: كل ما يخص الشخص (دائرة/اسم/تواريخ) يفتح تفاصيله،
+                // والتوسيع له زر مستقل مدخل تحت آخر مربع (شريحة العدد + السهم).
+                Button(action: onTap) {
+                    Group {
+                        if member.isDeceased ?? false {
+                            // ── المتوفّى: بطاقة واحدة مدمجة — الاسم فوق وشريط السنوات الأحمر تحته ──
+                            VStack(spacing: 0) {
+                                if showName {
+                                    Text(displayName)
+                                        .font(DS.Font.scaled(15, weight: .bold))
+                                        .foregroundColor(DS.Color.textPrimary)
+                                        .lineLimit(1)
+                                        .minimumScaleFactor(0.75)
+                                        .padding(.horizontal, DS.Spacing.lg)
+                                        .padding(.vertical, 5)
+                                        .frame(minWidth: interactiveLabelWidth, minHeight: interactiveLabelHeight + 2)
+                                        .background(DS.Color.surface)
+                                }
+                                Text(getLifeSpan())
+                                    .font(DS.Font.scaled(11, weight: .heavy))
+                                    .foregroundColor(.white)
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.7)
+                                    .padding(.horizontal, DS.Spacing.md)
+                                    .padding(.vertical, 4)
+                                    // maxWidth يمدّد الشريط الأحمر ليطابق عرض الاسم مهما طال
+                                    .frame(minWidth: interactiveLabelWidth, maxWidth: .infinity, minHeight: 21)
+                                    .background(Color(hex: "#A62B32"))   // عنّابي بدرجة خفيفة (طلب المالك)
+                            }
+                            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+                            .overlay(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                                .stroke(borderGradient, lineWidth: 2.5))
+                        } else if showName {
+                            Text(displayName)
+                                .font(DS.Font.scaled(15, weight: .bold))
+                                .foregroundColor(DS.Color.textPrimary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.75)
+                                .padding(.horizontal, DS.Spacing.lg)
+                                .padding(.vertical, 5)
+                                .frame(minWidth: interactiveLabelWidth, minHeight: interactiveLabelHeight + 2)
+                                .background(DS.Color.surface)
+                                .clipShape(Capsule())
+                                .overlay(Capsule().stroke(borderGradient, lineWidth: 2.5))
                         }
-                        .dynamicTypeSize(...DynamicTypeSize.xLarge)
-                        .foregroundColor(.white)
-                        .frame(width: 60, height: 28)
-                        .background(
-                            isKinshipHighlighted
-                                ? DS.Color.warning
-                                : (member.isDeceased == true ? DS.Color.textTertiary : DS.Color.primaryDark)
-                        )
-                        .clipShape(SemiCircleShape())
                     }
-                    .accessibilityLabel(isExpanded
-                        ? L10n.t("طي الأبناء", "Collapse children")
-                        : L10n.t("عرض \(childrenCount) أبناء", "Show \(childrenCount) children"))
-                    .offset(y: -1)
-                    .zIndex(0)
+                    .contentShape(Rectangle())
                 }
-
-                // سنوات الميلاد–الوفاة كتعليق خافت تحت الاسم (بدل الشريط الأحمر السابق)
-                if member.isDeceased ?? false {
-                    Text(getLifeSpan())
-                        .font(DS.Font.scaled(11, weight: .semibold))
-                        .foregroundColor(DS.Color.textSecondary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-                        .padding(.top, DS.Spacing.xs)
-                }
+                .buttonStyle(DSScaleButtonStyle())
+                .zIndex(1)
+                .accessibilityLabel(displayName)
+                .accessibilityHint(L10n.t("افتح التفاصيل", "Open details"))
+                // (شريحة التوسيع أُزيلت — العدّاد شارة فوق الصورة والصورة تتوسّع)
             }.fixedSize()
-        }
     }
 
     func getLifeSpan() -> String {
         let birth = member.birthDate?.prefix(4); let death = member.deathDate?.prefix(4)
         if (birth == nil || birth == "") && (death == nil || death == "") { return L10n.t("متوفى", "Deceased") }
-        // سنة الوفاة يسار، سنة الميلاد يمين — قراءة RTL تبدأ من الميلاد (يمين) للوفاة (يسار)
-        return "\(death ?? "?") - \(birth ?? "?")"
+        // سنة الميلاد أولاً ثم الوفاة (معكوس — طلب المالك)
+        // كل سنة تُلحق بـ«م» (ميلادي)، والمجهولة تُعرض «0000م»
+        let b = (birth == nil || birth == "") ? "0000م" : "\(birth!)م"
+        let d = (death == nil || death == "") ? "0000م" : "\(death!)م"
+        return "\(b) - \(d)"
     }
 
     private var displayName: String {
@@ -1543,57 +1483,5 @@ struct TreeMemberNode: View {
             parts.append(L10n.t("موقعك الحالي", "your location"))
         }
         return parts.joined(separator: "، ")
-    }
-}
-
-// MARK: - مفتاح التقاط حجم محتوى الشجرة (لزوم النقر المزدوج نحو نقطة اللمس)
-private struct TreeContentSizeKey: PreferenceKey {
-    static var defaultValue: CGSize = .zero
-    static func reduce(value: inout CGSize, nextValue: () -> CGSize) {
-        let next = nextValue()
-        if next != .zero { value = next }
-    }
-}
-
-// MARK: - نص دائرة (النص السفلي)
-private struct SemiCircleShape: Shape {
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        path.move(to: CGPoint(x: 0, y: 0))
-        path.addLine(to: CGPoint(x: rect.width, y: 0))
-        path.addArc(
-            center: CGPoint(x: rect.midX, y: 0),
-            radius: rect.width / 2,
-            startAngle: .degrees(0),
-            endAngle: .degrees(180),
-            clockwise: false
-        )
-        path.closeSubpath()
-        return path
-    }
-}
-
-// MARK: - شكل سداسي
-private struct HexagonShape: Shape {
-    func path(in rect: CGRect) -> Path {
-        let w = rect.width
-        let h = rect.height
-        let cx = rect.midX
-        let cy = rect.midY
-        let r = min(w, h) / 2
-
-        var path = Path()
-        for i in 0..<6 {
-            let angle = Angle(degrees: Double(i) * 60 - 90)
-            let x = cx + r * CGFloat(cos(angle.radians))
-            let y = cy + r * CGFloat(sin(angle.radians))
-            if i == 0 {
-                path.move(to: CGPoint(x: x, y: y))
-            } else {
-                path.addLine(to: CGPoint(x: x, y: y))
-            }
-        }
-        path.closeSubpath()
-        return path
     }
 }

@@ -23,14 +23,14 @@ struct WomenClassicTreeView: View {
     private let NODE_W: CGFloat = 62        // أضيق → أقرب
     private var NODE_H: CGFloat { CIRCLE + 4 + PILL_H + LIFE_H + BADGE_H - 6 }
     private let H_GAP: CGFloat = 6          // بين الإخوة جنب بعض (جنس واحد)
-    private let V_GAP: CGFloat = 15
+    private let V_GAP: CGFloat = 22    // بين الأب وأبنائه — مساحة أوسع عند التوسع (طلب المالك)
     private let ROW_GAP: CGFloat = 3        // بين الأبناء المكدّسين عموديًا
     private let MAX_PER_ROW = 3             // صفوف أفقية عند وجود جنس واحد فقط
     private let STUB: CGFloat = 11
     private let PAD: CGFloat = 32
-    private let GENDER_GAP: CGFloat = 4     // بين عمود الذكور وعمود الإناث
+    private let GENDER_GAP: CGFloat = 12    // بين عمود الذكور وعمود الإناث — مسافة خفيفة (طلب المالك)
 
-    private let rose = Color(hex: "#C07A8C")
+    private let rose = DS.Color.female
 
     @State private var collapsed: Set<UUID> = []
     @State private var initedRoot: UUID? = nil
@@ -43,6 +43,7 @@ struct WomenClassicTreeView: View {
     @State private var baseOffset: CGSize = .zero
     @State private var viewport: CGSize = .zero
     @State private var pendingExpandScroll: UUID? = nil   // عقدة توسّعت لتوّها → ننزل لأبنائها
+    @State private var pendingCollapseScroll: UUID? = nil // عقدة طُويت → ننزل لأبيها ليظهر الإخوة
 
     // كاش يُعاد حسابه فقط عند تغيّر الطيّ/البيانات — لا يُحسب أثناء السحب (سلاسة).
     @State private var layout = Layout()
@@ -98,9 +99,9 @@ struct WomenClassicTreeView: View {
 
     /// ارتفاع صندوق العقدة — يطابق الارتفاع الفعلي بدقّة (لمحاذاة الأسماء بين الأعمدة).
     private func nodeBoxHeight(deceased: Bool, hasKids: Bool) -> CGFloat {
+        // شريحة السهم أُزيلت — العدّاد صار شارة فوق الصورة، فلا ارتفاع إضافي للأبناء
         var h = CIRCLE + 2 + PILL_H
         if deceased { h += 2 + LIFE_H }
-        if hasKids { h += 2 + BADGE_H }
         return h
     }
 
@@ -123,10 +124,15 @@ struct WomenClassicTreeView: View {
         // ── منطق التوزيعة ──
         // أفقي (لفّ): ٣ كحدّ أقصى في الصف الواحد للذكور (مثلاً ٤ → ٣+١ · ٥ → ٣+٢).
         func perRowH(_ n: Int) -> Int { n <= 3 ? max(1, n) : 3 }
-        // عمودي (أعمدة جنسية): عمود واحد حتى ٥، ثم ~٤ لكل عمود فرعي.
-        func perRowV(_ n: Int) -> Int { n <= 5 ? 1 : Int(ceil(Double(n) / 4.0)) }
+        // عمودي (أعمدة جنسية): عمود واحد حتى ٤ · خمسة → عمودان والأخير تحتهم (٢+٢+١
+        // — طلب المالك) · أكثر → ~٤ لكل عمود فرعي.
+        func perRowV(_ n: Int) -> Int {
+            if n <= 4 { return 1 }
+            if n == 5 { return 2 }
+            return Int(ceil(Double(n) / 4.0))
+        }
         let stackGap: CGFloat = 10   // فجوة بين صفّ الذكور وصفّ الإناث (وضع مكدّس)
-        let pairGap: CGFloat = 0     // ذكر+أنثى: ملاصقين بالإطار مباشرة (بلا فجوة ولا تلاصق)
+        let pairGap: CGFloat = H_GAP // ذكر+أنثى: نفس مسافة بقية الإخوة (طلب المالك)
         // الترتيب: جنس واحد → أفقي (٣/صف) · ذكر+أنثى فقط → جنب بعض · أقلية واحدة → مكدّس · كلاهما ≥٢ → عمودان.
         enum Arrange { case single, stacked, sideBySide, pair }
         func arrange(_ mCount: Int, _ fCount: Int) -> Arrange {
@@ -136,14 +142,19 @@ struct WomenClassicTreeView: View {
             return .sideBySide
         }
 
-        func blockDims(_ boxes: [CGSize], _ per: Int) -> CGSize {
+        // فجوة الصفوف: أي كتلة إخوة تلتف لأكثر من سطر (ذكوراً أو إناثاً)
+        // تأخذ مسافة أوسع بين سطورها (طلب المالك)
+        func rowGapFor(_ list: [FamilyMember], _ per: Int) -> CGFloat {
+            list.count > per ? ROW_GAP + 9 : ROW_GAP
+        }
+        func blockDims(_ boxes: [CGSize], _ per: Int, _ gap: CGFloat) -> CGSize {
             var w: CGFloat = 0, h: CGFloat = 0
             var i = 0
             while i < boxes.count {
                 let row = Array(boxes[i..<min(i + per, boxes.count)])
                 let rowW = row.reduce(0) { $0 + $1.width } + H_GAP * CGFloat(row.count - 1)
                 let rowH = row.map(\.height).max() ?? 0
-                w = max(w, rowW); h += (i > 0 ? ROW_GAP : 0) + rowH
+                w = max(w, rowW); h += (i > 0 ? gap : 0) + rowH
                 i += per
             }
             return CGSize(width: w, height: h)
@@ -154,10 +165,10 @@ struct WomenClassicTreeView: View {
                           hasKids: !(cOf[id]?.isEmpty ?? true))
         }
         func measureBlock(_ list: [FamilyMember], _ per: Int) -> CGSize {
-            list.isEmpty ? .zero : blockDims(list.map { measure($0.id) }, per)
+            list.isEmpty ? .zero : blockDims(list.map { measure($0.id) }, per, rowGapFor(list, per))
         }
         func cachedBlock(_ list: [FamilyMember], _ per: Int) -> CGSize {
-            list.isEmpty ? .zero : blockDims(list.map { sizeCache[$0.id] ?? CGSize(width: NODE_W, height: boxH($0.id)) }, per)
+            list.isEmpty ? .zero : blockDims(list.map { sizeCache[$0.id] ?? CGSize(width: NODE_W, height: boxH($0.id)) }, per, rowGapFor(list, per))
         }
         func measure(_ id: UUID) -> CGSize {
             let bh = boxH(id)
@@ -194,6 +205,7 @@ struct WomenClassicTreeView: View {
         var placed = Set<UUID>()
         func placeBlock(_ pid: UUID, _ list: [FamilyMember], _ cx: CGFloat, _ top: CGFloat, _ d: Int, _ per: Int) {
             var rowTop = top
+            let gap = rowGapFor(list, per)
             var i = 0
             while i < list.count {
                 let rowKids = Array(list[i..<min(i + per, list.count)])
@@ -205,7 +217,7 @@ struct WomenClassicTreeView: View {
                     place(k.id, x + rowBoxes[j].width / 2, rowTop, d)
                     x += rowBoxes[j].width + H_GAP
                 }
-                rowTop += rowH + ROW_GAP
+                rowTop += rowH + gap
                 i += per
             }
         }
@@ -258,11 +270,8 @@ struct WomenClassicTreeView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            // ── شريط الأدوات (شفاف، فوق الشجرة): بداية · تبويب · موقعي ──
-            toolbarRow
-
-            // ── منطقة الشجرة (حركة محصورة داخل صندوقها فقط) ──
+        ZStack(alignment: .top) {
+            // ── منطقة الشجرة (تمر تحت البار العائم — مثل شجرة العائلة) ──
             GeometryReader { geo in
                 // حاوية بحجم الشاشة + الكانفس كـ overlay — يمنع انزياح الشجرة
                 // عندما يكون الكانفس أعرض من الشاشة (الحاوية لا تتمدد لحجمه).
@@ -270,16 +279,41 @@ struct WomenClassicTreeView: View {
                     .frame(width: geo.size.width, height: geo.size.height)
                     .overlay(alignment: .topLeading) {
                         ZStack(alignment: .topLeading) {
-                            // الوصلات — خط قصير تحت الأب فقط (النمط الأصلي)
-                            ForEach(Array(layout.stubs), id: \.self) { pid in
-                                if let a = layout.positions[pid] {
+                            // الوصلات — قوس بكسرة خفيفة من أول لآخر ابن بالصف الأول
+                            // (مثل شجرة العائلة)، وخط قصير عند ابن ظاهر واحد فقط
+                            Canvas { ctx, _ in
+                                for pid in layout.stubs {
+                                    guard let a = layout.positions[pid] else { continue }
                                     let ph = layout.heights[pid] ?? NODE_H
-                                    Rectangle()
-                                        .fill(DS.Color.primary.opacity(0.5))
-                                        .frame(width: 2, height: STUB)
-                                        .position(x: a.x + NODE_W / 2, y: a.y + ph + (V_GAP - STUB) / 2 + STUB / 2)
+                                    let pts = visibleChildren(pid, cChildrenOf)
+                                        .compactMap { layout.positions[$0.id] }
+                                    let minY = pts.map(\.y).min() ?? 0
+                                    let topRow = pts.filter { abs($0.y - minY) < 1 }.sorted { $0.x < $1.x }
+                                    if topRow.count >= 2, let f = topRow.first, let l = topRow.last {
+                                        let apex = CGPoint(x: a.x + NODE_W / 2, y: a.y + ph - 2)
+                                        let from = CGPoint(x: f.x + NODE_W / 2, y: f.y + 3)
+                                        let to = CGPoint(x: l.x + NODE_W / 2, y: l.y + 3)
+                                        var p = Path()
+                                        p.move(to: from)
+                                        p.addQuadCurve(to: apex,
+                                                       control: CGPoint(x: from.x + (apex.x - from.x) * 0.5, y: from.y))
+                                        p.addQuadCurve(to: to,
+                                                       control: CGPoint(x: apex.x + (to.x - apex.x) * 0.5, y: to.y))
+                                        ctx.stroke(p, with: .color(DS.Color.primary.opacity(0.45)),
+                                                   style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
+                                    } else {
+                                        var p = Path()
+                                        let x = a.x + NODE_W / 2
+                                        let top = a.y + ph + (V_GAP - STUB) / 2
+                                        p.move(to: CGPoint(x: x, y: top))
+                                        p.addLine(to: CGPoint(x: x, y: top + STUB))
+                                        ctx.stroke(p, with: .color(DS.Color.primary.opacity(0.5)),
+                                                   style: StrokeStyle(lineWidth: 2, lineCap: .round))
+                                    }
                                 }
                             }
+                            .frame(width: layout.size.width, height: layout.size.height, alignment: .topLeading)
+                            .allowsHitTesting(false)
                             // العُقد
                             ForEach(members.filter { layout.positions[$0.id] != nil }, id: \.id) { m in
                                 nodeView(m, at: layout.positions[m.id]!)
@@ -317,12 +351,20 @@ struct WomenClassicTreeView: View {
                         if let exp = pendingExpandScroll, L.positions[exp] != nil {
                             pendingExpandScroll = nil
                             scrollNodeToTop(exp, in: L)      // ينزل ليُظهر الأبناء والأب فوقهم
+                        } else if let col = pendingCollapseScroll {
+                            pendingCollapseScroll = nil
+                            // طي: تمركز على أب العقدة المطوية — تنزل الشجرة ويظهر كل الإخوة
+                            if L.positions[col] != nil { scrollNodeToTop(col, in: L) }
                         } else if !userInteracted {
                             fit(in: geo.size, layout: L)
                         }
                     }
                 }
             }
+
+            // ── شريط الأدوات يطفو فوق الشجرة (شفافيته تبان لما تمر العقد تحته) ──
+            toolbarRow
+                .zIndex(101)
         }
     }
 
@@ -336,7 +378,7 @@ struct WomenClassicTreeView: View {
         return L
     }
 
-    // ─── شريط الأدوات العلوي — مطابق لشجرة العائلة ───
+    // ─── شريط الأدوات العلوي — نفس بطاقة شجرة العائلة المدمّجة ───
     private var toolbarRow: some View {
         HStack(spacing: DS.Spacing.sm) {
             // البداية — رجوع للجذر + إعادة الملاءمة (بحركة واضحة)
@@ -369,16 +411,29 @@ struct WomenClassicTreeView: View {
             }
             .buttonStyle(DSScaleButtonStyle())
         }
-        .padding(.horizontal, DS.Spacing.lg)
+        .padding(.horizontal, DS.Spacing.sm)
+        .padding(.vertical, 3)
+        // مادة مخففة (50%) — نفس بار شجرة العائلة
+        .background {
+            RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .opacity(0.5)
+        }
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                .stroke(DS.Color.mutedBackground.opacity(0.7), lineWidth: 1)
+        )
+        .dsSubtleShadow()
+        .padding(.horizontal, DS.Spacing.sm)
         .padding(.top, DS.Spacing.sm)
     }
 
     private func toolbarIcon(_ icon: String) -> some View {
         Image(systemName: icon)
-            .font(DS.Font.scaled(16, weight: .bold))
+            .font(DS.Font.scaled(14, weight: .bold))
             .foregroundColor(DS.Color.primary)
-            .frame(width: 40, height: 40)
-            .background(DS.Color.surface, in: Circle())           // غير شفاف
+            .frame(width: 34, height: 34)
+            .background(DS.Color.surface.opacity(0.55), in: Circle())  // مخفف — مائل للشفاف
             .overlay(Circle().strokeBorder(DS.Color.primary.opacity(0.15), lineWidth: 1))
             .dsSubtleShadow()
             .contentShape(Circle())
@@ -458,40 +513,60 @@ struct WomenClassicTreeView: View {
 
         VStack(spacing: 2) {
             ZStack {
-                // الزوجات جنب العضو — مربّع صغير + الاسم الأول تحته
+                // الزوجات جنب العضو — جنب بعض افتراضياً، وإذا كان اسم إحداهن طويلاً
+                // تتكدس عمودياً (تحت بعض) ليتّسع الاسم الأول والأخير (طلب المالك)
                 if !wives.isEmpty {
-                    HStack(alignment: .top, spacing: 1) {
-                        ForEach(wives.prefix(3)) { w in
-                            VStack(spacing: 1) {
-                                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                                    .fill(w.isDeceased == true ? DS.Color.textTertiary : rose)
-                                    .frame(width: 24, height: 24)
-                                    .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous).stroke(Color.white.opacity(0.9), lineWidth: 1))
-                                    .overlay(Text(String(w.firstName.prefix(1))).font(.system(size: 11, weight: .bold)).foregroundColor(.white))
-                                    .saturation(w.isDeceased == true ? 0 : 1)
-                                Text(String(w.firstName.split(separator: " ").first ?? ""))
-                                    .font(.system(size: 8, weight: .medium))
-                                    .foregroundColor(DS.Color.textSecondary)
-                                    .lineLimit(1).frame(width: 30)
+                    let longName = wives.prefix(3).contains { wifeShortName($0).count > 12 }
+                    Group {
+                        if longName {
+                            VStack(alignment: .center, spacing: 4) {
+                                ForEach(wives.prefix(3)) { wifeCell($0) }
+                            }
+                        } else {
+                            // مسافة بين الزوجات — الأسماء ما تلتصق ببعض (طلب المالك)
+                            HStack(alignment: .top, spacing: 6) {
+                                ForEach(wives.prefix(3)) { wifeCell($0) }
                             }
                         }
                     }
-                    .offset(x: -(CIRCLE / 2 + 6 + CGFloat(min(wives.count, 3)) * 17), y: -2)
+                    .offset(x: longName
+                                ? -(CIRCLE / 2 + 6 + 17)
+                                : -(CIRCLE / 2 + 6
+                                    + CGFloat(min(wives.count, 3)) * 17
+                                    + CGFloat(max(0, min(wives.count, 3) - 1)) * 3),
+                            y: -2)
                 }
                 // شكل العضو (squircle) — إطار أخف. المتوفّى: صورة غير ملوّنة.
+                // قاعدة معتمة تحت اللون الشفاف — تمنع ظهور خط القوس خلف خلفية العضو
                 shape
-                    .fill(deceased ? DS.Color.textTertiary.opacity(0.5) : accent)
+                    .fill(DS.Color.background)
+                    // مربع الابنة بنفس غمقة مربع الزوجة (طلب المالك) — رمادي أنعم قليلاً
+                    .overlay(shape.fill(deceased
+                        ? (female ? DS.Color.textTertiary.opacity(0.85) : DS.Color.textTertiary.opacity(0.5))
+                        : accent))
                     .frame(width: CIRCLE, height: CIRCLE)
                     .overlay(
                         Group {
                             if !female, let url = m.avatarUrl, let u = URL(string: url) {
                                 CachedAsyncImage(url: u) { img in img.resizable().scaledToFill() } placeholder: {
-                                    Text(String(m.firstName.prefix(1))).font(.system(size: CIRCLE * 0.42, weight: .bold)).foregroundColor(.white)
+                                    Image(systemName: "person.fill")
+                                        .font(.system(size: CIRCLE * 0.42, weight: .semibold))
+                                        .foregroundColor(.white)
                                 }
                                 .frame(width: CIRCLE, height: CIRCLE).clipShape(shape)
                                 .saturation(deceased ? 0 : 1)          // متوفّى → غير ملوّنة
+                            } else if female {
+                                // الإناث: كلمة «ابنة» بدل الحرف الأول
+                                Text(L10n.t("ابنة", "Daughter"))
+                                    .font(.system(size: CIRCLE * 0.26, weight: .bold))
+                                    .minimumScaleFactor(0.7)
+                                    .lineLimit(1)
+                                    .foregroundColor(.white)
                             } else {
-                                Text(String(m.firstName.prefix(1))).font(.system(size: CIRCLE * 0.42, weight: .bold)).foregroundColor(.white)
+                                // الذكور بلا صورة: أيقونة شخص بدل الحرف (طلب المالك)
+                                Image(systemName: "person.fill")
+                                    .font(.system(size: CIRCLE * 0.42, weight: .semibold))
+                                    .foregroundColor(.white)
                             }
                         }
                     )
@@ -510,43 +585,79 @@ struct WomenClassicTreeView: View {
                                 .offset(x: 4, y: 4)
                         }
                     }
+                    // شارة عدد الأبناء + سهم — فوق يسار الصورة (طلب المالك)
+                    .overlay(alignment: .topLeading) {
+                        if !kids.isEmpty {
+                            HStack(spacing: 1.5) {
+                                Text("\(kids.count)")
+                                    .font(.system(size: 10, weight: .heavy))
+                                Image(systemName: "chevron.down")
+                                    .font(.system(size: 7, weight: .heavy))
+                                    .rotationEffect(.degrees(isCollapsed ? 0 : 180))
+                            }
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 5)
+                            .frame(minWidth: 18, minHeight: 18)
+                            .background(Capsule().fill(DS.Color.primaryDark))   // أغمق من لون العضو بلا صورة (طلب المالك)
+                            .overlay(Capsule().stroke(Color.white.opacity(0.9), lineWidth: 1.2))
+                            .offset(x: -7, y: -7)
+                        }
+                    }
             }
             .frame(width: CIRCLE, height: CIRCLE)
-            .onTapGesture { onSelect?(m) }   // الشكل يفتح التفاصيل
-
-            Text(m.firstName)
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundColor(DS.Color.textPrimary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-                .padding(.horizontal, 6)
-                .frame(maxWidth: NODE_W)
-                .frame(height: PILL_H)
-                .background(Capsule().fill(DS.Color.surface))
-                .overlay(Capsule().stroke(accent.opacity(0.4), lineWidth: 1))
-
-            // سنوات الوفاة–الميلاد للمتوفّى — رمادي خافت (المتوفّى غير ملوّن، يطابق شجرة العائلة)
-            if deceased, let ls = lifeSpanNeat(m) {
-                Text(ls)
-                    .font(.system(size: 8.5, weight: .bold))
-                    .foregroundColor(DS.Color.textSecondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
-                    .environment(\.layoutDirection, .leftToRight)
-                    .padding(.horizontal, 5)
-                    .frame(maxWidth: NODE_W)
-                    .frame(height: LIFE_H)
-                    .background(Capsule().fill(DS.Color.textTertiary.opacity(0.12)))
-                    .overlay(Capsule().stroke(DS.Color.textTertiary.opacity(0.25), lineWidth: 0.5))
+            // الصورة: توسيع/طي الأبناء — وبلا أبناء تفتح التفاصيل (طلب المالك)
+            .onTapGesture {
+                if kids.isEmpty { onSelect?(m); return }
+                if collapsed.contains(m.id) {
+                    pendingExpandScroll = m.id    // توسّع → انزل للأبناء
+                    lastExpandedId = m.id         // أبناؤه يدخلون بتدرّج
+                } else {
+                    lastExpandedId = nil
+                    pendingCollapseScroll = m.fatherId ?? m.id   // طي → اطلع لأب العقدة
+                }
+                withAnimation(DS.Anim.snappy) { toggle(m.id) }
             }
 
-            if !kids.isEmpty {
-                HStack(spacing: 3) {
-                    Text("\(kids.count)").font(.system(size: 10, weight: .bold))
-                    Image(systemName: isCollapsed ? "chevron.down" : "chevron.up").font(.system(size: 7, weight: .bold))
+            if deceased {
+                // بطاقة مدمجة للمتوفّى — الاسم فوق وشريط السنوات الأحمر ملتصق تحته
+                // (نفس تصميم شجرة العائلة، بمقاس عقد النساء الصغيرة)
+                VStack(spacing: 0) {
+                    Text(m.firstName)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(DS.Color.textPrimary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.5)
+                        .padding(.horizontal, 6)
+                        .frame(maxWidth: NODE_W)
+                        .frame(height: PILL_H)
+                        .background(DS.Color.surface)
+                    Text(lifeSpanNeat(m) ?? L10n.t("متوفى", "Deceased"))
+                        .font(.system(size: 8.5, weight: .heavy))
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                        .environment(\.layoutDirection, .leftToRight)
+                        .padding(.horizontal, 5)
+                        .frame(maxWidth: NODE_W)
+                        .frame(height: LIFE_H + 2)
+                        .background(Color(hex: "#A62B32"))   // عنّابي بدرجة خفيفة (طلب المالك)
                 }
-                .foregroundColor(.white).frame(width: 38, height: BADGE_H)
-                .background(SemiCapsule().fill(DS.Color.primaryDark)).offset(y: -3)
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(accent.opacity(0.4), lineWidth: 1))
+                .onTapGesture { onSelect?(m) }   // الاسم يفتح تفاصيل العضو (طلب المالك)
+            } else {
+                Text(m.firstName)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(DS.Color.textPrimary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)   // تصغير أكبر → الاسم الطويل يظهر كاملاً بلا اقتطاع
+                    .padding(.horizontal, 6)
+                    .frame(maxWidth: NODE_W)
+                    .frame(height: PILL_H)
+                    .background(Capsule().fill(DS.Color.surface))
+                    .overlay(Capsule().stroke(accent.opacity(0.4), lineWidth: 1))
+                    .onTapGesture { onSelect?(m) }   // الاسم يفتح تفاصيل العضو (طلب المالك)
             }
         }
         .frame(width: NODE_W, height: layout.heights[m.id] ?? NODE_H, alignment: .top)  // ارتفاع ثابت → الأسماء بنفس المستوى
@@ -559,17 +670,41 @@ struct WomenClassicTreeView: View {
                 .animation(DS.Anim.snappy.delay(staggerDelay(m))),
             removal: AnyTransition.opacity.animation(.easeOut(duration: 0.12))
         ))
-        .onTapGesture {
-            if !kids.isEmpty {
-                if collapsed.contains(m.id) {
-                    pendingExpandScroll = m.id    // توسّع → انزل للأبناء
-                    lastExpandedId = m.id         // أبناؤه يدخلون بتدرّج
-                } else {
-                    lastExpandedId = nil
-                }
-                withAnimation(DS.Anim.snappy) { toggle(m.id) }
-            }
+    }
+
+    /// خلية زوجة واحدة: مربّع «زوجة» + الاسم الأول والأخير تحته.
+    private func wifeCell(_ w: FamilyMember) -> some View {
+        VStack(spacing: 1) {
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .fill(w.isDeceased == true ? DS.Color.textTertiary : rose)
+                .frame(width: 24, height: 24)
+                .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous).stroke(Color.white.opacity(0.9), lineWidth: 1))
+                .overlay(
+                    Text(L10n.t("زوجة", "Wife"))
+                        .font(.system(size: 7.5, weight: .bold))
+                        .minimumScaleFactor(0.7)
+                        .lineLimit(1)
+                        .foregroundColor(.white)
+                )
+                .saturation(w.isDeceased == true ? 0 : 1)
+            Text(wifeShortName(w))
+                .font(.system(size: 8, weight: .medium))
+                .foregroundColor(DS.Color.textSecondary)
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+                .minimumScaleFactor(0.7)
+                .frame(width: 34)
         }
+    }
+
+    /// اسم الزوجة المختصر: الاسم الأول والأخير فقط (طلب المالك).
+    private func wifeShortName(_ w: FamilyMember) -> String {
+        let src = (w.firstName.isEmpty ? w.fullName : w.firstName)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let parts = src.split(separator: " ")
+        guard let f = parts.first else { return "" }
+        guard parts.count > 1, let l = parts.last else { return String(f) }
+        return "\(f) \(l)"
     }
 
     /// تأخير الدخول لكل ابن حسب ترتيبه بين إخوته (حد أقصى 0.35 ث).
@@ -580,12 +715,12 @@ struct WomenClassicTreeView: View {
         return min(0.35, Double(idx) * 0.05)
     }
 
-    /// سنوات المتوفّى «ميلاد–وفاة»، و«؟» للمفقود. إن غاب الاثنان → لا تُعرض.
+    /// سنوات المتوفّى «ميلاد - وفاة» مع لاحقة «م»، والمجهولة «٠٠٠٠م» — يطابق شجرة العائلة.
     private func lifeSpanNeat(_ m: FamilyMember) -> String? {
         guard m.isDeceased == true else { return nil }
         let by = year(m.birthDate), dy = year(m.deathDate)
-        guard by != nil || dy != nil else { return nil }   // كلاهما مفقود → لا تعرض
-        return "\(dy ?? "؟")–\(by ?? "؟")"   // وفاة–ميلاد (وفاة يسار · ميلاد يمين)
+        guard by != nil || dy != nil else { return nil }   // كلاهما مفقود → «متوفى» في الشريط
+        return "\(by ?? "0000")م - \(dy ?? "0000")م"
     }
     private func year(_ s: String?) -> String? {
         guard let s, let r = s.range(of: "\\d{4}", options: .regularExpression) else { return nil }
@@ -616,7 +751,8 @@ struct WomenClassicTreeView: View {
         guard L.size.width > 0, size.width > 0 else { return }
         let s = max(0.35, min(1.2, (size.width - 32) / L.size.width))
         scale = s; baseScale = s
-        offset = CGSize(width: (size.width - L.size.width * s) / 2, height: 20)
+        // 72 = ارتفاع البار العائم — الجذر يبدأ تحته لا خلفه
+        offset = CGSize(width: (size.width - L.size.width * s) / 2, height: 72)
         baseOffset = offset
     }
 

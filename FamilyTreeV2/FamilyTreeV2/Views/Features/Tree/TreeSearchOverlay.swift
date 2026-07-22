@@ -615,7 +615,7 @@ struct TreeSearchOverlay: View {
                         HStack {
                             Spacer()
                             Circle()
-                                .fill(Color.red)
+                                .fill(DS.Color.deceased)
                                 .frame(width: 16, height: 16)
                                 .overlay(
                                     Image(systemName: "heart.slash.fill")

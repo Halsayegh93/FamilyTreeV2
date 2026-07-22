@@ -29,7 +29,7 @@ struct FamilyTreeTabBar: View {
             segment(L10n.t("النساء", "Women"), 1)
         }
         .padding(3)
-        .background(DS.Color.surface, in: Capsule())     // غير شفاف
+        .background(DS.Color.surface.opacity(0.55), in: Capsule())  // مخفف — مائل للشفاف
         .overlay(Capsule().strokeBorder(DS.Color.primary.opacity(0.25), lineWidth: 1))
         .dsSubtleShadow()
         .dynamicTypeSize(.large)
@@ -40,12 +40,13 @@ struct FamilyTreeTabBar: View {
             withAnimation(DS.Anim.snappy) { selection = idx }
         } label: {
             Text(label)
-                .font(DS.Font.scaled(12, weight: .bold))
+                .font(DS.Font.scaled(11, weight: .bold))
                 .foregroundColor(selection == idx ? .white : DS.Color.textSecondary)
                 .lineLimit(1)
-                .padding(.horizontal, DS.Spacing.md)
-                .frame(height: 34)
+                .padding(.horizontal, DS.Spacing.sm)
+                .frame(minHeight: 30)                       // مقاس مدمّج أصغر للبار العلوي
                 .background(Capsule().fill(selection == idx ? DS.Color.primary : Color.clear))
+                .contentShape(Capsule())
         }
         .buttonStyle(.plain)
     }
