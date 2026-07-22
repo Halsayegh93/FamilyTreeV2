@@ -28,7 +28,9 @@ struct WomenClassicTreeView: View {
     private let MAX_PER_ROW = 3             // صفوف أفقية عند وجود جنس واحد فقط
     private let STUB: CGFloat = 11
     private let PAD: CGFloat = 32
-    private let GENDER_GAP: CGFloat = 12    // بين عمود الذكور وعمود الإناث — مسافة خفيفة (طلب المالك)
+    /// بين كتلة الذكور وكتلة الإناث — خفيفة عمودياً، وأوسع في الوضع الأفقي
+    /// ليتميّز الجنسان مع اتساع الشاشة (طلب المالك)
+    private var GENDER_GAP: CGFloat { viewport.width > viewport.height ? 30 : 12 }
 
     private let rose = DS.Color.female
 
@@ -153,7 +155,8 @@ struct WomenClassicTreeView: View {
             return Int(ceil(Double(n) / 4.0))
         }
         let stackGap: CGFloat = 10   // فجوة بين صفّ الذكور وصفّ الإناث (وضع مكدّس)
-        let pairGap: CGFloat = H_GAP // ذكر+أنثى: نفس مسافة بقية الإخوة (طلب المالك)
+        // ذكر+أنثى بصف واحد: نفس مسافة الإخوة عمودياً، وأوسع أفقياً (طلب المالك)
+        let pairGap: CGFloat = viewport.width > viewport.height ? 22 : H_GAP
         // الترتيب: جنس واحد → أفقي (٣/صف) · ذكر+أنثى فقط → جنب بعض · أقلية واحدة → مكدّس · كلاهما ≥٢ → عمودان.
         enum Arrange { case single, stacked, sideBySide, pair }
         func arrange(_ mCount: Int, _ fCount: Int) -> Arrange {
