@@ -589,57 +589,70 @@ private struct ScheduleComposerSheet: View {
         NavigationStack {
             ZStack {
                 DS.Color.background.ignoresSafeArea()
-                ScrollView(showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: DS.Spacing.lg) {
-                        // منتقي وقت الإرسال
-                        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                            Text(L10n.t("وقت الإرسال", "Send time"))
-                                .font(DS.Font.calloutBold)
-                                .foregroundColor(DS.Color.textPrimary)
-                            DatePicker(
-                                "",
-                                selection: $scheduledDate,
-                                in: Date()...,
-                                displayedComponents: [.date, .hourAndMinute]
-                            )
-                            .datePickerStyle(.wheel)
-                            .labelsHidden()
-                            .tint(DS.Color.primary)
-                            .environment(\.locale, LanguageManager.shared.locale)
-                        }
-                        .padding(DS.Spacing.md)
-                        .background(DS.Color.surface)
-                        .cornerRadius(DS.Radius.md)
 
-                        DSPrimaryButton(L10n.t("تأكيد الجدولة", "Confirm schedule"),
-                                        icon: "clock.badge.checkmark",
-                                        isLoading: notificationVM.isLoading) {
-                            onConfirm()
-                        }
+                VStack(spacing: DS.Spacing.md) {
+                    // عجلة الوقت — بلا خلفية، مباشرة على خلفية الشيت (طلب المالك)
+                    DatePicker(
+                        "",
+                        selection: $scheduledDate,
+                        in: Date()...,
+                        displayedComponents: [.date, .hourAndMinute]
+                    )
+                    .datePickerStyle(.wheel)
+                    .labelsHidden()
+                    .tint(DS.Color.primary)
+                    .environment(\.locale, LanguageManager.shared.locale)
+                    .frame(maxHeight: 190)
 
-                        // قسم الإشعارات المجدولة الحالية
-                        if !notificationVM.scheduledNotifications.isEmpty {
-                            DSSectionHeader(title: L10n.t("مجدولة بانتظار الإرسال", "Pending"),
-                                            icon: "clock.badge")
-                            ForEach(notificationVM.scheduledNotifications) { item in
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(item.title)
-                                        .font(DS.Font.calloutBold)
-                                        .foregroundColor(DS.Color.textPrimary)
-                                    Text(item.body)
-                                        .font(DS.Font.caption1)
-                                        .foregroundColor(DS.Color.textSecondary)
-                                        .lineLimit(2)
+                    // ملخّص الوقت المختار — سطر واحد هادئ
+                    Text(summaryText)
+                        .font(DS.Font.caption1)
+                        .foregroundColor(DS.Color.textSecondary)
+
+                    DSPrimaryButton(L10n.t("تأكيد الجدولة", "Confirm schedule"),
+                                    icon: "clock.badge.checkmark",
+                                    isLoading: notificationVM.isLoading) {
+                        onConfirm()
+                    }
+                    .padding(.horizontal, DS.Spacing.lg)
+
+                    // المجدولة المعلّقة — قائمة مدمجة تحت خط فاصل
+                    if !notificationVM.scheduledNotifications.isEmpty {
+                        DSDivider()
+                        HStack(spacing: 6) {
+                            Image(systemName: "clock.badge")
+                                .font(DS.Font.scaled(11, weight: .semibold))
+                            Text(L10n.t("مجدولة بانتظار الإرسال (\(notificationVM.scheduledNotifications.count))",
+                                        "Pending (\(notificationVM.scheduledNotifications.count))"))
+                                .font(DS.Font.caption1)
+                        }
+                        .foregroundColor(DS.Color.textTertiary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, DS.Spacing.lg)
+
+                        ScrollView(showsIndicators: false) {
+                            VStack(spacing: DS.Spacing.xs) {
+                                ForEach(notificationVM.scheduledNotifications) { item in
+                                    HStack(spacing: DS.Spacing.sm) {
+                                        Circle()
+                                            .fill(DS.Color.primary.opacity(0.5))
+                                            .frame(width: 6, height: 6)
+                                        Text(item.title)
+                                            .font(DS.Font.caption1)
+                                            .foregroundColor(DS.Color.textPrimary)
+                                            .lineLimit(1)
+                                        Spacer(minLength: 0)
+                                    }
+                                    .padding(.horizontal, DS.Spacing.lg)
                                 }
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(DS.Spacing.md)
-                                .background(DS.Color.surface)
-                                .cornerRadius(DS.Radius.md)
                             }
                         }
+                        .frame(maxHeight: 96)
                     }
-                    .padding(DS.Spacing.lg)
+
+                    Spacer(minLength: 0)
                 }
+                .padding(.top, DS.Spacing.sm)
             }
             .navigationTitle(L10n.t("جدولة الإشعار", "Schedule"))
             .navigationBarTitleDisplayMode(.inline)
@@ -653,8 +666,15 @@ private struct ScheduleComposerSheet: View {
             }
             .task { await notificationVM.fetchScheduledNotifications() }
         }
-        .presentationDetents([.height(430), .large])
+        .presentationDetents([.height(420)])
         .presentationDragIndicator(.visible)
+    }
+
+    private var summaryText: String {
+        let f = DateFormatter()
+        f.locale = LanguageManager.shared.locale
+        f.dateFormat = L10n.isArabic ? "EEEE d MMMM • h:mm a" : "EEEE d MMM • h:mm a"
+        return L10n.t("سيُرسل: ", "Sends: ") + f.string(from: scheduledDate)
     }
 }
 
