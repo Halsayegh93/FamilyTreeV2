@@ -783,18 +783,9 @@ class NotificationViewModel: ObservableObject {
                 .value
             allNotifications.append(contentsOf: personal)
 
-            // 2) للمدراء/المشرفين: جلب إشعارات broadcast
-            if canModerate {
-                let broadcast: [AppNotification] = try await supabase
-                    .from("notifications")
-                    .select()
-                    .is("target_member_id", value: nil)
-                    .order("created_at", ascending: false)
-                    .limit(200)
-                    .execute()
-                    .value
-                allNotifications.append(contentsOf: broadcast)
-            }
+            // (2) لم نعد نجلب صفوف broadcast المشتركة (target_member_id = NULL):
+            // القاعدة تُفرّخ الآن نسخة مستقلة لكل عضو إدارة عند الإنشاء، فيصير
+            // لكل عضو تحكّمه الخاص (حذف/قراءة لا يؤثّران على غيره).
 
             // ترتيب + إزالة تكرارات
             var seen = Set<UUID>()
@@ -949,14 +940,7 @@ class NotificationViewModel: ObservableObject {
                 .eq("is_read", value: false)
                 .execute()
 
-            // إذا moderator، نحدث broadcast أيضاً
-            if canModerate {
-                try await supabase.from("notifications")
-                    .update(["is_read": AnyEncodable(true)])
-                    .is("target_member_id", value: nil)
-                    .eq("is_read", value: false)
-                    .execute()
-            }
+            // (لا تحديث لصفوف broadcast المشتركة — صارت نسخاً فردية)
             pendingReadIds.subtract(unreadIds)
         } catch {
             pendingReadIds.subtract(unreadIds)
