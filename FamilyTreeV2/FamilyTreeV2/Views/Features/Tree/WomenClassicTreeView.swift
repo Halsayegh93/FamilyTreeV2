@@ -513,27 +513,15 @@ struct WomenClassicTreeView: View {
 
         VStack(spacing: 2) {
             ZStack {
-                // الزوجات جنب العضو — جنب بعض افتراضياً، وإذا كان اسم إحداهن طويلاً
-                // تتكدس عمودياً (تحت بعض) ليتّسع الاسم الأول والأخير (طلب المالك)
+                // الزوجات جنب العضو — دائماً جنب بعض (طلب المالك)؛
+                // الاسم الطويل ينزل على سطرين تحت مربعه بدل تكديس المربعات
                 if !wives.isEmpty {
-                    let longName = wives.prefix(3).contains { wifeShortName($0).count > 12 }
-                    Group {
-                        if longName {
-                            VStack(alignment: .center, spacing: 4) {
-                                ForEach(wives.prefix(3)) { wifeCell($0) }
-                            }
-                        } else {
-                            // مسافة بين الزوجات — الأسماء ما تلتصق ببعض (طلب المالك)
-                            HStack(alignment: .top, spacing: 6) {
-                                ForEach(wives.prefix(3)) { wifeCell($0) }
-                            }
-                        }
+                    HStack(alignment: .top, spacing: 6) {
+                        ForEach(wives.prefix(3)) { wifeCell($0) }
                     }
-                    .offset(x: longName
-                                ? -(CIRCLE / 2 + 6 + 17)
-                                : -(CIRCLE / 2 + 6
-                                    + CGFloat(min(wives.count, 3)) * 17
-                                    + CGFloat(max(0, min(wives.count, 3) - 1)) * 3),
+                    .offset(x: -(CIRCLE / 2 + 6
+                                 + CGFloat(min(wives.count, 3)) * 17
+                                 + CGFloat(max(0, min(wives.count, 3) - 1)) * 3),
                             y: -2)
                 }
                 // شكل العضو (squircle) — إطار أخف. المتوفّى: صورة غير ملوّنة.
