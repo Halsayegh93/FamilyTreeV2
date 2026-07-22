@@ -196,7 +196,7 @@ struct MainHeaderView<TrailingContent: View>: View {
                 .opacity(isAnimating ? 1.0 : 0.0)
             }
             .padding(.horizontal, DS.Spacing.lg)
-            .padding(.horizontal, physicallyLandscape ? DS.Spacing.xs : 0)
+            .padding(.horizontal, physicallyLandscape ? DS.Spacing.xxl : 0)
             .padding(.bottom, isLandscape ? DS.Spacing.xs : DS.Spacing.sm)
             .padding(.top, isLandscape ? DS.Spacing.xs : 0)
             .frame(minHeight: isLandscape ? 46 : 70, alignment: .bottom)
@@ -232,7 +232,8 @@ struct MainHeaderView<TrailingContent: View>: View {
             (backgroundGradient ?? DS.Color.gradientPrimary)
             DS.Color.headerVeil
         }
-        .ignoresSafeArea(edges: .top)
+        // أفقياً: يمتد من أول الشاشة لآخرها (يتجاوز حواف الأمان الجانبية)
+        .ignoresSafeArea(edges: physicallyLandscape ? [.top, .horizontal] : .top)
         .shadow(color: hasDropShadow ? DS.Shadow.card.color : .clear, radius: DS.Shadow.card.radius, x: DS.Shadow.card.x, y: DS.Shadow.card.y)
     }
 

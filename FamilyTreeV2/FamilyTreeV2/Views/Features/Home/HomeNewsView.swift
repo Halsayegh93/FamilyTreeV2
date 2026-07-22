@@ -280,10 +280,10 @@ struct HomeNewsView: View {
                 .accessibilityLabel(showNewsSearch ? L10n.t("إغلاق البحث", "Close search") : L10n.t("بحث", "Search"))
             }
         }
-        .padding(.horizontal, isLandscape ? DS.Spacing.xs : DS.Spacing.lg)
+        .padding(.horizontal, isLandscape ? DS.Spacing.xxl : DS.Spacing.lg)
         .padding(.vertical, isLandscape ? DS.Spacing.xs : DS.Spacing.sm)
         .frame(maxWidth: .infinity)
-        .background(DS.Color.background)
+        .background(DS.Color.background.ignoresSafeArea(edges: isLandscape ? .horizontal : []))
     }
 
     // MARK: - Bento Grid Section — توزيع عائلي احترافي
