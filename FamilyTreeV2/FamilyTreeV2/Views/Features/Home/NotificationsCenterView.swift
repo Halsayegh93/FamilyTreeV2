@@ -1318,29 +1318,6 @@ struct NotificationsCenterView: View {
             .foregroundColor(DS.Color.textTertiary)
             .padding(.top, DS.Spacing.xs)
 
-            // رقم الإشعار (للإدارة فقط) — انقر للنسخ
-            if authVM.canModerate {
-                Button {
-                    UIPasteboard.general.string = notification.id.uuidString
-                    let generator = UINotificationFeedbackGenerator()
-                    generator.notificationOccurred(.success)
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "number")
-                            .font(DS.Font.scaled(10, weight: .semibold))
-                        Text(notification.id.uuidString)
-                            .font(DS.Font.scaled(11, weight: .medium))
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                        Image(systemName: "doc.on.doc")
-                            .font(DS.Font.scaled(9, weight: .semibold))
-                            .opacity(0.7)
-                    }
-                    .foregroundColor(DS.Color.textTertiary)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(L10n.t("انسخ رقم الإشعار", "Copy notification ID"))
-            }
 
         }
         .padding(DS.Spacing.lg)

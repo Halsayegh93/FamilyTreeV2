@@ -18,6 +18,8 @@ struct AdminNotificationsView: View {
     @State private var scheduleEnabled = false
     @State private var scheduledDate = Date().addingTimeInterval(3600)
     @State private var showScheduledSheet = false
+    /// شاشة تحديد وقت الجدولة (منتقي الوقت + المجدولة الحالية)
+    @State private var showScheduleComposer = false
     @State private var showSendConfirm = false
     @State private var showSendError = false
 
@@ -302,35 +304,37 @@ struct AdminNotificationsView: View {
                 }
 
                 VStack(spacing: DS.Spacing.xs) {
-                    // الجدولة لها شاشتها المستقلة — طلب المالك
-                    Button {
-                        scheduleEnabled = true
-                        showScheduledSheet = true
-                    } label: {
-                        HStack(spacing: DS.Spacing.sm) {
-                            Image(systemName: "clock.badge")
-                            Text(L10n.t("جدولة الإرسال لوقت لاحق", "Schedule for later"))
+                    // زر الجدولة جنب زر الإرسال — طلب المالك
+                    HStack(spacing: DS.Spacing.sm) {
+                        Button {
+                            showScheduleComposer = true
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: "clock.badge")
+                                Text(L10n.t("جدولة", "Schedule"))
+                            }
+                            .font(DS.Font.calloutBold)
+                            .foregroundColor(DS.Color.primary)
+                            .frame(maxWidth: .infinity, minHeight: 52)
+                            .background(DS.Color.surface, in: Capsule())
+                            .overlay(Capsule().stroke(DS.Color.primary.opacity(0.35), lineWidth: 1.5))
                         }
-                        .font(DS.Font.calloutBold)
-                        .foregroundColor(DS.Color.primary)
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                        .background(DS.Color.surface, in: Capsule())
-                        .overlay(Capsule().stroke(DS.Color.primary.opacity(0.3), lineWidth: 1))
-                    }
-                    .buttonStyle(DSScaleButtonStyle())
-                    .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        .buttonStyle(DSScaleButtonStyle())
+                        .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        .frame(maxWidth: 130)
 
-                    DSPrimaryButton(
-                        L10n.t("إرسال الإشعار الآن", "Send Notification"),
-                        icon: "paperplane.fill",
-                        isLoading: notificationVM.isLoading
-                    ) {
-                        scheduleEnabled = false
-                        showSendConfirm = true
+                        DSPrimaryButton(
+                            L10n.t("إرسال الآن", "Send Now"),
+                            icon: "paperplane.fill",
+                            isLoading: notificationVM.isLoading
+                        ) {
+                            scheduleEnabled = false
+                            showSendConfirm = true
+                        }
+                        .disabled(
+                            title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        )
                     }
-                    .disabled(
-                        title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                    )
 
                     let targetText = selectedMemberIds.isEmpty
                         ? L10n.t("للجميع", "to all")
@@ -363,6 +367,14 @@ struct AdminNotificationsView: View {
                 await memberVM.fetchAllMembers()
             }
             await notificationVM.fetchScheduledNotifications()
+        }
+        .sheet(isPresented: $showScheduleComposer) {
+            ScheduleComposerSheet(scheduledDate: $scheduledDate) {
+                scheduleEnabled = true
+                showScheduleComposer = false
+                Task { await sendNotification() }
+            }
+            .environmentObject(notificationVM)
         }
         .sheet(isPresented: $showScheduledSheet) {
             ScheduledNotificationsSheet()
@@ -467,10 +479,15 @@ struct AdminNotificationsView: View {
 
         // إذا كل الأعضاء محددين، نرسل broadcast (nil) بدل إرسال كل الـ IDs
         let activeMemberIds = Set(activeMembers.map(\.id))
-        let targetIds: [UUID]? = if selectedMemberIds.isEmpty || selectedMemberIds == activeMemberIds {
-            nil
+        // مهم: البثّ العام (nil) يصل لكل الأعضاء — فلا يُستخدم إطلاقاً عند
+        // تفعيل تصفية الدولة، وإلا خرج الإشعار خارج الشريحة المختارة.
+        let targetIds: [UUID]?
+        if countryFilter != nil {
+            targetIds = selectedMemberIds.isEmpty ? Array(activeMemberIds) : Array(selectedMemberIds)
+        } else if selectedMemberIds.isEmpty || selectedMemberIds == activeMemberIds {
+            targetIds = nil
         } else {
-            Array(selectedMemberIds)
+            targetIds = Array(selectedMemberIds)
         }
 
         if scheduleEnabled {
@@ -494,6 +511,85 @@ struct AdminNotificationsView: View {
                 kind: "admin_broadcast"
             )
             if ok { dismiss() } else { showSendError = true }
+        }
+    }
+}
+
+// MARK: - شاشة الجدولة (تحديد الوقت + المجدولة الحالية)
+
+private struct ScheduleComposerSheet: View {
+    @EnvironmentObject var notificationVM: NotificationViewModel
+    @Environment(\.dismiss) private var dismiss
+    @Binding var scheduledDate: Date
+    let onConfirm: () -> Void
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                DS.Color.background.ignoresSafeArea()
+                ScrollView(showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: DS.Spacing.lg) {
+                        // منتقي وقت الإرسال
+                        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                            Text(L10n.t("وقت الإرسال", "Send time"))
+                                .font(DS.Font.calloutBold)
+                                .foregroundColor(DS.Color.textPrimary)
+                            DatePicker(
+                                "",
+                                selection: $scheduledDate,
+                                in: Date()...,
+                                displayedComponents: [.date, .hourAndMinute]
+                            )
+                            .datePickerStyle(.graphical)
+                            .labelsHidden()
+                            .tint(DS.Color.primary)
+                            .environment(\.locale, LanguageManager.shared.locale)
+                        }
+                        .padding(DS.Spacing.md)
+                        .background(DS.Color.surface)
+                        .cornerRadius(DS.Radius.md)
+
+                        DSPrimaryButton(L10n.t("تأكيد الجدولة", "Confirm schedule"),
+                                        icon: "clock.badge.checkmark",
+                                        isLoading: notificationVM.isLoading) {
+                            onConfirm()
+                        }
+
+                        // قسم الإشعارات المجدولة الحالية
+                        if !notificationVM.scheduledNotifications.isEmpty {
+                            DSSectionHeader(title: L10n.t("مجدولة بانتظار الإرسال", "Pending"),
+                                            icon: "clock.badge")
+                            ForEach(notificationVM.scheduledNotifications) { item in
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(item.title)
+                                        .font(DS.Font.calloutBold)
+                                        .foregroundColor(DS.Color.textPrimary)
+                                    Text(item.body)
+                                        .font(DS.Font.caption1)
+                                        .foregroundColor(DS.Color.textSecondary)
+                                        .lineLimit(2)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(DS.Spacing.md)
+                                .background(DS.Color.surface)
+                                .cornerRadius(DS.Radius.md)
+                            }
+                        }
+                    }
+                    .padding(DS.Spacing.lg)
+                }
+            }
+            .navigationTitle(L10n.t("جدولة الإشعار", "Schedule"))
+            .navigationBarTitleDisplayMode(.inline)
+            .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(L10n.t("إلغاء", "Cancel")) { dismiss() }
+                        .font(DS.Font.calloutBold)
+                        .foregroundColor(DS.Color.primary)
+                }
+            }
+            .task { await notificationVM.fetchScheduledNotifications() }
         }
     }
 }
