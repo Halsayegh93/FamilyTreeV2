@@ -323,32 +323,31 @@ struct AdminInboxView: View {
             .padding(.top, 6)
             .animation(DS.Anim.quick, value: isUnread)
 
-            avatar(for: msg.member)
-
-            VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+            // الصف معكوس مثل شاشة التفاصيل: النص أولاً والصورة في الطرف المقابل
+            VStack(alignment: .trailing, spacing: DS.Spacing.xs) {
                 HStack(spacing: DS.Spacing.xs) {
-                    Text(msg.member?.fullName ?? L10n.t("عضو", "Member"))
-                        .font(DS.Font.calloutBold)
-                        .fontWeight(isUnread ? .black : .bold)
-                        .foregroundColor(DS.Color.textPrimary)
-                        .lineLimit(1)
-                    Spacer(minLength: 0)
                     if let d = date {
                         Text(relativeShort(d))
                             .font(DS.Font.caption2)
                             .fontWeight(isUnread ? .bold : .regular)
                             .foregroundColor(isUnread ? DS.Color.primary : DS.Color.textTertiary)
                     }
+                    Spacer(minLength: 0)
+                    Text(msg.member?.fullName ?? L10n.t("عضو", "Member"))
+                        .font(DS.Font.calloutBold)
+                        .fontWeight(isUnread ? .black : .bold)
+                        .foregroundColor(DS.Color.textPrimary)
+                        .lineLimit(1)
                 }
 
                 HStack(spacing: DS.Spacing.xs) {
-                    categoryChip(category)
+                    Spacer(minLength: 0)
                     if isPending {
                         Image(systemName: "clock.fill")
                             .font(DS.Font.scaled(9, weight: .bold))
                             .foregroundColor(DS.Color.warning)
                     }
-                    Spacer(minLength: 0)
+                    categoryChip(category)
                 }
 
                 Text(preview)
@@ -356,9 +355,11 @@ struct AdminInboxView: View {
                     .fontWeight(isUnread ? .semibold : .regular)
                     .foregroundColor(isUnread ? DS.Color.textPrimary : DS.Color.textSecondary)
                     .lineLimit(2)
-                    .multilineTextAlignment(.leading)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .multilineTextAlignment(.trailing)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
             }
+
+            avatar(for: msg.member)
         }
         .padding(DS.Spacing.md)
         .background(isUnread ? DS.Color.primary.opacity(0.04) : DS.Color.surface)
