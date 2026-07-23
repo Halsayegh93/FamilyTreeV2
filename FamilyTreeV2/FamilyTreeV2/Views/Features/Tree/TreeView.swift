@@ -1587,7 +1587,7 @@ struct TreeMemberNode: View {
         if (birth == nil || birth == "") && (death == nil || death == "") {
             return L10n.t(member.isFemale ? "متوفية" : "متوفى", "Deceased")
         }
-        // سنة الميلاد أولاً ثم الوفاة (معكوس — طلب المالك)
+        // سنة الوفاة أولاً ثم الميلاد (طلب المالك)
         // كل سنة تُلحق بـ«م» (ميلادي)، والمجهولة تُعرض «0000م»
         // كل سنة داخل عزل LTR (U+2066…U+2069) فتبقى «م» ملتصقة بيمين رقمها
         // ولا تنتقل لجهة السنة الأخرى مهما كان اتجاه الواجهة (طلب المالك)
@@ -1595,7 +1595,8 @@ struct TreeMemberNode: View {
             let v = (y == nil || y == "") ? "0000" : y!
             return "\u{2066}\(v)م\u{2069}"
         }
-        return "\(iso(birth.map(String.init))) - \(iso(death.map(String.init)))"
+        // الوفاة أولاً ثم الميلاد (معكوس — طلب المالك)
+        return "\(iso(death.map(String.init))) - \(iso(birth.map(String.init)))"
     }
 
     private var displayName: String {
