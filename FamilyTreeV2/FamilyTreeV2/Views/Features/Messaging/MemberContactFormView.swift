@@ -87,17 +87,35 @@ struct MemberContactFormView: View {
 
     // MARK: - شرح مختصر
     private var introCard: some View {
-        HStack(spacing: DS.Spacing.sm) {
-            Image(systemName: "info.circle.fill")
-                .font(DS.Font.scaled(12, weight: .semibold))
-                .foregroundColor(DS.Color.primary.opacity(0.7))
-            Text(L10n.t("اختر التصنيف واكتب رسالتك — ترد عليك الإدارة بأقرب وقت.",
-                        "Pick a category and write your message — admin will reply soon."))
-                .font(DS.Font.caption1)
-                .foregroundColor(DS.Color.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
+        HStack(alignment: .center, spacing: DS.Spacing.md) {
+            ZStack {
+                Circle()
+                    .fill(DS.Color.primary.opacity(0.12))
+                    .frame(width: 42, height: 42)
+                Image(systemName: "envelope.fill")
+                    .font(DS.Font.scaled(17, weight: .semibold))
+                    .foregroundColor(DS.Color.primary)
+            }
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(L10n.t("تواصل مع الإدارة", "Contact Admin"))
+                    .font(DS.Font.calloutBold)
+                    .foregroundColor(DS.Color.textPrimary)
+                Text(L10n.t("اختر التصنيف واكتب رسالتك — يصلك الرد بأقرب وقت.",
+                            "Pick a category and write your message — you'll get a reply soon."))
+                    .font(DS.Font.caption1)
+                    .foregroundColor(DS.Color.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             Spacer(minLength: 0)
         }
+        .padding(DS.Spacing.md)
+        .background(DS.Color.surface)
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Radius.lg)
+                .strokeBorder(DS.Color.primary.opacity(0.10), lineWidth: 1)
+        )
     }
 
     /// عنوان قسم موحّد — أيقونة صغيرة + نص عريض
@@ -119,7 +137,7 @@ struct MemberContactFormView: View {
             sectionLabel(L10n.t("التصنيف", "Category"), icon: "square.grid.2x2.fill")
 
             LazyVGrid(
-                columns: [GridItem(.flexible()), GridItem(.flexible())],
+                columns: Array(repeating: GridItem(.flexible(), spacing: DS.Spacing.sm), count: 4),
                 spacing: DS.Spacing.sm
             ) {
                 ForEach(ContactCategory.allCases, id: \.self) { cat in
@@ -132,36 +150,33 @@ struct MemberContactFormView: View {
     private func categoryChip(_ cat: ContactCategory) -> some View {
         let selected = selectedCategory == cat
         return Button {
-            withAnimation(DS.Anim.snappy) { selectedCategory = cat }
+            withAnimation(DS.Anim.quick) { selectedCategory = cat }
         } label: {
-            HStack(spacing: DS.Spacing.sm) {
+            VStack(spacing: 6) {
                 Image(systemName: cat.icon)
-                    .font(DS.Font.scaled(13, weight: .bold))
+                    .font(DS.Font.scaled(15, weight: .bold))
                     .foregroundColor(selected ? .white : cat.color)
-                    .frame(width: 28, height: 28)
-                    .background(selected ? cat.color : cat.color.opacity(0.14))
+                    .frame(width: 34, height: 34)
+                    .background(selected ? cat.color : cat.color.opacity(0.12))
                     .clipShape(Circle())
+
                 Text(cat.title)
-                    .font(DS.Font.scaled(13, weight: .semibold))
-                    .foregroundColor(DS.Color.textPrimary)
-                Spacer(minLength: 0)
-                if selected {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(DS.Font.scaled(15, weight: .bold))
-                        .foregroundColor(cat.color)
-                }
+                    .font(DS.Font.scaled(11.5, weight: selected ? .bold : .semibold))
+                    .foregroundColor(selected ? cat.color : DS.Color.textSecondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
             }
-            .padding(.horizontal, DS.Spacing.md)
-            .padding(.vertical, DS.Spacing.sm)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, DS.Spacing.sm + 2)
             .background(selected ? cat.color.opacity(0.08) : DS.Color.surface)
             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
             .overlay(
                 RoundedRectangle(cornerRadius: DS.Radius.md)
-                    .strokeBorder(selected ? cat.color.opacity(0.35) : Color.clear, lineWidth: 1.5)
+                    .strokeBorder(selected ? cat.color.opacity(0.40) : DS.Color.textTertiary.opacity(0.12),
+                                  lineWidth: selected ? 1.5 : 1)
             )
         }
-        .buttonStyle(DSScaleButtonStyle())
+        .buttonStyle(.plain)
     }
 
     // MARK: - حقل الرسالة
