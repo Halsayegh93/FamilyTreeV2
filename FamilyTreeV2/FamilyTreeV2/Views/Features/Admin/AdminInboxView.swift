@@ -867,11 +867,6 @@ private struct OfficialReplySheet: View {
                                 .foregroundColor(DS.Color.error)
                         }
 
-                        Text(L10n.t("سيصل الرد من البريد الرسمي للعائلة.",
-                                    "The reply is sent from the family's official email."))
-                            .font(DS.Font.caption2)
-                            .foregroundColor(DS.Color.textTertiary)
-
                         DSPrimaryButton(didSend ? L10n.t("تم الإرسال", "Sent")
                                                 : L10n.t("إرسال الرد", "Send reply"),
                                         icon: didSend ? "checkmark.circle.fill" : "paperplane.fill",
