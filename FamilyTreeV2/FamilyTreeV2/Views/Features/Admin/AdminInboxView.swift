@@ -114,7 +114,7 @@ struct AdminInboxView: View {
             ToolbarItem(placement: .navigationBarTrailing) {
                 if !filteredMessages.isEmpty {
                     Button(isSelectMode ? L10n.t("تم", "Done") : L10n.t("تحديد", "Select")) {
-                        withAnimation(DS.Anim.snappy) {
+                        withAnimation(DS.Anim.quick) {
                             isSelectMode.toggle()
                             if !isSelectMode { selectedIDs.removeAll() }
                         }
@@ -162,7 +162,7 @@ struct AdminInboxView: View {
                     ? adminRequestVM.contactMessages.filter { $0.status == ApprovalStatus.pending.rawValue }.count
                     : adminRequestVM.contactMessages.filter { $0.status == ApprovalStatus.approved.rawValue }.count
                 Button {
-                    withAnimation(DS.Anim.snappy) { filter = f }
+                    withAnimation(DS.Anim.quick) { filter = f }
                 } label: {
                     HStack(spacing: 5) {
                         Text(f.title)
@@ -195,7 +195,7 @@ struct AdminInboxView: View {
                     )
                     .shadow(color: selected ? DS.Color.primary.opacity(0.35) : .clear, radius: 8, x: 0, y: 3)
                 }
-                .buttonStyle(DSScaleButtonStyle())
+                .buttonStyle(.plain)
             }
             Spacer(minLength: 0)
         }
@@ -212,7 +212,7 @@ struct AdminInboxView: View {
         await adminRequestVM.deleteContactMessages(ids: Array(selectedIDs))
         selectedIDs.removeAll()
         isDeleting = false
-        withAnimation(DS.Anim.snappy) { isSelectMode = false }
+        withAnimation(DS.Anim.quick) { isSelectMode = false }
     }
 
     private var deleteBar: some View {
@@ -316,12 +316,12 @@ struct AdminInboxView: View {
                     Circle()
                         .fill(DS.Color.primary)
                         .frame(width: 9, height: 9)
-                        .transition(.scale.combined(with: .opacity))
+                        .transition(.opacity)
                 }
             }
             .frame(width: 9)
             .padding(.top, 6)
-            .animation(DS.Anim.snappy, value: isUnread)
+            .animation(DS.Anim.quick, value: isUnread)
 
             avatar(for: msg.member)
 
@@ -390,7 +390,7 @@ struct AdminInboxView: View {
             .foregroundColor(DS.Color.textPrimary)
             Spacer()
             Button {
-                withAnimation(DS.Anim.snappy) {
+                withAnimation(DS.Anim.quick) {
                     adminRequestVM.markAllContactMessagesRead()
                 }
             } label: {
@@ -403,7 +403,7 @@ struct AdminInboxView: View {
                     .background(DS.Color.primary.opacity(0.10))
                     .clipShape(Capsule())
             }
-            .buttonStyle(DSScaleButtonStyle())
+            .buttonStyle(.plain)
         }
         .padding(.horizontal, DS.Spacing.md)
         .padding(.vertical, DS.Spacing.sm)
@@ -614,7 +614,7 @@ private struct MessageDetailSheet: View {
                         .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
                     }
                     .disabled(isMarking)
-                    .buttonStyle(DSScaleButtonStyle())
+                    .buttonStyle(.plain)
                 } else {
                     HStack(spacing: DS.Spacing.sm) {
                         Image(systemName: "checkmark.seal.fill")
@@ -668,7 +668,7 @@ private struct MessageDetailSheet: View {
                     .strokeBorder(color.opacity(0.25), lineWidth: 1)
             )
         }
-        .buttonStyle(DSScaleButtonStyle())
+        .buttonStyle(.plain)
     }
 
     private func sanitize(_ phone: String) -> String {
