@@ -469,26 +469,11 @@ private struct MessageDetailSheet: View {
         let phone = message.member?.phoneNumber ?? ""
 
         ScrollView {
-            VStack(alignment: .leading, spacing: DS.Spacing.lg) {
+            VStack(alignment: .trailing, spacing: DS.Spacing.lg) {
                 // Sender
+                // صف المرسل معكوس: التصنيف أولاً · الاسم والهاتف في الوسط ·
+                // الصورة في الطرف المقابل (طلب المالك)
                 HStack(spacing: DS.Spacing.md) {
-                    DSMemberAvatar(
-                        name: message.member?.firstName ?? "?",
-                        avatarUrl: message.member?.avatarUrl,
-                        size: 52,
-                        roleColor: message.member?.roleColor ?? DS.Color.primary
-                    )
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(message.member?.fullName ?? L10n.t("عضو", "Member"))
-                            .font(DS.Font.headline)
-                            .foregroundColor(DS.Color.textPrimary)
-                        if !phone.isEmpty {
-                            Text(phone)
-                                .font(DS.Font.caption1)
-                                .foregroundColor(DS.Color.textSecondary)
-                        }
-                    }
-                    Spacer()
                     let info = ContactCategoryInfo.from(raw: category)
                     VStack(spacing: 2) {
                         Image(systemName: info.icon)
@@ -502,21 +487,41 @@ private struct MessageDetailSheet: View {
                             .fontWeight(.semibold)
                             .foregroundColor(DS.Color.textSecondary)
                     }
+
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text(message.member?.fullName ?? L10n.t("عضو", "Member"))
+                            .font(DS.Font.headline)
+                            .foregroundColor(DS.Color.textPrimary)
+                        if !phone.isEmpty {
+                            Text(phone)
+                                .font(DS.Font.caption1)
+                                .foregroundColor(DS.Color.textSecondary)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+
+                    DSMemberAvatar(
+                        name: message.member?.firstName ?? "?",
+                        avatarUrl: message.member?.avatarUrl,
+                        size: 52,
+                        roleColor: message.member?.roleColor ?? DS.Color.primary
+                    )
                 }
 
                 Divider()
 
                 // Message body
-                VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                VStack(alignment: .trailing, spacing: DS.Spacing.xs) {
                     Text(L10n.t("الرسالة", "Message"))
                         .font(DS.Font.caption1)
                         .fontWeight(.bold)
                         .foregroundColor(DS.Color.textSecondary)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
                     Text(body)
                         .font(DS.Font.body)
                         .foregroundColor(DS.Color.textPrimary)
-                        .multilineTextAlignment(.leading)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .multilineTextAlignment(.trailing)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
                         .padding(DS.Spacing.md)
                         .background(DS.Color.surface)
                         .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
@@ -528,11 +533,12 @@ private struct MessageDetailSheet: View {
                 let replyPhone = isEmail ? phone : (preferred ?? phone)
 
                 if isEmail || !replyPhone.isEmpty {
-                    VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                    VStack(alignment: .trailing, spacing: DS.Spacing.sm) {
                         Text(L10n.t("الرد على العضو", "Reply to member"))
                             .font(DS.Font.caption1)
                             .fontWeight(.bold)
                             .foregroundColor(DS.Color.textSecondary)
+                            .frame(maxWidth: .infinity, alignment: .trailing)
 
                         // وسيلة التواصل التي كتبها العضو — تُعرض وتُنسخ بالضغط
                         if let preferred {
