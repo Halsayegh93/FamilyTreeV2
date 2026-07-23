@@ -50,6 +50,7 @@ struct MemberContactFormView: View {
 
                         VStack(alignment: .leading, spacing: DS.Spacing.lg) {
                             messageField
+                            contactField
                             if let err = errorText {
                                 errorBanner(err)
                             }
@@ -58,20 +59,23 @@ struct MemberContactFormView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 } else {
-                    VStack(alignment: .leading, spacing: DS.Spacing.xl) {
+                    VStack(alignment: .leading, spacing: DS.Spacing.lg) {
                         introCard
 
                         categoryPicker
 
                         messageField
 
+                        contactField
+
                         if let err = errorText {
                             errorBanner(err)
                         }
 
                         sendButton
+                            .padding(.top, DS.Spacing.xs)
 
-                        Spacer(minLength: DS.Spacing.xxxl)
+                        Spacer(minLength: DS.Spacing.xxl)
                     }
                 }
             }
@@ -87,9 +91,9 @@ struct MemberContactFormView: View {
             ZStack {
                 Circle()
                     .fill(DS.Color.primary.opacity(0.12))
-                    .frame(width: 44, height: 44)
+                    .frame(width: 36, height: 36)
                 Image(systemName: "envelope.fill")
-                    .font(DS.Font.scaled(18, weight: .semibold))
+                    .font(DS.Font.scaled(15, weight: .semibold))
                     .foregroundColor(DS.Color.primary)
             }
 
@@ -205,36 +209,42 @@ struct MemberContactFormView: View {
                     )
             )
 
-            // وسيلة التواصل للرد — إيميل أو رقم (اختياري) — طلب المالك
-            VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                Text(L10n.t("وسيلة التواصل للرد (اختياري)", "Reply contact (optional)"))
-                    .font(DS.Font.caption1)
-                    .foregroundColor(DS.Color.textSecondary)
-                HStack(spacing: DS.Spacing.sm) {
-                    Image(systemName: preferredContact.contains("@") ? "envelope.fill" : "phone.fill")
-                        .font(DS.Font.scaled(13, weight: .medium))
-                        .foregroundColor(DS.Color.textTertiary)
-                    TextField(L10n.t("إيميلك أو رقم هاتفك", "Your email or phone"),
-                              text: $preferredContact)
-                        .font(DS.Font.callout)
-                        .keyboardType(.emailAddress)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .environment(\.layoutDirection, .leftToRight)
-                        .multilineTextAlignment(L10n.isArabic ? .trailing : .leading)
-                }
-                .padding(DS.Spacing.md)
-                .background(DS.Color.surface)
-                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
-                .overlay(
-                    RoundedRectangle(cornerRadius: DS.Radius.md)
-                        .strokeBorder(DS.Color.textTertiary.opacity(0.15), lineWidth: 1)
-                )
-                Text(L10n.t("اتركه فارغاً لنرد على رقمك المسجّل.",
-                            "Leave empty to be reached on your registered number."))
-                    .font(DS.Font.caption2)
+        }
+    }
+
+    // MARK: - وسيلة التواصل للرد (قسم مستقل)
+    private var contactField: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            Text(L10n.t("وسيلة التواصل للرد", "Reply contact"))
+                .font(DS.Font.caption1)
+                .fontWeight(.bold)
+                .foregroundColor(DS.Color.textSecondary)
+
+            HStack(spacing: DS.Spacing.sm) {
+                Image(systemName: preferredContact.contains("@") ? "envelope.fill" : "phone.fill")
+                    .font(DS.Font.scaled(13, weight: .medium))
                     .foregroundColor(DS.Color.textTertiary)
+                TextField(L10n.t("إيميلك أو رقم هاتفك (اختياري)", "Your email or phone (optional)"),
+                          text: $preferredContact)
+                    .font(DS.Font.callout)
+                    .keyboardType(.emailAddress)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .environment(\.layoutDirection, .leftToRight)
+                    .multilineTextAlignment(L10n.isArabic ? .trailing : .leading)
             }
+            .padding(DS.Spacing.md)
+            .background(DS.Color.surface)
+            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Radius.md)
+                    .strokeBorder(DS.Color.textTertiary.opacity(0.15), lineWidth: 1)
+            )
+
+            Text(L10n.t("اتركه فارغاً لنرد على رقمك المسجّل.",
+                        "Leave empty to be reached on your registered number."))
+                .font(DS.Font.caption2)
+                .foregroundColor(DS.Color.textTertiary)
         }
     }
 
