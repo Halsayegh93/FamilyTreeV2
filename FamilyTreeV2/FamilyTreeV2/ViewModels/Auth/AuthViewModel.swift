@@ -1457,10 +1457,14 @@ class AuthViewModel: ObservableObject {
             return false
         }
 
-        let details = """
+        var details = """
         التصنيف: \(category)
         الرسالة: \(cleanMessage)
         """
+        // وسيلة تواصل اختيارية يرد عليها المدير (إيميل أو رقم) — طلب المالك
+        if let pc = preferredContact?.trimmingCharacters(in: .whitespacesAndNewlines), !pc.isEmpty {
+            details += "\nوسيلة التواصل: \(pc)"
+        }
 
         do {
             // 1. حفظ في admin_requests

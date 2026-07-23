@@ -817,7 +817,7 @@ struct WomenClassicTreeView: View {
         guard by != nil || dy != nil else { return nil }   // كلاهما مفقود → «متوفى» في الشريط
         // عزل كل سنة (U+2066…U+2069) لتبقى «م» بجانب رقمها — طلب المالك
         // الوفاة أولاً ثم الميلاد (معكوس — طلب المالك)
-        return "\u{2066}\(dy ?? "0000")م\u{2069} - \u{2066}\(by ?? "0000")م\u{2069}"
+        return "\u{2066}م\(dy ?? "0000")\u{2069} - \u{2066}م\(by ?? "0000")\u{2069}"
     }
     private func year(_ s: String?) -> String? {
         guard let s, let r = s.range(of: "\\d{4}", options: .regularExpression) else { return nil }

@@ -11,6 +11,8 @@ struct MemberContactFormView: View {
 
     @State private var selectedCategory: ContactCategory = .inquiry
     @State private var message: String = ""
+    /// إيميل أو رقم يرد عليه المدير (اختياري)
+    @State private var preferredContact: String = ""
     @State private var isSending = false
     @State private var didSend = false
     @State private var errorText: String? = nil
@@ -202,6 +204,37 @@ struct MemberContactFormView: View {
                         lineWidth: messageFocused ? 1.5 : 1
                     )
             )
+
+            // وسيلة التواصل للرد — إيميل أو رقم (اختياري) — طلب المالك
+            VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                Text(L10n.t("وسيلة التواصل للرد (اختياري)", "Reply contact (optional)"))
+                    .font(DS.Font.caption1)
+                    .foregroundColor(DS.Color.textSecondary)
+                HStack(spacing: DS.Spacing.sm) {
+                    Image(systemName: preferredContact.contains("@") ? "envelope.fill" : "phone.fill")
+                        .font(DS.Font.scaled(13, weight: .medium))
+                        .foregroundColor(DS.Color.textTertiary)
+                    TextField(L10n.t("إيميلك أو رقم هاتفك", "Your email or phone"),
+                              text: $preferredContact)
+                        .font(DS.Font.callout)
+                        .keyboardType(.emailAddress)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .environment(\.layoutDirection, .leftToRight)
+                        .multilineTextAlignment(L10n.isArabic ? .trailing : .leading)
+                }
+                .padding(DS.Spacing.md)
+                .background(DS.Color.surface)
+                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
+                .overlay(
+                    RoundedRectangle(cornerRadius: DS.Radius.md)
+                        .strokeBorder(DS.Color.textTertiary.opacity(0.15), lineWidth: 1)
+                )
+                Text(L10n.t("اتركه فارغاً لنرد على رقمك المسجّل.",
+                            "Leave empty to be reached on your registered number."))
+                    .font(DS.Font.caption2)
+                    .foregroundColor(DS.Color.textTertiary)
+            }
         }
     }
 
@@ -315,7 +348,7 @@ struct MemberContactFormView: View {
         let ok = await authVM.sendContactMessage(
             category: selectedCategory.serverValue,
             message: message.trimmingCharacters(in: .whitespacesAndNewlines),
-            preferredContact: nil
+            preferredContact: preferredContact.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : preferredContact.trimmingCharacters(in: .whitespacesAndNewlines)
         )
         isSending = false
         if ok {

@@ -237,7 +237,7 @@ struct HomeNewsView: View {
     private func subPageHeader(for page: HomeSubPage) -> some View {
         let title: String = {
             switch page {
-            case .archive: return L10n.t("أرشيف العائلة", "Family Archive")
+            case .archive: return L10n.t("مكتبة العائلة", "Family Library")
             case .projects: return L10n.t("مشاريع العائلة", "Family Projects")
             case .contact: return L10n.t("التواصل", "Contact")
             case .news: return L10n.t("الأخبار والمناسبات", "News & Events")
@@ -374,7 +374,7 @@ struct HomeNewsView: View {
             spacing: layout.gridSpacing
         ) {
             unifiedTile(
-                title: L10n.t("أرشيف العائلة", "Family Archive"),
+                title: L10n.t("مكتبة العائلة", "Family Library"),
                 icon: "archivebox.fill",
                 color: DS.Color.primary,
                 imageURL: nil,
@@ -436,7 +436,7 @@ struct HomeNewsView: View {
                 action: { selectedTab = 2 }
             )
             unifiedTile(
-                title: L10n.t("أرشيف العائلة", "Family Archive"),
+                title: L10n.t("مكتبة العائلة", "Family Library"),
                 icon: "archivebox.fill",
                 color: DS.Color.primary,
                 imageURL: nil,

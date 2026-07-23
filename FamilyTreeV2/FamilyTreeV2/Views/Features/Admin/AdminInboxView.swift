@@ -519,24 +519,65 @@ private struct MessageDetailSheet: View {
                         .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
                 }
 
-                // Reply actions
-                if !phone.isEmpty {
+                // Reply actions — الوسيلة التي طلبها العضو أوّلاً، ثم رقمه المسجّل
+                let preferred = ContactParser.preferredContact(from: message)
+                let isEmail = (preferred ?? "").contains("@")
+                let replyPhone = isEmail ? phone : (preferred ?? phone)
+
+                if isEmail || !replyPhone.isEmpty {
                     VStack(alignment: .leading, spacing: DS.Spacing.sm) {
                         Text(L10n.t("الرد على العضو", "Reply to member"))
                             .font(DS.Font.caption1)
                             .fontWeight(.bold)
                             .foregroundColor(DS.Color.textSecondary)
+
+                        // وسيلة التواصل التي كتبها العضو — تُعرض وتُنسخ بالضغط
+                        if let preferred {
+                            Button {
+                                UIPasteboard.general.string = preferred
+                                UINotificationFeedbackGenerator().notificationOccurred(.success)
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Image(systemName: isEmail ? "envelope.fill" : "phone.fill")
+                                        .font(DS.Font.scaled(11, weight: .semibold))
+                                    Text(preferred)
+                                        .font(DS.Font.caption1)
+                                        .lineLimit(1)
+                                        .environment(\.layoutDirection, .leftToRight)
+                                    Image(systemName: "doc.on.doc")
+                                        .font(DS.Font.scaled(9, weight: .semibold))
+                                        .opacity(0.6)
+                                }
+                                .foregroundColor(DS.Color.textSecondary)
+                            }
+                            .buttonStyle(.plain)
+                        }
+
                         HStack(spacing: DS.Spacing.sm) {
-                            replyButton(
-                                title: L10n.t("اتصال", "Call"),
-                                icon: "phone.fill",
-                                color: DS.Color.success
-                            ) { openURL("tel:\(sanitize(phone))") }
-                            replyButton(
-                                title: L10n.t("واتساب", "WhatsApp"),
-                                icon: "message.fill",
-                                color: Color(hex: "#25D366")
-                            ) { openURL("https://wa.me/\(sanitize(phone))") }
+                            if isEmail, let mail = preferred {
+                                replyButton(
+                                    title: L10n.t("إيميل", "Email"),
+                                    icon: "envelope.fill",
+                                    color: DS.Color.info
+                                ) {
+                                    let subject = L10n.t("رد على رسالتك — عائلة المحمدعلي",
+                                                         "Re: your message — Al-Mohammad Ali")
+                                        .addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+                                    openURL("mailto:\(mail)?subject=\(subject)")
+                                }
+                            }
+                            if !replyPhone.isEmpty {
+                                replyButton(
+                                    title: L10n.t("اتصال", "Call"),
+                                    icon: "phone.fill",
+                                    color: DS.Color.success
+                                ) { openURL("tel:\(sanitize(replyPhone))") }
+                                replyButton(
+                                    title: L10n.t("واتساب", "WhatsApp"),
+                                    icon: "message.fill",
+                                    color: Color(hex: "#25D366")
+                                ) { openURL("https://wa.me/\(sanitize(replyPhone))") }
+                            }
                         }
                     }
                 }
@@ -667,6 +708,23 @@ enum ContactParser {
             }
         }
         return "—"
+    }
+
+    /// وسيلة التواصل التي كتبها العضو للرد (إيميل أو رقم) — إن وُجدت.
+    static func preferredContact(from msg: AdminRequest) -> String? {
+        guard let details = msg.details else { return nil }
+        for line in details.components(separatedBy: .newlines) {
+            let t = line.trimmingCharacters(in: .whitespaces)
+            if t.hasPrefix("وسيلة التواصل:") {
+                let v = String(t.dropFirst("وسيلة التواصل:".count)).trimmingCharacters(in: .whitespaces)
+                return v.isEmpty ? nil : v
+            }
+            if t.lowercased().hasPrefix("preferred contact:") {
+                let v = String(t.dropFirst("preferred contact:".count)).trimmingCharacters(in: .whitespaces)
+                return v.isEmpty ? nil : v
+            }
+        }
+        return nil
     }
 
     /// نص الرسالة: من سطر "الرسالة:" أو "Message:" — fallback للنص الكامل.
