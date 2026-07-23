@@ -557,36 +557,24 @@ private struct MessageDetailSheet: View {
                         }
 
                         HStack(spacing: DS.Spacing.sm) {
-                            if isEmail, let mail = preferred {
-                                // رد رسمي: يُرسل من بريد العائلة الرسمي عبر الخادم
-                                replyButton(
-                                    title: L10n.t("رد رسمي", "Official reply"),
-                                    icon: "envelope.badge.fill",
-                                    color: DS.Color.info
-                                ) { showEmailComposer = true }
-
-                                replyButton(
-                                    title: L10n.t("بريدي", "My mail"),
-                                    icon: "envelope.fill",
-                                    color: DS.Color.accent
-                                ) {
-                                    let subject = L10n.t("رد على رسالتك — عائلة المحمدعلي",
-                                                         "Re: your message — Al-Mohammad Ali")
-                                        .addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-                                    openURL("mailto:\(mail)?subject=\(subject)")
-                                }
-                            }
                             if !replyPhone.isEmpty {
-                                replyButton(
-                                    title: L10n.t("اتصال", "Call"),
-                                    icon: "phone.fill",
-                                    color: DS.Color.success
-                                ) { openURL("tel:\(sanitize(replyPhone))") }
                                 replyButton(
                                     title: L10n.t("واتساب", "WhatsApp"),
                                     icon: "message.fill",
                                     color: Color(hex: "#25D366")
                                 ) { openURL("https://wa.me/\(sanitize(replyPhone))") }
+                                replyButton(
+                                    title: L10n.t("اتصال", "Call"),
+                                    icon: "phone.fill",
+                                    color: DS.Color.success
+                                ) { openURL("tel:\(sanitize(replyPhone))") }
+                            }
+                            if isEmail {
+                                replyButton(
+                                    title: L10n.t("إيميل", "Email"),
+                                    icon: "envelope.fill",
+                                    color: DS.Color.info
+                                ) { showEmailComposer = true }
                             }
                         }
                     }
@@ -895,7 +883,7 @@ private struct OfficialReplySheet: View {
                     .padding(DS.Spacing.lg)
                 }
             }
-            .navigationTitle(L10n.t("رد رسمي", "Official reply"))
+            .navigationTitle(L10n.t("الرد بالإيميل", "Email reply"))
             .navigationBarTitleDisplayMode(.inline)
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
             .toolbar {
