@@ -87,42 +87,36 @@ struct MemberContactFormView: View {
 
     // MARK: - شرح مختصر
     private var introCard: some View {
-        HStack(alignment: .top, spacing: DS.Spacing.md) {
-            ZStack {
-                Circle()
-                    .fill(DS.Color.primary.opacity(0.12))
-                    .frame(width: 36, height: 36)
-                Image(systemName: "envelope.fill")
-                    .font(DS.Font.scaled(15, weight: .semibold))
-                    .foregroundColor(DS.Color.primary)
-            }
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(L10n.t("تواصل مع الإدارة", "Contact Admin"))
-                    .font(DS.Font.headline)
-                    .foregroundColor(DS.Color.textPrimary)
-                Text(L10n.t(
-                    "اكتب رسالتك وراح ترد عليك الإدارة بأقرب وقت.",
-                    "Write your message and admin will get back to you."
-                ))
+        HStack(spacing: DS.Spacing.sm) {
+            Image(systemName: "info.circle.fill")
+                .font(DS.Font.scaled(12, weight: .semibold))
+                .foregroundColor(DS.Color.primary.opacity(0.7))
+            Text(L10n.t("اختر التصنيف واكتب رسالتك — ترد عليك الإدارة بأقرب وقت.",
+                        "Pick a category and write your message — admin will reply soon."))
                 .font(DS.Font.caption1)
                 .foregroundColor(DS.Color.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
-            }
             Spacer(minLength: 0)
         }
-        .padding(DS.Spacing.md)
-        .background(DS.Color.surface)
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
+    }
+
+    /// عنوان قسم موحّد — أيقونة صغيرة + نص عريض
+    private func sectionLabel(_ title: String, icon: String) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: icon)
+                .font(DS.Font.scaled(10, weight: .bold))
+                .foregroundColor(DS.Color.primary.opacity(0.75))
+            Text(title)
+                .font(DS.Font.caption1)
+                .fontWeight(.bold)
+                .foregroundColor(DS.Color.textSecondary)
+        }
     }
 
     // MARK: - اختيار التصنيف
     private var categoryPicker: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            Text(L10n.t("التصنيف", "Category"))
-                .font(DS.Font.caption1)
-                .fontWeight(.bold)
-                .foregroundColor(DS.Color.textSecondary)
+            sectionLabel(L10n.t("التصنيف", "Category"), icon: "square.grid.2x2.fill")
 
             LazyVGrid(
                 columns: [GridItem(.flexible()), GridItem(.flexible())],
@@ -174,10 +168,7 @@ struct MemberContactFormView: View {
     private var messageField: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             HStack {
-                Text(L10n.t("الرسالة", "Message"))
-                    .font(DS.Font.caption1)
-                    .fontWeight(.bold)
-                    .foregroundColor(DS.Color.textSecondary)
+                sectionLabel(L10n.t("الرسالة", "Message"), icon: "text.alignright")
                 Spacer()
                 Text("\(message.count)/\(maxLength)")
                     .font(DS.Font.caption2)
@@ -197,7 +188,7 @@ struct MemberContactFormView: View {
                     .font(DS.Font.body)
                     .scrollContentBackground(.hidden)
                     .padding(DS.Spacing.sm)
-                    .frame(minHeight: 160, maxHeight: 240)
+                    .frame(minHeight: 130, maxHeight: 200)
             }
             .background(DS.Color.surface)
             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
@@ -215,10 +206,7 @@ struct MemberContactFormView: View {
     // MARK: - وسيلة التواصل للرد (قسم مستقل)
     private var contactField: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            Text(L10n.t("وسيلة التواصل للرد", "Reply contact"))
-                .font(DS.Font.caption1)
-                .fontWeight(.bold)
-                .foregroundColor(DS.Color.textSecondary)
+            sectionLabel(L10n.t("وسيلة التواصل للرد", "Reply contact"), icon: "at")
 
             HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: preferredContact.contains("@") ? "envelope.fill" : "phone.fill")
