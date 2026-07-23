@@ -137,8 +137,8 @@ struct MemberContactFormView: View {
             sectionLabel(L10n.t("التصنيف", "Category"), icon: "square.grid.2x2.fill")
 
             LazyVGrid(
-                columns: Array(repeating: GridItem(.flexible(), spacing: DS.Spacing.sm), count: 4),
-                spacing: DS.Spacing.sm
+                columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 2),
+                spacing: 6
             ) {
                 ForEach(ContactCategory.allCases, id: \.self) { cat in
                     categoryChip(cat)
@@ -152,28 +152,28 @@ struct MemberContactFormView: View {
         return Button {
             withAnimation(DS.Anim.quick) { selectedCategory = cat }
         } label: {
-            VStack(spacing: 6) {
+            HStack(spacing: 5) {
                 Image(systemName: cat.icon)
-                    .font(DS.Font.scaled(15, weight: .bold))
+                    .font(DS.Font.scaled(11, weight: .bold))
                     .foregroundColor(selected ? .white : cat.color)
-                    .frame(width: 34, height: 34)
+                    .frame(width: 22, height: 22)
                     .background(selected ? cat.color : cat.color.opacity(0.12))
                     .clipShape(Circle())
 
                 Text(cat.title)
-                    .font(DS.Font.scaled(11.5, weight: selected ? .bold : .semibold))
+                    .font(DS.Font.scaled(11, weight: selected ? .bold : .semibold))
                     .foregroundColor(selected ? cat.color : DS.Color.textSecondary)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+                    .minimumScaleFactor(0.75)
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, DS.Spacing.sm + 2)
+            .padding(.vertical, 6)
             .background(selected ? cat.color.opacity(0.08) : DS.Color.surface)
             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
             .overlay(
                 RoundedRectangle(cornerRadius: DS.Radius.md)
                     .strokeBorder(selected ? cat.color.opacity(0.40) : DS.Color.textTertiary.opacity(0.12),
-                                  lineWidth: selected ? 1.5 : 1)
+                                  lineWidth: selected ? 1.3 : 1)
             )
         }
         .buttonStyle(.plain)
