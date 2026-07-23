@@ -1,4 +1,5 @@
 import SwiftUI
+import Supabase
 
 /// قائمة رسائل التواصل من الأعضاء — نموذج بسيط (لا دردشة).
 /// كل صف = رسالة واحدة. الضغط يفتح تفاصيلها مع خيارات الرد بالاتصال/واتساب.
@@ -459,6 +460,8 @@ private struct MessageDetailSheet: View {
     let onDismiss: () -> Void
 
     @State private var isMarking = false
+    /// شيت كتابة الرد الرسمي (يُرسل من بريد العائلة)
+    @State private var showEmailComposer = false
 
     var body: some View {
         let category = ContactParser.category(of: message)
@@ -555,10 +558,17 @@ private struct MessageDetailSheet: View {
 
                         HStack(spacing: DS.Spacing.sm) {
                             if isEmail, let mail = preferred {
+                                // رد رسمي: يُرسل من بريد العائلة الرسمي عبر الخادم
                                 replyButton(
-                                    title: L10n.t("إيميل", "Email"),
-                                    icon: "envelope.fill",
+                                    title: L10n.t("رد رسمي", "Official reply"),
+                                    icon: "envelope.badge.fill",
                                     color: DS.Color.info
+                                ) { showEmailComposer = true }
+
+                                replyButton(
+                                    title: L10n.t("بريدي", "My mail"),
+                                    icon: "envelope.fill",
+                                    color: DS.Color.accent
                                 ) {
                                     let subject = L10n.t("رد على رسالتك — عائلة المحمدعلي",
                                                          "Re: your message — Al-Mohammad Ali")
@@ -629,6 +639,14 @@ private struct MessageDetailSheet: View {
         .onAppear {
             // defensive: تأكد أن الرسالة معلّمة كمقروءة حتى لو فُتحت من مسار آخر
             adminRequestVM.markContactMessageRead(message.id)
+        }
+        .sheet(isPresented: $showEmailComposer) {
+            OfficialReplySheet(
+                to: ContactParser.preferredContact(from: message) ?? "",
+                memberName: message.member?.fullName ?? "",
+                category: ContactParser.category(of: message),
+                originalMessage: ContactParser.message(from: message)
+            )
         }
     }
 
@@ -786,6 +804,137 @@ struct ContactCategoryInfo {
             return .init(title: L10n.t("أخرى", "Other"), icon: "ellipsis.message.fill", color: DS.Color.accent)
         default:
             return .init(title: trimmed.isEmpty ? "—" : trimmed, icon: "envelope.fill", color: DS.Color.textSecondary)
+        }
+    }
+}
+
+
+// MARK: - شيت الرد الرسمي (يُرسل من بريد العائلة عبر الخادم)
+
+private struct OfficialReplySheet: View {
+    let to: String
+    let memberName: String
+    let category: String
+    let originalMessage: String
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var replyText = ""
+    @State private var isSending = false
+    @State private var errorText: String?
+    @State private var didSend = false
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                DS.Color.background.ignoresSafeArea()
+                ScrollView(showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: DS.Spacing.lg) {
+                        // المستلم
+                        HStack(spacing: DS.Spacing.sm) {
+                            Image(systemName: "envelope.badge.fill")
+                                .foregroundColor(DS.Color.info)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(memberName.isEmpty ? L10n.t("العضو", "Member") : memberName)
+                                    .font(DS.Font.calloutBold)
+                                    .foregroundColor(DS.Color.textPrimary)
+                                Text(to)
+                                    .font(DS.Font.caption1)
+                                    .foregroundColor(DS.Color.textSecondary)
+                                    .environment(\.layoutDirection, .leftToRight)
+                            }
+                            Spacer()
+                        }
+                        .padding(DS.Spacing.md)
+                        .background(DS.Color.surface)
+                        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
+
+                        // نص الرد
+                        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                            Text(L10n.t("نص الرد", "Reply"))
+                                .font(DS.Font.caption1)
+                                .foregroundColor(DS.Color.textSecondary)
+                            ZStack(alignment: .topLeading) {
+                                if replyText.isEmpty {
+                                    Text(L10n.t("اكتب ردّك هنا…", "Write your reply…"))
+                                        .font(DS.Font.body)
+                                        .foregroundColor(DS.Color.textTertiary)
+                                        .padding(.horizontal, DS.Spacing.md)
+                                        .padding(.vertical, DS.Spacing.md + 4)
+                                }
+                                TextEditor(text: $replyText)
+                                    .focused($focused)
+                                    .font(DS.Font.body)
+                                    .scrollContentBackground(.hidden)
+                                    .padding(DS.Spacing.sm)
+                                    .frame(minHeight: 150, maxHeight: 240)
+                            }
+                            .background(DS.Color.surface)
+                            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
+                        }
+
+                        if let errorText {
+                            Text(errorText)
+                                .font(DS.Font.caption1)
+                                .foregroundColor(DS.Color.error)
+                        }
+
+                        Text(L10n.t("سيصل الرد من البريد الرسمي للعائلة.",
+                                    "The reply is sent from the family's official email."))
+                            .font(DS.Font.caption2)
+                            .foregroundColor(DS.Color.textTertiary)
+
+                        DSPrimaryButton(didSend ? L10n.t("تم الإرسال", "Sent")
+                                                : L10n.t("إرسال الرد", "Send reply"),
+                                        icon: didSend ? "checkmark.circle.fill" : "paperplane.fill",
+                                        isLoading: isSending) {
+                            Task { await send() }
+                        }
+                        .disabled(isSending || didSend || replyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    }
+                    .padding(DS.Spacing.lg)
+                }
+            }
+            .navigationTitle(L10n.t("رد رسمي", "Official reply"))
+            .navigationBarTitleDisplayMode(.inline)
+            .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(L10n.t("إغلاق", "Close")) { dismiss() }
+                        .font(DS.Font.calloutBold)
+                        .foregroundColor(DS.Color.primary)
+                }
+            }
+        }
+    }
+
+    @MainActor
+    private func send() async {
+        errorText = nil
+        isSending = true
+        defer { isSending = false }
+        do {
+            struct Payload: Encodable {
+                let to: String, reply: String, member_name: String
+                let original_message: String, category: String
+            }
+            _ = try await SupabaseConfig.client.functions.invoke(
+                "admin-reply-email",
+                options: .init(body: Payload(
+                    to: to,
+                    reply: replyText.trimmingCharacters(in: .whitespacesAndNewlines),
+                    member_name: memberName,
+                    original_message: originalMessage,
+                    category: category
+                ))
+            )
+            didSend = true
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            try? await Task.sleep(nanoseconds: 900_000_000)
+            dismiss()
+        } catch {
+            Log.error("[AdminReply] فشل إرسال الرد: \(error.localizedDescription)")
+            errorText = L10n.t("تعذّر إرسال الرد. حاول مرة أخرى.", "Could not send the reply. Try again.")
         }
     }
 }
