@@ -59,7 +59,7 @@ struct MemberContactFormView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 } else {
-                    VStack(alignment: .leading, spacing: DS.Spacing.lg) {
+                    VStack(alignment: .leading, spacing: DS.Spacing.md) {
                         introCard
 
                         categoryPicker
@@ -85,36 +85,42 @@ struct MemberContactFormView: View {
         }
     }
 
-    // MARK: - شرح مختصر
+    // MARK: - بانر بهوية الهيدر
     private var introCard: some View {
         HStack(alignment: .center, spacing: DS.Spacing.md) {
-            ZStack {
-                Circle()
-                    .fill(DS.Color.primary.opacity(0.12))
-                    .frame(width: 42, height: 42)
-                Image(systemName: "envelope.fill")
-                    .font(DS.Font.scaled(17, weight: .semibold))
-                    .foregroundColor(DS.Color.primary)
-            }
+            Image(systemName: "envelope.fill")
+                .font(DS.Font.scaled(15, weight: .bold))
+                .foregroundColor(.white)
+                .frame(width: 36, height: 36)
+                .background(SwiftUI.Color.white.opacity(0.20))
+                .clipShape(Circle())
 
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(L10n.t("تواصل مع الإدارة", "Contact Admin"))
-                    .font(DS.Font.calloutBold)
-                    .foregroundColor(DS.Color.textPrimary)
+                    .font(DS.Font.scaled(13, weight: .bold))
+                    .foregroundColor(.white)
                 Text(L10n.t("اختر التصنيف واكتب رسالتك — يصلك الرد بأقرب وقت.",
                             "Pick a category and write your message — you'll get a reply soon."))
-                    .font(DS.Font.caption1)
-                    .foregroundColor(DS.Color.textSecondary)
+                    .font(DS.Font.scaled(10))
+                    .foregroundColor(SwiftUI.Color.white.opacity(0.85))
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 0)
         }
-        .padding(DS.Spacing.md)
-        .background(DS.Color.surface)
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
+        .padding(.horizontal, DS.Spacing.md)
+        .padding(.vertical, DS.Spacing.md - 2)
+        .background(
+            ZStack {
+                RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                    .fill(DS.Color.gradientPrimary)
+                RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                    .fill(DS.Color.headerVeil)
+            }
+        )
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: DS.Radius.lg)
-                .strokeBorder(DS.Color.primary.opacity(0.10), lineWidth: 1)
+            RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                .strokeBorder(DS.Color.headerBorder, lineWidth: 1)
         )
     }
 
@@ -182,18 +188,12 @@ struct MemberContactFormView: View {
     // MARK: - حقل الرسالة
     private var messageField: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            HStack {
-                sectionLabel(L10n.t("الرسالة", "Message"), icon: "text.alignright")
-                Spacer()
-                Text("\(message.count)/\(maxLength)")
-                    .font(DS.Font.caption2)
-                    .foregroundColor(message.count > maxLength ? DS.Color.error : DS.Color.textTertiary)
-            }
+            sectionLabel(L10n.t("الرسالة", "Message"), icon: "text.alignright")
 
             ZStack(alignment: .topLeading) {
                 if message.isEmpty {
                     Text(L10n.t("اكتب رسالتك هنا…", "Type your message here…"))
-                        .font(DS.Font.body)
+                        .font(DS.Font.scaled(14))
                         .foregroundColor(DS.Color.textTertiary)
                         .padding(.horizontal, DS.Spacing.md + 4)
                         .padding(.vertical, DS.Spacing.md + 8)
@@ -204,6 +204,16 @@ struct MemberContactFormView: View {
                     .scrollContentBackground(.hidden)
                     .padding(DS.Spacing.sm)
                     .frame(minHeight: 130, maxHeight: 200)
+
+                // العدّاد داخل الحقل — لا يسرق سطراً فوقه
+                Text("\(message.count)/\(maxLength)")
+                    .font(DS.Font.scaled(9.5))
+                    .foregroundColor(message.count > maxLength ? DS.Color.error : DS.Color.textTertiary)
+                    .padding(.horizontal, DS.Spacing.sm + 2)
+                    .padding(.vertical, 5)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity,
+                           alignment: L10n.isArabic ? .bottomLeading : .bottomTrailing)
+                    .allowsHitTesting(false)
             }
             .background(DS.Color.surface)
             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
@@ -218,37 +228,50 @@ struct MemberContactFormView: View {
         }
     }
 
-    // MARK: - وسيلة التواصل للرد (قسم مستقل)
+    // MARK: - الإيميل للرد — اختياري، بلا ملاحظات
     private var contactField: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            sectionLabel(L10n.t("وسيلة التواصل للرد", "Reply contact"), icon: "at")
+            sectionLabel(L10n.t("الإيميل (اختياري)", "Email (optional)"), icon: "envelope.fill")
 
             HStack(spacing: DS.Spacing.sm) {
-                Image(systemName: preferredContact.contains("@") ? "envelope.fill" : "phone.fill")
-                    .font(DS.Font.scaled(13, weight: .medium))
-                    .foregroundColor(DS.Color.textTertiary)
-                TextField(L10n.t("إيميلك أو رقم هاتفك (اختياري)", "Your email or phone (optional)"),
-                          text: $preferredContact)
-                    .font(DS.Font.callout)
+                Image(systemName: "at")
+                    .font(DS.Font.scaled(12, weight: .semibold))
+                    .foregroundColor(emailIsValid ? DS.Color.primary : DS.Color.textTertiary)
+                TextField(L10n.t("للرد عبر البريد", "To reply by email"), text: $preferredContact)
+                    .font(DS.Font.scaled(13))
                     .keyboardType(.emailAddress)
+                    .textContentType(.emailAddress)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .environment(\.layoutDirection, .leftToRight)
                     .multilineTextAlignment(L10n.isArabic ? .trailing : .leading)
+                if emailIsValid {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(DS.Font.scaled(12, weight: .bold))
+                        .foregroundColor(DS.Color.success)
+                        .transition(.scale.combined(with: .opacity))
+                }
             }
-            .padding(DS.Spacing.md)
+            .padding(.horizontal, DS.Spacing.md)
+            .padding(.vertical, DS.Spacing.sm + 2)
             .background(DS.Color.surface)
             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
             .overlay(
                 RoundedRectangle(cornerRadius: DS.Radius.md)
-                    .strokeBorder(DS.Color.textTertiary.opacity(0.15), lineWidth: 1)
+                    .strokeBorder(emailIsValid ? DS.Color.primary.opacity(0.30)
+                                               : DS.Color.textTertiary.opacity(0.15),
+                                  lineWidth: 1)
             )
-
-            Text(L10n.t("اتركه فارغاً لنرد على رقمك المسجّل.",
-                        "Leave empty to be reached on your registered number."))
-                .font(DS.Font.caption2)
-                .foregroundColor(DS.Color.textTertiary)
+            .animation(DS.Anim.quick, value: emailIsValid)
         }
+    }
+
+    /// بريد يبدو صالحاً — لمجرّد التأكيد البصري، الحقل يبقى اختيارياً
+    private var emailIsValid: Bool {
+        let t = preferredContact.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard t.contains("@"), let at = t.firstIndex(of: "@") else { return false }
+        let domain = t[t.index(after: at)...]
+        return !t[t.startIndex..<at].isEmpty && domain.contains(".") && !domain.hasSuffix(".")
     }
 
     // MARK: - بانر خطأ
@@ -373,6 +396,7 @@ struct MemberContactFormView: View {
 
     private func resetForm() {
         message = ""
+        preferredContact = ""
         selectedCategory = .inquiry
         errorText = nil
         withAnimation(DS.Anim.smooth) { didSend = false }

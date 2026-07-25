@@ -149,6 +149,14 @@ enum DS {
         static let gridContact   = accent
         static let gridMessaging = SwiftUI.Color.adaptive(light: "#0EA5E9", dark: "#38BDF8") // Sky cyan — التواصل
 
+        // مربّعات الرئيسية — مشتقّة من محور تدرّج الهيدر نفسه (أزرق عميق → نيلي)
+        // بدل ألوان متنافرة (أخضر/كهرماني/سماوي)، فتقرأ الشبكة كعائلة واحدة.
+        static let tileTree     = SwiftUI.Color.adaptive(light: "#1F5AB8", dark: "#3F7BD8") // أزرق عميق
+        static let tileDiwaniya = SwiftUI.Color.adaptive(light: "#357DED", dark: "#5C9AF2") // أزرق العلامة
+        static let tileLibrary  = SwiftUI.Color.adaptive(light: "#4361DB", dark: "#6A85E6") // أزرق مائل للنيلي
+        static let tileProjects = SwiftUI.Color.adaptive(light: "#5438DC", dark: "#7A62E8") // نيلي
+        static let tileContact  = SwiftUI.Color.adaptive(light: "#6A4FE0", dark: "#9080EE") // نيلي فاتح
+
         // Glass Effect Helpers — adaptive for light/dark mode
         static func glassBright(_ cs: ColorScheme) -> SwiftUI.Color {
             cs == .dark ? SwiftUI.Color.white.opacity(0.12) : SwiftUI.Color.white.opacity(0.8)

@@ -338,7 +338,7 @@ struct HomeNewsView: View {
             unifiedTile(
                 title: L10n.t("شجرة العائلة", "Family Tree"),
                 icon: "tree.fill",
-                color: DS.Color.secondary,
+                color: DS.Color.tileTree,
                 imageURL: nil,
                 count: nil,
                 height: primaryTileHeight,
@@ -347,7 +347,7 @@ struct HomeNewsView: View {
             unifiedTile(
                 title: L10n.t("الديوانيات", "Diwaniyas"),
                 icon: "map.fill",
-                color: DS.Color.accent,
+                color: DS.Color.tileDiwaniya,
                 imageURL: nil,
                 count: nil,
                 height: primaryTileHeight,
@@ -376,7 +376,7 @@ struct HomeNewsView: View {
             unifiedTile(
                 title: L10n.t("مكتبة العائلة", "Family Library"),
                 icon: "archivebox.fill",
-                color: DS.Color.primary,
+                color: DS.Color.tileLibrary,
                 imageURL: nil,
                 count: nil,
                 action: { withAnimation(DS.Anim.snappy) { activeSubPage = .archive } }
@@ -384,7 +384,7 @@ struct HomeNewsView: View {
             unifiedTile(
                 title: L10n.t("مشاريع العائلة", "Family Projects"),
                 icon: "briefcase.fill",
-                color: DS.Color.warning,
+                color: DS.Color.tileProjects,
                 imageURL: projectImageURL,
                 count: projectsVM.projects.count,
                 action: { withAnimation(DS.Anim.snappy) { activeSubPage = .projects } }
@@ -392,7 +392,7 @@ struct HomeNewsView: View {
             unifiedTile(
                 title: L10n.t("التواصل", "Contact"),
                 icon: "envelope.fill",
-                color: DS.Color.gridMessaging,
+                color: DS.Color.tileContact,
                 imageURL: nil,
                 count: nil,
                 action: { withAnimation(DS.Anim.snappy) { activeSubPage = .contact } }
@@ -420,7 +420,7 @@ struct HomeNewsView: View {
             unifiedTile(
                 title: L10n.t("شجرة العائلة", "Family Tree"),
                 icon: "tree.fill",
-                color: DS.Color.secondary,
+                color: DS.Color.tileTree,
                 imageURL: nil,
                 count: nil,
                 height: tileHeight,
@@ -429,7 +429,7 @@ struct HomeNewsView: View {
             unifiedTile(
                 title: L10n.t("الديوانيات", "Diwaniyas"),
                 icon: "map.fill",
-                color: DS.Color.accent,
+                color: DS.Color.tileDiwaniya,
                 imageURL: nil,
                 count: nil,
                 height: tileHeight,
@@ -438,7 +438,7 @@ struct HomeNewsView: View {
             unifiedTile(
                 title: L10n.t("مكتبة العائلة", "Family Library"),
                 icon: "archivebox.fill",
-                color: DS.Color.primary,
+                color: DS.Color.tileLibrary,
                 imageURL: nil,
                 count: nil,
                 height: tileHeight,
@@ -447,7 +447,7 @@ struct HomeNewsView: View {
             unifiedTile(
                 title: L10n.t("مشاريع العائلة", "Family Projects"),
                 icon: "briefcase.fill",
-                color: DS.Color.warning,
+                color: DS.Color.tileProjects,
                 imageURL: projectImageURL,
                 count: projectsVM.projects.count,
                 height: tileHeight,
@@ -456,7 +456,7 @@ struct HomeNewsView: View {
             unifiedTile(
                 title: L10n.t("التواصل", "Contact"),
                 icon: "envelope.fill",
-                color: DS.Color.gridMessaging,
+                color: DS.Color.tileContact,
                 imageURL: nil,
                 count: nil,
                 height: tileHeight,
@@ -483,7 +483,7 @@ struct HomeNewsView: View {
                 tileBackground(color: color, imageURL: imageURL, icon: icon)
 
                 LinearGradient(
-                    colors: [.clear, .black.opacity(0.08), .black.opacity(0.62)],
+                    colors: [.clear, .black.opacity(0.06), .black.opacity(0.55)],
                     startPoint: .top,
                     endPoint: .bottom
                 )
@@ -527,10 +527,10 @@ struct HomeNewsView: View {
             }
             .frame(maxWidth: .infinity)
             .frame(height: height ?? layout.tileHeight)
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.14), lineWidth: 1)
             )
             .shadow(color: .black.opacity(0.07), radius: 5, x: 0, y: 2)
         }
