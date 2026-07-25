@@ -486,15 +486,16 @@ struct HomeNewsView: View {
             ZStack(alignment: .bottomLeading) {
                 tileBackground(color: color, imageURL: imageURL, icon: icon)
 
+                // الحجاب من الأعلى — العنوان صار جنب الأيقونة فوق
                 LinearGradient(
-                    colors: [.clear, .black.opacity(0.06), .black.opacity(0.55)],
+                    colors: [.black.opacity(0.50), .black.opacity(0.14), .clear],
                     startPoint: .top,
                     endPoint: .bottom
                 )
 
-                // أيقونة دائرية أكبر + عدّاد
+                // أيقونة دائرية + العنوان جنبها + عدّاد
                 VStack {
-                    HStack {
+                    HStack(alignment: .center, spacing: 7) {
                         Image(systemName: icon)
                             .font(DS.Font.scaled(15, weight: .bold))
                             .foregroundColor(.white)
@@ -503,7 +504,16 @@ struct HomeNewsView: View {
                             .overlay(Circle().strokeBorder(Color.white.opacity(0.30), lineWidth: 1))
                             .shadow(color: .black.opacity(0.15), radius: 3, x: 0, y: 1)
 
-                        Spacer()
+                        Text(title)
+                            .font(DS.Font.scaled(15, weight: .black))
+                            .foregroundColor(.white)
+                            .lineLimit(2)
+                            .minimumScaleFactor(0.6)
+                            .multilineTextAlignment(.leading)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .shadow(color: .black.opacity(0.35), radius: 3, x: 0, y: 1)
+
+                        Spacer(minLength: 0)
 
                         if let count, count > 0 {
                             Text("\(count)")
