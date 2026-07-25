@@ -528,17 +528,6 @@ struct HomeNewsView: View {
                     Spacer()
                 }
                 .padding(9)
-
-                // العنوان أسفل — سطر واحد لضمان تساوي الأحجام
-                Text(title)
-                    .font(DS.Font.scaled(13, weight: .black))
-                    .foregroundColor(.white)
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.7)
-                    .multilineTextAlignment(.leading)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .shadow(color: .black.opacity(0.35), radius: 3, x: 0, y: 1)
-                    .padding(8)
             }
             .frame(maxWidth: .infinity)
             .frame(height: height ?? layout.tileHeight)
