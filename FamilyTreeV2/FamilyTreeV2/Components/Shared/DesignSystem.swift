@@ -1078,13 +1078,13 @@ struct DSFloatingButton: View {
             .foregroundColor(.white)
             .padding(.horizontal, label != nil ? DS.Spacing.xl : DS.Spacing.lg)
             .padding(.vertical, DS.Spacing.md + 2)
-            // نفس هوية الهيدر: تدرّج التطبيق + الحجاب الأبيض — لكن نصف شفّاف
-            // فوق مادة ضبابية، فيبان المحتوى المارّ من ورا الزر.
+            // الشفافية في الخلفية (مادة ضبابية) لا في اللون: اللون يبقى غنيّاً
+            // وغامقاً مثل الهيدر، والحجاب أسود خفيف يعمّقه بدل أن يبهته.
             .background(
                 ZStack {
                     Capsule().fill(.ultraThinMaterial)
-                    Capsule().fill(gradient).opacity(0.55)
-                    Capsule().fill(DS.Color.headerVeil)
+                    Capsule().fill(gradient).opacity(0.92)
+                    Capsule().fill(SwiftUI.Color.black.opacity(0.12))
                 }
             )
             .clipShape(Capsule())
