@@ -505,10 +505,10 @@ struct HomeNewsView: View {
                             .shadow(color: .black.opacity(0.15), radius: 3, x: 0, y: 1)
 
                         Text(title)
-                            .font(DS.Font.scaled(15, weight: .black))
+                            .font(DS.Font.scaled(17, weight: .black))
                             .foregroundColor(.white)
                             .lineLimit(2)
-                            .minimumScaleFactor(0.6)
+                            .minimumScaleFactor(0.55)
                             .multilineTextAlignment(.leading)
                             .fixedSize(horizontal: false, vertical: true)
                             .shadow(color: .black.opacity(0.35), radius: 3, x: 0, y: 1)
