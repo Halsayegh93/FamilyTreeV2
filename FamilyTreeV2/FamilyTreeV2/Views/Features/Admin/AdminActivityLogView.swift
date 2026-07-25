@@ -696,7 +696,7 @@ private struct ActivityDetailSheet: View {
                     }
                 }
                 .padding(DS.Spacing.lg)
-                .padding(.top, DS.Spacing.sm)
+                .padding(.top, DS.Spacing.md)   // فسحة مؤشّر السحب
                 .background(
                     GeometryReader { g in
                         Color.clear.preference(key: ActivitySheetHeightKey.self, value: g.size.height)
@@ -706,8 +706,13 @@ private struct ActivityDetailSheet: View {
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .onPreferenceChange(ActivitySheetHeightKey.self) { h in
-            // حدّ أدنى للراحة وحدّ أعلى حتى لا يبتلع الشاشة
-            contentHeight = min(max(h + 28, 200), UIScreen.main.bounds.height * 0.85)
+            // الارتفاع = المحتوى تماماً + منطقة الأمان السفلى (شريط الهوم)،
+            // بلا حشو زائد وإلا ظهر فراغ أسفل الشيت.
+            let safeBottom = UIApplication.shared.connectedScenes
+                .compactMap { $0 as? UIWindowScene }
+                .first?.windows.first(where: { $0.isKeyWindow })?
+                .safeAreaInsets.bottom ?? 0
+            contentHeight = min(max(h + safeBottom, 180), UIScreen.main.bounds.height * 0.85)
         }
         .presentationDetents([.height(contentHeight), .large])
         .presentationDragIndicator(.visible)
