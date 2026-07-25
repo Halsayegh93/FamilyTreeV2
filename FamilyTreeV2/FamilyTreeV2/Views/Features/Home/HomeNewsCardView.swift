@@ -62,7 +62,7 @@ struct HomeNewsCardView: View {
                     }
                 } label: {
                     HStack(spacing: DS.Spacing.sm) {
-                        DSMemberAvatar(name: authorName, avatarUrl: authorMember?.avatarUrl, size: 38, roleColor: NewsTypeHelper.color(for: type))
+                        DSMemberAvatar(name: authorName, avatarUrl: authorMember?.avatarUrl, size: 32, roleColor: NewsTypeHelper.color(for: type))
                         .overlay(
                             Circle()
                                 .stroke(DS.Color.textTertiary.opacity(0.3), lineWidth: 1)
@@ -71,20 +71,20 @@ struct HomeNewsCardView: View {
 
                         VStack(alignment: .leading, spacing: 2) {
                             Text(shortDisplayName)
-                                .font(DS.Font.calloutBold)
+                                .font(DS.Font.scaled(12, weight: .bold))
                                 .foregroundColor(DS.Color.textPrimary)
                                 .lineLimit(1)
+                                .minimumScaleFactor(0.85)
                             
                             HStack(spacing: 3) {
                                 Image(systemName: NewsTypeHelper.icon(for: type))
-                                    .font(DS.Font.scaled(9, weight: .bold))
+                                    .font(DS.Font.scaled(8, weight: .bold))
                                 Text(NewsTypeHelper.displayName(for: type))
-                                    .font(DS.Font.caption2)
-                                    .fontWeight(.semibold)
+                                    .font(DS.Font.scaled(9, weight: .semibold))
                             }
                                 .foregroundColor(NewsTypeHelper.color(for: type))
-                                .padding(.horizontal, DS.Spacing.sm)
-                                .padding(.vertical, 2)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 1.5)
                                 .background(NewsTypeHelper.color(for: type).opacity(0.12))
                                 .clipShape(Capsule())
                         }

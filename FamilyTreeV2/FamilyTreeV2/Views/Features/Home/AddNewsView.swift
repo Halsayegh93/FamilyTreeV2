@@ -53,30 +53,59 @@ struct AddNewsView: View {
                 VStack(spacing: DS.Spacing.lg) {
                     addNewsTypeSelector
 
-                    // النشر باسم الإدارة — يظهر لفريق الإدارة فقط
+                    // النشر باسم الإدارة — صف كامل قابل للضغط (لفريق الإدارة فقط)
                     if authVM.canModerate {
-                        Toggle(isOn: $postAsAdmin.animation(DS.Anim.quick)) {
-                            HStack(spacing: DS.Spacing.sm) {
+                        Button {
+                            withAnimation(DS.Anim.quick) { postAsAdmin.toggle() }
+                            UISelectionFeedbackGenerator().selectionChanged()
+                        } label: {
+                            HStack(spacing: DS.Spacing.md) {
                                 Image(systemName: postAsAdmin ? "shield.fill" : "person.fill")
-                                    .font(DS.Font.scaled(13, weight: .semibold))
-                                    .foregroundColor(postAsAdmin ? DS.Color.primary : DS.Color.textTertiary)
-                                VStack(alignment: .leading, spacing: 1) {
+                                    .font(DS.Font.scaled(14, weight: .semibold))
+                                    .foregroundColor(postAsAdmin ? .white : DS.Color.textTertiary)
+                                    .frame(width: 32, height: 32)
+                                    .background(postAsAdmin ? DS.Color.primary : DS.Color.textTertiary.opacity(0.12))
+                                    .clipShape(Circle())
+
+                                VStack(alignment: .leading, spacing: 2) {
                                     Text(L10n.t("النشر باسم الإدارة", "Post as Admin"))
-                                        .font(DS.Font.callout)
+                                        .font(DS.Font.calloutBold)
                                         .foregroundColor(DS.Color.textPrimary)
                                     Text(postAsAdmin
-                                         ? L10n.t("سيظهر باسم «إدارة العائلة»", "Will appear as “Family Admin”")
-                                         : L10n.t("سيظهر باسمك", "Will appear under your name"))
+                                         ? L10n.t("سيظهر باسم «إدارة العائلة»", "Will appear as Family Admin")
+                                         : L10n.t("سيظهر باسمك الشخصي", "Will appear under your name"))
                                         .font(DS.Font.caption2)
-                                        .foregroundColor(DS.Color.textTertiary)
+                                        .foregroundColor(DS.Color.textSecondary)
                                 }
+
+                                Spacer(minLength: 0)
+
+                                // مفتاح بصري — الصف كله يبدّله
+                                ZStack(alignment: postAsAdmin ? .trailing : .leading) {
+                                    Capsule()
+                                        .fill(postAsAdmin ? DS.Color.primary : DS.Color.textTertiary.opacity(0.25))
+                                        .frame(width: 46, height: 28)
+                                    Circle()
+                                        .fill(.white)
+                                        .frame(width: 22, height: 22)
+                                        .shadow(color: .black.opacity(0.15), radius: 2, y: 1)
+                                        .padding(.horizontal, 3)
+                                }
+                                .animation(DS.Anim.quick, value: postAsAdmin)
                             }
+                            .padding(DS.Spacing.md)
+                            .frame(maxWidth: .infinity)
+                            .background(postAsAdmin ? DS.Color.primary.opacity(0.06) : DS.Color.surface)
+                            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: DS.Radius.md)
+                                    .strokeBorder(postAsAdmin ? DS.Color.primary.opacity(0.35)
+                                                              : DS.Color.textTertiary.opacity(0.12),
+                                                  lineWidth: postAsAdmin ? 1.5 : 1)
+                            )
+                            .contentShape(Rectangle())
                         }
-                        .tint(DS.Color.primary)
-                        .padding(DS.Spacing.md)
-                        .background(DS.Color.surface)
-                        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
-                        .padding(.horizontal, DS.Spacing.lg)
+                        .buttonStyle(.plain)
                     }
 
                     if isPoll {
