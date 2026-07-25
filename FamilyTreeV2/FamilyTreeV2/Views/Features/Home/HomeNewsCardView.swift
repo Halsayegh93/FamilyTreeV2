@@ -43,7 +43,14 @@ struct HomeNewsCardView: View {
         return memberVM.member(byId: authorId)
     }
 
+    /// منشور نُشر بهوية الإدارة — الاسم المحفوظ يختلف عن اسم العضو الحقيقي
+    private var isAdminIdentityPost: Bool {
+        authorName == L10n.t("إدارة العائلة", "Family Admin") || authorName == "إدارة العائلة"
+    }
+
     private var shortDisplayName: String {
+        // هوية الإدارة: نعرض الاسم المحفوظ كما هو ولا نستبدله باسم العضو
+        if isAdminIdentityPost { return authorName }
         let name = authorMember?.fullName ?? authorName
         let parts = name.split(separator: " ")
         guard parts.count > 3, let last = parts.last else { return name }
@@ -57,12 +64,14 @@ struct HomeNewsCardView: View {
             // هيدر الكرت
             HStack(alignment: .center, spacing: DS.Spacing.sm) {
                 Button {
-                    if let member = authorMember {
-                        onMemberTap(member)
-                    }
+                    guard !isAdminIdentityPost, let member = authorMember else { return }
+                    onMemberTap(member)
                 } label: {
                     HStack(spacing: DS.Spacing.sm) {
-                        DSMemberAvatar(name: authorName, avatarUrl: authorMember?.avatarUrl, size: 32, roleColor: NewsTypeHelper.color(for: type))
+                        DSMemberAvatar(name: authorName,
+                                       avatarUrl: isAdminIdentityPost ? nil : authorMember?.avatarUrl,
+                                       size: 32,
+                                       roleColor: NewsTypeHelper.color(for: type))
                         .overlay(
                             Circle()
                                 .stroke(DS.Color.textTertiary.opacity(0.3), lineWidth: 1)
@@ -130,20 +139,20 @@ struct HomeNewsCardView: View {
                     }
                 }
             }
-            .padding(.horizontal, DS.Spacing.lg)
-            .padding(.top, DS.Spacing.lg)
-            .padding(.bottom, DS.Spacing.md)
+            .padding(.horizontal, DS.Spacing.md)
+            .padding(.top, DS.Spacing.md)
+            .padding(.bottom, DS.Spacing.sm)
 
             // المحتوى
             if !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 Text(content)
-                    .font(DS.Font.body)
+                    .font(DS.Font.scaled(14))
                     .foregroundColor(DS.Color.textPrimary.opacity(0.95))
                     .multilineTextAlignment(.leading)
-                    .lineSpacing(5)
+                    .lineSpacing(3)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.bottom, DS.Spacing.md)
+                    .padding(.horizontal, DS.Spacing.md)
+                    .padding(.bottom, DS.Spacing.sm)
             }
 
             // منطقة الميديا (صور) — Instagram-style with double-tap like
@@ -230,13 +239,13 @@ struct HomeNewsCardView: View {
             Rectangle()
                 .fill(DS.Color.textTertiary.opacity(0.2))
                 .frame(height: 0.5)
-                .padding(.horizontal, DS.Spacing.lg)
-                .padding(.top, DS.Spacing.md)
+                .padding(.horizontal, DS.Spacing.md)
+                .padding(.top, DS.Spacing.sm)
 
             // شريط الإجراءات
             actionBar
-                .padding(.horizontal, DS.Spacing.lg)
-                .padding(.vertical, DS.Spacing.xs)
+                .padding(.horizontal, DS.Spacing.md)
+                .padding(.vertical, 2)
         }
         .background(DS.Color.surface)
         .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
