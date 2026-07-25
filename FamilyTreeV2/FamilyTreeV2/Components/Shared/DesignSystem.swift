@@ -1051,6 +1051,8 @@ struct DSFloatingButton: View {
     var icon: String? = nil
     var label: String? = nil
     var color: Color = DS.Color.primary
+    /// تدرّج التعبئة — افتراضياً نفس تدرّج الهيدر
+    var gradient: LinearGradient = DS.Color.gradientPrimary
     var action: () -> Void
 
     @State private var appeared = false
@@ -1072,19 +1074,21 @@ struct DSFloatingButton: View {
                     Text(label).font(DS.Font.calloutBold)
                 }
             }
-            // نص غامق
-            .foregroundColor(DS.Color.textPrimary)
+            // نص أبيض — نفس نص الهيدر فوق التدرّج
+            .foregroundColor(.white)
             .padding(.horizontal, label != nil ? DS.Spacing.xl : DS.Spacing.lg)
             .padding(.vertical, DS.Spacing.md + 2)
-            // زجاج شفّاف بلون التطبيق — يبان الخلف من ورا الزر
+            // نفس هوية الهيدر: تدرّج التطبيق + الحجاب الأبيض — لكن نصف شفّاف
+            // فوق مادة ضبابية، فيبان المحتوى المارّ من ورا الزر.
             .background(
                 ZStack {
                     Capsule().fill(.ultraThinMaterial)
-                    Capsule().fill(color.opacity(0.28))
+                    Capsule().fill(gradient).opacity(0.55)
+                    Capsule().fill(DS.Color.headerVeil)
                 }
             )
             .clipShape(Capsule())
-            .overlay(Capsule().strokeBorder(color.opacity(0.42), lineWidth: 1))
+            .overlay(Capsule().strokeBorder(DS.Color.headerBorder, lineWidth: 1))
             .shadow(color: SwiftUI.Color.black.opacity(0.10), radius: 10, x: 0, y: 4)
             .shadow(color: color.opacity(0.16), radius: 7, x: 0, y: 3)
         }
