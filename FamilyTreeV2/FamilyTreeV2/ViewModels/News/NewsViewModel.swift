@@ -131,7 +131,7 @@ class NewsViewModel: ObservableObject {
                 self.allNews = response
             } else {
                 self.allNews = response.filter { post in
-                    post.isApproved || post.author_id == userId
+                    post.isApproved || post.ownerId == userId
                 }
             }
 
@@ -560,8 +560,11 @@ class NewsViewModel: ObservableObject {
             ? L10n.t("الإدارة", "Admin")
             : user.roleName
 
+        // author_id فارغ في منشور الإدارة: أي عميل قديم يبحث عن العضو فلا يجده
+        // فيعرض author_name = «إدارة العائلة» — الهوية مضمونة من السيرفر.
         let newPost: [String: AnyEncodable] = [
-            "author_id": AnyEncodable(user.id.uuidString),
+            "author_id": AnyEncodable(useAdminIdentity ? Optional<String>.none : user.id.uuidString),
+            "posted_by": AnyEncodable(user.id.uuidString),
             "author_name": AnyEncodable(postAuthorName),
             "author_role": AnyEncodable(postAuthorRole),
             "role_color": AnyEncodable(user.role.colorString),
@@ -614,7 +617,8 @@ class NewsViewModel: ObservableObject {
                 ErrorHelper.isMissingColumn(error, column: "approved_by") {
                 newsApprovalFeatureAvailable = false
                 let legacyPost: [String: AnyEncodable] = [
-                    "author_id": AnyEncodable(user.id.uuidString),
+                    "author_id": AnyEncodable(useAdminIdentity ? Optional<String>.none : user.id.uuidString),
+                    "posted_by": AnyEncodable(user.id.uuidString),
                     "author_name": AnyEncodable(user.fullName),
                     "author_role": AnyEncodable(user.roleName),
                     "role_color": AnyEncodable(user.role.colorString),
@@ -661,7 +665,7 @@ class NewsViewModel: ObservableObject {
         }
 
         // التحقق: العضو يعدل خبره فقط، المدير/المشرف يعدل أي خبر
-        let isAuthor = allNews.first(where: { $0.id == postId })?.author_id == userId
+        let isAuthor = allNews.first(where: { $0.id == postId })?.ownerId == userId
         guard isAuthor || canModerate else {
             newsPostErrorMessage = L10n.t("لا يمكنك تعديل خبر غيرك.", "You can only edit your own posts.")
             return false
@@ -739,7 +743,7 @@ class NewsViewModel: ObservableObject {
         guard newsApprovalFeatureAvailable else { return }
 
         // حفظ authorId قبل الحذف المحلي
-        let authorId = pendingNewsRequests.first(where: { $0.id == postId })?.author_id ?? allNews.first(where: { $0.id == postId })?.author_id
+        let authorId = pendingNewsRequests.first(where: { $0.id == postId })?.ownerId ?? allNews.first(where: { $0.id == postId })?.ownerId
 
         optimisticRemove(from: &pendingNewsRequests, id: postId, apiWork: { [weak self] in
             do {
@@ -807,8 +811,8 @@ class NewsViewModel: ObservableObject {
         self.isLoading = true
 
         // صاحب المنشور — نحفظه قبل الحذف لإشعاره ولربط الحركة به
-        let deletedAuthorId = allNews.first(where: { $0.id == postId })?.author_id
-            ?? pendingNewsRequests.first(where: { $0.id == postId })?.author_id
+        let deletedAuthorId = allNews.first(where: { $0.id == postId })?.ownerId
+            ?? pendingNewsRequests.first(where: { $0.id == postId })?.ownerId
 
         do {
             try await supabase

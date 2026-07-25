@@ -186,9 +186,9 @@ class NotificationViewModel: ObservableObject {
     /// نفس فلتر العرض في NotificationsCenterView (notifications tab + activity tab
     /// + إشعارات يتيمة).
     private static func isVisibleToUser(_ n: AppNotification, myId: UUID?, isAdmin: Bool) -> Bool {
-        // تاب «المستجدات» — تحديثات التطبيق فقط؛ والبث الإداري رسالة للعضو
-        // فتُعدّ ضمن «إشعاراتي» عبر target_member_id أدناه
+        // «المستجدات» — تحديثات التطبيق
         if n.kind == "app_update" { return true }
+        guard let myId else { return false }
 
         let isPending = Self.pendingApprovalKindsRaw.contains(n.kind)
         let isCompleted = Self.completedActionKindsRaw.contains(n.kind)
@@ -197,23 +197,15 @@ class NotificationViewModel: ObservableObject {
             || n.title.contains("Approved")
             || n.title.contains("Rejected")
 
-        // الحركات المنفّذة مكانها «سجل النشاط» في لوحة الإدارة — لا تُعدّ هنا
+        // مرآة belongsToNotificationsTab: الطلبات والحركات الإدارية لا تُعدّ
         // إلا إذا كانت تخصّني شخصياً ولست أنا من نفّذها.
-        // (بدون هذا الشرط كان الجرس يعرض رقماً لا يقابله إشعار داخل المركز.)
-        if isAdmin, isCompleted || titleIndicatesCompleted {
+        if isPending || isCompleted || titleIndicatesCompleted {
             if n.createdBy == myId { return false }
             return n.subjectMemberId == myId
         }
 
-        // طلبات تنتظر موافقة
-        if isPending { return true }
-        // إشعار شخصي موجّه لي
-        if let myId, n.targetMemberId == myId { return true }
-        // إشعار يتيم: kind غير معروف ولا موجّه لشخص — يظهر في تاب «إشعاراتي»
-        if !isPending && !isCompleted && !titleIndicatesCompleted, n.targetMemberId == nil {
-            return true
-        }
-        return false
+        if n.targetMemberId == myId { return true }
+        return n.targetMemberId == nil
     }
 
     /// قائمة kinds اللي تنتظر موافقة الأدمن (مرآة لـNotificationsCenterView.pendingApprovalKinds)

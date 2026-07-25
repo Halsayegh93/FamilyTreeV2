@@ -1082,18 +1082,15 @@ struct DSFloatingButton: View {
                     Text(label).font(DS.Font.calloutBold)
                 }
             }
-            // نص أبيض — نفس نص الهيدر فوق التدرّج
+            // نص أبيض مع ظل — يبقى مقروءاً فوق ما يمرّ خلف الزر
             .foregroundColor(.white)
+            .shadow(color: SwiftUI.Color.black.opacity(0.45), radius: 3, x: 0, y: 1)
             .padding(.horizontal, label != nil ? DS.Spacing.xl : DS.Spacing.lg)
             .padding(.vertical, DS.Spacing.md + 2)
-            // الشفافية في الخلفية (مادة ضبابية) لا في اللون: اللون يبقى غنيّاً
-            // وغامقاً مثل الهيدر، والحجاب أسود خفيف يعمّقه بدل أن يبهته.
+            // شفافية حقيقية: بلا مادة ضبابية — التدرّج وحده بنصف تعتيم،
+            // فالمنشورات خلف الزر تبين من ورائه لا مجرّد لون باهت.
             .background(
-                ZStack {
-                    Capsule().fill(.ultraThinMaterial)
-                    Capsule().fill(gradient).opacity(0.92)
-                    Capsule().fill(SwiftUI.Color.black.opacity(0.12))
-                }
+                Capsule().fill(gradient).opacity(0.50)
             )
             .clipShape(Capsule())
             .overlay(Capsule().strokeBorder(DS.Color.headerBorder, lineWidth: 1))

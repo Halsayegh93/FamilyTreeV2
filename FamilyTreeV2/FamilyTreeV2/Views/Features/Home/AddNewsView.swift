@@ -34,17 +34,18 @@ struct AddNewsView: View {
 
     private var isPoll: Bool { selectedType == "تصويت" }
 
+    /// رقائق الأنواع بلا «تصويت» — التصويت صار زراً في شريط الأدوات جنب الصور
     private var availableTypes: [String] {
-        let pollsOn = appSettingsVM.settings.pollsEnabled ?? true
-        return pollsOn ? NewsTypeHelper.mainTypes : NewsTypeHelper.mainTypes.filter { $0 != "تصويت" }
+        NewsTypeHelper.mainTypes.filter { $0 != "تصويت" }
     }
 
+    private var pollsEnabled: Bool { appSettingsVM.settings.pollsEnabled ?? true }
+
     private var canSubmit: Bool {
-        if isPoll {
-            return isPollValid && !isSubmitting
-        } else {
-            return !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isSubmitting
-        }
+        guard !isSubmitting else { return false }
+        // التصويت يخفي نص الخبر، فالشرط خياراته لا النص
+        if isPoll { return isPollValid }
+        return !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     var body: some View {
@@ -53,16 +54,12 @@ struct AddNewsView: View {
                 VStack(spacing: DS.Spacing.md) {
                     addNewsTypeSelector
 
-                    // النشر باسم الإدارة — بطاقة بهوية الهيدر، مميّزة عن بقية البطاقات
+                    // النشر باسم — في مكانه الأصلي داخل الصفحة
                     if authVM.canModerate { adminIdentityCard }
 
-                    if isPoll {
-                        addNewsPollSection
-                    } else {
-                        addNewsContentSection
-                    }
+                    addNewsContentSection
 
-                    addNewsSubmitSection
+                    addNewsReviewNote
                 }
                 .animation(DS.Anim.snappy, value: isPoll)
                 .padding(.horizontal, DS.Spacing.lg)
@@ -78,6 +75,8 @@ struct AddNewsView: View {
                         .font(DS.Font.caption1)
                         .foregroundColor(DS.Color.textSecondary)
                 }
+                // زر النشر — علوي بدل أسفل الصفحة
+                ToolbarItem(placement: .topBarLeading) { publishToolbarButton }
             }
             .alert(L10n.t("تعذر النشر", "Post Failed"), isPresented: $showPostErrorAlert) {
                 Button(L10n.t("حسناً", "OK"), role: .cancel) {}
@@ -92,13 +91,36 @@ struct AddNewsView: View {
 
     // MARK: - هوية الناشر
 
+    /// زر النشر — كبسولة علوية بلون الزر الأساسي
+    private var publishToolbarButton: some View {
+        Button {
+            Task { await submitNews() }
+        } label: {
+            Group {
+                if isSubmitting {
+                    ProgressView().scaleEffect(0.8).tint(DS.Color.primary)
+                } else {
+                    Image(systemName: "paperplane.fill")
+                        .font(DS.Font.scaled(16, weight: .semibold))
+                }
+            }
+            .foregroundColor(canSubmit ? DS.Color.primary : DS.Color.textTertiary)
+            .frame(width: 44, height: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!canSubmit)
+        .accessibilityLabel(newsVM.canAutoPublishNews ? L10n.t("نشر الخبر", "Publish Post")
+                                                      : L10n.t("إرسال للمراجعة", "Submit for Review"))
+    }
+
     /// بدل مفتاح تشغيل/إطفاء غامض: اختيار هويّة صريح بين بطاقتين —
     /// صورتك واسمك مقابل شعار الإدارة. تشوف بمن ستُنشر قبل ما تنشر.
     private var adminIdentityCard: some View {
         compactCard {
             compactHeader(L10n.t("النشر باسم", "Post as"),
                           icon: "person.crop.circle.badge.checkmark",
-                          color: DS.Color.primary)
+                          color: DS.Color.primary, size: 9.5)
 
             HStack(spacing: DS.Spacing.sm) {
                 identityOption(isAdmin: false)
@@ -118,21 +140,21 @@ struct AddNewsView: View {
             withAnimation(DS.Anim.snappy) { postAsAdmin = isAdmin }
             UISelectionFeedbackGenerator().selectionChanged()
         } label: {
-            VStack(spacing: 6) {
+            VStack(spacing: 3) {
                 ZStack {
                     if isAdmin {
                         Circle()
                             .fill(DS.Color.gradientPrimary)
-                            .frame(width: 40, height: 40)
+                            .frame(width: 30, height: 30)
                             .overlay(Circle().strokeBorder(DS.Color.headerBorder, lineWidth: 1))
-                        Image(systemName: "shield.lefthalf.filled")
-                            .font(DS.Font.scaled(17, weight: .bold))
+                        Image(systemName: "megaphone.fill")
+                            .font(DS.Font.scaled(13, weight: .bold))
                             .foregroundColor(.white)
                     } else {
                         DSMemberAvatar(
                             name: myName,
                             avatarUrl: authVM.currentUser?.avatarUrl,
-                            size: 40,
+                            size: 30,
                             roleColor: DS.Color.primary
                         )
                     }
@@ -143,26 +165,26 @@ struct AddNewsView: View {
                             .font(DS.Font.scaled(13, weight: .bold))
                             .foregroundStyle(.white, DS.Color.primary)
                             .background(Circle().fill(DS.Color.cardBackground).frame(width: 15, height: 15))
-                            .offset(x: 15, y: 15)
+                            .offset(x: 11, y: 11)
                             .transition(.scale.combined(with: .opacity))
                     }
                 }
-                .frame(height: 44)
+                .frame(height: 34)
 
                 Text(isAdmin ? L10n.t("إدارة العائلة", "Family Admin") : myName)
-                    .font(DS.Font.scaled(11.5, weight: .bold))
+                    .font(DS.Font.scaled(10, weight: .bold))
                     .foregroundColor(selected ? DS.Color.primary : DS.Color.textSecondary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
 
                 Text(isAdmin ? L10n.t("منشور رسمي", "Official post")
                              : L10n.t("منشور شخصي", "Personal post"))
-                    .font(DS.Font.scaled(9))
+                    .font(DS.Font.scaled(8))
                     .foregroundColor(DS.Color.textTertiary)
                     .lineLimit(1)
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, DS.Spacing.sm + 2)
+            .padding(.vertical, 6)
             .background(
                 RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
                     .fill(selected ? DS.Color.primary.opacity(0.07) : DS.Color.surface)
@@ -191,13 +213,14 @@ struct AddNewsView: View {
             .dsSubtleShadow()
     }
 
-    private func compactHeader(_ title: String, icon: String, color: Color) -> some View {
+    private func compactHeader(_ title: String, icon: String, color: Color,
+                               size: CGFloat = 11) -> some View {
         HStack(spacing: 5) {
             Image(systemName: icon)
-                .font(DS.Font.scaled(10, weight: .bold))
+                .font(DS.Font.scaled(size - 1, weight: .bold))
                 .foregroundColor(color)
             Text(title)
-                .font(DS.Font.scaled(11, weight: .bold))
+                .font(DS.Font.scaled(size, weight: .bold))
                 .foregroundColor(color)
             Spacer(minLength: 0)
         }
@@ -256,35 +279,45 @@ struct AddNewsView: View {
     // MARK: - Content Section (مع شريط الأدوات والصور)
     private var addNewsContentSection: some View {
         compactCard {
-            compactHeader(L10n.t("محتوى الخبر", "Post Content"), icon: "text.alignright", color: DS.Color.accent)
+            compactHeader(isPoll ? L10n.t("التصويت", "Poll") : L10n.t("محتوى الخبر", "Post Content"),
+                          icon: isPoll ? "chart.bar.fill" : "text.alignright",
+                          color: isPoll ? DS.Color.newsVote : DS.Color.accent)
 
-            // حقل النص
-            ZStack(alignment: .topTrailing) {
-                TextEditor(text: $content)
-                    .frame(minHeight: 52, maxHeight: .infinity)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .scrollContentBackground(.hidden)
-                    .font(DS.Font.callout)
-                    .foregroundColor(DS.Color.textPrimary)
-                    .padding(DS.Spacing.sm)
-
-                if content.isEmpty {
-                    Text(L10n.t("اكتب الخبر هنا...", "Write your post here..."))
+            // حقل النص — يختفي عند تفعيل التصويت (سؤال التصويت يغني عنه)
+            if !isPoll {
+                ZStack(alignment: .topTrailing) {
+                    TextEditor(text: $content)
+                        .frame(minHeight: 52, maxHeight: .infinity)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .scrollContentBackground(.hidden)
                         .font(DS.Font.callout)
-                        .foregroundColor(DS.Color.textTertiary)
-                        .padding(.top, DS.Spacing.md)
-                        .padding(.trailing, DS.Spacing.md)
-                        .allowsHitTesting(false)
+                        .foregroundColor(DS.Color.textPrimary)
+                        .padding(DS.Spacing.sm)
+
+                    if content.isEmpty {
+                        Text(L10n.t("اكتب الخبر هنا...", "Write your post here..."))
+                            .font(DS.Font.callout)
+                            .foregroundColor(DS.Color.textTertiary)
+                            .padding(.top, DS.Spacing.md)
+                            .padding(.trailing, DS.Spacing.md)
+                            .allowsHitTesting(false)
+                    }
                 }
+
+                // خط يفصل نص الخبر عن الإضافات — داخل نفس البطاقة
+                DSDivider()
+                    .padding(.top, DS.Spacing.xs)
             }
 
-            // الصور المختارة
             if !selectedImages.isEmpty {
                 photosPreview
             }
 
-            // شريط الأدوات (أيقونة الصور)
             contentToolbar
+
+            if isPoll {
+                pollFields
+            }
         }
     }
 
@@ -320,6 +353,32 @@ struct AddNewsView: View {
                 .clipShape(Capsule())
             }
             .disabled(isLoadingPhotos)
+
+            // التصويت — جنب الصور مباشرةً بدل أن يكون نوع خبر منفصلاً
+            if pollsEnabled {
+                Button {
+                    withAnimation(DS.Anim.snappy) {
+                        selectedType = isPoll ? "خبر" : "تصويت"
+                    }
+                    UISelectionFeedbackGenerator().selectionChanged()
+                } label: {
+                    HStack(spacing: DS.Spacing.xs) {
+                        Image(systemName: "chart.bar.fill")
+                            .font(DS.Font.scaled(15, weight: .medium))
+                        if isPoll {
+                            Text(L10n.t("تصويت", "Poll"))
+                                .font(DS.Font.caption2)
+                                .fontWeight(.bold)
+                        }
+                    }
+                    .foregroundColor(isPoll ? .white : DS.Color.newsVote)
+                    .padding(.horizontal, DS.Spacing.md)
+                    .padding(.vertical, DS.Spacing.sm)
+                    .background(isPoll ? DS.Color.newsVote : DS.Color.newsVote.opacity(0.10))
+                    .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+            }
 
             Spacer()
         }
@@ -361,48 +420,33 @@ struct AddNewsView: View {
         }
     }
 
-    // MARK: - Poll Section
-    private var addNewsPollSection: some View {
-        compactCard {
-            compactHeader(L10n.t("خيارات التصويت", "Poll Options"), icon: "chart.bar.fill", color: DS.Color.newsVote)
-
-            VStack(spacing: 6) {
-                pollField(placeholder: L10n.t("سؤال التصويت (اختياري)", "Poll question (optional)"), text: $pollQuestion, icon: "questionmark.circle")
-                pollField(placeholder: L10n.t("الخيار الأول", "Option 1"), text: $pollOption1, icon: "1.circle.fill")
-                pollField(placeholder: L10n.t("الخيار الثاني", "Option 2"), text: $pollOption2, icon: "2.circle.fill")
-                pollField(placeholder: L10n.t("الخيار الثالث (اختياري)", "Option 3 (optional)"), text: $pollOption3, icon: "3.circle.fill")
-                pollField(placeholder: L10n.t("الخيار الرابع (اختياري)", "Option 4 (optional)"), text: $pollOption4, icon: "4.circle.fill")
-            }
-            .padding(.horizontal, DS.Spacing.md)
-            .padding(.bottom, DS.Spacing.sm + 2)
+    // MARK: - حقول التصويت
+    private var pollFields: some View {
+        VStack(spacing: 6) {
+            DSDivider()
+                .padding(.bottom, 2)
+            pollField(placeholder: L10n.t("سؤال التصويت (اختياري)", "Poll question (optional)"), text: $pollQuestion, icon: "questionmark.circle")
+            pollField(placeholder: L10n.t("الخيار الأول", "Option 1"), text: $pollOption1, icon: "1.circle.fill")
+            pollField(placeholder: L10n.t("الخيار الثاني", "Option 2"), text: $pollOption2, icon: "2.circle.fill")
+            pollField(placeholder: L10n.t("الخيار الثالث (اختياري)", "Option 3 (optional)"), text: $pollOption3, icon: "3.circle.fill")
+            pollField(placeholder: L10n.t("الخيار الرابع (اختياري)", "Option 4 (optional)"), text: $pollOption4, icon: "4.circle.fill")
         }
+        .padding(.horizontal, DS.Spacing.md)
+        .padding(.bottom, DS.Spacing.sm + 2)
     }
 
-    // MARK: - Submit Section
-    private var addNewsSubmitSection: some View {
-        VStack(spacing: DS.Spacing.sm) {
-            DSPrimaryButton(
-                newsVM.canAutoPublishNews ? L10n.t("نشر الخبر", "Publish Post") : L10n.t("إرسال للمراجعة", "Submit for Review"),
-                icon: "paperplane.fill",
-                isLoading: isSubmitting,
-                useGradient: canSubmit,
-                color: canSubmit ? DS.Color.primary : .gray
-            ) {
-                Task { await submitNews() }
+    // MARK: - ملاحظة المراجعة (الزر انتقل للأعلى)
+    @ViewBuilder
+    private var addNewsReviewNote: some View {
+        if !newsVM.canAutoPublishNews {
+            HStack(spacing: DS.Spacing.xs) {
+                Image(systemName: "info.circle.fill")
+                    .font(DS.Font.scaled(11))
+                Text(L10n.t("يحتاج موافقة الإدارة", "Pending admin review"))
+                    .font(DS.Font.caption2)
             }
-            .disabled(!canSubmit)
-            .opacity(canSubmit ? 1.0 : 0.6)
-
-            if !newsVM.canAutoPublishNews {
-                HStack(spacing: DS.Spacing.xs) {
-                    Image(systemName: "info.circle.fill")
-                        .font(DS.Font.scaled(12))
-                    Text(L10n.t("يحتاج موافقة الإدارة", "Pending admin review"))
-                        .font(DS.Font.caption2)
-                }
-                .foregroundColor(DS.Color.textTertiary)
-                .frame(maxWidth: .infinity, alignment: .center)
-            }
+            .foregroundColor(DS.Color.textTertiary)
+            .frame(maxWidth: .infinity, alignment: .center)
         }
     }
 

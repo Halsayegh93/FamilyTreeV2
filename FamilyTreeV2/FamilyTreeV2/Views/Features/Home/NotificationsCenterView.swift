@@ -578,41 +578,31 @@ struct NotificationsCenterView: View {
     /// - الإشعارات اليتيمة (kind غير معروف وغير موجّهة لشخص محدد) — كانت
     ///   تختفي قبل، الآن تظهر هنا عشان المستخدم يقدر يقرأها/يحذفها
     private func belongsToNotificationsTab(_ n: AppNotification) -> Bool {
-        let myId = authVM.currentUser?.id
-        let isCompletedAction = Self.completedActionKinds.contains(n.kind)
-        let isPendingApproval = Self.pendingApprovalKinds.contains(n.kind)
+        guard let myId = authVM.currentUser?.id else { return false }
 
-        // عناوين تبدأ بـ "تم قبول/تم رفض" أو "Approved/Rejected" تدل على إجراء منفّذ
-        // (يستخدم لتمييز broadcastCompletedAction عن الطلبات الأصلية بنفس الـ kind)
+        // «المستجدات» لها تبويبها المستقل
+        if belongsToActivityTab(n) { return false }
+
+        let isPendingApproval = Self.pendingApprovalKinds.contains(n.kind)
+        let isCompletedAction = Self.completedActionKinds.contains(n.kind)
         let titleIndicatesCompleted = n.title.hasPrefix("تم قبول")
             || n.title.hasPrefix("تم رفض")
             || n.title.contains("Approved")
             || n.title.contains("Rejected")
 
-        // المستجدات (إعلانات/تحديثات) لها تبويبها المستقل
-        if belongsToActivityTab(n) { return false }
-
-        // للإدارة: الحركات المنفّذة (حذف منشور، منشور جديد، تعديل عضو…)
-        // مكانها «سجل النشاط» حصراً — لا تزاحم إشعاراتي إلا إذا كانت تخصّني
-        // أنا شخصياً (subject = أنا) ولم أكن أنا من نفّذها (طلب المالك).
-        if authVM.canModerate && (isCompletedAction || titleIndicatesCompleted) {
-            if n.createdBy == myId { return false }          // حركتي بنفسي — لا داعي لإشعاري
-            return n.subjectMemberId == myId                  // تخصّني شخصياً فقط
+        // إشعاراتي = ما يخصّني أنا: وضع طلباتي، وأي تغيير على بياناتي.
+        // طلبات الآخرين وحركات الإدارة شغل إداري — مكانها أقسام الإدارة
+        // وسجل النشاط، لا هنا (طلب المالك).
+        if isPendingApproval || isCompletedAction || titleIndicatesCompleted {
+            if n.createdBy == myId { return false }   // أنا من نفّذها
+            return n.subjectMemberId == myId          // تخصّني شخصياً فقط
         }
 
-        // طلبات تنتظر موافقة الأدمن
-        if isPendingApproval { return true }
-
-        // إشعار موجّه لي شخصياً (نتيجة موافقة/رفض/تعليق على شيء يخصني)
+        // إشعار موجّه لي (نتيجة طلبي، رسالة إدارية، ترحيب…)
         if n.targetMemberId == myId { return true }
 
-        // إشعار يتيم: kind غير معروف ولا موجّه لشخص محدد
-        // (للأدمن: لازم يكون مو completed action عشان لا يتداخل مع تاب المستجدات)
-        let isOrphan = !isPendingApproval && !isCompletedAction && !titleIndicatesCompleted
-        if isOrphan, n.targetMemberId == nil {
-            return true
-        }
-        return false
+        // إشعار يتيم بلا هدف — يظهر للجميع
+        return n.targetMemberId == nil
     }
 
     /// أنواع الطلبات الجديدة اللي تنتظر موافقة الأدمن — تظهر في "إشعاراتي" فقط
@@ -910,7 +900,6 @@ struct NotificationsCenterView: View {
 
     private func notificationDetailSheet(_ notification: AppNotification) -> some View {
         let iconInfo = NotificationKindStyle.style(for: notification.kind)
-        let date = notification.createdDate
         let relatedMember = relatedMemberForNotification(notification)
         let isJoinRequest = notification.kind == RequestType.joinRequest.rawValue
             || notification.kind == NotificationKind.linkRequest.rawValue
@@ -920,8 +909,7 @@ struct NotificationsCenterView: View {
 
             ScrollView(showsIndicators: false) {
                 VStack(spacing: relatedMember == nil ? DS.Spacing.sm : DS.Spacing.md) {
-                    detailHero(notification: notification, iconInfo: iconInfo, date: date)
-                        .padding(.top, isLandscape ? DS.Spacing.lg : DS.Spacing.xxxl)
+                    Spacer().frame(height: isLandscape ? DS.Spacing.md : DS.Spacing.xl)
 
                     if let member = relatedMember {
                         detailMemberCard(member: member, iconInfo: iconInfo)
@@ -941,12 +929,10 @@ struct NotificationsCenterView: View {
                         )
                     }
 
-                    if !notification.body.isEmpty {
-                        detailBodyCard(
-                            notification: notification,
-                            iconInfo: iconInfo
-                        )
-                    }
+                    detailBodyCard(
+                        notification: notification,
+                        iconInfo: iconInfo
+                    )
 
                     if authVM.isAdmin,
                        let details = notification.details,
@@ -1251,6 +1237,34 @@ struct NotificationsCenterView: View {
         }()
 
         return VStack(alignment: .leading, spacing: DS.Spacing.md) {
+            // ── الهيدر داخل البطاقة نفسها: الأيقونة والعنوان والوقت ──
+            HStack(alignment: .center, spacing: DS.Spacing.md) {
+                ZStack {
+                    Circle()
+                        .fill(iconInfo.gradient)
+                        .frame(width: 46, height: 46)
+                        .shadow(color: iconInfo.color.opacity(0.28), radius: 8, x: 0, y: 3)
+                    Image(systemName: iconInfo.icon)
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundColor(.white)
+                        .symbolRenderingMode(.hierarchical)
+                }
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(notification.title)
+                        .font(DS.Font.scaled(16, weight: .bold))
+                        .foregroundColor(DS.Color.textPrimary)
+                        .lineLimit(3)
+                        .multilineTextAlignment(.leading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Text(relativeTime(date))
+                        .font(DS.Font.scaled(11, weight: .medium))
+                        .foregroundColor(DS.Color.textTertiary)
+                }
+                Spacer(minLength: 0)
+            }
+
+            DSDivider()
+
             // ترويسة: chip التصنيف + chip المدير المنفّذ + الحالة
             HStack(spacing: DS.Spacing.xs) {
                 // chip التصنيف
@@ -1326,12 +1340,14 @@ struct NotificationsCenterView: View {
             let bodyText = bodyWithoutCreatorPrefix(notification.body, creator: actualCreator)
 
             // للإعلانات: نص أكبر قليلاً عشان الرسالة هي محتوى الإشعار.
-            richBodyView(
-                bodyText,
-                font: DS.Font.scaled(isBroadcast ? 17 : 15, weight: isBroadcast ? .semibold : .regular),
-                color: DS.Color.textPrimary
-            )
-            .frame(maxWidth: .infinity, alignment: .leading)
+            if !bodyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                richBodyView(
+                    bodyText,
+                    font: DS.Font.scaled(isBroadcast ? 17 : 15, weight: isBroadcast ? .semibold : .regular),
+                    color: DS.Color.textPrimary
+                )
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
 
             // التاريخ والوقت الكامل (تذييل خفيف)
             HStack(spacing: 4) {

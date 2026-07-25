@@ -1029,18 +1029,33 @@ struct HomeNewsView: View {
     // صف معاينة خبر — avatar للمؤلف + نص الخبر + اسم/وقت + تفاعلات + صورة مصغّرة
     private func newsPreviewRow(for news: NewsPost) -> some View {
         let member = news.author_id.flatMap { memberVM.member(byId: $0) }
-        let displayName = member?.fourPartName ?? news.author_name
+        // منشور بهوية الإدارة: الاسم المحفوظ هو الصحيح — لا يُستبدل باسم العضو
+        let isAdminIdentity = news.author_name == L10n.t("إدارة العائلة", "Family Admin")
+            || news.author_name == "إدارة العائلة"
+        let displayName = isAdminIdentity ? news.author_name
+                                          : (member?.fourPartName ?? news.author_name)
         let roleC = roleColorFor(news.role_color)
         let likes = newsVM.likesCountByPost[news.id] ?? 0
         let comments = newsVM.commentsCountByPost[news.id] ?? 0
         let thumbURL = news.mediaURLs.first.flatMap { URL(string: $0) }
         return HStack(alignment: .top, spacing: DS.Spacing.sm) {
-            DSMemberAvatar(
-                name: news.author_name,
-                avatarUrl: member?.avatarUrl,
-                size: 32,
-                roleColor: roleC
-            )
+            if isAdminIdentity {
+                ZStack {
+                    Circle().fill(DS.Color.gradientPrimary)
+                    Image(systemName: "megaphone.fill")
+                        .font(DS.Font.scaled(13, weight: .bold))
+                        .foregroundColor(.white)
+                }
+                .frame(width: 32, height: 32)
+                .overlay(Circle().strokeBorder(DS.Color.headerBorder, lineWidth: 1))
+            } else {
+                DSMemberAvatar(
+                    name: news.author_name,
+                    avatarUrl: member?.avatarUrl,
+                    size: 32,
+                    roleColor: roleC
+                )
+            }
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(news.content)
@@ -1051,8 +1066,8 @@ struct HomeNewsView: View {
 
                 HStack(spacing: 4) {
                     Text(displayName)
-                        .font(DS.Font.scaled(9, weight: .medium))
-                        .foregroundColor(DS.Color.textSecondary)
+                        .font(DS.Font.scaled(9, weight: isAdminIdentity ? .bold : .medium))
+                        .foregroundColor(isAdminIdentity ? DS.Color.primary : DS.Color.textSecondary)
                         .lineLimit(1)
                     Text("•")
                         .font(DS.Font.scaled(9))

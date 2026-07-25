@@ -67,7 +67,7 @@ struct HomeNewsCardView: View {
         VStack(alignment: .leading, spacing: 0) {
             cardHeader
 
-            // المحتوى
+            // المحتوى — ينزل قليلاً عن الترويسة الرسمية حتى لا يلتصق بها
             if !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 Text(content)
                     .font(DS.Font.scaled(14))
@@ -76,6 +76,7 @@ struct HomeNewsCardView: View {
                     .lineSpacing(3.5)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, DS.Spacing.md)
+                    .padding(.top, isAdminIdentityPost ? DS.Spacing.md : 0)
                     .padding(.bottom, DS.Spacing.sm)
             }
 
@@ -97,23 +98,20 @@ struct HomeNewsCardView: View {
                 .padding(.top, 2)
                 .padding(.bottom, 4)
         }
-        .background(DS.Color.surface)
+        // منشور الإدارة: خلفية مزرقّة تميّزه عن المنشورات الشخصية البيضاء
+        .background(
+            ZStack {
+                DS.Color.surface
+                if isAdminIdentityPost { DS.Color.primary.opacity(0.07) }
+            }
+        )
         .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                .stroke(isAdminIdentityPost ? DS.Color.primary.opacity(0.22)
+                .stroke(isAdminIdentityPost ? DS.Color.primary.opacity(0.45)
                                             : DS.Color.textTertiary.opacity(0.15),
-                        lineWidth: 0.75)
+                        lineWidth: isAdminIdentityPost ? 1.4 : 0.75)
         )
-        // خيط علوي بتدرّج الهيدر — توقيع المنشورات الرسمية فقط
-        .overlay(alignment: .top) {
-            if isAdminIdentityPost {
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(DS.Color.gradientPrimary)
-                    .frame(height: 3)
-                    .padding(.horizontal, DS.Radius.lg)
-            }
-        }
         .dsCardShadow()
     }
 
@@ -131,14 +129,14 @@ struct HomeNewsCardView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         HStack(spacing: 4) {
                             Text(shortDisplayName)
-                                .font(DS.Font.scaled(12, weight: .bold))
-                                .foregroundColor(DS.Color.textPrimary)
+                                .font(DS.Font.scaled(14, weight: .bold))
+                                .foregroundColor(isAdminIdentityPost ? .white : DS.Color.textPrimary)
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.85)
                             if isAdminIdentityPost {
                                 Image(systemName: "checkmark.seal.fill")
-                                    .font(DS.Font.scaled(10, weight: .bold))
-                                    .foregroundColor(DS.Color.primary)
+                                    .font(DS.Font.scaled(12, weight: .bold))
+                                    .foregroundColor(.white)
                             }
                         }
 
@@ -148,10 +146,11 @@ struct HomeNewsCardView: View {
                             Text(NewsTypeHelper.displayName(for: type))
                                 .font(DS.Font.scaled(9, weight: .semibold))
                         }
-                        .foregroundColor(typeColor)
+                        .foregroundColor(isAdminIdentityPost ? .white : typeColor)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 1.5)
-                        .background(typeColor.opacity(0.10))
+                        .background(isAdminIdentityPost ? SwiftUI.Color.white.opacity(0.22)
+                                                        : typeColor.opacity(0.10))
                         .clipShape(Capsule())
                     }
                 }
@@ -186,15 +185,27 @@ struct HomeNewsCardView: View {
                 } label: {
                     Image(systemName: "ellipsis")
                         .font(DS.Font.scaled(14, weight: .semibold))
-                        .foregroundColor(DS.Color.textTertiary)
+                        .foregroundColor(isAdminIdentityPost ? SwiftUI.Color.white.opacity(0.9)
+                                                             : DS.Color.textTertiary)
                         .frame(width: 44, height: 44)   // هدف لمس ≥44pt
                         .contentShape(Rectangle())
                 }
             }
         }
         .padding(.horizontal, DS.Spacing.md)
-        .padding(.top, DS.Spacing.md)
-        .padding(.bottom, DS.Spacing.sm)
+        .padding(.top, isAdminIdentityPost ? DS.Spacing.sm + 2 : DS.Spacing.md)
+        .padding(.bottom, isAdminIdentityPost ? DS.Spacing.sm + 2 : DS.Spacing.sm)
+        // ترويسة رسمية بتدرّج الهيدر — كورقة رسمية للعائلة
+        .background(
+            Group {
+                if isAdminIdentityPost {
+                    ZStack {
+                        DS.Color.gradientPrimary
+                        DS.Color.headerVeil
+                    }
+                }
+            }
+        )
     }
 
     /// صورة الناشر — درع متدرّج بهوية الهيدر لمنشورات الإدارة
@@ -203,13 +214,13 @@ struct HomeNewsCardView: View {
         if isAdminIdentityPost {
             ZStack {
                 Circle()
-                    .fill(DS.Color.gradientPrimary)
-                Image(systemName: "shield.lefthalf.filled")
-                    .font(DS.Font.scaled(14, weight: .bold))
+                    .fill(SwiftUI.Color.white.opacity(0.22))
+                Image(systemName: "megaphone.fill")
+                    .font(DS.Font.scaled(15, weight: .bold))
                     .foregroundColor(.white)
             }
-            .frame(width: 32, height: 32)
-            .overlay(Circle().stroke(DS.Color.headerBorder, lineWidth: 1))
+            .frame(width: 36, height: 36)
+            .overlay(Circle().strokeBorder(SwiftUI.Color.white.opacity(0.35), lineWidth: 1))
         } else {
             DSMemberAvatar(name: authorName,
                            avatarUrl: authorMember?.avatarUrl,

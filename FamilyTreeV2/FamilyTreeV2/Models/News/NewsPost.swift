@@ -7,6 +7,9 @@ nonisolated struct NewsPost: Identifiable, Codable, Sendable {
     let author_role: String
     let role_color: String
     let author_id: UUID?
+    /// المالك الحقيقي — يُملأ دائماً، حتى حين يكون author_id فارغاً
+    /// (منشور بهوية الإدارة). يُستخدم للصلاحيات لا للعرض.
+    var posted_by: UUID?
     let content: String
     let type: String
     var image_url: String?
@@ -47,6 +50,7 @@ nonisolated struct NewsPost: Identifiable, Codable, Sendable {
         case poll_question = "poll_question"
         case poll_options = "poll_options"
         case author_id = "author_id"
+        case posted_by = "posted_by"
         case approval_status = "approval_status"
         case approved_by = "approved_by"
         case approved_at = "approved_at"
@@ -55,6 +59,9 @@ nonisolated struct NewsPost: Identifiable, Codable, Sendable {
     var isApproved: Bool {
         approval_status == nil || approval_status == "approved"
     }
+
+    /// مالك المنشور لأغراض الصلاحيات — يتجاوز فراغ author_id في منشورات الإدارة
+    var ownerId: UUID? { author_id ?? posted_by }
 
     var mediaURLs: [String] {
         if let image_urls, !image_urls.isEmpty {
