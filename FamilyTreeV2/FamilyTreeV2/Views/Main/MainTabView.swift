@@ -4,6 +4,7 @@ import UserNotifications
 struct MainTabView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var appSettingsVM: AppSettingsViewModel
+    @EnvironmentObject var notificationVM: NotificationViewModel
     @ObservedObject private var langManager = LanguageManager.shared
     @State private var selectedTab = 0
     @Environment(\.verticalSizeClass) private var verticalSizeClass
@@ -70,6 +71,8 @@ struct MainTabView: View {
                         Image(systemName: selectedTab == 4 ? "gearshape.2.fill" : "gearshape.2")
                         Text(verticalSizeClass == .compact ? "" : L10n.t("الإدارة", "Admin"))
                     }
+                    // جديد سجل النشاط يظهر على أيقونة التبويب مباشرة
+                    .badge(notificationVM.unreadActivityLogCount)
                     .tag(4)
             }
         }

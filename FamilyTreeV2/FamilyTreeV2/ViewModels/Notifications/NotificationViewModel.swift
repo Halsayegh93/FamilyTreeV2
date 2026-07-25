@@ -172,6 +172,17 @@ class NotificationViewModel: ObservableObject {
         }.count
     }
 
+    /// عدد حركات «سجل النشاط» غير المقروءة — للإدارة فقط.
+    /// يستثني ما يُعدّ في جرس الإشعارات حتى لا يُحسب الشيء مرّتين.
+    var unreadActivityLogCount: Int {
+        guard canModerate else { return 0 }
+        let myId = currentUser?.id
+        return notifications.filter { n in
+            guard !n.read else { return false }
+            return !Self.isVisibleToUser(n, myId: myId, isAdmin: true)
+        }.count
+    }
+
     /// نفس فلتر العرض في NotificationsCenterView (notifications tab + activity tab
     /// + إشعارات يتيمة).
     private static func isVisibleToUser(_ n: AppNotification, myId: UUID?, isAdmin: Bool) -> Bool {

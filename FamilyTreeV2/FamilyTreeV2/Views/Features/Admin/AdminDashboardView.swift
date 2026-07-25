@@ -12,6 +12,7 @@ struct AdminDashboardView: View {
     @EnvironmentObject var newsVM: NewsViewModel
     @EnvironmentObject var adminRequestVM: AdminRequestViewModel
     @EnvironmentObject var projectsVM: ProjectsViewModel
+    @EnvironmentObject var notificationVM: NotificationViewModel
     @StateObject private var diwaniyaVM = DiwaniyasViewModel()
     @Binding var selectedTab: Int
     @State private var navigationPath = NavigationPath()
@@ -183,7 +184,9 @@ struct AdminDashboardView: View {
                                             title: L10n.t("سجل النشاط", "Activity Log"),
                                             subtitle: L10n.t("كل حركة وتغيير في التطبيق", "Every change across the app"),
                                             icon: "clock.arrow.circlepath",
-                                            color: DS.Color.accent
+                                            color: DS.Color.accent,
+                                            badge: notificationVM.unreadActivityLogCount > 0
+                                                 ? notificationVM.unreadActivityLogCount : nil
                                         )
                                     }
                                     // إدارة الأعضاء — مدير + مراقب + مالك (المشرف لا)
