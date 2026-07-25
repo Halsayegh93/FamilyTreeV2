@@ -696,7 +696,10 @@ private struct ActivityDetailSheet: View {
                     }
                 }
                 .padding(DS.Spacing.lg)
-                .padding(.top, DS.Spacing.md)   // فسحة مؤشّر السحب
+                // نقل جزء من حشو الأعلى إلى الأسفل: المحتوى يرتفع قليلاً
+                // ويتنفّس أسفل آخر سطر — والارتفاع الكلي كما هو.
+                .padding(.top, DS.Spacing.xs)
+                .padding(.bottom, DS.Spacing.sm)
                 .background(
                     GeometryReader { g in
                         Color.clear.preference(key: ActivitySheetHeightKey.self, value: g.size.height)
