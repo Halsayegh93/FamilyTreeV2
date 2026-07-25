@@ -215,7 +215,7 @@ struct AboutFamilyAppView: View {
                     .font(DS.Font.scaled(10, weight: .bold))
                     .foregroundColor(color)
                 Text(title)
-                    .font(DS.Font.scaled(10, weight: .bold))
+                    .font(DS.Font.scaled(11, weight: .bold))
                     .foregroundColor(color)
                 Spacer(minLength: 0)
             }
