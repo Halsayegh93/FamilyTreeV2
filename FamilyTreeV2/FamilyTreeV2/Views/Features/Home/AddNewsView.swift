@@ -9,6 +9,8 @@ struct AddNewsView: View {
     @Environment(\.dismiss) var dismiss
     @State private var content = ""
     @State private var selectedType = "خبر"
+    /// النشر باسم «إدارة العائلة» بدل الاسم الشخصي (للإدارة فقط)
+    @State private var postAsAdmin = false
     @State private var selectedImages: [UIImage] = []
     @State private var pickerItems: [PhotosPickerItem] = []
     @State private var pollQuestion = ""
@@ -50,6 +52,32 @@ struct AddNewsView: View {
             ScrollView(showsIndicators: false) {
                 VStack(spacing: DS.Spacing.lg) {
                     addNewsTypeSelector
+
+                    // النشر باسم الإدارة — يظهر لفريق الإدارة فقط
+                    if authVM.canModerate {
+                        Toggle(isOn: $postAsAdmin.animation(DS.Anim.quick)) {
+                            HStack(spacing: DS.Spacing.sm) {
+                                Image(systemName: postAsAdmin ? "shield.fill" : "person.fill")
+                                    .font(DS.Font.scaled(13, weight: .semibold))
+                                    .foregroundColor(postAsAdmin ? DS.Color.primary : DS.Color.textTertiary)
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(L10n.t("النشر باسم الإدارة", "Post as Admin"))
+                                        .font(DS.Font.callout)
+                                        .foregroundColor(DS.Color.textPrimary)
+                                    Text(postAsAdmin
+                                         ? L10n.t("سيظهر باسم «إدارة العائلة»", "Will appear as “Family Admin”")
+                                         : L10n.t("سيظهر باسمك", "Will appear under your name"))
+                                        .font(DS.Font.caption2)
+                                        .foregroundColor(DS.Color.textTertiary)
+                                }
+                            }
+                        }
+                        .tint(DS.Color.primary)
+                        .padding(DS.Spacing.md)
+                        .background(DS.Color.surface)
+                        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
+                        .padding(.horizontal, DS.Spacing.lg)
+                    }
 
                     if isPoll {
                         addNewsPollSection
@@ -363,7 +391,8 @@ struct AddNewsView: View {
             type: selectedType,
             imageURLs: uploadedURLs,
             pollQuestion: isPoll && !question.isEmpty ? question : nil,
-            pollOptions: isPoll ? normalizedPollOptions : []
+            pollOptions: isPoll ? normalizedPollOptions : [],
+            asAdminIdentity: postAsAdmin
         )
         if isPosted { dismiss() } else { showPostErrorAlert = true }
     }

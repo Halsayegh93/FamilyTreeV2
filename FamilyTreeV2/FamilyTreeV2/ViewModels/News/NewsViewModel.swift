@@ -535,7 +535,9 @@ class NewsViewModel: ObservableObject {
         type: String,
         imageURLs: [String] = [],
         pollQuestion: String? = nil,
-        pollOptions: [String] = []
+        pollOptions: [String] = [],
+        /// نشر باسم الإدارة بدل اسم الكاتب (للإدارة فقط — طلب المالك)
+        asAdminIdentity: Bool = false
     ) async -> Bool {
         guard NetworkMonitor.shared.requireOnline() else { return false }
         guard let user = currentUser else {
@@ -549,10 +551,19 @@ class NewsViewModel: ObservableObject {
 
         let shouldAutoApprove = canAutoPublishNews
 
+        // هوية النشر: باسم العضو، أو باسم الإدارة إذا اختار ذلك (وله صلاحية)
+        let useAdminIdentity = asAdminIdentity && (authVM?.canModerate ?? false)
+        let postAuthorName = useAdminIdentity
+            ? L10n.t("إدارة العائلة", "Family Admin")
+            : user.fullName
+        let postAuthorRole = useAdminIdentity
+            ? L10n.t("الإدارة", "Admin")
+            : user.roleName
+
         let newPost: [String: AnyEncodable] = [
             "author_id": AnyEncodable(user.id.uuidString),
-            "author_name": AnyEncodable(user.fullName),
-            "author_role": AnyEncodable(user.roleName),
+            "author_name": AnyEncodable(postAuthorName),
+            "author_role": AnyEncodable(postAuthorRole),
             "role_color": AnyEncodable(user.role.colorString),
             "content": AnyEncodable(content),
             "type": AnyEncodable(type),

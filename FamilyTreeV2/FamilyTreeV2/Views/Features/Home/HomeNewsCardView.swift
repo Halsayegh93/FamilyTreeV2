@@ -94,15 +94,6 @@ struct HomeNewsCardView: View {
 
                 Spacer()
 
-                // الوقت — انتقل للأعلى ليصير شريط الإجراءات أنظف
-                HStack(spacing: 3) {
-                    Image(systemName: "clock")
-                        .font(DS.Font.scaled(10))
-                    Text(time)
-                        .font(DS.Font.caption2)
-                }
-                .foregroundColor(DS.Color.textTertiary)
-
                 if approvalStatus == "pending" {
                     Text(L10n.t("مراجعة", "Review"))
                         .font(DS.Font.caption2)
@@ -304,6 +295,17 @@ struct HomeNewsCardView: View {
         }
     }
 
+    /// الوقت أسفل البطاقة — طلب المالك (كان في الهيدر)
+    private var timeStamp: some View {
+        HStack(spacing: 3) {
+            Image(systemName: "clock")
+                .font(DS.Font.scaled(10))
+            Text(time)
+                .font(DS.Font.caption2)
+        }
+        .foregroundColor(DS.Color.textTertiary)
+    }
+
     private var actionBar: some View {
         HStack(spacing: DS.Spacing.sm) {
             // Like
@@ -375,6 +377,9 @@ struct HomeNewsCardView: View {
             .accessibilityValue(commentCount > 0 ? "\(commentCount)" : "")
 
             Spacer()
+
+            // الوقت في نهاية الشريط السفلي
+            timeStamp
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
