@@ -1,6 +1,8 @@
 import SwiftUI
 
-// MARK: - كرت الخبر — Glass card styling
+// MARK: - كرت الخبر — تصميم نظيف بهرمية واضحة
+// منشورات الإدارة تلبس هوية الهيدر (درع متدرّج + خيط علوي)،
+// والتصويت بأشرطة نسب حيّة بدل أرقام صمّاء.
 struct HomeNewsCardView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var memberVM: MemberViewModel
@@ -59,89 +61,11 @@ struct HomeNewsCardView: View {
         return "\(first3) \(last)"
     }
 
+    private var typeColor: Color { NewsTypeHelper.color(for: type) }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // هيدر الكرت
-            HStack(alignment: .center, spacing: DS.Spacing.sm) {
-                Button {
-                    guard !isAdminIdentityPost, let member = authorMember else { return }
-                    onMemberTap(member)
-                } label: {
-                    HStack(spacing: DS.Spacing.sm) {
-                        DSMemberAvatar(name: authorName,
-                                       avatarUrl: isAdminIdentityPost ? nil : authorMember?.avatarUrl,
-                                       size: 32,
-                                       roleColor: NewsTypeHelper.color(for: type))
-                        .overlay(
-                            Circle()
-                                .stroke(DS.Color.textTertiary.opacity(0.3), lineWidth: 1)
-                        )
-                        .dsGlowShadow()
-
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(shortDisplayName)
-                                .font(DS.Font.scaled(12, weight: .bold))
-                                .foregroundColor(DS.Color.textPrimary)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.85)
-                            
-                            HStack(spacing: 3) {
-                                Image(systemName: NewsTypeHelper.icon(for: type))
-                                    .font(DS.Font.scaled(8, weight: .bold))
-                                Text(NewsTypeHelper.displayName(for: type))
-                                    .font(DS.Font.scaled(9, weight: .semibold))
-                            }
-                                .foregroundColor(NewsTypeHelper.color(for: type))
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 1.5)
-                                .background(NewsTypeHelper.color(for: type).opacity(0.12))
-                                .clipShape(Capsule())
-                        }
-                    }
-                }
-                .buttonStyle(.plain)
-
-                Spacer()
-
-                if approvalStatus == "pending" {
-                    Text(L10n.t("مراجعة", "Review"))
-                        .font(DS.Font.caption2)
-                        .fontWeight(.semibold)
-                        .foregroundColor(DS.Color.warning)
-                        .padding(.horizontal, DS.Spacing.sm)
-                        .padding(.vertical, DS.Spacing.xs)
-                        .background(.ultraThinMaterial)
-                        .clipShape(Capsule())
-                        .overlay(Capsule().stroke(DS.Color.warning.opacity(0.3), lineWidth: 1))
-                }
-
-                if canDelete || canReport || canEdit {
-                    Menu {
-                        if canEdit {
-                            Button(action: onEditTap) { Label(L10n.t("تعديل", "Edit"), systemImage: "pencil") }
-                        }
-                        if canDelete {
-                            Button(role: .destructive, action: onDeleteTap) { Label(L10n.t("حذف", "Delete"), systemImage: "trash") }
-                        }
-                        if canReport {
-                            Button(action: onReportTap) { Label(L10n.t("إبلاغ", "Report"), systemImage: "exclamationmark.bubble") }
-                        }
-                    } label: {
-                        Image(systemName: "ellipsis")
-                            .font(DS.Font.scaled(14, weight: .semibold))
-                            .foregroundColor(DS.Color.textSecondary)
-                            .frame(width: 30, height: 30)
-                            .background(.ultraThinMaterial)
-                            .clipShape(Circle())
-                            .overlay(Circle().stroke(DS.Color.textTertiary.opacity(0.3), lineWidth: 0.75))
-                            .frame(width: 44, height: 44)   // هدف لمس ≥44pt
-                            .contentShape(Rectangle())
-                    }
-                }
-            }
-            .padding(.horizontal, DS.Spacing.md)
-            .padding(.top, DS.Spacing.md)
-            .padding(.bottom, DS.Spacing.sm)
+            cardHeader
 
             // المحتوى
             if !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -149,159 +73,307 @@ struct HomeNewsCardView: View {
                     .font(DS.Font.scaled(14))
                     .foregroundColor(DS.Color.textPrimary.opacity(0.95))
                     .multilineTextAlignment(.leading)
-                    .lineSpacing(3)
+                    .lineSpacing(3.5)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, DS.Spacing.md)
                     .padding(.bottom, DS.Spacing.sm)
             }
 
-            // منطقة الميديا (صور) — Instagram-style with double-tap like
+            // منطقة الميديا (صور) — double-tap like
             if !imageUrls.isEmpty || imageUrl != nil {
-                ZStack {
-                    if !imageUrls.isEmpty {
-                        TabView {
-                            ForEach(Array(imageUrls.enumerated()), id: \.offset) { _, urlStr in
-                                if let encodedStr = urlStr.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-                                   let url = URL(string: encodedStr) {
-                                    CachedAsyncImage(url: url) { img in
-                                        img.resizable().scaledToFill()
-                                            .frame(maxWidth: .infinity)
-                                            .clipped()
-                                    } placeholder: {
-                                        ZStack {
-                                            DS.Color.surface
-                                            ProgressView().tint(DS.Color.primary)
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        .aspectRatio(4/5, contentMode: .fit)
-                        .clipped()
-                        .tabViewStyle(.page(indexDisplayMode: imageUrls.count > 1 ? .automatic : .never))
-                    } else if let urlStr = imageUrl,
-                              let encodedStr = urlStr.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-                              let url = URL(string: encodedStr) {
-                        CachedAsyncImage(url: url) { img in
-                            img.resizable()
-                                .scaledToFill()
-                                .frame(maxWidth: .infinity)
-                                .clipped()
-                        } placeholder: {
-                            ZStack {
-                                DS.Color.surface
-                                ProgressView().tint(DS.Color.primary)
-                            }
-                        }
-                        .aspectRatio(4/5, contentMode: .fit)
-                        .clipped()
-                    }
-
-                    // قلب الإعجاب
-                    if showDoubleTapHeart {
-                        Image(systemName: "heart.fill")
-                            .font(DS.Font.scaled(60, weight: .bold))
-                            .foregroundStyle(DS.Color.textOnPrimary)
-                            .dsCardShadow()
-                            .transition(.scale.combined(with: .opacity))
-                    }
-                }
-                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                        .stroke(DS.Color.textTertiary.opacity(0.12), lineWidth: 0.75)
-                )
-                .contentShape(Rectangle())
-                .onTapGesture(count: 2) {
-                    if !isLiked { onLikeTap() }
-                    withAnimation(DS.Anim.bouncy) {
-                        showDoubleTapHeart = true
-                    }
-                    Task {
-                        try? await Task.sleep(nanoseconds: 600_000_000)
-                        withAnimation(DS.Anim.smooth) {
-                            showDoubleTapHeart = false
-                        }
-                    }
-                }
-                .padding(.horizontal, DS.Spacing.lg)
-                .padding(.top, DS.Spacing.xs)
+                mediaSection
             }
 
             // التصويت
             if !pollOptions.isEmpty {
                 pollSection
-                    .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.top, DS.Spacing.md)
+                    .padding(.horizontal, DS.Spacing.md)
+                    .padding(.top, DS.Spacing.sm)
             }
 
-            // فاصل زجاجي
-            Rectangle()
-                .fill(DS.Color.textTertiary.opacity(0.2))
-                .frame(height: 0.5)
-                .padding(.horizontal, DS.Spacing.md)
-                .padding(.top, DS.Spacing.sm)
-
-            // شريط الإجراءات
+            // شريط الإجراءات — بلا فاصل: المسافة تكفي
             actionBar
                 .padding(.horizontal, DS.Spacing.md)
-                .padding(.vertical, 2)
+                .padding(.top, 2)
+                .padding(.bottom, 4)
         }
         .background(DS.Color.surface)
         .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                .stroke(DS.Color.textTertiary.opacity(0.15), lineWidth: 0.75)
+                .stroke(isAdminIdentityPost ? DS.Color.primary.opacity(0.22)
+                                            : DS.Color.textTertiary.opacity(0.15),
+                        lineWidth: 0.75)
         )
+        // خيط علوي بتدرّج الهيدر — توقيع المنشورات الرسمية فقط
+        .overlay(alignment: .top) {
+            if isAdminIdentityPost {
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(DS.Color.gradientPrimary)
+                    .frame(height: 3)
+                    .padding(.horizontal, DS.Radius.lg)
+            }
+        }
         .dsCardShadow()
     }
 
-    private var pollSection: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            if let q = pollQuestion, !q.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                Text(q).font(DS.Font.calloutBold)
-                    .foregroundColor(DS.Color.textPrimary)
-            }
-            ForEach(Array(pollOptions.enumerated()), id: \.offset) { index, option in
-                let isSelected = selectedPollOption == index
-                Button(action: { onVoteTap(index) }) {
-                    HStack(spacing: DS.Spacing.sm) {
-                        Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                            .foregroundStyle(isSelected ? DS.Color.gradientPrimary : LinearGradient(colors: [DS.Color.textSecondary], startPoint: .top, endPoint: .bottom))
-                            .font(DS.Font.scaled(20))
-                        Text(option).font(DS.Font.callout)
-                            .foregroundColor(DS.Color.textPrimary)
-                        Spacer()
-                        Text("\(pollVotes[index] ?? 0)")
-                            .font(DS.Font.caption1)
-                            .fontWeight(.bold)
-                            .foregroundColor(isSelected ? DS.Color.textOnPrimary : DS.Color.textSecondary)
-                            .padding(.horizontal, DS.Spacing.sm)
-                            .padding(.vertical, 3)
-                            .background(isSelected ? DS.Color.primary : DS.Color.glassDivider(colorScheme))
-                            .clipShape(Capsule())
-                    }
-                    .padding(.horizontal, DS.Spacing.md)
-                    .padding(.vertical, DS.Spacing.xs)
-                    .background(
-                        ZStack {
-                            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                                .fill(.ultraThinMaterial)
-                            if isSelected {
-                                DS.Color.primary.opacity(0.12)
-                                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+    // MARK: - هيدر الكرت
+
+    private var cardHeader: some View {
+        HStack(alignment: .center, spacing: DS.Spacing.sm) {
+            Button {
+                guard !isAdminIdentityPost, let member = authorMember else { return }
+                onMemberTap(member)
+            } label: {
+                HStack(spacing: DS.Spacing.sm) {
+                    authorAvatar
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(spacing: 4) {
+                            Text(shortDisplayName)
+                                .font(DS.Font.scaled(12, weight: .bold))
+                                .foregroundColor(DS.Color.textPrimary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.85)
+                            if isAdminIdentityPost {
+                                Image(systemName: "checkmark.seal.fill")
+                                    .font(DS.Font.scaled(10, weight: .bold))
+                                    .foregroundColor(DS.Color.primary)
                             }
                         }
-                    )
-                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                            .stroke(isSelected ? DS.Color.primary.opacity(0.4) : DS.Color.glassMedium(colorScheme), lineWidth: 1)
-                    )
+
+                        HStack(spacing: 3) {
+                            Image(systemName: NewsTypeHelper.icon(for: type))
+                                .font(DS.Font.scaled(8, weight: .bold))
+                            Text(NewsTypeHelper.displayName(for: type))
+                                .font(DS.Font.scaled(9, weight: .semibold))
+                        }
+                        .foregroundColor(typeColor)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 1.5)
+                        .background(typeColor.opacity(0.10))
+                        .clipShape(Capsule())
+                    }
                 }
-                .buttonStyle(.plain)
+            }
+            .buttonStyle(.plain)
+
+            Spacer()
+
+            if approvalStatus == "pending" {
+                Text(L10n.t("مراجعة", "Review"))
+                    .font(DS.Font.caption2)
+                    .fontWeight(.semibold)
+                    .foregroundColor(DS.Color.warning)
+                    .padding(.horizontal, DS.Spacing.sm)
+                    .padding(.vertical, DS.Spacing.xs)
+                    .background(DS.Color.warning.opacity(0.10))
+                    .clipShape(Capsule())
+                    .overlay(Capsule().stroke(DS.Color.warning.opacity(0.30), lineWidth: 1))
+            }
+
+            if canDelete || canReport || canEdit {
+                Menu {
+                    if canEdit {
+                        Button(action: onEditTap) { Label(L10n.t("تعديل", "Edit"), systemImage: "pencil") }
+                    }
+                    if canDelete {
+                        Button(role: .destructive, action: onDeleteTap) { Label(L10n.t("حذف", "Delete"), systemImage: "trash") }
+                    }
+                    if canReport {
+                        Button(action: onReportTap) { Label(L10n.t("إبلاغ", "Report"), systemImage: "exclamationmark.bubble") }
+                    }
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(DS.Font.scaled(14, weight: .semibold))
+                        .foregroundColor(DS.Color.textTertiary)
+                        .frame(width: 44, height: 44)   // هدف لمس ≥44pt
+                        .contentShape(Rectangle())
+                }
             }
         }
+        .padding(.horizontal, DS.Spacing.md)
+        .padding(.top, DS.Spacing.md)
+        .padding(.bottom, DS.Spacing.sm)
+    }
+
+    /// صورة الناشر — درع متدرّج بهوية الهيدر لمنشورات الإدارة
+    @ViewBuilder
+    private var authorAvatar: some View {
+        if isAdminIdentityPost {
+            ZStack {
+                Circle()
+                    .fill(DS.Color.gradientPrimary)
+                Image(systemName: "shield.lefthalf.filled")
+                    .font(DS.Font.scaled(14, weight: .bold))
+                    .foregroundColor(.white)
+            }
+            .frame(width: 32, height: 32)
+            .overlay(Circle().stroke(DS.Color.headerBorder, lineWidth: 1))
+        } else {
+            DSMemberAvatar(name: authorName,
+                           avatarUrl: authorMember?.avatarUrl,
+                           size: 32,
+                           roleColor: typeColor)
+                .overlay(Circle().stroke(DS.Color.textTertiary.opacity(0.30), lineWidth: 1))
+        }
+    }
+
+    // MARK: - الميديا
+
+    private var mediaSection: some View {
+        ZStack {
+            if !imageUrls.isEmpty {
+                TabView {
+                    ForEach(Array(imageUrls.enumerated()), id: \.offset) { _, urlStr in
+                        if let encodedStr = urlStr.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+                           let url = URL(string: encodedStr) {
+                            CachedAsyncImage(url: url) { img in
+                                img.resizable().scaledToFill()
+                                    .frame(maxWidth: .infinity)
+                                    .clipped()
+                            } placeholder: {
+                                ZStack {
+                                    DS.Color.surface
+                                    ProgressView().tint(DS.Color.primary)
+                                }
+                            }
+                        }
+                    }
+                }
+                .aspectRatio(4/5, contentMode: .fit)
+                .clipped()
+                .tabViewStyle(.page(indexDisplayMode: imageUrls.count > 1 ? .automatic : .never))
+            } else if let urlStr = imageUrl,
+                      let encodedStr = urlStr.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+                      let url = URL(string: encodedStr) {
+                CachedAsyncImage(url: url) { img in
+                    img.resizable()
+                        .scaledToFill()
+                        .frame(maxWidth: .infinity)
+                        .clipped()
+                } placeholder: {
+                    ZStack {
+                        DS.Color.surface
+                        ProgressView().tint(DS.Color.primary)
+                    }
+                }
+                .aspectRatio(4/5, contentMode: .fit)
+                .clipped()
+            }
+
+            // قلب الإعجاب
+            if showDoubleTapHeart {
+                Image(systemName: "heart.fill")
+                    .font(DS.Font.scaled(60, weight: .bold))
+                    .foregroundStyle(DS.Color.textOnPrimary)
+                    .dsCardShadow()
+                    .transition(.scale.combined(with: .opacity))
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                .stroke(DS.Color.textTertiary.opacity(0.12), lineWidth: 0.75)
+        )
+        .contentShape(Rectangle())
+        .onTapGesture(count: 2) {
+            if !isLiked { onLikeTap() }
+            withAnimation(DS.Anim.bouncy) {
+                showDoubleTapHeart = true
+            }
+            Task {
+                try? await Task.sleep(nanoseconds: 600_000_000)
+                withAnimation(DS.Anim.smooth) {
+                    showDoubleTapHeart = false
+                }
+            }
+        }
+        .padding(.horizontal, DS.Spacing.md)
+        .padding(.top, DS.Spacing.xs)
+    }
+
+    // MARK: - التصويت — أشرطة نسب حيّة
+
+    private var totalPollVotes: Int {
+        pollOptions.indices.reduce(0) { $0 + (pollVotes[$1] ?? 0) }
+    }
+
+    private var pollSection: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if let q = pollQuestion, !q.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                Text(q)
+                    .font(DS.Font.scaled(13.5, weight: .bold))
+                    .foregroundColor(DS.Color.textPrimary)
+            }
+
+            ForEach(Array(pollOptions.enumerated()), id: \.offset) { index, option in
+                pollOptionRow(index: index, option: option)
+            }
+
+            if totalPollVotes > 0 {
+                Text(L10n.t("\(totalPollVotes) صوت", "\(totalPollVotes) votes"))
+                    .font(DS.Font.scaled(9.5))
+                    .foregroundColor(DS.Color.textTertiary)
+                    .padding(.top, 1)
+            }
+        }
+    }
+
+    private func pollOptionRow(index: Int, option: String) -> some View {
+        let votes = pollVotes[index] ?? 0
+        let isSelected = selectedPollOption == index
+        let hasVoted = selectedPollOption != nil
+        let ratio = totalPollVotes > 0 ? CGFloat(votes) / CGFloat(totalPollVotes) : 0
+        let percent = totalPollVotes > 0 ? Int((ratio * 100).rounded()) : 0
+
+        return Button(action: { onVoteTap(index) }) {
+            ZStack(alignment: .leading) {
+                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                    .fill(DS.Color.background)
+
+                // شريط النسبة — يظهر بعد التصويت فلا يوحي بنتيجة قبل المشاركة
+                if hasVoted {
+                    GeometryReader { geo in
+                        RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                            .fill(isSelected ? DS.Color.primary.opacity(0.18)
+                                             : DS.Color.textTertiary.opacity(0.10))
+                            .frame(width: max(geo.size.width * ratio, ratio > 0 ? 8 : 0))
+                            .animation(DS.Anim.smooth, value: ratio)
+                    }
+                }
+
+                HStack(spacing: DS.Spacing.sm) {
+                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                        .font(DS.Font.scaled(16, weight: .semibold))
+                        .foregroundColor(isSelected ? DS.Color.primary : DS.Color.textTertiary)
+
+                    Text(option)
+                        .font(DS.Font.scaled(13, weight: isSelected ? .bold : .regular))
+                        .foregroundColor(DS.Color.textPrimary)
+                        .lineLimit(2)
+
+                    Spacer(minLength: DS.Spacing.sm)
+
+                    if hasVoted {
+                        Text("\(percent)٪")
+                            .font(DS.Font.scaled(11, weight: .bold))
+                            .foregroundColor(isSelected ? DS.Color.primary : DS.Color.textSecondary)
+                            .monospacedDigit()
+                    }
+                }
+                .padding(.horizontal, DS.Spacing.md)
+                .padding(.vertical, DS.Spacing.sm + 1)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                    .stroke(isSelected ? DS.Color.primary.opacity(0.40)
+                                       : DS.Color.textTertiary.opacity(0.15),
+                            lineWidth: isSelected ? 1.3 : 1)
+            )
+        }
+        .buttonStyle(.plain)
     }
 
     /// الوقت أسفل البطاقة — طلب المالك (كان في الهيدر)
@@ -315,11 +387,13 @@ struct HomeNewsCardView: View {
         .foregroundColor(DS.Color.textTertiary)
     }
 
+    // MARK: - شريط الإجراءات — أزرار شبحية خفيفة بلا كبسولات ثقيلة
+
     private var actionBar: some View {
-        HStack(spacing: DS.Spacing.sm) {
+        HStack(spacing: DS.Spacing.xs) {
             // Like
             Button(action: onLikeTap) {
-                HStack(spacing: DS.Spacing.xs) {
+                HStack(spacing: 5) {
                     Group {
                         if #available(iOS 17.0, *) {
                             Image(systemName: isLiked ? "heart.fill" : "heart")
@@ -330,58 +404,43 @@ struct HomeNewsCardView: View {
                                 .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isLiked)
                         }
                     }
-                    .font(DS.Font.scaled(15, weight: .medium))
+                    .font(DS.Font.scaled(16, weight: .medium))
                     .foregroundColor(isLiked ? DS.Color.error : DS.Color.textSecondary)
 
                     if likeCount > 0 {
                         Text("\(likeCount)")
-                            .font(DS.Font.caption1)
-                            .fontWeight(.semibold)
+                            .font(DS.Font.scaled(12, weight: .semibold))
                             .foregroundColor(isLiked ? DS.Color.error : DS.Color.textSecondary)
+                            .monospacedDigit()
                     }
                 }
-                .padding(.horizontal, DS.Spacing.md)
-                .padding(.vertical, 7)
-                .background(
-                    ZStack {
-                        Capsule().fill(.ultraThinMaterial)
-                        if isLiked { DS.Color.error.opacity(0.10) }
-                    }
-                )
-                .clipShape(Capsule())
-                .overlay(Capsule().stroke(DS.Color.textTertiary.opacity(0.25), lineWidth: 0.75))
+                .padding(.horizontal, DS.Spacing.sm)
+                .frame(minWidth: 40, minHeight: 44)   // هدف لمس ≥44pt
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .frame(minHeight: 44)                 // هدف لمس ≥44pt
-            .contentShape(Rectangle())
             .accessibilityLabel(isLiked ? L10n.t("إلغاء الإعجاب", "Unlike") : L10n.t("إعجاب", "Like"))
             .accessibilityValue(likeCount > 0 ? "\(likeCount)" : "")
 
             // Comment
             Button(action: onCommentTap) {
-                HStack(spacing: DS.Spacing.xs) {
+                HStack(spacing: 5) {
                     Image(systemName: "bubble.right")
                         .font(DS.Font.scaled(15, weight: .medium))
                         .foregroundColor(DS.Color.textSecondary)
 
                     if commentCount > 0 {
                         Text("\(commentCount)")
-                            .font(DS.Font.caption1)
-                            .fontWeight(.semibold)
+                            .font(DS.Font.scaled(12, weight: .semibold))
                             .foregroundColor(DS.Color.textSecondary)
+                            .monospacedDigit()
                     }
                 }
-                .padding(.horizontal, DS.Spacing.md)
-                .padding(.vertical, 7)
-                .background(
-                    Capsule().fill(.ultraThinMaterial)
-                )
-                .clipShape(Capsule())
-                .overlay(Capsule().stroke(DS.Color.textTertiary.opacity(0.25), lineWidth: 0.75))
+                .padding(.horizontal, DS.Spacing.sm)
+                .frame(minWidth: 40, minHeight: 44)   // هدف لمس ≥44pt
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .frame(minHeight: 44)                 // هدف لمس ≥44pt
-            .contentShape(Rectangle())
             .accessibilityLabel(L10n.t("تعليقات", "Comments"))
             .accessibilityValue(commentCount > 0 ? "\(commentCount)" : "")
 
