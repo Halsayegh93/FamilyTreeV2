@@ -18,11 +18,13 @@ struct AdminActivityLogView: View {
     @State private var selectedIds: Set<UUID> = []
     @State private var showDeleteConfirm = false
     @State private var isDeleting = false
+    /// الصفوف المفتوحة لعرض تفاصيل التغيير (قبل ← بعد)
+    @State private var expandedIds: Set<UUID> = []
 
     // MARK: - التصنيفات
 
     enum ActivityFilter: String, CaseIterable, Identifiable {
-        case all, members, content, system
+        case all, members, content, requests, system
         var id: String { rawValue }
 
         var title: String {
@@ -30,6 +32,7 @@ struct AdminActivityLogView: View {
             case .all:     return L10n.t("الكل", "All")
             case .members: return L10n.t("الأعضاء", "Members")
             case .content: return L10n.t("المحتوى", "Content")
+            case .requests: return L10n.t("الطلبات", "Requests")
             case .system:  return L10n.t("النظام", "System")
             }
         }
@@ -38,6 +41,7 @@ struct AdminActivityLogView: View {
             case .all:     return "square.grid.2x2.fill"
             case .members: return "person.2.fill"
             case .content: return "photo.stack.fill"
+            case .requests: return "tray.full.fill"
             case .system:  return "gearshape.fill"
             }
         }
@@ -46,6 +50,7 @@ struct AdminActivityLogView: View {
             case .all:     return DS.Color.primary
             case .members: return DS.Color.warning
             case .content: return DS.Color.info
+            case .requests: return DS.Color.warning
             case .system:  return DS.Color.accent
             }
         }
@@ -84,15 +89,30 @@ struct AdminActivityLogView: View {
         NotificationKind.projectRejected.rawValue,
     ]
 
-    /// كل ما يُعدّ «حركة منفّذة» — لا طلبات معلّقة
+    /// طلبات الأعضاء (انضمام، ربط، تعديل شجرة…)
+    private static let requestKinds: Set<String> = [
+        "join_request",
+        NotificationKind.linkRequest.rawValue,
+        NotificationKind.treeEdit.rawValue,
+        NotificationKind.childAdd.rawValue,
+        NotificationKind.phoneChange.rawValue,
+        NotificationKind.nameChange.rawValue,
+        NotificationKind.deceasedReport.rawValue,
+        NotificationKind.photoSuggestion.rawValue,
+        NotificationKind.contentReport.rawValue,
+        NotificationKind.newsReport.rawValue,
+        NotificationKind.newsAdd.rawValue,
+        NotificationKind.contactMessage.rawValue,
+        NotificationKind.adminRequest.rawValue,
+        NotificationKind.galleryPending.rawValue,
+        NotificationKind.storyPending.rawValue,
+        NotificationKind.diwaniyaPending.rawValue,
+        NotificationKind.projectPending.rawValue,
+    ]
+
+    /// السجل شامل: كل حركة في التطبيق بلا استثناء (طلب المالك)
     private var activityItems: [AppNotification] {
-        notificationVM.notifications.filter { n in
-            let isMember  = Self.memberKinds.contains(n.kind)
-            let isContent = Self.contentKinds.contains(n.kind)
-            let titleDone = n.title.hasPrefix("تم قبول") || n.title.hasPrefix("تم رفض")
-                || n.title.contains("Approved") || n.title.contains("Rejected")
-            return isMember || isContent || titleDone
-        }
+        notificationVM.notifications
     }
 
     private func matchesFilter(_ n: AppNotification) -> Bool {
@@ -100,7 +120,11 @@ struct AdminActivityLogView: View {
         case .all:     return true
         case .members: return Self.memberKinds.contains(n.kind)
         case .content: return Self.contentKinds.contains(n.kind)
-        case .system:  return !Self.memberKinds.contains(n.kind) && !Self.contentKinds.contains(n.kind)
+        case .requests: return Self.requestKinds.contains(n.kind)
+        case .system:
+            return !Self.memberKinds.contains(n.kind)
+                && !Self.contentKinds.contains(n.kind)
+                && !Self.requestKinds.contains(n.kind)
         }
     }
 
@@ -242,7 +266,11 @@ struct AdminActivityLogView: View {
                     case .all:     return true
                     case .members: return Self.memberKinds.contains(n.kind)
                     case .content: return Self.contentKinds.contains(n.kind)
-                    case .system:  return !Self.memberKinds.contains(n.kind) && !Self.contentKinds.contains(n.kind)
+                    case .requests: return Self.requestKinds.contains(n.kind)
+                    case .system:
+                        return !Self.memberKinds.contains(n.kind)
+                            && !Self.contentKinds.contains(n.kind)
+                            && !Self.requestKinds.contains(n.kind)
                     }
                 }.count
 
@@ -413,9 +441,46 @@ struct AdminActivityLogView: View {
                         .lineLimit(3)
                 }
 
-                Text(relativeTime(item.createdDate))
-                    .font(DS.Font.caption2)
-                    .foregroundColor(DS.Color.textTertiary)
+                HStack(spacing: DS.Spacing.sm) {
+                    Text(relativeTime(item.createdDate))
+                        .font(DS.Font.caption2)
+                        .foregroundColor(DS.Color.textTertiary)
+
+                    // تفاصيل التغيير — تُفتح بالضغط (صورة، اسم، تاريخ…)
+                    if let changes = item.details?.changes, !changes.isEmpty {
+                        Button {
+                            withAnimation(DS.Anim.quick) {
+                                if expandedIds.contains(item.id) { expandedIds.remove(item.id) }
+                                else { expandedIds.insert(item.id) }
+                            }
+                        } label: {
+                            HStack(spacing: 3) {
+                                Image(systemName: expandedIds.contains(item.id)
+                                      ? "chevron.up.circle.fill" : "list.bullet.rectangle")
+                                    .font(DS.Font.scaled(9, weight: .bold))
+                                Text(L10n.t("\(changes.count) تغيير", "\(changes.count) changes"))
+                                    .font(DS.Font.scaled(9.5, weight: .bold))
+                            }
+                            .foregroundColor(DS.Color.primary)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 1.5)
+                            .background(Capsule().fill(DS.Color.primary.opacity(0.10)))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    Spacer(minLength: 0)
+                }
+
+                // قائمة «قبل ← بعد»
+                if expandedIds.contains(item.id), let changes = item.details?.changes {
+                    VStack(alignment: .leading, spacing: 4) {
+                        ForEach(changes) { ch in
+                            changeRow(ch)
+                        }
+                    }
+                    .padding(.top, 4)
+                    .transition(.opacity)
+                }
             }
             Spacer(minLength: 0)
         }
@@ -439,6 +504,42 @@ struct AdminActivityLogView: View {
                 Task { await notificationVM.markNotificationAsRead(id: item.id) }
             }
         }
+    }
+
+    /// سطر تغيير واحد: الحقل · القيمة قبل ← بعد (يفهم الصور والقيم الفارغة)
+    private func changeRow(_ ch: AppNotification.NotificationDetails.ChangeEntry) -> some View {
+        let isPhoto = ch.field == "avatar_url"
+        func display(_ v: String?) -> String {
+            let t = (v ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            if t.isEmpty { return L10n.t("بلا", "None") }
+            if isPhoto { return L10n.t("صورة", "Photo") }
+            return t
+        }
+        return HStack(alignment: .top, spacing: 6) {
+            Text(AppNotification.NotificationDetails.localizedFieldName(ch.field))
+                .font(DS.Font.scaled(10, weight: .bold))
+                .foregroundColor(DS.Color.textSecondary)
+
+            HStack(spacing: 4) {
+                Text(display(ch.before))
+                    .font(DS.Font.scaled(10))
+                    .foregroundColor(DS.Color.textTertiary)
+                    .strikethrough(true, color: DS.Color.textTertiary.opacity(0.6))
+                    .lineLimit(1)
+                Image(systemName: L10n.isArabic ? "arrow.left" : "arrow.right")
+                    .font(DS.Font.scaled(8, weight: .bold))
+                    .foregroundColor(DS.Color.textTertiary)
+                Text(display(ch.after))
+                    .font(DS.Font.scaled(10, weight: .semibold))
+                    .foregroundColor(DS.Color.textPrimary)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, DS.Spacing.sm)
+        .padding(.vertical, 4)
+        .background(DS.Color.background)
+        .clipShape(RoundedRectangle(cornerRadius: 6))
     }
 
     /// أيقونة ولون الصف حسب نوع الحركة (محلي — لا يعتمد على مركز الإشعارات)
