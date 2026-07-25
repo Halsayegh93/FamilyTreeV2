@@ -613,19 +613,11 @@ struct NotificationsCenterView: View {
         NotificationKind.contactMessage.rawValue,
     ]
 
-    /// أنواع «المستجدات»: إعلانات الإدارة وتحديثات التطبيق والأخبار المنشورة
-    private static let updateKinds: Set<String> = [
-        NotificationKind.admin.rawValue,
-        NotificationKind.general.rawValue,
-        NotificationKind.newsPublished.rawValue,
-    ]
-
-    /// تاب «المستجدات»: تحديثات التطبيق والإعلانات العامة — للجميع.
-    /// (سجل حركة التطبيق انتقل لقسم «سجل النشاط» في لوحة الإدارة — طلب المالك)
+    /// تاب «المستجدات»: إعلانات الإدارة وتحديثات التطبيق فقط.
+    /// (تنبيهات مثل «فلان نشر منشوراً» هي حركة إدارية ومكانها «سجل النشاط»
+    /// في لوحة الإدارة — طلب المالك)
     private func belongsToActivityTab(_ n: AppNotification) -> Bool {
-        Self.updateKinds.contains(n.kind)
-            || n.kind == "admin_broadcast"
-            || n.kind == "app_update"     // تحديثات التطبيق ورسائل النظام
+        n.kind == "admin_broadcast" || n.kind == "app_update"
     }
 
     private var filteredNotifications: [AppNotification] {

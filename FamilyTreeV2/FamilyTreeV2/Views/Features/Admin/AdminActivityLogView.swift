@@ -233,44 +233,45 @@ struct AdminActivityLogView: View {
     // MARK: - شريط التصنيفات
 
     private var filterBar: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: DS.Spacing.sm) {
-                ForEach(ActivityFilter.allCases) { f in
-                    let active = filter == f
-                    let count = activityItems.filter { n in
-                        switch f {
-                        case .all:     return true
-                        case .members: return Self.memberKinds.contains(n.kind)
-                        case .content: return Self.contentKinds.contains(n.kind)
-                        case .system:  return !Self.memberKinds.contains(n.kind) && !Self.contentKinds.contains(n.kind)
-                        }
-                    }.count
-
-                    Button {
-                        withAnimation(DS.Anim.quick) { filter = f }
-                    } label: {
-                        HStack(spacing: 5) {
-                            Image(systemName: f.icon)
-                                .font(DS.Font.scaled(10, weight: .bold))
-                            Text(f.title)
-                                .font(DS.Font.scaled(12, weight: .bold))
-                            if count > 0 {
-                                Text("\(count)")
-                                    .font(DS.Font.scaled(11, weight: .heavy))
-                                    .opacity(0.75)
-                            }
-                        }
-                        .foregroundColor(active ? .white : DS.Color.textSecondary)
-                        .padding(.horizontal, DS.Spacing.md)
-                        .frame(height: 30)
-                        .background(Capsule().fill(active ? f.color : DS.Color.surface))
-                        .overlay(Capsule().stroke(DS.Color.mutedBackground, lineWidth: active ? 0 : 1))
+        // الأربعة في صف واحد بلا سحب — طلب المالك
+        HStack(spacing: 5) {
+            ForEach(ActivityFilter.allCases) { f in
+                let active = filter == f
+                let count = activityItems.filter { n in
+                    switch f {
+                    case .all:     return true
+                    case .members: return Self.memberKinds.contains(n.kind)
+                    case .content: return Self.contentKinds.contains(n.kind)
+                    case .system:  return !Self.memberKinds.contains(n.kind) && !Self.contentKinds.contains(n.kind)
                     }
-                    .buttonStyle(.plain)
+                }.count
+
+                Button {
+                    withAnimation(DS.Anim.quick) { filter = f }
+                } label: {
+                    HStack(spacing: 3) {
+                        Image(systemName: f.icon)
+                            .font(DS.Font.scaled(8.5, weight: .bold))
+                        Text(f.title)
+                            .font(DS.Font.scaled(10.5, weight: .bold))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+                        if count > 0 {
+                            Text("\(count)")
+                                .font(DS.Font.scaled(9.5, weight: .heavy))
+                                .opacity(0.75)
+                        }
+                    }
+                    .foregroundColor(active ? .white : DS.Color.textSecondary)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 26)
+                    .background(Capsule().fill(active ? f.color : DS.Color.surface))
+                    .overlay(Capsule().stroke(DS.Color.mutedBackground, lineWidth: active ? 0 : 1))
                 }
+                .buttonStyle(.plain)
             }
-            .padding(.horizontal, DS.Spacing.lg)
         }
+        .padding(.horizontal, DS.Spacing.lg)
         .padding(.vertical, DS.Spacing.sm)
     }
 

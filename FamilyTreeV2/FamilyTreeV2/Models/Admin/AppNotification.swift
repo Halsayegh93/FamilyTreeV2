@@ -23,6 +23,40 @@ nonisolated struct AppNotification: Identifiable, Codable, Sendable {
         case requestType = "request_type"
     }
 
+    init(id: UUID, targetMemberId: UUID?, title: String, body: String, kind: String,
+         createdBy: UUID?, createdAt: String, isRead: Bool?,
+         requestId: UUID?, requestType: String?, details: NotificationDetails?) {
+        self.id = id
+        self.targetMemberId = targetMemberId
+        self.title = title
+        self.body = body
+        self.kind = kind
+        self.createdBy = createdBy
+        self.createdAt = createdAt
+        self.isRead = isRead
+        self.requestId = requestId
+        self.requestType = requestType
+        self.details = details
+    }
+
+    /// فكّ ترميز متسامح: أي عطب في `details` (شكل غير متوقّع) يجعلها nil
+    /// بدل أن يُفشل الصف كله — ففشل صف واحد كان يُسقط قائمة الإشعارات
+    /// بأكملها (الإشعارات والمستجدات وسجل النشاط تظهر فارغة).
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id            = try c.decode(UUID.self, forKey: .id)
+        title         = try c.decode(String.self, forKey: .title)
+        body          = try c.decode(String.self, forKey: .body)
+        kind          = try c.decode(String.self, forKey: .kind)
+        createdAt     = try c.decode(String.self, forKey: .createdAt)
+        targetMemberId = try? c.decodeIfPresent(UUID.self, forKey: .targetMemberId)
+        createdBy     = try? c.decodeIfPresent(UUID.self, forKey: .createdBy)
+        isRead        = try? c.decodeIfPresent(Bool.self, forKey: .isRead)
+        requestId     = try? c.decodeIfPresent(UUID.self, forKey: .requestId)
+        requestType   = try? c.decodeIfPresent(String.self, forKey: .requestType)
+        details       = try? c.decodeIfPresent(NotificationDetails.self, forKey: .details)
+    }
+
     var read: Bool {
         isRead ?? false
     }
