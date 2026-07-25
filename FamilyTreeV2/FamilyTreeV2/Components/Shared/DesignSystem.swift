@@ -1076,17 +1076,17 @@ struct DSFloatingButton: View {
             .foregroundColor(DS.Color.textPrimary)
             .padding(.horizontal, label != nil ? DS.Spacing.xl : DS.Spacing.lg)
             .padding(.vertical, DS.Spacing.md + 2)
-            // معبّأ باللون بستايل زجاجي (frosted glass)
+            // زجاج شفّاف بلون التطبيق — يبان الخلف من ورا الزر
             .background(
                 ZStack {
                     Capsule().fill(.ultraThinMaterial)
-                    Capsule().fill(color.opacity(0.62))
+                    Capsule().fill(color.opacity(0.28))
                 }
             )
             .clipShape(Capsule())
-            .overlay(Capsule().strokeBorder(color.opacity(0.55), lineWidth: 1))
-            .shadow(color: SwiftUI.Color.black.opacity(0.14), radius: 12, x: 0, y: 5)
-            .shadow(color: color.opacity(0.22), radius: 8, x: 0, y: 3)
+            .overlay(Capsule().strokeBorder(color.opacity(0.42), lineWidth: 1))
+            .shadow(color: SwiftUI.Color.black.opacity(0.10), radius: 10, x: 0, y: 4)
+            .shadow(color: color.opacity(0.16), radius: 7, x: 0, y: 3)
         }
         .buttonStyle(DSBoldButtonStyle())
         .scaleEffect(appeared ? 1 : 0.3)
