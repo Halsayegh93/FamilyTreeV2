@@ -41,3 +41,6 @@ Pods/
 # database backups — personal family data, never commit
 worldcup-supabase/backups/
 .build_dd/
+
+build/
+build-device/

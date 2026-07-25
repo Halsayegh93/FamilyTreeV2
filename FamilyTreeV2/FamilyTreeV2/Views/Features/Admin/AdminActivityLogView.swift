@@ -20,6 +20,8 @@ struct AdminActivityLogView: View {
     @State private var isDeleting = false
     /// الصفوف المفتوحة لعرض تفاصيل التغيير (قبل ← بعد)
     @State private var expandedIds: Set<UUID> = []
+    /// السجل المفتوح في شيت التفاصيل
+    @State private var detailItem: AppNotification?
 
     // MARK: - التصنيفات
 
@@ -252,6 +254,14 @@ struct AdminActivityLogView: View {
         }
         .task { await notificationVM.fetchNotifications(force: true) }
         .refreshable { await notificationVM.fetchNotifications(force: true) }
+        .sheet(item: $detailItem) { item in
+            ActivityDetailSheet(
+                item: item,
+                style: rowStyle(for: item.kind),
+                categoryTitle: categoryTitle(for: item.kind)
+            )
+            .environmentObject(memberVM)
+        }
     }
 
     // MARK: - شريط التصنيفات
@@ -500,10 +510,21 @@ struct AdminActivityLogView: View {
                 withAnimation(DS.Anim.quick) {
                     if picked { selectedIds.remove(item.id) } else { selectedIds.insert(item.id) }
                 }
-            } else if isNew {
-                Task { await notificationVM.markNotificationAsRead(id: item.id) }
+            } else {
+                detailItem = item                       // الضغط يفتح التفاصيل
+                if isNew {
+                    Task { await notificationVM.markNotificationAsRead(id: item.id) }
+                }
             }
         }
+    }
+
+    /// اسم تصنيف الحركة (للعرض في التفاصيل)
+    private func categoryTitle(for kind: String) -> String {
+        if Self.memberKinds.contains(kind)   { return ActivityFilter.members.title }
+        if Self.contentKinds.contains(kind)  { return ActivityFilter.content.title }
+        if Self.requestKinds.contains(kind)  { return ActivityFilter.requests.title }
+        return ActivityFilter.system.title
     }
 
     /// سطر تغيير واحد: الحقل · القيمة قبل ← بعد (يفهم الصور والقيم الفارغة)
@@ -589,5 +610,189 @@ struct AdminActivityLogView: View {
                 .font(DS.Font.callout)
                 .foregroundColor(DS.Color.textSecondary)
         }
+    }
+}
+
+// MARK: - شيت تفاصيل الحركة
+
+private struct ActivitySheetHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 260
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
+}
+
+/// تفاصيل سجل واحد: من نفّذها، على مَن، متى بالضبط، وكل ما تغيّر.
+private struct ActivityDetailSheet: View {
+    let item: AppNotification
+    let style: (icon: String, color: Color)
+    let categoryTitle: String
+
+    @EnvironmentObject var memberVM: MemberViewModel
+    @Environment(\.dismiss) private var dismiss
+
+    private var actor: FamilyMember? {
+        guard let id = item.createdBy else { return nil }
+        return memberVM.member(byId: id)
+    }
+
+    private static let fullFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateStyle = .full
+        f.timeStyle = .short
+        return f
+    }()
+    private var fullDate: String {
+        Self.fullFormatter.locale = L10n.isArabic ? Locale(identifier: "ar") : Locale(identifier: "en_US")
+        return Self.fullFormatter.string(from: item.createdDate)
+    }
+
+    /// ارتفاع المحتوى الفعلي — الشيت يفصّل نفسه عليه
+    @State private var contentHeight: CGFloat = 260
+
+    var body: some View {
+        ZStack(alignment: .top) {
+            DS.Color.background.ignoresSafeArea()
+
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: DS.Spacing.md) {
+                    header
+
+                    if !item.body.isEmpty {
+                        block(L10n.t("التفاصيل", "Details"), icon: "text.alignright") {
+                            Text(item.body)
+                                .font(DS.Font.callout)
+                                .foregroundColor(DS.Color.textPrimary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+
+                    if let changes = item.details?.changes, !changes.isEmpty {
+                        block(L10n.t("ما تغيّر (\(changes.count))", "What changed (\(changes.count))"),
+                              icon: "arrow.left.arrow.right") {
+                            VStack(spacing: 6) {
+                                ForEach(changes) { ch in changeLine(ch) }
+                            }
+                        }
+                    }
+
+                    block(L10n.t("معلومات السجل", "Record info"), icon: "info.circle.fill") {
+                        VStack(spacing: 0) {
+                            infoRow(L10n.t("التصنيف", "Category"), categoryTitle)
+                            if let actor {
+                                DSDivider()
+                                infoRow(L10n.t("نفّذها", "By"), actor.fullName)
+                            }
+                            DSDivider()
+                            infoRow(L10n.t("الوقت", "Time"), fullDate)
+                        }
+                    }
+                }
+                .padding(DS.Spacing.lg)
+                .padding(.top, DS.Spacing.sm)
+                .background(
+                    GeometryReader { g in
+                        Color.clear.preference(key: ActivitySheetHeightKey.self, value: g.size.height)
+                    }
+                )
+            }
+        }
+        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+        .onPreferenceChange(ActivitySheetHeightKey.self) { h in
+            // حدّ أدنى للراحة وحدّ أعلى حتى لا يبتلع الشاشة
+            contentHeight = min(max(h + 28, 200), UIScreen.main.bounds.height * 0.85)
+        }
+        .presentationDetents([.height(contentHeight), .large])
+        .presentationDragIndicator(.visible)
+    }
+
+    private var header: some View {
+        HStack(alignment: .top, spacing: DS.Spacing.md) {
+            Image(systemName: style.icon)
+                .font(DS.Font.scaled(18, weight: .bold))
+                .foregroundColor(style.color)
+                .frame(width: 46, height: 46)
+                .background(style.color.opacity(0.12))
+                .clipShape(Circle())
+            VStack(alignment: .leading, spacing: 4) {
+                Text(item.title)
+                    .font(DS.Font.headline)
+                    .foregroundColor(DS.Color.textPrimary)
+                Text(categoryTitle)
+                    .font(DS.Font.caption2)
+                    .fontWeight(.bold)
+                    .foregroundColor(style.color)
+                    .padding(.horizontal, DS.Spacing.sm)
+                    .padding(.vertical, 2)
+                    .background(Capsule().fill(style.color.opacity(0.12)))
+            }
+            Spacer(minLength: 0)
+        }
+    }
+
+    private func block<Content: View>(_ title: String, icon: String,
+                                      @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            HStack(spacing: 5) {
+                Image(systemName: icon)
+                    .font(DS.Font.scaled(10, weight: .bold))
+                    .foregroundColor(DS.Color.primary.opacity(0.75))
+                Text(title)
+                    .font(DS.Font.caption1)
+                    .fontWeight(.bold)
+                    .foregroundColor(DS.Color.textSecondary)
+            }
+            content()
+                .padding(DS.Spacing.md)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(DS.Color.surface)
+                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
+        }
+    }
+
+    private func infoRow(_ label: String, _ value: String) -> some View {
+        HStack(spacing: DS.Spacing.md) {
+            Text(label)
+                .font(DS.Font.caption1)
+                .foregroundColor(DS.Color.textSecondary)
+            Spacer(minLength: 0)
+            Text(value)
+                .font(DS.Font.scaled(12, weight: .semibold))
+                .foregroundColor(DS.Color.textPrimary)
+                .multilineTextAlignment(L10n.isArabic ? .leading : .trailing)
+                .lineLimit(2)
+        }
+        .padding(.vertical, 7)
+    }
+
+    private func changeLine(_ ch: AppNotification.NotificationDetails.ChangeEntry) -> some View {
+        let isPhoto = ch.field == "avatar_url"
+        func display(_ v: String?) -> String {
+            let t = (v ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            if t.isEmpty { return L10n.t("بلا", "None") }
+            if isPhoto { return L10n.t("صورة", "Photo") }
+            return t
+        }
+        return VStack(alignment: .leading, spacing: 3) {
+            Text(AppNotification.NotificationDetails.localizedFieldName(ch.field))
+                .font(DS.Font.scaled(11, weight: .bold))
+                .foregroundColor(DS.Color.textSecondary)
+            HStack(spacing: 6) {
+                Text(display(ch.before))
+                    .font(DS.Font.scaled(12))
+                    .foregroundColor(DS.Color.textTertiary)
+                    .strikethrough(true, color: DS.Color.textTertiary.opacity(0.6))
+                Image(systemName: L10n.isArabic ? "arrow.left" : "arrow.right")
+                    .font(DS.Font.scaled(9, weight: .bold))
+                    .foregroundColor(DS.Color.textTertiary)
+                Text(display(ch.after))
+                    .font(DS.Font.scaled(12, weight: .bold))
+                    .foregroundColor(DS.Color.textPrimary)
+                Spacer(minLength: 0)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 5)
+        .padding(.horizontal, DS.Spacing.sm)
+        .background(DS.Color.background)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 }
