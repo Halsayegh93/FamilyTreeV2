@@ -55,6 +55,7 @@ struct MemberContactFormView: View {
                                 errorBanner(err)
                             }
                             sendButton
+                            AboutFamilySection()
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                     }
@@ -74,6 +75,9 @@ struct MemberContactFormView: View {
 
                         sendButton
                             .padding(.top, DS.Spacing.xs)
+
+                        // «من نحن» جزء من نفس الشاشة — بلا تبويبات (طلب المالك)
+                        AboutFamilySection()
 
                         Spacer(minLength: DS.Spacing.xxl)
                     }

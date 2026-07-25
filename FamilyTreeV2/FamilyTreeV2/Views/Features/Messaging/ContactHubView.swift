@@ -1,89 +1,8 @@
 import SwiftUI
 
-// MARK: - مركز التواصل
-// تبويبان: «مراسلة الإدارة» (النموذج الحالي) و«من نحن» (تعريف بالتطبيق وأصحابه).
-struct ContactHubView: View {
-    @State private var section: ContactSection = .message
-
-    enum ContactSection: CaseIterable {
-        case message, about
-
-        var title: String {
-            switch self {
-            case .message: return L10n.t("مراسلة الإدارة", "Message Admin")
-            case .about:   return L10n.t("من نحن", "About Us")
-            }
-        }
-        var icon: String {
-            switch self {
-            case .message: return "envelope.fill"
-            case .about:   return "info.circle.fill"
-            }
-        }
-    }
-
-    var body: some View {
-        VStack(spacing: 0) {
-            sectionSwitcher
-                .padding(.horizontal, DS.Spacing.lg)
-                .padding(.top, DS.Spacing.xs)
-                .padding(.bottom, DS.Spacing.sm)
-
-            ZStack {
-                switch section {
-                case .message:
-                    MemberContactFormView()
-                        .transition(.opacity)
-                case .about:
-                    AboutFamilyAppView()
-                        .transition(.opacity)
-                }
-            }
-            .animation(DS.Anim.quick, value: section)
-        }
-        .background(DS.Color.background)
-        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-    }
-
-    /// مبدّل تبويب منزلق — كبسولة بيضاء تنزلق تحت الخيار المختار
-    private var sectionSwitcher: some View {
-        HStack(spacing: 0) {
-            ForEach(ContactSection.allCases, id: \.self) { s in
-                let selected = section == s
-                Button {
-                    withAnimation(DS.Anim.snappy) { section = s }
-                    UISelectionFeedbackGenerator().selectionChanged()
-                } label: {
-                    HStack(spacing: 5) {
-                        Image(systemName: s.icon)
-                            .font(DS.Font.scaled(11, weight: .bold))
-                        Text(s.title)
-                            .font(DS.Font.scaled(12, weight: .bold))
-                    }
-                    .foregroundColor(selected ? DS.Color.primary : DS.Color.textSecondary)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 8)
-                    .background {
-                        if selected {
-                            RoundedRectangle(cornerRadius: DS.Radius.md - 2, style: .continuous)
-                                .fill(DS.Color.surface)
-                                .shadow(color: .black.opacity(0.07), radius: 4, y: 1)
-                        }
-                    }
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(3)
-        .background(DS.Color.textTertiary.opacity(0.10))
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
-    }
-}
-
 // MARK: - من نحن — تعريف بالتطبيق وأصحابه
 
-struct AboutFamilyAppView: View {
+struct AboutFamilySection: View {
     private var appVersion: String {
         let v = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
         let b = Bundle.main.infoDictionary?["CFBundleVersion"] as? String
@@ -91,58 +10,55 @@ struct AboutFamilyAppView: View {
     }
 
     var body: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(spacing: DS.Spacing.md) {
-                heroCard
-                purposeCard
-                featuresCard
-                teamCard
-                versionFooter
-            }
-            .padding(.horizontal, DS.Spacing.lg)
-            .padding(.top, DS.Spacing.xs)
-            .padding(.bottom, DS.Spacing.xxxxl)
+        VStack(alignment: .leading, spacing: DS.Spacing.md) {
+            DSDivider()
+                .padding(.vertical, DS.Spacing.xs)
+            heroCard
+            purposeCard
+            featuresCard
+            teamCard
+            versionFooter
         }
     }
 
     // البطاقة التعريفية — بهوية الهيدر
+    /// نفس بنية بانر «تواصل مع الإدارة» حرفياً — أيقونة يمين، سطران، بتدرّج الهيدر
     private var heroCard: some View {
-        VStack(spacing: DS.Spacing.sm) {
+        HStack(alignment: .center, spacing: DS.Spacing.md) {
             Image(systemName: "tree.fill")
-                .font(DS.Font.scaled(22, weight: .bold))
+                .font(DS.Font.scaled(15, weight: .bold))
                 .foregroundColor(.white)
-                .frame(width: 48, height: 48)
-                .background(SwiftUI.Color.white.opacity(0.18))
+                .frame(width: 36, height: 36)
+                .background(SwiftUI.Color.white.opacity(0.20))
                 .clipShape(Circle())
-                .overlay(Circle().strokeBorder(SwiftUI.Color.white.opacity(0.30), lineWidth: 1))
 
-            Text(L10n.t("تطبيق عائلة المحمدعلي", "Al-Mohammad Ali Family App"))
-                .font(DS.Font.scaled(14, weight: .black))
-                .foregroundColor(.white)
-
-            Text(L10n.t("بيت العائلة الرقمي — يجمعنا مهما تباعدنا",
-                        "The family's digital home — keeping us close"))
-                .font(DS.Font.scaled(10))
-                .foregroundColor(SwiftUI.Color.white.opacity(0.85))
-                .multilineTextAlignment(.center)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(L10n.t("تطبيق عائلة المحمدعلي", "Al-Mohammad Ali Family App"))
+                    .font(DS.Font.scaled(13, weight: .bold))
+                    .foregroundColor(.white)
+                Text(L10n.t("بيت العائلة الرقمي — يجمعنا مهما تباعدنا",
+                            "The family's digital home — keeping us close"))
+                    .font(DS.Font.scaled(10))
+                    .foregroundColor(SwiftUI.Color.white.opacity(0.85))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, DS.Spacing.lg)
-        .padding(.horizontal, DS.Spacing.lg)
+        .padding(.horizontal, DS.Spacing.md)
+        .padding(.vertical, DS.Spacing.md - 2)
         .background(
             ZStack {
-                RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
+                RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
                     .fill(DS.Color.gradientPrimary)
-                RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
+                RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
                     .fill(DS.Color.headerVeil)
             }
         )
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
+            RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
                 .strokeBorder(DS.Color.headerBorder, lineWidth: 1)
         )
-        .dsCardShadow()
     }
 
     private var purposeCard: some View {
@@ -207,29 +123,34 @@ struct AboutFamilyAppView: View {
 
     // MARK: - لبنات
 
+    /// نفس آلية أقسام التواصل: عنوان صغير خارج الصندوق ثم الصندوق نفسه
     private func aboutCard<C: View>(title: String, icon: String, color: Color,
                                     @ViewBuilder content: () -> C) -> some View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            HStack(spacing: 5) {
-                Image(systemName: icon)
-                    .font(DS.Font.scaled(10, weight: .bold))
-                    .foregroundColor(color)
-                Text(title)
-                    .font(DS.Font.scaled(11, weight: .bold))
-                    .foregroundColor(color)
-                Spacer(minLength: 0)
-            }
+            sectionLabel(title, icon: icon)
             content()
+                .padding(DS.Spacing.md)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(DS.Color.surface)
+                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
+                .overlay(
+                    RoundedRectangle(cornerRadius: DS.Radius.md)
+                        .strokeBorder(DS.Color.textTertiary.opacity(0.15), lineWidth: 1)
+                )
         }
-        .padding(DS.Spacing.md)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(DS.Color.surface)
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                .strokeBorder(DS.Color.textTertiary.opacity(0.10), lineWidth: 1)
-        )
-        .dsSubtleShadow()
+    }
+
+    /// مطابق لـ sectionLabel في نموذج التواصل
+    private func sectionLabel(_ title: String, icon: String) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: icon)
+                .font(DS.Font.scaled(10, weight: .bold))
+                .foregroundColor(DS.Color.primary.opacity(0.75))
+            Text(title)
+                .font(DS.Font.caption1)
+                .fontWeight(.bold)
+                .foregroundColor(DS.Color.textSecondary)
+        }
     }
 
     private func featureRow(_ icon: String, _ text: String, last: Bool = false) -> some View {

@@ -186,8 +186,9 @@ class NotificationViewModel: ObservableObject {
     /// نفس فلتر العرض في NotificationsCenterView (notifications tab + activity tab
     /// + إشعارات يتيمة).
     private static func isVisibleToUser(_ n: AppNotification, myId: UUID?, isAdmin: Bool) -> Bool {
-        // تاب «المستجدات» — إعلانات الإدارة وتحديثات التطبيق تظهر للجميع
-        if n.kind == "admin_broadcast" || n.kind == "app_update" { return true }
+        // تاب «المستجدات» — تحديثات التطبيق فقط؛ والبث الإداري رسالة للعضو
+        // فتُعدّ ضمن «إشعاراتي» عبر target_member_id أدناه
+        if n.kind == "app_update" { return true }
 
         let isPending = Self.pendingApprovalKindsRaw.contains(n.kind)
         let isCompleted = Self.completedActionKindsRaw.contains(n.kind)

@@ -115,6 +115,8 @@ struct NotificationsCenterView: View {
     @State private var isSelecting = false
     @State private var selectedIds: Set<UUID> = []
     @State private var selectedNotification: AppNotification? = nil
+    /// نشر تحديث تطبيق من تبويب «المستجدات» (للإدارة)
+    @State private var showingAppUpdateComposer = false
     /// العضو المختار لفتح تفاصيله من داخل الإشعار (مثل الشجرة).
     @State private var selectedMember: FamilyMember? = nil
     /// detent المختار حالياً — يُحدَّث ديناميكياً ليتطابق مع ارتفاع المحتوى
@@ -239,6 +241,10 @@ struct NotificationsCenterView: View {
         .sheet(item: $selectedNotification) { notification in
             notificationDetailSheet(notification)
         }
+        .sheet(isPresented: $showingAppUpdateComposer) {
+            NavigationStack { AdminAppUpdateView() }
+                .presentationDragIndicator(.visible)
+        }
         .alert(
             {
                 if case .failure = adminRequestVM.mergeResult {
@@ -270,6 +276,19 @@ struct NotificationsCenterView: View {
 
         return ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: DS.Spacing.sm) {
+
+                // «المستجدات» هي قناة تحديثات التطبيق — والإدارة تنشر منها مباشرة
+                if selectedTab == .activity, authVM.canModerate, !isSelecting {
+                    pillButton(
+                        icon: "megaphone.fill",
+                        label: L10n.t("نشر تحديث", "Publish Update"),
+                        fg: DS.Color.textOnPrimary,
+                        bg: DS.Color.primary
+                    ) {
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        showingAppUpdateComposer = true
+                    }
+                }
 
                 if isSelecting {
                     // ── وضع التحديد ──
@@ -618,8 +637,11 @@ struct NotificationsCenterView: View {
     /// تاب «المستجدات»: إعلانات الإدارة وتحديثات التطبيق فقط.
     /// (تنبيهات مثل «فلان نشر منشوراً» هي حركة إدارية ومكانها «سجل النشاط»
     /// في لوحة الإدارة — طلب المالك)
+    /// «المستجدات» = ما يخصّ التطبيق نفسه: إصدار جديد، ميزة، صيانة، تنويه.
+    /// أي رسالة موجّهة للأعضاء (بث إداري) مكانها «إشعاراتي» — فهي تخصّ العضو
+    /// لا التطبيق (طلب المالك).
     private func belongsToActivityTab(_ n: AppNotification) -> Bool {
-        n.kind == "admin_broadcast" || n.kind == "app_update"
+        n.kind == "app_update"
     }
 
     private var filteredNotifications: [AppNotification] {
@@ -678,14 +700,13 @@ struct NotificationsCenterView: View {
                             .listRowInsets(EdgeInsets(top: 3, leading: DS.Spacing.lg, bottom: 3, trailing: DS.Spacing.lg))
                             .listRowBackground(Color.clear)
                             .listRowSeparator(.hidden)
-                            .swipeActions(edge: .trailing, allowsFullSwipe: authVM.isAdmin) {
-                                if authVM.isAdmin {
-                                    Button(role: .destructive) {
-                                        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                                        Task { await notificationVM.deleteNotification(id: item.id) }
-                                    } label: {
-                                        Label(L10n.t("حذف", "Delete"), systemImage: "trash")
-                                    }
+                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                // كل عضو يحذف نسخته الخاصة من الإشعار
+                                Button(role: .destructive) {
+                                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                                    Task { await notificationVM.deleteNotification(id: item.id) }
+                                } label: {
+                                    Label(L10n.t("حذف", "Delete"), systemImage: "trash")
                                 }
                             }
                             .swipeActions(edge: .leading, allowsFullSwipe: true) {
@@ -861,12 +882,10 @@ struct NotificationsCenterView: View {
                     Label(L10n.t("تعليم كمقروء", "Mark as Read"), systemImage: "envelope.open")
                 }
             }
-            if authVM.isAdmin {
-                Button(role: .destructive) {
-                    Task { await notificationVM.deleteNotification(id: item.id) }
-                } label: {
-                    Label(L10n.t("حذف", "Delete"), systemImage: "trash")
-                }
+            Button(role: .destructive) {
+                Task { await notificationVM.deleteNotification(id: item.id) }
+            } label: {
+                Label(L10n.t("حذف", "Delete"), systemImage: "trash")
             }
         }
     }
@@ -1542,80 +1561,10 @@ struct NotificationsCenterView: View {
 
     // MARK: - Detail: Actions (circular icon buttons)
     @ViewBuilder
+    /// شيت التفاصيل صار للقراءة فقط — الموافقة والرفض والمراجعة تتم من
+    /// أقسام الإدارة المختصّة، والحذف من قائمة الإشعار في القائمة (طلب المالك).
     private func detailActions(notification: AppNotification) -> some View {
-        let isRequest = authVM.isAdmin
-            && (notification.isActionableRequest || Self.pendingApprovalKinds.contains(notification.kind))
-
-        VStack(spacing: DS.Spacing.md) {
-            // الأزرار الدائرية: موافقة / رفض / مراجعة / حذف
-            HStack(spacing: DS.Spacing.xl) {
-                if isRequest {
-                    detailCircleAction(
-                        icon: "checkmark",
-                        color: DS.Color.secondary,
-                        label: L10n.t("موافقة", "Approve")
-                    ) {
-                        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                        // طلب انضمام/ربط + يوجد تطابقات → اعرض حوار اختيار
-                        let isJoinKind = notification.kind == RequestType.joinRequest.rawValue
-                            || notification.kind == NotificationKind.linkRequest.rawValue
-                            || notification.kind == RequestType.linkRequest.rawValue
-                        if isJoinKind && !joinMatchCandidates.isEmpty {
-                            joinApproveDialog = notification
-                            return
-                        }
-                        let id = notification.id
-                        selectedNotification = nil
-                        Task {
-                            _ = await notificationVM.approveRequestFromNotification(notification)
-                            await notificationVM.markNotificationAsRead(id: id)
-                        }
-                    }
-                    detailCircleAction(
-                        icon: "xmark",
-                        color: DS.Color.error,
-                        label: L10n.t("رفض", "Reject")
-                    ) {
-                        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                        let id = notification.id
-                        selectedNotification = nil
-                        Task {
-                            _ = await notificationVM.rejectRequestFromNotification(notification)
-                            await notificationVM.markNotificationAsRead(id: id)
-                        }
-                    }
-                    detailCircleAction(
-                        icon: "shield.checkered",
-                        color: DS.Color.accent,
-                        label: L10n.t("المراجعة", "Review")
-                    ) {
-                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                        let kind = notification.kind
-                        selectedNotification = nil
-                        NotificationCenter.default.post(
-                            name: .openAdminReviewForKind,
-                            object: nil,
-                            userInfo: ["kind": kind]
-                        )
-                    }
-                }
-
-                // زر الحذف — متاح دائماً، مدمج مع باقي الأزرار
-                detailCircleAction(
-                    icon: "trash",
-                    color: DS.Color.textTertiary,
-                    label: L10n.t("حذف", "Delete")
-                ) {
-                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                    let id = notification.id
-                    selectedNotification = nil
-                    Task { await notificationVM.deleteNotification(id: id) }
-                }
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.top, DS.Spacing.sm)
-
-            // تعليم كمقروء — كرابط نصي خفيف
+        Group {
             if !notification.read {
                 Button {
                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
@@ -1630,6 +1579,7 @@ struct NotificationsCenterView: View {
                             .font(DS.Font.scaled(12, weight: .semibold))
                     }
                     .foregroundColor(DS.Color.primary)
+                    .padding(.top, DS.Spacing.sm)
                 }
                 .buttonStyle(DSScaleButtonStyle())
             }

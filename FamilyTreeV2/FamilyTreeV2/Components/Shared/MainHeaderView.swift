@@ -23,6 +23,8 @@ struct MainHeaderView<TrailingContent: View>: View {
     let backgroundGradient: LinearGradient?
     let hasDropShadow: Bool
     let showNotificationBell: Bool
+    /// إخفاء الجرس صراحةً حتى لو كان الهيدر بلا عنوان مخصّص (البروفايل)
+    let hideNotificationBell: Bool
     let subtitleAbove: Bool
     /// عرض العنوان الفرعي ككبسولة زجاجية (مثل عدد الأفراد في الشجرة)
     let subtitleChip: Bool
@@ -37,6 +39,7 @@ struct MainHeaderView<TrailingContent: View>: View {
         backgroundGradient: LinearGradient? = nil,
         hasDropShadow: Bool = true,
         showNotificationBell: Bool = false,
+        hideNotificationBell: Bool = false,
         subtitleAbove: Bool = false,
         subtitleChip: Bool = false,
         @ViewBuilder trailingContent: () -> TrailingContent = { EmptyView() }
@@ -49,6 +52,7 @@ struct MainHeaderView<TrailingContent: View>: View {
         self.backgroundGradient = backgroundGradient
         self.hasDropShadow = hasDropShadow
         self.showNotificationBell = showNotificationBell
+        self.hideNotificationBell = hideNotificationBell
         self.subtitleAbove = subtitleAbove
         self.subtitleChip = subtitleChip
         self.trailingContent = trailingContent()
@@ -167,7 +171,7 @@ struct MainHeaderView<TrailingContent: View>: View {
                         .accessibilityLabel(L10n.t("تسجيل الخروج", "Sign Out"))
                     }
 
-                    if customTitle == nil || showNotificationBell {
+                    if !hideNotificationBell, customTitle == nil || showNotificationBell {
                         NavigationLink(destination: NotificationsCenterView()) {
                             ZStack(alignment: .topTrailing) {
                                 headerIconView(

@@ -203,7 +203,7 @@ struct HomeNewsView: View {
             switch page {
             case .archive: FamilyArchiveView()
             case .projects: FamilyProjectsView()
-            case .contact: ContactHubView()
+            case .contact: MemberContactFormView()
             case .news: newsFullPage
             }
         }
@@ -486,16 +486,15 @@ struct HomeNewsView: View {
             ZStack(alignment: .bottomLeading) {
                 tileBackground(color: color, imageURL: imageURL, icon: icon)
 
-                // الحجاب من الأعلى — العنوان صار جنب الأيقونة فوق
                 LinearGradient(
-                    colors: [.black.opacity(0.50), .black.opacity(0.14), .clear],
+                    colors: [.clear, .black.opacity(0.06), .black.opacity(0.55)],
                     startPoint: .top,
                     endPoint: .bottom
                 )
 
-                // أيقونة دائرية + العنوان جنبها + عدّاد
+                // أيقونة دائرية أكبر + عدّاد
                 VStack {
-                    HStack(alignment: .center, spacing: 7) {
+                    HStack {
                         Image(systemName: icon)
                             .font(DS.Font.scaled(15, weight: .bold))
                             .foregroundColor(.white)
@@ -504,16 +503,7 @@ struct HomeNewsView: View {
                             .overlay(Circle().strokeBorder(Color.white.opacity(0.30), lineWidth: 1))
                             .shadow(color: .black.opacity(0.15), radius: 3, x: 0, y: 1)
 
-                        Text(title)
-                            .font(DS.Font.scaled(17, weight: .black))
-                            .foregroundColor(.white)
-                            .lineLimit(2)
-                            .minimumScaleFactor(0.55)
-                            .multilineTextAlignment(.leading)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .shadow(color: .black.opacity(0.35), radius: 3, x: 0, y: 1)
-
-                        Spacer(minLength: 0)
+                        Spacer()
 
                         if let count, count > 0 {
                             Text("\(count)")
@@ -528,6 +518,17 @@ struct HomeNewsView: View {
                     Spacer()
                 }
                 .padding(9)
+
+                // العنوان أسفل — سطر واحد لضمان تساوي الأحجام
+                Text(title)
+                    .font(DS.Font.scaled(13, weight: .black))
+                    .foregroundColor(.white)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.7)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .shadow(color: .black.opacity(0.35), radius: 3, x: 0, y: 1)
+                    .padding(8)
             }
             .frame(maxWidth: .infinity)
             .frame(height: height ?? layout.tileHeight)

@@ -59,7 +59,8 @@ struct ProfileView: View {
                             title: L10n.t("حسابي", "My Profile"),
                             subtitle: L10n.t("الملف الشخصي والإعدادات", "Profile and settings"),
                             icon: "person.fill",
-                            backgroundGradient: DS.Color.gradientPrimary
+                            backgroundGradient: DS.Color.gradientPrimary,
+                            hideNotificationBell: true
                         ) {
                             // زر الإعدادات — يفتح كل تفضيلات التطبيق
                             DSIconButton(icon: "gearshape.fill", iconColor: DS.Color.textOnPrimary) {
