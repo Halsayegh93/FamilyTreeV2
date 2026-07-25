@@ -109,25 +109,25 @@ struct AboutFamilyAppView: View {
     private var heroCard: some View {
         VStack(spacing: DS.Spacing.sm) {
             Image(systemName: "tree.fill")
-                .font(DS.Font.scaled(30, weight: .bold))
+                .font(DS.Font.scaled(22, weight: .bold))
                 .foregroundColor(.white)
-                .frame(width: 64, height: 64)
+                .frame(width: 48, height: 48)
                 .background(SwiftUI.Color.white.opacity(0.18))
                 .clipShape(Circle())
                 .overlay(Circle().strokeBorder(SwiftUI.Color.white.opacity(0.30), lineWidth: 1))
 
             Text(L10n.t("تطبيق عائلة المحمدعلي", "Al-Mohammad Ali Family App"))
-                .font(DS.Font.scaled(17, weight: .black))
+                .font(DS.Font.scaled(14, weight: .black))
                 .foregroundColor(.white)
 
             Text(L10n.t("بيت العائلة الرقمي — يجمعنا مهما تباعدنا",
                         "The family's digital home — keeping us close"))
-                .font(DS.Font.scaled(11.5))
+                .font(DS.Font.scaled(10))
                 .foregroundColor(SwiftUI.Color.white.opacity(0.85))
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, DS.Spacing.xl)
+        .padding(.vertical, DS.Spacing.lg)
         .padding(.horizontal, DS.Spacing.lg)
         .background(
             ZStack {
@@ -152,9 +152,9 @@ struct AboutFamilyAppView: View {
                 "أنشئ هذا التطبيق ليكون مرجع العائلة الواحد: شجرة تحفظ الأنساب جيلاً بعد جيل، وأخبار تجمع مناسباتنا أفراحاً وأتراحاً، وديوانيات تبقي أبواب بيوتنا مفتوحة لبعضنا.",
                 "This app is the family's single home: a tree preserving our lineage generation after generation, news gathering our occasions, and diwaniyas keeping our doors open to one another."
             ))
-            .font(DS.Font.scaled(12.5))
+            .font(DS.Font.scaled(11))
             .foregroundColor(DS.Color.textPrimary.opacity(0.9))
-            .lineSpacing(4)
+            .lineSpacing(3)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
@@ -215,7 +215,7 @@ struct AboutFamilyAppView: View {
                     .font(DS.Font.scaled(10, weight: .bold))
                     .foregroundColor(color)
                 Text(title)
-                    .font(DS.Font.scaled(11, weight: .bold))
+                    .font(DS.Font.scaled(10, weight: .bold))
                     .foregroundColor(color)
                 Spacer(minLength: 0)
             }
@@ -236,13 +236,13 @@ struct AboutFamilyAppView: View {
         VStack(spacing: 0) {
             HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: icon)
-                    .font(DS.Font.scaled(11, weight: .semibold))
+                    .font(DS.Font.scaled(9.5, weight: .semibold))
                     .foregroundColor(DS.Color.primary)
-                    .frame(width: 24, height: 24)
+                    .frame(width: 21, height: 21)
                     .background(DS.Color.primary.opacity(0.08))
                     .clipShape(Circle())
                 Text(text)
-                    .font(DS.Font.scaled(12))
+                    .font(DS.Font.scaled(11))
                     .foregroundColor(DS.Color.textPrimary.opacity(0.9))
                 Spacer(minLength: 0)
             }
@@ -260,17 +260,17 @@ struct AboutFamilyAppView: View {
                     Circle().fill(DS.Color.accent.opacity(0.12))
                 }
                 Image(systemName: icon)
-                    .font(DS.Font.scaled(13, weight: .bold))
+                    .font(DS.Font.scaled(11, weight: .bold))
                     .foregroundColor(gradient ? .white : DS.Color.accent)
             }
-            .frame(width: 34, height: 34)
+            .frame(width: 30, height: 30)
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(title)
-                    .font(DS.Font.scaled(12, weight: .bold))
+                    .font(DS.Font.scaled(11, weight: .bold))
                     .foregroundColor(DS.Color.textPrimary)
                 Text(subtitle)
-                    .font(DS.Font.scaled(9.5))
+                    .font(DS.Font.scaled(9))
                     .foregroundColor(DS.Color.textSecondary)
             }
             Spacer(minLength: 0)
