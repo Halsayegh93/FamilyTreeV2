@@ -652,6 +652,8 @@ private struct ActivityDetailSheet: View {
 
     /// ارتفاع المحتوى الفعلي — الشيت يفصّل نفسه عليه
     @State private var contentHeight: CGFloat = 260
+    /// لا بدّ من ربط الاختيار: بدونه يعلق الشيت على أول ارتفاع ولا يتكيّف
+    @State private var detent: PresentationDetent = .height(260)
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -715,9 +717,12 @@ private struct ActivityDetailSheet: View {
                 .compactMap { $0 as? UIWindowScene }
                 .first?.windows.first(where: { $0.isKeyWindow })?
                 .safeAreaInsets.bottom ?? 0
-            contentHeight = min(max(h + safeBottom, 180), UIScreen.main.bounds.height * 0.85)
+            let newHeight = min(max(h + safeBottom, 180), UIScreen.main.bounds.height * 0.85)
+            guard abs(newHeight - contentHeight) > 1 else { return }
+            contentHeight = newHeight
+            withAnimation(DS.Anim.quick) { detent = .height(newHeight) }
         }
-        .presentationDetents([.height(contentHeight), .large])
+        .presentationDetents([.height(contentHeight), .large], selection: $detent)
         .presentationDragIndicator(.visible)
     }
 
