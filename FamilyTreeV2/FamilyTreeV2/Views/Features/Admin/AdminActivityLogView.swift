@@ -13,6 +13,11 @@ struct AdminActivityLogView: View {
     @State private var searchText = ""
     @State private var showSearch = false
     @FocusState private var searchFocused: Bool
+    /// وضع التحديد المتعدد + الحذف
+    @State private var isSelecting = false
+    @State private var selectedIds: Set<UUID> = []
+    @State private var showDeleteConfirm = false
+    @State private var isDeleting = false
 
     // MARK: - التصنيفات
 
@@ -143,25 +148,43 @@ struct AdminActivityLogView: View {
                         .padding(.bottom, DS.Spacing.sm)
                 }
 
+                if isSelecting {
+                    selectionBar
+                        .padding(.horizontal, DS.Spacing.lg)
+                        .padding(.bottom, DS.Spacing.sm)
+                }
+
                 if filteredItems.isEmpty {
                     emptyState
                         .frame(maxHeight: .infinity)
                 } else {
-                    ScrollView(showsIndicators: false) {
-                        LazyVStack(spacing: DS.Spacing.sm, pinnedViews: [.sectionHeaders]) {
-                            ForEach(grouped, id: \.0) { section, items in
-                                Section {
-                                    ForEach(items) { item in
-                                        activityRow(item)
-                                    }
-                                } header: {
-                                    sectionHeader(section, count: items.count)
+                    // List — ليعمل السحب للحذف (لا يعمل داخل LazyVStack)
+                    List {
+                        ForEach(grouped, id: \.0) { section, items in
+                            Section {
+                                ForEach(items) { item in
+                                    activityRow(item)
+                                        .listRowInsets(EdgeInsets(top: 3, leading: DS.Spacing.lg,
+                                                                  bottom: 3, trailing: DS.Spacing.lg))
+                                        .listRowBackground(Color.clear)
+                                        .listRowSeparator(.hidden)
+                                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                            Button(role: .destructive) {
+                                                Task { await notificationVM.deleteNotification(id: item.id) }
+                                            } label: {
+                                                Label(L10n.t("حذف", "Delete"), systemImage: "trash.fill")
+                                            }
+                                        }
                                 }
+                            } header: {
+                                sectionHeader(section, count: items.count)
+                                    .listRowInsets(EdgeInsets(top: 0, leading: DS.Spacing.lg,
+                                                              bottom: 0, trailing: DS.Spacing.lg))
                             }
                         }
-                        .padding(.horizontal, DS.Spacing.lg)
-                        .padding(.bottom, DS.Spacing.xxxxl)
                     }
+                    .listStyle(.plain)
+                    .scrollContentBackground(.hidden)
                 }
             }
         }
@@ -170,15 +193,38 @@ struct AdminActivityLogView: View {
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    withAnimation(DS.Anim.quick) { showSearch.toggle() }
-                    if showSearch { searchFocused = true } else { searchText = "" }
-                } label: {
-                    Image(systemName: showSearch ? "xmark.circle.fill" : "magnifyingglass")
-                        .foregroundColor(DS.Color.primary)
+                HStack(spacing: DS.Spacing.md) {
+                    Button {
+                        withAnimation(DS.Anim.quick) {
+                            isSelecting.toggle()
+                            if !isSelecting { selectedIds.removeAll() }
+                        }
+                    } label: {
+                        Text(isSelecting ? L10n.t("إلغاء", "Cancel") : L10n.t("تحديد", "Select"))
+                            .font(DS.Font.calloutBold)
+                            .foregroundColor(DS.Color.primary)
+                    }
+
+                    Button {
+                        withAnimation(DS.Anim.quick) { showSearch.toggle() }
+                        if showSearch { searchFocused = true } else { searchText = "" }
+                    } label: {
+                        Image(systemName: showSearch ? "xmark.circle.fill" : "magnifyingglass")
+                            .foregroundColor(DS.Color.primary)
+                    }
+                    .accessibilityLabel(L10n.t("بحث", "Search"))
                 }
-                .accessibilityLabel(L10n.t("بحث", "Search"))
             }
+        }
+        .confirmationDialog(
+            L10n.t("حذف \(selectedIds.count) من السجل؟", "Delete \(selectedIds.count) entries?"),
+            isPresented: $showDeleteConfirm,
+            titleVisibility: .visible
+        ) {
+            Button(L10n.t("حذف", "Delete"), role: .destructive) {
+                Task { await deleteSelected() }
+            }
+            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
         }
         .task { await notificationVM.fetchNotifications(force: true) }
         .refreshable { await notificationVM.fetchNotifications(force: true) }
@@ -242,6 +288,70 @@ struct AdminActivityLogView: View {
         .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
     }
 
+    /// شريط التحديد: تحديد الكل · العدد · حذف
+    private var selectionBar: some View {
+        HStack(spacing: DS.Spacing.sm) {
+            Button {
+                withAnimation(DS.Anim.quick) {
+                    let all = Set(filteredItems.map(\.id))
+                    selectedIds = (selectedIds == all) ? [] : all
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(DS.Font.scaled(11, weight: .bold))
+                    Text(L10n.t("تحديد الكل", "Select all"))
+                        .font(DS.Font.scaled(12, weight: .bold))
+                }
+                .foregroundColor(DS.Color.primary)
+                .padding(.horizontal, DS.Spacing.md)
+                .frame(height: 30)
+                .background(Capsule().fill(DS.Color.primary.opacity(0.10)))
+            }
+            .buttonStyle(.plain)
+
+            Text(L10n.t("\(selectedIds.count) محدّد", "\(selectedIds.count) selected"))
+                .font(DS.Font.caption1)
+                .foregroundColor(DS.Color.textSecondary)
+
+            Spacer(minLength: 0)
+
+            Button {
+                showDeleteConfirm = true
+            } label: {
+                HStack(spacing: 4) {
+                    if isDeleting {
+                        ProgressView().tint(DS.Color.error).scaleEffect(0.7)
+                    } else {
+                        Image(systemName: "trash.fill")
+                            .font(DS.Font.scaled(11, weight: .bold))
+                    }
+                    Text(L10n.t("حذف", "Delete"))
+                        .font(DS.Font.scaled(12, weight: .bold))
+                }
+                .foregroundColor(DS.Color.error)
+                .padding(.horizontal, DS.Spacing.md)
+                .frame(height: 30)
+                .background(Capsule().fill(DS.Color.error.opacity(0.10)))
+            }
+            .buttonStyle(.plain)
+            .disabled(selectedIds.isEmpty || isDeleting)
+            .opacity(selectedIds.isEmpty ? 0.45 : 1)
+        }
+    }
+
+    @MainActor
+    private func deleteSelected() async {
+        guard !selectedIds.isEmpty else { return }
+        isDeleting = true
+        await notificationVM.deleteNotifications(ids: selectedIds)
+        isDeleting = false
+        withAnimation(DS.Anim.quick) {
+            selectedIds.removeAll()
+            isSelecting = false
+        }
+    }
+
     private func sectionHeader(_ title: String, count: Int) -> some View {
         HStack(spacing: 6) {
             Text(title)
@@ -261,7 +371,16 @@ struct AdminActivityLogView: View {
 
     private func activityRow(_ item: AppNotification) -> some View {
         let style = rowStyle(for: item.kind)
+        let isNew = !item.read
+        let picked = selectedIds.contains(item.id)
         return HStack(alignment: .top, spacing: DS.Spacing.md) {
+            if isSelecting {
+                Image(systemName: picked ? "checkmark.circle.fill" : "circle")
+                    .font(DS.Font.scaled(18))
+                    .foregroundColor(picked ? DS.Color.primary : DS.Color.textTertiary)
+                    .padding(.top, 4)
+            }
+
             Image(systemName: style.icon)
                 .font(DS.Font.scaled(13, weight: .bold))
                 .foregroundColor(style.color)
@@ -270,10 +389,23 @@ struct AdminActivityLogView: View {
                 .clipShape(Circle())
 
             VStack(alignment: .leading, spacing: 3) {
-                Text(item.title)
-                    .font(DS.Font.calloutBold)
-                    .foregroundColor(DS.Color.textPrimary)
-                    .lineLimit(2)
+                HStack(spacing: DS.Spacing.xs) {
+                    Text(item.title)
+                        .font(DS.Font.calloutBold)
+                        .foregroundColor(DS.Color.textPrimary)
+                        .lineLimit(2)
+
+                    // شارة «جديد» — حركة لم تُقرأ بعد
+                    if isNew {
+                        Text(L10n.t("جديد", "New"))
+                            .font(DS.Font.scaled(9, weight: .heavy))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Capsule().fill(DS.Color.primary))
+                    }
+                    Spacer(minLength: 0)
+                }
 
                 if !item.body.isEmpty {
                     Text(item.body)
@@ -290,8 +422,24 @@ struct AdminActivityLogView: View {
         }
         .padding(DS.Spacing.md)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(DS.Color.surface)
+        .background(isNew ? DS.Color.primary.opacity(0.05) : DS.Color.surface)
         .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Radius.lg)
+                .strokeBorder(picked ? DS.Color.primary.opacity(0.5)
+                                     : (isNew ? DS.Color.primary.opacity(0.18) : Color.clear),
+                              lineWidth: picked ? 1.5 : 1)
+        )
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if isSelecting {
+                withAnimation(DS.Anim.quick) {
+                    if picked { selectedIds.remove(item.id) } else { selectedIds.insert(item.id) }
+                }
+            } else if isNew {
+                Task { await notificationVM.markNotificationAsRead(id: item.id) }
+            }
+        }
     }
 
     /// أيقونة ولون الصف حسب نوع الحركة (محلي — لا يعتمد على مركز الإشعارات)
