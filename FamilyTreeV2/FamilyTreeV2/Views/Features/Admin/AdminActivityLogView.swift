@@ -234,7 +234,7 @@ struct AdminActivityLogView: View {
 
     private var filterBar: some View {
         // الأربعة في صف واحد بلا سحب — طلب المالك
-        HStack(spacing: 5) {
+        HStack(spacing: 4) {
             ForEach(ActivityFilter.allCases) { f in
                 let active = filter == f
                 let count = activityItems.filter { n in
@@ -249,22 +249,20 @@ struct AdminActivityLogView: View {
                 Button {
                     withAnimation(DS.Anim.quick) { filter = f }
                 } label: {
-                    HStack(spacing: 3) {
-                        Image(systemName: f.icon)
-                            .font(DS.Font.scaled(8.5, weight: .bold))
+                    HStack(spacing: 2.5) {
                         Text(f.title)
-                            .font(DS.Font.scaled(10.5, weight: .bold))
+                            .font(DS.Font.scaled(9.5, weight: .bold))
                             .lineLimit(1)
-                            .minimumScaleFactor(0.7)
+                            .minimumScaleFactor(0.65)
                         if count > 0 {
                             Text("\(count)")
-                                .font(DS.Font.scaled(9.5, weight: .heavy))
-                                .opacity(0.75)
+                                .font(DS.Font.scaled(8.5, weight: .heavy))
+                                .opacity(0.7)
                         }
                     }
                     .foregroundColor(active ? .white : DS.Color.textSecondary)
                     .frame(maxWidth: .infinity)
-                    .frame(height: 26)
+                    .frame(height: 22)
                     .background(Capsule().fill(active ? f.color : DS.Color.surface))
                     .overlay(Capsule().stroke(DS.Color.mutedBackground, lineWidth: active ? 0 : 1))
                 }
@@ -272,7 +270,7 @@ struct AdminActivityLogView: View {
             }
         }
         .padding(.horizontal, DS.Spacing.lg)
-        .padding(.vertical, DS.Spacing.sm)
+        .padding(.vertical, DS.Spacing.xs)
     }
 
     private var searchField: some View {
