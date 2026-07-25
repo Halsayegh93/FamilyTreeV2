@@ -50,63 +50,11 @@ struct AddNewsView: View {
     var body: some View {
         NavigationStack {
             ScrollView(showsIndicators: false) {
-                VStack(spacing: DS.Spacing.lg) {
+                VStack(spacing: DS.Spacing.md) {
                     addNewsTypeSelector
 
-                    // النشر باسم الإدارة — صف كامل قابل للضغط (لفريق الإدارة فقط)
-                    if authVM.canModerate {
-                        Button {
-                            withAnimation(DS.Anim.quick) { postAsAdmin.toggle() }
-                            UISelectionFeedbackGenerator().selectionChanged()
-                        } label: {
-                            HStack(spacing: DS.Spacing.md) {
-                                Image(systemName: postAsAdmin ? "shield.fill" : "person.fill")
-                                    .font(DS.Font.scaled(14, weight: .semibold))
-                                    .foregroundColor(postAsAdmin ? .white : DS.Color.textTertiary)
-                                    .frame(width: 32, height: 32)
-                                    .background(postAsAdmin ? DS.Color.primary : DS.Color.textTertiary.opacity(0.12))
-                                    .clipShape(Circle())
-
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(L10n.t("النشر باسم الإدارة", "Post as Admin"))
-                                        .font(DS.Font.calloutBold)
-                                        .foregroundColor(DS.Color.textPrimary)
-                                    Text(postAsAdmin
-                                         ? L10n.t("سيظهر باسم «إدارة العائلة»", "Will appear as Family Admin")
-                                         : L10n.t("سيظهر باسمك الشخصي", "Will appear under your name"))
-                                        .font(DS.Font.caption2)
-                                        .foregroundColor(DS.Color.textSecondary)
-                                }
-
-                                Spacer(minLength: 0)
-
-                                // مفتاح بصري — الصف كله يبدّله
-                                ZStack(alignment: postAsAdmin ? .trailing : .leading) {
-                                    Capsule()
-                                        .fill(postAsAdmin ? DS.Color.primary : DS.Color.textTertiary.opacity(0.25))
-                                        .frame(width: 46, height: 28)
-                                    Circle()
-                                        .fill(.white)
-                                        .frame(width: 22, height: 22)
-                                        .shadow(color: .black.opacity(0.15), radius: 2, y: 1)
-                                        .padding(.horizontal, 3)
-                                }
-                                .animation(DS.Anim.quick, value: postAsAdmin)
-                            }
-                            .padding(DS.Spacing.md)
-                            .frame(maxWidth: .infinity)
-                            .background(postAsAdmin ? DS.Color.primary.opacity(0.06) : DS.Color.surface)
-                            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: DS.Radius.md)
-                                    .strokeBorder(postAsAdmin ? DS.Color.primary.opacity(0.35)
-                                                              : DS.Color.textTertiary.opacity(0.12),
-                                                  lineWidth: postAsAdmin ? 1.5 : 1)
-                            )
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                    }
+                    // النشر باسم الإدارة — بطاقة بهوية الهيدر، مميّزة عن بقية البطاقات
+                    if authVM.canModerate { adminIdentityCard }
 
                     if isPoll {
                         addNewsPollSection
@@ -142,15 +90,111 @@ struct AddNewsView: View {
         }
     }
 
+    // MARK: - بطاقة النشر باسم الإدارة
+
+    /// شكل مميّز: عند التفعيل تلبس تدرّج الهيدر بنص أبيض — تنفصل بصرياً عن
+    /// بقية البطاقات البيضاء فيعرف الناشر فوراً أنه ينشر بصفة رسمية.
+    private var adminIdentityCard: some View {
+        Button {
+            withAnimation(DS.Anim.quick) { postAsAdmin.toggle() }
+            UISelectionFeedbackGenerator().selectionChanged()
+        } label: {
+            HStack(spacing: DS.Spacing.sm) {
+                Image(systemName: postAsAdmin ? "shield.lefthalf.filled" : "person.fill")
+                    .font(DS.Font.scaled(12, weight: .bold))
+                    .foregroundColor(postAsAdmin ? .white : DS.Color.textTertiary)
+                    .frame(width: 26, height: 26)
+                    .background(postAsAdmin ? SwiftUI.Color.white.opacity(0.22)
+                                            : DS.Color.textTertiary.opacity(0.12))
+                    .clipShape(Circle())
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(L10n.t("النشر باسم الإدارة", "Post as Admin"))
+                        .font(DS.Font.scaled(12, weight: .bold))
+                        .foregroundColor(postAsAdmin ? .white : DS.Color.textPrimary)
+                    Text(postAsAdmin
+                         ? L10n.t("سيظهر باسم «إدارة العائلة»", "Will appear as Family Admin")
+                         : L10n.t("سيظهر باسمك الشخصي", "Will appear under your name"))
+                        .font(DS.Font.scaled(9.5))
+                        .foregroundColor(postAsAdmin ? SwiftUI.Color.white.opacity(0.85)
+                                                     : DS.Color.textSecondary)
+                }
+
+                Spacer(minLength: 0)
+
+                ZStack(alignment: postAsAdmin ? .trailing : .leading) {
+                    Capsule()
+                        .fill(postAsAdmin ? SwiftUI.Color.white.opacity(0.30)
+                                          : DS.Color.textTertiary.opacity(0.22))
+                        .frame(width: 38, height: 22)
+                    Circle()
+                        .fill(.white)
+                        .frame(width: 17, height: 17)
+                        .shadow(color: .black.opacity(0.15), radius: 2, y: 1)
+                        .padding(.horizontal, 2.5)
+                }
+                .animation(DS.Anim.quick, value: postAsAdmin)
+            }
+            .padding(.horizontal, DS.Spacing.md)
+            .padding(.vertical, DS.Spacing.sm + 1)
+            .frame(maxWidth: .infinity)
+            .background(
+                ZStack {
+                    RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                        .fill(DS.Color.cardBackground)
+                    if postAsAdmin {
+                        RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                            .fill(DS.Color.gradientPrimary)
+                        RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                            .fill(DS.Color.headerVeil)
+                    }
+                }
+            )
+            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                    .strokeBorder(postAsAdmin ? DS.Color.headerBorder
+                                              : DS.Color.textTertiary.opacity(0.12),
+                                  lineWidth: 1)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - بطاقة وهيدر مصغّران (نفس التوزيعة، أصغر)
+
+    private func compactCard<C: View>(@ViewBuilder _ content: () -> C) -> some View {
+        VStack(spacing: 0) { content() }
+            .background(DS.Color.cardBackground)
+            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                    .strokeBorder(DS.Color.textTertiary.opacity(0.10), lineWidth: 1)
+            )
+            .dsSubtleShadow()
+    }
+
+    private func compactHeader(_ title: String, icon: String, color: Color) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: icon)
+                .font(DS.Font.scaled(10, weight: .bold))
+                .foregroundColor(color)
+            Text(title)
+                .font(DS.Font.scaled(11, weight: .bold))
+                .foregroundColor(color)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, DS.Spacing.md)
+        .padding(.top, DS.Spacing.sm + 2)
+        .padding(.bottom, DS.Spacing.xs)
+    }
+
     // MARK: - Type Selector
 
     private var addNewsTypeSelector: some View {
-        DSCard(padding: 0) {
-            DSSectionHeader(
-                title: L10n.t("نوع الخبر", "Post Type"),
-                icon: "tag.fill",
-                iconColor: DS.Color.primary
-            )
+        compactCard {
+            compactHeader(L10n.t("نوع الخبر", "Post Type"), icon: "tag.fill", color: DS.Color.primary)
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: DS.Spacing.sm) {
@@ -163,18 +207,18 @@ struct AddNewsView: View {
                         }) {
                             HStack(spacing: DS.Spacing.sm) {
                                 Image(systemName: NewsTypeHelper.icon(for: type))
-                                    .font(DS.Font.scaled(14, weight: .semibold))
+                                    .font(DS.Font.scaled(11, weight: .bold))
                                     .foregroundColor(isSelected ? DS.Color.textOnPrimary : typeColor)
-                                    .frame(width: 28, height: 28)
+                                    .frame(width: 22, height: 22)
                                     .background(isSelected ? typeColor : typeColor.opacity(0.12))
                                     .clipShape(Circle())
 
                                 Text(NewsTypeHelper.displayName(for: type))
-                                    .font(DS.Font.scaled(13, weight: .bold))
+                                    .font(DS.Font.scaled(11, weight: .bold))
                                     .foregroundColor(isSelected ? typeColor : DS.Color.textSecondary)
                             }
-                            .padding(.horizontal, DS.Spacing.md)
-                            .padding(.vertical, DS.Spacing.xs)
+                            .padding(.horizontal, DS.Spacing.sm + 2)
+                            .padding(.vertical, 3)
                             .background(
                                 Capsule()
                                     .fill(isSelected ? typeColor.opacity(0.1) : DS.Color.surface.opacity(0.5))
@@ -189,23 +233,19 @@ struct AddNewsView: View {
                 }
                 .padding(.horizontal, DS.Spacing.md)
             }
-            .padding(.bottom, DS.Spacing.md)
+            .padding(.bottom, DS.Spacing.sm + 2)
         }
     }
 
     // MARK: - Content Section (مع شريط الأدوات والصور)
     private var addNewsContentSection: some View {
-        DSCard(padding: 0) {
-            DSSectionHeader(
-                title: L10n.t("محتوى الخبر", "Post Content"),
-                icon: "text.alignright",
-                iconColor: DS.Color.accent
-            )
+        compactCard {
+            compactHeader(L10n.t("محتوى الخبر", "Post Content"), icon: "text.alignright", color: DS.Color.accent)
 
             // حقل النص
             ZStack(alignment: .topTrailing) {
                 TextEditor(text: $content)
-                    .frame(minHeight: 60, maxHeight: .infinity)
+                    .frame(minHeight: 52, maxHeight: .infinity)
                     .fixedSize(horizontal: false, vertical: true)
                     .scrollContentBackground(.hidden)
                     .font(DS.Font.callout)
@@ -307,14 +347,10 @@ struct AddNewsView: View {
 
     // MARK: - Poll Section
     private var addNewsPollSection: some View {
-        DSCard(padding: 0) {
-            DSSectionHeader(
-                title: L10n.t("خيارات التصويت", "Poll Options"),
-                icon: "chart.bar.fill",
-                iconColor: DS.Color.newsVote
-            )
+        compactCard {
+            compactHeader(L10n.t("خيارات التصويت", "Poll Options"), icon: "chart.bar.fill", color: DS.Color.newsVote)
 
-            VStack(spacing: DS.Spacing.sm) {
+            VStack(spacing: 6) {
                 pollField(placeholder: L10n.t("سؤال التصويت (اختياري)", "Poll question (optional)"), text: $pollQuestion, icon: "questionmark.circle")
                 pollField(placeholder: L10n.t("الخيار الأول", "Option 1"), text: $pollOption1, icon: "1.circle.fill")
                 pollField(placeholder: L10n.t("الخيار الثاني", "Option 2"), text: $pollOption2, icon: "2.circle.fill")
@@ -322,7 +358,7 @@ struct AddNewsView: View {
                 pollField(placeholder: L10n.t("الخيار الرابع (اختياري)", "Option 4 (optional)"), text: $pollOption4, icon: "4.circle.fill")
             }
             .padding(.horizontal, DS.Spacing.md)
-            .padding(.bottom, DS.Spacing.md)
+            .padding(.bottom, DS.Spacing.sm + 2)
         }
     }
 
@@ -357,16 +393,16 @@ struct AddNewsView: View {
     private func pollField(placeholder: String, text: Binding<String>, icon: String) -> some View {
         HStack(spacing: DS.Spacing.sm) {
             Image(systemName: icon)
-                .font(DS.Font.scaled(14, weight: .medium))
+                .font(DS.Font.scaled(12, weight: .semibold))
                 .foregroundColor(DS.Color.newsVote)
-                .frame(width: 24)
+                .frame(width: 20)
 
             TextField(placeholder, text: text)
-                .font(DS.Font.callout)
+                .font(DS.Font.scaled(13))
                 .foregroundColor(DS.Color.textPrimary)
         }
-        .padding(.horizontal, DS.Spacing.md)
-        .padding(.vertical, DS.Spacing.xs)
+        .padding(.horizontal, DS.Spacing.sm + 2)
+        .padding(.vertical, 5)
         .background(DS.Color.surface)
         .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
         .overlay(

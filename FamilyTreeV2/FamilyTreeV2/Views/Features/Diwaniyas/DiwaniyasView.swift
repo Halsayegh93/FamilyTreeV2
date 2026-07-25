@@ -533,11 +533,9 @@ private struct AddDiwaniyaRequestView: View {
                         // (حُذفت الأيقونة العلوية لتقليص الارتفاع — يتسع المحتوى بلا تمرير.)
 
                         // Basic info section
-                        DSCard(padding: 0) {
-                            DSSectionHeader(
-                                title: L10n.t("بيانات الديوانية", "Diwaniya Info"),
-                                icon: "info.circle.fill"
-                            )
+                        compactCard {
+                            compactHeader(L10n.t("بيانات الديوانية", "Diwaniya Info"),
+                                          icon: "info.circle.fill", color: DS.Color.gridDiwaniya)
 
                             formField(
                                 icon: "building.columns.fill",
@@ -565,9 +563,9 @@ private struct AddDiwaniyaRequestView: View {
 
                             VStack(alignment: .leading, spacing: DS.Spacing.xs) {
                                 HStack(spacing: DS.Spacing.sm) {
-                                    DSIcon("phone.fill", color: DS.Color.success)
+                                    DSIcon("phone.fill", color: DS.Color.success, size: 30, iconSize: 13)
                                     Text(L10n.t("رقم الهاتف (اختياري)", "Phone Number (optional)"))
-                                        .font(DS.Font.caption1)
+                                        .font(DS.Font.scaled(11))
                                         .foregroundColor(DS.Color.textSecondary)
                                     Spacer()
                                 }
@@ -579,7 +577,7 @@ private struct AddDiwaniyaRequestView: View {
                                     bordered: false
                                 )
                             }
-                            .padding(.horizontal, DS.Spacing.lg)
+                            .padding(.horizontal, DS.Spacing.md)
 
                             DSDivider()
 
@@ -589,9 +587,9 @@ private struct AddDiwaniyaRequestView: View {
                                     withAnimation(DS.Anim.quick) { daysOpen.toggle() }
                                 } label: {
                                     HStack(spacing: DS.Spacing.sm) {
-                                        DSIcon("calendar", color: DS.Color.warning)
+                                        DSIcon("calendar", color: DS.Color.warning, size: 30, iconSize: 13)
                                         Text(L10n.t("أيام الديوانية", "Diwaniya Days"))
-                                            .font(DS.Font.callout)
+                                            .font(DS.Font.scaled(13))
                                             .foregroundColor(DS.Color.textSecondary)
                                         Spacer()
                                         if !daysOpen && !daysDisplayText.isEmpty {
@@ -609,7 +607,7 @@ private struct AddDiwaniyaRequestView: View {
                                 .buttonStyle(.plain)
 
                                 if daysOpen {
-                                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 75), spacing: DS.Spacing.xs)], spacing: DS.Spacing.xs) {
+                                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 62), spacing: 5)], spacing: DS.Spacing.xs) {
                                         ForEach(Self.weekDays, id: \.id) { day in
                                             let isOn = selectedDays.contains(day.id)
                                             Button {
@@ -619,10 +617,10 @@ private struct AddDiwaniyaRequestView: View {
                                                 }
                                             } label: {
                                                 Text(L10n.t(day.ar, day.en))
-                                                    .font(DS.Font.scaled(13, weight: isOn ? .bold : .medium))
+                                                    .font(DS.Font.scaled(11, weight: isOn ? .bold : .medium))
                                                     .foregroundColor(isOn ? DS.Color.textOnPrimary : DS.Color.textSecondary)
                                                     .frame(maxWidth: .infinity)
-                                                    .padding(.vertical, DS.Spacing.sm)
+                                                    .padding(.vertical, 5)
                                                     .background(isOn ? DS.Color.warning : DS.Color.surface)
                                                     .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm))
                                                     .overlay(RoundedRectangle(cornerRadius: DS.Radius.sm).stroke(isOn ? Color.clear : DS.Color.textTertiary.opacity(0.25), lineWidth: 1))
@@ -632,8 +630,8 @@ private struct AddDiwaniyaRequestView: View {
                                     }
                                 }
                             }
-                            .padding(.horizontal, DS.Spacing.lg)
-                            .padding(.vertical, DS.Spacing.sm)
+                            .padding(.horizontal, DS.Spacing.md)
+                            .padding(.vertical, 6)
 
                             DSDivider()
 
@@ -643,9 +641,9 @@ private struct AddDiwaniyaRequestView: View {
                                     withAnimation(DS.Anim.quick) { timesOpen.toggle() }
                                 } label: {
                                     HStack(spacing: DS.Spacing.sm) {
-                                        DSIcon("clock.fill", color: DS.Color.warning)
+                                        DSIcon("clock.fill", color: DS.Color.warning, size: 30, iconSize: 13)
                                         Text(L10n.t("أوقات الديوانية", "Diwaniya Times"))
-                                            .font(DS.Font.callout)
+                                            .font(DS.Font.scaled(13))
                                             .foregroundColor(DS.Color.textSecondary)
                                         Spacer()
                                         if !timesOpen && !timeDisplayText.isEmpty {
@@ -663,7 +661,7 @@ private struct AddDiwaniyaRequestView: View {
                                 .buttonStyle(.plain)
 
                                 if timesOpen {
-                                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 72), spacing: DS.Spacing.xs)], spacing: DS.Spacing.xs) {
+                                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 58), spacing: 5)], spacing: DS.Spacing.xs) {
                                         ForEach(Self.timeSlots, id: \.self) { time in
                                             let isOn = selectedTimes.contains(time)
                                             Button {
@@ -673,10 +671,10 @@ private struct AddDiwaniyaRequestView: View {
                                                 }
                                             } label: {
                                                 Text(L10n.t("\(time) م", "\(time) PM"))
-                                                    .font(DS.Font.scaled(13, weight: isOn ? .bold : .medium))
+                                                    .font(DS.Font.scaled(11, weight: isOn ? .bold : .medium))
                                                     .foregroundColor(isOn ? DS.Color.textOnPrimary : DS.Color.textSecondary)
                                                     .frame(maxWidth: .infinity)
-                                                    .padding(.vertical, DS.Spacing.sm)
+                                                    .padding(.vertical, 5)
                                                     .background(isOn ? DS.Color.warning : DS.Color.surface)
                                                     .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm))
                                                     .overlay(RoundedRectangle(cornerRadius: DS.Radius.sm).stroke(isOn ? Color.clear : DS.Color.textTertiary.opacity(0.25), lineWidth: 1))
@@ -686,8 +684,8 @@ private struct AddDiwaniyaRequestView: View {
                                     }
                                 }
                             }
-                            .padding(.horizontal, DS.Spacing.lg)
-                            .padding(.vertical, DS.Spacing.sm)
+                            .padding(.horizontal, DS.Spacing.md)
+                            .padding(.vertical, 6)
 
                             DSDivider()
 
@@ -713,13 +711,13 @@ private struct AddDiwaniyaRequestView: View {
                         // Review note
                         HStack(spacing: DS.Spacing.sm) {
                             Image(systemName: "info.circle.fill")
-                                .font(DS.Font.scaled(14))
+                                .font(DS.Font.scaled(11))
                                 .foregroundColor(DS.Color.gridDiwaniya)
                             Text(L10n.t(
                                 "سيتم إضافة الديوانية بعد الموافقة.",
                                 "Added upon approval."
                             ))
-                            .font(DS.Font.footnote)
+                            .font(DS.Font.scaled(11))
                             .foregroundColor(DS.Color.textSecondary)
                         }
                         .padding(.horizontal, DS.Spacing.lg)
@@ -758,6 +756,34 @@ private struct AddDiwaniyaRequestView: View {
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
 
+    // MARK: - بطاقة وهيدر مصغّران
+
+    private func compactCard<C: View>(@ViewBuilder _ content: () -> C) -> some View {
+        VStack(spacing: 0) { content() }
+            .background(DS.Color.cardBackground)
+            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                    .strokeBorder(DS.Color.textTertiary.opacity(0.10), lineWidth: 1)
+            )
+            .dsSubtleShadow()
+    }
+
+    private func compactHeader(_ title: String, icon: String, color: Color) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: icon)
+                .font(DS.Font.scaled(10, weight: .bold))
+                .foregroundColor(color)
+            Text(title)
+                .font(DS.Font.scaled(11, weight: .bold))
+                .foregroundColor(color)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, DS.Spacing.md)
+        .padding(.top, DS.Spacing.sm + 2)
+        .padding(.bottom, DS.Spacing.xs)
+    }
+
     private func submitDiwaniya() async {
         guard let user = authVM.currentUser, !isSubmitting else { return }
         isSubmitting = true
@@ -785,18 +811,18 @@ private struct AddDiwaniyaRequestView: View {
         icon: String, iconColors: [Color], placeholder: String,
         text: Binding<String>, keyboard: UIKeyboardType = .default
     ) -> some View {
-        HStack(spacing: DS.Spacing.md) {
-            DSIcon(icon, color: iconColors.first ?? DS.Color.primary)
+        HStack(spacing: DS.Spacing.sm) {
+            DSIcon(icon, color: iconColors.first ?? DS.Color.primary, size: 30, iconSize: 13)
             TextField(placeholder, text: text)
-                .font(DS.Font.body)
+                .font(DS.Font.scaled(13))
                 .foregroundColor(DS.Color.textPrimary)
                 .multilineTextAlignment(.leading)
                 .keyboardType(keyboard)
                 .textInputAutocapitalization(keyboard == .URL ? .never : .words)
                 .autocorrectionDisabled(keyboard == .URL || keyboard == .phonePad)
         }
-        .padding(.horizontal, DS.Spacing.lg)
-        .padding(.vertical, DS.Spacing.xs)
+        .padding(.horizontal, DS.Spacing.md)
+        .padding(.vertical, 5)
     }
 }
 
