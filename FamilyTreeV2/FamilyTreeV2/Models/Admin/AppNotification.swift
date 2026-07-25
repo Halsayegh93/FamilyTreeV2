@@ -12,6 +12,8 @@ nonisolated struct AppNotification: Identifiable, Codable, Sendable {
     let requestId: UUID?
     let requestType: String?
     let details: NotificationDetails?
+    /// العضو الذي تخصّه الحركة (لا مستلم الإشعار — ذاك `targetMemberId`)
+    let subjectMemberId: UUID?
 
     enum CodingKeys: String, CodingKey {
         case id, title, body, kind, details
@@ -21,11 +23,13 @@ nonisolated struct AppNotification: Identifiable, Codable, Sendable {
         case isRead = "is_read"
         case requestId = "request_id"
         case requestType = "request_type"
+        case subjectMemberId = "subject_member_id"
     }
 
     init(id: UUID, targetMemberId: UUID?, title: String, body: String, kind: String,
          createdBy: UUID?, createdAt: String, isRead: Bool?,
-         requestId: UUID?, requestType: String?, details: NotificationDetails?) {
+         requestId: UUID?, requestType: String?, details: NotificationDetails?,
+         subjectMemberId: UUID? = nil) {
         self.id = id
         self.targetMemberId = targetMemberId
         self.title = title
@@ -37,6 +41,7 @@ nonisolated struct AppNotification: Identifiable, Codable, Sendable {
         self.requestId = requestId
         self.requestType = requestType
         self.details = details
+        self.subjectMemberId = subjectMemberId
     }
 
     /// فكّ ترميز متسامح: أي عطب في `details` (شكل غير متوقّع) يجعلها nil
@@ -55,6 +60,7 @@ nonisolated struct AppNotification: Identifiable, Codable, Sendable {
         requestId     = try? c.decodeIfPresent(UUID.self, forKey: .requestId)
         requestType   = try? c.decodeIfPresent(String.self, forKey: .requestType)
         details       = try? c.decodeIfPresent(NotificationDetails.self, forKey: .details)
+        subjectMemberId = try? c.decodeIfPresent(UUID.self, forKey: .subjectMemberId)
     }
 
     var read: Bool {
@@ -72,7 +78,7 @@ nonisolated struct AppNotification: Identifiable, Codable, Sendable {
             title: title, body: body, kind: kind,
             createdBy: createdBy, createdAt: createdAt, isRead: value,
             requestId: requestId, requestType: requestType,
-            details: details
+            details: details, subjectMemberId: subjectMemberId
         )
     }
 

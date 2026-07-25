@@ -120,7 +120,7 @@ struct FamilyArchiveView: View {
             if !selectionMode {
                 HStack {
                     Spacer()
-                    DSFloatingButton(label: L10n.t("إضافة", "Add"), color: DS.Color.secondary) {
+                    DSFloatingButton(label: L10n.t("إضافة", "Add"), color: DS.Color.primary) {
                         showingUpload = true
                     }
                     .padding(.trailing, DS.Spacing.xl)

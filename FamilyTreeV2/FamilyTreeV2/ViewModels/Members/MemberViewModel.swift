@@ -110,7 +110,8 @@ class MemberViewModel: ObservableObject {
             title: title,
             body: body,
             kind: kind,
-            changes: real
+            changes: real,
+            subjectMemberId: memberId
         )
     }
 
@@ -736,7 +737,8 @@ class MemberViewModel: ObservableObject {
                     "\(adminName) أضاف «\(fullName)» للشجرة العائلية",
                     "\(adminName) added «\(fullName)» to the family tree"
                 ),
-                kind: "member_add"
+                kind: "member_add",
+                subjectMemberId: newId
             )
 
             self.isLoading = false
@@ -889,7 +891,8 @@ class MemberViewModel: ObservableObject {
                         ),
                         kind: RequestType.childAdd.rawValue,
                         requestId: childRequestId,
-                        requestType: RequestType.childAdd.rawValue
+                        requestType: RequestType.childAdd.rawValue,
+                        subjectMemberId: fatherId
                     )
                 } catch {
                     Log.warning("لم يتم إدراج طلب child_add في admin_requests: \(error.localizedDescription)")
@@ -1018,7 +1021,8 @@ class MemberViewModel: ObservableObject {
                     kind: NotificationKind.adminEditAvatar.rawValue,
                     changes: [
                         .init(field: "avatar_url", before: oldAvatarUrl, after: urlString)
-                    ]
+                    ],
+                    subjectMemberId: memberId
                 )
             }
 
@@ -1722,7 +1726,8 @@ class MemberViewModel: ObservableObject {
                         "«\(memberName)»'s role changed to: «\(roleName)»"
                     ),
                     kind: NotificationKind.adminEditRole.rawValue,
-                    changes: [.init(field: "role", before: oldRoleLabel, after: roleName)]
+                    changes: [.init(field: "role", before: oldRoleLabel, after: roleName)],
+                    subjectMemberId: memberId
                 )
             } else {
                 // المالك يحدّث رتبته الخاصة (نادر) — أبقِ خلف الكواليس بدون details
@@ -1732,7 +1737,8 @@ class MemberViewModel: ObservableObject {
                         "تم تغيير صلاحية «\(memberName)» إلى: «\(roleName)»",
                         "«\(memberName)»'s role changed to: «\(roleName)»"
                     ),
-                    kind: "role_change"
+                    kind: "role_change",
+                    subjectMemberId: memberId
                 )
             }
 

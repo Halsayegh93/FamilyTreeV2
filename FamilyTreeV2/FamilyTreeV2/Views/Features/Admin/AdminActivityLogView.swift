@@ -629,6 +629,11 @@ private struct ActivityDetailSheet: View {
     @EnvironmentObject var memberVM: MemberViewModel
     @Environment(\.dismiss) private var dismiss
 
+    /// العضو الذي تخصّه الحركة — عمود مستقل عن مستلم الإشعار
+    private var subject: FamilyMember? {
+        guard let id = item.subjectMemberId else { return nil }
+        return memberVM.member(byId: id)
+    }
     private var actor: FamilyMember? {
         guard let id = item.createdBy else { return nil }
         return memberVM.member(byId: id)
@@ -677,6 +682,10 @@ private struct ActivityDetailSheet: View {
                     block(L10n.t("معلومات السجل", "Record info"), icon: "info.circle.fill") {
                         VStack(spacing: 0) {
                             infoRow(L10n.t("التصنيف", "Category"), categoryTitle)
+                            if let subject {
+                                DSDivider()
+                                infoRow(L10n.t("تخصّ", "About"), subject.fullName)
+                            }
                             if let actor {
                                 DSDivider()
                                 infoRow(L10n.t("نفّذها", "By"), actor.fullName)

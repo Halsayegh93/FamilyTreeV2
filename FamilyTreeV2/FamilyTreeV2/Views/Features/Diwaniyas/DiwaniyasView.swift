@@ -85,7 +85,7 @@ struct DiwaniyasView: View {
                 // زر الإضافة السفلي (FAB) — مثل بقية الصفحات
                 HStack {
                     Spacer()
-                    DSFloatingButton(label: L10n.t("إضافة", "Add"), color: DS.Color.secondary) {
+                    DSFloatingButton(label: L10n.t("إضافة", "Add"), color: DS.Color.primary) {
                         showingAddRequest = true
                     }
                     .padding(.trailing, DS.Spacing.xl)

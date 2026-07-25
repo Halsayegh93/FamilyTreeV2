@@ -222,7 +222,7 @@ struct HomeNewsView: View {
                     Spacer()
                     HStack {
                         Spacer()
-                        DSFloatingButton(label: L10n.t("إضافة خبر", "Add Post"), color: DS.Color.secondary) {
+                        DSFloatingButton(label: L10n.t("إضافة خبر", "Add Post"), color: DS.Color.primary) {
                             showingAddNews = true
                         }
                         .padding(.trailing, DS.Spacing.xl)

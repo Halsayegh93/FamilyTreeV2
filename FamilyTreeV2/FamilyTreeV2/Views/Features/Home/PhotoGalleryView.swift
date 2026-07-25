@@ -67,7 +67,7 @@ struct PhotoGalleryView: View {
             if authVM.isAdmin {
                 HStack {
                     Spacer()
-                    DSFloatingButton(label: L10n.t("ألبوم جديد", "New Album"), color: DS.Color.secondary) {
+                    DSFloatingButton(label: L10n.t("ألبوم جديد", "New Album"), color: DS.Color.primary) {
                         showingCreateAlbum = true
                     }
                     .padding(.trailing, DS.Spacing.xl)
@@ -300,7 +300,7 @@ struct GalleryAlbumDetailView: View {
             if authVM.isAdmin {
                 HStack {
                     Spacer()
-                    DSFloatingButton(label: L10n.t("إضافة صور", "Add Photos"), color: DS.Color.secondary) {
+                    DSFloatingButton(label: L10n.t("إضافة صور", "Add Photos"), color: DS.Color.primary) {
                         showingAddPhotos = true
                     }
                     .padding(.trailing, DS.Spacing.xl)

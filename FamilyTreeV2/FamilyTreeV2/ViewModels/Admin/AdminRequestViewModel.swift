@@ -1638,7 +1638,8 @@ class AdminRequestViewModel: ObservableObject {
                     "تم تفعيل حساب \(memberName)",
                     "\(memberName)'s account was activated"
                 ),
-                kind: "account_activated"
+                kind: "account_activated",
+                subjectMemberId: memberId
             )
         } catch {
             Log.error("فشل تفعيل الحساب: \(error.localizedDescription)")
@@ -1802,7 +1803,8 @@ class AdminRequestViewModel: ObservableObject {
                     "\(memberName) انضم لشجرة العائلة",
                     "\(memberName) joined the family tree"
                 ),
-                kind: "join_approved"
+                kind: "join_approved",
+                subjectMemberId: memberId
             )
         } catch {
             Log.error("خطأ إرسال إشعار اعتماد الانضمام: \(error.localizedDescription)")

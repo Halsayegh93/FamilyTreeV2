@@ -1209,7 +1209,8 @@ class NotificationViewModel: ObservableObject {
         body: String,
         kind: String,
         requestId: UUID? = nil,
-        requestType: String? = nil
+        requestType: String? = nil,
+        subjectMemberId: UUID? = nil
     ) async {
         let creatorId = currentUser?.id
         guard notificationsFeatureAvailable else { return }
@@ -1224,6 +1225,7 @@ class NotificationViewModel: ObservableObject {
             ]
             if let rid = requestId  { payload["request_id"]   = AnyEncodable(rid.uuidString) }
             if let rt  = requestType { payload["request_type"] = AnyEncodable(rt) }
+            if let sid = subjectMemberId { payload["subject_member_id"] = AnyEncodable(sid.uuidString) }
 
             try await supabase.from("notifications").insert(payload).execute()
         } catch {
@@ -1251,7 +1253,8 @@ class NotificationViewModel: ObservableObject {
         body: String,
         kind: String,
         requestId: UUID? = nil,
-        requestType: String? = nil
+        requestType: String? = nil,
+        subjectMemberId: UUID? = nil
     ) async {
         let dedupKey = "A|\(kind)|\(title)|\(body)|\(requestId?.uuidString ?? "")"
         if isDuplicateNotification(dedupKey) {
@@ -1259,7 +1262,7 @@ class NotificationViewModel: ObservableObject {
             return
         }
         async let push: Void = sendExternalAdminPush(title: title, body: body, kind: kind, requestId: requestId, requestType: requestType)
-        async let inApp: Void = notifyAdmins(title: title, body: body, kind: kind, requestId: requestId, requestType: requestType)
+        async let inApp: Void = notifyAdmins(title: title, body: body, kind: kind, requestId: requestId, requestType: requestType, subjectMemberId: subjectMemberId)
         _ = await (push, inApp)
     }
 
@@ -1269,10 +1272,11 @@ class NotificationViewModel: ObservableObject {
         title: String,
         body: String,
         kind: String,
-        changes: [AppNotification.NotificationDetails.ChangeEntry]
+        changes: [AppNotification.NotificationDetails.ChangeEntry],
+        subjectMemberId: UUID? = nil
     ) async {
         async let push: Void = sendExternalAdminPush(title: title, body: body, kind: kind, requestId: nil, requestType: nil)
-        async let inApp: Void = notifyAdminsWithChanges(title: title, body: body, kind: kind, changes: changes)
+        async let inApp: Void = notifyAdminsWithChanges(title: title, body: body, kind: kind, changes: changes, subjectMemberId: subjectMemberId)
         _ = await (push, inApp)
     }
 
@@ -1285,7 +1289,8 @@ class NotificationViewModel: ObservableObject {
         title: String,
         body: String,
         kind: String,
-        changes: [AppNotification.NotificationDetails.ChangeEntry]
+        changes: [AppNotification.NotificationDetails.ChangeEntry],
+        subjectMemberId: UUID? = nil
     ) async {
         let creatorId = currentUser?.id
         guard notificationsFeatureAvailable, !changes.isEmpty else { return }
@@ -1293,7 +1298,7 @@ class NotificationViewModel: ObservableObject {
         let details = AppNotification.NotificationDetails(changes: changes)
 
         do {
-            let payload: [String: AnyEncodable] = [
+            var payload: [String: AnyEncodable] = [
                 "target_member_id": AnyEncodable(Optional<String>.none),
                 "title": AnyEncodable(title),
                 "body": AnyEncodable(body),
@@ -1301,6 +1306,7 @@ class NotificationViewModel: ObservableObject {
                 "created_by": AnyEncodable(creatorId?.uuidString),
                 "details": AnyEncodable(details)
             ]
+            if let sid = subjectMemberId { payload["subject_member_id"] = AnyEncodable(sid.uuidString) }
             try await supabase.from("notifications").insert(payload).execute()
         } catch {
             if ErrorHelper.isMissingTable(error, table: "notifications") {
