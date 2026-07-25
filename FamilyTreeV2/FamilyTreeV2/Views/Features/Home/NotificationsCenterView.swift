@@ -145,8 +145,8 @@ struct NotificationsCenterView: View {
     @Namespace private var tabIndicator
 
     enum NotifTab: Hashable {
-        case notifications // إشعاراتي + موافقات
-        case activity      // المستجدات — للمدراء فقط
+        case notifications // إشعاراتي — ما يخصّني شخصياً
+        case activity      // المستجدات — تحديثات التطبيق والإعلانات العامة
     }
 
     // MARK: - Date Formatters
@@ -181,8 +181,8 @@ struct NotificationsCenterView: View {
             DS.Color.background.ignoresSafeArea()
 
             VStack(spacing: 0) {
-                // صفحتين — الإشعارات + المستجدات
-                if authVM.isAdmin {
+                // صفحتان — إشعاراتي + المستجدات (تحديثات وإعلانات) للجميع
+                do {
                     let visible = visibleNotifications
                     let notifUnread = visible.filter { belongsToNotificationsTab($0) && !$0.read }.count
                     let activityUnread = visible.filter { belongsToActivityTab($0) && !$0.read }.count
@@ -570,8 +570,14 @@ struct NotificationsCenterView: View {
             || n.title.contains("Approved")
             || n.title.contains("Rejected")
 
-        // للأدمن: الإجراءات اللي تمّت تذهب لـ "المستجدات" (مو "إشعاراتي")
-        if authVM.canModerate && (isCompletedAction || titleIndicatesCompleted) { return false }
+        // المستجدات (إعلانات/تحديثات) لها تبويبها المستقل
+        if belongsToActivityTab(n) { return false }
+
+        // للإدارة: سجل الحركة المنفّذة انتقل لقسم «سجل النشاط» في لوحة الإدارة،
+        // فلا يزاحم إشعارات العضو هنا (طلب المالك)
+        if authVM.canModerate && (isCompletedAction || titleIndicatesCompleted) {
+            return n.targetMemberId == myId
+        }
 
         // طلبات تنتظر موافقة الأدمن
         if isPendingApproval { return true }
@@ -607,14 +613,17 @@ struct NotificationsCenterView: View {
         NotificationKind.contactMessage.rawValue,
     ]
 
-    /// تاب "المستجدات" (للأدمن فقط): الإجراءات اللي تمّت
+    /// أنواع «المستجدات»: إعلانات الإدارة وتحديثات التطبيق والأخبار المنشورة
+    private static let updateKinds: Set<String> = [
+        NotificationKind.admin.rawValue,
+        NotificationKind.general.rawValue,
+        NotificationKind.newsPublished.rawValue,
+    ]
+
+    /// تاب «المستجدات»: تحديثات التطبيق والإعلانات العامة — للجميع.
+    /// (سجل حركة التطبيق انتقل لقسم «سجل النشاط» في لوحة الإدارة — طلب المالك)
     private func belongsToActivityTab(_ n: AppNotification) -> Bool {
-        guard !belongsToNotificationsTab(n) else { return false }
-        let titleIndicatesCompleted = n.title.hasPrefix("تم قبول")
-            || n.title.hasPrefix("تم رفض")
-            || n.title.contains("Approved")
-            || n.title.contains("Rejected")
-        return Self.completedActionKinds.contains(n.kind) || titleIndicatesCompleted
+        Self.updateKinds.contains(n.kind) || n.kind == "admin_broadcast"
     }
 
     private var filteredNotifications: [AppNotification] {
@@ -803,12 +812,13 @@ struct NotificationsCenterView: View {
                                 : (creator?.shortFullName ?? L10n.t("الإدارة", "Admin"))
                             let roleColor: Color = isAdminNotif ? DS.Color.primary : (creator?.roleColor ?? DS.Color.accent)
 
+                            // «من فلان» — يوضّح للإدارة أن الإشعار يخصّ عضواً بعينه
                             HStack(spacing: 3) {
-                                Circle()
-                                    .fill(roleColor)
-                                    .frame(width: 6, height: 6)
-                                Text(creatorName)
+                                Image(systemName: isAdminNotif ? "shield.fill" : "person.fill")
+                                    .font(DS.Font.scaled(8, weight: .bold))
+                                Text(isAdminNotif ? creatorName : L10n.t("من \(creatorName)", "from \(creatorName)"))
                                     .font(DS.Font.scaled(10, weight: .bold))
+                                    .lineLimit(1)
                             }
                             .foregroundColor(roleColor)
                             .padding(.horizontal, DS.Spacing.sm)

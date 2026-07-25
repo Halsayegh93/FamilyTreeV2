@@ -176,6 +176,16 @@ struct AdminDashboardView: View {
                                             badge: adminRequestVM.unreadContactMessagesCount > 0 ? adminRequestVM.unreadContactMessagesCount : nil
                                         )
                                     }
+                                    // سجل النشاط — كل حركة أو تغيير في التطبيق (طلب المالك)
+                                    DSDivider()
+                                    NavigationLink(destination: AdminActivityLogView()) {
+                                        DSActionRow(
+                                            title: L10n.t("سجل النشاط", "Activity Log"),
+                                            subtitle: L10n.t("كل حركة وتغيير في التطبيق", "Every change across the app"),
+                                            icon: "clock.arrow.circlepath",
+                                            color: DS.Color.accent
+                                        )
+                                    }
                                     // إدارة الأعضاء — مدير + مراقب + مالك (المشرف لا)
                                     if authVM.canEditMembers {
                                         DSDivider()
