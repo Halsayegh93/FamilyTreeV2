@@ -90,72 +90,88 @@ struct AddNewsView: View {
         }
     }
 
-    // MARK: - بطاقة النشر باسم الإدارة
+    // MARK: - هوية الناشر
 
-    /// شكل مميّز: عند التفعيل تلبس تدرّج الهيدر بنص أبيض — تنفصل بصرياً عن
-    /// بقية البطاقات البيضاء فيعرف الناشر فوراً أنه ينشر بصفة رسمية.
+    /// بدل مفتاح تشغيل/إطفاء غامض: اختيار هويّة صريح بين بطاقتين —
+    /// صورتك واسمك مقابل شعار الإدارة. تشوف بمن ستُنشر قبل ما تنشر.
     private var adminIdentityCard: some View {
-        Button {
-            withAnimation(DS.Anim.quick) { postAsAdmin.toggle() }
-            UISelectionFeedbackGenerator().selectionChanged()
-        } label: {
+        compactCard {
+            compactHeader(L10n.t("النشر باسم", "Post as"),
+                          icon: "person.crop.circle.badge.checkmark",
+                          color: DS.Color.primary)
+
             HStack(spacing: DS.Spacing.sm) {
-                Image(systemName: postAsAdmin ? "shield.lefthalf.filled" : "person.fill")
-                    .font(DS.Font.scaled(12, weight: .bold))
-                    .foregroundColor(postAsAdmin ? .white : DS.Color.textTertiary)
-                    .frame(width: 26, height: 26)
-                    .background(postAsAdmin ? SwiftUI.Color.white.opacity(0.22)
-                                            : DS.Color.textTertiary.opacity(0.12))
-                    .clipShape(Circle())
-
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(L10n.t("النشر باسم الإدارة", "Post as Admin"))
-                        .font(DS.Font.scaled(12, weight: .bold))
-                        .foregroundColor(postAsAdmin ? .white : DS.Color.textPrimary)
-                    Text(postAsAdmin
-                         ? L10n.t("سيظهر باسم «إدارة العائلة»", "Will appear as Family Admin")
-                         : L10n.t("سيظهر باسمك الشخصي", "Will appear under your name"))
-                        .font(DS.Font.scaled(9.5))
-                        .foregroundColor(postAsAdmin ? SwiftUI.Color.white.opacity(0.85)
-                                                     : DS.Color.textSecondary)
-                }
-
-                Spacer(minLength: 0)
-
-                ZStack(alignment: postAsAdmin ? .trailing : .leading) {
-                    Capsule()
-                        .fill(postAsAdmin ? SwiftUI.Color.white.opacity(0.30)
-                                          : DS.Color.textTertiary.opacity(0.22))
-                        .frame(width: 38, height: 22)
-                    Circle()
-                        .fill(.white)
-                        .frame(width: 17, height: 17)
-                        .shadow(color: .black.opacity(0.15), radius: 2, y: 1)
-                        .padding(.horizontal, 2.5)
-                }
-                .animation(DS.Anim.quick, value: postAsAdmin)
+                identityOption(isAdmin: false)
+                identityOption(isAdmin: true)
             }
             .padding(.horizontal, DS.Spacing.md)
-            .padding(.vertical, DS.Spacing.sm + 1)
-            .frame(maxWidth: .infinity)
-            .background(
+            .padding(.bottom, DS.Spacing.sm + 2)
+        }
+    }
+
+    private func identityOption(isAdmin: Bool) -> some View {
+        let selected = (postAsAdmin == isAdmin)
+        let myName = authVM.currentUser?.firstName ?? L10n.t("باسمي", "Me")
+
+        return Button {
+            guard postAsAdmin != isAdmin else { return }
+            withAnimation(DS.Anim.snappy) { postAsAdmin = isAdmin }
+            UISelectionFeedbackGenerator().selectionChanged()
+        } label: {
+            VStack(spacing: 6) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                        .fill(DS.Color.cardBackground)
-                    if postAsAdmin {
-                        RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                    if isAdmin {
+                        Circle()
                             .fill(DS.Color.gradientPrimary)
-                        RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                            .fill(DS.Color.headerVeil)
+                            .frame(width: 40, height: 40)
+                            .overlay(Circle().strokeBorder(DS.Color.headerBorder, lineWidth: 1))
+                        Image(systemName: "shield.lefthalf.filled")
+                            .font(DS.Font.scaled(17, weight: .bold))
+                            .foregroundColor(.white)
+                    } else {
+                        DSMemberAvatar(
+                            name: myName,
+                            avatarUrl: authVM.currentUser?.avatarUrl,
+                            size: 40,
+                            roleColor: DS.Color.primary
+                        )
+                    }
+
+                    // علامة الاختيار — تحلّ محلّ المفتاح
+                    if selected {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(DS.Font.scaled(13, weight: .bold))
+                            .foregroundStyle(.white, DS.Color.primary)
+                            .background(Circle().fill(DS.Color.cardBackground).frame(width: 15, height: 15))
+                            .offset(x: 15, y: 15)
+                            .transition(.scale.combined(with: .opacity))
                     }
                 }
+                .frame(height: 44)
+
+                Text(isAdmin ? L10n.t("إدارة العائلة", "Family Admin") : myName)
+                    .font(DS.Font.scaled(11.5, weight: .bold))
+                    .foregroundColor(selected ? DS.Color.primary : DS.Color.textSecondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+
+                Text(isAdmin ? L10n.t("منشور رسمي", "Official post")
+                             : L10n.t("منشور شخصي", "Personal post"))
+                    .font(DS.Font.scaled(9))
+                    .foregroundColor(DS.Color.textTertiary)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, DS.Spacing.sm + 2)
+            .background(
+                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                    .fill(selected ? DS.Color.primary.opacity(0.07) : DS.Color.surface)
             )
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                    .strokeBorder(postAsAdmin ? DS.Color.headerBorder
-                                              : DS.Color.textTertiary.opacity(0.12),
-                                  lineWidth: 1)
+                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                    .strokeBorder(selected ? DS.Color.primary.opacity(0.45)
+                                           : DS.Color.textTertiary.opacity(0.12),
+                                  lineWidth: selected ? 1.6 : 1)
             )
             .contentShape(Rectangle())
         }
