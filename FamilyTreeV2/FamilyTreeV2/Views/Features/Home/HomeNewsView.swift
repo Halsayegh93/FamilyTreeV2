@@ -340,7 +340,7 @@ struct HomeNewsView: View {
     private var primaryTilesRow: some View {
         HStack(spacing: layout.gridSpacing) {
             unifiedTile(
-                title: L10n.t("شجرة العائلة", "Family Tree"),
+                title: L10n.t("شجرة\nالمحمدعلي", "Al-Mohammad Ali\nFamily Tree"),
                 icon: "tree.fill",
                 color: DS.Color.tileTree,
                 imageURL: nil,
@@ -422,7 +422,7 @@ struct HomeNewsView: View {
             spacing: layout.gridSpacing
         ) {
             unifiedTile(
-                title: L10n.t("شجرة العائلة", "Family Tree"),
+                title: L10n.t("شجرة\nالمحمدعلي", "Al-Mohammad Ali\nFamily Tree"),
                 icon: "tree.fill",
                 color: DS.Color.tileTree,
                 imageURL: nil,
@@ -523,9 +523,10 @@ struct HomeNewsView: View {
                 Text(title)
                     .font(DS.Font.scaled(13, weight: .black))
                     .foregroundColor(.white)
-                    .lineLimit(1)
+                    .lineLimit(2)
                     .minimumScaleFactor(0.7)
                     .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
                     .shadow(color: .black.opacity(0.35), radius: 3, x: 0, y: 1)
                     .padding(8)
             }
