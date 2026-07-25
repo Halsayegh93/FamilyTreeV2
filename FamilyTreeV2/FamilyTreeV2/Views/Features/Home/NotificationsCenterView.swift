@@ -623,7 +623,9 @@ struct NotificationsCenterView: View {
     /// تاب «المستجدات»: تحديثات التطبيق والإعلانات العامة — للجميع.
     /// (سجل حركة التطبيق انتقل لقسم «سجل النشاط» في لوحة الإدارة — طلب المالك)
     private func belongsToActivityTab(_ n: AppNotification) -> Bool {
-        Self.updateKinds.contains(n.kind) || n.kind == "admin_broadcast"
+        Self.updateKinds.contains(n.kind)
+            || n.kind == "admin_broadcast"
+            || n.kind == "app_update"     // تحديثات التطبيق ورسائل النظام
     }
 
     private var filteredNotifications: [AppNotification] {

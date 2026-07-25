@@ -223,6 +223,9 @@ struct AdminDashboardView: View {
                                                 DSActionRow(title: L10n.t("إرسال إشعارات", "Send Notifications"), subtitle: L10n.t("إرسال إشعار للأعضاء", "Send notification"), icon: "bell.badge.fill", color: DS.Color.primary)
                                             }
                                             DSDivider()
+                                            NavigationLink(destination: AdminAppUpdateView()) {
+                                                DSActionRow(title: L10n.t("تحديثات التطبيق", "App Updates"), subtitle: L10n.t("رسالة نظام تظهر في المستجدات", "System message shown in Updates"), icon: "megaphone.fill", color: DS.Color.success)
+                                            }
                                             NavigationLink(destination: AdminReportsView()) {
                                                 DSActionRow(title: L10n.t("تقارير PDF", "PDF Reports"), subtitle: L10n.t("تقرير إحصائيات الأعضاء", "Member stats report"), icon: "doc.text.fill", color: DS.Color.primary)
                                             }
