@@ -573,10 +573,12 @@ struct NotificationsCenterView: View {
         // المستجدات (إعلانات/تحديثات) لها تبويبها المستقل
         if belongsToActivityTab(n) { return false }
 
-        // للإدارة: سجل الحركة المنفّذة انتقل لقسم «سجل النشاط» في لوحة الإدارة،
-        // فلا يزاحم إشعارات العضو هنا (طلب المالك)
+        // للإدارة: الحركات المنفّذة (حذف منشور، منشور جديد، تعديل عضو…)
+        // مكانها «سجل النشاط» حصراً — لا تزاحم إشعاراتي إلا إذا كانت تخصّني
+        // أنا شخصياً (subject = أنا) ولم أكن أنا من نفّذها (طلب المالك).
         if authVM.canModerate && (isCompletedAction || titleIndicatesCompleted) {
-            return n.targetMemberId == myId
+            if n.createdBy == myId { return false }          // حركتي بنفسي — لا داعي لإشعاري
+            return n.subjectMemberId == myId                  // تخصّني شخصياً فقط
         }
 
         // طلبات تنتظر موافقة الأدمن

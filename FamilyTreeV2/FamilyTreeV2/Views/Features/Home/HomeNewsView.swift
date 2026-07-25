@@ -27,6 +27,8 @@ struct HomeNewsView: View {
     @State private var selectedMemberForDetails: FamilyMember? = nil
     @State private var lastRefreshDate: Date? = nil
     @State private var activeSubPage: HomeSubPage? = nil
+    /// فلتر نوع الخبر في صفحة الأخبار — nil يعني الكل
+    @State private var selectedNewsTypeFilter: String? = nil
     @State private var appeared = false
     @State private var showNewsSearch = false
     @State private var newsSearchText = ""
@@ -201,7 +203,7 @@ struct HomeNewsView: View {
             switch page {
             case .archive: FamilyArchiveView()
             case .projects: FamilyProjectsView()
-            case .contact: MemberContactFormView()
+            case .contact: ContactHubView()
             case .news: newsFullPage
             }
         }
@@ -211,6 +213,8 @@ struct HomeNewsView: View {
     private var newsFullPage: some View {
         ZStack {
             ScrollView(showsIndicators: false) {
+                newsTypeFilterBar
+                    .padding(.top, DS.Spacing.xs)
                 newsFeedSection
                     .padding(.top, DS.Spacing.sm)
                     .padding(.bottom, isLandscape ? DS.Spacing.xxxxl + 44 : DS.Spacing.xxxxl)
@@ -1453,6 +1457,18 @@ struct HomeNewsView: View {
                     .transition(.opacity)
             } else if newsVM.allNews.isEmpty {
                 emptyNewsView
+            } else if filteredNews.isEmpty && debouncedNewsSearch.isEmpty {
+                // فلتر نوع بلا نتائج (نادر — النوع اختفى بعد حذف)
+                VStack(spacing: DS.Spacing.md) {
+                    Spacer().frame(height: DS.Spacing.xxxl)
+                    Image(systemName: "tray")
+                        .font(DS.Font.scaled(36))
+                        .foregroundColor(DS.Color.textTertiary)
+                    Text(L10n.t("لا منشورات من هذا النوع", "No posts of this type"))
+                        .font(DS.Font.callout)
+                        .foregroundColor(DS.Color.textSecondary)
+                }
+                .transition(.opacity)
             } else if !debouncedNewsSearch.isEmpty && filteredNews.isEmpty {
                 VStack(spacing: DS.Spacing.md) {
                     Spacer().frame(height: DS.Spacing.xxxl)
@@ -1502,12 +1518,63 @@ struct HomeNewsView: View {
     }
 
     private var filteredNews: [NewsPost] {
-        if debouncedNewsSearch.isEmpty { return newsVM.allNews }
+        var list = newsVM.allNews
+        if let t = selectedNewsTypeFilter {
+            list = list.filter { $0.type == t }
+        }
+        guard !debouncedNewsSearch.isEmpty else { return list }
         let query = debouncedNewsSearch.lowercased()
-        return newsVM.allNews.filter {
+        return list.filter {
             $0.content.lowercased().contains(query) ||
             $0.author_name.lowercased().contains(query)
         }
+    }
+
+    // MARK: - شريط فلترة الأنواع — «الكل» + الأنواع الموجودة فعلاً في السيل
+    private var newsTypeFilterBar: some View {
+        let presentTypes = NewsTypeHelper.mainTypes.filter { t in
+            newsVM.allNews.contains { $0.type == t }
+        }
+        return Group {
+            if presentTypes.count > 1 {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        newsTypeChip(nil, label: L10n.t("الكل", "All"),
+                                     icon: "square.grid.2x2", color: DS.Color.primary)
+                        ForEach(presentTypes, id: \.self) { t in
+                            newsTypeChip(t,
+                                         label: NewsTypeHelper.displayName(for: t),
+                                         icon: NewsTypeHelper.icon(for: t),
+                                         color: NewsTypeHelper.color(for: t))
+                        }
+                    }
+                    .padding(.horizontal, DS.Spacing.lg)
+                }
+                .padding(.bottom, DS.Spacing.xs)
+            }
+        }
+    }
+
+    private func newsTypeChip(_ type: String?, label: String, icon: String, color: Color) -> some View {
+        let selected = selectedNewsTypeFilter == type
+        return Button {
+            withAnimation(DS.Anim.snappy) { selectedNewsTypeFilter = type }
+            UISelectionFeedbackGenerator().selectionChanged()
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(DS.Font.scaled(9, weight: .bold))
+                Text(label)
+                    .font(DS.Font.scaled(11, weight: .bold))
+            }
+            .foregroundColor(selected ? .white : color)
+            .padding(.horizontal, DS.Spacing.sm + 2)
+            .padding(.vertical, 5)
+            .background(Capsule().fill(selected ? color : color.opacity(0.10)))
+            .overlay(Capsule().strokeBorder(color.opacity(selected ? 0 : 0.30), lineWidth: 1))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
     }
 
     private var newsListView: some View {

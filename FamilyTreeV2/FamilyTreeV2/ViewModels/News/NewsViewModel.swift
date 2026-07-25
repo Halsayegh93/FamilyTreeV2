@@ -585,7 +585,8 @@ class NewsViewModel: ObservableObject {
                         "\(posterName) أرسل منشوراً جديداً يحتاج موافقتكم",
                         "\(posterName) submitted a new post for review"
                     ),
-                    kind: NotificationKind.newsAdd.rawValue
+                    kind: NotificationKind.newsAdd.rawValue,
+                    subjectMemberId: user.id
                 )
             }
             if shouldAutoApprove {
@@ -595,7 +596,8 @@ class NewsViewModel: ObservableObject {
                         "\(posterName) نشر منشوراً جديداً",
                         "\(posterName) published a new post"
                     ),
-                    kind: NotificationKind.newsPublished.rawValue
+                    kind: NotificationKind.newsPublished.rawValue,
+                    subjectMemberId: user.id
                 )
             }
             Log.info(shouldAutoApprove ? "تم نشر الخبر بنجاح" : "تم إرسال الخبر للمراجعة")
@@ -804,6 +806,10 @@ class NewsViewModel: ObservableObject {
         guard authVM?.canDeleteNews == true else { return }
         self.isLoading = true
 
+        // صاحب المنشور — نحفظه قبل الحذف لإشعاره ولربط الحركة به
+        let deletedAuthorId = allNews.first(where: { $0.id == postId })?.author_id
+            ?? pendingNewsRequests.first(where: { $0.id == postId })?.author_id
+
         do {
             try await supabase
                 .from("news")
@@ -816,11 +822,22 @@ class NewsViewModel: ObservableObject {
                 await fetchPendingNewsRequests(force: true)
             }
 
-            // إجراء مُنفَّذ — يذهب لتاب المستجدات بلا أزرار موافقة/رفض
+            // صاحب المنشور يُبلَّغ شخصياً في إشعاراته — إلا إذا كان هو من حذفه
+            if let deletedAuthorId, deletedAuthorId != currentUser?.id {
+                await notificationVM?.sendNotification(
+                    title: L10n.t("تم حذف منشورك", "Your Post Was Removed"),
+                    body: L10n.t("قامت الإدارة بحذف أحد منشوراتك من الأخبار",
+                                 "The administration removed one of your posts"),
+                    targetMemberIds: [deletedAuthorId]
+                )
+            }
+
+            // حركة إدارية — مكانها «سجل النشاط»، مربوطة بصاحب المنشور
             await notificationVM?.notifyAdminsWithPush(
                 title: L10n.t("حذف منشور", "Post Deleted"),
                 body: L10n.t("تم حذف منشور من الأخبار", "A news post has been deleted"),
-                kind: "news_deleted"
+                kind: "news_deleted",
+                subjectMemberId: deletedAuthorId
             )
         } catch {
             Log.error("خطأ حذف الخبر: \(error.localizedDescription)")
