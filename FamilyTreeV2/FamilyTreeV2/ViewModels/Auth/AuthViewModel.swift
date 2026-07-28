@@ -650,6 +650,11 @@ class AuthViewModel: ObservableObject {
         self.currentUser = profile
         self.status = access
 
+        // ينشر الجلسة لامتداد المشاركة فور معرفة العضو (لا ينتظر تجديد الجلسة)
+        if let session = try? await supabase.auth.session {
+            publishSessionToShareExtension(session)
+        }
+
         // جلب إعدادات التطبيق من السيرفر
         await appSettingsVM?.fetchSettings()
         if let normalizedPhone, normalizedPhone.count == 8 {
@@ -910,6 +915,20 @@ class AuthViewModel: ObservableObject {
 
     }
     
+    // MARK: - جسر امتداد المشاركة
+
+    /// ينشر رمز الجلسة لحاوية App Group ليرفع امتداد المشاركة باسم العضو.
+    /// يُستدعى عند كل تحقق أو تجديد للجلسة.
+    func publishSessionToShareExtension(_ session: Session) {
+        SharedSessionStore.save(
+            accessToken: session.accessToken,
+            expiresAt: TimeInterval(session.expiresAt),
+            memberId: currentUser?.id,
+            memberName: currentUser?.fullName,
+            isAdmin: isAdmin
+        )
+    }
+
     // MARK: - Profile Check
     
     /// تحديث الجلسة لو منتهية — يضمن JWT صالح لاستدعاء Edge Functions
@@ -919,8 +938,11 @@ class AuthViewModel: ObservableObject {
             // لو الجلسة قاربت على الانتهاء (أقل من ساعة)
             let expiresAt = Date(timeIntervalSince1970: TimeInterval(session.expiresAt))
             if expiresAt.timeIntervalSinceNow < 3600 {
-                _ = try await supabase.auth.refreshSession()
+                let refreshed = try await supabase.auth.refreshSession()
+                publishSessionToShareExtension(refreshed)
                 Log.info("[AUTH] تم تحديث الجلسة بنجاح")
+            } else {
+                publishSessionToShareExtension(session)
             }
         } catch {
             Log.warning("[AUTH] تعذر تحديث الجلسة: \(error.localizedDescription)")
@@ -1218,6 +1240,8 @@ class AuthViewModel: ObservableObject {
         self.lastAuthDialingCode = ""
         // مسح الكاش المحلي
         CacheManager.shared.clearAll()
+        // إبطال جسر امتداد المشاركة — لا يرفع أحد باسمك بعد الخروج
+        SharedSessionStore.clear()
         // إيقاف الاشتراكات الحية
         RealtimeManager.shared.unsubscribe()
     }

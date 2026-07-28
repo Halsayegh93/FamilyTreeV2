@@ -379,7 +379,7 @@ struct HomeNewsView: View {
         ) {
             unifiedTile(
                 title: L10n.t("مكتبة العائلة", "Family Library"),
-                icon: "archivebox.fill",
+                icon: "books.vertical.fill",
                 color: DS.Color.tileLibrary,
                 imageURL: nil,
                 count: nil,
@@ -441,7 +441,7 @@ struct HomeNewsView: View {
             )
             unifiedTile(
                 title: L10n.t("مكتبة العائلة", "Family Library"),
-                icon: "archivebox.fill",
+                icon: "books.vertical.fill",
                 color: DS.Color.tileLibrary,
                 imageURL: nil,
                 count: nil,
