@@ -1,0 +1,34 @@
+name: World Cup DB apply (manual)
+
+# MANUAL-ONLY: applies .github/db/wc-db.sql to Supabase via the Management API.
+# No schedule, no push trigger — the 20-minute auto-update stays cancelled.
+# Run it from the Actions tab whenever a db.sql change needs applying.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply db.sql
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          if [ -z "${SUPABASE_ACCESS_TOKEN}" ]; then
+            echo "No SUPABASE_ACCESS_TOKEN secret set."; exit 1
+          fi
+          payload=$(jq -Rs '{query: .}' < .github/db/wc-db.sql)
+          code=$(curl -sS -o /tmp/resp.json -w "%{http_code}" -X POST \
+            "https://api.supabase.com/v1/projects/vnyhbppzufadqxpbijnb/database/query" \
+            -H "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}" \
+            -H "Content-Type: application/json" \
+            --data "${payload}")
+          echo "Apply HTTP ${code}"
+          head -c 400 /tmp/resp.json 2>/dev/null || true
+          echo
+          [ "${code}" = "200" ] || [ "${code}" = "201" ]
