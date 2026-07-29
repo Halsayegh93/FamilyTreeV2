@@ -846,3 +846,16 @@ do $$ begin
     on conflict (tournament_id, key) do nothing;
   end if;
 end $$;
+
+-- ---------------------------------------------------------------------------
+-- Re-show the World Cup in the tournament picker (one-shot, owner request).
+-- New marker so it runs once; later manual toggles from the dashboard win.
+do $$ begin
+  if not exists (select 1 from public.wc_settings
+                  where tournament_id = 'wc26' and key = 'wc26_reshown') then
+    update public.wc_tournaments set active = true where id = 'wc26';
+    insert into public.wc_settings (tournament_id, key, value, updated_at)
+    values ('wc26', 'wc26_reshown', '1', now())
+    on conflict (tournament_id, key) do nothing;
+  end if;
+end $$;
