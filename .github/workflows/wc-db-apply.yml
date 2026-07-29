@@ -1,11 +1,16 @@
 name: World Cup DB apply (manual)
 
-# MANUAL-ONLY: applies .github/db/wc-db.sql to Supabase via the Management API.
-# No schedule, no push trigger — the 20-minute auto-update stays cancelled.
-# Run it from the Actions tab whenever a db.sql change needs applying.
+# Applies .github/db/wc-db.sql to Supabase via the Management API.
+# No schedule — the 20-minute auto-update stays cancelled. Runs only when
+# db.sql itself changes on main, or manually from the Actions tab.
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/db/wc-db.sql'
+      - '.github/workflows/wc-db-apply.yml'
 
 permissions:
   contents: read
