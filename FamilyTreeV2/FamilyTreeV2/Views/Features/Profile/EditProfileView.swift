@@ -31,6 +31,10 @@ struct EditProfileView: View {
 
     // متغيرات الحالة
     @State private var fullName: String = ""
+    /// عائلة العضو المختارة من قائمة الإدارة
+    @State private var familyName: String = ""
+    @State private var isSavingFamily = false
+    @StateObject private var familyNamesVM = FamilyNamesViewModel()
     @State private var selectedPhoneCountry: KuwaitPhone.Country = KuwaitPhone.defaultCountry
     @State private var phoneNumber: String = ""
     @State private var birthDate: Date = Date()
@@ -126,6 +130,8 @@ struct EditProfileView: View {
                                 VStack(spacing: 0) {
                                     nameFieldWithChangeRequest
                                     DSDivider()
+                                    familyPickerRow
+                                    DSDivider()
                                     modernPhoneField
                                         .cooldownGuarded(.phoneNumber, cooldown: cooldown)
                                     cooldownLabel(.phoneNumber)
@@ -213,6 +219,7 @@ struct EditProfileView: View {
                     "You have unsaved changes. Discard them?"
                 ))
             }
+        .task { await familyNamesVM.fetch() }
             .onAppear {
                 setupData()
             }
@@ -293,6 +300,8 @@ struct EditProfileView: View {
 
             VStack(spacing: 0) {
                 nameFieldWithChangeRequest
+                DSDivider()
+                familyPickerRow
                 DSDivider()
                 modernPhoneField
                     .cooldownGuarded(.phoneNumber, cooldown: cooldown)
@@ -409,6 +418,66 @@ struct EditProfileView: View {
 
             cooldownLabel(.fullName)
         }
+    }
+
+    /// اختيار العائلة من قائمة الإدارة — يُحفظ فوراً بلا طلب موافقة،
+    /// فهو اختيار من قائمة معتمدة لا نصّ حر.
+    private var familyPickerRow: some View {
+        HStack(spacing: DS.Spacing.md) {
+            DSIcon("person.2.fill", color: DS.Color.accent)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(L10n.t("العائلة", "Family"))
+                    .font(DS.Font.caption1)
+                    .foregroundColor(DS.Color.textSecondary)
+                Text(familyName.isEmpty ? L10n.t("لم تُحدَّد", "Not set") : familyName)
+                    .font(DS.Font.callout)
+                    .foregroundColor(familyName.isEmpty ? DS.Color.textTertiary : DS.Color.textPrimary)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            if isSavingFamily {
+                ProgressView().scaleEffect(0.7)
+            } else {
+                Menu {
+                    ForEach(familyNamesVM.activeNames, id: \.self) { option in
+                        Button {
+                            guard option != familyName else { return }
+                            familyName = option
+                            Task { await saveFamilyName(option) }
+                        } label: {
+                            if familyName == option {
+                                Label(option, systemImage: "checkmark")
+                            } else {
+                                Text(option)
+                            }
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Text(L10n.t("تغيير", "Change"))
+                            .font(DS.Font.scaled(11, weight: .bold))
+                        Image(systemName: "chevron.up.chevron.down")
+                            .font(DS.Font.scaled(10, weight: .semibold))
+                    }
+                    .foregroundColor(DS.Color.accent)
+                    .padding(.horizontal, DS.Spacing.sm + 2)
+                    .padding(.vertical, 5)
+                    .background(Capsule().fill(DS.Color.accent.opacity(0.10)))
+                }
+            }
+        }
+        .padding(.horizontal, DS.Spacing.lg)
+        .padding(.vertical, DS.Spacing.xs)
+    }
+
+    @MainActor
+    private func saveFamilyName(_ name: String) async {
+        isSavingFamily = true
+        defer { isSavingFamily = false }
+        let ok = await memberVM.updateFamilyName(memberId: member.id, familyName: name)
+        if !ok { familyName = member.familyName ?? "" }
     }
 
     private var nameChangeRequestSheet: some View {
@@ -818,6 +887,7 @@ struct EditProfileView: View {
 
     private func setupData() {
         self.fullName = member.fullName
+        self.familyName = member.familyName ?? ""
         let detectedPhone = KuwaitPhone.detectCountryAndLocal(member.phoneNumber)
         self.selectedPhoneCountry = detectedPhone.country
         self.phoneNumber = detectedPhone.localDigits

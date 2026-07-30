@@ -50,15 +50,11 @@
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		9F71E6A62F0B04F70001F8B7 /* FamilyTreeV2 */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-			);
 			path = FamilyTreeV2;
 			sourceTree = "<group>";
 		};
 		C9E8CF112E0C9D20CF5D72B5 /* ShareExtension */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-			);
 			path = ShareExtension;
 			sourceTree = "<group>";
 		};

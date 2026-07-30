@@ -133,11 +133,6 @@ struct HomeNewsCardView: View {
                                 .foregroundColor(isAdminIdentityPost ? .white : DS.Color.textPrimary)
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.85)
-                            if isAdminIdentityPost {
-                                Image(systemName: "checkmark.seal.fill")
-                                    .font(DS.Font.scaled(12, weight: .bold))
-                                    .foregroundColor(.white)
-                            }
                         }
 
                         HStack(spacing: 3) {

@@ -5,6 +5,7 @@ struct RegistrationView: View {
 
     @State private var fullName: String = ""
     @State private var familyName: String = ""
+    @StateObject private var familyNamesVM = FamilyNamesViewModel()
     @State private var birthDate: Date = Calendar.current.date(byAdding: .year, value: -20, to: Date()) ?? Date()
     @State private var selectedGender: String = "male"
     @State private var selectedImage: UIImage? = nil
@@ -91,6 +92,7 @@ struct RegistrationView: View {
         } message: {
             Text(authVM.registrationError ?? "")
         }
+        .task { await familyNamesVM.fetch() }
         .onAppear {
             Log.info("[REGISTRATION] RegistrationView ظهرت — البروفايل غير موجود. phone=\(Log.masked(authVM.phoneNumber))")
             withAnimation(DS.Anim.elastic.delay(0.2)) {
@@ -170,24 +172,66 @@ struct RegistrationView: View {
     }
 
     // MARK: - Family Name
+    /// اختيار العائلة — بنفس هيئة حقل «الاسم الرباعي» حرفياً (أيقونة + عنوان
+    /// + قيمة) فتبدو كل الحقول قطعة واحدة.
     private var familyNameSection: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-            DSTextField(
-                label: L10n.t("اسم العائلة", "Family Name"),
-                placeholder: L10n.t("مثال: آل محمد علي", "e.g. Al-Mohammad Ali"),
-                text: $familyName,
-                icon: "person.2.fill",
-                iconColor: DS.Color.accent,
-                required: true
-            )
-            .onChange(of: familyName) { _ in
-                if familyName.count > 50 {
-                    familyName = String(familyName.prefix(50))
+            Menu {
+                ForEach(familyNamesVM.activeNames, id: \.self) { option in
+                    Button {
+                        familyName = option
+                    } label: {
+                        if familyName == option {
+                            Label(option, systemImage: "checkmark")
+                        } else {
+                            Text(option)
+                        }
+                    }
                 }
+            } label: {
+                HStack(spacing: DS.Spacing.md) {
+                    DSIcon("person.2.fill", color: DS.Color.accent)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(spacing: 2) {
+                            Text(L10n.t("العائلة", "Family"))
+                                .foregroundColor(DS.Color.textSecondary)
+                            Text("*").foregroundColor(DS.Color.error)
+                        }
+                        .font(DS.Font.caption1)
+
+                        Text(familyName.isEmpty
+                             ? L10n.t("اختر عائلتك", "Choose your family")
+                             : familyName)
+                            .font(DS.Font.body)
+                            .foregroundColor(familyName.isEmpty
+                                             ? DS.Color.textTertiary
+                                             : DS.Color.textPrimary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+
+                    if familyNamesVM.isLoading {
+                        ProgressView().scaleEffect(0.7)
+                    } else {
+                        Image(systemName: "chevron.up.chevron.down")
+                            .font(DS.Font.scaled(12, weight: .semibold))
+                            .foregroundColor(DS.Color.textTertiary)
+                    }
+                }
+                .padding(.horizontal, DS.Spacing.lg)
+                .padding(.vertical, DS.Spacing.md)
+                .background(.ultraThinMaterial)
+                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                        .stroke(SwiftUI.Color.white.opacity(0.15), lineWidth: 0.5)
+                )
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
 
             if hasAttemptedSubmit && familyName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                validationError(L10n.t("اسم العائلة مطلوب", "Family name is required"))
+                validationError(L10n.t("اختيار العائلة مطلوب", "Choosing a family is required"))
             }
         }
     }
@@ -197,15 +241,19 @@ struct RegistrationView: View {
         DSDateField(
             label: L10n.t("تاريخ الميلاد", "Birth Date"),
             date: $birthDate,
-            range: ...Date()
+            range: ...Date(),
+            // نفس مقاسات نصوص حقلي الاسم والعائلة
+            labelFont: DS.Font.caption1,
+            valueFont: DS.Font.body
         )
         .padding(.horizontal, DS.Spacing.lg)
         .padding(.vertical, DS.Spacing.md)
-        .background(DS.Color.surface)
+        // نفس هيئة حقل «الاسم الرباعي» — مادة زجاجية وحدّ أبيض خفيف
+        .background(.ultraThinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                .stroke(DS.Color.inactiveBorder, lineWidth: 1)
+                .stroke(SwiftUI.Color.white.opacity(0.15), lineWidth: 0.5)
         )
     }
 

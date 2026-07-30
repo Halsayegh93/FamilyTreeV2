@@ -139,9 +139,22 @@ struct FamilyTreeV2App: App {
                     guard url.scheme == "familytree",
                           url.host == "member",
                           let idString = url.pathComponents.last,
-                          let memberId = UUID(uuidString: idString),
-                          let member = appState.memberVM.member(byId: memberId),
-                          let currentUser = appState.authVM.currentUser else { return }
+                          let memberId = UUID(uuidString: idString)
+                    else { return }
+
+                    Task { @MainActor in
+                    // العضو قد لا يكون محمّلاً (فتح بارد من كاميرا النظام) —
+                    // نجلبه من السيرفر بدل الخروج صامتاً بلا أي أثر.
+                    var resolved = appState.memberVM.member(byId: memberId)
+                    if resolved == nil {
+                        await appState.memberVM.fetchSingleMember(id: memberId)
+                        resolved = appState.memberVM.member(byId: memberId)
+                    }
+                    guard let member = resolved,
+                          let currentUser = appState.authVM.currentUser else {
+                        Log.warning("[DeepLink] تعذّر إيجاد العضو: \(memberId)")
+                        return
+                    }
 
                     Log.info("[DeepLink] فتح عضو: \(member.firstName)")
 
@@ -155,18 +168,17 @@ struct FamilyTreeV2App: App {
                     pathIds.append(currentUser.id)
                     pathIds.append(member.id)
 
-                    // إرسال notification للشجرة — Task async بدل DispatchQueue لتجنب خلط concurrency models
-                    Task { @MainActor in
-                        try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s
-                        NotificationCenter.default.post(
-                            name: .showKinshipPath,
-                            object: nil,
-                            userInfo: [
-                                "memberId": member.id,
-                                "relationship": result.relationship,
-                                "pathIds": pathIds
-                            ]
-                        )
+                    // مهلة قصيرة حتى تجهز الشجرة قبل إبراز المسار
+                    try? await Task.sleep(nanoseconds: 500_000_000)
+                    NotificationCenter.default.post(
+                        name: .showKinshipPath,
+                        object: nil,
+                        userInfo: [
+                            "memberId": member.id,
+                            "relationship": result.relationship,
+                            "pathIds": pathIds
+                        ]
+                    )
                     }
                 }
         }

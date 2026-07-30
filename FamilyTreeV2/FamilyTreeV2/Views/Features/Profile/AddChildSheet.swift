@@ -181,11 +181,12 @@ struct AddChildSheet: View {
         DSPrimaryButton(
             L10n.t("إضافة", "Add"),
             icon: "checkmark.circle.fill",
-            isLoading: memberVM.isLoading,
+            isLoading: memberVM.isLoading || isSubmitting,
             action: saveChild
         )
         .opacity(firstName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.5 : 1.0)
-        .disabled(firstName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || memberVM.isLoading)
+        .disabled(firstName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                  || memberVM.isLoading || isSubmitting)
     }
 
     private func genderButton(title: String, value: String, color: Color) -> some View {
@@ -203,8 +204,15 @@ struct AddChildSheet: View {
         .buttonStyle(.plain)
     }
 
+    /// حارس محلي يمنع الإضافة المكرّرة — isLoading في الـ VM يتأخر لحظة
+    /// بعد الضغط، فكانت النقرات السريعة تنشئ أكثر من سجل.
+    @State private var isSubmitting = false
+
     private func saveChild() {
+        guard !isSubmitting else { return }
+        isSubmitting = true
         Task {
+            defer { isSubmitting = false }
             let name = firstName.trimmingCharacters(in: .whitespacesAndNewlines)
             let formatter = DateFormatter()
             formatter.dateFormat = "yyyy-MM-dd"

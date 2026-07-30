@@ -304,18 +304,19 @@ class MemberViewModel: ObservableObject {
     func fetchWomenFamily(for userId: UUID) async {
         let uid = userId.uuidString
         do {
-            // 1) عقدة المستخدم نفسها — لقراءة mother_id
-            let selfRows: [WomanMember] = try await supabase.from("women_members")
+            // العقدة والأقارب يُجلبان معاً — كانا متسلسلين فيتضاعف الانتظار
+            async let selfTask: [WomanMember] = supabase.from("women_members")
                 .select().eq("id", value: uid).limit(1).execute().value
-            let motherId = selfRows.first?.motherId
-
-            // 2) الأبناء + الزوجات (المرئيون)
-            let related: [WomanMember] = try await supabase.from("women_members")
+            async let relatedTask: [WomanMember] = supabase.from("women_members")
                 .select()
                 .or("parent_id.eq.\(uid),husband_id.eq.\(uid)")
                 .eq("is_hidden_from_tree", value: false)
                 .order("sort_order", ascending: true)
                 .execute().value
+
+            let selfRows = try await selfTask
+            let related = try await relatedTask
+            let motherId = selfRows.first?.motherId
 
             func named(_ m: WomanMember) -> Bool {
                 !m.firstName.trimmingCharacters(in: .whitespaces).isEmpty
@@ -366,6 +367,23 @@ class MemberViewModel: ObservableObject {
             let p_death: String?
             let p_sort: Int
             let p_parent_full_name: String
+
+            enum CodingKeys: String, CodingKey {
+                case p_parent_id, p_name, p_gender, p_birth
+                case p_deceased, p_death, p_sort, p_parent_full_name
+            }
+            // null صريحة للمفاتيح الفارغة — وإلا نقص توقيع الدالة على السيرفر
+            func encode(to encoder: Encoder) throws {
+                var c = encoder.container(keyedBy: CodingKeys.self)
+                try c.encode(p_parent_id, forKey: .p_parent_id)
+                try c.encode(p_name, forKey: .p_name)
+                try c.encode(p_gender, forKey: .p_gender)
+                try c.encode(p_birth, forKey: .p_birth)
+                try c.encode(p_deceased, forKey: .p_deceased)
+                try c.encode(p_death, forKey: .p_death)
+                try c.encode(p_sort, forKey: .p_sort)
+                try c.encode(p_parent_full_name, forKey: .p_parent_full_name)
+            }
         }
         let params = Params(
             p_parent_id: parentId.uuidString,
@@ -437,15 +455,56 @@ class MemberViewModel: ObservableObject {
         }
     }
 
+    /// تحديث عائلة العضو — تسري على أبنائه وأحفاده لأن العائلة صفة نسب
+    /// تُورَّث، لا اختياراً فردياً لكل ابن على حدة.
+    /// - Returns: عدد الأفراد الذين تغيّرت عائلتهم (العضو + ذريّته).
+    @discardableResult
+    func updateFamilyName(memberId: UUID, familyName: String) async -> Bool {
+        guard NetworkMonitor.shared.requireOnline() else { return false }
+        let trimmed = familyName.trimmingCharacters(in: .whitespacesAndNewlines)
+        struct P: Encodable { let p_member_id: String; let p_family: String }
+        do {
+            let affected: Int = try await supabase
+                .rpc("set_family_name_cascade",
+                     params: P(p_member_id: memberId.uuidString, p_family: trimmed))
+                .execute().value
+            await fetchAllMembers(force: true)
+            Log.info("[Family] عائلة «\(trimmed)» سرت على \(affected) فرد")
+            return true
+        } catch {
+            let detail = error.localizedDescription
+            self.errorMessage = L10n.t("تعذّر حفظ العائلة. \(detail)",
+                                       "Failed to save family. \(detail)")
+            Log.error("[Family] updateFamilyName: \(detail)")
+            return false
+        }
+    }
+
     // MARK: - بنات «عائلتي» (self-service للأب نفسه — RPCs مقيّدة على النفس)
 
     /// تعديل بيانات ابنة للمستخدم نفسه (RPC update_self_woman_child).
     @discardableResult
     func updateSelfWomanChild(id: UUID, firstName: String, birthDate: Date?, isDeceased: Bool, deathDate: Date?) async -> Bool {
         guard NetworkMonitor.shared.requireOnline(), let uid = currentUser?.id else { return false }
+        // ترميز صريح: Swift يحذف المفاتيح الاختيارية الفارغة (encodeIfPresent)،
+        // فيصل الطلب بأربعة معاملات وتفشل PostgREST في إيجاد الدالة.
+        // هنا نكتب null صراحةً فيبقى التوقيع كاملاً.
         struct P: Encodable {
             let p_child_id: String; let p_first_name: String; let p_full_name: String
             let p_birth: String?; let p_deceased: Bool; let p_death: String?
+
+            enum CodingKeys: String, CodingKey {
+                case p_child_id, p_first_name, p_full_name, p_birth, p_deceased, p_death
+            }
+            func encode(to encoder: Encoder) throws {
+                var c = encoder.container(keyedBy: CodingKeys.self)
+                try c.encode(p_child_id, forKey: .p_child_id)
+                try c.encode(p_first_name, forKey: .p_first_name)
+                try c.encode(p_full_name, forKey: .p_full_name)
+                try c.encode(p_birth, forKey: .p_birth)
+                try c.encode(p_deceased, forKey: .p_deceased)
+                try c.encode(p_death, forKey: .p_death)
+            }
         }
         let params = P(
             p_child_id: id.uuidString,
@@ -459,8 +518,11 @@ class MemberViewModel: ObservableObject {
             _ = try await supabase.rpc("update_self_woman_child", params: params).execute()
             await fetchWomenFamily(for: uid); return true
         } catch {
-            self.errorMessage = L10n.t("تعذّر تعديل الابنة.", "Failed to update daughter.")
-            Log.error("[Women] updateSelfWomanChild: \(error.localizedDescription)"); return false
+            // نعرض سبب الخادم الحقيقي — النص العام كان يخفي علّة الفشل
+            let detail = error.localizedDescription
+            self.errorMessage = L10n.t("تعذّر تعديل الابنة. \(detail)",
+                                       "Failed to update daughter. \(detail)")
+            Log.error("[Women] updateSelfWomanChild: \(detail)"); return false
         }
     }
 

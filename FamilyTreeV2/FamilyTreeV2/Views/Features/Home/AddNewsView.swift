@@ -8,7 +8,7 @@ struct AddNewsView: View {
     @EnvironmentObject var appSettingsVM: AppSettingsViewModel
     @Environment(\.dismiss) var dismiss
     @State private var content = ""
-    @State private var selectedType = "خبر"
+    @State private var selectedType = "إعلان"
     /// النشر باسم «إدارة العائلة» بدل الاسم الشخصي (للإدارة فقط)
     @State private var postAsAdmin = false
     @State private var selectedImages: [UIImage] = []
@@ -34,9 +34,9 @@ struct AddNewsView: View {
 
     private var isPoll: Bool { selectedType == "تصويت" }
 
-    /// رقائق الأنواع بلا «تصويت» — التصويت صار زراً في شريط الأدوات جنب الصور
+    /// الأنواع بلا «خبر» (طلب المالك) وبلا «تصويت» — التصويت من زره جنب الصور
     private var availableTypes: [String] {
-        NewsTypeHelper.mainTypes.filter { $0 != "تصويت" }
+        NewsTypeHelper.mainTypes.filter { $0 != "تصويت" && $0 != "خبر" }
     }
 
     private var pollsEnabled: Bool { appSettingsVM.settings.pollsEnabled ?? true }
@@ -358,7 +358,7 @@ struct AddNewsView: View {
             if pollsEnabled {
                 Button {
                     withAnimation(DS.Anim.snappy) {
-                        selectedType = isPoll ? "خبر" : "تصويت"
+                        selectedType = isPoll ? "إعلان" : "تصويت"
                     }
                     UISelectionFeedbackGenerator().selectionChanged()
                 } label: {

@@ -64,6 +64,8 @@ struct DSDateField: View {
     var compact: Bool = false
     /// خط اسم الحقل — لتوحيد حجم العناوين مع DSFormRow.
     var labelFont: Font = DS.Font.callout
+    /// خط القيمة — لتوحيد حجم النص مع حقول الإدخال (DSTextField)
+    var valueFont: Font = DS.Font.calloutBold
     /// العنوان فوق القيمة (مثل DSLabeledFieldRow) بدل سطر واحد.
     var labelAbove: Bool = false
 
@@ -121,7 +123,7 @@ struct DSDateField: View {
                         .foregroundColor(DS.Color.textPrimary)
                     Spacer()
                     Text(formatted)
-                        .font(DS.Font.calloutBold)
+                        .font(valueFont)
                         .foregroundColor(DS.Color.primary)
                     Image(systemName: "chevron.up.chevron.down")
                         .font(DS.Font.caption1)

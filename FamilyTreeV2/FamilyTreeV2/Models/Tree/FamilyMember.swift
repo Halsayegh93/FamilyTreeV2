@@ -4,6 +4,8 @@ nonisolated struct FamilyMember: Identifiable, Codable, Equatable, Sendable {
     let id: UUID
     var firstName: String
     var fullName: String
+    /// اسم العائلة الذي يختاره العضو من قائمة الإدارة (family_names)
+    var familyName: String?
     var phoneNumber: String?
     var birthDate: String?
     var deathDate: String?
@@ -33,6 +35,7 @@ nonisolated struct FamilyMember: Identifiable, Codable, Equatable, Sendable {
         id: UUID = UUID(),
         firstName: String,
         fullName: String,
+        familyName: String? = nil,
         phoneNumber: String? = nil,
         birthDate: String? = nil,
         deathDate: String? = nil,
@@ -61,6 +64,7 @@ nonisolated struct FamilyMember: Identifiable, Codable, Equatable, Sendable {
         self.id = id
         self.firstName = firstName
         self.fullName = fullName
+        self.familyName = familyName
         self.phoneNumber = phoneNumber
         self.birthDate = birthDate
         self.deathDate = deathDate
@@ -95,6 +99,7 @@ nonisolated struct FamilyMember: Identifiable, Codable, Equatable, Sendable {
         // استخدام الاسم المتوفر كبديل إذا كان الآخر فارغ
         self.firstName = rawFirst ?? rawFull?.split(separator: " ").first.map(String.init) ?? ""
         self.fullName = rawFull ?? rawFirst ?? ""
+        self.familyName = try container.decodeIfPresent(String.self, forKey: .familyName)
         self.phoneNumber = try container.decodeIfPresent(String.self, forKey: .phoneNumber)
         self.birthDate = try container.decodeIfPresent(String.self, forKey: .birthDate)
         self.deathDate = try container.decodeIfPresent(String.self, forKey: .deathDate)
@@ -215,6 +220,21 @@ nonisolated struct FamilyMember: Identifiable, Codable, Equatable, Sendable {
         return fullName
     }
 
+    /// الاسم مع لاحقة العائلة المختارة — تُضاف لآخره ما لم تكن موجودة أصلاً
+    /// (سلاسل النسب تنتهي غالباً باسم العائلة، فلا نكرّره).
+    func withFamilySuffix(_ base: String) -> String {
+        guard let fam = familyName?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !fam.isEmpty else { return base }
+        let trimmed = base.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return fam }
+        // موجودة كآخر كلمة أو ضمن السلسلة → لا تكرار
+        if trimmed == fam || trimmed.hasSuffix(" \(fam)") { return trimmed }
+        return "\(trimmed) \(fam)"
+    }
+
+    /// الاسم الكامل + العائلة — يُستخدم حيث يظهر الاسم للعرض
+    var displayFullName: String { withFamilySuffix(fullName) }
+
     /// الاسم الرباعي: الأول + الثاني + الثالث + العائلة (الأخير)
     /// مثال: "حسن صلاح عبدالحميد حسن موسى محمدعلي الصايغ" → "حسن صلاح عبدالحميد الصايغ"
     /// أوضح من الاسم الأول، أقصر من الكامل، يحتوي اسم العائلة للتمييز.
@@ -270,6 +290,7 @@ nonisolated struct FamilyMember: Identifiable, Codable, Equatable, Sendable {
         case id, role, status
         case firstName = "first_name"
         case fullName = "full_name"
+        case familyName = "family_name"
         case phoneNumber = "phone_number"
         case birthDate = "birth_date"
         case deathDate = "death_date"

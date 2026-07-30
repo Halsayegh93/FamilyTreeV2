@@ -13,6 +13,10 @@ struct QRScannerView: View {
 
     @State private var scannedMemberId: UUID?
     @State private var kinshipResult: KinshipCalculator.KinshipResult?
+    /// جلب العضو من السيرفر جارٍ (رمز لعضو غير محمّل)
+    @State private var isResolving = false
+    /// سبب فشل المسح — يُعرض بدل الخروج الصامت
+    @State private var scanErrorMessage: String?
     @State private var scannedMember: FamilyMember?
     @State private var cameraPermissionDenied = false
 
@@ -31,7 +35,28 @@ struct QRScannerView: View {
 
                     // إطار المسح
                     scanOverlay
+
+                    if isResolving {
+                        VStack(spacing: DS.Spacing.sm) {
+                            ProgressView().tint(.white).scaleEffect(1.1)
+                            Text(L10n.t("جارٍ إيجاد العضو…", "Finding member…"))
+                                .font(DS.Font.scaled(12, weight: .semibold))
+                                .foregroundColor(.white)
+                        }
+                        .padding(DS.Spacing.lg)
+                        .background(.ultraThinMaterial)
+                        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
+                    }
                 }
+            }
+            .alert(L10n.t("تعذّر المسح", "Scan Failed"),
+                   isPresented: Binding(
+                     get: { scanErrorMessage != nil },
+                     set: { if !$0 { scanErrorMessage = nil } }
+                   )) {
+                Button(L10n.t("حسناً", "OK"), role: .cancel) { scanErrorMessage = nil }
+            } message: {
+                Text(scanErrorMessage ?? "")
             }
             .background(DS.Color.background)
             .navigationBarTitleDisplayMode(.inline)
@@ -188,16 +213,36 @@ struct QRScannerView: View {
         guard code.hasPrefix("familytree://member/"),
               let idString = code.split(separator: "/").last,
               let memberId = UUID(uuidString: String(idString)) else {
+            scanErrorMessage = L10n.t("هذا ليس رمز عضو في العائلة.",
+                                      "This isn't a family member code.")
             return
         }
 
         // تجنب المسح المتكرر
         guard scannedMemberId == nil else { return }
         scannedMemberId = memberId
+        Task { await resolveAndShow(memberId) }
+    }
 
-        // بحث عن العضو
-        guard let member = memberVM.member(byId: memberId),
-              let currentUser = authVM.currentUser else { return }
+    /// يجلب العضو من السيرفر إن لم يكن محمّلاً — كان الماسح يخرج صامتاً
+    /// فيظنّ المستخدم أن الرمز لا يعمل.
+    @MainActor
+    private func resolveAndShow(_ memberId: UUID) async {
+        var found = memberVM.member(byId: memberId)
+        if found == nil {
+            isResolving = true
+            await memberVM.fetchSingleMember(id: memberId)
+            found = memberVM.member(byId: memberId)
+            isResolving = false
+        }
+
+        guard let member = found, let currentUser = authVM.currentUser else {
+            scannedMemberId = nil        // اسمح بمحاولة أخرى
+            scanErrorMessage = L10n.t("هذا الرمز لا يخصّ عضواً في العائلة.",
+                                      "This code doesn't belong to a family member.")
+            UINotificationFeedbackGenerator().notificationOccurred(.error)
+            return
+        }
 
         // حساب صلة القرابة
         let result = KinshipCalculator.calculate(

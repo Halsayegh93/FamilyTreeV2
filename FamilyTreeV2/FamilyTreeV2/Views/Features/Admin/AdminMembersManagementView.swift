@@ -7,12 +7,13 @@ struct AdminMembersManagementView: View {
 
     enum Tab: Int, CaseIterable {
         // ملاحظة: تاب صحة الشجرة (treeHealth) نُقل إلى "طلبات المراجعة" → قسم "صحة الشجرة"
-        case management, directory
+        case management, directory, families
 
         var title: String {
             switch self {
             case .management:  return L10n.t("إدارة", "Manage")
             case .directory:   return L10n.t("السجل", "Registry")
+            case .families:    return L10n.t("العوائل", "Families")
             }
         }
 
@@ -20,6 +21,7 @@ struct AdminMembersManagementView: View {
             switch self {
             case .management:  return "person.crop.circle.badge.exclamationmark"
             case .directory:   return "person.3.sequence.fill"
+            case .families:    return "person.2.crop.square.stack.fill"
             }
         }
 
@@ -27,6 +29,7 @@ struct AdminMembersManagementView: View {
             switch self {
             case .management:  return DS.Color.warning
             case .directory:   return DS.Color.primary
+            case .families:    return DS.Color.accent
             }
         }
     }
@@ -55,6 +58,10 @@ struct AdminMembersManagementView: View {
                     AdminMembersDirectoryView()
                         .environmentObject(authVM)
                         .environmentObject(memberVM)
+
+                case .families:
+                    AdminFamilyNamesView()
+                        .environmentObject(authVM)
                 }
             }
         }

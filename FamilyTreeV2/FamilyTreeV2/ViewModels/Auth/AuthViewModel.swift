@@ -1308,6 +1308,7 @@ class AuthViewModel: ObservableObject {
         let profileData: [String: AnyEncodable] = [
             "id": AnyEncodable(user.id),
             "full_name": AnyEncodable(fullName),
+            "family_name": AnyEncodable(cleanFamilyName),
             "first_name": AnyEncodable(cleanFirstName),
             "phone_number": AnyEncodable(user.phone ?? toE164(dialingCode: dialingCode, localDigits: phoneNumber)),
             "birth_date": AnyEncodable(DateHelper.format(birthDate)),
