@@ -15,7 +15,7 @@ on:
   # ارجع كتلة push:
   #   push:
   #     branches: [main]
-  #     paths: ['FamilyTreeV2/**/*.swift', 'FamilyTreeV2/supabase/migrations/**']
+  #     paths: ['FamilyTreeV2/**/*.swift', 'supabase/migrations/**']
   workflow_dispatch:
 
 concurrency:
@@ -41,7 +41,7 @@ jobs:
           if [ -z "$BEFORE" ] || ! git cat-file -e "$BEFORE" 2>/dev/null; then BEFORE='HEAD~1'; fi
           git diff "$BEFORE" '${{ github.sha }}' -- \
             'FamilyTreeV2/**/*.swift' \
-            'FamilyTreeV2/supabase/migrations/**' > /tmp/sync/ios.diff || true
+            'supabase/migrations/**' > /tmp/sync/ios.diff || true
           echo "lines=$(wc -l < /tmp/sync/ios.diff)" >> "$GITHUB_OUTPUT"
           echo "----- iOS diff (first 60 lines) -----"
           head -60 /tmp/sync/ios.diff || true
