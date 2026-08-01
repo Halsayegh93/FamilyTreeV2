@@ -352,76 +352,74 @@ struct DiwaniyasView: View {
                 .padding(.horizontal, DS.Spacing.lg)
                 .padding(.vertical, DS.Spacing.md)
 
-                // معلومات مدمجة في شبكة
+                // ═══ شرائح المعلومات — أفقية متمرّرة بدل الصفوف الطويلة ═══
                 let infoItems = buildDiwaniyaInfoItems(item)
                 if !infoItems.isEmpty {
-                    DSDivider()
-                    VStack(spacing: 0) {
-                        ForEach(Array(infoItems.enumerated()), id: \.offset) { index, info in
-                            HStack(spacing: DS.Spacing.md) {
-                                Image(systemName: info.icon)
-                                    .font(DS.Font.scaled(14, weight: .semibold))
-                                    .foregroundColor(info.color)
-                                    .frame(width: 22)
-                                Text(info.text)
-                                    .font(DS.Font.callout)
-                                    .foregroundColor(DS.Color.textPrimary)
-                                    .lineLimit(2)
-                                Spacer()
-                            }
-                            .padding(.horizontal, DS.Spacing.lg)
-                            .padding(.vertical, DS.Spacing.sm + 2)
-
-                            if index < infoItems.count - 1 {
-                                DSDivider()
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: DS.Spacing.sm) {
+                            ForEach(Array(infoItems.enumerated()), id: \.offset) { _, info in
+                                HStack(spacing: 5) {
+                                    Image(systemName: info.icon)
+                                        .font(DS.Font.scaled(11, weight: .semibold))
+                                        .foregroundColor(info.color)
+                                    Text(info.text)
+                                        .font(DS.Font.scaled(12, weight: .medium))
+                                        .foregroundColor(DS.Color.textSecondary)
+                                        .lineLimit(1)
+                                }
+                                .padding(.horizontal, DS.Spacing.sm + 2)
+                                .padding(.vertical, 6)
+                                .background(info.color.opacity(0.08), in: Capsule())
+                                .overlay(Capsule().strokeBorder(info.color.opacity(0.18), lineWidth: 1))
                             }
                         }
+                        .padding(.horizontal, DS.Spacing.lg)
+                        .padding(.bottom, DS.Spacing.md)
                     }
                 }
 
-                // أزرار الإجراءات
+                // ═══ إجراءات أيقونية مدمجة ═══
                 let hasLocation = item.mapsUrl?.isEmpty == false
                 let hasPhone = item.contactPhone?.isEmpty == false
                 if hasLocation || hasPhone {
-                    DSDivider()
-                    HStack(spacing: DS.Spacing.md) {
+                    HStack(spacing: DS.Spacing.sm) {
                         if let mapsStr = item.mapsUrl, !mapsStr.isEmpty, let url = URL(string: mapsStr) {
                             Button(action: { UIApplication.shared.open(url) }) {
-                                HStack(spacing: DS.Spacing.xs) {
+                                HStack(spacing: 6) {
                                     Image(systemName: "location.fill")
+                                        .font(DS.Font.scaled(12, weight: .bold))
                                     Text(L10n.t("الموقع", "Location"))
+                                        .font(DS.Font.scaled(12, weight: .bold))
                                 }
-                                .font(DS.Font.callout)
-                                .fontWeight(.bold)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, DS.Spacing.md)
                                 .foregroundColor(DS.Color.textOnPrimary)
-                                .background(DS.Color.gradientPrimary)
-                                .clipShape(Capsule())
+                                .padding(.horizontal, DS.Spacing.md)
+                                .padding(.vertical, 8)
+                                .background(DS.Color.gradientPrimary, in: Capsule())
                             }
                             .buttonStyle(DSBoldButtonStyle())
                         }
 
                         if let phone = item.contactPhone, !phone.isEmpty, let callURL = KuwaitPhone.telURL(phone) {
                             Button(action: { UIApplication.shared.open(callURL) }) {
-                                HStack(spacing: DS.Spacing.xs) {
+                                HStack(spacing: 6) {
                                     Image(systemName: "phone.fill")
+                                        .font(DS.Font.scaled(12, weight: .bold))
                                     Text(L10n.t("اتصال", "Call"))
+                                        .font(DS.Font.scaled(12, weight: .bold))
                                 }
-                                .font(DS.Font.callout)
-                                .fontWeight(.bold)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, DS.Spacing.md)
                                 .foregroundColor(DS.Color.success)
-                                .background(DS.Color.success.opacity(0.08))
-                                .clipShape(Capsule())
-                                .overlay(Capsule().stroke(DS.Color.success.opacity(0.3), lineWidth: 1))
+                                .padding(.horizontal, DS.Spacing.md)
+                                .padding(.vertical, 8)
+                                .background(DS.Color.success.opacity(0.10), in: Capsule())
+                                .overlay(Capsule().strokeBorder(DS.Color.success.opacity(0.30), lineWidth: 1))
                             }
                             .buttonStyle(DSBoldButtonStyle())
                         }
+
+                        Spacer(minLength: 0)
                     }
                     .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.vertical, DS.Spacing.md)
+                    .padding(.bottom, DS.Spacing.md)
                 }
             }
         }

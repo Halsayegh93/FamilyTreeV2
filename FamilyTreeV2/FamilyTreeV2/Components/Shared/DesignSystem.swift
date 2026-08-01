@@ -230,14 +230,50 @@ enum DS {
         /// يُطبَّق على العناوين الكبرى فقط؛ ويبقى نص المحتوى على خط النظام (SF Pro) لأقصى وضوح.
         static let displayDesign: SwiftUI.Font.Design = .rounded
 
-        // العناوين الكبرى — الصوت الطباعي المميّز (display voice)
-        static let hero        = SwiftUI.Font.system(.largeTitle, design: displayDesign).weight(.black)
-        static let largeTitle  = SwiftUI.Font.system(.largeTitle, design: displayDesign).weight(.bold)
-        static let title1      = SwiftUI.Font.system(.title, design: displayDesign).weight(.bold)
-        // العناوين الأصغر ونص المحتوى — خط النظام للوضوح الأقصى
-        static let title2      = SwiftUI.Font.system(.title2, design: .default).weight(.bold)
-        static let title3      = SwiftUI.Font.system(.title3, design: .default).weight(.semibold)
-        static let headline    = SwiftUI.Font.system(.headline, design: .default).weight(.bold)
+        // MARK: IBM Plex Sans Arabic — خط الهوية (تجربة)
+        /// أسماء PostScript للأوزان المضافة في Resources/Fonts
+        enum Plex {
+            static let regular  = "IBMPlexSansArabic-Regular"
+            static let medium   = "IBMPlexSansArabic-Medium"
+            static let semibold = "IBMPlexSansArabic-SemiBold"
+            static let bold     = "IBMPlexSansArabic-Bold"
+        }
+
+        /// خط IBM Plex Sans Arabic مع دعم Dynamic Type — يُستخدم للعناوين وهوية الاسم
+        static func plex(_ size: CGFloat, weight: SwiftUI.Font.Weight = .regular) -> SwiftUI.Font {
+            let name: String
+            switch weight {
+            case .black, .heavy, .bold: name = Plex.bold
+            case .semibold:             name = Plex.semibold
+            case .medium:               name = Plex.medium
+            default:                    name = Plex.regular
+            }
+            return .custom(name, size: size, relativeTo: textStyle(for: size))
+        }
+
+        /// اختيار TextStyle المناسب للحجم — يضمن تكيّف الخط المخصّص مع Dynamic Type
+        static func textStyle(for size: CGFloat) -> SwiftUI.Font.TextStyle {
+            switch size {
+            case ...12:  return .caption
+            case 13:     return .footnote
+            case 14...15: return .subheadline
+            case 16:     return .callout
+            case 17:     return .body
+            case 18...19: return .headline
+            case 20...21: return .title3
+            case 22...27: return .title2
+            default:     return .title
+            }
+        }
+
+        // العناوين — IBM Plex Sans Arabic (الصوت الطباعي للهوية)، مع دعم Dynamic Type
+        static let hero        = SwiftUI.Font.custom(Plex.bold, size: 34, relativeTo: .largeTitle)
+        static let largeTitle  = SwiftUI.Font.custom(Plex.bold, size: 34, relativeTo: .largeTitle)
+        static let title1      = SwiftUI.Font.custom(Plex.bold, size: 28, relativeTo: .title)
+        static let title2      = SwiftUI.Font.custom(Plex.bold, size: 22, relativeTo: .title2)
+        static let title3      = SwiftUI.Font.custom(Plex.semibold, size: 20, relativeTo: .title3)
+        static let headline    = SwiftUI.Font.custom(Plex.semibold, size: 17, relativeTo: .headline)
+        // نص المحتوى — خط النظام للوضوح الأقصى
         static let body        = SwiftUI.Font.system(.body, design: .default)
         static let bodyBold    = SwiftUI.Font.system(.body, design: .default).weight(.semibold)
         static let callout     = SwiftUI.Font.system(.callout, design: .default)
