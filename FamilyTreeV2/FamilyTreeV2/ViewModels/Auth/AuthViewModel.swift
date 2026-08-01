@@ -459,51 +459,26 @@ class AuthViewModel: ObservableObject {
         
         Log.info("[AUTH] findProfileByPhone: phone=\(Log.masked(rawPhone)), candidates=\(candidates.count)")
         
-        // 1) محاولة مطابقة مباشرة على أكثر من صيغة شائعة
+        // المطابقة تتم على السيرفر عبر find_profiles_by_phone — لا تُسحب أي أرقام
+        // للجهاز، والدالة تطابق آخر ٨ أرقام فتغطي كل صيغ الإدخال دفعة واحدة.
         for candidate in candidates {
             do {
                 let response: [PhoneLookupProfile] = try await supabase
-                    .from("profiles")
-                    .select("id, phone_number, role, status")
-                    .eq("phone_number", value: candidate)
-                    .limit(20)
+                    .rpc("find_profiles_by_phone", params: ["p_phone": candidate])
                     .execute()
                     .value
                 if let profileId = pickBestProfileId(from: response),
                    let profile = await loadProfile(by: profileId) {
-                    Log.info("[AUTH] تم العثور على بروفايل بالمطابقة المباشرة: \(profile.fullName) (candidate: \(candidate))")
+                    Log.info("[AUTH] تم العثور على بروفايل بالمطابقة: \(profile.fullName) (candidate: \(candidate))")
                     return profile
                 }
             } catch {
-                Log.warning("فشل المطابقة المباشرة بالهاتف \(candidate): \(error)")
+                Log.warning("فشل مطابقة الهاتف \(Log.masked(candidate)): \(error)")
             }
         }
-        
-        // 2) محاولة أوسع: جلب الهواتف ثم تطبيعها محلياً لتفادي اختلاف التنسيقات
-        do {
-            let broad: [PhoneLookupProfile] = try await supabase
-                .from("profiles")
-                .select("id, phone_number, role, status")
-                .limit(500)
-                .execute()
-                .value
-            
-            Log.info("[AUTH] بحث موسع: تم جلب \(broad.count) بروفايل")
-            
-            let matchedRows = broad.filter { phonesMatch(stored: $0.phoneNumber, targetRaw: normalized) }
-            if let profileId = pickBestProfileId(from: matchedRows) {
-                if let profile = await loadProfile(by: profileId) {
-                    Log.info("[AUTH] تم العثور على بروفايل بالبحث الموسع: \(profile.fullName)")
-                    return profile
-                }
-            }
 
-            Log.warning("[AUTH] لم يتم العثور على أي مطابقة للهاتف: \(Log.masked(rawPhone))")
-            return nil
-        } catch {
-            Log.warning("فشل المطابقة الموسعة بالهاتف: \(error)")
-            return nil
-        }
+        Log.warning("[AUTH] لم يتم العثور على أي مطابقة للهاتف: \(Log.masked(rawPhone))")
+        return nil
     }
     
     /// ربط بروفايل موجود بـ auth.uid الجديد — يُستخدم عندما يُعثر على بروفايل بالرقم بدلاً من UUID
