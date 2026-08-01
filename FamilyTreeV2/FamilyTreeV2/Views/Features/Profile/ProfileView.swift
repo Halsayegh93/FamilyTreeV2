@@ -18,6 +18,8 @@ struct ProfileView: View {
     @State private var editingChild: FamilyMember? = nil
     @State private var editingFamilyMember: WomenFamilyEntry? = nil
     @State private var isReorderingChildren = false
+    /// ستر أسماء النساء (الأم/الزوجة/البنات) — مغبّشة افتراضياً، وهزّ الجهاز يبدّل
+    @State private var womenRevealed = false
     // إضافة/اختيار الزوجة والأم
     @State private var showAddWife = false
     @State private var newWifeName = ""
@@ -831,9 +833,13 @@ struct ProfileView: View {
     private func familyMemberButton(_ entry: WomenFamilyEntry) -> some View {
         Button { editingFamilyMember = entry } label: { womanFamilyGridCell(entry: entry) }
             .buttonStyle(PlainButtonStyle())
+            // لا ضغط ولا تعديل ما دام الاسم مستوراً — لازم الكشف بالهزّ أولاً
+            .allowsHitTesting(womenRevealed)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(entry.member.firstName.isEmpty ? L10n.t("فرد", "Member") : entry.member.firstName)
-            .accessibilityHint(L10n.t("تعديل", "Edit"))
+            .accessibilityHint(womenRevealed
+                               ? L10n.t("تعديل", "Edit")
+                               : L10n.t("مستور — هزّ الجهاز للإظهار", "Hidden — shake to show"))
     }
 
     private var childrenGridView: some View {
@@ -847,6 +853,18 @@ struct ProfileView: View {
         return VStack(spacing: DS.Spacing.sm) {
             // ═══ الأم / الزوجة — أماكن ثابتة (البطاقة أو زر الإضافة/الاختيار) ═══
             if showParents {
+                // تلميح حالة الستر — أيقونة وكلمة واحدة
+                HStack(spacing: 5) {
+                    Image(systemName: womenRevealed ? "eye.fill" : "eye.slash.fill")
+                        .font(.system(size: 11, weight: .semibold))
+                    Text(womenRevealed
+                         ? L10n.t("ظاهر — هزّ الجهاز للإخفاء", "Visible — shake to hide")
+                         : L10n.t("مخفي — هزّ الجهاز للإظهار", "Hidden — shake to show"))
+                        .font(DS.Font.scaled(10, weight: .medium))
+                    Spacer()
+                }
+                .foregroundColor(DS.Color.textTertiary)
+
                 LazyVGrid(columns: columns, spacing: DS.Spacing.md) {
                     // خانة الأم (ثابتة أولاً)
                     if let motherEntry {
@@ -859,7 +877,9 @@ struct ProfileView: View {
                         }
                     }
                     // خانة الزوجة (ثابتة بعد الأم)
-                    ForEach(wifeEntries) { entry in familyMemberButton(entry) }
+                    ForEach(wifeEntries) { entry in
+                        familyMemberButton(entry)
+                    }
                     // إضافة الزوجة متاحة لأي عضو متزوّج (مو المدير فقط) — اختياري لا إجبار
                     if !hasWife {
                         addFamilyActionCell(title: L10n.t("إضافة زوجة", "Add Wife"),
@@ -882,7 +902,9 @@ struct ProfileView: View {
                 }
                 if isCurrentUserMarried {
                     // البنات — قابلة للنقر للتعديل لأي عضو؛ الترتيب انتقل للوضع الموحّد.
-                    ForEach(womenKids) { entry in familyMemberButton(entry) }
+                    ForEach(womenKids) { entry in
+                        familyMemberButton(entry)
+                    }
                 }
                 // إضافة ابن
                 Button { showAddChild = true } label: {
@@ -912,6 +934,11 @@ struct ProfileView: View {
             }
         }
         .padding(DS.Spacing.md)
+        // هزّ الجهاز يبدّل ستر أسماء النساء (الأم/الزوجة/البنات) — مفتاح يبقى على حاله
+        .onShake {
+            withAnimation(DS.Anim.smooth) { womenRevealed.toggle() }
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        }
     }
 
     private func childGridCell(son: FamilyMember) -> some View {
@@ -1063,11 +1090,13 @@ struct ProfileView: View {
             .overlay(Circle().strokeBorder(DS.Color.primary.opacity(0.12), lineWidth: 1))
 
             VStack(alignment: .leading, spacing: 2) {
+                // الاسم وحده هو المستور — الصورة والدور يبقيان ظاهرين
                 Text(woman.firstName.isEmpty ? L10n.t("الاسم", "Name") : woman.firstName)
                     .font(DS.Font.caption1)
                     .fontWeight(.bold)
                     .foregroundColor(DS.Color.textPrimary)
                     .lineLimit(1)
+                    .blur(radius: womenRevealed ? 0 : 5)
 
                 HStack(spacing: DS.Spacing.xs) {
                     // الدور (زوجة/أم) — يُخفى للأبناء
