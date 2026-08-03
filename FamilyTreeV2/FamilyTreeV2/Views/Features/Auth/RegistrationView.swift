@@ -19,12 +19,7 @@ struct RegistrationView: View {
 
     var body: some View {
         ZStack {
-            LinearGradient(
-                colors: [DS.Color.primary.opacity(0.06), DS.Color.background],
-                startPoint: .top,
-                endPoint: .center
-            )
-            .ignoresSafeArea()
+            DS.Color.background.ignoresSafeArea()
 
             VStack(spacing: 0) {
                 // Top bar
@@ -36,19 +31,6 @@ struct RegistrationView: View {
                         photoSection
                             .scaleEffect(headerScale)
                             .opacity(headerOpacity)
-
-                        // العنوان
-                        VStack(spacing: DS.Spacing.sm) {
-                            Text(L10n.t("عائلة المحمدعلي", "Al-Mohammadali Family"))
-                                .font(DS.Font.title1)
-                                .fontWeight(.black)
-                                .foregroundColor(DS.Color.textPrimary)
-
-                            Text(L10n.t("أكمل بياناتك للانضمام", "Complete profile to join"))
-                                .font(DS.Font.callout)
-                                .foregroundColor(DS.Color.textSecondary)
-                        }
-                        .opacity(headerOpacity)
 
                         // الحقول
                         VStack(spacing: DS.Spacing.md) {
@@ -105,24 +87,82 @@ struct RegistrationView: View {
         }
     }
 
-    // MARK: - Top Bar
+    // MARK: - Top Bar — الهيدر الموحّد (أيقونة + عنوان + وصف + شريط سدو)
     private var topBar: some View {
-        HStack {
-            // كان مكتوبًا «رجوع» لكنه يسجّل الخروج فعليًا — تسمية صادقة بدل الطرد الصامت
-            Button(action: { Task { await authVM.signOut() } }) {
-                HStack(spacing: DS.Spacing.xs) {
-                    Image(systemName: "rectangle.portrait.and.arrow.right")
-                        .font(DS.Font.scaled(13, weight: .bold))
-                    Text(L10n.t("تسجيل الخروج", "Sign out"))
+        VStack(spacing: 0) {
+            HStack(spacing: DS.Spacing.md) {
+                ZStack {
+                    Circle()
+                        .fill(DS.Color.overlayIcon)
+                        .overlay(Circle().strokeBorder(DS.Color.overlayIconBorder, lineWidth: 1.5))
+                    Image(systemName: "person.badge.plus")
+                        .font(DS.Font.scaled(20, weight: .bold))
+                        .foregroundColor(DS.Color.textOnPrimary)
                 }
-                .font(DS.Font.subheadline)
-                .foregroundColor(DS.Color.textSecondary)
+                .frame(width: 52, height: 52)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(L10n.t("إكمال البيانات", "Complete Profile"))
+                        .font(DS.Font.plex(19, weight: .bold))
+                        .foregroundColor(DS.Color.textOnPrimary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                    Text(L10n.t("خطوة واحدة وتنضم لشجرة العائلة",
+                                "One step to join the family tree"))
+                        .font(DS.Font.plex(12, weight: .medium))
+                        .foregroundColor(DS.Color.overlayText)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                }
+
+                Spacer(minLength: DS.Spacing.xs)
+
+                // تسجيل الخروج — بنفس موضع زر الإغلاق في بقية الواجهات
+                Button(action: { Task { await authVM.signOut() } }) {
+                    Image(systemName: "rectangle.portrait.and.arrow.right")
+                        .font(DS.Font.scaled(17, weight: .bold))
+                        .foregroundColor(DS.Color.textOnPrimary)
+                        .frame(width: 44, height: 44)
+                        .background(Circle().fill(DS.Color.overlayIcon))
+                        .overlay(Circle().strokeBorder(DS.Color.overlayIconBorder, lineWidth: 1.5))
+                }
+                .buttonStyle(BounceButtonStyle())
+                .accessibilityLabel(L10n.t("تسجيل الخروج", "Sign out"))
             }
-            Spacer()
+            .padding(.horizontal, DS.Spacing.lg)
+            .padding(.bottom, DS.Spacing.sm)
+            .frame(minHeight: 70, alignment: .bottom)
+
+            saduStrip
         }
-        .padding(DS.Spacing.lg)
-        .background(DS.Color.surface.opacity(0.95))
-        .dsSubtleShadow()
+        .frame(maxWidth: .infinity)
+        .background(
+            ZStack {
+                DS.Color.gradientPrimary
+                DS.Color.headerVeil
+            }
+            .ignoresSafeArea(edges: .top)
+        )
+    }
+
+    /// شريط سدو زخرفي — نفس بقية الهيدرات
+    private var saduStrip: some View {
+        HStack(spacing: 5) {
+            Rectangle()
+                .fill(DS.Color.textOnPrimary.opacity(0.16))
+                .frame(height: 1)
+            ForEach(0..<5, id: \.self) { i in
+                Rectangle()
+                    .fill(DS.Color.textOnPrimary.opacity(i == 2 ? 0.55 : 0.30))
+                    .frame(width: i == 2 ? 6 : 4, height: i == 2 ? 6 : 4)
+                    .rotationEffect(.degrees(45))
+            }
+            Rectangle()
+                .fill(DS.Color.textOnPrimary.opacity(0.16))
+                .frame(height: 1)
+        }
+        .padding(.horizontal, DS.Spacing.xl)
+        .padding(.bottom, DS.Spacing.xs)
     }
 
     // MARK: - Photo Section — كاميرا على الصورة مباشرة

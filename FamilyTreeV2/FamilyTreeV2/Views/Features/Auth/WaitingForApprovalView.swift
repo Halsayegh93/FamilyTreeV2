@@ -16,16 +16,20 @@ struct WaitingForApprovalView: View {
 
     var body: some View {
         ZStack {
-            LinearGradient(
-                colors: [DS.Color.primary.opacity(0.06), DS.Color.background],
-                startPoint: .top,
-                endPoint: .center
-            )
-            .ignoresSafeArea()
+            DS.Color.background.ignoresSafeArea()
 
-            ScrollView(showsIndicators: false) {
+            VStack(spacing: 0) {
+                // الهيدر الموحّد — نفس بقية الواجهات
+                authHeader(
+                    icon: "hourglass",
+                    title: L10n.t("قيد المراجعة", "Under Review"),
+                    subtitle: L10n.t("طلبك وصل الإدارة وينتظر الموافقة",
+                                     "Your request reached the admins")
+                )
+
+                ScrollView(showsIndicators: false) {
                 VStack(spacing: DS.Spacing.xxl) {
-                    Spacer().frame(height: DS.Spacing.xxxxl)
+                    Spacer().frame(height: DS.Spacing.xl)
 
                     // أيقونة الانتظار مع الحركة
                     waitingIcon
@@ -47,6 +51,7 @@ struct WaitingForApprovalView: View {
                         .offset(y: buttonsAppeared ? 0 : 20)
 
                     Spacer().frame(height: DS.Spacing.xxl)
+                }
                 }
             }
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)

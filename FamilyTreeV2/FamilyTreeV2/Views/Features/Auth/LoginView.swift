@@ -4,6 +4,10 @@ struct LoginView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @FocusState private var isFieldFocused: Bool
 
+#if DEBUG
+    /// معاينة شاشة تسجيل البيانات بلا رقم جديد — نسخة التطوير فقط
+    @State private var previewRegistration = false
+#endif
     @State private var timeRemaining = 0
     @State private var otpTimeRemaining = 0
     @State private var logoScale: CGFloat = 0.6
@@ -93,13 +97,34 @@ struct LoginView: View {
     /// محتوى شاشة الدخول — نفسه في الوضعين، يُلف بـScrollView أفقياً فقط
     private var loginContent: some View {
             VStack(spacing: 0) {
+                if authVM.isOtpSent {
+                    // خطوة الرمز — الهيدر الموحّد بدل الشعار
+                    authHeader(
+                        icon: "lock.shield.fill",
+                        title: L10n.t("رمز التحقق", "Verification Code"),
+                        subtitle: L10n.t("أدخل الرمز المرسل لجوالك", "Enter the code sent to your phone"),
+                        actionIcon: L10n.isArabic ? "arrow.right" : "arrow.left",
+                        action: {
+                            withAnimation(DS.Anim.smooth) {
+                                authVM.isOtpSent = false
+                                authVM.otpCode = ""; otpText = ""
+                                authVM.otpErrorMessage = nil
+                                authVM.otpStatusMessage = ""
+                                timeRemaining = 0
+                            }
+                        }
+                    )
+                }
+
                 Spacer()
 
-                // شعار متحرك — Elegant
-                logoSection
-                    .scaleEffect(logoScale)
-                    .opacity(logoOpacity)
-                    .padding(.bottom, isLandscape ? DS.Spacing.xl : DS.Spacing.xxxxl)
+                if !authVM.isOtpSent {
+                    // شعار متحرك — Elegant
+                    logoSection
+                        .scaleEffect(logoScale)
+                        .opacity(logoOpacity)
+                        .padding(.bottom, isLandscape ? DS.Spacing.xl : DS.Spacing.xxxxl)
+                }
 
                 // مؤشر التقدم — خطوة ١ / خطوة ٢
                 HStack(spacing: DS.Spacing.sm) {
@@ -154,6 +179,26 @@ struct LoginView: View {
                 .frame(width: 100, height: 100)
                 .clipShape(Circle())
                 .shadow(color: DS.Color.primary.opacity(0.2), radius: 12, y: 6)
+#if DEBUG
+                // ضغطة مطوّلة على الشعار تفتح شاشة تسجيل البيانات للمعاينة
+                // بلا رقم جديد. لا تُبنى إطلاقاً في نسخة الإصدار.
+                .onLongPressGesture(minimumDuration: 1.5) {
+                    UINotificationFeedbackGenerator().notificationOccurred(.success)
+                    previewRegistration = true
+                }
+                .fullScreenCover(isPresented: $previewRegistration) {
+                    ZStack(alignment: .topLeading) {
+                        RegistrationView()
+                        Button { previewRegistration = false } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 30))
+                                .symbolRenderingMode(.palette)
+                                .foregroundStyle(.white, .black.opacity(0.4))
+                                .padding()
+                        }
+                    }
+                }
+#endif
 
             VStack(spacing: DS.Spacing.sm) {
                 Text(L10n.t("عائلة المحمدعلي", "Al-Mohammadali Family"))
