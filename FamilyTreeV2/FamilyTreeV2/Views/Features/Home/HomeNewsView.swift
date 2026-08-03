@@ -14,6 +14,9 @@ struct HomeNewsView: View {
     /// الوضع الأفقي على الجوال — نعيد توزيع البنتو على عمودين
     private var isLandscape: Bool { vSizeClass == .compact }
     @State private var contentWidth: CGFloat = 0
+    /// إزاحة السحب التفاعلي للرجوع — الصفحة تتبع الإصبع
+    @State private var backDragOffset: CGFloat = 0
+
     @Binding var selectedTab: Int
     @State private var showingAddNews = false
     @State private var showingNotifications = false
@@ -26,18 +29,19 @@ struct HomeNewsView: View {
     @State private var newNewsCount = 0
     @State private var selectedMemberForDetails: FamilyMember? = nil
     @State private var lastRefreshDate: Date? = nil
-    @State private var activeSubPage: HomeSubPage? = nil
     /// فلتر نوع الخبر في صفحة الأخبار — nil يعني الكل
     @State private var selectedNewsTypeFilter: String? = nil
-    @State private var appeared = false
     @State private var showNewsSearch = false
     @State private var newsSearchText = ""
     @State private var debouncedNewsSearch = ""
     @State private var newsSearchTask: Task<Void, Never>?
 
-    private enum HomeSubPage {
+    private enum HomeSubPage: Hashable {
         case archive, projects, contact, news
     }
+
+    /// الصفحة الفرعية المفتوحة — تُدفع كوجهة تنقّل حقيقية لتأخذ حركة iOS الأصلية
+    @State private var activeSubPage: HomeSubPage? = nil
 
     /// مقاييس التخطيط المتجاوبة — تتكيّف مع عرض الجهاز الفعلي + size class
     private var layout: DS.Layout.Metrics {
@@ -50,39 +54,51 @@ struct HomeNewsView: View {
             ZStack {
                 DS.Color.background.ignoresSafeArea()
 
-                if let subPage = activeSubPage {
-                    subPageContent(for: subPage)
-                        .transition(.move(edge: L10n.isArabic ? .leading : .trailing))
-                } else {
+                Group {
                     // Main home content — Bento Grid
                     VStack(spacing: 0) {
                         homeHeader
 
                         ScrollView(showsIndicators: false) {
                             bentoSection
-                                .background(
-                                    GeometryReader { proxy in
-                                        SwiftUI.Color.clear
-                                            .preference(key: HomeWidthKey.self, value: proxy.size.width)
-                                    }
-                                )
-                                .onPreferenceChange(HomeWidthKey.self) { contentWidth = $0 }
-                                .opacity(appeared ? 1 : 0)
-                                .offset(y: appeared ? 0 : 20)
+                                // بلا أنيميشن ظهور — المحتوى يثبت مكانه بلا انزلاق
                                 .padding(.top, DS.Spacing.md)
                                 .padding(.bottom, isLandscape ? DS.Spacing.xxxxl + 44 : DS.Spacing.xxxxl)
-                                .onAppear {
-                                    guard !appeared else { return }
-                                    withAnimation(DS.Anim.smooth.delay(0.1)) { appeared = true }
-                                }
                         }
+                        // القياس خارج التمرير: كان GeometryReader داخل ScrollView يقيس
+                        // المحتوى الذي تحدّده مقاساتُه نفسها، فتنشأ حلقة إعادة قياس
+                        // تجعل الشاشة تتحرك. الآن يقيس عرض الحاوية الثابت مرة واحدة.
+                        .background(
+                            GeometryReader { proxy in
+                                SwiftUI.Color.clear
+                                    .preference(key: HomeWidthKey.self, value: proxy.size.width)
+                            }
+                        )
+                        .onPreferenceChange(HomeWidthKey.self) { newWidth in
+                            // تجاهل التغيّرات الدقيقة حتى لا تُعاد الحسابات بلا داعٍ
+                            if abs(newWidth - contentWidth) > 1 { contentWidth = newWidth }
+                        }
+                        // بلا ارتداد مطّاطي عند السحب باليد (متاح من iOS 16.4)
+                        .modifier(NoBounceIfAvailable())
                         .refreshable { await refreshNews(notifyIfNew: true, force: true) }
                     }
-                    .transition(.move(edge: L10n.isArabic ? .trailing : .leading))
+                }
+            }
+            // isPresented بدل مسار مُنمّط: المكدّس نفسه يحوي روابط بأنواع أخرى
+            // (مركز الإشعارات) والمسار المُنمّط يتعارض معها.
+            .navigationDestination(
+                isPresented: Binding(
+                    get: { activeSubPage != nil },
+                    set: { if !$0 { activeSubPage = nil } }
+                )
+            ) {
+                if let page = activeSubPage {
+                    subPageContent(for: page)
+                        .toolbar(.hidden, for: .navigationBar)
                 }
             }
             .toolbar(.hidden, for: .navigationBar)
-            .animation(DS.Anim.snappy, value: activeSubPage == nil)
+            // بلا أنيميشن على تبديل الصفحات الفرعية
             .onChange(of: newsSearchText) { newValue in
                 newsSearchTask?.cancel()
                 if newValue.isEmpty {
@@ -159,7 +175,7 @@ struct HomeNewsView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .didReselectTab)) { notification in
             if let tab = notification.userInfo?["tab"] as? Int, tab == 0, activeSubPage != nil {
-                withAnimation(DS.Anim.snappy) { activeSubPage = nil }
+                activeSubPage = nil
             }
         }
         // Deep-link من push خارجي لطلب انضمام — يفتح مركز الإشعارات تلقائياً
@@ -241,46 +257,76 @@ struct HomeNewsView: View {
             }
         }()
 
-        return HStack(spacing: DS.Spacing.md) {
-            DSIconButton(
-                icon: "chevron.backward",
-                iconColor: DS.Color.textPrimary,
-                fillColor: DS.Color.surface,
-                borderColor: DS.Color.primary.opacity(0.08),
-                borderWidth: 1
-            ) {
-                withAnimation(DS.Anim.snappy) { activeSubPage = nil }
+        let icon: String = {
+            switch page {
+            case .archive:  return "books.vertical.fill"
+            case .projects: return "briefcase.fill"
+            case .contact:  return "envelope.fill"
+            case .news:     return "newspaper.fill"
             }
+        }()
 
-            Text(title)
-                .font(DS.Font.title3)
-                .fontWeight(.black)
-                .foregroundColor(DS.Color.textPrimary)
-
-            Spacer()
-
-            // زر البحث — يظهر في صفحة الأخبار فقط (انتقل من الهيدر الداخلي)
-            if page == .news {
+        return VStack(spacing: 0) {
+            HStack(spacing: DS.Spacing.md) {
+                // رجوع — بنفس لغة أزرار الهيدر الزجاجية
                 Button {
-                    withAnimation(DS.Anim.snappy) { showNewsSearch.toggle() }
+                    activeSubPage = nil
                 } label: {
-                    Image(systemName: showNewsSearch ? "xmark.circle.fill" : "magnifyingglass")
-                        .font(DS.Font.scaled(16, weight: .semibold))
-                        .foregroundColor(DS.Color.textSecondary)
-                        .frame(width: 38, height: 38)
-                        .background(DS.Color.surface)
-                        .clipShape(Circle())
-                        .overlay(Circle().strokeBorder(DS.Color.primary.opacity(0.08), lineWidth: 1))
-                        .frame(width: 44, height: 44)          // هدف لمس ≥44pt (الحجم البصري يبقى 38)
-                        .contentShape(Rectangle())
+                    ZStack {
+                        Circle().fill(DS.Color.overlayIcon)
+                        Circle().strokeBorder(DS.Color.overlayIconBorder, lineWidth: 1)
+                        Image(systemName: L10n.isArabic ? "chevron.forward" : "chevron.backward")
+                            .font(DS.Font.scaled(15, weight: .bold))
+                            .foregroundColor(DS.Color.textOnPrimary)
+                    }
+                    .frame(width: 40, height: 40)
                 }
-                .accessibilityLabel(showNewsSearch ? L10n.t("إغلاق البحث", "Close search") : L10n.t("بحث", "Search"))
+                .buttonStyle(BounceButtonStyle())
+                .accessibilityLabel(L10n.t("رجوع", "Back"))
+
+                // أيقونة القسم + عنوانه — نفس بنية هيدر الرئيسية
+                ZStack {
+                    Circle().fill(DS.Color.overlayIcon)
+                    Circle().strokeBorder(DS.Color.overlayIconBorder, lineWidth: 1)
+                    Image(systemName: icon)
+                        .font(DS.Font.scaled(17, weight: .semibold))
+                        .foregroundColor(DS.Color.textOnPrimary)
+                }
+                .frame(width: isLandscape ? 38 : 46, height: isLandscape ? 38 : 46)
+
+                Text(title)
+                    .font(DS.Font.plex(19, weight: .bold))
+                    .foregroundColor(DS.Color.textOnPrimary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+
+                Spacer(minLength: DS.Spacing.xs)
+
+                if page == .news {
+                    Button {
+                        withAnimation(DS.Anim.snappy) { showNewsSearch.toggle() }
+                    } label: {
+                        Image(systemName: showNewsSearch ? "xmark.circle.fill" : "magnifyingglass")
+                            .font(DS.Font.scaled(17, weight: .semibold))
+                            .foregroundColor(DS.Color.textOnPrimary)
+                            .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(BounceButtonStyle())
+                    .accessibilityLabel(showNewsSearch ? L10n.t("إغلاق البحث", "Close search")
+                                                       : L10n.t("بحث", "Search"))
+                }
             }
+            .padding(.horizontal, isLandscape ? DS.Spacing.xxl : DS.Spacing.lg)
+            .padding(.bottom, isLandscape ? DS.Spacing.xs : DS.Spacing.sm)
+            .padding(.top, isLandscape ? DS.Spacing.xs : 0)
+            .frame(minHeight: isLandscape ? 46 : 70, alignment: .bottom)
+
+            // شريط سدو زخرفي — يحلّ محل الخط الفاصل بلا زيادة ارتفاع تُذكر
+            saduStrip
         }
-        .padding(.horizontal, isLandscape ? DS.Spacing.xxl : DS.Spacing.lg)
-        .padding(.vertical, isLandscape ? DS.Spacing.xs : DS.Spacing.sm)
         .frame(maxWidth: .infinity)
-        .background(DS.Color.background.ignoresSafeArea(edges: isLandscape ? .horizontal : []))
+        .background(DS.Color.gradientPrimary.ignoresSafeArea(edges: .top))
     }
 
     // MARK: - Bento Grid Section — توزيع عائلي احترافي
@@ -376,7 +422,7 @@ struct HomeNewsView: View {
                 color: DS.Color.tileLibrary,
                 imageURL: nil,
                 count: nil,
-                action: { withAnimation(DS.Anim.snappy) { activeSubPage = .archive } }
+                action: { activeSubPage = .archive }
             )
             unifiedTile(
                 title: L10n.t("مشاريع العائلة", "Family Projects"),
@@ -384,7 +430,7 @@ struct HomeNewsView: View {
                 color: DS.Color.tileProjects,
                 imageURL: projectImageURL,
                 count: projectsVM.projects.count,
-                action: { withAnimation(DS.Anim.snappy) { activeSubPage = .projects } }
+                action: { activeSubPage = .projects }
             )
             unifiedTile(
                 title: L10n.t("التواصل", "Contact"),
@@ -392,7 +438,7 @@ struct HomeNewsView: View {
                 color: DS.Color.tileContact,
                 imageURL: nil,
                 count: nil,
-                action: { withAnimation(DS.Anim.snappy) { activeSubPage = .contact } }
+                action: { activeSubPage = .contact }
             )
         }
     }
@@ -439,7 +485,7 @@ struct HomeNewsView: View {
                 imageURL: nil,
                 count: nil,
                 height: tileHeight,
-                action: { withAnimation(DS.Anim.snappy) { activeSubPage = .archive } }
+                action: { activeSubPage = .archive }
             )
             unifiedTile(
                 title: L10n.t("مشاريع العائلة", "Family Projects"),
@@ -448,7 +494,7 @@ struct HomeNewsView: View {
                 imageURL: projectImageURL,
                 count: projectsVM.projects.count,
                 height: tileHeight,
-                action: { withAnimation(DS.Anim.snappy) { activeSubPage = .projects } }
+                action: { activeSubPage = .projects }
             )
             unifiedTile(
                 title: L10n.t("التواصل", "Contact"),
@@ -457,7 +503,7 @@ struct HomeNewsView: View {
                 imageURL: nil,
                 count: nil,
                 height: tileHeight,
-                action: { withAnimation(DS.Anim.snappy) { activeSubPage = .contact } }
+                action: { activeSubPage = .contact }
             )
         }
     }
@@ -500,7 +546,7 @@ struct HomeNewsView: View {
 
                         if let count, count > 0 {
                             Text("\(count)")
-                                .font(DS.Font.scaled(10, weight: .black))
+                                .font(DS.Font.scaled(11, weight: .black))
                                 .foregroundColor(.white)
                                 .padding(.horizontal, 7)
                                 .padding(.vertical, 3)
@@ -579,7 +625,7 @@ struct HomeNewsView: View {
         let total = approvedProjects.count
 
         return Button {
-            withAnimation(DS.Anim.snappy) { activeSubPage = .projects }
+            activeSubPage = .projects
         } label: {
             ZStack(alignment: .bottomLeading) {
                 // ── خلفية: صورة المشروع المميَّز أو gradient ──
@@ -614,7 +660,7 @@ struct HomeNewsView: View {
                         if total > 0 {
                             HStack(spacing: 3) {
                                 Image(systemName: "square.stack.fill")
-                                    .font(DS.Font.scaled(10, weight: .bold))
+                                    .font(DS.Font.scaled(11, weight: .bold))
                                 Text("\(total)")
                                     .font(DS.Font.scaled(11, weight: .black))
                             }
@@ -641,7 +687,7 @@ struct HomeNewsView: View {
 
                         HStack(spacing: 6) {
                             Image(systemName: "person.fill")
-                                .font(DS.Font.scaled(10, weight: .bold))
+                                .font(DS.Font.scaled(11, weight: .bold))
                             Text(L10n.t("صاحب المشروع: ", "Owner: ") + p.ownerName)
                                 .font(DS.Font.scaled(11, weight: .semibold))
                                 .lineLimit(1)
@@ -717,7 +763,7 @@ struct HomeNewsView: View {
     /// بطاقة التواصل المستقلة — full-width أصغر من بطاقة المشاريع، بنمط الـ tile الموحّد.
     private var contactCard: some View {
         Button {
-            withAnimation(DS.Anim.snappy) { activeSubPage = .contact }
+            activeSubPage = .contact
         } label: {
             HStack(spacing: DS.Spacing.md) {
                 ZStack {
@@ -764,6 +810,26 @@ struct HomeNewsView: View {
     }
 
     // MARK: - بطاقة الترحيب «سماء الوقت» — مشهد خفيف يتبدّل مع الساعة، تفتح "حسابي"
+    /// شريط سدو زخرفي — معينات صغيرة بين خطين متلاشيين
+    private var saduStrip: some View {
+        HStack(spacing: 5) {
+            Rectangle()
+                .fill(DS.Color.textOnPrimary.opacity(0.16))
+                .frame(height: 1)
+            ForEach(0..<5, id: \.self) { i in
+                Rectangle()
+                    .fill(DS.Color.textOnPrimary.opacity(i == 2 ? 0.55 : 0.30))
+                    .frame(width: i == 2 ? 6 : 4, height: i == 2 ? 6 : 4)
+                    .rotationEffect(.degrees(45))
+            }
+            Rectangle()
+                .fill(DS.Color.textOnPrimary.opacity(0.16))
+                .frame(height: 1)
+        }
+        .padding(.horizontal, DS.Spacing.xl)
+        .padding(.bottom, DS.Spacing.xs)
+    }
+
     // MARK: - هيدر الرئيسية — شعار العائلة + شريط سدو زخرفي (خاص بالرئيسية فقط)
     private var homeHeader: some View {
         VStack(spacing: 0) {
@@ -802,7 +868,7 @@ struct HomeNewsView: View {
                         if notificationVM.unreadNotificationsCount > 0 {
                             Text(notificationVM.unreadNotificationsCount > 99
                                  ? "99+" : "\(notificationVM.unreadNotificationsCount)")
-                                .font(DS.Font.scaled(10, weight: .bold))
+                                .font(DS.Font.scaled(11, weight: .bold))
                                 .foregroundColor(.white)
                                 .padding(.horizontal, 5)
                                 .padding(.vertical, 2)
@@ -821,10 +887,8 @@ struct HomeNewsView: View {
             .frame(minHeight: isLandscape ? 46 : 70, alignment: .bottom)
 
             // الخط الفاصل السفلي — مطابق لبقية الواجهات
-            Rectangle()
-                .fill(DS.Color.headerBorder)
-                .frame(height: 1)
-                .opacity(0.55)
+            // شريط سدو زخرفي — يحلّ محل الخط الفاصل بلا زيادة ارتفاع تُذكر
+            saduStrip
         }
         .frame(maxWidth: .infinity)
         .background(DS.Color.gradientPrimary.ignoresSafeArea(edges: .top))
@@ -894,6 +958,11 @@ struct HomeNewsView: View {
             .padding(.horizontal, DS.Spacing.lg)
             .padding(.vertical, DS.Spacing.md)
             .frame(maxWidth: .infinity, alignment: .leading)
+            // إطار خفيف جداً يحدّد المربّع بلا ما يثقله
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
+                    .strokeBorder(DS.Color.textTertiary.opacity(0.12), lineWidth: 1)
+            )
         }
         .buttonStyle(DSScaleButtonStyle())
     }
@@ -972,7 +1041,7 @@ struct HomeNewsView: View {
                     .lineLimit(1)
             }
             Text(label)
-                .font(DS.Font.scaled(10, weight: .medium))
+                .font(DS.Font.scaled(11, weight: .medium))
                 .foregroundColor(DS.Color.textSecondary)
                 .lineLimit(1)
         }
@@ -1001,7 +1070,7 @@ struct HomeNewsView: View {
                     .minimumScaleFactor(0.85)
                 Spacer(minLength: 0)
                 Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
-                    .font(DS.Font.scaled(10, weight: .bold))
+                    .font(DS.Font.scaled(11, weight: .bold))
                     .foregroundColor(DS.Color.textTertiary)
             }
             .padding(.horizontal, DS.Spacing.md)
@@ -1017,7 +1086,7 @@ struct HomeNewsView: View {
     // مربع الأخبار: هيدر بأيقونة بتدرّج + معاينات بـ avatars + "عرض الكل"
     private var newsBentoCard: some View {
         Button {
-            withAnimation(DS.Anim.snappy) { activeSubPage = .news }
+            activeSubPage = .news
         } label: {
             VStack(alignment: .leading, spacing: DS.Spacing.md) {
                 HStack(alignment: .center, spacing: DS.Spacing.sm) {
@@ -1029,7 +1098,7 @@ struct HomeNewsView: View {
                             .foregroundColor(DS.Color.textPrimary)
                         if !newsVM.allNews.isEmpty {
                             Text("\(newsVM.allNews.count) " + L10n.t("منشور", "POSTS"))
-                                .font(DS.Font.scaled(10, weight: .heavy))
+                                .font(DS.Font.scaled(11, weight: .heavy))
                                 .foregroundColor(DS.Color.textSecondary)
                                 .tracking(0.6)
                         }
@@ -1177,14 +1246,14 @@ struct HomeNewsView: View {
 
                 HStack(spacing: 4) {
                     Text(displayName)
-                        .font(DS.Font.scaled(9, weight: isAdminIdentity ? .bold : .medium))
+                        .font(DS.Font.scaled(11, weight: isAdminIdentity ? .bold : .medium))
                         .foregroundColor(isAdminIdentity ? DS.Color.primary : DS.Color.textSecondary)
                         .lineLimit(1)
                     Text("•")
-                        .font(DS.Font.scaled(9))
+                        .font(DS.Font.scaled(11))
                         .foregroundColor(DS.Color.textTertiary)
                     Text(getRelativeTime(for: news.timestamp))
-                        .font(DS.Font.scaled(9))
+                        .font(DS.Font.scaled(11))
                         .foregroundColor(DS.Color.textTertiary)
                         .lineLimit(1)
 
@@ -1218,10 +1287,10 @@ struct HomeNewsView: View {
     private func previewMetaChip(icon: String, value: Int?) -> some View {
         HStack(spacing: 2) {
             Image(systemName: icon)
-                .font(DS.Font.scaled(8, weight: .bold))
+                .font(DS.Font.scaled(11, weight: .bold))
             if let value {
                 Text("\(value)")
-                    .font(DS.Font.scaled(9, weight: .bold))
+                    .font(DS.Font.scaled(11, weight: .bold))
             }
         }
         .foregroundColor(DS.Color.textTertiary)
@@ -1315,7 +1384,7 @@ struct HomeNewsView: View {
                             .font(DS.Font.scaled(18, weight: .bold))
                             .foregroundColor(DS.Color.textPrimary)
                         Text(L10n.t("نظرة سريعة على الطلبات والنشاط", "Quick overview"))
-                            .font(DS.Font.scaled(10, weight: .heavy))
+                            .font(DS.Font.scaled(11, weight: .heavy))
                             .foregroundColor(DS.Color.textSecondary)
                             .tracking(0.6)
                     }
@@ -1445,7 +1514,7 @@ struct HomeNewsView: View {
                     .lineLimit(1)
             }
             Text(label)
-                .font(DS.Font.scaled(10, weight: .medium))
+                .font(DS.Font.scaled(11, weight: .medium))
                 .foregroundColor(DS.Color.textSecondary)
                 .lineLimit(1)
         }
@@ -1472,7 +1541,7 @@ struct HomeNewsView: View {
                     .lineLimit(1)
                 if !item.subtitle.isEmpty {
                     Text(item.subtitle)
-                        .font(DS.Font.scaled(10, weight: .medium))
+                        .font(DS.Font.scaled(11, weight: .medium))
                         .foregroundColor(DS.Color.textSecondary)
                         .lineLimit(1)
                 }
@@ -1481,7 +1550,7 @@ struct HomeNewsView: View {
             Spacer(minLength: DS.Spacing.sm)
 
             Text(getRelativeTime(for: item.date))
-                .font(DS.Font.scaled(9))
+                .font(DS.Font.scaled(11))
                 .foregroundColor(DS.Color.textTertiary)
                 .lineLimit(1)
         }
@@ -1690,7 +1759,7 @@ struct HomeNewsView: View {
         } label: {
             HStack(spacing: 4) {
                 Image(systemName: icon)
-                    .font(DS.Font.scaled(9, weight: .bold))
+                    .font(DS.Font.scaled(11, weight: .bold))
                 Text(label)
                     .font(DS.Font.scaled(11, weight: .bold))
             }
@@ -1715,16 +1784,12 @@ struct HomeNewsView: View {
                 ) {
                     ForEach(filteredNews) { news in
                         newsCard(for: news)
-                            .opacity(appeared ? 1 : 0)
-                            .offset(y: appeared ? 0 : 20)
                     }
                 }
             } else {
                 LazyVStack(spacing: DS.Spacing.lg) {
                     ForEach(filteredNews) { news in
                         newsCard(for: news)
-                            .opacity(appeared ? 1 : 0)
-                            .offset(y: appeared ? 0 : 20)
                             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                                 if authVM.canDeleteNews {
                                     Button(role: .destructive) {
@@ -1903,5 +1968,16 @@ struct HeaderIconView: View {
             .background(color.opacity(0.12))
             .clipShape(Circle())
             .overlay(Circle().stroke(color.opacity(0.15), lineWidth: 1))
+    }
+}
+
+/// يمنع الارتداد المطّاطي على الأجهزة التي تدعمه، ويتجاهله على iOS 16.0–16.3
+private struct NoBounceIfAvailable: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 16.4, *) {
+            content.scrollBounceBehavior(.basedOnSize)
+        } else {
+            content
+        }
     }
 }

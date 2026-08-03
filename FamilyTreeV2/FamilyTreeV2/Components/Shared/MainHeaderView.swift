@@ -180,7 +180,7 @@ struct MainHeaderView<TrailingContent: View>: View {
 
                                 if notificationVM.unreadNotificationsCount > 0 {
                                     Text(notificationVM.unreadNotificationsCount > 99 ? "99+" : "\(notificationVM.unreadNotificationsCount)")
-                                        .font(DS.Font.scaled(10, weight: .bold))
+                                        .font(DS.Font.scaled(11, weight: .bold))
                                         .foregroundColor(.white)
                                         .padding(.horizontal, 5)
                                         .padding(.vertical, 2)
@@ -205,10 +205,23 @@ struct MainHeaderView<TrailingContent: View>: View {
             .padding(.top, isLandscape ? DS.Spacing.xs : 0)
             .frame(minHeight: isLandscape ? 46 : 70, alignment: .bottom)
 
-            Rectangle()
-                .fill(DS.Color.headerBorder)
-                .frame(height: 1)
-                .opacity(0.55)
+            // شريط سدو زخرفي — نفس هوية الرئيسية على كل الواجهات
+            HStack(spacing: 5) {
+                Rectangle()
+                    .fill(DS.Color.textOnPrimary.opacity(0.16))
+                    .frame(height: 1)
+                ForEach(0..<5, id: \.self) { i in
+                    Rectangle()
+                        .fill(DS.Color.textOnPrimary.opacity(i == 2 ? 0.55 : 0.30))
+                        .frame(width: i == 2 ? 6 : 4, height: i == 2 ? 6 : 4)
+                        .rotationEffect(.degrees(45))
+                }
+                Rectangle()
+                    .fill(DS.Color.textOnPrimary.opacity(0.16))
+                    .frame(height: 1)
+            }
+            .padding(.horizontal, DS.Spacing.xl)
+            .padding(.bottom, DS.Spacing.xs)
         }
         .background(headerBackground)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)

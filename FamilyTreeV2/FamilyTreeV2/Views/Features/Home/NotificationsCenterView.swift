@@ -176,6 +176,67 @@ struct NotificationsCenterView: View {
         return Self.fullDateFormatter.string(from: date)
     }
 
+    // MARK: - الهيدر — بهوية الرئيسية
+
+    private var notificationsHeader: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: DS.Spacing.md) {
+                Button { dismiss() } label: {
+                    ZStack {
+                        Circle().fill(DS.Color.overlayIcon)
+                        Circle().strokeBorder(DS.Color.overlayIconBorder, lineWidth: 1)
+                        Image(systemName: L10n.isArabic ? "chevron.forward" : "chevron.backward")
+                            .font(DS.Font.scaled(15, weight: .bold))
+                            .foregroundColor(DS.Color.textOnPrimary)
+                    }
+                    .frame(width: 40, height: 40)
+                }
+                .buttonStyle(BounceButtonStyle())
+                .accessibilityLabel(L10n.t("رجوع", "Back"))
+
+                ZStack {
+                    Circle().fill(DS.Color.overlayIcon)
+                    Circle().strokeBorder(DS.Color.overlayIconBorder, lineWidth: 1)
+                    Image(systemName: "bell.fill")
+                        .font(DS.Font.scaled(17, weight: .semibold))
+                        .foregroundColor(DS.Color.textOnPrimary)
+                }
+                .frame(width: 46, height: 46)
+
+                Text(L10n.t("الإشعارات", "Notifications"))
+                    .font(DS.Font.plex(19, weight: .bold))
+                    .foregroundColor(DS.Color.textOnPrimary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, DS.Spacing.lg)
+            .padding(.bottom, DS.Spacing.sm)
+            .frame(minHeight: 70, alignment: .bottom)
+
+            // شريط سدو زخرفي
+            HStack(spacing: 5) {
+                Rectangle()
+                    .fill(DS.Color.textOnPrimary.opacity(0.16))
+                    .frame(height: 1)
+                ForEach(0..<5, id: \.self) { i in
+                    Rectangle()
+                        .fill(DS.Color.textOnPrimary.opacity(i == 2 ? 0.55 : 0.30))
+                        .frame(width: i == 2 ? 6 : 4, height: i == 2 ? 6 : 4)
+                        .rotationEffect(.degrees(45))
+                }
+                Rectangle()
+                    .fill(DS.Color.textOnPrimary.opacity(0.16))
+                    .frame(height: 1)
+            }
+            .padding(.horizontal, DS.Spacing.xl)
+            .padding(.bottom, DS.Spacing.xs)
+        }
+        .frame(maxWidth: .infinity)
+        .background(DS.Color.gradientPrimary.ignoresSafeArea(edges: .top))
+    }
+
     // MARK: - Body
 
     var body: some View {
@@ -183,6 +244,8 @@ struct NotificationsCenterView: View {
             DS.Color.background.ignoresSafeArea()
 
             VStack(spacing: 0) {
+                notificationsHeader
+
                 // صفحتان — إشعاراتي + المستجدات (تحديثات وإعلانات) للجميع
                 do {
                     let visible = visibleNotifications
@@ -211,9 +274,7 @@ struct NotificationsCenterView: View {
                 }
             }
         }
-        .navigationTitle(L10n.t("الإشعارات", "Notifications"))
-        .navigationBarTitleDisplayMode(.inline)
-        .navigationBarBackButtonHidden(isSelecting)
+        .toolbar(.hidden, for: .navigationBar)
         .task {
             await notificationVM.fetchNotifications()
             // Deep-link من push خارجي لطلب انضمام: افتح شيت التفاصيل مباشرة
@@ -801,7 +862,7 @@ struct NotificationsCenterView: View {
                     HStack(spacing: DS.Spacing.sm) {
                         // التصنيف
                         Text(iconInfo.label)
-                            .font(DS.Font.scaled(10, weight: .bold))
+                            .font(DS.Font.scaled(11, weight: .bold))
                             .foregroundColor(isUnread ? iconInfo.color : DS.Color.textTertiary)
                             .padding(.horizontal, DS.Spacing.sm)
                             .padding(.vertical, 2)
@@ -822,9 +883,9 @@ struct NotificationsCenterView: View {
                             // «من فلان» — يوضّح للإدارة أن الإشعار يخصّ عضواً بعينه
                             HStack(spacing: 3) {
                                 Image(systemName: isAdminNotif ? "shield.fill" : "person.fill")
-                                    .font(DS.Font.scaled(8, weight: .bold))
+                                    .font(DS.Font.scaled(11, weight: .bold))
                                 Text(isAdminNotif ? creatorName : L10n.t("من \(creatorName)", "from \(creatorName)"))
-                                    .font(DS.Font.scaled(10, weight: .bold))
+                                    .font(DS.Font.scaled(11, weight: .bold))
                                     .lineLimit(1)
                             }
                             .foregroundColor(roleColor)
@@ -1185,7 +1246,7 @@ struct NotificationsCenterView: View {
 
                 // رقاقة الدور
                 Text(member.roleName)
-                    .font(DS.Font.scaled(10, weight: .bold))
+                    .font(DS.Font.scaled(11, weight: .bold))
                     .foregroundColor(member.roleColor)
                     .padding(.horizontal, DS.Spacing.sm)
                     .padding(.vertical, 2)
@@ -1270,9 +1331,9 @@ struct NotificationsCenterView: View {
                 // chip التصنيف
                 HStack(spacing: 4) {
                     Image(systemName: iconInfo.icon)
-                        .font(DS.Font.scaled(10, weight: .bold))
+                        .font(DS.Font.scaled(11, weight: .bold))
                     Text(iconInfo.label)
-                        .font(DS.Font.scaled(10, weight: .bold))
+                        .font(DS.Font.scaled(11, weight: .bold))
                 }
                 .foregroundColor(iconInfo.color)
                 .padding(.horizontal, DS.Spacing.sm)
@@ -1285,9 +1346,9 @@ struct NotificationsCenterView: View {
                 if isAdminSender {
                     HStack(spacing: 3) {
                         Image(systemName: "shield.lefthalf.filled")
-                            .font(DS.Font.scaled(9, weight: .bold))
+                            .font(DS.Font.scaled(11, weight: .bold))
                         Text(L10n.t("الإدارة", "Admin"))
-                            .font(DS.Font.scaled(10, weight: .bold))
+                            .font(DS.Font.scaled(11, weight: .bold))
                     }
                     .foregroundColor(DS.Color.primary)
                     .padding(.horizontal, DS.Spacing.sm)
@@ -1301,9 +1362,9 @@ struct NotificationsCenterView: View {
                 if let creator = actualCreator {
                     HStack(spacing: 3) {
                         Image(systemName: "person.fill")
-                            .font(DS.Font.scaled(9, weight: .bold))
+                            .font(DS.Font.scaled(11, weight: .bold))
                         Text(creator.shortFullName)
-                            .font(DS.Font.scaled(10, weight: .bold))
+                            .font(DS.Font.scaled(11, weight: .bold))
                             .lineLimit(1)
                             .truncationMode(.tail)
                     }
@@ -1324,7 +1385,7 @@ struct NotificationsCenterView: View {
                         .fill(notification.read ? DS.Color.textTertiary : DS.Color.primary)
                         .frame(width: 6, height: 6)
                     Text(notification.read ? L10n.t("مقروء", "Read") : L10n.t("جديد", "New"))
-                        .font(DS.Font.scaled(10, weight: .bold))
+                        .font(DS.Font.scaled(11, weight: .bold))
                         .foregroundColor(notification.read ? DS.Color.textTertiary : DS.Color.primary)
                 }
             }
@@ -1352,7 +1413,7 @@ struct NotificationsCenterView: View {
             // التاريخ والوقت الكامل (تذييل خفيف)
             HStack(spacing: 4) {
                 Image(systemName: "calendar")
-                    .font(DS.Font.scaled(10, weight: .semibold))
+                    .font(DS.Font.scaled(11, weight: .semibold))
                 Text(fullDateTime(date))
                     .font(DS.Font.scaled(11, weight: .medium))
             }
@@ -1432,7 +1493,7 @@ struct NotificationsCenterView: View {
 
                 // سهم
                 Image(systemName: L10n.isArabic ? "arrow.left" : "arrow.right")
-                    .font(DS.Font.scaled(9, weight: .bold))
+                    .font(DS.Font.scaled(11, weight: .bold))
                     .foregroundColor(DS.Color.textTertiary)
 
                 // قيمة بعد
@@ -1458,7 +1519,7 @@ struct NotificationsCenterView: View {
         HStack(spacing: 4) {
             if let icon {
                 Image(systemName: icon)
-                    .font(DS.Font.scaled(10, weight: .bold))
+                    .font(DS.Font.scaled(11, weight: .bold))
             }
             Text(text)
                 .font(DS.Font.scaled(11, weight: .bold))
@@ -1845,9 +1906,9 @@ struct NotificationsCenterView: View {
                 HStack(spacing: DS.Spacing.sm) {
                     HStack(spacing: 4) {
                         Image(systemName: "person.2.fill")
-                            .font(DS.Font.scaled(10, weight: .bold))
+                            .font(DS.Font.scaled(11, weight: .bold))
                         Text(L10n.t("تطابقات محتملة", "Possible Matches"))
-                            .font(DS.Font.scaled(10, weight: .bold))
+                            .font(DS.Font.scaled(11, weight: .bold))
                     }
                     .foregroundColor(iconInfo.color)
                     .padding(.horizontal, DS.Spacing.sm)
@@ -1966,9 +2027,9 @@ struct NotificationsCenterView: View {
             } label: {
                 HStack(spacing: 3) {
                     Image(systemName: "link")
-                        .font(DS.Font.scaled(9, weight: .bold))
+                        .font(DS.Font.scaled(11, weight: .bold))
                     Text(L10n.t("ربط", "Link"))
-                        .font(DS.Font.scaled(10, weight: .bold))
+                        .font(DS.Font.scaled(11, weight: .bold))
                 }
                 .foregroundColor(DS.Color.secondary)
                 .padding(.horizontal, DS.Spacing.sm)
