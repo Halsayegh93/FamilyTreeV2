@@ -143,7 +143,7 @@ struct BranchPickerSheet: View {
                         HStack(spacing: 4) {
                             if node.member.isDeceased == true {
                                 Image(systemName: "leaf.fill")
-                                    .font(DS.Font.scaled(9))
+                                    .font(DS.Font.scaled(11))
                                     .foregroundColor(DS.Color.textTertiary)
                             }
                             Text(node.displayName)

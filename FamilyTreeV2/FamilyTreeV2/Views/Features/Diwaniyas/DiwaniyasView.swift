@@ -299,7 +299,7 @@ struct DiwaniyasView: View {
                                     Image(systemName: "lock.fill")
                                         .font(DS.Font.caption2)
                                     Text(L10n.t("مغلقة", "Closed"))
-                                        .font(DS.Font.scaled(10, weight: .bold))
+                                        .font(DS.Font.scaled(11, weight: .bold))
                                 }
                                 .foregroundColor(DS.Color.textOnPrimary)
                                 .padding(.horizontal, DS.Spacing.sm)
@@ -770,7 +770,7 @@ private struct AddDiwaniyaRequestView: View {
     private func compactHeader(_ title: String, icon: String, color: Color) -> some View {
         HStack(spacing: 5) {
             Image(systemName: icon)
-                .font(DS.Font.scaled(10, weight: .bold))
+                .font(DS.Font.scaled(11, weight: .bold))
                 .foregroundColor(color)
             Text(title)
                 .font(DS.Font.scaled(11, weight: .bold))

@@ -927,7 +927,7 @@ struct MemberDetailsView: View {
                         .frame(width: 14, height: 14)
                         .overlay(
                             Image(systemName: "heart.slash.fill")
-                                .font(DS.Font.scaled(8, weight: .bold))
+                                .font(DS.Font.scaled(11, weight: .bold))
                                 .foregroundColor(DS.Color.textTertiary)
                         )
                         .offset(x: 15, y: 15)

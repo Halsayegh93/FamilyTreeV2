@@ -161,8 +161,8 @@ private struct GalleryAlbumCard: View {
 
                 // عدّاد الصور
                 HStack(spacing: 3) {
-                    Image(systemName: "photo.fill").font(DS.Font.scaled(8, weight: .bold))
-                    Text("\(photoCount)").font(DS.Font.scaled(10, weight: .black))
+                    Image(systemName: "photo.fill").font(DS.Font.scaled(11, weight: .bold))
+                    Text("\(photoCount)").font(DS.Font.scaled(11, weight: .black))
                 }
                 .foregroundColor(.white)
                 .padding(.horizontal, 7)
@@ -174,8 +174,8 @@ private struct GalleryAlbumCard: View {
             .overlay(alignment: .topTrailing) {
                 if album.isHidden {
                     HStack(spacing: 3) {
-                        Image(systemName: "eye.slash.fill").font(DS.Font.scaled(8, weight: .bold))
-                        Text(L10n.t("مخفي", "Hidden")).font(DS.Font.scaled(9, weight: .bold))
+                        Image(systemName: "eye.slash.fill").font(DS.Font.scaled(11, weight: .bold))
+                        Text(L10n.t("مخفي", "Hidden")).font(DS.Font.scaled(11, weight: .bold))
                     }
                     .foregroundColor(.white)
                     .padding(.horizontal, 6).padding(.vertical, 3)
@@ -193,8 +193,8 @@ private struct GalleryAlbumCard: View {
                     .multilineTextAlignment(.leading)
                 if let year = album.year {
                     HStack(spacing: 3) {
-                        Image(systemName: "calendar").font(DS.Font.scaled(9, weight: .bold))
-                        Text(String(year)).font(DS.Font.scaled(10, weight: .bold))
+                        Image(systemName: "calendar").font(DS.Font.scaled(11, weight: .bold))
+                        Text(String(year)).font(DS.Font.scaled(11, weight: .bold))
                     }
                     .foregroundColor(DS.Color.primary)
                     .padding(.horizontal, 6).padding(.vertical, 2)

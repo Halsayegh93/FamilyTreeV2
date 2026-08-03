@@ -742,7 +742,7 @@ struct DSMultiPhotoPicker: View {
                             Image(systemName: "plus")
                                 .font(DS.Font.scaled(16, weight: .bold))
                             Text(L10n.t("إضافة", "Add"))
-                                .font(DS.Font.scaled(9, weight: .medium))
+                                .font(DS.Font.scaled(11, weight: .medium))
                         }
                         .foregroundColor(DS.Color.primary)
                         .frame(width: 56, height: 56)

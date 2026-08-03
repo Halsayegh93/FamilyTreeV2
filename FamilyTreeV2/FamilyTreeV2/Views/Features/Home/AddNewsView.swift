@@ -172,14 +172,14 @@ struct AddNewsView: View {
                 .frame(height: 34)
 
                 Text(isAdmin ? L10n.t("إدارة العائلة", "Family Admin") : myName)
-                    .font(DS.Font.scaled(10, weight: .bold))
+                    .font(DS.Font.scaled(11, weight: .bold))
                     .foregroundColor(selected ? DS.Color.primary : DS.Color.textSecondary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
 
                 Text(isAdmin ? L10n.t("منشور رسمي", "Official post")
                              : L10n.t("منشور شخصي", "Personal post"))
-                    .font(DS.Font.scaled(8))
+                    .font(DS.Font.scaled(11))
                     .foregroundColor(DS.Color.textTertiary)
                     .lineLimit(1)
             }

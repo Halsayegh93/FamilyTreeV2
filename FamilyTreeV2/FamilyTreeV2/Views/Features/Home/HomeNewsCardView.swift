@@ -137,9 +137,9 @@ struct HomeNewsCardView: View {
 
                         HStack(spacing: 3) {
                             Image(systemName: NewsTypeHelper.icon(for: type))
-                                .font(DS.Font.scaled(8, weight: .bold))
+                                .font(DS.Font.scaled(11, weight: .bold))
                             Text(NewsTypeHelper.displayName(for: type))
-                                .font(DS.Font.scaled(9, weight: .semibold))
+                                .font(DS.Font.scaled(11, weight: .semibold))
                         }
                         .foregroundColor(isAdminIdentityPost ? .white : typeColor)
                         .padding(.horizontal, 6)
@@ -319,7 +319,7 @@ struct HomeNewsCardView: View {
 
             if totalPollVotes > 0 {
                 Text(L10n.t("\(totalPollVotes) صوت", "\(totalPollVotes) votes"))
-                    .font(DS.Font.scaled(9.5))
+                    .font(DS.Font.scaled(11))
                     .foregroundColor(DS.Color.textTertiary)
                     .padding(.top, 1)
             }
@@ -386,7 +386,7 @@ struct HomeNewsCardView: View {
     private var timeStamp: some View {
         HStack(spacing: 3) {
             Image(systemName: "clock")
-                .font(DS.Font.scaled(10))
+                .font(DS.Font.scaled(11))
             Text(time)
                 .font(DS.Font.caption2)
         }

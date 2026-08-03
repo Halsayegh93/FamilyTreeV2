@@ -742,7 +742,7 @@ struct TreeView: View {
             withAnimation(DS.Anim.snappy) { treeTab.wrappedValue = idx }
         } label: {
             Text(title)
-                .font(DS.Font.scaled(10, weight: .bold))
+                .font(DS.Font.scaled(11, weight: .bold))
                 .foregroundColor(treeTab.wrappedValue == idx ? DS.Color.textOnPrimary : DS.Color.textSecondary)
                 .padding(.horizontal, 5)
                 .frame(minWidth: 40, minHeight: 20)
@@ -1500,7 +1500,7 @@ struct TreeMemberNode: View {
                     // علامة "أنت هنا" — overlay لا يأثر على الـ layout
                     if isCurrentLocationMember {
                         Text(L10n.t("أنت هنا", "You"))
-                            .font(DS.Font.scaled(10, weight: .bold))
+                            .font(DS.Font.scaled(11, weight: .bold))
                             .foregroundColor(DS.Color.textOnPrimary)
                             .padding(.horizontal, DS.Spacing.sm)
                             .padding(.vertical, 3)

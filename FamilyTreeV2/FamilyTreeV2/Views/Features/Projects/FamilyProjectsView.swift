@@ -409,7 +409,7 @@ struct FamilyProjectsView: View {
             Text(title).font(DS.Font.scaled(13, weight: .bold)).foregroundColor(.white)
             if count > 0 {
                 Text("\(count)")
-                    .font(DS.Font.scaled(10, weight: .black))
+                    .font(DS.Font.scaled(11, weight: .black))
                     .foregroundColor(.white)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 1)
@@ -433,7 +433,7 @@ struct FamilyProjectsView: View {
                     .overlay(Circle().strokeBorder(color.opacity(0.20), lineWidth: 1))
                 if count > 0 {
                     Text("\(count)")
-                        .font(DS.Font.scaled(9, weight: .black))
+                        .font(DS.Font.scaled(11, weight: .black))
                         .foregroundColor(.white)
                         .frame(minWidth: 16, minHeight: 16)
                         .padding(.horizontal, 3)
@@ -550,9 +550,9 @@ struct FamilyProjectsView: View {
 
                 HStack(spacing: 4) {
                     Image(systemName: "person.fill")
-                        .font(DS.Font.scaled(8, weight: .bold))
+                        .font(DS.Font.scaled(11, weight: .bold))
                     Text(project.ownerName)
-                        .font(DS.Font.scaled(10, weight: .semibold))
+                        .font(DS.Font.scaled(11, weight: .semibold))
                         .lineLimit(1)
                 }
                 .foregroundColor(DS.Color.textSecondary)
@@ -577,8 +577,8 @@ struct FamilyProjectsView: View {
         .overlay(alignment: .topTrailing) {
             if project.approvalStatus == "pending" {
                 HStack(spacing: 3) {
-                    Image(systemName: "clock.fill").font(DS.Font.scaled(9, weight: .bold))
-                    Text(L10n.t("بانتظار", "Pending")).font(DS.Font.scaled(9, weight: .bold))
+                    Image(systemName: "clock.fill").font(DS.Font.scaled(11, weight: .bold))
+                    Text(L10n.t("بانتظار", "Pending")).font(DS.Font.scaled(11, weight: .bold))
                 }
                 .foregroundColor(.white)
                 .padding(.horizontal, 6).padding(.vertical, 3)
@@ -586,8 +586,8 @@ struct FamilyProjectsView: View {
                 .padding(DS.Spacing.sm)
             } else if project.isHidden {
                 HStack(spacing: 3) {
-                    Image(systemName: "eye.slash.fill").font(DS.Font.scaled(9, weight: .bold))
-                    Text(L10n.t("مخفي", "Hidden")).font(DS.Font.scaled(9, weight: .bold))
+                    Image(systemName: "eye.slash.fill").font(DS.Font.scaled(11, weight: .bold))
+                    Text(L10n.t("مخفي", "Hidden")).font(DS.Font.scaled(11, weight: .bold))
                 }
                 .foregroundColor(.white)
                 .padding(.horizontal, 6).padding(.vertical, 3)
@@ -613,7 +613,7 @@ struct FamilyProjectsView: View {
 
     private func socialDot(icon: String, color: Color) -> some View {
         Image(systemName: icon)
-            .font(DS.Font.scaled(8, weight: .bold))
+            .font(DS.Font.scaled(11, weight: .bold))
             .foregroundColor(color)
             .frame(width: 16, height: 16)
             .background(Circle().fill(color.opacity(0.15)))

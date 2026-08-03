@@ -497,7 +497,7 @@ struct FamilyArchiveView: View {
                 .lineLimit(1)
             if count > 0 {
                 Text("\(count)")
-                    .font(DS.Font.scaled(10, weight: .black))
+                    .font(DS.Font.scaled(11, weight: .black))
                     .foregroundColor(.white)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 1)
@@ -535,7 +535,7 @@ struct FamilyArchiveView: View {
                 // عدّاد صغير غير مزعج — يظهر فقط لو > 0
                 if count > 0 {
                     Text("\(count)")
-                        .font(DS.Font.scaled(9, weight: .black))
+                        .font(DS.Font.scaled(11, weight: .black))
                         .foregroundColor(.white)
                         .frame(minWidth: 16, minHeight: 16)
                         .padding(.horizontal, 3)
@@ -558,7 +558,7 @@ struct FamilyArchiveView: View {
                 .font(.system(size: 36, weight: .light))
                 .foregroundColor(DS.Color.primary.opacity(0.85))
             Text("PDF")
-                .font(DS.Font.scaled(10, weight: .black))
+                .font(DS.Font.scaled(11, weight: .black))
                 .foregroundColor(DS.Color.primary)
                 .padding(.horizontal, 6)
                 .padding(.vertical, 1)
@@ -690,9 +690,9 @@ struct FamilyArchiveView: View {
                     if item.isPDF {
                         HStack(spacing: 3) {
                             Image(systemName: "doc.text.fill")
-                                .font(DS.Font.scaled(8, weight: .bold))
+                                .font(DS.Font.scaled(11, weight: .bold))
                             Text("PDF")
-                                .font(DS.Font.scaled(9, weight: .black))
+                                .font(DS.Font.scaled(11, weight: .black))
                         }
                         .foregroundColor(.white)
                         .padding(.horizontal, 6)
@@ -738,9 +738,9 @@ struct FamilyArchiveView: View {
                 if let year = item.year {
                     HStack(spacing: 3) {
                         Image(systemName: "calendar")
-                            .font(DS.Font.scaled(9, weight: .bold))
+                            .font(DS.Font.scaled(11, weight: .bold))
                         Text(String(year))
-                            .font(DS.Font.scaled(10, weight: .bold))
+                            .font(DS.Font.scaled(11, weight: .bold))
                     }
                     .foregroundColor(item.category.accentColor)
                     .padding(.horizontal, 6)
@@ -752,9 +752,9 @@ struct FamilyArchiveView: View {
                 if let uploaderName = uploaderName(for: item) {
                     HStack(spacing: 2) {
                         Image(systemName: "person.fill")
-                            .font(DS.Font.scaled(7, weight: .bold))
+                            .font(DS.Font.scaled(11, weight: .bold))
                         Text(uploaderName)
-                            .font(DS.Font.scaled(8, weight: .medium))
+                            .font(DS.Font.scaled(11, weight: .medium))
                             .lineLimit(1)
                     }
                     .foregroundColor(DS.Color.textTertiary)
@@ -797,8 +797,8 @@ struct FamilyArchiveView: View {
     /// شارة حالة موحّدة (capsule صغيرة بأيقونة + نص).
     private func statusBadge(icon: String, label: String, color: Color) -> some View {
         HStack(spacing: 3) {
-            Image(systemName: icon).font(DS.Font.scaled(9, weight: .bold))
-            Text(label).font(DS.Font.scaled(9, weight: .bold))
+            Image(systemName: icon).font(DS.Font.scaled(11, weight: .bold))
+            Text(label).font(DS.Font.scaled(11, weight: .bold))
         }
         .foregroundColor(.white)
         .padding(.horizontal, 6)
@@ -1102,7 +1102,7 @@ struct ArchiveUploadSheet: View {
                         .lineLimit(1)
                     Spacer(minLength: 2)
                     Image(systemName: "chevron.up.chevron.down")
-                        .font(DS.Font.scaled(10, weight: .bold))
+                        .font(DS.Font.scaled(11, weight: .bold))
                         .foregroundColor(DS.Color.textTertiary)
                 }
             }
@@ -1300,7 +1300,7 @@ struct ArchiveEditSheet: View {
                         .lineLimit(1)
                     Spacer(minLength: 2)
                     Image(systemName: "chevron.up.chevron.down")
-                        .font(DS.Font.scaled(10, weight: .bold))
+                        .font(DS.Font.scaled(11, weight: .bold))
                         .foregroundColor(DS.Color.textTertiary)
                 }
             }
@@ -1379,7 +1379,7 @@ struct ArchiveItemViewer: View {
                         Spacer(minLength: 0)
                         if let year = item.year {
                             HStack(spacing: 3) {
-                                Image(systemName: "calendar").font(DS.Font.scaled(10, weight: .bold))
+                                Image(systemName: "calendar").font(DS.Font.scaled(11, weight: .bold))
                                 Text(String(year)).font(DS.Font.scaled(11, weight: .bold))
                             }
                             .foregroundColor(item.category.accentColor)
@@ -1397,7 +1397,7 @@ struct ArchiveItemViewer: View {
                     if let uploaderName, !uploaderName.isEmpty {
                         HStack(spacing: 4) {
                             Image(systemName: "person.crop.circle.fill")
-                                .font(DS.Font.scaled(10, weight: .bold))
+                                .font(DS.Font.scaled(11, weight: .bold))
                             Text(L10n.t("أضافه: ", "Added by: ") + uploaderName)
                                 .font(DS.Font.scaled(11, weight: .semibold))
                                 .lineLimit(1)
@@ -1520,7 +1520,7 @@ private struct PDFThumbnailView: View {
                         .font(.system(size: 36, weight: .light))
                         .foregroundColor(DS.Color.primary.opacity(0.85))
                     Text("PDF")
-                        .font(DS.Font.scaled(10, weight: .black))
+                        .font(DS.Font.scaled(11, weight: .black))
                         .foregroundColor(DS.Color.primary)
                         .padding(.horizontal, 6).padding(.vertical, 1)
                         .background(Capsule().fill(DS.Color.primary.opacity(0.15)))

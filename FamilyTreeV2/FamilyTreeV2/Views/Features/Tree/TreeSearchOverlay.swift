@@ -257,7 +257,7 @@ struct TreeSearchOverlay: View {
                             Button(action: { searchText = query }) {
                                 HStack(spacing: DS.Spacing.xs) {
                                     Image(systemName: "clock.arrow.circlepath")
-                                        .font(DS.Font.scaled(10, weight: .regular))
+                                        .font(DS.Font.scaled(11, weight: .regular))
                                     Text(query)
                                         .font(DS.Font.caption1)
                                 }
@@ -539,7 +539,7 @@ struct TreeSearchOverlay: View {
             Button { branchPickerOpen = true } label: {
                 HStack(spacing: 4) {
                     Image(systemName: "tree.fill")
-                        .font(DS.Font.scaled(10, weight: .bold))
+                        .font(DS.Font.scaled(11, weight: .bold))
                     Text(m.firstName)
                         .font(DS.Font.scaled(12, weight: .bold))
                         .lineLimit(1)
@@ -619,7 +619,7 @@ struct TreeSearchOverlay: View {
                                 .frame(width: 16, height: 16)
                                 .overlay(
                                     Image(systemName: "heart.slash.fill")
-                                        .font(DS.Font.scaled(8, weight: .bold))
+                                        .font(DS.Font.scaled(11, weight: .bold))
                                         .foregroundColor(DS.Color.textOnPrimary)
                                 )
                         }
@@ -637,7 +637,7 @@ struct TreeSearchOverlay: View {
                 HStack(spacing: DS.Spacing.xs) {
                     if result.member.isDeceased ?? false {
                         Text(L10n.t("متوفى", "Deceased"))
-                            .font(DS.Font.scaled(9, weight: .medium))
+                            .font(DS.Font.scaled(11, weight: .medium))
                             .foregroundColor(DS.Color.deceased)
                             .padding(.horizontal, DS.Spacing.xs)
                             .padding(.vertical, 2)
@@ -647,7 +647,7 @@ struct TreeSearchOverlay: View {
 
                     if let context = result.matchContext {
                         Text(context)
-                            .font(DS.Font.scaled(9, weight: .medium))
+                            .font(DS.Font.scaled(11, weight: .medium))
                             .foregroundColor(DS.Color.info)
                             .padding(.horizontal, DS.Spacing.xs)
                             .padding(.vertical, 2)

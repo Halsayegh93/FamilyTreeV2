@@ -963,10 +963,11 @@ struct DSSectionHeader: View {
                 .clipShape(Capsule())
 
                 if let trailing {
+                    // تلميح ثانوي — لا ينافس عنوان القسم في اللون ولا الحجم
                     Text(trailing)
-                        .font(DS.Font.caption1)
-                        .foregroundColor(DS.Color.primary)
-                        .fontWeight(.bold)
+                        .font(DS.Font.caption2)
+                        .fontWeight(.semibold)
+                        .foregroundColor(DS.Color.textTertiary)
                 }
 
                 Spacer()

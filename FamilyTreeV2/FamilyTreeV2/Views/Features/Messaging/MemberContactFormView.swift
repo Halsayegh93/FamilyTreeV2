@@ -33,7 +33,12 @@ struct MemberContactFormView: View {
             }
         }
         .animation(DS.Anim.smooth, value: didSend)
+        .sheet(isPresented: $showAbout) {
+            AboutFamilySheet()
+        }
     }
+
+    @State private var showAbout = false
 
     // MARK: - حالة الإدخال
     private var formState: some View {
@@ -55,7 +60,6 @@ struct MemberContactFormView: View {
                                 errorBanner(err)
                             }
                             sendButton
-                            AboutFamilySection()
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                     }
@@ -76,8 +80,8 @@ struct MemberContactFormView: View {
                         sendButton
                             .padding(.top, DS.Spacing.xs)
 
-                        // «من نحن» جزء من نفس الشاشة — بلا تبويبات (طلب المالك)
-                        AboutFamilySection()
+                        // «من نحن» انتقل لشاشته الخاصة — غرض واحد لكل شاشة
+                        aboutLinkRow
 
                         Spacer(minLength: DS.Spacing.xxl)
                     }
@@ -87,6 +91,45 @@ struct MemberContactFormView: View {
             .padding(.top, DS.Spacing.md)
             .padding(.bottom, DS.Spacing.xxxxl)
         }
+    }
+
+    // MARK: - صف «عن التطبيق»
+    private var aboutLinkRow: some View {
+        Button { showAbout = true } label: {
+            HStack(spacing: DS.Spacing.md) {
+                ZStack {
+                    Circle().fill(DS.Color.primary.opacity(0.12))
+                    Image(systemName: "info.circle.fill")
+                        .font(DS.Font.scaled(14, weight: .semibold))
+                        .foregroundColor(DS.Color.primary)
+                }
+                .frame(width: 34, height: 34)
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(L10n.t("عن التطبيق", "About the app"))
+                        .font(DS.Font.scaled(13, weight: .bold))
+                        .foregroundColor(DS.Color.textPrimary)
+                    Text(L10n.t("الهدف والمزايا وفريق الإدارة", "Purpose, features & team"))
+                        .font(DS.Font.scaled(12))
+                        .foregroundColor(DS.Color.textSecondary)
+                }
+
+                Spacer(minLength: 0)
+
+                Image(systemName: "chevron.forward")
+                    .font(DS.Font.scaled(14, weight: .bold))
+                    .foregroundColor(DS.Color.textTertiary)
+            }
+            .padding(DS.Spacing.md)
+            .background(DS.Color.surface)
+            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                    .strokeBorder(DS.Color.textTertiary.opacity(0.10), lineWidth: 1)
+            )
+        }
+        .buttonStyle(DSScaleButtonStyle())
+        .padding(.top, DS.Spacing.sm)
     }
 
     // MARK: - بانر بهوية الهيدر
@@ -105,7 +148,7 @@ struct MemberContactFormView: View {
                     .foregroundColor(.white)
                 Text(L10n.t("اختر التصنيف واكتب رسالتك — يصلك الرد بأقرب وقت.",
                             "Pick a category and write your message — you'll get a reply soon."))
-                    .font(DS.Font.scaled(10))
+                    .font(DS.Font.scaled(12))
                     .foregroundColor(SwiftUI.Color.white.opacity(0.85))
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -128,11 +171,11 @@ struct MemberContactFormView: View {
         )
     }
 
-    /// عنوان قسم موحّد — أيقونة صغيرة + نص عريض
-    private func sectionLabel(_ title: String, icon: String) -> some View {
+    /// عنوان قسم قديم — باقٍ لحقل الإيميل فقط
+    private func legacyContactLabel(_ title: String, icon: String) -> some View {
         HStack(spacing: 5) {
             Image(systemName: icon)
-                .font(DS.Font.scaled(10, weight: .bold))
+                .font(DS.Font.scaled(12, weight: .bold))
                 .foregroundColor(DS.Color.primary.opacity(0.75))
             Text(title)
                 .font(DS.Font.caption1)
@@ -143,17 +186,22 @@ struct MemberContactFormView: View {
 
     // MARK: - اختيار التصنيف
     private var categoryPicker: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            sectionLabel(L10n.t("التصنيف", "Category"), icon: "square.grid.2x2.fill")
-
+        DSCard(padding: 0) {
+            DSSectionHeader(
+                title: L10n.t("التصنيف", "Category"),
+                icon: "square.grid.2x2.fill",
+                iconColor: DS.Color.primary
+            )
             LazyVGrid(
-                columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 2),
-                spacing: 6
+                columns: Array(repeating: GridItem(.flexible(), spacing: DS.Spacing.sm), count: 2),
+                spacing: DS.Spacing.sm
             ) {
                 ForEach(ContactCategory.allCases, id: \.self) { cat in
                     categoryChip(cat)
                 }
             }
+            .padding(.horizontal, DS.Spacing.lg)
+            .padding(.bottom, DS.Spacing.md)
         }
     }
 
@@ -162,22 +210,20 @@ struct MemberContactFormView: View {
         return Button {
             withAnimation(DS.Anim.quick) { selectedCategory = cat }
         } label: {
-            HStack(spacing: 5) {
+            HStack(spacing: DS.Spacing.xs) {
                 Image(systemName: cat.icon)
-                    .font(DS.Font.scaled(11, weight: .bold))
-                    .foregroundColor(selected ? .white : cat.color)
-                    .frame(width: 22, height: 22)
-                    .background(selected ? cat.color : cat.color.opacity(0.12))
-                    .clipShape(Circle())
+                    .font(DS.Font.scaled(12, weight: .semibold))
+                    .foregroundColor(selected ? cat.color : DS.Color.textTertiary)
 
                 Text(cat.title)
-                    .font(DS.Font.scaled(11, weight: selected ? .bold : .semibold))
+                    .font(DS.Font.caption1)
+                    .fontWeight(selected ? .bold : .semibold)
                     .foregroundColor(selected ? cat.color : DS.Color.textSecondary)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.75)
+                    .minimumScaleFactor(0.8)
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 6)
+            .padding(.vertical, DS.Spacing.sm)
             .background(selected ? cat.color.opacity(0.08) : DS.Color.surface)
             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
             .overlay(
@@ -191,8 +237,12 @@ struct MemberContactFormView: View {
 
     // MARK: - حقل الرسالة
     private var messageField: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            sectionLabel(L10n.t("الرسالة", "Message"), icon: "text.alignright")
+        DSCard(padding: 0) {
+            DSSectionHeader(
+                title: L10n.t("الرسالة", "Message"),
+                icon: "text.alignright",
+                iconColor: DS.Color.primary
+            )
 
             ZStack(alignment: .topLeading) {
                 if message.isEmpty {
@@ -211,7 +261,7 @@ struct MemberContactFormView: View {
 
                 // العدّاد داخل الحقل — لا يسرق سطراً فوقه
                 Text("\(message.count)/\(maxLength)")
-                    .font(DS.Font.scaled(9.5))
+                    .font(DS.Font.scaled(12))
                     .foregroundColor(message.count > maxLength ? DS.Color.error : DS.Color.textTertiary)
                     .padding(.horizontal, DS.Spacing.sm + 2)
                     .padding(.vertical, 5)
@@ -219,7 +269,7 @@ struct MemberContactFormView: View {
                            alignment: L10n.isArabic ? .bottomLeading : .bottomTrailing)
                     .allowsHitTesting(false)
             }
-            .background(DS.Color.surface)
+            .background(DS.Color.background)
             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
             .overlay(
                 RoundedRectangle(cornerRadius: DS.Radius.md)
@@ -228,21 +278,32 @@ struct MemberContactFormView: View {
                         lineWidth: messageFocused ? 1.5 : 1
                     )
             )
-
+            .padding(.horizontal, DS.Spacing.lg)
+            .padding(.bottom, DS.Spacing.md)
         }
     }
 
     // MARK: - الإيميل للرد — اختياري، بلا ملاحظات
     private var contactField: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            sectionLabel(L10n.t("الإيميل (اختياري)", "Email (optional)"), icon: "envelope.fill")
+        DSCard(padding: 0) {
+            contactSectionHeader
+            contactFieldBody
+        }
+    }
 
+    private var contactSectionHeader: some View {
+        DSSectionHeader(
+            title: L10n.t("البريد الإلكتروني", "Email"),
+            icon: "envelope.fill",
+            iconColor: DS.Color.primary
+        )
+    }
+
+    private var contactFieldBody: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             HStack(spacing: DS.Spacing.sm) {
-                Image(systemName: "at")
-                    .font(DS.Font.scaled(12, weight: .semibold))
-                    .foregroundColor(emailIsValid ? DS.Color.primary : DS.Color.textTertiary)
-                TextField(L10n.t("للرد عبر البريد", "To reply by email"), text: $preferredContact)
-                    .font(DS.Font.scaled(13))
+                TextField(L10n.t("name@example.com", "name@example.com"), text: $preferredContact)
+                    .font(DS.Font.subheadline)
                     .keyboardType(.emailAddress)
                     .textContentType(.emailAddress)
                     .textInputAutocapitalization(.never)
@@ -254,11 +315,16 @@ struct MemberContactFormView: View {
                         .font(DS.Font.scaled(12, weight: .bold))
                         .foregroundColor(DS.Color.success)
                         .transition(.scale.combined(with: .opacity))
+                } else if preferredContact.isEmpty {
+                    // التلميح داخل الحقل — يختفي أول ما يبدأ بالكتابة
+                    Text(L10n.t("اختياري", "Optional"))
+                        .font(DS.Font.caption2)
+                        .foregroundColor(DS.Color.textTertiary)
                 }
             }
             .padding(.horizontal, DS.Spacing.md)
             .padding(.vertical, DS.Spacing.sm + 2)
-            .background(DS.Color.surface)
+            .background(DS.Color.background)
             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
             .overlay(
                 RoundedRectangle(cornerRadius: DS.Radius.md)
@@ -268,6 +334,8 @@ struct MemberContactFormView: View {
             )
             .animation(DS.Anim.quick, value: emailIsValid)
         }
+        .padding(.horizontal, DS.Spacing.lg)
+        .padding(.bottom, DS.Spacing.md)
     }
 
     /// بريد يبدو صالحاً — لمجرّد التأكيد البصري، الحقل يبقى اختيارياً

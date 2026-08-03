@@ -357,7 +357,7 @@ struct ProfileView: View {
                     if totalChildren > 0 {
                         HStack(spacing: DS.Spacing.xs) {
                             Image(systemName: "person.2.fill")
-                                .font(DS.Font.scaled(10, weight: .semibold))
+                                .font(DS.Font.scaled(11, weight: .semibold))
                             Text("\(totalChildren) " + L10n.t("من العائلة", "family"))
                                 .font(DS.Font.scaled(11, weight: .bold))
                         }
@@ -648,9 +648,9 @@ struct ProfileView: View {
                 // badge «تحت المراجعة» — نفس نمط الديوانيات
                 HStack(spacing: DS.Spacing.xs) {
                     Image(systemName: "clock.badge.questionmark")
-                        .font(DS.Font.scaled(10, weight: .bold))
+                        .font(DS.Font.scaled(11, weight: .bold))
                     Text(L10n.t("تحت المراجعة", "Under Review"))
-                        .font(DS.Font.scaled(10, weight: .bold))
+                        .font(DS.Font.scaled(11, weight: .bold))
                 }
                 .foregroundColor(DS.Color.warning)
             }
@@ -860,7 +860,7 @@ struct ProfileView: View {
                     Text(womenRevealed
                          ? L10n.t("ظاهر — هزّ الجهاز للإخفاء", "Visible — shake to hide")
                          : L10n.t("مخفي — هزّ الجهاز للإظهار", "Hidden — shake to show"))
-                        .font(DS.Font.scaled(10, weight: .medium))
+                        .font(DS.Font.scaled(11, weight: .medium))
                     Spacer()
                 }
                 .foregroundColor(DS.Color.textTertiary)
@@ -956,7 +956,7 @@ struct ProfileView: View {
 
                 if son.isDeceased ?? false {
                     Text(L10n.t("متوفى", "Deceased"))
-                        .font(DS.Font.scaled(8, weight: .bold))
+                        .font(DS.Font.scaled(11, weight: .bold))
                         .foregroundColor(DS.Color.textOnPrimary)
                         .padding(.horizontal, DS.Spacing.xs)
                         .padding(.vertical, 1)
@@ -1108,7 +1108,7 @@ struct ProfileView: View {
                     }
                     if woman.isDeceased {
                         Text(L10n.t("متوفى", "Deceased"))
-                            .font(DS.Font.scaled(8, weight: .bold))
+                            .font(DS.Font.scaled(11, weight: .bold))
                             .foregroundColor(DS.Color.textOnPrimary)
                             .padding(.horizontal, DS.Spacing.xs).padding(.vertical, 1)
                             .background(DS.Color.error.opacity(0.8)).clipShape(Capsule())

@@ -459,7 +459,7 @@ struct EditProfileView: View {
                         Text(L10n.t("تغيير", "Change"))
                             .font(DS.Font.scaled(11, weight: .bold))
                         Image(systemName: "chevron.up.chevron.down")
-                            .font(DS.Font.scaled(10, weight: .semibold))
+                            .font(DS.Font.scaled(11, weight: .semibold))
                     }
                     .foregroundColor(DS.Color.accent)
                     .padding(.horizontal, DS.Spacing.sm + 2)
@@ -613,7 +613,7 @@ struct EditProfileView: View {
                 HStack(spacing: DS.Spacing.xs) {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .font(DS.Font.caption2)
-                    Text(L10n.t("صيغة الإيميل غير صحيحة", "Invalid email format"))
+                    Text(L10n.t("صيغة البريد الإلكتروني غير صحيحة", "Invalid email format"))
                         .font(DS.Font.caption2)
                 }
                 .foregroundColor(DS.Color.error)

@@ -618,7 +618,7 @@ struct EditProjectView: View {
                                     .foregroundColor(DS.Color.textSecondary)
                                 Spacer()
                                 Text(L10n.t("اختياري", "Optional"))
-                                    .font(DS.Font.scaled(10, weight: .semibold))
+                                    .font(DS.Font.scaled(11, weight: .semibold))
                                     .foregroundColor(DS.Color.textTertiary)
                             }
                             TextEditor(text: $description)
