@@ -93,7 +93,10 @@ struct HomeNewsView: View {
                 )
             ) {
                 if let page = activeSubPage {
+                    // هوية مرتبطة بالصفحة — بدونها يعيد SwiftUI استخدام الوجهة
+                    // المبنيّة سابقاً فيفتح قسماً غير الذي ضُغط عليه
                     subPageContent(for: page)
+                        .id(page)
                         .toolbar(.hidden, for: .navigationBar)
                 }
             }
@@ -268,6 +271,17 @@ struct HomeNewsView: View {
             }
         }()
 
+        // سطر توضيحي تحت اسم القسم
+        let subtitle: String? = {
+            switch page {
+            case .archive:  return L10n.t("وثائق وصور العائلة", "Family documents & photos")
+            case .projects: return L10n.t("مبادرات ومشاريع الأعضاء", "Member initiatives & projects")
+            case .contact:  return L10n.t("اكتب رسالتك ويصلك الرد بأقرب وقت",
+                                          "Write your message — you'll get a reply soon")
+            case .news:     return L10n.t("آخر أخبار العائلة ومناسباتها", "Latest family news & events")
+            }
+        }()
+
         return VStack(spacing: 0) {
             HStack(spacing: DS.Spacing.md) {
                 // أيقونة القسم — بنفس مقاس أيقونة الرئيسية والشجرة تماماً (هوية فقط)
@@ -281,11 +295,20 @@ struct HomeNewsView: View {
                 }
                 .frame(width: isLandscape ? 38 : 52, height: isLandscape ? 38 : 52)
 
-                Text(title)
-                    .font(DS.Font.plex(19, weight: .bold))
-                    .foregroundColor(DS.Color.textOnPrimary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(DS.Font.plex(19, weight: .bold))
+                        .foregroundColor(DS.Color.textOnPrimary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                    if let subtitle {
+                        Text(subtitle)
+                            .font(DS.Font.plex(12, weight: .medium))
+                            .foregroundColor(DS.Color.overlayText)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+                    }
+                }
 
                 Spacer(minLength: DS.Spacing.xs)
 

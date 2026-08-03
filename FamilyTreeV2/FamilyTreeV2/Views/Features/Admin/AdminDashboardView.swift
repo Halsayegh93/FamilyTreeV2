@@ -132,6 +132,8 @@ struct AdminDashboardView: View {
 
                     ScrollView(showsIndicators: false) {
                         VStack(spacing: 0) {
+                        // مسافة بين الهيدر وأول بطاقة — نفس بقية الواجهات
+                        Color.clear.frame(height: DS.Spacing.md)
 
                         VStack(spacing: DS.Spacing.md) {
                             // تحذير التوافق

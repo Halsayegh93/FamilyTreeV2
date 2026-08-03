@@ -10,6 +10,8 @@ struct MemberContactFormView: View {
     private var isLandscape: Bool { vSizeClass == .compact }
 
     @State private var selectedCategory: ContactCategory = .inquiry
+    /// عنوان الرسالة — يُضاف كأول سطر في المتن
+    @State private var subject: String = ""
     @State private var message: String = ""
     /// إيميل أو رقم يرد عليه المدير (اختياري)
     @State private var preferredContact: String = ""
@@ -48,7 +50,6 @@ struct MemberContactFormView: View {
                     // الوضع الأفقي: عمودان — يمين (تعريف + تصنيف) ويسار (الرسالة + الإرسال)
                     HStack(alignment: .top, spacing: DS.Spacing.lg) {
                         VStack(alignment: .leading, spacing: DS.Spacing.lg) {
-                            introCard
                             categoryPicker
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -65,7 +66,6 @@ struct MemberContactFormView: View {
                     }
                 } else {
                     VStack(alignment: .leading, spacing: DS.Spacing.md) {
-                        introCard
 
                         categoryPicker
 
@@ -132,46 +132,6 @@ struct MemberContactFormView: View {
         .padding(.top, DS.Spacing.sm)
     }
 
-    // MARK: - بانر بهوية الهيدر
-    private var introCard: some View {
-        HStack(alignment: .center, spacing: DS.Spacing.md) {
-            Image(systemName: "envelope.fill")
-                .font(DS.Font.scaled(15, weight: .bold))
-                .foregroundColor(.white)
-                .frame(width: 36, height: 36)
-                .background(SwiftUI.Color.white.opacity(0.20))
-                .clipShape(Circle())
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(L10n.t("تواصل مع الإدارة", "Contact Admin"))
-                    .font(DS.Font.scaled(13, weight: .bold))
-                    .foregroundColor(.white)
-                Text(L10n.t("اختر التصنيف واكتب رسالتك — يصلك الرد بأقرب وقت.",
-                            "Pick a category and write your message — you'll get a reply soon."))
-                    .font(DS.Font.scaled(12))
-                    .foregroundColor(SwiftUI.Color.white.opacity(0.85))
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, DS.Spacing.md)
-        .padding(.vertical, DS.Spacing.md - 2)
-        // تدرّج زمرّدي — يتميّز عن أزرق الهيدر ولا يزاحم كبسولة «استفسار»
-        .background(
-            RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: [DS.Color.secondaryDark, DS.Color.secondary],
-                        startPoint: .bottomTrailing, endPoint: .topLeading
-                    )
-                )
-        )
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                .strokeBorder(DS.Color.headerBorder, lineWidth: 1)
-        )
-    }
 
     /// عنوان قسم قديم — باقٍ لحقل الإيميل فقط
     private func legacyContactLabel(_ title: String, icon: String) -> some View {
@@ -253,13 +213,20 @@ struct MemberContactFormView: View {
     }
 
     // MARK: - حقل الرسالة
+    /// مربّع مبسّط: عنوان الرسالة ثم نصّها — بلا ترويسة قسم
     private var messageField: some View {
-        DSCard(padding: 0) {
-            DSSectionHeader(
-                title: L10n.t("الرسالة", "Message"),
-                icon: "text.alignright",
-                iconColor: DS.Color.primary
-            )
+        VStack(spacing: DS.Spacing.sm) {
+            // العنوان — سطر واحد
+            TextField(L10n.t("عنوان الرسالة", "Subject"), text: $subject)
+                .font(DS.Font.body)
+                .padding(.horizontal, DS.Spacing.md)
+                .padding(.vertical, DS.Spacing.sm + 4)
+                .background(DS.Color.surface)
+                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
+                .overlay(
+                    RoundedRectangle(cornerRadius: DS.Radius.md)
+                        .strokeBorder(DS.Color.textTertiary.opacity(0.15), lineWidth: 1)
+                )
 
             ZStack(alignment: .topLeading) {
                 if message.isEmpty {
@@ -286,7 +253,7 @@ struct MemberContactFormView: View {
                            alignment: L10n.isArabic ? .bottomLeading : .bottomTrailing)
                     .allowsHitTesting(false)
             }
-            .background(DS.Color.background)
+            .background(DS.Color.surface)
             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
             .overlay(
                 RoundedRectangle(cornerRadius: DS.Radius.md)
@@ -295,8 +262,6 @@ struct MemberContactFormView: View {
                         lineWidth: messageFocused ? 1.5 : 1
                     )
             )
-            .padding(.horizontal, DS.Spacing.lg)
-            .padding(.bottom, DS.Spacing.md)
         }
     }
 
@@ -465,6 +430,13 @@ struct MemberContactFormView: View {
 
     // MARK: - Actions
 
+    /// العنوان يُضاف كأول سطر في المتن
+    private var combinedMessage: String {
+        let t = subject.trimmingCharacters(in: .whitespacesAndNewlines)
+        let b = message.trimmingCharacters(in: .whitespacesAndNewlines)
+        return t.isEmpty ? b : t + "\n" + b
+    }
+
     @MainActor
     private func send() async {
         errorText = nil
@@ -472,7 +444,7 @@ struct MemberContactFormView: View {
         isSending = true
         let ok = await authVM.sendContactMessage(
             category: selectedCategory.serverValue,
-            message: message.trimmingCharacters(in: .whitespacesAndNewlines),
+            message: combinedMessage,
             preferredContact: preferredContact.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : preferredContact.trimmingCharacters(in: .whitespacesAndNewlines)
         )
         isSending = false
