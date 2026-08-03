@@ -216,9 +216,16 @@ struct MemberContactFormView: View {
     /// مربّع مبسّط: عنوان الرسالة ثم نصّها — بلا ترويسة قسم
     private var messageField: some View {
         VStack(spacing: DS.Spacing.sm) {
-            // العنوان — سطر واحد
-            TextField(L10n.t("عنوان الرسالة", "Subject"), text: $subject)
-                .font(DS.Font.body)
+            // العنوان — سطر واحد، اختياري والتلميح داخل المربّع
+            HStack(spacing: DS.Spacing.sm) {
+                TextField(L10n.t("عنوان الرسالة", "Subject"), text: $subject)
+                    .font(DS.Font.body)
+                if subject.trimmingCharacters(in: .whitespaces).isEmpty {
+                    Text(L10n.t("اختياري", "Optional"))
+                        .font(DS.Font.caption2)
+                        .foregroundColor(DS.Color.textTertiary)
+                }
+            }
                 .padding(.horizontal, DS.Spacing.md)
                 .padding(.vertical, DS.Spacing.sm + 4)
                 .background(DS.Color.surface)
@@ -230,7 +237,7 @@ struct MemberContactFormView: View {
 
             ZStack(alignment: .topLeading) {
                 if message.isEmpty {
-                    Text(L10n.t("اكتب رسالتك هنا…", "Type your message here…"))
+                    Text(L10n.t("اكتب رسالتك هنا… (مطلوب)", "Type your message here… (required)"))
                         .font(DS.Font.scaled(14))
                         .foregroundColor(DS.Color.textTertiary)
                         .padding(.horizontal, DS.Spacing.md + 4)
