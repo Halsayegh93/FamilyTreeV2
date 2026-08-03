@@ -587,6 +587,8 @@ struct HomeNewsView: View {
             }
             .frame(maxWidth: .infinity)
             .frame(height: height ?? layout.tileHeight)
+            // منطقة اللمس = حدود المربّع المرئية بالضبط
+            .contentShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
@@ -1224,6 +1226,8 @@ struct HomeNewsView: View {
                 }
             )
             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm))
+            // بلا هذا تلتقط زخارف الخلفية المزاحة نقرات فوق حدود البطاقة
+            .contentShape(RoundedRectangle(cornerRadius: DS.Radius.sm))
             .shadow(color: .black.opacity(0.045), radius: 14, x: 0, y: 4)
         }
         .buttonStyle(DSScaleButtonStyle())
