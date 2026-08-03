@@ -156,13 +156,15 @@ struct MemberContactFormView: View {
         }
         .padding(.horizontal, DS.Spacing.md)
         .padding(.vertical, DS.Spacing.md - 2)
+        // تدرّج زمرّدي — يتميّز عن أزرق الهيدر ولا يزاحم كبسولة «استفسار»
         .background(
-            ZStack {
-                RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                    .fill(DS.Color.gradientPrimary)
-                RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                    .fill(DS.Color.headerVeil)
-            }
+            RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [DS.Color.secondaryDark, DS.Color.secondary],
+                        startPoint: .bottomTrailing, endPoint: .topLeading
+                    )
+                )
         )
         .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
         .overlay(
@@ -185,54 +187,69 @@ struct MemberContactFormView: View {
     }
 
     // MARK: - اختيار التصنيف
+    /// التصنيف — كبسولة فلاتر عائمة، نفس شريط الأخبار والأرشيف والشجرة
     private var categoryPicker: some View {
-        DSCard(padding: 0) {
-            DSSectionHeader(
-                title: L10n.t("التصنيف", "Category"),
-                icon: "square.grid.2x2.fill",
-                iconColor: DS.Color.primary
-            )
-            LazyVGrid(
-                columns: Array(repeating: GridItem(.flexible(), spacing: DS.Spacing.sm), count: 2),
-                spacing: DS.Spacing.sm
-            ) {
+        HStack {
+            Spacer(minLength: 0)
+
+            HStack(spacing: 6) {
                 ForEach(ContactCategory.allCases, id: \.self) { cat in
                     categoryChip(cat)
                 }
             }
-            .padding(.horizontal, DS.Spacing.lg)
-            .padding(.bottom, DS.Spacing.md)
+            .padding(6)
+            .background(Capsule(style: .continuous).fill(.ultraThinMaterial))
+            .overlay(
+                Capsule(style: .continuous)
+                    .strokeBorder(DS.Color.primary.opacity(0.10), lineWidth: 1)
+            )
+            .shadow(color: .black.opacity(0.06), radius: 8, x: 0, y: 3)
+            .animation(.spring(response: 0.40, dampingFraction: 0.78), value: selectedCategory)
+
+            Spacer(minLength: 0)
         }
     }
 
+    /// المختار كبسولة ملوّنة بنص، وغيره أيقونة دائرية (نفس نمط الفلاتر)
     private func categoryChip(_ cat: ContactCategory) -> some View {
         let selected = selectedCategory == cat
         return Button {
-            withAnimation(DS.Anim.quick) { selectedCategory = cat }
+            withAnimation(.spring(response: 0.40, dampingFraction: 0.78)) { selectedCategory = cat }
+            UISelectionFeedbackGenerator().selectionChanged()
         } label: {
-            HStack(spacing: DS.Spacing.xs) {
+            // كل التصنيفات تظهر بنصّها — المختار كبسولة ملوّنة والباقي خفيف
+            HStack(spacing: 5) {
                 Image(systemName: cat.icon)
-                    .font(DS.Font.scaled(12, weight: .semibold))
-                    .foregroundColor(selected ? cat.color : DS.Color.textTertiary)
-
+                    .font(DS.Font.scaled(11, weight: .bold))
                 Text(cat.title)
-                    .font(DS.Font.caption1)
-                    .fontWeight(selected ? .bold : .semibold)
-                    .foregroundColor(selected ? cat.color : DS.Color.textSecondary)
+                    .font(DS.Font.scaled(12, weight: .bold))
                     .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+                    .minimumScaleFactor(0.85)
             }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, DS.Spacing.sm)
-            .background(selected ? cat.color.opacity(0.08) : DS.Color.surface)
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
+            .foregroundColor(selected ? .white : cat.color)
+            .padding(.horizontal, DS.Spacing.sm + 2)
+            .padding(.vertical, 8)
+            .background(
+                Group {
+                    if selected {
+                        Capsule().fill(
+                            LinearGradient(
+                                colors: [cat.color, cat.color.opacity(0.85)],
+                                startPoint: .topLeading, endPoint: .bottomTrailing
+                            )
+                        )
+                    } else {
+                        Capsule().fill(cat.color.opacity(0.12))
+                    }
+                }
+            )
             .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.md)
-                    .strokeBorder(selected ? cat.color.opacity(0.40) : DS.Color.textTertiary.opacity(0.12),
-                                  lineWidth: selected ? 1.3 : 1)
+                Capsule().strokeBorder(
+                    selected ? .clear : cat.color.opacity(0.20), lineWidth: 1
+                )
             )
         }
-        .buttonStyle(.plain)
+        .buttonStyle(DSScaleButtonStyle())
     }
 
     // MARK: - حقل الرسالة
@@ -478,7 +495,7 @@ struct MemberContactFormView: View {
 // MARK: - التصنيفات الأربعة
 
 enum ContactCategory: CaseIterable {
-    case complaint, suggestion, inquiry, other
+    case inquiry, complaint, suggestion, other
 
     var title: String {
         switch self {
