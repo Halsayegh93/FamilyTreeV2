@@ -1124,10 +1124,14 @@ struct DSFloatingButton: View {
             .shadow(color: SwiftUI.Color.black.opacity(0.45), radius: 3, x: 0, y: 1)
             .padding(.horizontal, label != nil ? DS.Spacing.xl : DS.Spacing.lg)
             .padding(.vertical, DS.Spacing.md + 2)
-            // شفافية حقيقية: بلا مادة ضبابية — التدرّج وحده بنصف تعتيم،
-            // فالمنشورات خلف الزر تبين من ورائه لا مجرّد لون باهت.
+            // كان التدرّج بشفافية ٥٠٪ فيقرأ نصّ المنشور خلف الزر ويتداخل معه.
+            // الآن: مادة ضبابية تحجب ما خلفها ثم التدرّج فوقها — يبقى الإحساس
+            // الزجاجي لكن النص مقروء ولا يختلط بما تحته.
             .background(
-                Capsule().fill(gradient).opacity(0.50)
+                ZStack {
+                    Capsule().fill(.ultraThinMaterial)
+                    Capsule().fill(gradient).opacity(0.92)
+                }
             )
             .clipShape(Capsule())
             .overlay(Capsule().strokeBorder(DS.Color.headerBorder, lineWidth: 1))

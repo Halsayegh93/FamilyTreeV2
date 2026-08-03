@@ -265,7 +265,7 @@ struct AdminMembersDirectoryView: View {
                 // 1) البحث — أعلى شي
                 searchBar
                     .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.top, DS.Spacing.sm)
+                    .padding(.top, DS.Spacing.md)
 
                 // 2) فلتر الحالة (الكل/أحياء/متوفون)
                 filterChips

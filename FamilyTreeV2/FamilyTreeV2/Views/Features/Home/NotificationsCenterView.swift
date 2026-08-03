@@ -181,27 +181,16 @@ struct NotificationsCenterView: View {
     private var notificationsHeader: some View {
         VStack(spacing: 0) {
             HStack(spacing: DS.Spacing.md) {
-                Button { dismiss() } label: {
-                    ZStack {
-                        Circle().fill(DS.Color.overlayIcon)
-                        Circle().strokeBorder(DS.Color.overlayIconBorder, lineWidth: 1)
-                        Image(systemName: L10n.isArabic ? "chevron.forward" : "chevron.backward")
-                            .font(DS.Font.scaled(15, weight: .bold))
-                            .foregroundColor(DS.Color.textOnPrimary)
-                    }
-                    .frame(width: 40, height: 40)
-                }
-                .buttonStyle(BounceButtonStyle())
-                .accessibilityLabel(L10n.t("رجوع", "Back"))
-
+                // أيقونة الصفحة — بنفس مقاس أيقونة الرئيسية والشجرة
                 ZStack {
-                    Circle().fill(DS.Color.overlayIcon)
-                    Circle().strokeBorder(DS.Color.overlayIconBorder, lineWidth: 1)
+                    Circle()
+                        .fill(DS.Color.overlayIcon)
+                        .overlay(Circle().strokeBorder(DS.Color.overlayIconBorder, lineWidth: 1.5))
                     Image(systemName: "bell.fill")
-                        .font(DS.Font.scaled(17, weight: .semibold))
+                        .font(DS.Font.scaled(20, weight: .bold))
                         .foregroundColor(DS.Color.textOnPrimary)
                 }
-                .frame(width: 46, height: 46)
+                .frame(width: 52, height: 52)
 
                 Text(L10n.t("الإشعارات", "Notifications"))
                     .font(DS.Font.plex(19, weight: .bold))
@@ -210,6 +199,18 @@ struct NotificationsCenterView: View {
                     .minimumScaleFactor(0.7)
 
                 Spacer(minLength: 0)
+
+                // الرجوع في الطرف المقابل — نفس موضع الجرس في الرئيسية
+                Button { dismiss() } label: {
+                    Image(systemName: "xmark")
+                        .font(DS.Font.scaled(17, weight: .bold))
+                        .foregroundColor(DS.Color.textOnPrimary)
+                        .frame(width: 44, height: 44)
+                        .background(Circle().fill(DS.Color.overlayIcon))
+                        .overlay(Circle().strokeBorder(DS.Color.overlayIconBorder, lineWidth: 1.5))
+                }
+                .buttonStyle(BounceButtonStyle())
+                .accessibilityLabel(L10n.t("رجوع", "Back"))
             }
             .padding(.horizontal, DS.Spacing.lg)
             .padding(.bottom, DS.Spacing.sm)
@@ -234,7 +235,14 @@ struct NotificationsCenterView: View {
             .padding(.bottom, DS.Spacing.xs)
         }
         .frame(maxWidth: .infinity)
-        .background(DS.Color.gradientPrimary.ignoresSafeArea(edges: .top))
+        .background(
+            ZStack {
+                DS.Color.gradientPrimary
+                // نفس طبقة MainHeaderView — بدونها يطلع الهيدر أفتح
+                DS.Color.headerVeil
+            }
+            .ignoresSafeArea(edges: .top)
+        )
     }
 
     // MARK: - Body

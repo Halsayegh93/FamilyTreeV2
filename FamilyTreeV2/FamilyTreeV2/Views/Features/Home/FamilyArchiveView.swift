@@ -59,7 +59,7 @@ struct FamilyArchiveView: View {
                 // صف الفلاتر (مع زر التحديد مدمج للإدارة)
                 categoryPicker
                     .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.top, DS.Spacing.sm)
+                    .padding(.top, DS.Spacing.md)
                     .padding(.bottom, DS.Spacing.xs)
 
                 if archiveVM.isLoading && archiveVM.items.isEmpty {

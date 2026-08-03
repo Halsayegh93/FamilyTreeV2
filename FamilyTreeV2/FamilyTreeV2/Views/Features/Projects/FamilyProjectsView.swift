@@ -57,7 +57,7 @@ struct FamilyProjectsView: View {
                 } else {
                     filterCapsule
                         .padding(.horizontal, DS.Spacing.lg)
-                        .padding(.top, DS.Spacing.sm)
+                        .padding(.top, DS.Spacing.md)
                         .padding(.bottom, DS.Spacing.xs)
                 }
 

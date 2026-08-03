@@ -223,9 +223,11 @@ struct HomeNewsView: View {
         ZStack {
             ScrollView(showsIndicators: false) {
                 newsTypeFilterBar
-                    .padding(.top, DS.Spacing.xs)
+                    // مسافة أوضح بين الهيدر وشريط الفلاتر
+                    .padding(.top, DS.Spacing.md)
                 newsFeedSection
-                    .padding(.top, DS.Spacing.sm)
+                    // أول منشور أقرب للفلاتر
+                    .padding(.top, 0)
                     .padding(.bottom, isLandscape ? DS.Spacing.xxxxl + 44 : DS.Spacing.xxxxl)
             }
             .refreshable { await refreshNews(notifyIfNew: true, force: true) }
@@ -268,31 +270,16 @@ struct HomeNewsView: View {
 
         return VStack(spacing: 0) {
             HStack(spacing: DS.Spacing.md) {
-                // رجوع — بنفس لغة أزرار الهيدر الزجاجية
-                Button {
-                    activeSubPage = nil
-                } label: {
-                    ZStack {
-                        Circle().fill(DS.Color.overlayIcon)
-                        Circle().strokeBorder(DS.Color.overlayIconBorder, lineWidth: 1)
-                        Image(systemName: L10n.isArabic ? "chevron.forward" : "chevron.backward")
-                            .font(DS.Font.scaled(15, weight: .bold))
-                            .foregroundColor(DS.Color.textOnPrimary)
-                    }
-                    .frame(width: 40, height: 40)
-                }
-                .buttonStyle(BounceButtonStyle())
-                .accessibilityLabel(L10n.t("رجوع", "Back"))
-
-                // أيقونة القسم + عنوانه — نفس بنية هيدر الرئيسية
+                // أيقونة القسم — بنفس مقاس أيقونة الرئيسية والشجرة تماماً (هوية فقط)
                 ZStack {
-                    Circle().fill(DS.Color.overlayIcon)
-                    Circle().strokeBorder(DS.Color.overlayIconBorder, lineWidth: 1)
+                    Circle()
+                        .fill(DS.Color.overlayIcon)
+                        .overlay(Circle().strokeBorder(DS.Color.overlayIconBorder, lineWidth: 1.5))
                     Image(systemName: icon)
-                        .font(DS.Font.scaled(17, weight: .semibold))
+                        .font(DS.Font.scaled(isLandscape ? 16 : 20, weight: .bold))
                         .foregroundColor(DS.Color.textOnPrimary)
                 }
-                .frame(width: isLandscape ? 38 : 46, height: isLandscape ? 38 : 46)
+                .frame(width: isLandscape ? 38 : 52, height: isLandscape ? 38 : 52)
 
                 Text(title)
                     .font(DS.Font.plex(19, weight: .bold))
@@ -302,20 +289,19 @@ struct HomeNewsView: View {
 
                 Spacer(minLength: DS.Spacing.xs)
 
-                if page == .news {
-                    Button {
-                        withAnimation(DS.Anim.snappy) { showNewsSearch.toggle() }
-                    } label: {
-                        Image(systemName: showNewsSearch ? "xmark.circle.fill" : "magnifyingglass")
-                            .font(DS.Font.scaled(17, weight: .semibold))
-                            .foregroundColor(DS.Color.textOnPrimary)
-                            .frame(width: 44, height: 44)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(BounceButtonStyle())
-                    .accessibilityLabel(showNewsSearch ? L10n.t("إغلاق البحث", "Close search")
-                                                       : L10n.t("بحث", "Search"))
+                // الرجوع في الطرف المقابل — نفس موضع الجرس في الرئيسية
+                Button {
+                    activeSubPage = nil
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(DS.Font.scaled(isLandscape ? 15 : 17, weight: .bold))
+                        .foregroundColor(DS.Color.textOnPrimary)
+                        .frame(width: isLandscape ? 36 : 44, height: isLandscape ? 36 : 44)
+                        .background(Circle().fill(DS.Color.overlayIcon))
+                        .overlay(Circle().strokeBorder(DS.Color.overlayIconBorder, lineWidth: 1.5))
                 }
+                .buttonStyle(BounceButtonStyle())
+                .accessibilityLabel(L10n.t("رجوع", "Back"))
             }
             .padding(.horizontal, isLandscape ? DS.Spacing.xxl : DS.Spacing.lg)
             .padding(.bottom, isLandscape ? DS.Spacing.xs : DS.Spacing.sm)
@@ -326,7 +312,14 @@ struct HomeNewsView: View {
             saduStrip
         }
         .frame(maxWidth: .infinity)
-        .background(DS.Color.gradientPrimary.ignoresSafeArea(edges: .top))
+        .background(
+            ZStack {
+                DS.Color.gradientPrimary
+                // نفس طبقة MainHeaderView — بدونها يطلع الهيدر أفتح
+                DS.Color.headerVeil
+            }
+            .ignoresSafeArea(edges: .top)
+        )
     }
 
     // MARK: - Bento Grid Section — توزيع عائلي احترافي
@@ -891,7 +884,14 @@ struct HomeNewsView: View {
             saduStrip
         }
         .frame(maxWidth: .infinity)
-        .background(DS.Color.gradientPrimary.ignoresSafeArea(edges: .top))
+        .background(
+            ZStack {
+                DS.Color.gradientPrimary
+                // نفس طبقة MainHeaderView — بدونها يطلع الهيدر أفتح
+                DS.Color.headerVeil
+            }
+            .ignoresSafeArea(edges: .top)
+        )
     }
 
     private var greetingCard: some View {
@@ -1626,27 +1626,7 @@ struct HomeNewsView: View {
     // MARK: - News Feed Section
     private var newsFeedSection: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // حقل البحث فقط — العنوان موجود في هيدر الصفحة بالأعلى (بدون تكرار)
-            if showNewsSearch {
-                HStack(spacing: DS.Spacing.sm) {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundColor(DS.Color.textTertiary)
-                    TextField(L10n.t("بحث بالأخبار...", "Search news..."), text: $newsSearchText)
-                        .font(DS.Font.body)
-                    if !newsSearchText.isEmpty {
-                        Button { newsSearchText = "" } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundColor(DS.Color.textTertiary)
-                        }
-                    }
-                }
-                .padding(DS.Spacing.sm)
-                .background(DS.Color.surface)
-                .cornerRadius(DS.Radius.md)
-                .padding(.horizontal, DS.Spacing.lg)
-                .padding(.vertical, DS.Spacing.sm)
-            }
-
+            // البحث صار داخل كبسولة الفلتر أعلى الصفحة — بلا حقل مكرّر هنا
             if newsVM.isLoading && newsVM.allNews.isEmpty {
                 newsLoadingSkeleton(count: 3)
                     .padding(.horizontal, DS.Spacing.lg)
@@ -1732,21 +1712,83 @@ struct HomeNewsView: View {
             newsVM.allNews.contains { $0.type == t }
         }
         return Group {
-            if presentTypes.count > 1 {
-                ScrollView(.horizontal, showsIndicators: false) {
+            if presentTypes.count > 1 || showNewsSearch {
+                HStack {
+                    Spacer(minLength: 0)
+
                     HStack(spacing: 6) {
-                        newsTypeChip(nil, label: L10n.t("الكل", "All"),
-                                     icon: "square.grid.2x2", color: DS.Color.primary)
-                        ForEach(presentTypes, id: \.self) { t in
-                            newsTypeChip(t,
-                                         label: NewsTypeHelper.displayName(for: t),
-                                         icon: NewsTypeHelper.icon(for: t),
-                                         color: NewsTypeHelper.color(for: t))
+                        if showNewsSearch {
+                            // البحث يفتح داخل نفس كبسولة الفلتر — مثل شريط الشجرة
+                            Image(systemName: "magnifyingglass")
+                                .font(DS.Font.scaled(13, weight: .bold))
+                                .foregroundColor(DS.Color.primary)
+
+                            TextField(L10n.t("ابحث في الأخبار", "Search news"), text: $newsSearchText)
+                                .font(DS.Font.subheadline)
+                                .textInputAutocapitalization(.never)
+                                .autocorrectionDisabled()
+                                .frame(minWidth: 140)
+
+                            Button {
+                                withAnimation(.spring(response: 0.40, dampingFraction: 0.78)) {
+                                    newsSearchText = ""
+                                    showNewsSearch = false
+                                }
+                            } label: {
+                                Image(systemName: "xmark")
+                                    .font(DS.Font.scaled(12, weight: .bold))
+                                    .foregroundColor(DS.Color.textSecondary)
+                                    .frame(width: 30, height: 30)
+                                    .background(Circle().fill(DS.Color.textTertiary.opacity(0.12)))
+                            }
+                            .buttonStyle(DSScaleButtonStyle())
+                            .accessibilityLabel(L10n.t("إغلاق البحث", "Close search"))
+                        } else {
+                            newsTypeChip(nil, label: L10n.t("الكل", "All"),
+                                         icon: "square.grid.2x2", color: DS.Color.primary)
+                            ForEach(presentTypes, id: \.self) { t in
+                                newsTypeChip(t,
+                                             label: NewsTypeHelper.displayName(for: t),
+                                             icon: NewsTypeHelper.icon(for: t),
+                                             color: NewsTypeHelper.color(for: t))
+                            }
+
+                            // فاصل ثم زر البحث — داخل نفس الكبسولة
+                            Capsule()
+                                .fill(DS.Color.textTertiary.opacity(0.25))
+                                .frame(width: 1, height: 22)
+                                .padding(.horizontal, 2)
+
+                            Button {
+                                withAnimation(.spring(response: 0.40, dampingFraction: 0.78)) {
+                                    showNewsSearch = true
+                                }
+                            } label: {
+                                Image(systemName: "magnifyingglass")
+                                    .font(DS.Font.scaled(13, weight: .bold))
+                                    .foregroundColor(DS.Color.primary)
+                                    .frame(width: 36, height: 36)
+                                    .background(Circle().fill(DS.Color.primary.opacity(0.12)))
+                                    .overlay(Circle().strokeBorder(DS.Color.primary.opacity(0.20), lineWidth: 1))
+                            }
+                            .buttonStyle(DSScaleButtonStyle())
+                            .accessibilityLabel(L10n.t("بحث", "Search"))
                         }
                     }
-                    .padding(.horizontal, DS.Spacing.lg)
+                    .padding(6)
+                    .background(Capsule(style: .continuous).fill(.ultraThinMaterial))
+                    .overlay(
+                        Capsule(style: .continuous)
+                            .strokeBorder(DS.Color.primary.opacity(0.10), lineWidth: 1)
+                    )
+                    .shadow(color: .black.opacity(0.06), radius: 8, x: 0, y: 3)
+                    .animation(.spring(response: 0.40, dampingFraction: 0.78), value: selectedNewsTypeFilter)
+                    .animation(.spring(response: 0.40, dampingFraction: 0.78), value: showNewsSearch)
+
+                    Spacer(minLength: 0)
                 }
-                .padding(.bottom, DS.Spacing.xs)
+                .padding(.horizontal, DS.Spacing.lg)
+                .padding(.bottom, 2)
             }
         }
     }
@@ -1754,23 +1796,41 @@ struct HomeNewsView: View {
     private func newsTypeChip(_ type: String?, label: String, icon: String, color: Color) -> some View {
         let selected = selectedNewsTypeFilter == type
         return Button {
-            withAnimation(DS.Anim.snappy) { selectedNewsTypeFilter = type }
+            withAnimation(.spring(response: 0.40, dampingFraction: 0.78)) { selectedNewsTypeFilter = type }
             UISelectionFeedbackGenerator().selectionChanged()
         } label: {
-            HStack(spacing: 4) {
+            // نفس نمط مكتبة العائلة: المختار كبسولة بنص، وغيره أيقونة دائرية
+            if selected {
+                HStack(spacing: 6) {
+                    Image(systemName: icon)
+                        .font(DS.Font.scaled(12, weight: .bold))
+                    Text(label)
+                        .font(DS.Font.scaled(13, weight: .bold))
+                        .lineLimit(1)
+                }
+                .foregroundColor(.white)
+                .padding(.horizontal, DS.Spacing.md)
+                .padding(.vertical, 8)
+                .background(
+                    Capsule().fill(
+                        LinearGradient(
+                            colors: [color, color.opacity(0.85)],
+                            startPoint: .topLeading, endPoint: .bottomTrailing
+                        )
+                    )
+                )
+                .transition(.scale(scale: 0.85).combined(with: .opacity))
+            } else {
                 Image(systemName: icon)
-                    .font(DS.Font.scaled(11, weight: .bold))
-                Text(label)
-                    .font(DS.Font.scaled(11, weight: .bold))
+                    .font(DS.Font.scaled(13, weight: .bold))
+                    .foregroundColor(color)
+                    .frame(width: 36, height: 36)
+                    .background(Circle().fill(color.opacity(0.12)))
+                    .overlay(Circle().strokeBorder(color.opacity(0.20), lineWidth: 1))
+                    .transition(.scale(scale: 0.85).combined(with: .opacity))
             }
-            .foregroundColor(selected ? .white : color)
-            .padding(.horizontal, DS.Spacing.sm + 2)
-            .padding(.vertical, 5)
-            .background(Capsule().fill(selected ? color : color.opacity(0.10)))
-            .overlay(Capsule().strokeBorder(color.opacity(selected ? 0 : 0.30), lineWidth: 1))
-            .contentShape(Capsule())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(DSScaleButtonStyle())
     }
 
     private var newsListView: some View {

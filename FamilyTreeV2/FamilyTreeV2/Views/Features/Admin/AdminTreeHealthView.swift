@@ -168,7 +168,7 @@ struct AdminTreeHealthView: View {
             } else {
                 VStack(spacing: 0) {
                     filterChips
-                        .padding(.top, DS.Spacing.sm)
+                        .padding(.top, DS.Spacing.md)
                         .padding(.bottom, DS.Spacing.xs)
 
                     // Swipe hint

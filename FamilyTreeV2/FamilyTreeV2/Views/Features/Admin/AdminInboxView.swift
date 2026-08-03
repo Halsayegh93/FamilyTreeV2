@@ -49,7 +49,7 @@ struct AdminInboxView: View {
             VStack(spacing: 0) {
                 filterBar
                     .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.top, DS.Spacing.sm)
+                    .padding(.top, DS.Spacing.md)
 
                 searchBar
                     .padding(.horizontal, DS.Spacing.lg)

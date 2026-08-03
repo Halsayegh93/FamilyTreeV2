@@ -15,7 +15,15 @@ extension UINavigationController: UIGestureRecognizerDelegate {
 
     public func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
         // شاشة واحدة فقط = لا يوجد ما نرجع إليه
-        viewControllers.count > 1
+        guard viewControllers.count > 1 else { return false }
+
+        // تقييد البداية بحافة الشاشة: بدون هذا الشرط تبدأ الإيماءة من أي مكان
+        // فتتحرّك الصفحة أفقياً أثناء التمرير العادي في وسط الشاشة.
+        guard let view = gestureRecognizer.view else { return true }
+        let x = gestureRecognizer.location(in: view).x
+        let edge: CGFloat = 30
+        let isRTL = UIView.userInterfaceLayoutDirection(for: view.semanticContentAttribute) == .rightToLeft
+        return isRTL ? x > view.bounds.width - edge : x < edge
     }
 
     /// السماح بالتزامن مع تمرير القوائم حتى لا تتعطّل إحداهما
