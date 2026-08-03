@@ -426,7 +426,7 @@ struct AdminIncompleteMembersView: View {
                         ForEach(missing, id: \.self) { field in
                             HStack(spacing: 2) {
                                 Image(systemName: field.icon)
-                                    .font(DS.Font.scaled(9, weight: .bold))
+                                    .font(DS.Font.scaled(11, weight: .bold))
                                 Text(field.label)
                                     .font(DS.Font.caption2)
                                     .fontWeight(.medium)

@@ -16,6 +16,12 @@ struct AdminMembersDirectoryView: View {
     @State private var branchRootId: UUID? = nil
     @State private var branchPickerOpen = false
 
+    /// مسار التصفّح الشجري — فارغ يعني مستوى الجذور (رؤوس الفروع)
+    @State private var drillPath: [FamilyMember] = []
+
+    /// عدد ذرّية كل عضو — يُحسب مرة واحدة بدل مسح الشجرة لكل صف عند كل رسم
+    @State private var descendantCounts: [UUID: Int] = [:]
+
     // MARK: - Filter
 
     enum RegistryFilter: String, CaseIterable {
@@ -50,9 +56,16 @@ struct AdminMembersDirectoryView: View {
 
     private var baseMembers: [FamilyMember] {
         // المعيار القانوني: يطابق الشجرة + الويب + كل العدّادات
+        // الفرز على الاسم الأول ثم الكامل — الفرز على سلسلة النسب الطويلة
+        // كان يجعل القائمة تبدو عشوائية لأن التشابه في أوائل السلسلة كبير.
         memberVM.allMembers
             .filter(\.isCountable)
-            .sorted { $0.fullName < $1.fullName }
+            .sorted {
+                let a = $0.firstName.trimmingCharacters(in: .whitespaces)
+                let b = $1.firstName.trimmingCharacters(in: .whitespaces)
+                if a != b { return a.localizedStandardCompare(b) == .orderedAscending }
+                return $0.fullName.localizedStandardCompare($1.fullName) == .orderedAscending
+            }
     }
 
     /// أبناء كل أب — لحساب الذرّية بسرعة
@@ -123,6 +136,125 @@ struct AdminMembersDirectoryView: View {
         return members
     }
 
+    // MARK: - التصفّح الشجري
+
+    /// رؤوس الفروع — من ليس له أب مسجّل
+    private var rootMembers: [FamilyMember] {
+        baseMembers.filter { $0.fatherId == nil }
+    }
+
+    /// أعضاء المستوى الحالي حسب المسار
+    private var currentLevelMembers: [FamilyMember] {
+        guard let last = drillPath.last else { return rootMembers }
+        let kids = childrenByFather[last.id] ?? []
+        return kids.sorted {
+            let a = $0.firstName.trimmingCharacters(in: .whitespaces)
+            let b = $1.firstName.trimmingCharacters(in: .whitespaces)
+            if a != b { return a.localizedStandardCompare(b) == .orderedAscending }
+            return $0.fullName.localizedStandardCompare($1.fullName) == .orderedAscending
+        }
+    }
+
+    /// عدد ذرّية عضو (بلا نفسه) — من الخريطة المحسوبة مسبقاً
+    private func descendantCount(of m: FamilyMember) -> Int {
+        descendantCounts[m.id] ?? 0
+    }
+
+    /// يبني خريطة الذرّية بمرور واحد من الأسفل للأعلى — O(n) بدل O(n²)
+    private func buildDescendantCounts() {
+        let kidsMap = childrenByFather
+        var memo: [UUID: Int] = [:]
+
+        func count(_ id: UUID) -> Int {
+            if let cached = memo[id] { return cached }
+            var total = 0
+            for child in kidsMap[id] ?? [] {
+                total += 1 + count(child.id)
+            }
+            memo[id] = total
+            return total
+        }
+
+        for m in memberVM.allMembers { _ = count(m.id) }
+        descendantCounts = memo
+    }
+
+    /// شريط المسار — يرجّعك لأي مستوى بضغطة
+    private var breadcrumbBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 4) {
+                Button {
+                    withAnimation(DS.Anim.snappy) { drillPath.removeAll() }
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "house.fill")
+                            .font(DS.Font.scaled(11, weight: .semibold))
+                        Text(L10n.t("الفروع", "Branches"))
+                            .font(DS.Font.scaled(11, weight: .semibold))
+                    }
+                    .foregroundColor(drillPath.isEmpty ? DS.Color.textOnPrimary : DS.Color.primary)
+                    .padding(.horizontal, DS.Spacing.sm + 2)
+                    .padding(.vertical, 5)
+                    .background(Capsule().fill(drillPath.isEmpty ? DS.Color.primary : DS.Color.primary.opacity(0.10)))
+                }
+
+                ForEach(Array(drillPath.enumerated()), id: \.element.id) { idx, node in
+                    Image(systemName: "chevron.forward")
+                        .font(DS.Font.scaled(11, weight: .bold))
+                        .foregroundColor(DS.Color.textTertiary)
+                    Button {
+                        withAnimation(DS.Anim.snappy) {
+                            drillPath = Array(drillPath.prefix(idx + 1))
+                        }
+                    } label: {
+                        let isLast = idx == drillPath.count - 1
+                        Text(node.firstName.isEmpty ? node.fullName : node.firstName)
+                            .font(DS.Font.scaled(11, weight: .semibold))
+                            .foregroundColor(isLast ? DS.Color.textOnPrimary : DS.Color.primary)
+                            .lineLimit(1)
+                            .padding(.horizontal, DS.Spacing.sm + 2)
+                            .padding(.vertical, 5)
+                            .background(Capsule().fill(isLast ? DS.Color.primary : DS.Color.primary.opacity(0.10)))
+                    }
+                }
+            }
+            .padding(.horizontal, DS.Spacing.lg)
+        }
+        .buttonStyle(DSScaleButtonStyle())
+    }
+
+    /// صفّ فرع — الضغط على الاسم يفتح التفاصيل، وعلى شارة الذرّية ينزل داخل الفرع
+    private func branchRow(_ member: FamilyMember) -> some View {
+        let kids = descendantCount(of: member)
+        return HStack(spacing: DS.Spacing.sm) {
+            NavigationLink(destination: AdminMemberDetailSheet(member: member)) {
+                memberRow(member: member, index: 0)
+            }
+            .buttonStyle(PlainButtonStyle())
+
+            if kids > 0 {
+                Button {
+                    withAnimation(DS.Anim.snappy) { drillPath.append(member) }
+                } label: {
+                    VStack(spacing: 1) {
+                        Text("\(kids)")
+                            .font(DS.Font.plex(13, weight: .bold))
+                        Image(systemName: "chevron.forward")
+                            .font(DS.Font.scaled(11, weight: .bold))
+                    }
+                    .foregroundColor(DS.Color.primary)
+                    .frame(width: 42, height: 42)
+                    .background(DS.Color.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                            .strokeBorder(DS.Color.primary.opacity(0.18), lineWidth: 1)
+                    )
+                }
+                .buttonStyle(DSScaleButtonStyle())
+            }
+        }
+    }
+
     // MARK: - Body
 
     var body: some View {
@@ -138,27 +270,37 @@ struct AdminMembersDirectoryView: View {
                 // 2) فلتر الحالة (الكل/أحياء/متوفون)
                 filterChips
 
-                // 3) فلتر الفرع
-                branchFilterRow
-                    .padding(.horizontal, DS.Spacing.lg)
-
-                // 4) تلميح السحب
-                if authVM.canEditMembers && selectedFilter != .deceased {
-                    HStack(spacing: DS.Spacing.xs) {
-                        Image(systemName: "hand.draw")
-                            .font(DS.Font.scaled(10, weight: .medium))
-                        Text(L10n.t(
-                            "سحب يسار: تجميد / تفعيل الحساب",
-                            "Swipe left: Freeze / Activate account"
-                        ))
-                        .font(DS.Font.caption2)
-                    }
-                    .foregroundColor(DS.Color.textTertiary)
-                    .padding(.horizontal, DS.Spacing.lg)
+                if searchText.isEmpty {
+                    breadcrumbBar
                 }
 
                 if filteredMembers.isEmpty {
                     noResultsState
+                } else if searchText.isEmpty {
+                    // تصفّح شجري — مستوى واحد في كل مرة
+                    List {
+                        ForEach(currentLevelMembers, id: \.id) { member in
+                            branchRow(member)
+                                .listRowBackground(Color.clear)
+                                .listRowSeparator(.hidden)
+                                .listRowInsets(EdgeInsets(
+                                    top: 3, leading: DS.Spacing.lg,
+                                    bottom: 3, trailing: DS.Spacing.lg
+                                ))
+                        }
+                        if currentLevelMembers.isEmpty {
+                            Text(L10n.t("ما فيه ذرّية مسجّلة لهذا الفرع", "No descendants recorded for this branch"))
+                                .font(DS.Font.scaled(12))
+                                .foregroundColor(DS.Color.textSecondary)
+                                .frame(maxWidth: .infinity, alignment: .center)
+                                .padding(.vertical, DS.Spacing.xxl)
+                                .listRowBackground(Color.clear)
+                                .listRowSeparator(.hidden)
+                        }
+                    }
+                    .listStyle(.plain)
+                    .scrollContentBackground(.hidden)
+                    .environment(\.defaultMinListRowHeight, 0)
                 } else {
                     List {
                         let visible = Array(filteredMembers.prefix(displayLimit))
@@ -234,7 +376,9 @@ struct AdminMembersDirectoryView: View {
             }
             .onAppear {
                 withAnimation(DS.Anim.smooth.delay(0.1)) { appeared = true }
+                if descendantCounts.isEmpty { buildDescendantCounts() }
             }
+            .onChange(of: memberVM.allMembers.count) { _ in buildDescendantCounts() }
         }
         // تعديل / إضافة رقم — واجهة «رقم العضو» الموحّدة (تحفظ على السيرفر وتعتمد وتفعّل)
         .sheet(item: $memberToEditPhone) { member in
@@ -348,78 +492,77 @@ struct AdminMembersDirectoryView: View {
 
     // MARK: - Member Row
 
+    /// شارة حالة صغيرة موحّدة (متوفي / مجمّد)
+    private func statusChip(_ text: String, color: Color) -> some View {
+        Text(text)
+            .font(DS.Font.caption2)
+            .fontWeight(.bold)
+            .foregroundColor(color)
+            .padding(.horizontal, 5)
+            .padding(.vertical, 1)
+            .background(color.opacity(0.12))
+            .clipShape(Capsule())
+    }
+
     private func memberRow(member: FamilyMember, index: Int) -> some View {
-        HStack(spacing: DS.Spacing.md) {
+        HStack(spacing: DS.Spacing.sm) {
             DSMemberAvatar(
                 name: member.fullName,
                 avatarUrl: member.avatarUrl,
-                size: 50,
+                size: 40,
                 roleColor: member.isDeceased == true ? DS.Color.textTertiary : member.roleColor
             )
             .overlay(alignment: .bottomTrailing) {
-                if member.status == .frozen {
-                    Image(systemName: "lock.fill")
-                        .font(DS.Font.scaled(10, weight: .bold))
+                // حالة العضو على الصورة نفسها — بدل شارات نصّية تزحم السطر
+                if member.isDeceased == true {
+                    Image(systemName: "leaf.fill")
+                        .font(DS.Font.scaled(11, weight: .bold))
                         .foregroundColor(.white)
-                        .padding(DS.Spacing.xs)
+                        .padding(4)
+                        .background(DS.Color.textTertiary)
+                        .clipShape(Circle())
+                        .overlay(Circle().strokeBorder(DS.Color.background, lineWidth: 1.5))
+                } else if member.status == .frozen {
+                    Image(systemName: "lock.fill")
+                        .font(DS.Font.scaled(11, weight: .bold))
+                        .foregroundColor(.white)
+                        .padding(4)
                         .background(DS.Color.error)
                         .clipShape(Circle())
+                        .overlay(Circle().strokeBorder(DS.Color.background, lineWidth: 1.5))
                 }
             }
 
-            VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                // Name + status badges
-                HStack(spacing: DS.Spacing.xs) {
-                    Text(member.fullName)
-                        .font(DS.Font.calloutBold)
-                        .foregroundColor(
-                            member.isDeceased == true ? DS.Color.textTertiary :
-                            member.status == .frozen ? DS.Color.textTertiary :
-                            DS.Color.textPrimary
-                        )
-                        .lineLimit(2)
+            // سطران: الاسم، ثم شارة العضو والهاتف — بلا تكرار الاسم
+            VStack(alignment: .leading, spacing: 3) {
+                Text(member.shortFullName)
+                    .font(DS.Font.calloutBold)
+                    .foregroundColor(
+                        member.isDeceased == true ? DS.Color.textTertiary :
+                        member.status == .frozen ? DS.Color.textTertiary :
+                        DS.Color.textPrimary
+                    )
+                    .lineLimit(1)
 
-                    if member.isDeceased == true {
-                        Text(L10n.t("متوفي", "Deceased"))
-                            .font(DS.Font.caption2)
-                            .fontWeight(.bold)
-                            .foregroundColor(DS.Color.textTertiary)
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 1)
-                            .background(DS.Color.textTertiary.opacity(0.12))
-                            .clipShape(Capsule())
+                HStack(spacing: DS.Spacing.sm) {
+                    DSRoleBadge(title: member.roleName, color: member.roleColor)
+
+                    if let phone = member.phoneNumber, !phone.isEmpty {
+                        HStack(spacing: 3) {
+                            Image(systemName: "phone.fill")
+                                .font(DS.Font.scaled(11))
+                            Text(KuwaitPhone.display(phone))
+                                .font(DS.Font.caption2)
+                                .monospacedDigit()
+                        }
+                        .foregroundColor(DS.Color.textSecondary)
                     }
 
-                    if member.status == .frozen {
-                        Text(L10n.t("مجمّد", "Frozen"))
-                            .font(DS.Font.caption2)
-                            .fontWeight(.bold)
-                            .foregroundColor(DS.Color.error)
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 1)
-                            .background(DS.Color.error.opacity(0.12))
-                            .clipShape(Capsule())
-                    }
-                }
-
-                // Role badge
-                DSRoleBadge(title: member.roleName, color: member.roleColor)
-
-                // Phone
-                if let phone = member.phoneNumber, !phone.isEmpty {
-                    HStack(spacing: DS.Spacing.xs) {
-                        Image(systemName: "phone.fill")
-                            .font(DS.Font.scaled(10))
-                        Text(KuwaitPhone.display(phone))
-                            .font(DS.Font.caption1)
-                            .monospacedDigit()
-                    }
-                    .foregroundColor(DS.Color.textTertiary)
+                    Spacer(minLength: 0)
                 }
             }
-
-            Spacer()
         }
+        .frame(minHeight: 50)
         .padding(.vertical, DS.Spacing.sm)
         .padding(.horizontal, DS.Spacing.md)
         .background(DS.Color.surface)
@@ -493,7 +636,7 @@ struct AdminMembersDirectoryView: View {
                             .fontWeight(.semibold)
                         Spacer()
                         Image(systemName: "chevron.forward")
-                            .font(DS.Font.scaled(10, weight: .bold))
+                            .font(DS.Font.scaled(11, weight: .bold))
                             .opacity(0.5)
                     }
                     .foregroundColor(DS.Color.textSecondary)

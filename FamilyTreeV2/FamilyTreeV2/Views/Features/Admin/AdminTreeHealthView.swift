@@ -174,7 +174,7 @@ struct AdminTreeHealthView: View {
                     // Swipe hint
                     HStack(spacing: DS.Spacing.xs) {
                         Image(systemName: "hand.draw")
-                            .font(DS.Font.scaled(10, weight: .medium))
+                            .font(DS.Font.scaled(11, weight: .medium))
                         Text(L10n.t(
                             "← سحب لإجراءات سريعة →",
                             "← Swipe for quick actions →"
@@ -474,9 +474,9 @@ struct AdminTreeHealthView: View {
                         ForEach(issues, id: \.self) { tag in
                             HStack(spacing: 2) {
                                 Image(systemName: tag.icon)
-                                    .font(DS.Font.scaled(8, weight: .bold))
+                                    .font(DS.Font.scaled(11, weight: .bold))
                                 Text(tag.label)
-                                    .font(DS.Font.scaled(9, weight: .bold))
+                                    .font(DS.Font.scaled(11, weight: .bold))
                             }
                             .foregroundColor(tag.color)
                             .padding(.horizontal, 5)

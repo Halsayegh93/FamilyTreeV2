@@ -285,7 +285,7 @@ struct AdminPendingRequestsView: View {
                         if let uname {
                             HStack(spacing: 4) {
                                 Image(systemName: "at")
-                                    .font(DS.Font.scaled(10, weight: .bold))
+                                    .font(DS.Font.scaled(11, weight: .bold))
                                     .foregroundColor(DS.Color.primary)
                                 Text(uname)
                                     .font(DS.Font.scaled(11, weight: .bold))
@@ -297,10 +297,10 @@ struct AdminPendingRequestsView: View {
                         if member.fullName.split(whereSeparator: \.isWhitespace).count >= 5 {
                             HStack(spacing: 4) {
                                 Image(systemName: "checkmark.seal.fill")
-                                    .font(DS.Font.scaled(10))
+                                    .font(DS.Font.scaled(11))
                                     .foregroundColor(DS.Color.success)
                                 Text(L10n.t("اسم خماسي مكتمل", "Full 5-part name"))
-                                    .font(DS.Font.scaled(10))
+                                    .font(DS.Font.scaled(11))
                                     .foregroundColor(DS.Color.success)
                             }
                         }
@@ -308,18 +308,18 @@ struct AdminPendingRequestsView: View {
                         // الوقت والتاريخ
                         HStack(spacing: 3) {
                             Image(systemName: "clock.fill")
-                                .font(DS.Font.scaled(9))
+                                .font(DS.Font.scaled(11))
                             Text(registrationTime)
-                                .font(DS.Font.scaled(10, weight: .semibold))
+                                .font(DS.Font.scaled(11, weight: .semibold))
                         }
                         .foregroundColor(DS.Color.textSecondary)
 
                         // المصدر
                         HStack(spacing: 3) {
                             Image(systemName: platform == "web" ? "globe" : "iphone")
-                                .font(DS.Font.scaled(9))
+                                .font(DS.Font.scaled(11))
                             Text(platform == "web" ? L10n.t("الموقع", "Web") : L10n.t("التطبيق", "App"))
-                                .font(DS.Font.scaled(10, weight: .bold))
+                                .font(DS.Font.scaled(11, weight: .bold))
                         }
                         .foregroundColor(platform == "web" ? DS.Color.info : DS.Color.success)
                         .padding(.horizontal, 6)
@@ -497,7 +497,7 @@ struct AdminPendingRequestsView: View {
                             Text(L10n.t("تعديل / إضافة رقم فعلي", "Edit / Add real number"))
                                 .font(DS.Font.scaled(13, weight: .bold))
                             Text(phoneSubtitle(for: member))
-                                .font(DS.Font.scaled(10, weight: .medium))
+                                .font(DS.Font.scaled(11, weight: .medium))
                                 .foregroundColor(DS.Color.textSecondary)
                         }
                         Spacer()
@@ -562,7 +562,7 @@ struct AdminPendingRequestsView: View {
                 VStack(alignment: .leading, spacing: DS.Spacing.xs) {
                     // اسم العضو الكامل بالشجرة
                     Text(L10n.t("عضو الشجرة:", "Tree member:"))
-                        .font(DS.Font.scaled(10, weight: .medium))
+                        .font(DS.Font.scaled(11, weight: .medium))
                         .foregroundColor(DS.Color.textTertiary)
 
                     // الاسم مع تمييز الأجزاء المتطابقة
@@ -576,7 +576,7 @@ struct AdminPendingRequestsView: View {
                     if let fatherName {
                         HStack(spacing: 4) {
                             Image(systemName: "arrow.up.right")
-                                .font(DS.Font.scaled(9, weight: .semibold))
+                                .font(DS.Font.scaled(11, weight: .semibold))
                             Text(L10n.t("ابن: \(fatherName)", "Son of: \(fatherName)"))
                                 .font(DS.Font.scaled(11, weight: .medium))
                         }
@@ -594,7 +594,7 @@ struct AdminPendingRequestsView: View {
                     "\(match.matchCount)/\(totalParts) متطابق",
                     "\(match.matchCount)/\(totalParts) match"
                 ))
-                .font(DS.Font.scaled(10, weight: .semibold))
+                .font(DS.Font.scaled(11, weight: .semibold))
                 .foregroundColor(strengthColor)
                 .padding(.horizontal, DS.Spacing.sm)
                 .padding(.vertical, 3)
@@ -603,7 +603,7 @@ struct AdminPendingRequestsView: View {
 
                 // بادج قوة التطابق
                 Text(matchStrengthLabel(ratio: matchRatio))
-                    .font(DS.Font.scaled(10, weight: .bold))
+                    .font(DS.Font.scaled(11, weight: .bold))
                     .foregroundColor(DS.Color.textOnPrimary)
                     .padding(.horizontal, DS.Spacing.sm)
                     .padding(.vertical, 3)

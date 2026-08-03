@@ -289,12 +289,12 @@ struct AdminActivityLogView: View {
                 } label: {
                     HStack(spacing: 2.5) {
                         Text(f.title)
-                            .font(DS.Font.scaled(9.5, weight: .bold))
+                            .font(DS.Font.scaled(11, weight: .bold))
                             .lineLimit(1)
                             .minimumScaleFactor(0.65)
                         if count > 0 {
                             Text("\(count)")
-                                .font(DS.Font.scaled(8.5, weight: .heavy))
+                                .font(DS.Font.scaled(11, weight: .heavy))
                                 .opacity(0.7)
                         }
                     }
@@ -435,7 +435,7 @@ struct AdminActivityLogView: View {
                     // شارة «جديد» — حركة لم تُقرأ بعد
                     if isNew {
                         Text(L10n.t("جديد", "New"))
-                            .font(DS.Font.scaled(9, weight: .heavy))
+                            .font(DS.Font.scaled(11, weight: .heavy))
                             .foregroundColor(.white)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
@@ -467,9 +467,9 @@ struct AdminActivityLogView: View {
                             HStack(spacing: 3) {
                                 Image(systemName: expandedIds.contains(item.id)
                                       ? "chevron.up.circle.fill" : "list.bullet.rectangle")
-                                    .font(DS.Font.scaled(9, weight: .bold))
+                                    .font(DS.Font.scaled(11, weight: .bold))
                                 Text(L10n.t("\(changes.count) تغيير", "\(changes.count) changes"))
-                                    .font(DS.Font.scaled(9.5, weight: .bold))
+                                    .font(DS.Font.scaled(11, weight: .bold))
                             }
                             .foregroundColor(DS.Color.primary)
                             .padding(.horizontal, 6)
@@ -538,20 +538,20 @@ struct AdminActivityLogView: View {
         }
         return HStack(alignment: .top, spacing: 6) {
             Text(AppNotification.NotificationDetails.localizedFieldName(ch.field))
-                .font(DS.Font.scaled(10, weight: .bold))
+                .font(DS.Font.scaled(11, weight: .bold))
                 .foregroundColor(DS.Color.textSecondary)
 
             HStack(spacing: 4) {
                 Text(display(ch.before))
-                    .font(DS.Font.scaled(10))
+                    .font(DS.Font.scaled(11))
                     .foregroundColor(DS.Color.textTertiary)
                     .strikethrough(true, color: DS.Color.textTertiary.opacity(0.6))
                     .lineLimit(1)
                 Image(systemName: L10n.isArabic ? "arrow.left" : "arrow.right")
-                    .font(DS.Font.scaled(8, weight: .bold))
+                    .font(DS.Font.scaled(11, weight: .bold))
                     .foregroundColor(DS.Color.textTertiary)
                 Text(display(ch.after))
-                    .font(DS.Font.scaled(10, weight: .semibold))
+                    .font(DS.Font.scaled(11, weight: .semibold))
                     .foregroundColor(DS.Color.textPrimary)
                     .lineLimit(1)
             }
@@ -656,159 +656,224 @@ private struct ActivityDetailSheet: View {
     @State private var detent: PresentationDetent = .height(260)
 
     var body: some View {
-        ZStack(alignment: .top) {
-            DS.Color.background.ignoresSafeArea()
+        VStack(spacing: 0) {
+            // ═══ شريط علوي ثابت بهوية نوع الحركة ═══
+            VStack(spacing: DS.Spacing.sm) {
+                HStack(spacing: DS.Spacing.md) {
+                    ZStack {
+                        Circle().fill(SwiftUI.Color.white.opacity(0.20))
+                        Image(systemName: style.icon)
+                            .font(DS.Font.scaled(17, weight: .bold))
+                            .foregroundColor(.white)
+                    }
+                    .frame(width: 44, height: 44)
 
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(item.title)
+                            .font(DS.Font.plex(16, weight: .bold))
+                            .foregroundColor(.white)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Text(categoryTitle)
+                            .font(DS.Font.caption2)
+                            .foregroundColor(SwiftUI.Color.white.opacity(0.85))
+                    }
+
+                    Spacer(minLength: 0)
+
+                    Button { dismiss() } label: {
+                        Image(systemName: "xmark")
+                            .font(DS.Font.scaled(13, weight: .bold))
+                            .foregroundColor(.white)
+                            .frame(width: 32, height: 32)
+                            .background(SwiftUI.Color.white.opacity(0.18), in: Circle())
+                    }
+                    .accessibilityLabel(L10n.t("إغلاق", "Close"))
+                }
+            }
+            .padding(.horizontal, DS.Spacing.lg)
+            .padding(.vertical, DS.Spacing.md)
+            .frame(maxWidth: .infinity)
+            .background(style.color)
+
+            // ═══ المحتوى ═══
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: DS.Spacing.md) {
-                    header
 
-                    if !item.body.isEmpty {
-                        block(L10n.t("التفاصيل", "Details"), icon: "text.alignright") {
-                            Text(item.body)
-                                .font(DS.Font.callout)
-                                .foregroundColor(DS.Color.textPrimary)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                    }
-
+                    // «ما تغيّر» — سبب فتح السجل، فيتصدّر
                     if let changes = item.details?.changes, !changes.isEmpty {
-                        block(L10n.t("ما تغيّر (\(changes.count))", "What changed (\(changes.count))"),
-                              icon: "arrow.left.arrow.right") {
-                            VStack(spacing: 6) {
+                        DSCard(padding: 0) {
+                            DSSectionHeader(
+                                title: L10n.t("ما تغيّر", "What changed"),
+                                icon: "arrow.left.arrow.right",
+                                trailing: "\(changes.count)",
+                                iconColor: DS.Color.accent
+                            )
+                            VStack(spacing: DS.Spacing.xs) {
                                 ForEach(changes) { ch in changeLine(ch) }
                             }
+                            .padding(.horizontal, DS.Spacing.lg)
+                            .padding(.bottom, DS.Spacing.md)
                         }
                     }
 
-                    block(L10n.t("معلومات السجل", "Record info"), icon: "info.circle.fill") {
+                    if !item.body.isEmpty {
+                        DSCard(padding: 0) {
+                            DSSectionHeader(
+                                title: L10n.t("التفاصيل", "Details"),
+                                icon: "text.alignright",
+                                iconColor: DS.Color.primary
+                            )
+                            Text(item.body)
+                                .font(DS.Font.subheadline)
+                                .foregroundColor(DS.Color.textPrimary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, DS.Spacing.lg)
+                                .padding(.bottom, DS.Spacing.md)
+                        }
+                    }
+
+                    // معلومات السجل — كل الحقول ظاهرة بصفوف موحّدة
+                    DSCard(padding: 0) {
+                        DSSectionHeader(
+                            title: L10n.t("معلومات السجل", "Record info"),
+                            icon: "info.circle.fill",
+                            iconColor: DS.Color.textSecondary
+                        )
                         VStack(spacing: 0) {
                             infoRow(L10n.t("التصنيف", "Category"), categoryTitle)
+                            DSDivider()
+                            infoRow(L10n.t("الوقت", "Time"), fullDate)
                             if let subject {
                                 DSDivider()
-                                infoRow(L10n.t("تخصّ", "About"), subject.fullName)
+                                infoRow(L10n.t("تخصّ", "About"), subject.shortFullName)
                             }
                             if let actor {
                                 DSDivider()
-                                infoRow(L10n.t("نفّذها", "By"), actor.fullName)
+                                infoRow(L10n.t("نفّذها", "By"), actor.shortFullName)
                             }
-                            DSDivider()
-                            infoRow(L10n.t("الوقت", "Time"), fullDate)
                         }
+                        .padding(.horizontal, DS.Spacing.lg)
+                        .padding(.bottom, DS.Spacing.sm)
                     }
                 }
                 .padding(DS.Spacing.lg)
-                // نقل جزء من حشو الأعلى إلى الأسفل: المحتوى يرتفع قليلاً
-                // ويتنفّس أسفل آخر سطر — والارتفاع الكلي كما هو.
-                .padding(.top, DS.Spacing.xs)
-                .padding(.bottom, DS.Spacing.sm)
                 .background(
                     GeometryReader { g in
                         Color.clear.preference(key: ActivitySheetHeightKey.self, value: g.size.height)
                     }
                 )
             }
+            .background(DS.Color.background)
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .onPreferenceChange(ActivitySheetHeightKey.self) { h in
-            // الارتفاع = المحتوى تماماً + منطقة الأمان السفلى (شريط الهوم)،
-            // بلا حشو زائد وإلا ظهر فراغ أسفل الشيت.
             let safeBottom = UIApplication.shared.connectedScenes
                 .compactMap { $0 as? UIWindowScene }
                 .first?.windows.first(where: { $0.isKeyWindow })?
                 .safeAreaInsets.bottom ?? 0
-            let newHeight = min(max(h + safeBottom, 180), UIScreen.main.bounds.height * 0.85)
+            // المحتوى + الشريط العلوي (76) + منطقة الأمان
+            let newHeight = min(max(h + 76 + safeBottom, 240),
+                                UIScreen.main.bounds.height * 0.92)
             guard abs(newHeight - contentHeight) > 1 else { return }
             contentHeight = newHeight
             withAnimation(DS.Anim.quick) { detent = .height(newHeight) }
         }
         .presentationDetents([.height(contentHeight), .large], selection: $detent)
-        .presentationDragIndicator(.visible)
+        .presentationDragIndicator(.hidden)
     }
 
-    private var header: some View {
-        HStack(alignment: .top, spacing: DS.Spacing.md) {
-            Image(systemName: style.icon)
-                .font(DS.Font.scaled(18, weight: .bold))
-                .foregroundColor(style.color)
-                .frame(width: 46, height: 46)
-                .background(style.color.opacity(0.12))
-                .clipShape(Circle())
-            VStack(alignment: .leading, spacing: 4) {
-                Text(item.title)
-                    .font(DS.Font.headline)
-                    .foregroundColor(DS.Color.textPrimary)
-                Text(categoryTitle)
-                    .font(DS.Font.caption2)
-                    .fontWeight(.bold)
-                    .foregroundColor(style.color)
-                    .padding(.horizontal, DS.Spacing.sm)
-                    .padding(.vertical, 2)
-                    .background(Capsule().fill(style.color.opacity(0.12)))
-            }
-            Spacer(minLength: 0)
-        }
-    }
-
-    private func block<Content: View>(_ title: String, icon: String,
-                                      @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            HStack(spacing: 5) {
-                Image(systemName: icon)
-                    .font(DS.Font.scaled(10, weight: .bold))
-                    .foregroundColor(DS.Color.primary.opacity(0.75))
-                Text(title)
-                    .font(DS.Font.caption1)
-                    .fontWeight(.bold)
-                    .foregroundColor(DS.Color.textSecondary)
-            }
-            content()
-                .padding(DS.Spacing.md)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(DS.Color.surface)
-                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
-        }
-    }
-
+    /// صف معلومة داخل بطاقة «معلومات السجل»
     private func infoRow(_ label: String, _ value: String) -> some View {
-        HStack(spacing: DS.Spacing.md) {
+        HStack(alignment: .top, spacing: DS.Spacing.md) {
             Text(label)
                 .font(DS.Font.caption1)
                 .foregroundColor(DS.Color.textSecondary)
-            Spacer(minLength: 0)
+            Spacer(minLength: DS.Spacing.sm)
             Text(value)
                 .font(DS.Font.scaled(12, weight: .semibold))
                 .foregroundColor(DS.Color.textPrimary)
                 .multilineTextAlignment(L10n.isArabic ? .leading : .trailing)
-                .lineLimit(2)
+                .lineLimit(3)
+                .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(.vertical, 7)
+        .padding(.vertical, DS.Spacing.xs + 1)
+    }
+
+    /// مصغّرة صورة داخل تفاصيل التغيير — تُظهر الصورة الفعلية قبل/بعد
+    private func photoThumb(_ urlString: String?, label: String, faded: Bool) -> some View {
+        let trimmed = (urlString ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        return VStack(spacing: 3) {
+            Group {
+                if let url = URL(string: trimmed), !trimmed.isEmpty {
+                    CachedAsyncImage(url: url) { img in
+                        img.resizable().scaledToFill()
+                    } placeholder: {
+                        Rectangle().fill(DS.Color.surface)
+                    }
+                } else {
+                    ZStack {
+                        Rectangle().fill(DS.Color.surface)
+                        Image(systemName: "person.crop.circle.badge.xmark")
+                            .font(DS.Font.scaled(14))
+                            .foregroundColor(DS.Color.textTertiary)
+                    }
+                }
+            }
+            .frame(width: 54, height: 54)
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .strokeBorder(DS.Color.textTertiary.opacity(0.18), lineWidth: 1)
+            )
+            .opacity(faded ? 0.55 : 1)
+
+            Text(label)
+                .font(DS.Font.scaled(11, weight: .semibold))
+                .foregroundColor(DS.Color.textTertiary)
+        }
     }
 
     private func changeLine(_ ch: AppNotification.NotificationDetails.ChangeEntry) -> some View {
-        let isPhoto = ch.field == "avatar_url"
+        let isPhoto = ch.field == "avatar_url" || ch.field == "cover_url" || ch.field == "photo_url"
         func display(_ v: String?) -> String {
             let t = (v ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             if t.isEmpty { return L10n.t("بلا", "None") }
-            if isPhoto { return L10n.t("صورة", "Photo") }
             return t
         }
-        return VStack(alignment: .leading, spacing: 3) {
+        return VStack(alignment: .leading, spacing: 5) {
             Text(AppNotification.NotificationDetails.localizedFieldName(ch.field))
                 .font(DS.Font.scaled(11, weight: .bold))
                 .foregroundColor(DS.Color.textSecondary)
-            HStack(spacing: 6) {
-                Text(display(ch.before))
-                    .font(DS.Font.scaled(12))
-                    .foregroundColor(DS.Color.textTertiary)
-                    .strikethrough(true, color: DS.Color.textTertiary.opacity(0.6))
-                Image(systemName: L10n.isArabic ? "arrow.left" : "arrow.right")
-                    .font(DS.Font.scaled(9, weight: .bold))
-                    .foregroundColor(DS.Color.textTertiary)
-                Text(display(ch.after))
-                    .font(DS.Font.scaled(12, weight: .bold))
-                    .foregroundColor(DS.Color.textPrimary)
-                Spacer(minLength: 0)
+
+            if isPhoto {
+                // الصور تُعرض فعلاً — النص «صورة ← صورة» كان بلا فائدة
+                HStack(spacing: DS.Spacing.md) {
+                    photoThumb(ch.before, label: L10n.t("قبل", "Before"), faded: true)
+                    Image(systemName: L10n.isArabic ? "arrow.left" : "arrow.right")
+                        .font(DS.Font.scaled(11, weight: .bold))
+                        .foregroundColor(DS.Color.textTertiary)
+                    photoThumb(ch.after, label: L10n.t("بعد", "After"), faded: false)
+                    Spacer(minLength: 0)
+                }
+            } else {
+                HStack(spacing: 6) {
+                    Text(display(ch.before))
+                        .font(DS.Font.scaled(12))
+                        .foregroundColor(DS.Color.textTertiary)
+                        .strikethrough(true, color: DS.Color.textTertiary.opacity(0.6))
+                        .lineLimit(3)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Image(systemName: L10n.isArabic ? "arrow.left" : "arrow.right")
+                        .font(DS.Font.scaled(11, weight: .bold))
+                        .foregroundColor(DS.Color.textTertiary)
+                    Text(display(ch.after))
+                        .font(DS.Font.scaled(12, weight: .bold))
+                        .foregroundColor(DS.Color.textPrimary)
+                        .lineLimit(3)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 0)
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

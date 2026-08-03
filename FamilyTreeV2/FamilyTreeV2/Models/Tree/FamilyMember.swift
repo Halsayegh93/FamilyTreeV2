@@ -10,6 +10,10 @@ nonisolated struct FamilyMember: Identifiable, Codable, Equatable, Sendable {
     var birthDate: String?
     var deathDate: String?
     var isDeceased: Bool?
+    /// تاريخ الوفاة غير معروف — يُستثنى من تقارير البيانات الناقصة
+    var deathDateUnknown: Bool?
+    /// لا توجد صورة لهذا العضو — يُستثنى من تقارير البيانات الناقصة
+    var avatarUnavailable: Bool?
     var role: UserRole
     var fatherId: UUID?
     var motherId: UUID?
@@ -101,6 +105,8 @@ nonisolated struct FamilyMember: Identifiable, Codable, Equatable, Sendable {
         self.fullName = rawFull ?? rawFirst ?? ""
         self.familyName = try container.decodeIfPresent(String.self, forKey: .familyName)
         self.phoneNumber = try container.decodeIfPresent(String.self, forKey: .phoneNumber)
+        self.deathDateUnknown = try container.decodeIfPresent(Bool.self, forKey: .deathDateUnknown)
+        self.avatarUnavailable = try container.decodeIfPresent(Bool.self, forKey: .avatarUnavailable)
         self.birthDate = try container.decodeIfPresent(String.self, forKey: .birthDate)
         self.deathDate = try container.decodeIfPresent(String.self, forKey: .deathDate)
         self.isDeceased = try container.decodeIfPresent(Bool.self, forKey: .isDeceased)
@@ -292,6 +298,8 @@ nonisolated struct FamilyMember: Identifiable, Codable, Equatable, Sendable {
         case fullName = "full_name"
         case familyName = "family_name"
         case phoneNumber = "phone_number"
+        case deathDateUnknown = "death_date_unknown"
+        case avatarUnavailable = "avatar_unavailable"
         case birthDate = "birth_date"
         case deathDate = "death_date"
         case isDeceased = "is_deceased"

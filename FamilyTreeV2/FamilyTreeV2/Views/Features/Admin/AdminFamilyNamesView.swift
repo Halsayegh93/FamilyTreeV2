@@ -72,7 +72,7 @@ struct AdminFamilyNamesView: View {
                     .foregroundColor(.white)
                 Text(L10n.t("يختار العضو عائلته منها، وتظهر بآخر اسمه في التطبيق.",
                             "Members pick from this list; it appears at the end of their name."))
-                    .font(DS.Font.scaled(10))
+                    .font(DS.Font.scaled(11))
                     .foregroundColor(SwiftUI.Color.white.opacity(0.85))
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -125,7 +125,7 @@ struct AdminFamilyNamesView: View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             HStack(spacing: 5) {
                 Image(systemName: "list.bullet")
-                    .font(DS.Font.scaled(10, weight: .bold))
+                    .font(DS.Font.scaled(11, weight: .bold))
                     .foregroundColor(DS.Color.primary.opacity(0.75))
                 Text(L10n.t("العوائل (\(vm.options.count))", "Families (\(vm.options.count))"))
                     .font(DS.Font.caption1)
@@ -173,7 +173,7 @@ struct AdminFamilyNamesView: View {
 
             if !option.isActive {
                 Text(L10n.t("معطّلة", "Disabled"))
-                    .font(DS.Font.scaled(9, weight: .bold))
+                    .font(DS.Font.scaled(11, weight: .bold))
                     .foregroundColor(DS.Color.textTertiary)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)

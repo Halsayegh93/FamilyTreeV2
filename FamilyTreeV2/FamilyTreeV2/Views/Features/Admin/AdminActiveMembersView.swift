@@ -168,7 +168,7 @@ struct AdminActiveMembersView: View {
 
                 HStack(spacing: 4) {
                     Image(systemName: actionIcon(row.actionKind, source: row.source))
-                        .font(DS.Font.scaled(10, weight: .semibold))
+                        .font(DS.Font.scaled(11, weight: .semibold))
                         .foregroundColor(actionColor(row.actionKind, source: row.source))
                     Text(actionLabel(row))
                         .font(DS.Font.scaled(11, weight: .semibold))
@@ -180,7 +180,7 @@ struct AdminActiveMembersView: View {
             Spacer()
 
             Text(minutesLabel(row.minutesAgo))
-                .font(DS.Font.scaled(10, weight: .semibold))
+                .font(DS.Font.scaled(11, weight: .semibold))
                 .foregroundColor(DS.Color.textTertiary)
         }
         .padding(.horizontal, DS.Spacing.lg)
@@ -312,7 +312,7 @@ struct AdminActiveMembersView: View {
                         "أعضاء نشطون (هاتف أو تسجيل دخول)",
                         "Active members (phone or login)"
                     ))
-                    .font(DS.Font.scaled(10, weight: .medium))
+                    .font(DS.Font.scaled(11, weight: .medium))
                     .foregroundColor(DS.Color.textTertiary)
                 }
 
@@ -347,7 +347,7 @@ struct AdminActiveMembersView: View {
                 .font(DS.Font.scaled(20, weight: .heavy))
                 .foregroundColor(DS.Color.textPrimary)
             Text(title)
-                .font(DS.Font.scaled(10, weight: .semibold))
+                .font(DS.Font.scaled(11, weight: .semibold))
                 .foregroundColor(DS.Color.textSecondary)
         }
         .frame(maxWidth: .infinity)
@@ -371,7 +371,7 @@ struct AdminActiveMembersView: View {
 
                 HStack(spacing: 4) {
                     Image(systemName: sourceIcon(row.source))
-                        .font(DS.Font.scaled(10, weight: .semibold))
+                        .font(DS.Font.scaled(11, weight: .semibold))
                     Text(screenLabel(row.currentScreen, source: row.source))
                         .font(DS.Font.scaled(11, weight: .semibold))
                 }
@@ -381,7 +381,7 @@ struct AdminActiveMembersView: View {
             Spacer()
 
             Text(secondsLabel(row.secondsSinceActive))
-                .font(DS.Font.scaled(10, weight: .heavy))
+                .font(DS.Font.scaled(11, weight: .heavy))
                 .foregroundColor(DS.Color.success)
         }
         .padding(.horizontal, DS.Spacing.lg)
@@ -401,7 +401,7 @@ struct AdminActiveMembersView: View {
 
                 HStack(spacing: 4) {
                     Image(systemName: sourceIcon(row.source))
-                        .font(DS.Font.scaled(10, weight: .semibold))
+                        .font(DS.Font.scaled(11, weight: .semibold))
                     Text(screenLabel(row.currentScreen, source: row.source))
                         .font(DS.Font.scaled(11, weight: .regular))
                 }
@@ -411,7 +411,7 @@ struct AdminActiveMembersView: View {
             Spacer()
 
             Text(hoursLabel(row.hoursSinceActive))
-                .font(DS.Font.scaled(10, weight: .semibold))
+                .font(DS.Font.scaled(11, weight: .semibold))
                 .foregroundColor(DS.Color.textTertiary)
         }
         .padding(.horizontal, DS.Spacing.lg)

@@ -2099,6 +2099,44 @@ class MemberViewModel: ObservableObject {
         self.isLoading = false
     }
 
+    /// يعلّم تاريخ وفاة العضو بأنه غير معروف — فيخرج من تقارير البيانات الناقصة
+    /// يعلّم أن العضو لا توجد له صورة — فيخرج من تقارير البيانات الناقصة
+    func setAvatarUnavailable(memberId: UUID) async {
+        guard NetworkMonitor.shared.requireOnline() else { return }
+        do {
+            try await supabase
+                .from("profiles")
+                .update(["avatar_unavailable": AnyEncodable(true)])
+                .eq("id", value: memberId.uuidString)
+                .execute()
+            if let idx = allMembers.firstIndex(where: { $0.id == memberId }) {
+                allMembers[idx].avatarUnavailable = true
+            }
+            Log.info("عُلّم أن لا صورة للعضو \(memberId)")
+        } catch {
+            Log.error("فشل تعليم لا صورة: \(error)")
+            self.errorMessage = L10n.t("تعذّر الحفظ", "Could not save")
+        }
+    }
+
+    func setDeathDateUnknown(memberId: UUID) async {
+        guard NetworkMonitor.shared.requireOnline() else { return }
+        do {
+            try await supabase
+                .from("profiles")
+                .update(["death_date_unknown": AnyEncodable(true)])
+                .eq("id", value: memberId.uuidString)
+                .execute()
+            if let idx = allMembers.firstIndex(where: { $0.id == memberId }) {
+                allMembers[idx].deathDateUnknown = true
+            }
+            Log.info("عُلّم تاريخ الوفاة غير معروف للعضو \(memberId)")
+        } catch {
+            Log.error("فشل تعليم تاريخ الوفاة غير معروف: \(error)")
+            self.errorMessage = L10n.t("تعذّر الحفظ", "Could not save")
+        }
+    }
+
     func updateMemberGender(memberId: UUID, gender: String, silent: Bool = false) async {
         guard NetworkMonitor.shared.requireOnline() else { return }
         self.isLoading = true

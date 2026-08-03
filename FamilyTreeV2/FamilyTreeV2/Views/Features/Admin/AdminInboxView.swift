@@ -170,7 +170,7 @@ struct AdminInboxView: View {
                             .lineLimit(1)
                         if count > 0 {
                             Text("\(count)")
-                                .font(DS.Font.scaled(9, weight: .black))
+                                .font(DS.Font.scaled(11, weight: .black))
                                 .foregroundColor(selected ? .white : .white)
                                 .frame(minWidth: 16, minHeight: 16)
                                 .padding(.horizontal, 3)
@@ -344,7 +344,7 @@ struct AdminInboxView: View {
                     Spacer(minLength: 0)
                     if isPending {
                         Image(systemName: "clock.fill")
-                            .font(DS.Font.scaled(9, weight: .bold))
+                            .font(DS.Font.scaled(11, weight: .bold))
                             .foregroundColor(DS.Color.warning)
                     }
                     categoryChip(category)
@@ -429,9 +429,9 @@ struct AdminInboxView: View {
         let info = ContactCategoryInfo.from(raw: raw)
         return HStack(spacing: 4) {
             Image(systemName: info.icon)
-                .font(DS.Font.scaled(9, weight: .bold))
+                .font(DS.Font.scaled(11, weight: .bold))
             Text(info.title)
-                .font(DS.Font.scaled(10, weight: .bold))
+                .font(DS.Font.scaled(11, weight: .bold))
         }
         .foregroundColor(info.color)
         .padding(.horizontal, DS.Spacing.sm)
@@ -555,7 +555,7 @@ private struct MessageDetailSheet: View {
                                         .lineLimit(1)
                                         .environment(\.layoutDirection, .leftToRight)
                                     Image(systemName: "doc.on.doc")
-                                        .font(DS.Font.scaled(9, weight: .semibold))
+                                        .font(DS.Font.scaled(11, weight: .semibold))
                                         .opacity(0.6)
                                 }
                                 .foregroundColor(DS.Color.textSecondary)
@@ -578,7 +578,7 @@ private struct MessageDetailSheet: View {
                             }
                             if isEmail {
                                 replyButton(
-                                    title: L10n.t("إيميل", "Email"),
+                                    title: L10n.t("بريد", "Email"),
                                     icon: "envelope.fill",
                                     color: DS.Color.info
                                 ) { showEmailComposer = true }
@@ -885,7 +885,7 @@ private struct OfficialReplySheet: View {
                     .padding(DS.Spacing.lg)
                 }
             }
-            .navigationTitle(L10n.t("الرد بالإيميل", "Email reply"))
+            .navigationTitle(L10n.t("الرد بالبريد", "Email reply"))
             .navigationBarTitleDisplayMode(.inline)
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
             .toolbar {

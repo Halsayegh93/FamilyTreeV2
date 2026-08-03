@@ -544,7 +544,7 @@ struct AdminAnalyticsView: View {
                 ForEach(months, id: \.label) { month in
                     VStack(spacing: DS.Spacing.xs) {
                         Text("\(month.count)")
-                            .font(DS.Font.scaled(10, weight: .bold))
+                            .font(DS.Font.scaled(11, weight: .bold))
                             .foregroundColor(DS.Color.textSecondary)
 
                         RoundedRectangle(cornerRadius: DS.Radius.sm)
@@ -560,7 +560,7 @@ struct AdminAnalyticsView: View {
                             )
 
                         Text(month.label)
-                            .font(DS.Font.scaled(9, weight: .semibold))
+                            .font(DS.Font.scaled(11, weight: .semibold))
                             .foregroundColor(DS.Color.textTertiary)
                     }
                     .frame(maxWidth: .infinity)

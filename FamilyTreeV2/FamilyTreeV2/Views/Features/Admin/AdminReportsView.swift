@@ -718,7 +718,7 @@ struct AdminReportsView: View {
                             .fontWeight(.semibold)
                         Spacer()
                         Image(systemName: "chevron.forward")
-                            .font(DS.Font.scaled(10, weight: .bold))
+                            .font(DS.Font.scaled(11, weight: .bold))
                             .opacity(0.5)
                     }
                     .foregroundColor(DS.Color.textSecondary)
@@ -796,7 +796,7 @@ struct AdminReportsView: View {
 
                     if member.isDeceased == true {
                         Image(systemName: "leaf.fill")
-                            .font(DS.Font.scaled(10))
+                            .font(DS.Font.scaled(11))
                             .foregroundColor(DS.Color.textTertiary)
                     }
                 }
@@ -836,7 +836,7 @@ struct AdminReportsView: View {
     private func detailBadge(icon: String, text: String, tint: Color = DS.Color.textSecondary) -> some View {
         HStack(spacing: 4) {
             Image(systemName: icon)
-                .font(DS.Font.scaled(10))
+                .font(DS.Font.scaled(11))
             Text(text)
                 .font(DS.Font.caption2)
         }

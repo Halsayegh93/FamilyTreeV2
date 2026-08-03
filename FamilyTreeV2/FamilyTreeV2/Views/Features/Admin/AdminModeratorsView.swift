@@ -226,7 +226,7 @@ struct AdminModeratorsView: View {
                 if let phone = member.phoneNumber, !phone.isEmpty {
                     HStack(spacing: DS.Spacing.xs) {
                         Image(systemName: "phone.fill")
-                            .font(DS.Font.scaled(10))
+                            .font(DS.Font.scaled(11))
                         Text(KuwaitPhone.display(phone))
                             .font(DS.Font.caption1)
                             .monospacedDigit()

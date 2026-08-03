@@ -382,7 +382,7 @@ struct AdminAllRequestsView: View {
                                 .font(DS.Font.scaled(18, weight: .black))
                                 .foregroundColor(DS.Color.textPrimary)
                             Text(L10n.t("محدد", "selected"))
-                                .font(DS.Font.scaled(10, weight: .medium))
+                                .font(DS.Font.scaled(11, weight: .medium))
                                 .foregroundColor(DS.Color.textTertiary)
                         }
                         .frame(minWidth: 44)
@@ -1146,7 +1146,7 @@ struct AdminAllRequestsView: View {
                     .lineLimit(1)
                 if count > 0 {
                     Text("\(count)")
-                        .font(DS.Font.scaled(10, weight: .black))
+                        .font(DS.Font.scaled(11, weight: .black))
                         .foregroundColor(.white)
                         .frame(minWidth: 18, minHeight: 18)
                         .padding(.horizontal, 4)
@@ -1201,7 +1201,7 @@ struct AdminAllRequestsView: View {
 
                 if hasBadge {
                     Text("\(count)")
-                        .font(DS.Font.scaled(9, weight: .black))
+                        .font(DS.Font.scaled(11, weight: .black))
                         .foregroundColor(.white)
                         .frame(minWidth: 18, minHeight: 18)
                         .padding(.horizontal, 4)
@@ -1841,7 +1841,7 @@ struct AdminAllRequestsView: View {
                 if let createdAt = member.createdAt {
                     HStack(spacing: DS.Spacing.xs) {
                         Image(systemName: "clock")
-                            .font(DS.Font.scaled(10, weight: .medium))
+                            .font(DS.Font.scaled(11, weight: .medium))
                             .foregroundColor(DS.Color.textTertiary)
                         Text(formatRegistrationDate(createdAt))
                             .font(DS.Font.caption2)
@@ -1908,7 +1908,7 @@ struct AdminAllRequestsView: View {
             if let newDisplay = treeEditNewValue(payload: payload, action: action) {
                 HStack(spacing: 4) {
                     Image(systemName: "arrow.right.circle.fill")
-                        .font(DS.Font.scaled(10, weight: .bold))
+                        .font(DS.Font.scaled(11, weight: .bold))
                         .foregroundColor(DS.Color.success)
                     Text(L10n.t("القيمة الجديدة:", "New:")).font(DS.Font.caption2).foregroundColor(DS.Color.textSecondary)
                     Text(newDisplay).font(DS.Font.caption1).fontWeight(.semibold).foregroundColor(DS.Color.textPrimary)
@@ -1919,7 +1919,7 @@ struct AdminAllRequestsView: View {
             if let date = request.createdAt {
                 HStack(spacing: DS.Spacing.xs) {
                     Image(systemName: "clock")
-                        .font(DS.Font.scaled(10, weight: .medium))
+                        .font(DS.Font.scaled(11, weight: .medium))
                         .foregroundColor(DS.Color.textTertiary)
                     Text(formatRegistrationDate(date))
                         .font(DS.Font.caption2)
@@ -2302,7 +2302,7 @@ struct AdminAllRequestsView: View {
                     if let uname {
                         HStack(spacing: 3) {
                             Image(systemName: "at")
-                                .font(DS.Font.scaled(9, weight: .bold))
+                                .font(DS.Font.scaled(11, weight: .bold))
                             Text(uname)
                                 .font(DS.Font.scaled(11, weight: .bold))
                         }
@@ -2313,7 +2313,7 @@ struct AdminAllRequestsView: View {
                     if let phone = member.phoneNumber, !phone.isEmpty {
                         HStack(spacing: DS.Spacing.xs) {
                             Image(systemName: "phone.fill")
-                                .font(DS.Font.scaled(10))
+                                .font(DS.Font.scaled(11))
                             Text(KuwaitPhone.display(phone))
                                 .font(DS.Font.scaled(11, weight: .medium))
                                 .monospacedDigit()
@@ -2324,9 +2324,9 @@ struct AdminAllRequestsView: View {
                     // الوقت والتاريخ
                     HStack(spacing: 3) {
                         Image(systemName: "clock.fill")
-                            .font(DS.Font.scaled(9))
+                            .font(DS.Font.scaled(11))
                         Text(registrationTime)
-                            .font(DS.Font.scaled(10, weight: .semibold))
+                            .font(DS.Font.scaled(11, weight: .semibold))
                     }
                     .foregroundColor(DS.Color.textSecondary)
                 }
@@ -2362,7 +2362,7 @@ struct AdminAllRequestsView: View {
                                 .font(DS.Font.scaled(14, weight: .black))
                                 .foregroundColor(DS.Color.info)
                             Text(L10n.t("مطابقة", "match"))
-                                .font(DS.Font.scaled(8, weight: .bold))
+                                .font(DS.Font.scaled(11, weight: .bold))
                                 .foregroundColor(DS.Color.info)
                         }
                         .padding(.horizontal, DS.Spacing.sm)
@@ -2481,12 +2481,12 @@ struct AdminAllRequestsView: View {
                         "\(match.matchCount) من \(totalParts) أسماء متطابقة",
                         "\(match.matchCount) of \(totalParts) names match"
                     ))
-                    .font(DS.Font.scaled(10, weight: .medium))
+                    .font(DS.Font.scaled(11, weight: .medium))
                     .foregroundColor(DS.Color.textSecondary)
 
                     if match.isRegistrationMatch {
                         Text(L10n.t("تسجيل", "Reg"))
-                            .font(DS.Font.scaled(9, weight: .bold))
+                            .font(DS.Font.scaled(11, weight: .bold))
                             .foregroundColor(.white)
                             .padding(.horizontal, 5)
                             .padding(.vertical, 1)
@@ -2499,9 +2499,9 @@ struct AdminAllRequestsView: View {
                 if let phone = match.member.phoneNumber, !phone.isEmpty {
                     HStack(spacing: DS.Spacing.xs) {
                         Image(systemName: "phone.fill")
-                            .font(DS.Font.scaled(9))
+                            .font(DS.Font.scaled(11))
                         Text(KuwaitPhone.display(phone))
-                            .font(DS.Font.scaled(10, weight: .medium))
+                            .font(DS.Font.scaled(11, weight: .medium))
                             .monospacedDigit()
                     }
                     .foregroundColor(DS.Color.textTertiary)
@@ -2793,14 +2793,14 @@ struct AdminAllRequestsView: View {
             // التاريخ تحت + إشارة صور إن وُجدت
             HStack(spacing: DS.Spacing.xs) {
                 Image(systemName: "clock")
-                    .font(DS.Font.scaled(10, weight: .medium))
+                    .font(DS.Font.scaled(11, weight: .medium))
                     .foregroundColor(DS.Color.textTertiary)
                 Text(formatRegistrationDate(String(post.created_at)))
                     .font(DS.Font.caption2)
                     .foregroundColor(DS.Color.textTertiary)
                 if !post.mediaURLs.isEmpty {
                     Image(systemName: "photo.fill")
-                        .font(DS.Font.scaled(10, weight: .medium))
+                        .font(DS.Font.scaled(11, weight: .medium))
                         .foregroundColor(DS.Color.textTertiary)
                     Text("\(post.mediaURLs.count)")
                         .font(DS.Font.caption2)
@@ -2841,7 +2841,7 @@ struct AdminAllRequestsView: View {
             // التاريخ تحت
             HStack(spacing: DS.Spacing.xs) {
                 Image(systemName: "clock")
-                    .font(DS.Font.scaled(10, weight: .medium))
+                    .font(DS.Font.scaled(11, weight: .medium))
                     .foregroundColor(DS.Color.textTertiary)
                 Text(request.createdAt.map { formatRegistrationDate($0) } ?? "—")
                     .font(DS.Font.caption2)
@@ -2895,7 +2895,7 @@ struct AdminAllRequestsView: View {
             if let createdAt = request.createdAt {
                 HStack(spacing: DS.Spacing.xs) {
                     Image(systemName: "clock")
-                        .font(DS.Font.scaled(10, weight: .medium))
+                        .font(DS.Font.scaled(11, weight: .medium))
                         .foregroundColor(DS.Color.textTertiary)
                     Text(formatRegistrationDate(String(createdAt)))
                         .font(DS.Font.caption2)
@@ -3005,7 +3005,7 @@ struct AdminAllRequestsView: View {
             if let createdAt = request.createdAt {
                 HStack(spacing: DS.Spacing.xs) {
                     Image(systemName: "clock")
-                        .font(DS.Font.scaled(10, weight: .medium))
+                        .font(DS.Font.scaled(11, weight: .medium))
                         .foregroundColor(DS.Color.textTertiary)
                     Text(formatRegistrationDate(String(createdAt)))
                         .font(DS.Font.caption2)
@@ -3050,7 +3050,7 @@ struct AdminAllRequestsView: View {
             if let createdAt = request.createdAt {
                 HStack(spacing: DS.Spacing.xs) {
                     Image(systemName: "clock")
-                        .font(DS.Font.scaled(10, weight: .medium))
+                        .font(DS.Font.scaled(11, weight: .medium))
                         .foregroundColor(DS.Color.textTertiary)
                     Text(formatRegistrationDate(String(createdAt)))
                         .font(DS.Font.caption2)
@@ -3111,7 +3111,7 @@ struct AdminAllRequestsView: View {
                 if let createdAt = request.createdAt {
                     HStack(spacing: DS.Spacing.xs) {
                         Image(systemName: "clock")
-                            .font(DS.Font.scaled(10, weight: .medium))
+                            .font(DS.Font.scaled(11, weight: .medium))
                             .foregroundColor(DS.Color.textTertiary)
                         Text(formatRegistrationDate(String(createdAt)))
                             .font(DS.Font.caption2)
@@ -3171,7 +3171,7 @@ struct AdminAllRequestsView: View {
             if let createdAt = request.createdAt {
                 HStack(spacing: DS.Spacing.xs) {
                     Image(systemName: "clock")
-                        .font(DS.Font.scaled(10, weight: .medium))
+                        .font(DS.Font.scaled(11, weight: .medium))
                         .foregroundColor(DS.Color.textTertiary)
                     Text(formatRegistrationDate(String(createdAt)))
                         .font(DS.Font.caption2)
@@ -3368,7 +3368,7 @@ struct AdminAllRequestsView: View {
             if let date = project.createdAt {
                 HStack(spacing: DS.Spacing.xs) {
                     Image(systemName: "clock")
-                        .font(DS.Font.scaled(10, weight: .medium))
+                        .font(DS.Font.scaled(11, weight: .medium))
                         .foregroundColor(DS.Color.textTertiary)
                     Text(L10n.t("أُضيف: \(formatRegistrationDate(date))", "Added: \(formatRegistrationDate(date))"))
                         .font(DS.Font.caption2)
@@ -3632,7 +3632,7 @@ struct AdminAllRequestsView: View {
             if let timestamp {
                 HStack(spacing: 4) {
                     Image(systemName: "clock.fill")
-                        .font(DS.Font.scaled(10, weight: .bold))
+                        .font(DS.Font.scaled(11, weight: .bold))
                     Text(timestamp)
                         .font(DS.Font.scaled(11, weight: .semibold))
                 }
@@ -4058,7 +4058,7 @@ struct AdminAllRequestsView: View {
                         .foregroundColor(DS.Color.error)
                 }
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(oldLabel).font(DS.Font.scaled(10, weight: .semibold))
+                    Text(oldLabel).font(DS.Font.scaled(11, weight: .semibold))
                         .foregroundColor(DS.Color.textSecondary)
                     Text(oldValue).font(DS.Font.scaled(14, weight: .semibold))
                         .foregroundColor(DS.Color.textPrimary)
@@ -4070,7 +4070,7 @@ struct AdminAllRequestsView: View {
             HStack(spacing: 4) {
                 Spacer()
                 Image(systemName: "arrow.down")
-                    .font(DS.Font.scaled(10, weight: .bold))
+                    .font(DS.Font.scaled(11, weight: .bold))
                     .foregroundColor(DS.Color.textTertiary)
                 Spacer()
             }
@@ -4082,7 +4082,7 @@ struct AdminAllRequestsView: View {
                         .foregroundColor(DS.Color.success)
                 }
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(newLabel).font(DS.Font.scaled(10, weight: .semibold))
+                    Text(newLabel).font(DS.Font.scaled(11, weight: .semibold))
                         .foregroundColor(DS.Color.success)
                     Text(newValue).font(DS.Font.scaled(14, weight: .bold))
                         .foregroundColor(DS.Color.textPrimary)

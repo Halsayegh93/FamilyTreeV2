@@ -275,7 +275,7 @@ struct AdminAppUpdateView: View {
     private func sectionLabel(_ title: String, icon: String) -> some View {
         HStack(spacing: 5) {
             Image(systemName: icon)
-                .font(DS.Font.scaled(10, weight: .bold))
+                .font(DS.Font.scaled(11, weight: .bold))
                 .foregroundColor(DS.Color.primary.opacity(0.75))
             Text(title)
                 .font(DS.Font.caption1)

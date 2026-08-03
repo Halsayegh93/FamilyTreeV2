@@ -503,7 +503,7 @@ struct AdminNotificationsView: View {
                 if let phone = member.phoneNumber, !phone.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     HStack(spacing: 2) {
                         Image(systemName: "phone.fill")
-                            .font(DS.Font.scaled(10))
+                            .font(DS.Font.scaled(11))
                         Text(KuwaitPhone.display(phone))
                     }
                     .font(DS.Font.caption1)

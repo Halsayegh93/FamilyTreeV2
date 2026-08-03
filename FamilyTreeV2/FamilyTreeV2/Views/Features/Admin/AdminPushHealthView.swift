@@ -516,7 +516,7 @@ struct AdminPushHealthView: View {
             // Environment pill
             HStack(spacing: 3) {
                 Image(systemName: owner.environment == "sandbox" ? "hammer.fill" : "checkmark.shield.fill")
-                    .font(DS.Font.scaled(9, weight: .bold))
+                    .font(DS.Font.scaled(11, weight: .bold))
                 Text(owner.environment == "sandbox" ? L10n.t("تطوير", "Sandbox") : L10n.t("إنتاج", "Prod"))
                     .font(DS.Font.caption2)
                     .fontWeight(.bold)

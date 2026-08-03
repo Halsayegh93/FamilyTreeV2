@@ -42,27 +42,7 @@ struct AdminSecuritySettingsView: View {
                     .padding(.horizontal, DS.Spacing.lg)
 
                     // ── الفريق ──
-                    DSCard(padding: 0) {
-                        DSSectionHeader(
-                            title: L10n.t("الفريق", "Team"),
-                            icon: "person.3.fill",
-                            iconColor: DS.Color.accent
-                        )
-
-                        NavigationLink(
-                            destination: AdminModeratorsView()
-                                .environmentObject(authVM)
-                                .environmentObject(memberVM)
-                        ) {
-                            DSActionRow(
-                                title: L10n.t("المدراء والمشرفون", "Moderators & Supervisors"),
-                                subtitle: L10n.t("تعيين الأدوار وإدارة الصلاحيات", "Assign roles and manage permissions"),
-                                icon: "person.badge.key.fill",
-                                color: DS.Color.accent
-                            )
-                        }
-                    }
-                    .padding(.horizontal, DS.Spacing.lg)
+                    // «فريق الإدارة» له مدخل واحد: لوحة الإدارة ← الفريق والنظام (بلا تكرار)
 
                     // ── الأمان ──
                     DSCard(padding: 0) {
@@ -72,18 +52,7 @@ struct AdminSecuritySettingsView: View {
                             iconColor: DS.Color.error
                         )
 
-                        NavigationLink(
-                            destination: AdminBannedPhonesView()
-                                .environmentObject(authVM)
-                        ) {
-                            DSActionRow(
-                                title: L10n.t("الأرقام المحظورة", "Banned Numbers"),
-                                subtitle: L10n.t("منع أرقام معينة من التسجيل", "Block numbers from registering"),
-                                icon: "phone.down.fill",
-                                color: DS.Color.error,
-                                badge: authVM.bannedPhones.count > 0 ? authVM.bannedPhones.count : nil
-                            )
-                        }
+                        // «الأرقام المحظورة» انتقلت إلى: إدارة الأعضاء ← الحسابات (بلا تكرار)
                     }
                     .padding(.horizontal, DS.Spacing.lg)
 
