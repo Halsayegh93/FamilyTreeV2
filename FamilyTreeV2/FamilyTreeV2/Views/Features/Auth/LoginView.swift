@@ -156,6 +156,42 @@ struct LoginView: View {
             }
     }
 
+    /// مربّع رقم واحد من رمز التحقق — يبرز المربّع النشط
+    private func otpBox(at index: Int) -> some View {
+        let chars = Array(otpText)
+        let digit = index < chars.count ? String(chars[index]) : ""
+        let isActive = isFieldFocused && index == min(chars.count, 5)
+        let isFilled = !digit.isEmpty
+
+        return Text(digit)
+            .font(DS.Font.plex(26, weight: .bold))
+            .foregroundColor(DS.Color.textPrimary)
+            .frame(maxWidth: .infinity)
+            .frame(height: 58)
+            .background(DS.Color.surface)
+            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                    .strokeBorder(
+                        isActive ? DS.Color.primary
+                        : isFilled ? DS.Color.primary.opacity(0.35)
+                        : DS.Color.inactiveBorder,
+                        lineWidth: isActive ? 2 : 1
+                    )
+            )
+            .overlay(alignment: .center) {
+                // مؤشّر نبض في المربّع الفارغ النشط
+                if isActive && !isFilled {
+                    RoundedRectangle(cornerRadius: 1)
+                        .fill(DS.Color.primary)
+                        .frame(width: 2, height: 24)
+                        .opacity(0.8)
+                }
+            }
+            .animation(DS.Anim.quick, value: isActive)
+            .animation(DS.Anim.quick, value: isFilled)
+    }
+
     // MARK: - Background
     private var backgroundView: some View {
         ZStack {
@@ -329,26 +365,28 @@ struct LoginView: View {
                 }
             }
 
-            // حقل OTP — AutoFill compatible
-            TextField("", text: $otpText, prompt: Text("------").foregroundColor(DS.Color.textTertiary))
-                .keyboardType(.numberPad)
-                .textContentType(.oneTimeCode)
-                .font(DS.Font.scaled(32, weight: .bold))
-                .foregroundColor(DS.Color.textPrimary)
-                .multilineTextAlignment(.center)
-                .frame(height: 60)
-                .background(DS.Color.surface)
-                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                        .stroke(
-                            isFieldFocused ? DS.Color.primary.opacity(0.5) : DS.Color.inactiveBorder,
-                            lineWidth: isFieldFocused ? 1.5 : 1
-                        )
-                        .animation(DS.Anim.quick, value: isFieldFocused)
-                )
-                .focused($isFieldFocused)
-                .accessibilityLabel(L10n.t("رمز التحقق", "Verification Code"))
+            // حقل OTP — ستة مربّعات فوق حقل مخفي يحافظ على AutoFill
+            ZStack {
+                TextField("", text: $otpText)
+                    .keyboardType(.numberPad)
+                    .textContentType(.oneTimeCode)
+                    .focused($isFieldFocused)
+                    // مخفي بصرياً لا وظيفياً — يبقى مستقبِلاً للوحة المفاتيح
+                    .opacity(0.001)
+                    .frame(height: 60)
+                    .accessibilityLabel(L10n.t("رمز التحقق", "Verification Code"))
+
+                HStack(spacing: DS.Spacing.sm) {
+                    ForEach(0..<6, id: \.self) { i in
+                        otpBox(at: i)
+                    }
+                }
+                // الرمز يُملأ من اليسار لليمين حتى مع واجهة عربية
+                .environment(\.layoutDirection, .leftToRight)
+                .allowsHitTesting(false)
+            }
+            .contentShape(Rectangle())
+            .onTapGesture { isFieldFocused = true }
                 .onAppear {
                     isFieldFocused = true
                     otpText = ""
@@ -356,7 +394,8 @@ struct LoginView: View {
                     otpTimeRemaining = 300
                 }
                 .onChange(of: otpText) { newValue in
-                    let digits = newValue.filter(\.isNumber)
+                    // يقبل الأرقام العربية والفارسية ويحوّلها إنجليزية — نفس حقل الهاتف
+                    let digits = KuwaitPhone.normalizeDigits(newValue).filter(\.isNumber)
                     let limited = String(digits.prefix(6))
                     // فقط صحّح إذا فيه حروف غير أرقام
                     if newValue != limited {
