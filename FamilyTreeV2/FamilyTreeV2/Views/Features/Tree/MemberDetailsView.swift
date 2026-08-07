@@ -22,6 +22,9 @@ struct MemberDetailsView: View {
     }
 
     @State private var showAdminControl = false
+    /// الرقم يُجلب عند فتح التفاصيل عبر RPC يفرض «الإخفاء» — لم يعد يُشحن
+    /// ضمن قائمة الأعضاء لجهاز العضو العادي.
+    @State private var fetchedPhone: String? = nil
     @State private var avatarPreviewScale: CGFloat = 1.0
     @State private var lastAvatarPreviewScale: CGFloat = 1.0
     @State private var showAvatarPreview = false
@@ -151,8 +154,8 @@ struct MemberDetailsView: View {
 
                 floatingCloseButton
             }
-            .onAppear { recomputeCache() }
-            .onChange(of: currentMemberId) { _ in recomputeCache() }
+            .onAppear { recomputeCache(); loadPhone() }
+            .onChange(of: currentMemberId) { _ in recomputeCache(); loadPhone() }
             .onChange(of: memberVM.membersVersion) { _ in recomputeCache() }
             .onChange(of: adminRequestVM.treeEditRequests.count) { _ in recomputeCache() }
             .toolbar(.hidden, for: .navigationBar)
@@ -643,6 +646,16 @@ struct MemberDetailsView: View {
         let color: Color
     }
 
+    /// يطلب رقم العضو من السيرفر (يُعيد nil للمخفيّ عن غير الإدارة وغير صاحبه).
+    private func loadPhone() {
+        fetchedPhone = nil
+        let id = currentMemberId
+        Task {
+            let p = await memberVM.fetchPhone(for: id)
+            await MainActor.run { if currentMemberId == id { fetchedPhone = p } }
+        }
+    }
+
     private func computeBasicInfoRows(for m: FamilyMember) -> [InfoRowData] {
         var rows: [InfoRowData] = []
         let isSelf = m.id == authVM.currentUser?.id
@@ -663,14 +676,21 @@ struct MemberDetailsView: View {
             ))
         }
 
-        if !isDeceased,
-           let phone = m.phoneNumber, !phone.isEmpty {
-            let shouldHide = (m.isPhoneHidden == true) && !isSelf && !canMod
+        // الرقم من الجلب المباشر (الإدارة تملكه محلياً أصلاً). السيرفر يعيد
+        // nil للمخفيّ، فغيابه هنا يعني «مخفي» فعلاً لا نقصاً في البيانات.
+        if !isDeceased, let phone = m.phoneNumber ?? fetchedPhone, !phone.isEmpty {
             rows.append(.init(
                 icon: "phone.fill",
                 label: L10n.t("الهاتف", "Phone"),
-                value: shouldHide ? L10n.t("مخفي", "Hidden") : KuwaitPhone.display(phone),
-                color: shouldHide ? DS.Color.textTertiary : DS.Color.success
+                value: KuwaitPhone.display(phone),
+                color: DS.Color.success
+            ))
+        } else if !isDeceased, m.isPhoneHidden == true, !isSelf, !canMod {
+            rows.append(.init(
+                icon: "phone.fill",
+                label: L10n.t("الهاتف", "Phone"),
+                value: L10n.t("مخفي", "Hidden"),
+                color: DS.Color.textTertiary
             ))
         }
 
