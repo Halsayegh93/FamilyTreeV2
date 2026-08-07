@@ -373,7 +373,8 @@ private struct WomanDetailSheet: View {
     /// مرشّحات «زوجة من العائلة»: إناث الشجرة غير المرتبطات بزوج (عدا العضو نفسه).
     private var wifeCandidates: [FamilyMember] {
         allWomen
-            .filter { $0.isFemale && $0.id != woman.id && $0.husbandId == nil }
+            // المتوفيات لا تُعرض ضمن مرشّحات الزوجة
+            .filter { $0.isFemale && $0.isDeceased != true && $0.id != woman.id && $0.husbandId == nil }
             .sorted { $0.fullName.localizedCompare($1.fullName) == .orderedAscending }
     }
     /// مرشّحات «زوج من العائلة»: ذكور الشجرة (عدا العضو نفسه).
@@ -859,26 +860,56 @@ private struct WomanDetailSheet: View {
 
     /// الأبناء كبلاطات (صورة + اسم) — صف واحد حتى ٥، وسطران إذا أكثر. تُبرز الإناث بالوردي.
     @ViewBuilder
+    /// الأبناء بمجموعتين متجاورتين — الذكور والإناث — كل مجموعة على عمودين،
+    /// والفرد الأخير يتوسّط مجموعته إن كان عددها فردياً.
     private var childrenTiles: some View {
-        if children.count > 5 {
-            let mid = (children.count + 1) / 2
-            ScrollView(.horizontal, showsIndicators: false) {
-                VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                    HStack(alignment: .top, spacing: DS.Spacing.sm) {
-                        ForEach(Array(children.prefix(mid))) { childTile($0) }
-                    }
-                    HStack(alignment: .top, spacing: DS.Spacing.sm) {
-                        ForEach(Array(children.dropFirst(mid))) { childTile($0) }
-                    }
+        let sons = children.filter { !$0.isFemale }
+        let daughters = children.filter { $0.isFemale }
+
+        return ScrollView(.horizontal, showsIndicators: false) {
+            HStack(alignment: .top, spacing: DS.Spacing.xl) {
+                if !sons.isEmpty {
+                    childrenGroup(L10n.t("الذكور", "Sons"), sons, DS.Color.primary)
                 }
-                .padding(.vertical, 2)
+                if !sons.isEmpty && !daughters.isEmpty {
+                    Rectangle()
+                        .fill(DS.Color.textTertiary.opacity(0.18))
+                        .frame(width: 1)
+                }
+                if !daughters.isEmpty {
+                    childrenGroup(L10n.t("الإناث", "Daughters"), daughters, DS.Color.female)
+                }
             }
-        } else {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(alignment: .top, spacing: DS.Spacing.sm) {
-                    ForEach(children) { childTile($0) }
+            .padding(.vertical, 2)
+        }
+    }
+
+    /// مجموعة أبناء على عمودين — الصفوف أزواج، والفرد الأخير يتوسّط.
+    private func childrenGroup(_ title: String, _ list: [FamilyMember], _ color: Color) -> some View {
+        let pairs = stride(from: 0, to: list.count - (list.count % 2), by: 2).map {
+            (list[$0], list[$0 + 1])
+        }
+        let odd = list.count % 2 == 1 ? list.last : nil
+
+        return VStack(spacing: DS.Spacing.sm) {
+            HStack(spacing: DS.Spacing.xs) {
+                Circle().fill(color).frame(width: 5, height: 5)
+                Text("\(title) (\(list.count))")
+                    .font(DS.Font.scaled(11, weight: .bold))
+                    .foregroundColor(DS.Color.textSecondary)
+            }
+
+            VStack(spacing: DS.Spacing.sm) {
+                ForEach(Array(pairs.enumerated()), id: \.offset) { _, pair in
+                    HStack(alignment: .top, spacing: DS.Spacing.sm) {
+                        childTile(pair.0)
+                        childTile(pair.1)
+                    }
                 }
-                .padding(.vertical, 2)
+                // الفرد الأخير يتوسّط عمودَي مجموعته
+                if let odd {
+                    childTile(odd)
+                }
             }
         }
     }

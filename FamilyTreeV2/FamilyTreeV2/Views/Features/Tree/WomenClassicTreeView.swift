@@ -146,13 +146,9 @@ struct WomenClassicTreeView: View {
         func perRowH(_ n: Int) -> Int { splitRow(n) }
         // عمودي (أعمدة جنسية): عمود واحد حتى ٤ · خمسة → عمودان والأخير تحتهم (٢+٢+١
         // — طلب المالك) · أكثر → ~٤ لكل عمود فرعي.
-        func perRowV(_ n: Int) -> Int {
-            // أفقياً: وزّع كل جنس على أعمدة أوسع (نصف ما تتحمّله الشاشة لكل جنس)
-            if landscapeWide { return splitRow(n) }   // صف/سطران لكل جنس
-            if n <= 4 { return 1 }
-            if n == 5 { return 2 }
-            return Int(ceil(Double(n) / 4.0))
-        }
+        /// عمودان لكل مجموعة جنس — والفرد الأخير يتوسّط عمودَيه لأن
+        /// placeBlock يوسّط كل صف على مركز المجموعة.
+        func perRowV(_ n: Int) -> Int { min(2, max(1, n)) }
         let stackGap: CGFloat = 10   // فجوة بين صفّ الذكور وصفّ الإناث (وضع مكدّس)
         // ذكر+أنثى بصف واحد: نفس مسافة الإخوة عمودياً، وأوسع أفقياً (طلب المالك)
         let pairGap: CGFloat = viewport.width > viewport.height ? 22 : H_GAP
@@ -160,17 +156,15 @@ struct WomenClassicTreeView: View {
         enum Arrange { case single, stacked, sideBySide, pair }
         func arrange(_ mCount: Int, _ fCount: Int) -> Arrange {
             if mCount == 0 || fCount == 0 { return .single }
-            // حتى ٤ أبناء مختلطين → صف أفقي واحد (ذكور ثم إناث) بدل تكديس
-            // الإناث تحت الذكور — التكديس كان يوهم أن الأخوات بنات لأخيهن
-            if mCount + fCount <= (viewport.width > viewport.height ? maxPerRow : 4) { return .pair }
-            if min(mCount, fCount) == 1 { return .stacked }
+            // وجود الجنسين ⇒ مجموعتان متجاورتان دائماً: الذكور بجهة والإناث
+            // بجهة، كل مجموعة على عمودين (طلب المالك). لا تكديس ولا صف مختلط.
             return .sideBySide
         }
 
         // فجوة الصفوف: أي كتلة إخوة تلتف لأكثر من سطر (ذكوراً أو إناثاً)
         // تأخذ مسافة أوسع بين سطورها (طلب المالك)
         func rowGapFor(_ list: [FamilyMember], _ per: Int) -> CGFloat {
-            list.count > per ? ROW_GAP + 9 : ROW_GAP
+            list.count > per ? ROW_GAP + 3 : ROW_GAP
         }
         func blockDims(_ boxes: [CGSize], _ per: Int, _ gap: CGFloat) -> CGSize {
             var w: CGFloat = 0, h: CGFloat = 0
@@ -682,14 +676,14 @@ struct WomenClassicTreeView: View {
                         if !kids.isEmpty {
                             HStack(spacing: 1.5) {
                                 Text("\(kids.count)")
-                                    .font(.system(size: 10, weight: .heavy))
+                                    .font(.system(size: 8.5, weight: .heavy))
                                 Image(systemName: "chevron.down")
-                                    .font(.system(size: 7, weight: .heavy))
+                                    .font(.system(size: 6, weight: .heavy))
                                     .rotationEffect(.degrees(isCollapsed ? 0 : 180))
                             }
                             .foregroundColor(.white)
-                            .padding(.horizontal, 5)
-                            .frame(minWidth: 18, minHeight: 18)
+                            .padding(.horizontal, 4)
+                            .frame(minWidth: 16, minHeight: 16)
                             .background(Capsule().fill(DS.Color.primaryDark))   // أغمق من لون العضو بلا صورة (طلب المالك)
                             .overlay(Capsule().stroke(Color.white.opacity(0.9), lineWidth: 1.2))
                             .offset(x: -7, y: -7)

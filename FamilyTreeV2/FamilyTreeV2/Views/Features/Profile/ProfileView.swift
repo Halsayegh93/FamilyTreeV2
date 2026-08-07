@@ -217,12 +217,10 @@ struct ProfileView: View {
             .confirmationDialog(L10n.t("إضافة زوجة", "Add Wife"),
                                 isPresented: $showWifeSource, titleVisibility: .visible) {
                 Button(L10n.t("اختيار من العائلة", "Choose from family")) {
-                    Task {
-                        isLoadingWifeCandidates = true
-                        wifeCandidates = await loadWifeCandidates()
-                        isLoadingWifeCandidates = false
-                        showWifePicker = true
-                    }
+                    // الشيت يُفتح فوراً ويحمّل بداخله — كان يُبنى قبل وصول
+                    // القائمة فيعرض «لا توجد إناث» أول مرة
+                    wifeCandidates = []
+                    showWifePicker = true
                 }
                 Button(L10n.t("إضافة بالاسم", "Add by name")) {
                     // تأخير بسيط لتفادي تعارض عرض التنبيه بعد إغلاق الحوار
@@ -232,7 +230,15 @@ struct ProfileView: View {
                 }
                 Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
             }
-            .sheet(isPresented: $showWifePicker) { wifePickerSheet }
+            .sheet(isPresented: $showWifePicker) {
+                wifePickerSheet
+                    // التحميل بعد ظهور الشيت — فتُبنى القائمة على بيانات حاضرة
+                    .task {
+                        isLoadingWifeCandidates = true
+                        wifeCandidates = await loadWifeCandidates()
+                        isLoadingWifeCandidates = false
+                    }
+            }
             .confirmationDialog(L10n.t("الأم", "Mother"), isPresented: $showMotherOptions, titleVisibility: .visible) {
                 ForEach(fatherWives) { w in
                     Button(w.firstName.isEmpty ? L10n.t("زوجة الأب", "Father's wife") : w.firstName) {
@@ -985,6 +991,7 @@ struct ProfileView: View {
         return all
             .filter {
                 $0.isFemale
+                && $0.isDeceased != true                                             // المتوفيات لا تُعرض
                 && $0.husbandId == nil                                              // غير مرتبطة بزوج
                 && $0.id != me
                 && WomenStore.linkedUserByWoman[$0.id] == nil                        // ليست عضواً بحساب
@@ -1006,7 +1013,15 @@ struct ProfileView: View {
             : wifeCandidates.filter { $0.fullName.contains(wifeSearch) || $0.firstName.contains(wifeSearch) }
         return NavigationStack {
             Group {
-                if wifeCandidates.isEmpty {
+                if isLoadingWifeCandidates {
+                    VStack(spacing: DS.Spacing.md) {
+                        ProgressView()
+                        Text(L10n.t("جارٍ التحميل…", "Loading…"))
+                            .font(DS.Font.callout)
+                            .foregroundColor(DS.Color.textSecondary)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if wifeCandidates.isEmpty {
                     VStack(spacing: DS.Spacing.md) {
                         Image(systemName: "person.2.slash")
                             .font(DS.Font.scaled(36, weight: .regular))
