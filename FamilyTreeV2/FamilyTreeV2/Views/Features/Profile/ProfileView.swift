@@ -24,6 +24,8 @@ struct ProfileView: View {
     @State private var showAddWife = false
     @State private var newWifeName = ""
     @State private var newWifeHidden = false
+    /// خطأ إضافة الزوجة — كان الفشل صامتاً تماماً (النتيجة مُهمَلة).
+    @State private var addWifeError: String? = nil
     // مصدر إضافة الزوجة: بالاسم أو اختيار من العائلة
     @State private var showWifeSource = false
     @State private var showWifePicker = false
@@ -993,6 +995,13 @@ struct ProfileView: View {
                     Text(L10n.t("المخفيّة لا تظهر لأي أحد في الشجرة — تبقى مسجّلة عندك فقط.",
                                 "A hidden wife appears to no one in the tree — she stays recorded for you only."))
                 }
+                if let addWifeError {
+                    Section {
+                        Label(addWifeError, systemImage: "exclamationmark.triangle.fill")
+                            .font(DS.Font.caption1)
+                            .foregroundColor(DS.Color.error)
+                    }
+                }
             }
             .navigationTitle(L10n.t("إضافة زوجة", "Add Wife"))
             .navigationBarTitleDisplayMode(.inline)
@@ -1003,8 +1012,19 @@ struct ProfileView: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button(L10n.t("إضافة", "Add")) {
                         let n = newWifeName, h = newWifeHidden
-                        showAddWife = false
-                        Task { await memberVM.addSelfWife(name: n, hidden: h) }
+                        addWifeError = nil
+                        Task {
+                            let ok = await memberVM.addSelfWife(name: n, hidden: h)
+                            await MainActor.run {
+                                if ok {
+                                    showAddWife = false
+                                } else {
+                                    // الشيت يبقى مفتوحاً مع سبب الفشل بدل اختفاء صامت
+                                    addWifeError = memberVM.errorMessage
+                                        ?? L10n.t("تعذّرت الإضافة.", "Couldn't add.")
+                                }
+                            }
+                        }
                     }
                     .disabled(newWifeName.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
