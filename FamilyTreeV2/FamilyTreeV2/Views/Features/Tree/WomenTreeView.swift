@@ -193,6 +193,11 @@ private struct WomanDetailSheet: View {
     @State private var editName = ""
     @State private var showDelete = false
     @State private var busy = false
+    @State private var showBirthDate = false
+    @State private var birthDateDraft = Date()
+    /// نموذج الإضافة/التعديل: تاريخ ميلاد اختياري + علامة متزوجة
+    @State private var formHasBirthDate = false
+    @State private var formIsMarried = false
     @State private var showReorder = false
     @State private var showMotherPicker = false
     @State private var showWifeSource = false
@@ -243,7 +248,9 @@ private struct WomanDetailSheet: View {
     /// الأبناء (بلا الزوجات) — مرتّبون: الذكور ثم الإناث حسب الترتيب.
     private var children: [FamilyMember] {
         allWomen
-            .filter { ($0.fatherId == woman.id || $0.motherId == woman.id) && $0.husbandId == nil }
+            // البنت تبقى ابنة أبيها بعد زواجها — كان الشرط husbandId == nil
+            // يُخفي المتزوجات من قائمة أبناء العضو رغم ظهورهنّ في الشجرة.
+            .filter { $0.fatherId == woman.id || $0.motherId == woman.id }
             .sorted {
                 if $0.isFemale != $1.isFemale { return !$0.isFemale }   // ذكور أولًا
                 return $0.sortOrder < $1.sortOrder
@@ -295,17 +302,50 @@ private struct WomanDetailSheet: View {
             .presentationDetents([.fraction(0.46), .large], selection: $detent)
             .presentationDragIndicator(.visible)
             // إضافة (ابن/بنت/زوجة/أم)
-            .alert(addKind?.title ?? "", isPresented: Binding(
-                get: { addKind != nil }, set: { if !$0 { addKind = nil; addName = "" } })) {
-                TextField(L10n.t("الاسم", "Name"), text: $addName)
-                Button(L10n.t("إضافة", "Add")) { performAdd() }
-                Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { addName = "" }
+            .sheet(isPresented: Binding(
+                get: { addKind != nil },
+                set: { if !$0 { addKind = nil; addName = "" } })) {
+                memberFormSheet(
+                    title: addKind?.title ?? "",
+                    isFemale: addKind == .daughter || addKind == .wife || addKind == .mother,
+                    confirmTitle: L10n.t("إضافة", "Add"),
+                    onConfirm: performAdd
+                )
             }
             // تعديل الاسم
-            .alert(L10n.t("تعديل الاسم", "Edit name"), isPresented: $showEditName) {
-                TextField(L10n.t("الاسم الكامل", "Full name"), text: $editName)
-                Button(L10n.t("حفظ", "Save")) { performRename() }
-                Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { }
+            .sheet(isPresented: $showBirthDate) {
+                NavigationStack {
+                    DatePicker(L10n.t("تاريخ الميلاد", "Birth date"),
+                               selection: $birthDateDraft,
+                               in: ...Date(),
+                               displayedComponents: .date)
+                        .datePickerStyle(.graphical)
+                        .padding(DS.Spacing.lg)
+                        .navigationTitle(L10n.t("تاريخ الميلاد", "Birth date"))
+                        .navigationBarTitleDisplayMode(.inline)
+                        .toolbar {
+                            ToolbarItem(placement: .cancellationAction) {
+                                Button(L10n.t("إلغاء", "Cancel")) { showBirthDate = false }
+                            }
+                            ToolbarItem(placement: .confirmationAction) {
+                                Button(L10n.t("حفظ", "Save")) {
+                                    showBirthDate = false
+                                    saveBirthDate()
+                                }
+                            }
+                        }
+                }
+                .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+                .presentationDetents([.medium, .large])
+            }
+            .sheet(isPresented: $showEditName) {
+                memberFormSheet(
+                    title: L10n.t("تعديل البيانات", "Edit details"),
+                    isFemale: woman.isFemale,
+                    confirmTitle: L10n.t("حفظ", "Save"),
+                    isEdit: true,
+                    onConfirm: performRename
+                )
             }
             // حذف
             .alert(L10n.t("حذف العضو؟", "Delete member?"), isPresented: $showDelete) {
@@ -733,7 +773,7 @@ private struct WomanDetailSheet: View {
                     adminCircle("زوجة", "Wife", "heart", DS.Color.female) { showWifeSource = true }
                 }
                 adminCircle("أم", "Mother", "figure.dress", DS.Color.accent) { showMotherPicker = true }
-                adminCircle("تعديل الاسم", "Rename", "pencil", DS.Color.info) {
+                adminCircle("تعديل البيانات", "Edit", "pencil", DS.Color.info) {
                     editName = woman.fullName.isEmpty ? woman.firstName : woman.fullName
                     showEditName = true
                 }
@@ -778,21 +818,107 @@ private struct WomanDetailSheet: View {
 
     private var nextSort: Int { (children.map(\.sortOrder).max() ?? -1) + 1 }
 
+    /// نموذج موحّد للإضافة والتعديل — الاسم ثم تاريخ الميلاد ثم «متزوجة»
+    /// (الأخيران للإناث فقط).
+    private func memberFormSheet(
+        title: String,
+        isFemale: Bool,
+        confirmTitle: String,
+        isEdit: Bool = false,
+        onConfirm: @escaping () -> Void
+    ) -> some View {
+        NavigationStack {
+            Form {
+                Section(L10n.t("الاسم", "Name")) {
+                    TextField(L10n.t("الاسم", "Name"),
+                              text: isEdit ? $editName : $addName)
+                        .font(DS.Font.body)
+                }
+
+                Section(L10n.t("تاريخ الميلاد", "Birth date")) {
+                        Toggle(L10n.t("التاريخ معروف", "Date is known"),
+                               isOn: $formHasBirthDate)
+                    if formHasBirthDate {
+                        DatePicker(L10n.t("تاريخ الميلاد", "Birth date"),
+                                   selection: $birthDateDraft,
+                                   in: ...Date(),
+                                   displayedComponents: .date)
+                            .datePickerStyle(.compact)
+                    }
+                }
+
+                if isFemale {
+                    Section {
+                        Toggle(L10n.t("متزوجة", "Married"), isOn: $formIsMarried)
+                    } footer: {
+                        Text(L10n.t("المتزوجة لا تظهر في قائمة اختيار الزوجة.",
+                                    "A married woman is hidden from wife candidates."))
+                    }
+                }
+            }
+            .navigationTitle(title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(L10n.t("إلغاء", "Cancel")) {
+                        addKind = nil; addName = ""; showEditName = false
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(confirmTitle) {
+                        showEditName = false
+                        onConfirm()
+                    }
+                    .disabled((isEdit ? editName : addName)
+                        .trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+            }
+        }
+        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+        .presentationDetents([.medium, .large])
+        .onAppear {
+            if isEdit {
+                formIsMarried = woman.isMarried == true
+                if let d = parseBirthDate(woman.birthDate) {
+                    birthDateDraft = d; formHasBirthDate = true
+                } else {
+                    formHasBirthDate = false
+                }
+            } else {
+                formIsMarried = false
+                formHasBirthDate = false
+                birthDateDraft = Date()
+            }
+        }
+    }
+
+    /// نص التاريخ المختار — أو nil إن كان غير معروف
+    private var formBirthDateValue: String? {
+        guard formHasBirthDate else { return nil }
+        let f = DateFormatter()
+        f.calendar = Calendar(identifier: .gregorian)
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd"
+        return f.string(from: birthDateDraft)
+    }
+
     private func performAdd() {
         guard let kind = addKind, !addName.trimmingCharacters(in: .whitespaces).isEmpty else { return }
         let name = addName.trimmingCharacters(in: .whitespaces)
+        let birth = formBirthDateValue
+        let married = formIsMarried
         addName = ""; addKind = nil; busy = true
         Task {
             do {
                 switch kind {
                 case .son:
-                    try await WomenStore.addChild(parentId: woman.id, name: name, sortOrder: nextSort, gender: "male", parentFullName: woman.fullName)
+                    try await WomenStore.addChild(parentId: woman.id, name: name, sortOrder: nextSort, gender: "male", parentFullName: woman.fullName, birthDate: birth)
                 case .daughter:
-                    try await WomenStore.addChild(parentId: woman.id, name: name, sortOrder: nextSort, gender: "female", parentFullName: woman.fullName)
+                    try await WomenStore.addChild(parentId: woman.id, name: name, sortOrder: nextSort, gender: "female", parentFullName: woman.fullName, birthDate: birth, isMarried: married)
                 case .wife:
-                    try await WomenStore.addWife(husbandId: woman.id, name: name)
+                    try await WomenStore.addWife(husbandId: woman.id, name: name, birthDate: birth, isMarried: married)
                 case .mother:
-                    try await WomenStore.addMother(childId: woman.id, name: name)
+                    try await WomenStore.addMother(childId: woman.id, name: name, birthDate: birth, isMarried: married)
                 }
                 await onChanged?()
             } catch { }
@@ -803,12 +929,50 @@ private struct WomanDetailSheet: View {
     private func performRename() {
         let name = editName.trimmingCharacters(in: .whitespaces)
         guard !name.isEmpty else { return }
+        let birth = formBirthDateValue
+        let married = formIsMarried
         busy = true
         Task {
             try? await WomenStore.update(id: woman.id, fullName: name,
                                          isDeceased: woman.isDeceased == true,
-                                         deathDate: woman.deathDate, birthDate: woman.birthDate,
+                                         deathDate: woman.deathDate, birthDate: birth,
                                          gender: woman.gender, isHidden: woman.isHiddenFromTree)
+            if woman.isFemale, married != (woman.isMarried == true) {
+                try? await WomenStore.setMarried(id: woman.id, married)
+            }
+            await onChanged?()
+            await MainActor.run { busy = false; dismiss() }
+        }
+    }
+
+    /// تحويل نص التاريخ لـDate (yyyy-MM-dd)
+    private func parseBirthDate(_ raw: String?) -> Date? {
+        guard let raw, raw.count >= 10 else { return nil }
+        let f = DateFormatter()
+        f.calendar = Calendar(identifier: .gregorian)
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd"
+        return f.date(from: String(raw.prefix(10)))
+    }
+
+    private func toggleMarried() {
+        busy = true
+        Task {
+            try? await WomenStore.setMarried(id: woman.id, !(woman.isMarried == true))
+            await onChanged?()
+            await MainActor.run { busy = false; dismiss() }
+        }
+    }
+
+    private func saveBirthDate() {
+        busy = true
+        let f = DateFormatter()
+        f.calendar = Calendar(identifier: .gregorian)
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd"
+        let value = f.string(from: birthDateDraft)
+        Task {
+            try? await WomenStore.setBirthDate(id: woman.id, value)
             await onChanged?()
             await MainActor.run { busy = false; dismiss() }
         }

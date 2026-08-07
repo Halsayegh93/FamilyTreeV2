@@ -18,6 +18,7 @@ private struct WomenRow: Decodable {
     let photoUrl: String?
     let avatarUrl: String?
     let linkedUserId: UUID?
+    let isMarried: Bool?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -35,6 +36,7 @@ private struct WomenRow: Decodable {
         case photoUrl = "photo_url"
         case avatarUrl = "avatar_url"
         case linkedUserId = "linked_user_id"
+        case isMarried = "is_married"
     }
 }
 
@@ -78,6 +80,7 @@ enum WomenStore {
                 sortOrder: r.sortOrder ?? 0,
                 status: .active,
                 avatarUrl: r.avatarUrl,
+                isMarried: r.isMarried ?? false,
                 gender: (r.gender?.isEmpty == false ? r.gender! : "male")
             )
         }
@@ -88,7 +91,7 @@ enum WomenStore {
     static func addChild(parentId: UUID, name: String, sortOrder: Int,
                          gender: String = "male", parentFullName: String = "",
                          birthDate: String? = nil, isDeceased: Bool = false,
-                         deathDate: String? = nil) async throws {
+                         deathDate: String? = nil, isMarried: Bool = false) async throws {
         // تسلسل الاسم: «الاسم + اسم الأب الكامل» (مثل الشجرة العامة).
         let chained = parentFullName.trimmingCharacters(in: .whitespaces).isEmpty
             ? name : "\(name) \(parentFullName)"
@@ -100,14 +103,16 @@ enum WomenStore {
             "gender": AnyEncodable(gender),
             "birth_date": AnyEncodable(birthDate),
             "is_deceased": AnyEncodable(isDeceased),
-            "death_date": AnyEncodable(isDeceased ? deathDate : Optional<String>.none)
+            "death_date": AnyEncodable(isDeceased ? deathDate : Optional<String>.none),
+            "is_married": AnyEncodable(gender == "female" && isMarried)
         ]
         try await SupabaseConfig.client.from("women_members").insert(payload).execute()
     }
 
     /// إضافة زوجة لعقدة (تظهر كشارة على الزوج) — أنثى husband_id = العقدة.
     static func addWife(husbandId: UUID, name: String, birthDate: String? = nil,
-                        isDeceased: Bool = false, deathDate: String? = nil) async throws {
+                        isDeceased: Bool = false, deathDate: String? = nil,
+                        isMarried: Bool = false) async throws {
         let payload: [String: AnyEncodable] = [
             "first_name": AnyEncodable(name),
             "full_name": AnyEncodable(name),
@@ -116,14 +121,16 @@ enum WomenStore {
             "sort_order": AnyEncodable(0),
             "birth_date": AnyEncodable(birthDate),
             "is_deceased": AnyEncodable(isDeceased),
-            "death_date": AnyEncodable(isDeceased ? deathDate : Optional<String>.none)
+            "death_date": AnyEncodable(isDeceased ? deathDate : Optional<String>.none),
+            "is_married": AnyEncodable(isMarried)
         ]
         try await SupabaseConfig.client.from("women_members").insert(payload).execute()
     }
 
     /// إضافة أمّ لعقدة — تُنشئ أنثى ثم تربطها mother_id بالعقدة.
     static func addMother(childId: UUID, name: String, birthDate: String? = nil,
-                          isDeceased: Bool = false, deathDate: String? = nil) async throws {
+                          isDeceased: Bool = false, deathDate: String? = nil,
+                          isMarried: Bool = false) async throws {
         struct InsertedRow: Decodable { let id: UUID }
         let payload: [String: AnyEncodable] = [
             "first_name": AnyEncodable(name),
@@ -132,7 +139,8 @@ enum WomenStore {
             "sort_order": AnyEncodable(0),
             "birth_date": AnyEncodable(birthDate),
             "is_deceased": AnyEncodable(isDeceased),
-            "death_date": AnyEncodable(isDeceased ? deathDate : Optional<String>.none)
+            "death_date": AnyEncodable(isDeceased ? deathDate : Optional<String>.none),
+            "is_married": AnyEncodable(isMarried)
         ]
         let rows: [InsertedRow] = try await SupabaseConfig.client.from("women_members")
             .insert(payload).select("id").execute().value
@@ -155,6 +163,20 @@ enum WomenStore {
         ]
         if let gender { payload["gender"] = AnyEncodable(gender) }
         try await SupabaseConfig.client.from("women_members").update(payload).eq("id", value: id.uuidString).execute()
+    }
+
+    /// تعليم/إلغاء «متزوجة» — تُستبعد من مرشّحات الزوجة عند التعليم.
+    static func setMarried(id: UUID, _ married: Bool) async throws {
+        try await SupabaseConfig.client.from("women_members")
+            .update(["is_married": AnyEncodable(married)])
+            .eq("id", value: id.uuidString).execute()
+    }
+
+    /// تعديل تاريخ الميلاد وحده — يُستخدم في تفاصيل العضو بشجرة النساء.
+    static func setBirthDate(id: UUID, _ date: String?) async throws {
+        try await SupabaseConfig.client.from("women_members")
+            .update(["birth_date": AnyEncodable(date)])
+            .eq("id", value: id.uuidString).execute()
     }
 
     static func setMotherId(childId: UUID, motherId: UUID?) async throws {

@@ -986,14 +986,60 @@ struct ProfileView: View {
 
     /// إناث شجرة النساء المتاحات (بلا زوج) — مرشّحات «زوجة من العائلة».
     private func loadWifeCandidates() async -> [FamilyMember] {
-        guard let me = authVM.currentUser?.id else { return [] }
+        guard let user = authVM.currentUser else { return [] }
+        let me = user.id
         let all = (try? await WomenStore.fetch()) ?? []
+
+        // ذرّية أبي: تشمل أخواتي وبنات إخوتي وأخواتي وبناتي — كلهنّ محارم
+        // فلا يصحّ ظهورهنّ. نبني الشجرة من الرجال والنساء معاً.
+        var kidsOf: [UUID: [UUID]] = [:]
+        for m in memberVM.allMembers {
+            if let f = m.fatherId { kidsOf[f, default: []].append(m.id) }
+        }
+        for w in all {
+            if let f = w.fatherId { kidsOf[f, default: []].append(w.id) }
+        }
+        var mahram = Set<UUID>()
+        if let myFather = user.fatherId {
+            var stack = [myFather]
+            while let node = stack.popLast() {
+                for child in kidsOf[node] ?? [] where !mahram.contains(child) {
+                    mahram.insert(child)
+                    stack.append(child)
+                }
+            }
+        }
+        // بناتي وذرّيتهنّ (لو لم يكن لي أب مسجّل)
+        var stack = [me]
+        while let node = stack.popLast() {
+            for child in kidsOf[node] ?? [] where !mahram.contains(child) {
+                mahram.insert(child)
+                stack.append(child)
+            }
+        }
+
+        /// أقلّ من ١٧ سنة لا تظهر. مجهولة الميلاد تُعرض (لا يمكن التحقّق).
+        func isUnderAge(_ w: FamilyMember) -> Bool {
+            guard let raw = w.birthDate, raw.count >= 10 else { return false }
+            let f = DateFormatter()
+            f.calendar = Calendar(identifier: .gregorian)
+            f.locale = Locale(identifier: "en_US_POSIX")
+            f.dateFormat = "yyyy-MM-dd"
+            guard let born = f.date(from: String(raw.prefix(10))) else { return false }
+            let years = Calendar.current.dateComponents([.year], from: born, to: Date()).year ?? 99
+            return years < 17
+        }
+
         return all
             .filter {
                 $0.isFemale
                 && $0.isDeceased != true                                             // المتوفيات لا تُعرض
                 && $0.husbandId == nil                                              // غير مرتبطة بزوج
+                && $0.isMarried != true                                             // ولا مُعلَّمة متزوجة
                 && $0.id != me
+                && $0.fatherId != nil                                               // من نسل العائلة لا مُصاهَرة
+                && !mahram.contains($0.id)                                          // ليست من محارمه
+                && !isUnderAge($0)                                                  // ١٧ سنة فأكثر
                 && WomenStore.linkedUserByWoman[$0.id] == nil                        // ليست عضواً بحساب
                 && !$0.fullName.trimmingCharacters(in: .whitespaces).isEmpty         // لها اسم
             }
@@ -1008,9 +1054,14 @@ struct ProfileView: View {
 
     /// شيت اختيار زوجة من العائلة (مع بحث).
     private var wifePickerSheet: some View {
-        let list = wifeSearch.trimmingCharacters(in: .whitespaces).isEmpty
-            ? wifeCandidates
-            : wifeCandidates.filter { $0.fullName.contains(wifeSearch) || $0.firstName.contains(wifeSearch) }
+        // خصوصية: لا تُستعرض أسماء نساء العائلة. تظهر النتيجة فقط لمن يكتب
+        // اسماً محدّداً بما يكفي (كلمتان فأكثر) — لا تصفّح ولا تعداد للقائمة.
+        let query = wifeSearch.trimmingCharacters(in: .whitespaces)
+        let queryWords = query.split(whereSeparator: \.isWhitespace).count
+        let queryIsSpecific = queryWords >= 2 || query.count >= 8
+        let list = queryIsSpecific
+            ? wifeCandidates.filter { $0.fullName.contains(query) }
+            : []
         return NavigationStack {
             Group {
                 if isLoadingWifeCandidates {
@@ -1021,14 +1072,51 @@ struct ProfileView: View {
                             .foregroundColor(DS.Color.textSecondary)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else if wifeCandidates.isEmpty {
+                } else if !queryIsSpecific {
+                    // الحالة الافتراضية: إرشاد بلا أي أسماء
                     VStack(spacing: DS.Spacing.md) {
-                        Image(systemName: "person.2.slash")
+                        Image(systemName: "magnifyingglass")
                             .font(DS.Font.scaled(36, weight: .regular))
                             .foregroundColor(DS.Color.textTertiary)
-                        Text(L10n.t("لا توجد إناث متاحات في العائلة", "No available family women"))
+                        Text(L10n.t("اكتب الاسم الرباعي الصحيح لزوجتك",
+                                    "Type your wife's full name"))
                             .font(DS.Font.callout)
+                            .foregroundColor(DS.Color.textPrimary)
+                        Text(L10n.t("حفاظاً على الخصوصية لا تُعرض أسماء نساء العائلة — تظهر النتيجة عند كتابة الاسم كاملاً.",
+                                    "For privacy, family women aren't listed — results appear once you type the full name."))
+                            .font(DS.Font.caption1)
                             .foregroundColor(DS.Color.textSecondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, DS.Spacing.xl)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if list.isEmpty {
+                    VStack(spacing: DS.Spacing.md) {
+                        Image(systemName: "person.fill.questionmark")
+                            .font(DS.Font.scaled(36, weight: .regular))
+                            .foregroundColor(DS.Color.textTertiary)
+                        Text(L10n.t("ما لقينا اسماً مطابقاً", "No matching name"))
+                            .font(DS.Font.callout)
+                            .foregroundColor(DS.Color.textPrimary)
+                        Text(L10n.t("تأكّد من الاسم، أو أضفها بالاسم وتراجعها الإدارة.",
+                                    "Check the name, or add by name for admin review."))
+                            .font(DS.Font.caption1)
+                            .foregroundColor(DS.Color.textSecondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, DS.Spacing.xl)
+
+                        Button {
+                            showWifePicker = false
+                            newWifeName = query
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                                showAddWife = true
+                            }
+                        } label: {
+                            Text(L10n.t("إضافة بالاسم", "Add by name"))
+                                .font(DS.Font.calloutBold)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .padding(.top, DS.Spacing.xs)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
@@ -1043,9 +1131,10 @@ struct ProfileView: View {
                             }
                         }
                     }
-                    .searchable(text: $wifeSearch, prompt: L10n.t("بحث بالاسم", "Search by name"))
                 }
             }
+            .searchable(text: $wifeSearch,
+                        prompt: L10n.t("اكتب الاسم الرباعي", "Type the full name"))
             .navigationTitle(L10n.t("اختيار زوجة من العائلة", "Choose wife"))
             .navigationBarTitleDisplayMode(.inline)
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
