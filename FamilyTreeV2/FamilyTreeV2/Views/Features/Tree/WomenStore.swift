@@ -222,11 +222,18 @@ enum WomenStore {
     }
 
     /// إعادة ترتيب الأبناء — يحدّث sort_order حسب الترتيب الجديد. (إدارة فقط).
+    /// التحديثات تُرسَل معاً لا بالتسلسل — الطلب المتسلسل يجعل الترتيب بطيئاً
+    /// بمقدار عدد الأبناء (طلب شبكة لكل صف).
     static func reorder(orderedIds: [UUID]) async throws {
-        for (i, id) in orderedIds.enumerated() {
-            try await SupabaseConfig.client.from("women_members")
-                .update(["sort_order": AnyEncodable(i)])
-                .eq("id", value: id.uuidString).execute()
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            for (i, id) in orderedIds.enumerated() {
+                group.addTask {
+                    try await SupabaseConfig.client.from("women_members")
+                        .update(["sort_order": AnyEncodable(i)])
+                        .eq("id", value: id.uuidString).execute()
+                }
+            }
+            try await group.waitForAll()
         }
     }
 

@@ -652,13 +652,10 @@ class MemberViewModel: ObservableObject {
         let reorderedChildEntries = orderedChildren.map { WomenFamilyEntry(member: $0, role: .child) }
         currentMemberWomenFamily = others + reorderedChildEntries
 
-        for (index, child) in orderedChildren.enumerated() {
-            do {
-                try await supabase.from("women_members")
-                    .update(["sort_order": index]).eq("id", value: child.id.uuidString).execute()
-            } catch {
-                Log.error("[Women] خطأ ترتيب: \(error.localizedDescription)")
-            }
+        do {
+            try await WomenStore.reorder(orderedIds: orderedChildren.map { $0.id })
+        } catch {
+            Log.error("[Women] خطأ ترتيب: \(error.localizedDescription)")
         }
     }
 
@@ -734,20 +731,18 @@ class MemberViewModel: ObservableObject {
         }
     }
     
+    /// ترتيب الأبناء — كتابة واحدة عبر RPC. كان تحديثاً متسلسلاً لكل ابن،
+    /// أي طلب شبكة لكل صف مع كل ضغطة سهم، فيبدو الترتيب بطيئاً.
     func reorderChildren(_ children: [FamilyMember]) async {
         // تحديث محلي فوري
         currentMemberChildren = children
-        
-        for (index, child) in children.enumerated() {
-            do {
-                try await supabase
-                    .from("profiles")
-                    .update(["sort_order": AnyEncodable(index)])
-                    .eq("id", value: child.id.uuidString)
-                    .execute()
-            } catch {
-                Log.error("خطأ تحديث ترتيب الابن: \(error.localizedDescription)")
-            }
+        guard NetworkMonitor.shared.requireOnline() else { return }
+        struct P: Encodable { let p_ids: [String] }
+        do {
+            _ = try await supabase.rpc("reorder_self_children",
+                                       params: P(p_ids: children.map { $0.id.uuidString })).execute()
+        } catch {
+            Log.error("خطأ تحديث ترتيب الأبناء: \(error.localizedDescription)")
         }
     }
     
