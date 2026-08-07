@@ -421,7 +421,9 @@ class MemberViewModel: ObservableObject {
             _ = try await supabase.rpc("add_self_wife", params: P(p_name: trimmed, p_hidden: hidden)).execute()
             await fetchWomenFamily(for: uid); return true
         } catch {
-            self.errorMessage = L10n.t("تعذّر إضافة الزوجة.", "Failed to add wife.")
+            // أظهر سبب السيرفر لا نصاً عاماً — الفشل كان يختفي بلا أثر
+            self.errorMessage = L10n.t("تعذّر إضافة الزوجة: ", "Failed to add wife: ")
+                + error.localizedDescription
             Log.error("[Women] addSelfWife: \(error.localizedDescription)"); return false
         }
     }
@@ -435,7 +437,8 @@ class MemberViewModel: ObservableObject {
                                        params: P(p_wife_id: wifeId.uuidString, p_hidden: hidden)).execute()
             await fetchWomenFamily(for: uid); return true
         } catch {
-            self.errorMessage = L10n.t("تعذّر تغيير الإخفاء.", "Failed to change visibility.")
+            self.errorMessage = L10n.t("تعذّر تغيير الإخفاء: ", "Failed to change visibility: ")
+                + error.localizedDescription
             Log.error("[Women] setSelfWifeHidden: \(error.localizedDescription)"); return false
         }
     }
