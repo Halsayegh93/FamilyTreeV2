@@ -2,6 +2,8 @@ import UIKit
 import UserNotifications
 
 extension Notification.Name {
+    /// تغيّر صف في women_members عبر realtime — الشاشات المفتوحة تعيد الجلب.
+    static let womenMembersChanged           = Notification.Name("womenMembersChanged")
     static let didReceiveAPNSToken           = Notification.Name("didReceiveAPNSToken")
     static let didReceivePushNotification    = Notification.Name("didReceivePushNotification")
     static let didTapPushNotification        = Notification.Name("didTapPushNotification")

@@ -56,6 +56,15 @@ final class RealtimeManager {
         subscribeToTable("projects", debounceKey: "projects") { [weak self] in
             await self?.projectsVM?.fetchProjects()
         }
+
+        // شجرة النساء: أي تغيير (زوجة/بنت/إخفاء/متزوجة) ينبّه الشاشات المفتوحة
+        // عبر إشعار داخلي — الشجرة و«عائلتي» يعيدان الجلب فوراً.
+        subscribeToTable("women_members", debounceKey: "women", debounceDelay: 3.0) { [weak self] in
+            await MainActor.run { NotificationCenter.default.post(name: .womenMembersChanged, object: nil) }
+            if let uid = SupabaseConfig.client.auth.currentUser?.id {
+                await self?.memberVM?.fetchWomenFamily(for: uid)
+            }
+        }
     }
 
     /// إلغاء جميع الاشتراكات — يُستدعى عند تسجيل الخروج

@@ -56,6 +56,8 @@ struct WomenTreeView: View {
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .task { await load() }
+        // تغيير من جهاز آخر (realtime) → أعِد الجلب بلا تدخّل المستخدم
+        .onReceive(womenChangePublisher) { _ in Task { await reloadWomen() } }
         .sheet(item: $selectedWoman) { w in
             WomanDetailSheet(
                 woman: w,
@@ -77,6 +79,11 @@ struct WomenTreeView: View {
     /// المخفيّون لا يظهرون في الشجرة لأحد — عدا الإدارة (لتتمكّن من إظهارهم).
     private func visible(_ rows: [FamilyMember]) -> [FamilyMember] {
         authVM.canEditMembers ? rows : rows.filter { !$0.isHiddenFromTree }
+    }
+
+    /// إعادة الجلب عند وصول تغيير حيّ من جهاز آخر.
+    private var womenChangePublisher: NotificationCenter.Publisher {
+        NotificationCenter.default.publisher(for: .womenMembersChanged)
     }
 
     private func load() async {
