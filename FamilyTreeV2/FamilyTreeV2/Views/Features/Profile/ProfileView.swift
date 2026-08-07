@@ -1021,6 +1021,9 @@ struct ProfileView: View {
 
         // ذرّية أبي: تشمل أخواتي وبنات إخوتي وأخواتي وبناتي — كلهنّ محارم
         // فلا يصحّ ظهورهنّ. نبني الشجرة من الرجال والنساء معاً.
+        // لو لم تُحمَّل قائمة الرجال بعد لصار حساب المحارم ناقصاً (بنات الإخوة
+        // تظهر) — نضمن تحميلها قبل الحساب.
+        if memberVM.allMembers.isEmpty { await memberVM.fetchAllMembers(force: true) }
         var kidsOf: [UUID: [UUID]] = [:]
         for m in memberVM.allMembers {
             if let f = m.fatherId { kidsOf[f, default: []].append(m.id) }

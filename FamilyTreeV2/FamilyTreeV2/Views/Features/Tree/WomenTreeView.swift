@@ -205,7 +205,6 @@ private struct WomanDetailSheet: View {
     @State private var editName = ""
     @State private var showDelete = false
     @State private var busy = false
-    @State private var showBirthDate = false
     @State private var birthDateDraft = Date()
     /// نموذج الإضافة/التعديل: تاريخ ميلاد اختياري + علامة متزوجة
     @State private var formHasBirthDate = false
@@ -332,31 +331,6 @@ private struct WomanDetailSheet: View {
                 )
             }
             // تعديل الاسم
-            .sheet(isPresented: $showBirthDate) {
-                NavigationStack {
-                    DatePicker(L10n.t("تاريخ الميلاد", "Birth date"),
-                               selection: $birthDateDraft,
-                               in: ...Date(),
-                               displayedComponents: .date)
-                        .datePickerStyle(.graphical)
-                        .padding(DS.Spacing.lg)
-                        .navigationTitle(L10n.t("تاريخ الميلاد", "Birth date"))
-                        .navigationBarTitleDisplayMode(.inline)
-                        .toolbar {
-                            ToolbarItem(placement: .cancellationAction) {
-                                Button(L10n.t("إلغاء", "Cancel")) { showBirthDate = false }
-                            }
-                            ToolbarItem(placement: .confirmationAction) {
-                                Button(L10n.t("حفظ", "Save")) {
-                                    showBirthDate = false
-                                    saveBirthDate()
-                                }
-                            }
-                        }
-                }
-                .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-                .presentationDetents([.medium, .large])
-            }
             .sheet(isPresented: $showEditName) {
                 memberFormSheet(
                     title: L10n.t("تعديل البيانات", "Edit details"),
@@ -867,11 +841,18 @@ private struct WomanDetailSheet: View {
                 }
 
                 if isFemale {
+                    // المرتبطة بزوج في الشجرة متزوجة بحكم الرابط — إطفاء المفتاح
+                    // لها كان بلا أثر (الرابط يبقى ويستبعدها من المرشّحات).
+                    let linked = isEdit && woman.husbandId != nil
                     Section {
                         Toggle(L10n.t("متزوجة", "Married"), isOn: $formIsMarried)
+                            .disabled(linked)
                     } footer: {
-                        Text(L10n.t("المتزوجة لا تظهر في قائمة اختيار الزوجة.",
-                                    "A married woman is hidden from wife candidates."))
+                        Text(linked
+                             ? L10n.t("مرتبطة بزوج في الشجرة — فُكّ الارتباط أولاً لتغيير الحالة.",
+                                      "Linked to a husband in the tree — unlink first to change this.")
+                             : L10n.t("المتزوجة لا تظهر في قائمة اختيار الزوجة.",
+                                      "A married woman is hidden from wife candidates."))
                     }
                 }
             }
@@ -973,29 +954,6 @@ private struct WomanDetailSheet: View {
         f.locale = Locale(identifier: "en_US_POSIX")
         f.dateFormat = "yyyy-MM-dd"
         return f.date(from: String(raw.prefix(10)))
-    }
-
-    private func toggleMarried() {
-        busy = true
-        Task {
-            try? await WomenStore.setMarried(id: woman.id, !(woman.isMarried == true))
-            await onChanged?()
-            await MainActor.run { busy = false; dismiss() }
-        }
-    }
-
-    private func saveBirthDate() {
-        busy = true
-        let f = DateFormatter()
-        f.calendar = Calendar(identifier: .gregorian)
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.dateFormat = "yyyy-MM-dd"
-        let value = f.string(from: birthDateDraft)
-        Task {
-            try? await WomenStore.setBirthDate(id: woman.id, value)
-            await onChanged?()
-            await MainActor.run { busy = false; dismiss() }
-        }
     }
 
     private func toggleDeceased() {
