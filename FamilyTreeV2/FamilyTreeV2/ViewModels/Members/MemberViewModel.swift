@@ -411,17 +411,31 @@ class MemberViewModel: ObservableObject {
 
     /// إضافة زوجة للمستخدم نفسه (RPC add_self_wife).
     @discardableResult
-    func addSelfWife(name: String) async -> Bool {
+    func addSelfWife(name: String, hidden: Bool = false) async -> Bool {
         guard NetworkMonitor.shared.requireOnline(), let uid = currentUser?.id else { return false }
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return false }
-        struct P: Encodable { let p_name: String }
+        struct P: Encodable { let p_name: String; let p_hidden: Bool }
         do {
-            _ = try await supabase.rpc("add_self_wife", params: P(p_name: trimmed)).execute()
+            _ = try await supabase.rpc("add_self_wife", params: P(p_name: trimmed, p_hidden: hidden)).execute()
             await fetchWomenFamily(for: uid); return true
         } catch {
             self.errorMessage = L10n.t("تعذّر إضافة الزوجة.", "Failed to add wife.")
             Log.error("[Women] addSelfWife: \(error.localizedDescription)"); return false
+        }
+    }
+
+    /// إخفاء/إظهار زوجة العضو في الشجرة — الإخفاء يمنع ظهورها لأي أحد.
+    func setSelfWifeHidden(wifeId: UUID, hidden: Bool) async -> Bool {
+        guard NetworkMonitor.shared.requireOnline(), let uid = currentUser?.id else { return false }
+        struct P: Encodable { let p_wife_id: String; let p_hidden: Bool }
+        do {
+            _ = try await supabase.rpc("set_self_wife_hidden",
+                                       params: P(p_wife_id: wifeId.uuidString, p_hidden: hidden)).execute()
+            await fetchWomenFamily(for: uid); return true
+        } catch {
+            self.errorMessage = L10n.t("تعذّر تغيير الإخفاء.", "Failed to change visibility.")
+            Log.error("[Women] setSelfWifeHidden: \(error.localizedDescription)"); return false
         }
     }
 

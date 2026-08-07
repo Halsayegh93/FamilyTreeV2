@@ -196,9 +196,17 @@ enum WomenStore {
     }
 
     // ── إدارة العضو لعائلته الخاصة (الأم/الزوجة) عبر دوال السيرفر ──────────
-    static func addSelfWife(name: String) async throws {
+    static func addSelfWife(name: String, hidden: Bool = false) async throws {
         try await SupabaseConfig.client
-            .rpc("add_self_wife", params: ["p_name": AnyEncodable(name)]).execute()
+            .rpc("add_self_wife", params: ["p_name": AnyEncodable(name),
+                                           "p_hidden": AnyEncodable(hidden)]).execute()
+    }
+
+    /// إخفاء/إظهار زوجة العضو في الشجرة — مقيَّد بزوجاته هو (RPC ذاتي).
+    static func setSelfWifeHidden(wifeId: UUID, _ hidden: Bool) async throws {
+        try await SupabaseConfig.client
+            .rpc("set_self_wife_hidden", params: ["p_wife_id": AnyEncodable(wifeId.uuidString),
+                                                  "p_hidden": AnyEncodable(hidden)]).execute()
     }
     static func addSelfMother(name: String) async throws {
         try await SupabaseConfig.client

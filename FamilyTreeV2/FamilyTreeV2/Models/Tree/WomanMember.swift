@@ -17,6 +17,8 @@ struct WomanMember: Identifiable, Codable, Equatable {
     let avatarUrl: String?
     let photoUrl: String?
     let sortOrder: Int
+    /// مخفيّة من الشجرة — لا تظهر لأي أحد (خيار ذاتي للزوجة).
+    let isHiddenFromTree: Bool
 
     /// الصورة المفضّلة للعرض (avatar ثم photo).
     var displayImageUrl: String? {
@@ -39,15 +41,18 @@ struct WomanMember: Identifiable, Codable, Equatable {
         case avatarUrl  = "avatar_url"
         case photoUrl   = "photo_url"
         case sortOrder  = "sort_order"
+        case isHiddenFromTree = "is_hidden_from_tree"
     }
 
     init(id: UUID, firstName: String, fullName: String, parentId: UUID?, husbandId: UUID?,
          motherId: UUID?, gender: String, isDeceased: Bool, birthDate: String?,
-         deathDate: String? = nil, avatarUrl: String?, photoUrl: String?, sortOrder: Int) {
+         deathDate: String? = nil, avatarUrl: String?, photoUrl: String?, sortOrder: Int,
+         isHiddenFromTree: Bool = false) {
         self.id = id; self.firstName = firstName; self.fullName = fullName
         self.parentId = parentId; self.husbandId = husbandId; self.motherId = motherId
         self.gender = gender; self.isDeceased = isDeceased; self.birthDate = birthDate
         self.deathDate = deathDate
+        self.isHiddenFromTree = isHiddenFromTree
         self.avatarUrl = avatarUrl; self.photoUrl = photoUrl; self.sortOrder = sortOrder
     }
 
@@ -66,6 +71,7 @@ struct WomanMember: Identifiable, Codable, Equatable {
         avatarUrl  = try c.decodeIfPresent(String.self, forKey: .avatarUrl)
         photoUrl   = try c.decodeIfPresent(String.self, forKey: .photoUrl)
         sortOrder  = try c.decodeIfPresent(Int.self, forKey: .sortOrder) ?? 0
+        isHiddenFromTree = try c.decodeIfPresent(Bool.self, forKey: .isHiddenFromTree) ?? false
     }
 }
 

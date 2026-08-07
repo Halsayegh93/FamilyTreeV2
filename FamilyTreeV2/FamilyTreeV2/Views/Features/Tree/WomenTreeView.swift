@@ -258,6 +258,13 @@ private struct WomanDetailSheet: View {
     }
     private var isViewingSelf: Bool { woman.id == me?.id }
 
+    /// خصوصية الأنثى: زوجها لا يُعرض للعضو العادي — تراه الإدارة، وهي نفسها،
+    /// وزوجها (فبطاقته تعرض «الزوجة» أصلاً).
+    private var showHusband: Bool {
+        guard husband != nil else { return false }
+        return canEdit || isViewingSelf || husband?.id == me?.id
+    }
+
     var body: some View {
         NavigationStack {
             ZStack(alignment: .top) {
@@ -643,7 +650,7 @@ private struct WomanDetailSheet: View {
     private var detailsCard: some View {
         return VStack(alignment: .leading, spacing: DS.Spacing.md) {
             // ── الأم + الزوجة جنب بعض (بلا الأب) ──
-            if mother != nil || !wives.isEmpty || husband != nil {
+            if mother != nil || !wives.isEmpty || showHusband {
                 HStack(spacing: DS.Spacing.sm) {
                     if let mother {
                         relationCell(icon: "figure.dress", label: L10n.t("الأم", "Mother"),
@@ -659,7 +666,7 @@ private struct WomanDetailSheet: View {
                                          if wives.count == 1 { onOpenMember?(wives[0].id) }
                                          else { showWifeNav = true }
                                      })
-                    } else if let husband {
+                    } else if showHusband, let husband {
                         relationCell(icon: "person.fill", label: L10n.t("الزوج", "Husband"),
                                      value: shortName(husband), color: DS.Color.primary,
                                      onTap: { onOpenMember?(husband.id) })

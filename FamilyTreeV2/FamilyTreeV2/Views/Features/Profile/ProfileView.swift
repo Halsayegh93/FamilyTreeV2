@@ -23,6 +23,7 @@ struct ProfileView: View {
     // إضافة/اختيار الزوجة والأم
     @State private var showAddWife = false
     @State private var newWifeName = ""
+    @State private var newWifeHidden = false
     // مصدر إضافة الزوجة: بالاسم أو اختيار من العائلة
     @State private var showWifeSource = false
     @State private var showWifePicker = false
@@ -205,14 +206,7 @@ struct ProfileView: View {
                 WomanMemberEditSheet(memberVM: memberVM, entry: entry)
                     .presentationDragIndicator(.visible)
             }
-            .alert(L10n.t("إضافة زوجة", "Add Wife"), isPresented: $showAddWife) {
-                TextField(L10n.t("اسم الزوجة", "Wife's name"), text: $newWifeName)
-                Button(L10n.t("إضافة", "Add")) {
-                    let n = newWifeName
-                    Task { await memberVM.addSelfWife(name: n) }
-                }
-                Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
-            }
+            .sheet(isPresented: $showAddWife) { addWifeSheet }
             // مصدر إضافة الزوجة: بالاسم أو اختيار من العائلة (مثل شجرة النساء)
             .confirmationDialog(L10n.t("إضافة زوجة", "Add Wife"),
                                 isPresented: $showWifeSource, titleVisibility: .visible) {
@@ -225,7 +219,7 @@ struct ProfileView: View {
                 Button(L10n.t("إضافة بالاسم", "Add by name")) {
                     // تأخير بسيط لتفادي تعارض عرض التنبيه بعد إغلاق الحوار
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                        newWifeName = ""; showAddWife = true
+                        newWifeName = ""; newWifeHidden = false; showAddWife = true
                     }
                 }
                 Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
@@ -985,6 +979,41 @@ struct ProfileView: View {
     // MARK: - اختيار الزوجة من العائلة
 
     /// إناث شجرة النساء المتاحات (بلا زوج) — مرشّحات «زوجة من العائلة».
+    /// نموذج «إضافة زوجة بالاسم» — الاسم + خيار إخفائها من الشجرة.
+    private var addWifeSheet: some View {
+        NavigationStack {
+            Form {
+                Section(L10n.t("الاسم", "Name")) {
+                    TextField(L10n.t("اسم الزوجة", "Wife's name"), text: $newWifeName)
+                        .font(DS.Font.body)
+                }
+                Section {
+                    Toggle(L10n.t("إخفاؤها من الشجرة", "Hide from the tree"), isOn: $newWifeHidden)
+                } footer: {
+                    Text(L10n.t("المخفيّة لا تظهر لأي أحد في الشجرة — تبقى مسجّلة عندك فقط.",
+                                "A hidden wife appears to no one in the tree — she stays recorded for you only."))
+                }
+            }
+            .navigationTitle(L10n.t("إضافة زوجة", "Add Wife"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(L10n.t("إلغاء", "Cancel")) { showAddWife = false }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(L10n.t("إضافة", "Add")) {
+                        let n = newWifeName, h = newWifeHidden
+                        showAddWife = false
+                        Task { await memberVM.addSelfWife(name: n, hidden: h) }
+                    }
+                    .disabled(newWifeName.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+            }
+        }
+        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+        .presentationDetents([.medium])
+    }
+
     private func loadWifeCandidates() async -> [FamilyMember] {
         guard let user = authVM.currentUser else { return [] }
         let me = user.id
@@ -1450,6 +1479,7 @@ struct WomanMemberEditSheet: View {
     @State private var deathDate: Date
     @State private var hasDeathDate: Bool
     @State private var selectedUIImage: UIImage? = nil
+    @State private var isHidden: Bool
     @State private var isSaving = false
     @State private var showDeleteConfirm = false
     @State private var errorBanner: String? = nil
@@ -1460,6 +1490,7 @@ struct WomanMemberEditSheet: View {
         self.entry = entry
         _name = State(initialValue: entry.member.firstName)
         _isDeceased = State(initialValue: entry.member.isDeceased)
+        _isHidden = State(initialValue: entry.member.isHiddenFromTree)
         _selectedGender = State(initialValue: entry.member.gender)
         let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"
         if let b = entry.member.birthDate, let d = f.date(from: b) {
@@ -1530,6 +1561,15 @@ struct WomanMemberEditSheet: View {
                                 labelAbove: true
                             )
                             .onChange(of: birthDate) { _ in hasBirthDate = true }
+                            DSDivider()
+                            // الإخفاء — للزوجة فقط، وهي إعداد ذاتي عبر RPC مقيّد.
+                            if entry.role == .wife {
+                                DSDivider()
+                                DSFormRow(icon: "eye.slash.fill", iconColor: DS.Color.textSecondary,
+                                          label: L10n.t("إخفاؤها من الشجرة", "Hide from tree")) {
+                                    Toggle("", isOn: $isHidden).labelsHidden().tint(DS.Color.primary)
+                                }
+                            }
                             DSDivider()
                             DSFormRow(icon: "leaf.fill", iconColor: DS.Color.error,
                                       label: L10n.t("متوفى", "Deceased")) {
@@ -1667,6 +1707,10 @@ struct WomanMemberEditSheet: View {
             }
             if ok, let img = selectedUIImage {
                 await memberVM.updateWomanAvatar(id: entry.member.id, image: img)
+            }
+            // الإخفاء يمرّ بـRPC ذاتي منفصل (updateWomanMember لا يملك صلاحيته للعضو).
+            if ok, entry.role == .wife, isHidden != entry.member.isHiddenFromTree {
+                _ = await memberVM.setSelfWifeHidden(wifeId: entry.member.id, hidden: isHidden)
             }
             isSaving = false
             if ok { dismiss() } else { errorBanner = memberVM.errorMessage }
