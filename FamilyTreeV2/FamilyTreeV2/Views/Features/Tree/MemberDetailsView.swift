@@ -22,9 +22,6 @@ struct MemberDetailsView: View {
     }
 
     @State private var showAdminControl = false
-    /// الرقم يُجلب عند فتح التفاصيل عبر RPC يفرض «الإخفاء» — لم يعد يُشحن
-    /// ضمن قائمة الأعضاء لجهاز العضو العادي.
-    @State private var fetchedPhone: String? = nil
     @State private var avatarPreviewScale: CGFloat = 1.0
     @State private var lastAvatarPreviewScale: CGFloat = 1.0
     @State private var showAvatarPreview = false
@@ -154,8 +151,8 @@ struct MemberDetailsView: View {
 
                 floatingCloseButton
             }
-            .onAppear { recomputeCache(); loadPhone() }
-            .onChange(of: currentMemberId) { _ in recomputeCache(); loadPhone() }
+            .onAppear { recomputeCache() }
+            .onChange(of: currentMemberId) { _ in recomputeCache() }
             .onChange(of: memberVM.membersVersion) { _ in recomputeCache() }
             .onChange(of: adminRequestVM.treeEditRequests.count) { _ in recomputeCache() }
             .toolbar(.hidden, for: .navigationBar)
@@ -646,16 +643,6 @@ struct MemberDetailsView: View {
         let color: Color
     }
 
-    /// يطلب رقم العضو من السيرفر (يُعيد nil للمخفيّ عن غير الإدارة وغير صاحبه).
-    private func loadPhone() {
-        fetchedPhone = nil
-        let id = currentMemberId
-        Task {
-            let p = await memberVM.fetchPhone(for: id)
-            await MainActor.run { if currentMemberId == id { fetchedPhone = p } }
-        }
-    }
-
     private func computeBasicInfoRows(for m: FamilyMember) -> [InfoRowData] {
         var rows: [InfoRowData] = []
         let isSelf = m.id == authVM.currentUser?.id
@@ -678,7 +665,8 @@ struct MemberDetailsView: View {
 
         // الرقم من الجلب المباشر (الإدارة تملكه محلياً أصلاً). السيرفر يعيد
         // nil للمخفيّ، فغيابه هنا يعني «مخفي» فعلاً لا نقصاً في البيانات.
-        if !isDeceased, let phone = m.phoneNumber ?? fetchedPhone, !phone.isEmpty {
+        // العرض يُعيد nil للرقم المخفيّ، فغيابه هنا يعني «مخفي» فعلاً.
+        if !isDeceased, let phone = m.phoneNumber, !phone.isEmpty {
             rows.append(.init(
                 icon: "phone.fill",
                 label: L10n.t("الهاتف", "Phone"),

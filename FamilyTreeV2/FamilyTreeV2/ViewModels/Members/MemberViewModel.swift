@@ -220,29 +220,6 @@ class MemberViewModel: ObservableObject {
 
     // MARK: - Fetch Members
 
-    /// أعمدة جلب الأعضاء. الهاتف والبريد واسم المستخدم **لا تُشحن** لجهاز العضو
-    /// العادي — كانت تُنزَّل لكل الأعضاء ثم تُخفى في الواجهة فقط، فالإخفاء
-    /// تجميلي. من يحتاج رقماً يطلبه عبر get_member_phone الذي يفرض القاعدة.
-    /// الإدارة تحتفظ بها لأن شاشاتها تعمل عليها مباشرة (تواصل/تفعيل حسابات).
-    private static let safeMemberColumns = "id,role,status,first_name,full_name,family_name,death_date_unknown,avatar_unavailable,birth_date,death_date,is_deceased,father_id,mother_id,husband_id,photo_url,is_phone_hidden,is_birth_date_hidden,badge_enabled,is_hidden_from_tree,sort_order,bio_json,avatar_url,cover_url,is_married,gender,created_at,registration_platform"
-    static func memberColumns(includeContact: Bool) -> String {
-        includeContact ? safeMemberColumns + ",phone_number,email,username" : safeMemberColumns
-    }
-
-    /// رقم عضو عند الطلب — يفرض السيرفر «إخفاء الهاتف» وصلاحية الإدارة.
-    func fetchPhone(for memberId: UUID) async -> String? {
-        guard NetworkMonitor.shared.requireOnline() else { return nil }
-        struct P: Encodable { let p_id: String }
-        do {
-            let res = try await supabase.rpc("get_member_phone", params: P(p_id: memberId.uuidString)).execute()
-            let raw = String(data: res.data, encoding: .utf8)?
-                .trimmingCharacters(in: CharacterSet(charactersIn: "\"\n "))
-            return (raw == nil || raw!.isEmpty || raw == "null") ? nil : raw
-        } catch {
-            Log.error("[Phone] get_member_phone: \(error.localizedDescription)"); return nil
-        }
-    }
-
     func fetchAllMembers(force: Bool = false) async {
         // تحميل من الكاش أولاً إذا لا توجد بيانات (في background لتجنب تجميد الواجهة)
         if allMembers.isEmpty,
@@ -264,9 +241,12 @@ class MemberViewModel: ObservableObject {
         self.activePath = [] // تصفير المسار عند كل تحميل
 
         do {
+            // members_masked لا profiles: العرض يُفرغ الهاتف المخفيّ والبريد على
+            // السيرفر (نفس ما يقرأه الأندرويد)، فالإخفاء حقيقي لا تجميلي،
+            // والإدارة ترى الكل عبر is_team داخل العرض نفسه.
             let response = try await supabase
-                .from("profiles")
-                .select(Self.memberColumns(includeContact: authVM?.canEditMembers == true))
+                .from("members_masked")
+                .select()
                 .limit(10000)
                 .execute()
 
