@@ -849,6 +849,13 @@ struct HomeNewsView: View {
     }
 
     // MARK: - هيدر الرئيسية — شعار العائلة + شريط سدو زخرفي (خاص بالرئيسية فقط)
+#if DEBUG
+    /// معاينة شاشتي التسجيل والانتظار من داخل التطبيق — الجلسة موجودة هنا
+    /// فتُحمّل قائمة العوائل فعلياً (بخلاف شاشة الدخول). DEBUG فقط.
+    @State private var previewAuthScreens = false
+    @State private var previewAuthStep = 0
+#endif
+
     private var homeHeader: some View {
         VStack(spacing: 0) {
             HStack(spacing: DS.Spacing.md) {
@@ -859,6 +866,50 @@ struct HomeNewsView: View {
                     .frame(width: isLandscape ? 38 : 52, height: isLandscape ? 38 : 52)
                     .clipShape(Circle())
                     .overlay(Circle().strokeBorder(DS.Color.overlayIconBorder, lineWidth: 1.5))
+#if DEBUG
+                    .onLongPressGesture(minimumDuration: 1.5) {
+                        UINotificationFeedbackGenerator().notificationOccurred(.success)
+                        previewAuthScreens = true
+                    }
+                    .fullScreenCover(isPresented: $previewAuthScreens) {
+                        ZStack(alignment: .top) {
+                            if previewAuthStep == 0 {
+                                RegistrationView(topInset: 46)
+                            } else {
+                                WaitingForApprovalView()
+                            }
+
+                            HStack(spacing: DS.Spacing.sm) {
+                                Button {
+                                    previewAuthScreens = false
+                                    previewAuthStep = 0
+                                } label: {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .font(.system(size: 26))
+                                        .symbolRenderingMode(.palette)
+                                        .foregroundStyle(.white, .black.opacity(0.45))
+                                }
+                                Text(L10n.t("شاشة معاينة", "Preview"))
+                                    .font(DS.Font.scaled(11, weight: .bold))
+                                    .foregroundColor(DS.Color.textSecondary)
+
+                                Picker("", selection: $previewAuthStep) {
+                                    Text(L10n.t("البيانات", "Profile")).tag(0)
+                                    Text(L10n.t("الانتظار", "Waiting")).tag(1)
+                                }
+                                .pickerStyle(.segmented)
+                                .frame(width: 170)
+                                .environment(\.layoutDirection, .rightToLeft)
+                            }
+                            .padding(.horizontal, DS.Spacing.md)
+                            .padding(.vertical, DS.Spacing.sm)
+                            .background(Capsule().fill(.ultraThinMaterial))
+                            .overlay(Capsule().strokeBorder(DS.Color.textTertiary.opacity(0.20), lineWidth: 1))
+                            .shadow(color: .black.opacity(0.12), radius: 10, y: 4)
+                            .padding(.top, 118)
+                        }
+                    }
+#endif
 
                 // ═══ اسم العائلة ═══
                 VStack(alignment: .leading, spacing: 2) {

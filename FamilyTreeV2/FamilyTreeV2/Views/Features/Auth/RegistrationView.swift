@@ -5,7 +5,14 @@ struct RegistrationView: View {
 
     @State private var fullName: String = ""
     @State private var familyName: String = ""
+    /// مسافة علوية إضافية — تستخدمها المعاينة حتى لا يغطّي شريطها المحتوى
+    var topInset: CGFloat = 0
+
     @StateObject private var familyNamesVM = FamilyNamesViewModel()
+    /// إدخال يدوي لاسم العائلة — يُستخدم إن تعذّر جلب القائمة أو لم تكن مدرجة
+    @State private var showManualFamily = false
+    @State private var manualFamilyText = ""
+
     @State private var birthDate: Date = Calendar.current.date(byAdding: .year, value: -20, to: Date()) ?? Date()
     @State private var selectedGender: String = "male"
     @State private var selectedImage: UIImage? = nil
@@ -27,6 +34,7 @@ struct RegistrationView: View {
 
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: DS.Spacing.xl) {
+                        if topInset > 0 { Color.clear.frame(height: topInset) }
                         // الصورة الشخصية — في الأعلى مثل حسابي
                         photoSection
                             .scaleEffect(headerScale)
@@ -73,6 +81,14 @@ struct RegistrationView: View {
             Button(L10n.t("حسناً", "OK"), role: .cancel) { authVM.registrationError = nil }
         } message: {
             Text(authVM.registrationError ?? "")
+        }
+        .alert(L10n.t("اسم العائلة", "Family name"), isPresented: $showManualFamily) {
+            TextField(L10n.t("مثال: الصايغ", "e.g. Al-Sayegh"), text: $manualFamilyText)
+            Button(L10n.t("حفظ", "Save")) {
+                let t = manualFamilyText.trimmingCharacters(in: .whitespaces)
+                if !t.isEmpty { familyName = t }
+            }
+            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
         }
         .task { await familyNamesVM.fetch() }
         .onAppear {
@@ -228,6 +244,23 @@ struct RegistrationView: View {
                         }
                     }
                 }
+                // القائمة لا تُترك فارغة: إعادة محاولة + كتابة يدوية
+                if familyNamesVM.activeNames.isEmpty {
+                    Button {
+                        Task { await familyNamesVM.fetch(force: true) }
+                    } label: {
+                        Label(L10n.t("إعادة تحميل القائمة", "Reload list"),
+                              systemImage: "arrow.clockwise")
+                    }
+                }
+                Divider()
+                Button {
+                    manualFamilyText = familyName
+                    showManualFamily = true
+                } label: {
+                    Label(L10n.t("كتابة اسم العائلة يدوياً", "Type family name"),
+                          systemImage: "pencil")
+                }
             } label: {
                 HStack(spacing: DS.Spacing.md) {
                     DSIcon("person.2.fill", color: DS.Color.accent)
@@ -272,6 +305,24 @@ struct RegistrationView: View {
 
             if hasAttemptedSubmit && familyName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 validationError(L10n.t("اختيار العائلة مطلوب", "Choosing a family is required"))
+            }
+
+            if familyNamesVM.errorMessage == nil
+                && !familyNamesVM.isLoading
+                && familyNamesVM.activeNames.isEmpty {
+                Text(L10n.t("القائمة فارغة — تظهر العوائل بعد تسجيل الدخول",
+                            "Empty list — families load after sign-in"))
+                    .font(DS.Font.scaled(11))
+                    .foregroundColor(DS.Color.textTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if let err = familyNamesVM.errorMessage {
+                Text(L10n.t("تعذّر جلب قائمة العوائل: \(err)",
+                            "Could not load families: \(err)"))
+                    .font(DS.Font.scaled(11))
+                    .foregroundColor(DS.Color.error)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }

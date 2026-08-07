@@ -93,32 +93,56 @@ struct MemberContactFormView: View {
         }
     }
 
-    // MARK: - صف «عن التطبيق»
+    private var appVersion: String {
+        let v = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
+        let b = Bundle.main.infoDictionary?["CFBundleVersion"] as? String
+        return b.map { "\(v) (\($0))" } ?? v
+    }
+
+    // MARK: - بطاقة «عمل هذا التطبيق» — بدل صف «عن التطبيق»
     private var aboutLinkRow: some View {
-        Button { showAbout = true } label: {
+        VStack(spacing: DS.Spacing.md) {
+            HStack(spacing: DS.Spacing.xs) {
+                Rectangle()
+                    .fill(DS.Color.textTertiary.opacity(0.18))
+                    .frame(height: 1)
+                Text(L10n.t("عمل هذا التطبيق", "Made by"))
+                    .font(DS.Font.scaled(11, weight: .bold))
+                    .foregroundColor(DS.Color.textTertiary)
+                    .fixedSize()
+                Rectangle()
+                    .fill(DS.Color.textTertiary.opacity(0.18))
+                    .frame(height: 1)
+            }
+
             HStack(spacing: DS.Spacing.md) {
                 ZStack {
-                    Circle().fill(DS.Color.primary.opacity(0.12))
-                    Image(systemName: "info.circle.fill")
-                        .font(DS.Font.scaled(14, weight: .semibold))
-                        .foregroundColor(DS.Color.primary)
+                    Circle().fill(DS.Color.gradientPrimary)
+                    Image(systemName: "hammer.fill")
+                        .font(DS.Font.scaled(16, weight: .bold))
+                        .foregroundColor(.white)
                 }
-                .frame(width: 34, height: 34)
+                .frame(width: 44, height: 44)
 
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(L10n.t("عن التطبيق", "About the app"))
-                        .font(DS.Font.scaled(13, weight: .bold))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(L10n.t("حسن الصايغ", "Hasan Al-Sayegh"))
+                        .font(DS.Font.plex(15, weight: .bold))
                         .foregroundColor(DS.Color.textPrimary)
-                    Text(L10n.t("الهدف والمزايا وفريق الإدارة", "Purpose, features & team"))
+                    Text(L10n.t("فكرة وتصميم وبرمجة", "Idea, design & code"))
                         .font(DS.Font.scaled(12))
                         .foregroundColor(DS.Color.textSecondary)
                 }
 
                 Spacer(minLength: 0)
 
-                Image(systemName: "chevron.forward")
-                    .font(DS.Font.scaled(14, weight: .bold))
-                    .foregroundColor(DS.Color.textTertiary)
+                // تفاصيل التطبيق تبقى متاحة بضغطة
+                Button { showAbout = true } label: {
+                    Image(systemName: "info.circle.fill")
+                        .font(DS.Font.scaled(20, weight: .medium))
+                        .foregroundColor(DS.Color.primary)
+                }
+                .buttonStyle(DSScaleButtonStyle())
+                .accessibilityLabel(L10n.t("عن التطبيق", "About the app"))
             }
             .padding(DS.Spacing.md)
             .background(DS.Color.surface)
@@ -127,9 +151,12 @@ struct MemberContactFormView: View {
                 RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
                     .strokeBorder(DS.Color.textTertiary.opacity(0.10), lineWidth: 1)
             )
+
+            Text(L10n.t("الإصدار \(appVersion)", "Version \(appVersion)"))
+                .font(DS.Font.scaled(11))
+                .foregroundColor(DS.Color.textTertiary)
         }
-        .buttonStyle(DSScaleButtonStyle())
-        .padding(.top, DS.Spacing.sm)
+        .padding(.top, DS.Spacing.lg)
     }
 
 

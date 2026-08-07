@@ -7,6 +7,8 @@ struct LoginView: View {
 #if DEBUG
     /// معاينة شاشة تسجيل البيانات بلا رقم جديد — نسخة التطوير فقط
     @State private var previewRegistration = false
+    /// خطوة المعاينة: تسجيل البيانات ← شاشة الانتظار
+    @State private var previewStep = 0
 #endif
     @State private var timeRemaining = 0
     @State private var otpTimeRemaining = 0
@@ -223,15 +225,43 @@ struct LoginView: View {
                     previewRegistration = true
                 }
                 .fullScreenCover(isPresented: $previewRegistration) {
-                    ZStack(alignment: .topLeading) {
-                        RegistrationView()
-                        Button { previewRegistration = false } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 30))
-                                .symbolRenderingMode(.palette)
-                                .foregroundStyle(.white, .black.opacity(0.4))
-                                .padding()
+                    ZStack(alignment: .top) {
+                        if previewStep == 0 {
+                            RegistrationView(topInset: 46)
+                        } else {
+                            WaitingForApprovalView()
                         }
+
+                        // شريط تنقّل المعاينة — إغلاق + تبديل الشاشتين
+                        HStack(spacing: DS.Spacing.sm) {
+                            Button {
+                                previewRegistration = false
+                                previewStep = 0
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.system(size: 26))
+                                    .symbolRenderingMode(.palette)
+                                    .foregroundStyle(.white, .black.opacity(0.45))
+                            }
+
+                            Text(L10n.t("شاشة معاينة", "Preview"))
+                                .font(DS.Font.scaled(11, weight: .bold))
+                                .foregroundColor(DS.Color.textSecondary)
+
+                            Picker("", selection: $previewStep) {
+                                Text(L10n.t("البيانات", "Profile")).tag(0)
+                                Text(L10n.t("الانتظار", "Waiting")).tag(1)
+                            }
+                            .pickerStyle(.segmented)
+                            .frame(width: 170)
+                            .environment(\.layoutDirection, .rightToLeft)
+                        }
+                        .padding(.horizontal, DS.Spacing.md)
+                        .padding(.vertical, DS.Spacing.sm)
+                        .background(Capsule().fill(.ultraThinMaterial))
+                        .overlay(Capsule().strokeBorder(DS.Color.textTertiary.opacity(0.20), lineWidth: 1))
+                        .shadow(color: .black.opacity(0.12), radius: 10, y: 4)
+                        .padding(.top, 118)
                     }
                 }
 #endif

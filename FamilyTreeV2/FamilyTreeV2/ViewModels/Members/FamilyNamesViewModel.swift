@@ -36,6 +36,7 @@ final class FamilyNamesViewModel: ObservableObject {
     func fetch(force: Bool = false) async {
         guard force || !didLoad else { return }
         isLoading = true
+        errorMessage = nil
         defer { isLoading = false }
         do {
             let rows: [FamilyNameOption] = try await supabase.from(table)
@@ -46,7 +47,9 @@ final class FamilyNamesViewModel: ObservableObject {
             options = rows
             didLoad = true
         } catch {
-            // الجدول قد لا يكون مُهاجَراً بعد — لا نُفشل الشاشة
+            // الجدول قد لا يكون مُهاجَراً بعد — لا نُفشل الشاشة، لكن نُظهر السبب
+            // بدل قائمة فارغة صامتة يستحيل تشخيصها من الجهاز.
+            errorMessage = error.localizedDescription
             Log.warning("[FamilyNames] تعذّر الجلب: \(error.localizedDescription)")
         }
     }
