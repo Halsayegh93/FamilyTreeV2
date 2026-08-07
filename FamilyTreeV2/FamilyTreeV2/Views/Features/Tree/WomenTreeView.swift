@@ -74,10 +74,15 @@ struct WomenTreeView: View {
         }
     }
 
+    /// المخفيّون لا يظهرون في الشجرة لأحد — عدا الإدارة (لتتمكّن من إظهارهم).
+    private func visible(_ rows: [FamilyMember]) -> [FamilyMember] {
+        authVM.canEditMembers ? rows : rows.filter { !$0.isHiddenFromTree }
+    }
+
     private func load() async {
         do {
             let rows = try await WomenStore.fetch()
-            allMembers = rows
+            allMembers = visible(rows)
             isLoading = false
         } catch {
             isLoading = false
@@ -86,7 +91,7 @@ struct WomenTreeView: View {
 
     /// إعادة تحميل بعد تعديل/إضافة/حذف من شيت التفاصيل.
     private func reloadWomen() async {
-        if let rows = try? await WomenStore.fetch() { allMembers = rows }
+        if let rows = try? await WomenStore.fetch() { allMembers = visible(rows) }
     }
 
     /// عقدة المستخدم في شجرة النساء — تلقائيًا لكل مستخدم حسب هويّته:

@@ -307,10 +307,11 @@ class MemberViewModel: ObservableObject {
             // العقدة والأقارب يُجلبان معاً — كانا متسلسلين فيتضاعف الانتظار
             async let selfTask: [WomanMember] = supabase.from("women_members")
                 .select().eq("id", value: uid).limit(1).execute().value
+            // بلا استبعاد المخفيّين: الإخفاء يخصّ الشجرة العامة فقط — «عائلتي»
+            // هي سجلّ صاحبها، والزوجة المخفية لازم تبقى ظاهرة له ليعدّلها.
             async let relatedTask: [WomanMember] = supabase.from("women_members")
                 .select()
                 .or("parent_id.eq.\(uid),husband_id.eq.\(uid)")
-                .eq("is_hidden_from_tree", value: false)
                 .order("sort_order", ascending: true)
                 .execute().value
 
