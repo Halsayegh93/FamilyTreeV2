@@ -186,9 +186,12 @@ enum WomenStore {
     }
 
     /// ربط أنثى موجودة في الشجرة كزوجة لعقدة (اختيار زوجة من العائلة).
+    /// ربط/فكّ زوج — الربط يعلّم «متزوجة» تلقائياً (المرتبطة بزوج متزوجة فعلاً).
     static func setHusbandId(womanId: UUID, husbandId: UUID?) async throws {
+        var payload: [String: AnyEncodable] = ["husband_id": AnyEncodable(husbandId?.uuidString)]
+        if husbandId != nil { payload["is_married"] = AnyEncodable(true) }
         try await SupabaseConfig.client.from("women_members")
-            .update(["husband_id": AnyEncodable(husbandId?.uuidString)])
+            .update(payload)
             .eq("id", value: womanId.uuidString).execute()
     }
 

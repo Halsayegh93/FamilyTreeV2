@@ -878,7 +878,8 @@ private struct WomanDetailSheet: View {
         .presentationDetents([.medium, .large])
         .onAppear {
             if isEdit {
-                formIsMarried = woman.isMarried == true
+                // المرتبطة بزوج متزوجة فعلاً — اعرضها كذلك ولو لم تُعلَّم بعد
+                formIsMarried = woman.isMarried == true || woman.husbandId != nil
                 if let d = parseBirthDate(woman.birthDate) {
                     birthDateDraft = d; formHasBirthDate = true
                 } else {
