@@ -63,6 +63,10 @@ enum NotificationKind: String {
     case adminEditChildAdd = "admin_edit_child_add"
     case adminEditChildRemove = "admin_edit_child_remove"
     case memberDelete = "member_delete"
+    // شجرة النساء — تُكتب من تريغر log_women_change_to_activity
+    case womenAdd = "women_add"
+    case womenEdit = "women_edit"
+    case womenDelete = "women_delete"
     // شجرة وعضوية
     case treeEdit = "tree_edit"
     case linkRequest = "link_request"

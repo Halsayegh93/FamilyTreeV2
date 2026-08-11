@@ -23,7 +23,8 @@ struct AdminSecuritySettingsView: View {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: DS.Spacing.md) {
 
-                    sectionTitle(L10n.t("الضبط", "Configuration"))
+                    // شبكة واحدة متجاورة — العناوين الثلاثة كانت تقطع الصفوف
+                    // فتظهر المربّعات مبعثرة بدل أن تصطفّ جنب بعضها.
                     LazyVGrid(columns: columns, spacing: DS.Spacing.sm) {
                         AdminTile(
                             title: L10n.t("إعدادات التطبيق", "App Settings"),
@@ -52,12 +53,8 @@ struct AdminSecuritySettingsView: View {
                                     .environmentObject(memberVM)
                             }
                         }
-                    }
-                    .padding(.horizontal, DS.Spacing.lg)
 
-                    if authVM.isAdmin {
-                        sectionTitle(L10n.t("المراسلة", "Outreach"))
-                        LazyVGrid(columns: columns, spacing: DS.Spacing.sm) {
+                        if authVM.isAdmin {
                             AdminTile(
                                 title: L10n.t("إرسال إشعارات", "Notifications"),
                                 subtitle: L10n.t("إشعار موجّه أو بثّ", "Targeted or broadcast"),
@@ -81,11 +78,7 @@ struct AdminSecuritySettingsView: View {
                                     .environmentObject(notificationVM)
                             }
                         }
-                        .padding(.horizontal, DS.Spacing.lg)
-                    }
 
-                    sectionTitle(L10n.t("المراقبة", "Monitoring"))
-                    LazyVGrid(columns: columns, spacing: DS.Spacing.sm) {
                         AdminTile(
                             title: L10n.t("صحة النظام", "System Health"),
                             subtitle: L10n.t("النشاط والأجهزة والإشعارات", "Activity, devices & push"),
@@ -114,12 +107,4 @@ struct AdminSecuritySettingsView: View {
         Array(repeating: GridItem(.flexible(), spacing: DS.Spacing.sm), count: 3)
     }
 
-    /// عنوان مجموعة — يفصل المربّعات بحسب الغرض بدل رصّها في شبكة واحدة صمّاء.
-    private func sectionTitle(_ t: String) -> some View {
-        Text(t)
-            .font(DS.Font.scaled(12, weight: .bold))
-            .foregroundColor(DS.Color.textSecondary)
-            .padding(.horizontal, DS.Spacing.lg)
-            .padding(.top, DS.Spacing.xs)
-    }
 }
