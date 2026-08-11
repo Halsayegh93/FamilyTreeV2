@@ -68,7 +68,13 @@ struct ProfileView: View {
                             hideNotificationBell: true
                         ) {
                             // زر الإعدادات — يفتح كل تفضيلات التطبيق
-                            DSIconButton(icon: "gearshape.fill", iconColor: DS.Color.textOnPrimary) {
+                            // عارٍ بلا قرص وبحجم الجرس — نفس معالجة زرّ
+                            // الإشعارات في الرئيسية، فيتّسق زرّا الهيدر.
+                            DSIconButton(icon: "gearshape.fill",
+                                         iconSize: 22,
+                                         iconColor: DS.Color.textOnPrimary,
+                                         fillColor: .clear,
+                                         borderColor: .clear) {
                                 showSettings = true
                             }
                             .accessibilityLabel(L10n.t("الإعدادات", "Settings"))

@@ -1205,7 +1205,7 @@ struct AdminAllRequestsView: View {
                         .foregroundColor(.white)
                         .frame(minWidth: 18, minHeight: 18)
                         .padding(.horizontal, 4)
-                        .background(Capsule().fill(color))
+                        .background(Capsule().fill(DS.Color.error))
                         .overlay(Capsule().strokeBorder(DS.Color.background, lineWidth: 1.5))
                 }
             }

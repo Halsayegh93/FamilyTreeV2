@@ -26,6 +26,10 @@ struct AdminDashboardView: View {
     @State private var totalMembersCount: Int = 0
     @State private var aliveMembersCount: Int = 0
     @State private var deceasedMembersCount: Int = 0
+    // أعداد شجرة النساء — الإناث وحدهن (الجدول يضمّ مرايا الرجال أيضاً)
+    @State private var womenTotalCount: Int = 0
+    @State private var womenAliveCount: Int = 0
+    @State private var womenDeceasedCount: Int = 0
     @State private var isInitialLoading = true
     @Environment(\.dismiss) var dismiss
     @Environment(\.verticalSizeClass) private var vSizeClass
@@ -108,6 +112,19 @@ struct AdminDashboardView: View {
             issueMembersCount = issues
             treeIssuesCount = treeIssues
             totalReviewRequestsCount = reviewTotal
+        }
+    }
+
+    /// أعداد شجرة النساء — الإناث فقط، فالجدول يضمّ مرايا الذكور كذلك.
+    @MainActor
+    private func loadWomenStats() async {
+        guard let rows = try? await WomenStore.fetch() else { return }
+        let females = rows.filter { $0.isFemale }
+        let deceased = females.filter { $0.isDeceased == true }.count
+        withAnimation(DS.Anim.smooth) {
+            womenTotalCount = females.count
+            womenDeceasedCount = deceased
+            womenAliveCount = females.count - deceased
         }
     }
 
@@ -210,6 +227,7 @@ struct AdminDashboardView: View {
             group.addTask { @MainActor in await adminRequestVM.fetchContactMessages() }
             group.addTask { @MainActor in await projectsVM.fetchPendingProjects() }
             group.addTask { @MainActor in await authVM.fetchBannedPhones() }
+            group.addTask { @MainActor in await loadWomenStats() }
         }
         recalculateBadges()
         withAnimation(DS.Anim.smooth) { isInitialLoading = false }
@@ -260,15 +278,49 @@ struct AdminDashboardView: View {
                         .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
                     }
 
-                    // ═══ أرقام مرجعية — صف نصّي هادئ بلا بطاقات ملوّنة ═══
-                    HStack(spacing: 0) {
-                        refStat(L10n.t("الأعضاء", "Members"), totalMembersCount)
-                        refDivider
-                        refStat(L10n.t("الأحياء", "Alive"), aliveMembersCount)
-                        refDivider
-                        refStat(L10n.t("المتوفون", "Deceased"), deceasedMembersCount)
+                    // ═══ أفراد العائلة — جدول واحد: صفّ لكل جنس، عمود لكل حالة ═══
+                    // شريطان منفصلان كانا يجعلان المقارنة بينهما عمليةً ذهنية؛
+                    // الجدول يجعلها نظرة واحدة.
+                    VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                        Text(L10n.t("أفراد العائلة", "Family members"))
+                            .font(DS.Font.scaled(11, weight: .bold))
+                            .foregroundColor(DS.Color.textSecondary)
+
+                        // أعمدة ثابتة العرض: الاسم يسار، والأرقام الثلاثة
+                        // تتقاسم الباقي بالتساوي — فتتراصّ الخانات تحت عناوينها.
+                        Grid(alignment: .center,
+                             horizontalSpacing: DS.Spacing.xs,
+                             verticalSpacing: 10) {
+                            GridRow {
+                                Text("")
+                                    .frame(width: 58, alignment: .leading)
+                                censusHeader(L10n.t("الكل", "Total"))
+                                censusHeader(L10n.t("الأحياء", "Alive"))
+                                censusHeader(L10n.t("المتوفون", "Deceased"))
+                            }
+
+                            GridRow {
+                                censusLabel(L10n.t("الرجال", "Men"), DS.Color.primary)
+                                censusValue(totalMembersCount)
+                                censusValue(aliveMembersCount)
+                                censusValue(deceasedMembersCount)
+                            }
+
+                            // خطّ يفصل الجنسين — يمتدّ على الأعمدة الأربعة
+                            Divider()
+                                .overlay(DS.Color.textTertiary.opacity(0.22))
+                                .gridCellColumns(4)
+
+                            GridRow {
+                                censusLabel(L10n.t("النساء", "Women"), DS.Color.female)
+                                censusValue(womenTotalCount)
+                                censusValue(womenAliveCount)
+                                censusValue(womenDeceasedCount)
+                            }
+                        }
                     }
-                    .padding(.vertical, DS.Spacing.sm)
+                    .padding(DS.Spacing.md)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .background(DS.Color.surface)
                     .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
                     .overlay(
@@ -285,58 +337,6 @@ struct AdminDashboardView: View {
     // MARK: - شبكة الأقسام (Bento)
 
     /// بلاطة قسم — أيقونة في قرص ملوّن، عنوان، وشارة عدد اختيارية
-    private struct AdminTile<Destination: View>: View {
-        let title: String
-        let subtitle: String  // يُستخدم كوصف وصولية فقط في العرض المضغوط
-        let icon: String
-        let color: Color
-        var badge: Int? = nil
-        @ViewBuilder let destination: () -> Destination
-
-        var body: some View {
-            NavigationLink(destination: destination()) {
-                VStack(spacing: DS.Spacing.sm) {
-                    ZStack(alignment: .topTrailing) {
-                        ZStack {
-                            Circle().fill(color.opacity(0.14))
-                            Image(systemName: icon)
-                                .font(DS.Font.scaled(17, weight: .semibold))
-                                .foregroundColor(color)
-                        }
-                        .frame(width: 44, height: 44)
-
-                        if let badge, badge > 0 {
-                            Text(badge > 99 ? "99+" : "\(badge)")
-                                .font(DS.Font.scaled(11, weight: .bold))
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 5)
-                                .padding(.vertical, 1)
-                                .background(Capsule().fill(color))
-                                .offset(x: 8, y: -3)
-                        }
-                    }
-
-                    Text(title)
-                        .font(DS.Font.plex(11, weight: .bold))
-                        .foregroundColor(DS.Color.textPrimary)
-                        .multilineTextAlignment(.center)
-                        .lineLimit(2)
-                        .minimumScaleFactor(0.8)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .padding(.vertical, DS.Spacing.md)
-                .padding(.horizontal, DS.Spacing.xs)
-                .frame(maxWidth: .infinity, minHeight: 104)
-                .background(DS.Color.surface)
-                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                        .strokeBorder(color.opacity(0.14), lineWidth: 1)
-                )
-            }
-            .buttonStyle(DSScaleButtonStyle())
-        }
-    }
 
     private var adminBentoGrid: some View {
         LazyVGrid(
@@ -382,20 +382,6 @@ struct AdminDashboardView: View {
 
             if authVM.isAdmin {
                 AdminTile(
-                    title: L10n.t("إرسال إشعارات", "Notifications"),
-                    subtitle: L10n.t("إشعار موجّه أو بثّ", "Targeted or broadcast"),
-                    icon: "bell.badge.fill",
-                    color: DS.Color.secondary
-                ) { AdminNotificationsView() }
-
-                AdminTile(
-                    title: L10n.t("تحديثات التطبيق", "App Updates"),
-                    subtitle: L10n.t("رسالة نظام في المستجدات", "System message in Updates"),
-                    icon: "megaphone.fill",
-                    color: DS.Color.success
-                ) { AdminAppUpdateView() }
-
-                AdminTile(
                     title: L10n.t("إحصائيات متقدمة", "Analytics"),
                     subtitle: L10n.t("الأدوار والأعمار والنمو", "Roles, ages, growth"),
                     icon: "chart.bar.xaxis",
@@ -410,23 +396,16 @@ struct AdminDashboardView: View {
                 ) { AdminReportsView() }
             }
 
-            if authVM.canModerate {
-                AdminTile(
-                    title: L10n.t("فريق الإدارة", "Admin Team"),
-                    subtitle: L10n.t("الأعضاء والصلاحيات", "Members & permissions"),
-                    icon: "person.3.fill",
-                    color: DS.Color.neonPurple,
-                    badge: moderatorCount
-                ) { AdminModeratorsView() }
-            }
-
             if authVM.canViewSystemSettings {
                 AdminTile(
                     title: L10n.t("إعدادات النظام", "System Settings"),
                     subtitle: L10n.t("الأمان وصحة النظام", "Security & health"),
                     icon: "lock.shield.fill",
                     color: DS.Color.textSecondary
-                ) { AdminSecuritySettingsView() }
+                ) {
+                    // الفريق والإشعارات وتحديثات التطبيق انتقلت إلى الداخل
+                    AdminSecuritySettingsView()
+                }
             }
         }
     }
@@ -479,6 +458,38 @@ struct AdminDashboardView: View {
     }
 
     /// رقم مرجعي — بلا لون ولا بطاقة، مجرّد معلومة
+    /// عنوان عمود في جدول الأفراد
+    private func censusHeader(_ t: String) -> some View {
+        Text(t)
+            .font(DS.Font.scaled(9.5, weight: .semibold))
+            .foregroundColor(DS.Color.textTertiary)
+            .lineLimit(1)
+            .minimumScaleFactor(0.75)   // «المتوفون» لا يلتفّ ولا يزيح العمود
+            .frame(maxWidth: .infinity)
+    }
+
+    /// اسم الصفّ — نقطة ملوّنة تميّز الجنس بلا كلمة زائدة
+    private func censusLabel(_ t: String, _ c: Color) -> some View {
+        HStack(spacing: 5) {
+            Circle().fill(c).frame(width: 6, height: 6)
+            Text(t)
+                .font(DS.Font.scaled(11, weight: .semibold))
+                .foregroundColor(DS.Color.textPrimary)
+                .lineLimit(1)
+        }
+        .frame(width: 58, alignment: .leading)
+    }
+
+    /// رقم في الجدول — أرقام جدولية فتتراصّ الخانات عمودياً
+    private func censusValue(_ v: Int) -> some View {
+        Text("\(v)")
+            .font(DS.Font.plex(15, weight: .bold))
+            .monospacedDigit()
+            .foregroundColor(DS.Color.textPrimary)
+            .contentTransition(.numericText())
+            .frame(maxWidth: .infinity)
+    }
+
     private func refStat(_ title: String, _ value: Int) -> some View {
         VStack(spacing: 1) {
             Text("\(value)")
@@ -546,5 +557,62 @@ struct AdminDashboardView: View {
                 .stroke(DS.Color.warning.opacity(0.2), lineWidth: 1)
         )
         .dsCardShadow()
+    }
+}
+
+/// بلاطة قسم إداري — تُستعمل في لوحة الإدارة وفي إعدادات النظام.
+/// كانت خاصّة داخل اللوحة، فرُفعت لمستوى الملف بدل نسخها مرة ثانية.
+struct AdminTile<Destination: View>: View {
+    let title: String
+    let subtitle: String  // يُستخدم كوصف وصولية فقط في العرض المضغوط
+    let icon: String
+    let color: Color
+    var badge: Int? = nil
+    @ViewBuilder let destination: () -> Destination
+
+    var body: some View {
+        NavigationLink(destination: destination()) {
+            VStack(spacing: DS.Spacing.sm) {
+                ZStack(alignment: .topTrailing) {
+                    ZStack {
+                        Circle().fill(color.opacity(0.14))
+                        Image(systemName: icon)
+                            .font(DS.Font.scaled(17, weight: .semibold))
+                            .foregroundColor(color)
+                    }
+                    .frame(width: 44, height: 44)
+
+                    if let badge, badge > 0 {
+                        Text(badge > 99 ? "99+" : "\(badge)")
+                            .font(DS.Font.scaled(11, weight: .bold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 1)
+                            // الشارة حمراء دائماً — لون المربّع كان يجعل
+                            // بعضها باهتاً فلا يُقرأ كتنبيه يحتاج إجراءً.
+                            .background(Capsule().fill(DS.Color.error))
+                            .offset(x: 8, y: -3)
+                    }
+                }
+
+                Text(title)
+                    .font(DS.Font.plex(11, weight: .bold))
+                    .foregroundColor(DS.Color.textPrimary)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.8)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.vertical, DS.Spacing.md)
+            .padding(.horizontal, DS.Spacing.xs)
+            .frame(maxWidth: .infinity, minHeight: 104)
+            .background(DS.Color.surface)
+            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                    .strokeBorder(color.opacity(0.14), lineWidth: 1)
+            )
+        }
+        .buttonStyle(DSScaleButtonStyle())
     }
 }

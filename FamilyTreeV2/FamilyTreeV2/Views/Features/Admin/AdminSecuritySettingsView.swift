@@ -1,85 +1,104 @@
 import SwiftUI
 
-/// إعدادات النظام — بنفس تصميم التطبيق (DSCard + DSSectionHeader + DSActionRow)
+/// إعدادات النظام — مربّعات بنفس لغة لوحة الإدارة (AdminTile) بدل صفوف داخل
+/// بطاقات. ضُمّ إليها ما كان مبعثراً في اللوحة: فريق الإدارة · إرسال الإشعارات
+/// · تحديثات التطبيق — فصارت اللوحة للعمل اليومي وهذه لضبط النظام.
 struct AdminSecuritySettingsView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var notificationVM: NotificationViewModel
     @EnvironmentObject var memberVM: MemberViewModel
     @EnvironmentObject var appSettingsVM: AppSettingsViewModel
 
+    /// عدد فريق الإدارة — شارة على مربّع الفريق، كما كانت في اللوحة.
+    private var moderatorCount: Int {
+        memberVM.allMembers.filter {
+            $0.role == .owner || $0.role == .admin || $0.role == .monitor || $0.role == .supervisor
+        }.count
+    }
+
     var body: some View {
         ZStack {
             DS.Color.background.ignoresSafeArea()
 
             ScrollView(showsIndicators: false) {
-                VStack(spacing: DS.Spacing.md) {
-                    // الوضع الأفقي: البطاقات على عمودين
-                    AdaptiveCardStack(spacing: DS.Spacing.md, landscapeMinimum: 340) {
+                VStack(alignment: .leading, spacing: DS.Spacing.md) {
 
-                    // ── الإعدادات العامة ──
-                    DSCard(padding: 0) {
-                        DSSectionHeader(
-                            title: L10n.t("الإعدادات العامة", "General Settings"),
-                            icon: "gearshape.2.fill",
-                            iconColor: DS.Color.primary
-                        )
-
-                        NavigationLink(
-                            destination: AdminAppSettingsView()
+                    sectionTitle(L10n.t("الضبط", "Configuration"))
+                    LazyVGrid(columns: columns, spacing: DS.Spacing.sm) {
+                        AdminTile(
+                            title: L10n.t("إعدادات التطبيق", "App Settings"),
+                            subtitle: L10n.t("التسجيل · الأخبار · الميزات · الصيانة",
+                                             "Registration · News · Features · Maintenance"),
+                            icon: "gearshape.fill",
+                            color: DS.Color.primary
+                        ) {
+                            AdminAppSettingsView()
                                 .environmentObject(authVM)
                                 .environmentObject(memberVM)
                                 .environmentObject(appSettingsVM)
                                 .environmentObject(notificationVM)
-                        ) {
-                            DSActionRow(
-                                title: L10n.t("إعدادات التطبيق", "App Settings"),
-                                subtitle: L10n.t("التسجيل · الأخبار · الميزات · الصيانة", "Registration · News · Features · Maintenance"),
-                                icon: "gearshape.fill",
-                                color: DS.Color.primary
-                            )
+                        }
+
+                        if authVM.canModerate {
+                            AdminTile(
+                                title: L10n.t("فريق الإدارة", "Admin Team"),
+                                subtitle: L10n.t("الأعضاء والصلاحيات", "Members & permissions"),
+                                icon: "person.3.fill",
+                                color: DS.Color.neonPurple,
+                                badge: moderatorCount
+                            ) {
+                                AdminModeratorsView()
+                                    .environmentObject(authVM)
+                                    .environmentObject(memberVM)
+                            }
                         }
                     }
                     .padding(.horizontal, DS.Spacing.lg)
 
-                    // ── الفريق ──
-                    // «فريق الإدارة» له مدخل واحد: لوحة الإدارة ← الفريق والنظام (بلا تكرار)
+                    if authVM.isAdmin {
+                        sectionTitle(L10n.t("المراسلة", "Outreach"))
+                        LazyVGrid(columns: columns, spacing: DS.Spacing.sm) {
+                            AdminTile(
+                                title: L10n.t("إرسال إشعارات", "Notifications"),
+                                subtitle: L10n.t("إشعار موجّه أو بثّ", "Targeted or broadcast"),
+                                icon: "bell.badge.fill",
+                                color: DS.Color.secondary
+                            ) {
+                                AdminNotificationsView()
+                                    .environmentObject(authVM)
+                                    .environmentObject(memberVM)
+                                    .environmentObject(notificationVM)
+                            }
 
-                    // ── الأمان ──
-                    DSCard(padding: 0) {
-                        DSSectionHeader(
-                            title: L10n.t("الأمان", "Security"),
-                            icon: "lock.shield.fill",
-                            iconColor: DS.Color.error
-                        )
-
-                        // «الأرقام المحظورة» انتقلت إلى: إدارة الأعضاء ← الحسابات (بلا تكرار)
+                            AdminTile(
+                                title: L10n.t("تحديثات التطبيق", "App Updates"),
+                                subtitle: L10n.t("رسالة نظام في المستجدات", "System message in Updates"),
+                                icon: "megaphone.fill",
+                                color: DS.Color.success
+                            ) {
+                                AdminAppUpdateView()
+                                    .environmentObject(authVM)
+                                    .environmentObject(notificationVM)
+                            }
+                        }
+                        .padding(.horizontal, DS.Spacing.lg)
                     }
-                    .padding(.horizontal, DS.Spacing.lg)
 
-                    // ── المراقبة ──
-                    DSCard(padding: 0) {
-                        DSSectionHeader(
-                            title: L10n.t("المراقبة", "Monitoring"),
-                            icon: "waveform.path.ecg.rectangle.fill",
-                            iconColor: DS.Color.info
-                        )
-
-                        NavigationLink(
-                            destination: AdminSystemHealthView()
+                    sectionTitle(L10n.t("المراقبة", "Monitoring"))
+                    LazyVGrid(columns: columns, spacing: DS.Spacing.sm) {
+                        AdminTile(
+                            title: L10n.t("صحة النظام", "System Health"),
+                            subtitle: L10n.t("النشاط والأجهزة والإشعارات", "Activity, devices & push"),
+                            icon: "waveform.path.ecg",
+                            color: DS.Color.info
+                        ) {
+                            AdminSystemHealthView()
                                 .environmentObject(authVM)
                                 .environmentObject(notificationVM)
                                 .environmentObject(memberVM)
-                        ) {
-                            DSActionRow(
-                                title: L10n.t("صحة النظام", "System Health"),
-                                subtitle: L10n.t("النشاط والأجهزة والإشعارات", "Activity, Devices & Push"),
-                                icon: "waveform.path.ecg",
-                                color: DS.Color.info
-                            )
                         }
                     }
                     .padding(.horizontal, DS.Spacing.lg)
-                    }
 
                     Spacer(minLength: DS.Spacing.xxxl)
                 }
@@ -89,5 +108,18 @@ struct AdminSecuritySettingsView: View {
         .navigationTitle(L10n.t("إعدادات النظام", "System Settings"))
         .navigationBarTitleDisplayMode(.inline)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+    }
+
+    private var columns: [GridItem] {
+        Array(repeating: GridItem(.flexible(), spacing: DS.Spacing.sm), count: 3)
+    }
+
+    /// عنوان مجموعة — يفصل المربّعات بحسب الغرض بدل رصّها في شبكة واحدة صمّاء.
+    private func sectionTitle(_ t: String) -> some View {
+        Text(t)
+            .font(DS.Font.scaled(12, weight: .bold))
+            .foregroundColor(DS.Color.textSecondary)
+            .padding(.horizontal, DS.Spacing.lg)
+            .padding(.top, DS.Spacing.xs)
     }
 }

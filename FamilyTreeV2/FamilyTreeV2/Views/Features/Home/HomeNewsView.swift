@@ -927,28 +927,33 @@ struct HomeNewsView: View {
 
                 // ═══ الجرس ═══
                 NavigationLink(destination: NotificationsCenterView()) {
-                    ZStack(alignment: .topTrailing) {
-                        Image(systemName: notificationVM.unreadNotificationsCount > 0
-                              ? "bell.badge.fill" : "bell.fill")
-                            .font(DS.Font.scaled(isLandscape ? 15 : 18, weight: .bold))
-                            .foregroundColor(DS.Color.textOnPrimary)
-                            .frame(width: isLandscape ? 36 : 44, height: isLandscape ? 36 : 44)
-
-                        if notificationVM.unreadNotificationsCount > 0 {
-                            Text(notificationVM.unreadNotificationsCount > 99
-                                 ? "99+" : "\(notificationVM.unreadNotificationsCount)")
-                                .font(DS.Font.scaled(11, weight: .bold))
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 5)
-                                .padding(.vertical, 2)
-                                .background(DS.Color.error)
-                                .clipShape(Capsule())
-                                .offset(x: 6, y: -4)
+                    // الشارة من الرمز نفسه لا دائرة مرسومة فوقه: bell.badge.fill
+                    // طبقتان تُلوَّنان بـpalette، وترتيبهما: **الشارة أولاً ثم
+                    // الجرس** — فاللون الأول أحمر والثاني أبيض، لا العكس.
+                    // تناسبها مع الجرس مضبوط من Apple وتكبر معه تلقائياً، فلا
+                    // إزاحات ولا أحجام أخمّنها ولا تنقلب مع اتجاه اللغة.
+                    let hasUnread = notificationVM.unreadNotificationsCount > 0
+                    Group {
+                        if #available(iOS 17.0, *) {
+                            Image(systemName: hasUnread ? "bell.badge.fill" : "bell")
+                                .symbolRenderingMode(hasUnread ? .palette : .monochrome)
+                                .foregroundStyle(DS.Color.error, DS.Color.textOnPrimary)
+                                .symbolEffect(.bounce, value: notificationVM.unreadNotificationsCount)
+                        } else {
+                            Image(systemName: hasUnread ? "bell.badge.fill" : "bell")
+                                .symbolRenderingMode(hasUnread ? .palette : .monochrome)
+                                .foregroundStyle(DS.Color.error, DS.Color.textOnPrimary)
                         }
                     }
+                    .font(DS.Font.scaled(isLandscape ? 19 : 22, weight: .semibold))
+                    .frame(width: isLandscape ? 36 : 44, height: isLandscape ? 36 : 44)
+                    .animation(DS.Anim.smooth, value: hasUnread)
                 }
                 .buttonStyle(BounceButtonStyle())
                 .accessibilityLabel(L10n.t("الإشعارات", "Notifications"))
+                .accessibilityValue(notificationVM.unreadNotificationsCount > 0
+                                    ? L10n.t("توجد إشعارات غير مقروءة", "Unread notifications")
+                                    : "")
             }
             .padding(.horizontal, DS.Spacing.lg)
             .padding(.bottom, isLandscape ? DS.Spacing.xs : DS.Spacing.sm)
