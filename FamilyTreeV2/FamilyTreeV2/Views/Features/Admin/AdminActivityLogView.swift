@@ -26,13 +26,14 @@ struct AdminActivityLogView: View {
     // MARK: - التصنيفات
 
     enum ActivityFilter: String, CaseIterable, Identifiable {
-        case all, members, content, requests, system
+        case all, members, women, content, requests, system
         var id: String { rawValue }
 
         var title: String {
             switch self {
             case .all:     return L10n.t("الكل", "All")
             case .members: return L10n.t("الأعضاء", "Members")
+            case .women:   return L10n.t("النساء", "Women")
             case .content: return L10n.t("المحتوى", "Content")
             case .requests: return L10n.t("الطلبات", "Requests")
             case .system:  return L10n.t("النظام", "System")
@@ -42,6 +43,7 @@ struct AdminActivityLogView: View {
             switch self {
             case .all:     return "square.grid.2x2.fill"
             case .members: return "person.2.fill"
+            case .women:   return "figure.dress.line.vertical.figure"
             case .content: return "photo.stack.fill"
             case .requests: return "tray.full.fill"
             case .system:  return "gearshape.fill"
@@ -51,6 +53,7 @@ struct AdminActivityLogView: View {
             switch self {
             case .all:     return DS.Color.primary
             case .members: return DS.Color.warning
+            case .women:   return DS.Color.female
             case .content: return DS.Color.info
             case .requests: return DS.Color.warning
             case .system:  return DS.Color.accent
@@ -59,6 +62,14 @@ struct AdminActivityLogView: View {
     }
 
     /// تغييرات تخصّ الأعضاء (تعديل بيانات، حذف، أدوار، تفعيل)
+    /// حركة شجرة النساء — قسم مستقلّ لا ضمن «الأعضاء»، فمصدرها جدول آخر
+    /// وطبيعتها مختلفة (زوجات وبنات لا حسابات).
+    private static let womenKinds: Set<String> = [
+        NotificationKind.womenAdd.rawValue,
+        NotificationKind.womenEdit.rawValue,
+        NotificationKind.womenDelete.rawValue,
+    ]
+
     private static let memberKinds: Set<String> = [
         NotificationKind.adminEdit.rawValue,
         NotificationKind.adminEditName.rawValue,
@@ -120,14 +131,18 @@ struct AdminActivityLogView: View {
         notificationVM.notifications
     }
 
-    private func matchesFilter(_ n: AppNotification) -> Bool {
-        switch filter {
+    private func matchesFilter(_ n: AppNotification) -> Bool { matches(n, filter) }
+
+    private func matches(_ n: AppNotification, _ f: ActivityFilter) -> Bool {
+        switch f {
         case .all:     return true
         case .members: return Self.memberKinds.contains(n.kind)
+        case .women:   return Self.womenKinds.contains(n.kind)
         case .content: return Self.contentKinds.contains(n.kind)
         case .requests: return Self.requestKinds.contains(n.kind)
         case .system:
             return !Self.memberKinds.contains(n.kind)
+                && !Self.womenKinds.contains(n.kind)
                 && !Self.contentKinds.contains(n.kind)
                 && !Self.requestKinds.contains(n.kind)
         }
@@ -274,18 +289,9 @@ struct AdminActivityLogView: View {
         HStack(spacing: 4) {
             ForEach(ActivityFilter.allCases) { f in
                 let active = filter == f
-                let count = activityItems.filter { n in
-                    switch f {
-                    case .all:     return true
-                    case .members: return Self.memberKinds.contains(n.kind)
-                    case .content: return Self.contentKinds.contains(n.kind)
-                    case .requests: return Self.requestKinds.contains(n.kind)
-                    case .system:
-                        return !Self.memberKinds.contains(n.kind)
-                            && !Self.contentKinds.contains(n.kind)
-                            && !Self.requestKinds.contains(n.kind)
-                    }
-                }.count
+                // مصدر واحد للتصنيف — كان مكرّراً هنا فبقي ناقصاً عند
+                // إضافة تبويب جديد. matchesFilter هي المرجع الوحيد الآن.
+                let count = activityItems.filter { matches($0, f) }.count
 
                 Button {
                     withAnimation(DS.Anim.quick) { filter = f }

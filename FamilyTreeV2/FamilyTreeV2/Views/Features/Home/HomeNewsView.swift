@@ -934,15 +934,23 @@ struct HomeNewsView: View {
                     // إزاحات ولا أحجام أخمّنها ولا تنقلب مع اتجاه اللغة.
                     let hasUnread = notificationVM.unreadNotificationsCount > 0
                     Group {
-                        if #available(iOS 17.0, *) {
-                            Image(systemName: hasUnread ? "bell.badge.fill" : "bell")
-                                .symbolRenderingMode(hasUnread ? .palette : .monochrome)
+                        if hasUnread {
+                            // palette: اللون الأول للشارة والثاني للجرس
+                            let bell = Image(systemName: "bell.badge.fill")
+                                .symbolRenderingMode(.palette)
                                 .foregroundStyle(DS.Color.error, DS.Color.textOnPrimary)
-                                .symbolEffect(.bounce, value: notificationVM.unreadNotificationsCount)
+                            if #available(iOS 17.0, *) {
+                                bell.symbolEffect(.bounce,
+                                                  value: notificationVM.unreadNotificationsCount)
+                            } else {
+                                bell
+                            }
                         } else {
-                            Image(systemName: hasUnread ? "bell.badge.fill" : "bell")
-                                .symbolRenderingMode(hasUnread ? .palette : .monochrome)
-                                .foregroundStyle(DS.Color.error, DS.Color.textOnPrimary)
+                            // بلا إشعارات: أبيض خالص. وضع monochrome يأخذ اللون
+                            // **الأول** فقط — وكان الأحمر، فيخرج الجرس أحمر.
+                            Image(systemName: "bell")
+                                .symbolRenderingMode(.monochrome)
+                                .foregroundStyle(DS.Color.textOnPrimary)
                         }
                     }
                     .font(DS.Font.scaled(isLandscape ? 19 : 22, weight: .semibold))
