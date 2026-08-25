@@ -49,9 +49,12 @@ enum WomenStore {
     static var linkedUserByWoman: [UUID: UUID] = [:]   // womanId → userId
 
     static func fetch() async throws -> [FamilyMember] {
+        // سجلّات «الموقع فقط» لا وجود لها في التطبيق — تُستبعد على السيرفر
+        // فلا تُنقل أصلاً، بدل تصفيتها بعد الوصول.
         let rows: [WomenRow] = try await SupabaseConfig.client
             .from("women_members")
             .select()
+            .eq("is_web_only", value: false)
             .order("sort_order", ascending: true)
             .execute()
             .value

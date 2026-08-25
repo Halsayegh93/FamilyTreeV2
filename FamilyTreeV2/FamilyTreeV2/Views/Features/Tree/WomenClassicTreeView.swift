@@ -671,6 +671,23 @@ struct WomenClassicTreeView: View {
                                 .offset(x: 4, y: 4)
                         }
                     }
+                    // شارة الإخفاء: عين مشطوبة — لا يراها إلا الإداري، لأن
+                    // المخفيّ لا يصل العضو العادي أصلًا. تميّز «مخفية عن الشجرة»
+                    // من الظاهرة بلا فتح التفاصيل.
+                    .overlay(alignment: .topTrailing) {
+                        if m.isHiddenFromTree {
+                            Circle().fill(DS.Color.background)
+                                .frame(width: 17, height: 17)
+                                .overlay(
+                                    Image(systemName: "eye.slash.fill")
+                                        .font(.system(size: 8.5, weight: .bold))
+                                        .foregroundColor(DS.Color.warning)
+                                )
+                                .offset(x: 4, y: -4)
+                        }
+                    }
+                    // المخفيّ باهت — إشارة ثانية تُقرأ من بعيد دون تمييز الشارة
+                    .opacity(m.isHiddenFromTree ? 0.55 : 1)
                     // شارة عدد الأبناء + سهم — فوق يسار الصورة (طلب المالك)
                     .overlay(alignment: .topLeading) {
                         if !kids.isEmpty {
@@ -773,6 +790,20 @@ struct WomenClassicTreeView: View {
                         .foregroundColor(.white)
                 )
                 .saturation(w.isDeceased == true ? 0 : 1)
+                // نفس شارة الإخفاء على مربّع الزوجة — بمقاس الخلية الصغيرة
+                .overlay(alignment: .topTrailing) {
+                    if w.isHiddenFromTree {
+                        Circle().fill(DS.Color.background)
+                            .frame(width: 12, height: 12)
+                            .overlay(
+                                Image(systemName: "eye.slash.fill")
+                                    .font(.system(size: 6, weight: .bold))
+                                    .foregroundColor(DS.Color.warning)
+                            )
+                            .offset(x: 3, y: -3)
+                    }
+                }
+                .opacity(w.isHiddenFromTree ? 0.55 : 1)
             Text(wifeShortName(w))
                 .font(.system(size: 8, weight: .medium))
                 .foregroundColor(DS.Color.textSecondary)

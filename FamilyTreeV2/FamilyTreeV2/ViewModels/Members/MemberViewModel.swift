@@ -315,6 +315,7 @@ class MemberViewModel: ObservableObject {
             async let relatedTask: [WomanMember] = supabase.from("women_members")
                 .select()
                 .or("parent_id.eq.\(uid),husband_id.eq.\(uid)")
+                .eq("is_web_only", value: false)   // «الموقع فقط» لا تظهر هنا
                 .order("sort_order", ascending: true)
                 .execute().value
 
@@ -610,7 +611,8 @@ class MemberViewModel: ObservableObject {
                 .select().eq("id", value: uid.uuidString).limit(1).execute().value
             guard let fatherNodeId = selfRows.first?.parentId else { return [] }
             let wives: [WomanMember] = try await supabase.from("women_members")
-                .select().eq("husband_id", value: fatherNodeId.uuidString).execute().value
+                .select().eq("husband_id", value: fatherNodeId.uuidString)
+                .eq("is_web_only", value: false).execute().value
             return wives.filter { !$0.firstName.trimmingCharacters(in: .whitespaces).isEmpty }
         } catch {
             Log.warning("[Women] fetchFatherWives: \(error.localizedDescription)"); return []
