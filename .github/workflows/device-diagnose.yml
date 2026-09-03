@@ -1,7 +1,7 @@
 name: Diagnose app on iPhone
 
-# يشغّل التطبيق على الآيفون المقترن ويلتقط مخرجاته وسجلّ النظام،
-# ليظهر سبب أي انهيار عند الإقلاع.
+# قراءة فقط: يسحب تقارير الانهيار المحفوظة على الجهاز من المحاولات السابقة.
+# لا يبني ولا يثبّت ولا يشغّل أي شيء على الآيفون.
 
 on:
   push:
@@ -12,11 +12,10 @@ on:
 jobs:
   diagnose:
     runs-on: self-hosted
-    timeout-minutes: 20
+    timeout-minutes: 10
 
     env:
       DEVELOPER_DIR: /Applications/Xcode.app/Contents/Developer
-      BUNDLE_ID: Hasan.FamilyTreeV2
 
     steps:
       - name: Find the connected iPhone
@@ -38,57 +37,41 @@ jobs:
           PY
           ) || { echo "::error::لم يُعثر على آيفون مقترن"; exit 1; }
           echo "DEVICE_UDID=$UDID" >> $GITHUB_ENV
-          echo "الجهاز: $UDID"
 
-      - name: Launch the app and capture output
+      - name: Pull crash reports (read-only, with hard time limit)
         continue-on-error: true
         run: |
           set +e
-          LOG="$RUNNER_TEMP/launch.log"
-          SYSLOG="$RUNNER_TEMP/syslog.log"
+          OUT="$RUNNER_TEMP/crash"
+          rm -rf "$OUT"; mkdir -p "$OUT"
 
-          # سجلّ النظام من الجهاز يعمل بالتوازي مع التشغيل
-          xcrun devicectl device console --device "$DEVICE_UDID" > "$SYSLOG" 2>&1 &
-          CONSOLE_PID=$!
-
-          sleep 3
-
-          xcrun devicectl device process launch \
+          # كل محاولة في الخلفية مع حدّ زمني، حتى لا تعلق المهمة
+          xcrun devicectl device copy from \
             --device "$DEVICE_UDID" \
-            --console \
-            --terminate-existing \
-            "$BUNDLE_ID" > "$LOG" 2>&1 &
-          LAUNCH_PID=$!
+            --domain-type systemCrashLogs \
+            --source . \
+            --destination "$OUT" > "$RUNNER_TEMP/copy.log" 2>&1 &
+          COPY_PID=$!
 
-          # ننتظر 30 ثانية ثم نوقف الالتقاط (macOS بلا أمر timeout)
-          sleep 30
-          kill "$LAUNCH_PID" 2>/dev/null
-          kill "$CONSOLE_PID" 2>/dev/null
-          wait "$LAUNCH_PID" 2>/dev/null
-          wait "$CONSOLE_PID" 2>/dev/null
-
-          echo "════════ مخرجات تشغيل التطبيق ════════"
-          cat "$LOG" 2>/dev/null || echo "(فارغ)"
-
-          echo ""
-          echo "════════ أسطر النظام المتعلقة بالتطبيق ════════"
-          grep -iE "familytree|Hasan\.FamilyTreeV2|crash|fatal|exception|terminat|signal|SIGABRT|dyld|Library not loaded|assert" \
-            "$SYSLOG" 2>/dev/null | head -80 || echo "(لا شيء)"
-
-      - name: Crash reports on the device
-        continue-on-error: true
-        run: |
-          set +e
-          echo "════════ تقارير الانهيار ════════"
-          for DIR in \
-            "$HOME/Library/Logs/CrashReporter/MobileDevice" \
-            "$HOME/Library/Logs/DiagnosticReports"
-          do
-            [ -d "$DIR" ] || continue
-            FOUND=$(find "$DIR" -name "*FamilyTreeV2*" -type f -mtime -1 2>/dev/null | head -3)
-            for F in $FOUND; do
-              echo "── $F ──"
-              head -100 "$F"
-            done
+          WAITED=0
+          while kill -0 "$COPY_PID" 2>/dev/null && [ "$WAITED" -lt 150 ]; do
+            sleep 5
+            WAITED=$((WAITED + 5))
           done
-          echo "(انتهى)"
+          kill "$COPY_PID" 2>/dev/null
+          wait "$COPY_PID" 2>/dev/null
+
+          echo "════════ مخرجات السحب ════════"
+          tail -20 "$RUNNER_TEMP/copy.log" 2>/dev/null
+
+          echo "════════ تقارير التطبيق ════════"
+          find "$OUT" -iname "*FamilyTree*" -type f 2>/dev/null | head -20
+
+          LATEST=$(find "$OUT" -iname "*FamilyTree*" -type f 2>/dev/null \
+                   | xargs -r ls -t 2>/dev/null | head -1)
+          if [ -n "$LATEST" ]; then
+            echo "════════ أحدث تقرير: $LATEST ════════"
+            head -250 "$LATEST"
+          else
+            echo "(لم يُعثر على تقرير للتطبيق)"
+          fi
