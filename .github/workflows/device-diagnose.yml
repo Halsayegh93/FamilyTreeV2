@@ -1,7 +1,7 @@
 name: Diagnose app on iPhone
 
-# يشغّل التطبيق على الآيفون المقترن ويطبع مخرجاته وسبب أي انهيار،
-# ثم يسحب تقارير الانهيار الحديثة من الجهاز.
+# يشغّل التطبيق على الآيفون المقترن ويلتقط مخرجاته وسجلّ النظام،
+# ليظهر سبب أي انهيار عند الإقلاع.
 
 on:
   push:
@@ -43,36 +43,52 @@ jobs:
       - name: Launch the app and capture output
         continue-on-error: true
         run: |
-          echo "════════ تشغيل التطبيق ════════"
           set +e
-          timeout 70 xcrun devicectl device process launch \
+          LOG="$RUNNER_TEMP/launch.log"
+          SYSLOG="$RUNNER_TEMP/syslog.log"
+
+          # سجلّ النظام من الجهاز يعمل بالتوازي مع التشغيل
+          xcrun devicectl device console --device "$DEVICE_UDID" > "$SYSLOG" 2>&1 &
+          CONSOLE_PID=$!
+
+          sleep 3
+
+          xcrun devicectl device process launch \
             --device "$DEVICE_UDID" \
             --console \
             --terminate-existing \
-            "$BUNDLE_ID" 2>&1 | tee "$RUNNER_TEMP/launch.log"
-          echo "════════ رمز الخروج: $? ════════"
+            "$BUNDLE_ID" > "$LOG" 2>&1 &
+          LAUNCH_PID=$!
 
-      - name: Recent crash reports for the app
+          # ننتظر 30 ثانية ثم نوقف الالتقاط (macOS بلا أمر timeout)
+          sleep 30
+          kill "$LAUNCH_PID" 2>/dev/null
+          kill "$CONSOLE_PID" 2>/dev/null
+          wait "$LAUNCH_PID" 2>/dev/null
+          wait "$CONSOLE_PID" 2>/dev/null
+
+          echo "════════ مخرجات تشغيل التطبيق ════════"
+          cat "$LOG" 2>/dev/null || echo "(فارغ)"
+
+          echo ""
+          echo "════════ أسطر النظام المتعلقة بالتطبيق ════════"
+          grep -iE "familytree|Hasan\.FamilyTreeV2|crash|fatal|exception|terminat|signal|SIGABRT|dyld|Library not loaded|assert" \
+            "$SYSLOG" 2>/dev/null | head -80 || echo "(لا شيء)"
+
+      - name: Crash reports on the device
         continue-on-error: true
         run: |
-          echo "════════ تقارير الانهيار على الماك ════════"
-          CRASH_DIR="$HOME/Library/Logs/CrashReporter/MobileDevice"
-          if [ -d "$CRASH_DIR" ]; then
-            LATEST=$(find "$CRASH_DIR" -name "FamilyTreeV2*" -type f -mtime -1 2>/dev/null \
-                     | xargs -r ls -t 2>/dev/null | head -1)
-            if [ -n "$LATEST" ]; then
-              echo "── $LATEST ──"
-              head -120 "$LATEST"
-            else
-              echo "لا توجد تقارير انهيار محفوظة على الماك لهذا التطبيق."
-            fi
-          else
-            echo "مجلد تقارير الانهيار غير موجود على الماك."
-          fi
-
-      - name: Device console around the crash
-        continue-on-error: true
-        run: |
-          echo "════════ سجلّ النظام من الجهاز ════════"
-          timeout 60 xcrun devicectl device info processes \
-            --device "$DEVICE_UDID" 2>&1 | grep -i familytree || true
+          set +e
+          echo "════════ تقارير الانهيار ════════"
+          for DIR in \
+            "$HOME/Library/Logs/CrashReporter/MobileDevice" \
+            "$HOME/Library/Logs/DiagnosticReports"
+          do
+            [ -d "$DIR" ] || continue
+            FOUND=$(find "$DIR" -name "*FamilyTreeV2*" -type f -mtime -1 2>/dev/null | head -3)
+            for F in $FOUND; do
+              echo "── $F ──"
+              head -100 "$F"
+            done
+          done
+          echo "(انتهى)"
