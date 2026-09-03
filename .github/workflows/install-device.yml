@@ -112,8 +112,63 @@ jobs:
           xcrun devicectl device install app --device "$DEVICE_UDID" "$APP_PATH"
           echo "تم تثبيت النسخة الجديدة على $DEVICE_NAME"
 
+      - name: Smoke test — هل يبقى التطبيق شغّالاً؟
+        id: smoke
+        run: |
+          set +e
+          LOG="$RUNNER_TEMP/smoke.log"
+          xcrun devicectl device process launch \
+            --device "$DEVICE_UDID" \
+            --console \
+            --terminate-existing \
+            Hasan.FamilyTreeV2 > "$LOG" 2>&1 &
+          PID=$!
+          sleep 25
+          kill "$PID" 2>/dev/null
+          wait "$PID" 2>/dev/null
+
+          echo "════════ مخرجات التشغيل ════════"
+          cat "$LOG"
+
+          if grep -q "terminated due to signal" "$LOG"; then
+            echo "::error::التطبيق انهار عند التشغيل — سيُستعاد الإصدار المستقر"
+            exit 1
+          fi
+          echo "✅ التطبيق بقي شغّالاً 25 ثانية بلا انهيار"
+
+      # ── شبكة أمان: لو انهارت النسخة الجديدة، نعيد main فوراً ──
+      # حتى لا يبقى الجهاز على نسخة معطّلة في أي حال.
+      - name: Checkout main for rollback
+        if: failure()
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: rollback-src
+
+      - name: Rollback to the stable build
+        if: failure()
+        run: |
+          echo "⚠️ استعادة الإصدار المستقر من main"
+          xcodebuild build \
+            -project rollback-src/FamilyTreeV2.xcodeproj \
+            -scheme FamilyTreeV2 \
+            -configuration Debug \
+            -destination "platform=iOS,id=$DEVICE_UDID" \
+            -derivedDataPath "$RUNNER_TEMP/dd-rollback" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath ~/.private_keys/AuthKey_${{ secrets.APP_STORE_CONNECT_KEY_ID }}.p8 \
+            -authenticationKeyID ${{ secrets.APP_STORE_CONNECT_KEY_ID }} \
+            -authenticationKeyIssuerID ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }} \
+            CODE_SIGN_STYLE=Automatic \
+            DEVELOPMENT_TEAM=G8GVN83P97
+
+          xcrun devicectl device install app \
+            --device "$DEVICE_UDID" \
+            "$RUNNER_TEMP/dd-rollback/Build/Products/Debug-iphoneos/FamilyTreeV2.app"
+          echo "✅ تمت استعادة الإصدار المستقر على $DEVICE_NAME"
+
       - name: Cleanup
         if: always()
         run: |
-          rm -rf "$RUNNER_TEMP/dd"
+          rm -rf "$RUNNER_TEMP/dd" "$RUNNER_TEMP/dd-rollback"
           rm -rf ~/.private_keys 2>/dev/null || true

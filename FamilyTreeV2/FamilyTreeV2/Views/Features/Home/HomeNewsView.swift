@@ -396,21 +396,9 @@ struct HomeNewsView: View {
         .frame(maxWidth: .infinity)
         .animation(DS.Anim.smooth, value: layout)
         .onAppear {
-            // الحركة نفسها معرّفة على كل مربّع عبر tileEntrance — هنا نغيّر الحالة فقط
+            // حركة الدخول معرّفة داخل HomeTile — هنا نغيّر الحالة فقط
             if !tilesAppeared { tilesAppeared = true }
         }
-    }
-
-    /// ظهور متدرّج للمربّع حسب ترتيبه — مرة واحدة عند أول فتح، ويتعطّل مع "تقليل الحركة"
-    private func tileEntrance<Content: View>(_ index: Int, _ content: Content) -> some View {
-        content
-            .opacity(tilesAppeared ? 1 : 0.55)
-            .scaleEffect(tilesAppeared ? 1 : 0.96)
-            .offset(y: tilesAppeared ? 0 : 10)
-            .animation(
-                DS.Anim.respectingMotion(DS.Anim.bouncy.delay(Double(index) * 0.07), reduceMotion: reduceMotion),
-                value: tilesAppeared
-            )
     }
 
     /// حركة تكرارية بطيئة (تنفّس/نبض) — تتعطّل مع "تقليل الحركة"
@@ -427,24 +415,26 @@ struct HomeNewsView: View {
     /// وبارتفاع أكبر قليلاً ليكونا عنصري الوصول الأساسيين.
     private var primaryTilesRow: some View {
         HStack(spacing: layout.gridSpacing) {
-            tileEntrance(0, unifiedTile(
+            unifiedTile(
                 title: L10n.t("شجرة\nالمحمدعلي", "Al-Mohammad Ali\nFamily Tree"),
                 icon: "tree.fill",
                 tint: DS.Color.tileTreeTint,
                 imageURL: nil,
                 count: nil,
                 height: primaryTileHeight,
+                entranceIndex: 0,
                 action: { selectedTab = 1 }
-            ))
-            tileEntrance(1, unifiedTile(
+            )
+            unifiedTile(
                 title: L10n.t("الديوانيات", "Diwaniyas"),
                 icon: "map.fill",
                 tint: DS.Color.tileDiwaniyaTint,
                 imageURL: nil,
                 count: nil,
                 height: primaryTileHeight,
+                entranceIndex: 1,
                 action: { selectedTab = 2 }
-            ))
+            )
         }
     }
 
@@ -465,30 +455,33 @@ struct HomeNewsView: View {
             ),
             spacing: layout.gridSpacing
         ) {
-            tileEntrance(2, unifiedTile(
+            unifiedTile(
                 title: L10n.t("مكتبة العائلة", "Family Library"),
                 icon: "books.vertical.fill",
                 tint: DS.Color.tileLibraryTint,
                 imageURL: nil,
                 count: nil,
+                entranceIndex: 2,
                 action: { activeSubPage = .archive }
-            ))
-            tileEntrance(3, unifiedTile(
+            )
+            unifiedTile(
                 title: L10n.t("مشاريع العائلة", "Family Projects"),
                 icon: "briefcase.fill",
                 tint: DS.Color.tileProjectsTint,
                 imageURL: projectImageURL,
                 count: projectsVM.projects.count,
+                entranceIndex: 3,
                 action: { activeSubPage = .projects }
-            ))
-            tileEntrance(4, unifiedTile(
+            )
+            unifiedTile(
                 title: L10n.t("التواصل", "Contact"),
                 icon: "envelope.fill",
                 tint: DS.Color.tileContactTint,
                 imageURL: nil,
                 count: nil,
+                entranceIndex: 4,
                 action: { activeSubPage = .contact }
-            ))
+            )
         }
     }
 
@@ -557,7 +550,12 @@ struct HomeNewsView: View {
         }
     }
 
-    /// بطاقة وصول سريع بارتفاع موحد وصغير حتى تبقى الشبكة خفيفة.
+    /// بطاقة وصول سريع — تُبنى عبر HomeTile (بنية مستقلة).
+    ///
+    /// مهم: المربّع بنية `View` مستقلة وليس دالة تُرجع `some View`.
+    /// تغليف المربّعات بدوال عامة متداخلة كان يولّد نوع واجهة عميقاً جداً،
+    /// فينهار التطبيق عند الإقلاع بطفح مكدس داخل بناء بيانات الأنواع في Swift
+    /// (buildDescriptorPath). البنية المستقلة تقطع سلسلة الأنواع.
     private func unifiedTile(
         title: String,
         icon: String,
@@ -565,109 +563,22 @@ struct HomeNewsView: View {
         imageURL: String?,
         count: Int?,
         height: CGFloat? = nil,
+        entranceIndex: Int? = nil,
         action: @escaping () -> Void
-    ) -> some View {
-        Button(action: {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            action()
-        }) {
-            ZStack(alignment: .bottomLeading) {
-                tileBackground(tint: tint, imageURL: imageURL, icon: icon)
-
-                // عتمة أخف أسفل (للقراءة) + لمعة خفيفة أعلى — اللون يبقى حيّاً
-                LinearGradient(
-                    stops: [
-                        .init(color: .white.opacity(0.10), location: 0),
-                        .init(color: .clear, location: 0.30),
-                        .init(color: .black.opacity(0.34), location: 1)
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-
-                // أيقونة دائرية أكبر + عدّاد
-                VStack {
-                    HStack {
-                        Image(systemName: icon)
-                            .font(DS.Font.scaled(15, weight: .bold))
-                            .foregroundColor(.white)
-                            .frame(width: 36 * layout.scale, height: 36 * layout.scale)
-                            .background(Circle().fill(.ultraThinMaterial))
-                            .overlay(Circle().strokeBorder(Color.white.opacity(0.30), lineWidth: 1))
-                            .shadow(color: .black.opacity(0.15), radius: 3, x: 0, y: 1)
-
-                        Spacer()
-
-                        if let count, count > 0 {
-                            Text("\(count)")
-                                .font(DS.Font.scaled(11, weight: .black))
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 7)
-                                .padding(.vertical, 3)
-                                .background(Capsule().fill(.ultraThinMaterial))
-                                .overlay(Capsule().strokeBorder(Color.white.opacity(0.30), lineWidth: 1))
-                        }
-                    }
-                    Spacer()
-                }
-                .padding(9)
-
-                // العنوان أسفل — سطر واحد لضمان تساوي الأحجام
-                Text(title)
-                    .font(DS.Font.scaled(13, weight: .black))
-                    .foregroundColor(.white)
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.7)
-                    .multilineTextAlignment(.leading)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .shadow(color: .black.opacity(0.35), radius: 3, x: 0, y: 1)
-                    .padding(8)
-            }
-            .frame(maxWidth: .infinity)
-            .frame(height: height ?? layout.tileHeight)
-            // منطقة اللمس = حدود المربّع المرئية بالضبط
-            .contentShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.14), lineWidth: 1)
-            )
-            .shadow(color: .black.opacity(0.07), radius: 5, x: 0, y: 2)
-        }
-        .buttonStyle(DSScaleButtonStyle())
-        .accessibilityLabel(title)
-    }
-
-    /// خلفية المربّع — صورة من رابط أو gradient بلون الفئة مع زخارف.
-    @ViewBuilder
-    private func tileBackground(tint: DS.Color.TileTint, imageURL: String?, icon: String) -> some View {
-        if let urlStr = imageURL, let url = URL(string: urlStr) {
-            CachedAsyncImage(url: url) { img in
-                img.resizable().scaledToFill()
-            } placeholder: {
-                gradientBackground(tint: tint, icon: icon)
-            }
-        } else {
-            gradientBackground(tint: tint, icon: icon)
-        }
-    }
-
-    private func gradientBackground(tint: DS.Color.TileTint, icon: String) -> some View {
-        ZStack {
-            // تدرّج ثلاثي (فاتح → أساسي → غامق) بدل لون واحد بشفافية
-            tint.gradient
-            // زخرفة خفيفة — مقيّدة في صندوق ثابت ومثبّتة أسفل-يمين حتى
-            // تبقى في نفس المكان لكل الأيقونات مهما اختلف ارتفاع الرمز
-            // (مثلاً tree.fill الطويلة كانت تطلع فوق مقارنةً بـ map.fill)
-            Image(systemName: icon)
-                .resizable()
-                .scaledToFit()
-                .frame(width: 78, height: 78)
-                .foregroundColor(.white.opacity(0.18))
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-                .offset(x: 16, y: 12)
-        }
-        .clipped()
+    ) -> HomeTile {
+        HomeTile(
+            title: title,
+            icon: icon,
+            tint: tint,
+            imageURL: imageURL,
+            count: count,
+            height: height ?? layout.tileHeight,
+            iconScale: layout.scale,
+            entranceIndex: entranceIndex,
+            appeared: tilesAppeared,
+            reduceMotion: reduceMotion,
+            action: action
+        )
     }
 
     // MARK: - Legacy (لم يعد مستخدماً بعد توحيد الشبكة)
@@ -2270,5 +2181,149 @@ private struct NoBounceIfAvailable: ViewModifier {
         } else {
             content
         }
+    }
+}
+
+// MARK: - HomeTile — مربّع الوصول السريع كبنية مستقلة
+//
+// فصل المربّع في بنية `View` خاصة به مقصود وليس تنظيماً فقط:
+// عندما كانت المربّعات تُبنى بدوال تُرجع `some View` وتُغلَّف بدالة عامة
+// إضافية، كان نوع الواجهة الناتج يتضخّم حتى ينهار التطبيق عند الإقلاع
+// (EXC_BAD_ACCESS في منطقة حارس المكدس، بتكرار
+// swift::SubstGenericParametersFromMetadata::buildDescriptorPath).
+// البنية المستقلة تجعل النوع في الأب مجرّد `HomeTile`، فتنقطع السلسلة.
+struct HomeTile: View {
+    let title: String
+    let icon: String
+    let tint: DS.Color.TileTint
+    let imageURL: String?
+    let count: Int?
+    let height: CGFloat
+    let iconScale: CGFloat
+    /// ترتيب المربّع لظهور متدرّج — nil يعني بلا حركة دخول
+    let entranceIndex: Int?
+    let appeared: Bool
+    let reduceMotion: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            action()
+        }) {
+            tileFace
+        }
+        .buttonStyle(DSScaleButtonStyle())
+        .accessibilityLabel(title)
+        .opacity(entranceProgress)
+        .scaleEffect(appeared || entranceIndex == nil ? 1 : 0.96)
+        .offset(y: appeared || entranceIndex == nil ? 0 : 10)
+        .animation(entranceAnimation, value: appeared)
+    }
+
+    private var entranceProgress: Double {
+        (appeared || entranceIndex == nil) ? 1 : 0.55
+    }
+
+    private var entranceAnimation: Animation? {
+        guard let entranceIndex, !reduceMotion else { return nil }
+        return DS.Anim.bouncy.delay(Double(entranceIndex) * 0.07)
+    }
+
+    private var tileFace: some View {
+        ZStack(alignment: .bottomLeading) {
+            background
+
+            // عتمة أخف أسفل (للقراءة) + لمعة خفيفة أعلى — اللون يبقى حيّاً
+            LinearGradient(
+                stops: [
+                    .init(color: .white.opacity(0.10), location: 0),
+                    .init(color: .clear, location: 0.30),
+                    .init(color: .black.opacity(0.34), location: 1)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+
+            topRow
+
+            // العنوان أسفل
+            Text(title)
+                .font(DS.Font.scaled(13, weight: .black))
+                .foregroundColor(.white)
+                .lineLimit(2)
+                .minimumScaleFactor(0.7)
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
+                .shadow(color: .black.opacity(0.35), radius: 3, x: 0, y: 1)
+                .padding(8)
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: height)
+        // منطقة اللمس = حدود المربّع المرئية بالضبط
+        .contentShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                .strokeBorder(Color.white.opacity(0.14), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.07), radius: 5, x: 0, y: 2)
+    }
+
+    private var topRow: some View {
+        VStack {
+            HStack {
+                Image(systemName: icon)
+                    .font(DS.Font.scaled(15, weight: .bold))
+                    .foregroundColor(.white)
+                    .frame(width: 36 * iconScale, height: 36 * iconScale)
+                    .background(Circle().fill(.ultraThinMaterial))
+                    .overlay(Circle().strokeBorder(Color.white.opacity(0.30), lineWidth: 1))
+                    .shadow(color: .black.opacity(0.15), radius: 3, x: 0, y: 1)
+
+                Spacer()
+
+                if let count, count > 0 {
+                    Text("\(count)")
+                        .font(DS.Font.scaled(11, weight: .black))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 3)
+                        .background(Capsule().fill(.ultraThinMaterial))
+                        .overlay(Capsule().strokeBorder(Color.white.opacity(0.30), lineWidth: 1))
+                }
+            }
+            Spacer()
+        }
+        .padding(9)
+    }
+
+    @ViewBuilder
+    private var background: some View {
+        if let urlStr = imageURL, let url = URL(string: urlStr) {
+            CachedAsyncImage(url: url) { img in
+                img.resizable().scaledToFill()
+            } placeholder: {
+                gradientFace
+            }
+        } else {
+            gradientFace
+        }
+    }
+
+    private var gradientFace: some View {
+        ZStack {
+            // تدرّج ثلاثي (فاتح → أساسي → غامق) بدل لون واحد بشفافية
+            tint.gradient
+            // زخرفة ثابتة الموضع مهما اختلف ارتفاع الرمز
+            Image(systemName: icon)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 78, height: 78)
+                .foregroundColor(.white.opacity(0.18))
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                .offset(x: 16, y: 12)
+        }
+        .clipped()
     }
 }
