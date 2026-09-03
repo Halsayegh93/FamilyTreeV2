@@ -1,9 +1,14 @@
 name: Build & Upload to TestFlight
 
 on:
-  # التشغيل اليدوي فقط — يدفع المستخدم البناء لـ TestFlight لما يخلّص.
+  # التشغيل اليدوي — يدفع المستخدم البناء لـ TestFlight لما يخلّص.
   # لتفعيل التحفيز التلقائي على push لـ main: ارجع push: branches: [main]
   workflow_dispatch:
+  # وسم متعمّد للرفع: دفع وسم مثل tf-42 يشغّل البناء والرفع مرة واحدة.
+  # الأوسمة فقط — الدفع العادي على الفروع لا يرفع شيئاً لـ TestFlight.
+  push:
+    tags:
+      - 'tf-*'
 
 jobs:
   build-and-upload:
