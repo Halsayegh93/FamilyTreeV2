@@ -36,15 +36,6 @@ struct HomeNewsView: View {
     @State private var debouncedNewsSearch = ""
     @State private var newsSearchTask: Task<Void, Never>?
 
-    // ═══ حيوية الواجهة — حركات خفيفة تحترم "تقليل الحركة" ═══
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    /// ظهور المربعات متدرّجاً عند أول فتح فقط
-    @State private var tilesAppeared = false
-    /// انزياح دوائر الهيدر المموّهة (تتنفّس ببطء)
-    @State private var headerDrift = false
-    /// نبض حلقة صورة العضو في بطاقة الترحيب
-    @State private var ringPulse = false
-
     private enum HomeSubPage: Hashable {
         case archive, projects, contact, news
     }
@@ -395,18 +386,6 @@ struct HomeNewsView: View {
         .frame(maxWidth: hSizeClass == .regular ? 700 : .infinity)
         .frame(maxWidth: .infinity)
         .animation(DS.Anim.smooth, value: layout)
-        .onAppear {
-            // حركة الدخول معرّفة داخل HomeTile — هنا نغيّر الحالة فقط
-            if !tilesAppeared { tilesAppeared = true }
-        }
-    }
-
-    /// حركة تكرارية بطيئة (تنفّس/نبض) — تتعطّل مع "تقليل الحركة"
-    private func breathing(duration: Double, autoreverses: Bool = true) -> Animation? {
-        DS.Anim.respectingMotion(
-            .easeInOut(duration: duration).repeatForever(autoreverses: autoreverses),
-            reduceMotion: reduceMotion
-        )
     }
 
     // MARK: - Primary Tiles Row — الشجرة + الديوانيات
@@ -418,21 +397,21 @@ struct HomeNewsView: View {
             unifiedTile(
                 title: L10n.t("شجرة\nالمحمدعلي", "Al-Mohammad Ali\nFamily Tree"),
                 icon: "tree.fill",
-                tint: DS.Color.tileTreeTint,
+                color: DS.Color.tileTree,
+                deep: DS.Color.tileTreeDeep,
                 imageURL: nil,
                 count: nil,
                 height: primaryTileHeight,
-                entranceIndex: 0,
                 action: { selectedTab = 1 }
             )
             unifiedTile(
                 title: L10n.t("الديوانيات", "Diwaniyas"),
                 icon: "map.fill",
-                tint: DS.Color.tileDiwaniyaTint,
+                color: DS.Color.tileDiwaniya,
+                deep: DS.Color.tileDiwaniyaDeep,
                 imageURL: nil,
                 count: nil,
                 height: primaryTileHeight,
-                entranceIndex: 1,
                 action: { selectedTab = 2 }
             )
         }
@@ -458,28 +437,28 @@ struct HomeNewsView: View {
             unifiedTile(
                 title: L10n.t("مكتبة العائلة", "Family Library"),
                 icon: "books.vertical.fill",
-                tint: DS.Color.tileLibraryTint,
+                color: DS.Color.tileLibrary,
+                deep: DS.Color.tileLibraryDeep,
                 imageURL: nil,
                 count: nil,
-                entranceIndex: 2,
                 action: { activeSubPage = .archive }
             )
             unifiedTile(
                 title: L10n.t("مشاريع العائلة", "Family Projects"),
                 icon: "briefcase.fill",
-                tint: DS.Color.tileProjectsTint,
+                color: DS.Color.tileProjects,
+                deep: DS.Color.tileProjectsDeep,
                 imageURL: projectImageURL,
                 count: projectsVM.projects.count,
-                entranceIndex: 3,
                 action: { activeSubPage = .projects }
             )
             unifiedTile(
                 title: L10n.t("التواصل", "Contact"),
                 icon: "envelope.fill",
-                tint: DS.Color.tileContactTint,
+                color: DS.Color.tileContact,
+                deep: DS.Color.tileContactDeep,
                 imageURL: nil,
                 count: nil,
-                entranceIndex: 4,
                 action: { activeSubPage = .contact }
             )
         }
@@ -505,7 +484,8 @@ struct HomeNewsView: View {
             unifiedTile(
                 title: L10n.t("شجرة\nالمحمدعلي", "Al-Mohammad Ali\nFamily Tree"),
                 icon: "tree.fill",
-                tint: DS.Color.tileTreeTint,
+                color: DS.Color.tileTree,
+                deep: DS.Color.tileTreeDeep,
                 imageURL: nil,
                 count: nil,
                 height: tileHeight,
@@ -514,7 +494,8 @@ struct HomeNewsView: View {
             unifiedTile(
                 title: L10n.t("الديوانيات", "Diwaniyas"),
                 icon: "map.fill",
-                tint: DS.Color.tileDiwaniyaTint,
+                color: DS.Color.tileDiwaniya,
+                deep: DS.Color.tileDiwaniyaDeep,
                 imageURL: nil,
                 count: nil,
                 height: tileHeight,
@@ -523,7 +504,8 @@ struct HomeNewsView: View {
             unifiedTile(
                 title: L10n.t("مكتبة العائلة", "Family Library"),
                 icon: "books.vertical.fill",
-                tint: DS.Color.tileLibraryTint,
+                color: DS.Color.tileLibrary,
+                deep: DS.Color.tileLibraryDeep,
                 imageURL: nil,
                 count: nil,
                 height: tileHeight,
@@ -532,7 +514,8 @@ struct HomeNewsView: View {
             unifiedTile(
                 title: L10n.t("مشاريع العائلة", "Family Projects"),
                 icon: "briefcase.fill",
-                tint: DS.Color.tileProjectsTint,
+                color: DS.Color.tileProjects,
+                deep: DS.Color.tileProjectsDeep,
                 imageURL: projectImageURL,
                 count: projectsVM.projects.count,
                 height: tileHeight,
@@ -541,7 +524,8 @@ struct HomeNewsView: View {
             unifiedTile(
                 title: L10n.t("التواصل", "Contact"),
                 icon: "envelope.fill",
-                tint: DS.Color.tileContactTint,
+                color: DS.Color.tileContact,
+                deep: DS.Color.tileContactDeep,
                 imageURL: nil,
                 count: nil,
                 height: tileHeight,
@@ -550,35 +534,120 @@ struct HomeNewsView: View {
         }
     }
 
-    /// بطاقة وصول سريع — تُبنى عبر HomeTile (بنية مستقلة).
-    ///
-    /// مهم: المربّع بنية `View` مستقلة وليس دالة تُرجع `some View`.
-    /// تغليف المربّعات بدوال عامة متداخلة كان يولّد نوع واجهة عميقاً جداً،
-    /// فينهار التطبيق عند الإقلاع بطفح مكدس داخل بناء بيانات الأنواع في Swift
-    /// (buildDescriptorPath). البنية المستقلة تقطع سلسلة الأنواع.
+    /// بطاقة وصول سريع بارتفاع موحد وصغير حتى تبقى الشبكة خفيفة.
     private func unifiedTile(
         title: String,
         icon: String,
-        tint: DS.Color.TileTint,
+        color: Color,
+        deep: Color,
         imageURL: String?,
         count: Int?,
         height: CGFloat? = nil,
-        entranceIndex: Int? = nil,
         action: @escaping () -> Void
-    ) -> HomeTile {
-        HomeTile(
-            title: title,
-            icon: icon,
-            tint: tint,
-            imageURL: imageURL,
-            count: count,
-            height: height ?? layout.tileHeight,
-            iconScale: layout.scale,
-            entranceIndex: entranceIndex,
-            appeared: tilesAppeared,
-            reduceMotion: reduceMotion,
-            action: action
-        )
+    ) -> some View {
+        Button(action: {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            action()
+        }) {
+            ZStack(alignment: .bottomLeading) {
+                tileBackground(color: color, deep: deep, imageURL: imageURL, icon: icon)
+
+                LinearGradient(
+                    stops: [
+                        .init(color: .white.opacity(0.10), location: 0),
+                        .init(color: .clear, location: 0.32),
+                        .init(color: .black.opacity(0.36), location: 1)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+
+                // أيقونة دائرية أكبر + عدّاد
+                VStack {
+                    HStack {
+                        Image(systemName: icon)
+                            .font(DS.Font.scaled(15, weight: .bold))
+                            .foregroundColor(.white)
+                            .frame(width: 36 * layout.scale, height: 36 * layout.scale)
+                            .background(Circle().fill(.ultraThinMaterial))
+                            .overlay(Circle().strokeBorder(Color.white.opacity(0.30), lineWidth: 1))
+                            .shadow(color: .black.opacity(0.15), radius: 3, x: 0, y: 1)
+
+                        Spacer()
+
+                        if let count, count > 0 {
+                            Text("\(count)")
+                                .font(DS.Font.scaled(11, weight: .black))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 3)
+                                .background(Capsule().fill(.ultraThinMaterial))
+                                .overlay(Capsule().strokeBorder(Color.white.opacity(0.30), lineWidth: 1))
+                        }
+                    }
+                    Spacer()
+                }
+                .padding(9)
+
+                // العنوان أسفل — سطر واحد لضمان تساوي الأحجام
+                Text(title)
+                    .font(DS.Font.scaled(13, weight: .black))
+                    .foregroundColor(.white)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.7)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .shadow(color: .black.opacity(0.35), radius: 3, x: 0, y: 1)
+                    .padding(8)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: height ?? layout.tileHeight)
+            // منطقة اللمس = حدود المربّع المرئية بالضبط
+            .contentShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.14), lineWidth: 1)
+            )
+            .shadow(color: .black.opacity(0.07), radius: 5, x: 0, y: 2)
+        }
+        .buttonStyle(DSScaleButtonStyle())
+        .accessibilityLabel(title)
+    }
+
+    /// خلفية المربّع — صورة من رابط أو gradient بلون الفئة مع زخارف.
+    @ViewBuilder
+    private func tileBackground(color: Color, deep: Color, imageURL: String?, icon: String) -> some View {
+        if let urlStr = imageURL, let url = URL(string: urlStr) {
+            CachedAsyncImage(url: url) { img in
+                img.resizable().scaledToFill()
+            } placeholder: {
+                gradientBackground(color: color, deep: deep, icon: icon)
+            }
+        } else {
+            gradientBackground(color: color, deep: deep, icon: icon)
+        }
+    }
+
+    private func gradientBackground(color: Color, deep: Color, icon: String) -> some View {
+        ZStack {
+            LinearGradient(
+                colors: [color.opacity(0.92), color, deep],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            // زخرفة خفيفة — مقيّدة في صندوق ثابت ومثبّتة أسفل-يمين حتى
+            // تبقى في نفس المكان لكل الأيقونات مهما اختلف ارتفاع الرمز
+            // (مثلاً tree.fill الطويلة كانت تطلع فوق مقارنةً بـ map.fill)
+            Image(systemName: icon)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 78, height: 78)
+                .foregroundColor(.white.opacity(0.17))
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                .offset(x: 16, y: 12)
+        }
+        .clipped()
     }
 
     // MARK: - Legacy (لم يعد مستخدماً بعد توحيد الشبكة)
@@ -782,11 +851,9 @@ struct HomeNewsView: View {
                 .frame(height: 1)
             ForEach(0..<5, id: \.self) { i in
                 Rectangle()
-                    .fill(DS.Color.textOnPrimary.opacity(i == 2 ? 0.95 : 0.40))
+                    .fill(DS.Color.textOnPrimary.opacity(i == 2 ? 0.55 : 0.30))
                     .frame(width: i == 2 ? 6 : 4, height: i == 2 ? 6 : 4)
                     .rotationEffect(.degrees(45))
-                    // المعيّن الأوسط يلمع قليلاً — لمسة سدو حيّة
-                    .shadow(color: .white.opacity(i == 2 ? 0.7 : 0), radius: 4)
             }
             Rectangle()
                 .fill(DS.Color.textOnPrimary.opacity(0.16))
@@ -924,42 +991,11 @@ struct HomeNewsView: View {
         .background(
             ZStack {
                 DS.Color.gradientPrimary
-                // دوائر مموّهة تتنفّس ببطء خلف التدرّج — حيوية بلا إزعاج
-                headerBlobs
                 // نفس طبقة MainHeaderView — بدونها يطلع الهيدر أفتح
                 DS.Color.headerVeil
             }
             .ignoresSafeArea(edges: .top)
         )
-        .onAppear {
-            if !reduceMotion, !headerDrift { headerDrift = true }
-        }
-    }
-
-    /// ثلاث دوائر مموّهة بألوان العلامة — تنزاح بضع نقاط ذهاباً وإياباً
-    private var headerBlobs: some View {
-        let d: CGFloat = headerDrift ? 1 : 0
-        return ZStack {
-            Circle()
-                .fill(DS.Color.accentLight.opacity(0.55))
-                .frame(width: 170, height: 170)
-                .blur(radius: 30)
-                .offset(x: 120 + 18 * d, y: -60 + 12 * d)
-            Circle()
-                .fill(DS.Color.secondaryLight.opacity(0.32))
-                .frame(width: 130, height: 130)
-                .blur(radius: 28)
-                .offset(x: -110 - 14 * d, y: 45 - 10 * d)
-            Circle()
-                .fill(DS.Color.primaryLight.opacity(0.5))
-                .frame(width: 100, height: 100)
-                .blur(radius: 24)
-                .offset(x: -40 + 16 * d, y: -50 + 8 * d)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .clipped()
-        .allowsHitTesting(false)
-        .animation(breathing(duration: 9), value: headerDrift)
     }
 
     private var greetingCard: some View {
@@ -990,20 +1026,13 @@ struct HomeNewsView: View {
                         // فسحة بين الصورة والإطار ثم الإطار نفسه
                         .padding(4)
                         .overlay(
-                            Circle().strokeBorder(timeAccent.opacity(0.55), lineWidth: 2)
-                        )
-                        // هالة تنبض ببطء حول الحلقة — تتعطّل مع "تقليل الحركة"
-                        .overlay(
-                            Circle()
-                                .strokeBorder(timeAccent.opacity(ringPulse ? 0 : 0.35), lineWidth: 2)
-                                .scaleEffect(ringPulse ? 1.28 : 1.0)
-                                .animation(breathing(duration: 2.6, autoreverses: false), value: ringPulse)
+                            Circle().strokeBorder(timeAccent.opacity(0.45), lineWidth: 2)
                         )
                     }
                     .frame(width: 58 * layout.scale, height: 58 * layout.scale)
                 }
 
-                // ═══ التحية والاسم + عدّادات سريعة ═══
+                // ═══ التحية والاسم ═══
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(alignment: .firstTextBaseline, spacing: 5) {
                         Image(systemName: greetingSymbol)
@@ -1012,7 +1041,7 @@ struct HomeNewsView: View {
                             .foregroundStyle(timeAccent)
                         Text(timeBasedGreeting)
                             .font(DS.Font.plex(12, weight: .medium))
-                            .foregroundColor(timeAccent)
+                            .foregroundColor(DS.Color.textSecondary)
                     }
                     .fixedSize()
                     Text(greetingName)
@@ -1021,12 +1050,6 @@ struct HomeNewsView: View {
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
                         .fixedSize(horizontal: false, vertical: true)
-
-                    HStack(spacing: DS.Spacing.xs + 2) {
-                        greetingStatChip(value: memberVM.allMembers.count, label: L10n.t("فرد", "members"))
-                        greetingStatChip(value: newsVM.allNews.count, label: L10n.t("خبر", "posts"))
-                    }
-                    .padding(.top, 3)
                 }
 
                 Spacer(minLength: DS.Spacing.sm)
@@ -1034,65 +1057,18 @@ struct HomeNewsView: View {
                 // سهم خفيف — ينعكس تلقائياً مع RTL
                 Image(systemName: "chevron.forward")
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(timeAccent.opacity(0.5))
+                    .foregroundColor(timeAccent.opacity(0.4))
             }
             .padding(.horizontal, DS.Spacing.lg)
             .padding(.vertical, DS.Spacing.md)
             .frame(maxWidth: .infinity, alignment: .leading)
-            // خلفية بلون الوقت — تدرّج ناعم مع دائرتين مموّهتين
-            .background(greetingBackground)
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
+            // إطار خفيف جداً يحدّد المربّع بلا ما يثقله
             .overlay(
                 RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
-                    .strokeBorder(timeAccent.opacity(0.14), lineWidth: 1)
+                    .strokeBorder(DS.Color.textTertiary.opacity(0.12), lineWidth: 1)
             )
-            .shadow(color: timeAccent.opacity(0.18), radius: 14, x: 0, y: 6)
         }
         .buttonStyle(DSScaleButtonStyle())
-        .onAppear {
-            if !reduceMotion, !ringPulse { ringPulse = true }
-        }
-    }
-
-    /// خلفية بطاقة الترحيب — سطح + تدرّج خفيف بلون الوقت + دوائر مموّهة
-    private var greetingBackground: some View {
-        ZStack {
-            DS.Color.surface
-            LinearGradient(
-                colors: [timeAccent.opacity(0.16), timeAccent.opacity(0.05), DS.Color.secondary.opacity(0.10)],
-                startPoint: .leading,
-                endPoint: .trailing
-            )
-            Circle()
-                .fill(timeAccent.opacity(0.22))
-                .frame(width: 130, height: 130)
-                .blur(radius: 30)
-                .offset(x: -90, y: -50)
-            Circle()
-                .fill(DS.Color.secondaryLight.opacity(0.20))
-                .frame(width: 100, height: 100)
-                .blur(radius: 26)
-                .offset(x: 110, y: 45)
-        }
-        .allowsHitTesting(false)
-    }
-
-    /// شريحة عدّاد صغيرة داخل بطاقة الترحيب (عدد الأفراد / الأخبار)
-    private func greetingStatChip(value: Int, label: String) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 3) {
-            Text("\(value)")
-                .font(DS.Font.plex(12, weight: .bold))
-                .foregroundColor(DS.Color.textPrimary)
-                .contentTransition(.numericText())
-                .animation(DS.Anim.smooth, value: value)
-            Text(label)
-                .font(DS.Font.plex(10, weight: .medium))
-                .foregroundColor(DS.Color.textSecondary)
-        }
-        .padding(.horizontal, DS.Spacing.sm)
-        .padding(.vertical, 2)
-        .background(Capsule().fill(DS.Color.surfaceElevated.opacity(0.85)))
-        .overlay(Capsule().strokeBorder(timeAccent.opacity(0.16), lineWidth: 1))
     }
 
 
@@ -1218,16 +1194,7 @@ struct HomeNewsView: View {
         } label: {
             VStack(alignment: .leading, spacing: DS.Spacing.md) {
                 HStack(alignment: .center, spacing: DS.Spacing.sm) {
-                    // أيقونة بتدرّج العلامة — تبرز أكثر من الدائرة الباهتة
-                    ZStack {
-                        RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                            .fill(DS.Color.gradientPrimary)
-                            .frame(width: 40, height: 40)
-                            .shadow(color: DS.Color.primary.opacity(0.35), radius: 8, x: 0, y: 4)
-                        Image(systemName: "newspaper.fill")
-                            .font(DS.Font.scaled(17, weight: .bold))
-                            .foregroundColor(.white)
-                    }
+                    premiumIcon("newspaper.fill", color: DS.Color.primary)
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(L10n.t("الأخبار والمناسبات", "News & Events"))
@@ -1242,11 +1209,6 @@ struct HomeNewsView: View {
                     }
 
                     Spacer()
-
-                    // شارة «جديد اليوم» تنبض لو فيه خبر نُشر اليوم
-                    if todayNewsCount > 0 {
-                        newTodayBadge
-                    }
                 }
 
                 if newsVM.isLoading && newsVM.allNews.isEmpty {
@@ -1268,28 +1230,51 @@ struct HomeNewsView: View {
                     }
                     .padding(.vertical, DS.Spacing.md)
                 } else {
-                    // معاينة حيّة — صورة الكاتب + النص + الاسم/الوقت + تفاعلات + صورة مصغّرة
-                    VStack(spacing: DS.Spacing.md) {
-                        ForEach(Array(newsVM.allNews.prefix(3))) { news in
-                            newsPreviewRow(for: news)
+                    // عرض مبسّط — نقطة + نص الخبر + الوقت، بلا صور ولا عدّادات
+                    VStack(spacing: DS.Spacing.sm + 2) {
+                        ForEach(Array(newsVM.allNews.prefix(4))) { news in
+                            HStack(alignment: .top, spacing: DS.Spacing.sm) {
+                                Circle()
+                                    .fill(roleColorFor(news.role_color))
+                                    .frame(width: 6, height: 6)
+                                    .padding(.top, 5)
+
+                                Text(news.content)
+                                    .font(DS.Font.plex(13, weight: .medium))
+                                    .foregroundColor(DS.Color.textPrimary)
+                                    .lineLimit(2)
+                                    .multilineTextAlignment(.leading)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                                Text(getRelativeTime(for: news.timestamp))
+                                    .font(DS.Font.plex(10))
+                                    .foregroundColor(DS.Color.textTertiary)
+                                    .lineLimit(1)
+                                    .layoutPriority(1)
+                            }
                         }
                     }
                 }
 
                 if newsVM.allNews.count > 3 {
-                    HStack(spacing: DS.Spacing.xs + 2) {
-                        Text(L10n.t("عرض كل الأخبار", "Show all news"))
+                    HStack {
+                        Spacer()
+                        Text(L10n.t("عرض المزيد", "Show more"))
                             .font(DS.Font.scaled(13, weight: .bold))
-                        Image(systemName: "chevron.forward")
-                            .font(DS.Font.scaled(11, weight: .bold))
+                            .foregroundColor(DS.Color.primary)
+                            .padding(.horizontal, DS.Spacing.lg)
+                            .padding(.vertical, 9)
+                            .frame(maxWidth: .infinity)
+                            .background(DS.Color.primary.opacity(0.10))
+                            .clipShape(Capsule())
+                            .overlay(
+                                Capsule()
+                                    .strokeBorder(DS.Color.primary.opacity(0.20), lineWidth: 1)
+                            )
+                        Spacer()
                     }
-                    .foregroundColor(.white)
-                    .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.vertical, 9)
-                    .frame(maxWidth: .infinity)
-                    .background(Capsule().fill(DS.Color.gradientPrimary))
-                    .shadow(color: DS.Color.primary.opacity(0.35), radius: 10, x: 0, y: 5)
-                    .padding(.top, DS.Spacing.xs)
+                    .padding(.top, DS.Spacing.sm)
                 }
             }
             .padding(DS.Spacing.lg)
@@ -1297,55 +1282,34 @@ struct HomeNewsView: View {
             .background(
                 ZStack {
                     DS.Color.surface
-                    // دوائر أوضح من قبل — البطاقة تقرأ ملوّنة لا رمادية
                     Circle()
-                        .fill(DS.Color.primary.opacity(0.18))
+                        .fill(DS.Color.primary.opacity(0.09))
                         .frame(width: 220, height: 220)
-                        .blur(radius: 55)
+                        .blur(radius: 60)
                         .offset(x: 130, y: -90)
                     Circle()
-                        .fill(DS.Color.secondary.opacity(0.14))
+                        .fill(DS.Color.secondary.opacity(0.07))
                         .frame(width: 160, height: 160)
-                        .blur(radius: 45)
-                        .offset(x: -80, y: 120)
+                        .blur(radius: 50)
+                        .offset(x: -70, y: 130)
                     Circle()
-                        .fill(DS.Color.accent.opacity(0.14))
+                        .fill(DS.Color.primary.opacity(0.13))
                         .frame(width: 130, height: 130)
                         .blur(radius: 38)
                         .offset(x: -100, y: -70)
+                    Circle()
+                        .fill(DS.Color.secondary.opacity(0.09))
+                        .frame(width: 90, height: 90)
+                        .blur(radius: 30)
+                        .offset(x: -30, y: -60)
                 }
             )
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm))
             // بلا هذا تلتقط زخارف الخلفية المزاحة نقرات فوق حدود البطاقة
-            .contentShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                    .strokeBorder(DS.Color.primary.opacity(0.10), lineWidth: 1)
-            )
-            .shadow(color: DS.Color.primaryDark.opacity(0.12), radius: 16, x: 0, y: 6)
+            .contentShape(RoundedRectangle(cornerRadius: DS.Radius.sm))
+            .shadow(color: .black.opacity(0.045), radius: 14, x: 0, y: 4)
         }
         .buttonStyle(DSScaleButtonStyle())
-    }
-
-    /// عدد الأخبار المنشورة اليوم
-    private var todayNewsCount: Int {
-        newsVM.allNews.filter { Calendar.current.isDateInToday($0.timestamp) }.count
-    }
-
-    /// شارة حمراء تنبض: «جديد اليوم»
-    private var newTodayBadge: some View {
-        Text(L10n.t("جديد اليوم", "New today"))
-            .font(DS.Font.scaled(10, weight: .bold))
-            .foregroundColor(.white)
-            .padding(.horizontal, DS.Spacing.sm)
-            .padding(.vertical, 4)
-            .background(Capsule().fill(DS.Color.error))
-            .overlay(
-                Capsule()
-                    .strokeBorder(DS.Color.error.opacity(ringPulse ? 0 : 0.5), lineWidth: 2)
-                    .scaleEffect(ringPulse ? 1.25 : 1.0)
-                    .animation(breathing(duration: 2.6, autoreverses: false), value: ringPulse)
-            )
     }
 
     // صف معاينة خبر — avatar للمؤلف + نص الخبر + اسم/وقت + تفاعلات + صورة مصغّرة
@@ -2181,149 +2145,5 @@ private struct NoBounceIfAvailable: ViewModifier {
         } else {
             content
         }
-    }
-}
-
-// MARK: - HomeTile — مربّع الوصول السريع كبنية مستقلة
-//
-// فصل المربّع في بنية `View` خاصة به مقصود وليس تنظيماً فقط:
-// عندما كانت المربّعات تُبنى بدوال تُرجع `some View` وتُغلَّف بدالة عامة
-// إضافية، كان نوع الواجهة الناتج يتضخّم حتى ينهار التطبيق عند الإقلاع
-// (EXC_BAD_ACCESS في منطقة حارس المكدس، بتكرار
-// swift::SubstGenericParametersFromMetadata::buildDescriptorPath).
-// البنية المستقلة تجعل النوع في الأب مجرّد `HomeTile`، فتنقطع السلسلة.
-struct HomeTile: View {
-    let title: String
-    let icon: String
-    let tint: DS.Color.TileTint
-    let imageURL: String?
-    let count: Int?
-    let height: CGFloat
-    let iconScale: CGFloat
-    /// ترتيب المربّع لظهور متدرّج — nil يعني بلا حركة دخول
-    let entranceIndex: Int?
-    let appeared: Bool
-    let reduceMotion: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            action()
-        }) {
-            tileFace
-        }
-        .buttonStyle(DSScaleButtonStyle())
-        .accessibilityLabel(title)
-        .opacity(entranceProgress)
-        .scaleEffect(appeared || entranceIndex == nil ? 1 : 0.96)
-        .offset(y: appeared || entranceIndex == nil ? 0 : 10)
-        .animation(entranceAnimation, value: appeared)
-    }
-
-    private var entranceProgress: Double {
-        (appeared || entranceIndex == nil) ? 1 : 0.55
-    }
-
-    private var entranceAnimation: Animation? {
-        guard let entranceIndex, !reduceMotion else { return nil }
-        return DS.Anim.bouncy.delay(Double(entranceIndex) * 0.07)
-    }
-
-    private var tileFace: some View {
-        ZStack(alignment: .bottomLeading) {
-            background
-
-            // عتمة أخف أسفل (للقراءة) + لمعة خفيفة أعلى — اللون يبقى حيّاً
-            LinearGradient(
-                stops: [
-                    .init(color: .white.opacity(0.10), location: 0),
-                    .init(color: .clear, location: 0.30),
-                    .init(color: .black.opacity(0.34), location: 1)
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-
-            topRow
-
-            // العنوان أسفل
-            Text(title)
-                .font(DS.Font.scaled(13, weight: .black))
-                .foregroundColor(.white)
-                .lineLimit(2)
-                .minimumScaleFactor(0.7)
-                .multilineTextAlignment(.leading)
-                .fixedSize(horizontal: false, vertical: true)
-                .shadow(color: .black.opacity(0.35), radius: 3, x: 0, y: 1)
-                .padding(8)
-        }
-        .frame(maxWidth: .infinity)
-        .frame(height: height)
-        // منطقة اللمس = حدود المربّع المرئية بالضبط
-        .contentShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.14), lineWidth: 1)
-        )
-        .shadow(color: .black.opacity(0.07), radius: 5, x: 0, y: 2)
-    }
-
-    private var topRow: some View {
-        VStack {
-            HStack {
-                Image(systemName: icon)
-                    .font(DS.Font.scaled(15, weight: .bold))
-                    .foregroundColor(.white)
-                    .frame(width: 36 * iconScale, height: 36 * iconScale)
-                    .background(Circle().fill(.ultraThinMaterial))
-                    .overlay(Circle().strokeBorder(Color.white.opacity(0.30), lineWidth: 1))
-                    .shadow(color: .black.opacity(0.15), radius: 3, x: 0, y: 1)
-
-                Spacer()
-
-                if let count, count > 0 {
-                    Text("\(count)")
-                        .font(DS.Font.scaled(11, weight: .black))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 7)
-                        .padding(.vertical, 3)
-                        .background(Capsule().fill(.ultraThinMaterial))
-                        .overlay(Capsule().strokeBorder(Color.white.opacity(0.30), lineWidth: 1))
-                }
-            }
-            Spacer()
-        }
-        .padding(9)
-    }
-
-    @ViewBuilder
-    private var background: some View {
-        if let urlStr = imageURL, let url = URL(string: urlStr) {
-            CachedAsyncImage(url: url) { img in
-                img.resizable().scaledToFill()
-            } placeholder: {
-                gradientFace
-            }
-        } else {
-            gradientFace
-        }
-    }
-
-    private var gradientFace: some View {
-        ZStack {
-            // تدرّج ثلاثي (فاتح → أساسي → غامق) بدل لون واحد بشفافية
-            tint.gradient
-            // زخرفة ثابتة الموضع مهما اختلف ارتفاع الرمز
-            Image(systemName: icon)
-                .resizable()
-                .scaledToFit()
-                .frame(width: 78, height: 78)
-                .foregroundColor(.white.opacity(0.18))
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-                .offset(x: 16, y: 12)
-        }
-        .clipped()
     }
 }

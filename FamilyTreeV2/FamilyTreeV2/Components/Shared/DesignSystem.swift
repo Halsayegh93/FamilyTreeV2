@@ -149,59 +149,21 @@ enum DS {
         static let gridContact   = accent
         static let gridMessaging = SwiftUI.Color.adaptive(light: "#0EA5E9", dark: "#38BDF8") // Sky cyan — التواصل
 
-        // مربّعات الرئيسية — لكل قسم هويته اللونية (تدرّج ثلاثي: فاتح → أساسي → غامق)
-        // حتى تقرأ الشبكة حيّة ومتنوّعة، مع بقاء الألوان من عائلة العلامة نفسها.
-        struct TileTint {
-            let light: SwiftUI.Color
-            let base: SwiftUI.Color
-            let dark: SwiftUI.Color
+        // مربّعات الرئيسية — مشتقّة من محور تدرّج الهيدر نفسه (أزرق عميق → نيلي)
+        // بدل ألوان متنافرة (أخضر/كهرماني/سماوي)، فتقرأ الشبكة كعائلة واحدة.
+        // لكل قسم هويته اللونية حتى تُقرأ الشبكة حيّة ومتنوّعة بدل خمس درجات زرقاء.
+        static let tileTree     = secondary                                                 // أخضر زمرّدي
+        static let tileDiwaniya = primary                                                   // أزرق العلامة
+        static let tileLibrary  = accent                                                    // نيلي
+        static let tileProjects = SwiftUI.Color.adaptive(light: "#C46A4A", dark: "#D98466") // دافي
+        static let tileContact  = SwiftUI.Color.adaptive(light: "#0E9DB5", dark: "#22B8D0") // تيل
 
-            var gradient: LinearGradient {
-                LinearGradient(
-                    colors: [light, base, dark],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            }
-        }
-
-        /// الشجرة — أخضر زمرّدي (لون النماء)
-        static let tileTreeTint = TileTint(
-            light: secondaryLight,
-            base:  secondary,
-            dark:  SwiftUI.Color.adaptive(light: "#047857", dark: "#059669")
-        )
-        /// الديوانيات — أزرق العلامة
-        static let tileDiwaniyaTint = TileTint(
-            light: primaryLight,
-            base:  primary,
-            dark:  primaryDark
-        )
-        /// المكتبة — نيلي
-        static let tileLibraryTint = TileTint(
-            light: accentLight,
-            base:  accent,
-            dark:  accentDark
-        )
-        /// المشاريع — دافي (كهرماني → توتي)
-        static let tileProjectsTint = TileTint(
-            light: SwiftUI.Color.adaptive(light: "#D4960A", dark: "#F0B040"),
-            base:  SwiftUI.Color.adaptive(light: "#C46A4A", dark: "#D98466"),
-            dark:  SwiftUI.Color.adaptive(light: "#B24C63", dark: "#CC6A80")
-        )
-        /// التواصل — تيل (أزرق مخضرّ)
-        static let tileContactTint = TileTint(
-            light: SwiftUI.Color.adaptive(light: "#22C1D9", dark: "#4DD4E8"),
-            base:  SwiftUI.Color.adaptive(light: "#0E9DB5", dark: "#22B8D0"),
-            dark:  SwiftUI.Color.adaptive(light: "#0A7C8F", dark: "#0E9DB5")
-        )
-
-        // ألوان مفردة للتوافق مع الاستخدامات القديمة
-        static let tileTree     = tileTreeTint.base
-        static let tileDiwaniya = tileDiwaniyaTint.base
-        static let tileLibrary  = tileLibraryTint.base
-        static let tileProjects = tileProjectsTint.base
-        static let tileContact  = tileContactTint.base
+        // الطرف الغامق من تدرّج كل مربّع
+        static let tileTreeDeep     = SwiftUI.Color.adaptive(light: "#047857", dark: "#059669")
+        static let tileDiwaniyaDeep = primaryDark
+        static let tileLibraryDeep  = accentDark
+        static let tileProjectsDeep = SwiftUI.Color.adaptive(light: "#B24C63", dark: "#CC6A80")
+        static let tileContactDeep  = SwiftUI.Color.adaptive(light: "#0A7C8F", dark: "#0E9DB5")
 
         // Glass Effect Helpers — adaptive for light/dark mode
         static func glassBright(_ cs: ColorScheme) -> SwiftUI.Color {

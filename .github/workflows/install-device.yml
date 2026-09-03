@@ -142,7 +142,8 @@ jobs:
         if: failure()
         uses: actions/checkout@v4
         with:
-          ref: main
+          # آخر نسخة ثبت أنها تعمل على الجهاز (تُحدَّث بعد كل نجاح)
+          ref: release/device-stable
           path: rollback-src
 
       - name: Rollback to the stable build
