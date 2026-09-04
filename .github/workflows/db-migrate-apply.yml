@@ -1,0 +1,68 @@
+name: Apply migration to Supabase
+
+# يطبّق ملف ترحيل واحد على قاعدة Supabase عبر Management API
+# (نفس آلية wc-db-apply). يعمل عند الدفع إلى الفرع release/db-apply أو يدوياً.
+#
+# ملفات الترحيل هنا مكتوبة بحيث يكون تكرار تطبيقها آمناً (if not exists / شروط).
+
+on:
+  workflow_dispatch:
+    inputs:
+      migration:
+        description: 'مسار ملف الترحيل داخل supabase/migrations'
+        required: true
+        default: 'supabase/migrations/20260904120000_diwaniyas_schedule_days.sql'
+  push:
+    branches: [release/db-apply]
+
+permissions:
+  contents: read
+
+env:
+  DEFAULT_MIGRATION: supabase/migrations/20260904120000_diwaniyas_schedule_days.sql
+  PROJECT_REF: vnyhbppzufadqxpbijnb
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Apply migration
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          MIGRATION: ${{ github.event.inputs.migration }}
+        run: |
+          if [ -z "${SUPABASE_ACCESS_TOKEN}" ]; then
+            echo "::error::لا يوجد SUPABASE_ACCESS_TOKEN في أسرار المستودع"; exit 1
+          fi
+          FILE="${MIGRATION:-$DEFAULT_MIGRATION}"
+          if [ ! -f "$FILE" ]; then
+            echo "::error::ملف الترحيل غير موجود: $FILE"; exit 1
+          fi
+          echo "تطبيق: $FILE"
+
+          payload=$(jq -Rs '{query: .}' < "$FILE")
+          code=$(curl -sS -o /tmp/resp.json -w "%{http_code}" -X POST \
+            "https://api.supabase.com/v1/projects/${PROJECT_REF}/database/query" \
+            -H "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}" \
+            -H "Content-Type: application/json" \
+            --data "${payload}")
+          echo "HTTP ${code}"
+          head -c 600 /tmp/resp.json 2>/dev/null || true
+          echo
+          [ "${code}" = "200" ] || [ "${code}" = "201" ]
+
+      - name: Verify column exists
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          q='select column_name, data_type, column_default from information_schema.columns where table_schema = '"'"'public'"'"' and table_name = '"'"'diwaniyas'"'"' and column_name = '"'"'schedule_days'"'"';'
+          payload=$(jq -n --arg q "$q" '{query: $q}')
+          curl -sS -X POST \
+            "https://api.supabase.com/v1/projects/${PROJECT_REF}/database/query" \
+            -H "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}" \
+            -H "Content-Type: application/json" \
+            --data "${payload}" | tee /tmp/verify.json
+          echo
+          grep -q "schedule_days" /tmp/verify.json && echo "✅ العمود schedule_days موجود" || { echo "::error::العمود غير موجود بعد التطبيق"; exit 1; }
