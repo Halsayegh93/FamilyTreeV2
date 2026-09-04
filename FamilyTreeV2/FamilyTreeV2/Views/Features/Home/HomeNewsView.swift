@@ -14,8 +14,6 @@ struct HomeNewsView: View {
     /// الوضع الأفقي على الجوال — نعيد توزيع البنتو على عمودين
     private var isLandscape: Bool { vSizeClass == .compact }
     @State private var contentWidth: CGFloat = 0
-    /// إزاحة السحب التفاعلي للرجوع — الصفحة تتبع الإصبع
-    @State private var backDragOffset: CGFloat = 0
 
     @Binding var selectedTab: Int
     @State private var showingAddNews = false
@@ -345,38 +343,38 @@ struct HomeNewsView: View {
         )
     }
 
-    // MARK: - Bento Grid Section — توزيع عائلي احترافي
+    // MARK: - Bento Section — الترتيب الجديد
+    //
+    // 1) ترحيب مدمج     2) شريط المستجدات (الرابط مع بقية الأقسام)
+    // 3) بطاقة الإدارة للمشرفين     4) وصول سريع: المكتبة / المشاريع / التواصل
+    // 5) آخر الأخبار (مع آخر مناسبة)
+    //
+    // كل بطاقة بنية View مستقلة في ملفها — يبقى نوع هذه الصفحة ضحلاً
+    // (تضخّمه سابقاً أسقط التطبيق بطفح مكدس عند الإقلاع).
     private var bentoSection: some View {
         Group {
             if isLandscape {
-                // الوضع الأفقي: عمودان — يسار (ترحيب + كل المربعات) ويمين (الأخبار)
-                // الوضع الأفقي: عمود الوصول السريع (ترحيب مضغوط + بلاطات) وعمود الأخبار
-                // عمودان متساويان بارتفاع طبيعي — بلا ارتفاع مفروض حتى لا يُقتطع
                 HStack(alignment: .top, spacing: DS.Spacing.md) {
                     VStack(spacing: DS.Spacing.sm) {
-                        greetingCard
-                            .frame(height: 92)      // لا تتمدد لتطابق طول البلاطات
-                        landscapeTilesGrid
+                        greetingRow
+                        updatesStrip
+                        quickAccessGrid(tileHeight: max(66, layout.tileHeight - 18))
                         Spacer(minLength: 0)
                     }
                     .frame(maxWidth: .infinity, alignment: .top)
 
-                    // عمود الأخبار أضيق — البلاطات تأخذ المساحة الأوسع (طلب المالك)
-                    newsBentoCard
-                        .frame(maxWidth: max(230, UIScreen.main.bounds.width * 0.29), alignment: .top)
+                    VStack(spacing: DS.Spacing.sm) {
+                        if authVM.canModerate { adminCard }
+                        newsBentoCard
+                    }
+                    .frame(maxWidth: max(260, UIScreen.main.bounds.width * 0.36), alignment: .top)
                 }
             } else {
-                VStack(spacing: DS.Spacing.sm) {
-                    // 1) Hero ترحيب (يفتح حسابي عند الضغط)
-                    greetingCard
-
-                    // 2) الشجرة + الديوانيات — مربعين بنفس ستايل التايل
-                    primaryTilesRow
-
-                    // 3) شبكة الوصول السريع — أرشيف / مشاريع / تواصل (تحت الشجرة والديوانيات، فوق الأخبار)
-                    quickAccessGrid
-
-                    // 4) آخر الأخبار
+                VStack(spacing: DS.Spacing.md) {
+                    greetingRow
+                    updatesStrip
+                    if authVM.canModerate { adminCard }
+                    quickAccessGrid(tileHeight: layout.tileHeight + 6)
                     newsBentoCard
                 }
             }
@@ -388,49 +386,34 @@ struct HomeNewsView: View {
         .animation(DS.Anim.smooth, value: layout)
     }
 
-    // MARK: - Primary Tiles Row — الشجرة + الديوانيات
-
-    /// صف علوي: مربّع الشجرة + مربّع الديوانيات — بنفس ستايل التايل الموحّد،
-    /// وبارتفاع أكبر قليلاً ليكونا عنصري الوصول الأساسيين.
-    private var primaryTilesRow: some View {
-        HStack(spacing: layout.gridSpacing) {
-            unifiedTile(
-                title: L10n.t("شجرة\nالمحمدعلي", "Al-Mohammad Ali\nFamily Tree"),
-                icon: "tree.fill",
-                color: DS.Color.tileTree,
-                deep: DS.Color.tileTreeDeep,
-                imageURL: nil,
-                count: nil,
-                height: primaryTileHeight,
-                action: { selectedTab = 1 }
-            )
-            unifiedTile(
-                title: L10n.t("الديوانيات", "Diwaniyas"),
-                icon: "map.fill",
-                color: DS.Color.tileDiwaniya,
-                deep: DS.Color.tileDiwaniyaDeep,
-                imageURL: nil,
-                count: nil,
-                height: primaryTileHeight,
-                action: { selectedTab = 2 }
-            )
-        }
+    private var greetingRow: some View {
+        HomeGreetingRow(onOpenProfile: { selectedTab = 3 }, onLongPress: debugLongPress)
     }
 
-    /// ارتفاع المربّعين العلويين — أطول قليلاً من تايلات الوصول السريع.
-    private var primaryTileHeight: CGFloat { layout.tileHeight + 6 }
+    /// شريط المستجدات — كل شريحة تفتح قسمها
+    private var updatesStrip: some View {
+        HomeUpdatesStrip(
+            onNews: { activeSubPage = .news },
+            onTree: { selectedTab = 1 },
+            onNotifications: { showingNotifications = true },
+            onAdmin: { selectedTab = 4 }
+        )
+    }
 
-    // MARK: - Quick Access Grid — أرشيف / مشاريع / تواصل
+    private var adminCard: some View {
+        HomeAdminCard { selectedTab = 4 }
+    }
 
-    /// صف من 3 مربعات موحّدة: أرشيف العائلة / مشاريع العائلة / التواصل
-    /// — كلها بنفس التصميم وأحجام متطابقة.
-    private var quickAccessGrid: some View {
+    // MARK: - Quick Access — الأقسام التي لا تبويب لها
+    /// المكتبة / المشاريع / التواصل — المشاريع تختفي إن عُطّلت من الإعدادات.
+    private func quickAccessGrid(tileHeight: CGFloat) -> some View {
+        let projectsOn = appSettingsVM.settings.projectsEnabled ?? true
         let projectImageURL: String? = projectsVM.projects.first?.logoUrl
 
         return LazyVGrid(
             columns: Array(
                 repeating: GridItem(.flexible(), spacing: layout.gridSpacing),
-                count: 3
+                count: projectsOn ? 3 : 2
             ),
             spacing: layout.gridSpacing
         ) {
@@ -441,86 +424,21 @@ struct HomeNewsView: View {
                 deep: DS.Color.tileLibraryDeep,
                 imageURL: nil,
                 count: nil,
-                action: { activeSubPage = .archive }
-            )
-            unifiedTile(
-                title: L10n.t("مشاريع العائلة", "Family Projects"),
-                icon: "briefcase.fill",
-                color: DS.Color.tileProjects,
-                deep: DS.Color.tileProjectsDeep,
-                imageURL: projectImageURL,
-                count: projectsVM.projects.count,
-                action: { activeSubPage = .projects }
-            )
-            unifiedTile(
-                title: L10n.t("التواصل", "Contact"),
-                icon: "envelope.fill",
-                color: DS.Color.tileContact,
-                deep: DS.Color.tileContactDeep,
-                imageURL: nil,
-                count: nil,
-                action: { activeSubPage = .contact }
-            )
-        }
-    }
-
-    // MARK: - شبكة المربعات في الوضع الأفقي
-    /// الوضع الأفقي: كل المربعات الخمسة في شبكة تكيّفية واحدة بارتفاع أقصر
-    /// حتى لا يضيع الارتفاع القصير للشاشة.
-    /// ارتفاع قسم الأفقي: ترحيب (92) + صفّا بلاطات + الفواصل.
-    private var landscapeBentoHeight: CGFloat {
-        let tileH = max(66, layout.tileHeight - 18)
-        return 92 + DS.Spacing.sm + tileH * 2 + layout.gridSpacing + DS.Spacing.sm
-    }
-
-    private var landscapeTilesGrid: some View {
-        let projectImageURL: String? = projectsVM.projects.first?.logoUrl
-        let tileHeight = max(66, layout.tileHeight - 18)
-
-        return LazyVGrid(
-            columns: Array(repeating: GridItem(.flexible(), spacing: layout.gridSpacing), count: 3),
-            spacing: layout.gridSpacing
-        ) {
-            unifiedTile(
-                title: L10n.t("شجرة\nالمحمدعلي", "Al-Mohammad Ali\nFamily Tree"),
-                icon: "tree.fill",
-                color: DS.Color.tileTree,
-                deep: DS.Color.tileTreeDeep,
-                imageURL: nil,
-                count: nil,
-                height: tileHeight,
-                action: { selectedTab = 1 }
-            )
-            unifiedTile(
-                title: L10n.t("الديوانيات", "Diwaniyas"),
-                icon: "map.fill",
-                color: DS.Color.tileDiwaniya,
-                deep: DS.Color.tileDiwaniyaDeep,
-                imageURL: nil,
-                count: nil,
-                height: tileHeight,
-                action: { selectedTab = 2 }
-            )
-            unifiedTile(
-                title: L10n.t("مكتبة العائلة", "Family Library"),
-                icon: "books.vertical.fill",
-                color: DS.Color.tileLibrary,
-                deep: DS.Color.tileLibraryDeep,
-                imageURL: nil,
-                count: nil,
                 height: tileHeight,
                 action: { activeSubPage = .archive }
             )
-            unifiedTile(
-                title: L10n.t("مشاريع العائلة", "Family Projects"),
-                icon: "briefcase.fill",
-                color: DS.Color.tileProjects,
-                deep: DS.Color.tileProjectsDeep,
-                imageURL: projectImageURL,
-                count: projectsVM.projects.count,
-                height: tileHeight,
-                action: { activeSubPage = .projects }
-            )
+            if projectsOn {
+                unifiedTile(
+                    title: L10n.t("مشاريع العائلة", "Family Projects"),
+                    icon: "briefcase.fill",
+                    color: DS.Color.tileProjects,
+                    deep: DS.Color.tileProjectsDeep,
+                    imageURL: projectImageURL,
+                    count: projectsVM.projects.count,
+                    height: tileHeight,
+                    action: { activeSubPage = .projects }
+                )
+            }
             unifiedTile(
                 title: L10n.t("التواصل", "Contact"),
                 icon: "envelope.fill",
@@ -650,199 +568,6 @@ struct HomeNewsView: View {
         .clipped()
     }
 
-    // MARK: - Legacy (لم يعد مستخدماً بعد توحيد الشبكة)
-    @available(*, deprecated, message: "Replaced by quickAccessGrid")
-    private var familyProjectsCard: some View {
-        let approvedProjects = projectsVM.projects
-        let featured = approvedProjects.first
-        let total = approvedProjects.count
-
-        return Button {
-            activeSubPage = .projects
-        } label: {
-            ZStack(alignment: .bottomLeading) {
-                // ── خلفية: صورة المشروع المميَّز أو gradient ──
-                projectsBackground(featured: featured)
-
-                // ── تدرّج داكن للقراءة ──
-                LinearGradient(
-                    colors: [.clear, .black.opacity(0.10), .black.opacity(0.65)],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-
-                // ── شارة القسم أعلى ──
-                VStack {
-                    HStack {
-                        HStack(spacing: 5) {
-                            Image(systemName: "briefcase.fill")
-                                .font(DS.Font.scaled(11, weight: .bold))
-                            Text(L10n.t("مشاريع العائلة", "Family Projects"))
-                                .font(DS.Font.scaled(11, weight: .black))
-                                .tracking(0.5)
-                        }
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
-                        .background(Capsule().fill(.ultraThinMaterial))
-                        .overlay(Capsule().strokeBorder(Color.white.opacity(0.30), lineWidth: 1))
-
-                        Spacer()
-
-                        // عدّاد إجمالي
-                        if total > 0 {
-                            HStack(spacing: 3) {
-                                Image(systemName: "square.stack.fill")
-                                    .font(DS.Font.scaled(11, weight: .bold))
-                                Text("\(total)")
-                                    .font(DS.Font.scaled(11, weight: .black))
-                            }
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 9)
-                            .padding(.vertical, 5)
-                            .background(Capsule().fill(.ultraThinMaterial))
-                            .overlay(Capsule().strokeBorder(Color.white.opacity(0.30), lineWidth: 1))
-                        }
-                    }
-                    Spacer()
-                }
-                .padding(DS.Spacing.md)
-
-                // ── معلومات أسفل ──
-                VStack(alignment: .leading, spacing: 6) {
-                    if let p = featured {
-                        Text(p.title)
-                            .font(DS.Font.scaled(22, weight: .black))
-                            .foregroundColor(.white)
-                            .lineLimit(2)
-                            .multilineTextAlignment(.leading)
-                            .shadow(color: .black.opacity(0.35), radius: 6, x: 0, y: 1)
-
-                        HStack(spacing: 6) {
-                            Image(systemName: "person.fill")
-                                .font(DS.Font.scaled(11, weight: .bold))
-                            Text(L10n.t("صاحب المشروع: ", "Owner: ") + p.ownerName)
-                                .font(DS.Font.scaled(11, weight: .semibold))
-                                .lineLimit(1)
-                        }
-                        .foregroundColor(.white.opacity(0.95))
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
-                        .background(Capsule().fill(Color.black.opacity(0.30)))
-                    } else {
-                        Text(L10n.t("ابدأ مشاريع العائلة",
-                                   "Start Family Projects"))
-                            .font(DS.Font.scaled(20, weight: .black))
-                            .foregroundColor(.white)
-                            .shadow(color: .black.opacity(0.35), radius: 6, x: 0, y: 1)
-
-                        Text(L10n.t("اعرض ما يقدّمه أبناء العائلة",
-                                   "Showcase what family members offer"))
-                            .font(DS.Font.scaled(12, weight: .semibold))
-                            .foregroundColor(.white.opacity(0.90))
-                    }
-                }
-                .padding(DS.Spacing.md)
-            }
-            .frame(height: 200)
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xxl, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.xxl, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
-            )
-            .shadow(color: .black.opacity(0.12), radius: 14, x: 0, y: 5)
-        }
-        .buttonStyle(DSScaleButtonStyle())
-        .accessibilityLabel(L10n.t("افتح مشاريع العائلة", "Open Family Projects"))
-    }
-
-    /// خلفية البطاقة — صورة شعار المشروع المميَّز أو gradient عند عدم وجود مشاريع.
-    @ViewBuilder
-    private func projectsBackground(featured: Project?) -> some View {
-        if let urlStr = featured?.logoUrl, let url = URL(string: urlStr) {
-            CachedAsyncImage(url: url) { image in
-                image
-                    .resizable()
-                    .scaledToFill()
-            } placeholder: {
-                projectsPlaceholderGradient
-            }
-        } else {
-            projectsPlaceholderGradient
-        }
-    }
-
-    private var projectsPlaceholderGradient: some View {
-        ZStack {
-            LinearGradient(
-                colors: [DS.Color.warning, DS.Color.warning.opacity(0.7), DS.Color.accent],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            // زخرفة باهتة
-            Image(systemName: "briefcase.fill")
-                .font(.system(size: 110, weight: .light))
-                .foregroundColor(.white.opacity(0.15))
-                .offset(x: 90, y: -20)
-            Image(systemName: "lightbulb.fill")
-                .font(.system(size: 60, weight: .light))
-                .foregroundColor(.white.opacity(0.10))
-                .offset(x: -90, y: 30)
-        }
-    }
-
-    // MARK: - Contact Card
-
-    /// بطاقة التواصل المستقلة — full-width أصغر من بطاقة المشاريع، بنمط الـ tile الموحّد.
-    private var contactCard: some View {
-        Button {
-            activeSubPage = .contact
-        } label: {
-            HStack(spacing: DS.Spacing.md) {
-                ZStack {
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [DS.Color.info, DS.Color.info.opacity(0.75)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: 44, height: 44)
-                    Image(systemName: "bubble.left.and.bubble.right.fill")
-                        .font(DS.Font.scaled(17, weight: .bold))
-                        .foregroundColor(.white)
-                }
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(L10n.t("التواصل مع الإدارة", "Contact Admin"))
-                        .font(DS.Font.scaled(15, weight: .bold))
-                        .foregroundColor(DS.Color.textPrimary)
-                    Text(L10n.t("أرسل سؤالاً أو ملاحظة",
-                               "Send a question or remark"))
-                        .font(DS.Font.scaled(11, weight: .semibold))
-                        .foregroundColor(DS.Color.textSecondary)
-                }
-                Spacer()
-                Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
-                    .font(DS.Font.scaled(12, weight: .bold))
-                    .foregroundColor(DS.Color.textTertiary)
-            }
-            .padding(DS.Spacing.md)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
-                    .fill(DS.Color.surface)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
-                    .stroke(DS.Color.info.opacity(0.12), lineWidth: 1)
-            )
-            .dsSubtleShadow()
-        }
-        .buttonStyle(DSScaleButtonStyle())
-    }
-
-    // MARK: - بطاقة الترحيب «سماء الوقت» — مشهد خفيف يتبدّل مع الساعة، تفتح "حسابي"
     /// شريط سدو زخرفي — معينات صغيرة بين خطين متلاشيين
     private var saduStrip: some View {
         HStack(spacing: 5) {
@@ -863,751 +588,82 @@ struct HomeNewsView: View {
         .padding(.bottom, DS.Spacing.xs)
     }
 
-    // MARK: - هيدر الرئيسية — شعار العائلة + شريط سدو زخرفي (خاص بالرئيسية فقط)
+    // MARK: - الهيدر — نفس MainHeaderView المستخدم في بقية التبويبات
 #if DEBUG
-    /// معاينة شاشتي التسجيل والانتظار من داخل التطبيق — الجلسة موجودة هنا
-    /// فتُحمّل قائمة العوائل فعلياً (بخلاف شاشة الدخول). DEBUG فقط.
+    /// معاينة شاشتي التسجيل والانتظار من داخل التطبيق (ضغطة مطوّلة على الترحيب).
     @State private var previewAuthScreens = false
     @State private var previewAuthStep = 0
+
+    private var debugLongPress: (() -> Void)? {
+        {
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            previewAuthScreens = true
+        }
+    }
+
+    private var debugAuthPreview: some View {
+        ZStack(alignment: .top) {
+            if previewAuthStep == 0 {
+                RegistrationView(topInset: 46)
+            } else {
+                WaitingForApprovalView()
+            }
+
+            HStack(spacing: DS.Spacing.sm) {
+                Button {
+                    previewAuthScreens = false
+                    previewAuthStep = 0
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 26))
+                        .symbolRenderingMode(.palette)
+                        .foregroundStyle(.white, .black.opacity(0.45))
+                }
+                Text(L10n.t("شاشة معاينة", "Preview"))
+                    .font(DS.Font.scaled(11, weight: .bold))
+                    .foregroundColor(DS.Color.textSecondary)
+
+                Picker("", selection: $previewAuthStep) {
+                    Text(L10n.t("البيانات", "Profile")).tag(0)
+                    Text(L10n.t("الانتظار", "Waiting")).tag(1)
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 170)
+                .environment(\.layoutDirection, .rightToLeft)
+            }
+            .padding(.horizontal, DS.Spacing.md)
+            .padding(.vertical, DS.Spacing.sm)
+            .background(Capsule().fill(.ultraThinMaterial))
+            .overlay(Capsule().strokeBorder(DS.Color.textTertiary.opacity(0.20), lineWidth: 1))
+            .shadow(color: .black.opacity(0.12), radius: 10, y: 4)
+            .padding(.top, 118)
+        }
+    }
+#else
+    private var debugLongPress: (() -> Void)? { nil }
 #endif
 
     private var homeHeader: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: DS.Spacing.md) {
-                // ═══ شعار العائلة — مربّع زجاجي بشجرة ═══
-                Image("AppIconImage")
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: isLandscape ? 38 : 52, height: isLandscape ? 38 : 52)
-                    .clipShape(Circle())
-                    .overlay(Circle().strokeBorder(DS.Color.overlayIconBorder, lineWidth: 1.5))
-#if DEBUG
-                    .onLongPressGesture(minimumDuration: 1.5) {
-                        UINotificationFeedbackGenerator().notificationOccurred(.success)
-                        previewAuthScreens = true
-                    }
-                    .fullScreenCover(isPresented: $previewAuthScreens) {
-                        ZStack(alignment: .top) {
-                            if previewAuthStep == 0 {
-                                RegistrationView(topInset: 46)
-                            } else {
-                                WaitingForApprovalView()
-                            }
-
-                            HStack(spacing: DS.Spacing.sm) {
-                                Button {
-                                    previewAuthScreens = false
-                                    previewAuthStep = 0
-                                } label: {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .font(.system(size: 26))
-                                        .symbolRenderingMode(.palette)
-                                        .foregroundStyle(.white, .black.opacity(0.45))
-                                }
-                                Text(L10n.t("شاشة معاينة", "Preview"))
-                                    .font(DS.Font.scaled(11, weight: .bold))
-                                    .foregroundColor(DS.Color.textSecondary)
-
-                                Picker("", selection: $previewAuthStep) {
-                                    Text(L10n.t("البيانات", "Profile")).tag(0)
-                                    Text(L10n.t("الانتظار", "Waiting")).tag(1)
-                                }
-                                .pickerStyle(.segmented)
-                                .frame(width: 170)
-                                .environment(\.layoutDirection, .rightToLeft)
-                            }
-                            .padding(.horizontal, DS.Spacing.md)
-                            .padding(.vertical, DS.Spacing.sm)
-                            .background(Capsule().fill(.ultraThinMaterial))
-                            .overlay(Capsule().strokeBorder(DS.Color.textTertiary.opacity(0.20), lineWidth: 1))
-                            .shadow(color: .black.opacity(0.12), radius: 10, y: 4)
-                            .padding(.top, 118)
-                        }
-                    }
-#endif
-
-                // ═══ اسم العائلة ═══
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(L10n.t("عائلة المحمدعلي", "Al-Mohammad Ali"))
-                        .font(DS.Font.plex(21, weight: .bold))
-                        .foregroundColor(DS.Color.textOnPrimary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-                    Text(L10n.t("تطبيق العائلة", "Family App"))
-                        .font(DS.Font.plex(13, weight: .medium))
-                        .foregroundColor(DS.Color.overlayText)
-                }
-
-                Spacer(minLength: DS.Spacing.sm)
-
-                // ═══ الجرس ═══
-                NavigationLink(destination: NotificationsCenterView()) {
-                    // الشارة من الرمز نفسه لا دائرة مرسومة فوقه: bell.badge.fill
-                    // طبقتان تُلوَّنان بـpalette، وترتيبهما: **الشارة أولاً ثم
-                    // الجرس** — فاللون الأول أحمر والثاني أبيض، لا العكس.
-                    // تناسبها مع الجرس مضبوط من Apple وتكبر معه تلقائياً، فلا
-                    // إزاحات ولا أحجام أخمّنها ولا تنقلب مع اتجاه اللغة.
-                    let hasUnread = notificationVM.unreadNotificationsCount > 0
-                    Group {
-                        if hasUnread {
-                            // palette: اللون الأول للشارة والثاني للجرس
-                            let bell = Image(systemName: "bell.badge.fill")
-                                .symbolRenderingMode(.palette)
-                                .foregroundStyle(DS.Color.error, DS.Color.textOnPrimary)
-                            if #available(iOS 17.0, *) {
-                                bell.symbolEffect(.bounce,
-                                                  value: notificationVM.unreadNotificationsCount)
-                            } else {
-                                bell
-                            }
-                        } else {
-                            // بلا إشعارات: أبيض خالص. وضع monochrome يأخذ اللون
-                            // **الأول** فقط — وكان الأحمر، فيخرج الجرس أحمر.
-                            Image(systemName: "bell")
-                                .symbolRenderingMode(.monochrome)
-                                .foregroundStyle(DS.Color.textOnPrimary)
-                        }
-                    }
-                    .font(DS.Font.scaled(isLandscape ? 19 : 22, weight: .semibold))
-                    .frame(width: isLandscape ? 36 : 44, height: isLandscape ? 36 : 44)
-                    .animation(DS.Anim.smooth, value: hasUnread)
-                }
-                .buttonStyle(BounceButtonStyle())
-                .accessibilityLabel(L10n.t("الإشعارات", "Notifications"))
-                .accessibilityValue(notificationVM.unreadNotificationsCount > 0
-                                    ? L10n.t("توجد إشعارات غير مقروءة", "Unread notifications")
-                                    : "")
-            }
-            .padding(.horizontal, DS.Spacing.lg)
-            .padding(.bottom, isLandscape ? DS.Spacing.xs : DS.Spacing.sm)
-            .padding(.top, isLandscape ? DS.Spacing.xs : 0)
-            .frame(minHeight: isLandscape ? 46 : 70, alignment: .bottom)
-
-            // الخط الفاصل السفلي — مطابق لبقية الواجهات
-            // شريط سدو زخرفي — يحلّ محل الخط الفاصل بلا زيادة ارتفاع تُذكر
-            saduStrip
-        }
-        .frame(maxWidth: .infinity)
-        .background(
-            ZStack {
-                DS.Color.gradientPrimary
-                // نفس طبقة MainHeaderView — بدونها يطلع الهيدر أفتح
-                DS.Color.headerVeil
-            }
-            .ignoresSafeArea(edges: .top)
+        let header = MainHeaderView(
+            selectedTab: $selectedTab,
+            showingNotifications: $showingNotifications,
+            title: L10n.t("عائلة المحمدعلي", "Al-Mohammad Ali"),
+            subtitle: L10n.t("تطبيق العائلة", "Family App"),
+            icon: "tree.fill",
+            backgroundGradient: DS.Color.gradientPrimary,
+            showNotificationBell: true
         )
-    }
-
-    private var greetingCard: some View {
-        Button {
-            selectedTab = 3
-        } label: {
-            HStack(alignment: .center, spacing: DS.Spacing.md) {
-                // ═══ الصورة في البداية — قوس تقدّم اليوم حولها ═══
-                if let user = authVM.currentUser {
-                    ZStack {
-                        Group {
-                            if let urlStr = user.avatarUrl, let url = URL(string: urlStr) {
-                                CachedAsyncImage(url: url) { image in
-                                    image.resizable().scaledToFill()
-                                } placeholder: {
-                                    Text(String(user.firstName.prefix(1)))
-                                        .font(DS.Font.plex(18, weight: .bold))
-                                        .foregroundColor(user.roleColor)
-                                }
-                            } else {
-                                Text(String(user.firstName.prefix(1)))
-                                    .font(DS.Font.plex(18, weight: .bold))
-                                    .foregroundColor(user.roleColor)
-                            }
-                        }
-                        .frame(width: 50 * layout.scale, height: 50 * layout.scale)
-                        .clipShape(Circle())
-                        // فسحة بين الصورة والإطار ثم الإطار نفسه
-                        .padding(4)
-                        .overlay(
-                            Circle().strokeBorder(timeAccent.opacity(0.45), lineWidth: 2)
-                        )
-                    }
-                    .frame(width: 58 * layout.scale, height: 58 * layout.scale)
-                }
-
-                // ═══ التحية والاسم ═══
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(alignment: .firstTextBaseline, spacing: 5) {
-                        Image(systemName: greetingSymbol)
-                            .font(.system(size: 10, weight: .semibold))
-                            .symbolRenderingMode(.hierarchical)
-                            .foregroundStyle(timeAccent)
-                        Text(timeBasedGreeting)
-                            .font(DS.Font.plex(12, weight: .medium))
-                            .foregroundColor(DS.Color.textSecondary)
-                    }
-                    .fixedSize()
-                    Text(greetingName)
-                        .font(DS.Font.plex(20, weight: .bold))
-                        .foregroundColor(DS.Color.textPrimary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                Spacer(minLength: DS.Spacing.sm)
-
-                // سهم خفيف — ينعكس تلقائياً مع RTL
-                Image(systemName: "chevron.forward")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(timeAccent.opacity(0.4))
-            }
-            .padding(.horizontal, DS.Spacing.lg)
-            .padding(.vertical, DS.Spacing.md)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            // إطار خفيف جداً يحدّد المربّع بلا ما يثقله
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
-                    .strokeBorder(DS.Color.textTertiary.opacity(0.12), lineWidth: 1)
-            )
-        }
-        .buttonStyle(DSScaleButtonStyle())
-    }
-
-
-
-
-    /// أيقونة الوقت المرافقة للتحية
-    private var greetingSymbol: String {
-        let hour = Calendar.current.component(.hour, from: Date())
-        if hour < 12 { return "sun.and.horizon.fill" }
-        else if hour < 17 { return "sun.max.fill" }
-        else { return "moon.stars.fill" }
-    }
-
-    /// لون الوقت — فجر أخضر، نهار أزرق، ليل نيلي
-    private var timeAccent: Color {
-        let hour = Calendar.current.component(.hour, from: Date())
-        if hour < 12 { return DS.Color.secondary }
-        else if hour < 17 { return DS.Color.primary }
-        else { return DS.Color.accent }
-    }
-
-    /// الاسم الأول + اسم العائلة (الأخير) — بلا سلسلة النسب الكاملة
-    private var greetingName: String {
-        guard let user = authVM.currentUser else { return L10n.t("أهلاً بك", "Welcome") }
-        let parts = user.fullName
-            .trimmingCharacters(in: .whitespaces)
-            .split(whereSeparator: \.isWhitespace)
-            .map(String.init)
-        guard let first = parts.first, let last = parts.last, first != last else {
-            return user.firstName
-        }
-        return "\(first) \(last)"
-    }
-
-    private var timeBasedGreeting: String {
-        let hour = Calendar.current.component(.hour, from: Date())
-        if hour < 12 {
-            return L10n.t("صباح الخير", "GOOD MORNING")
-        } else if hour < 17 {
-            return L10n.t("مساء الخير", "GOOD AFTERNOON")
-        } else {
-            return L10n.t("مساء الخير", "GOOD EVENING")
-        }
-    }
-
-    // MARK: - شريط الإحصائيات السريعة
-    private var statsStrip: some View {
-        HStack(spacing: DS.Spacing.sm) {
-            statChip(
-                icon: "person.2.fill",
-                value: memberVM.allMembers.count,
-                label: L10n.t("فرد", "Members"),
-                color: DS.Color.secondary
-            )
-            statChip(
-                icon: "newspaper.fill",
-                value: newsVM.allNews.count,
-                label: L10n.t("خبر", "News"),
-                color: DS.Color.primary
-            )
-        }
-    }
-
-    private func statChip(icon: String, value: Int, label: String, color: Color) -> some View {
-        VStack(spacing: 4) {
-            HStack(spacing: 5) {
-                Image(systemName: icon)
-                    .font(DS.Font.scaled(11, weight: .bold))
-                    .foregroundColor(color)
-                Text("\(value)")
-                    .font(DS.Font.scaled(17, weight: .heavy))
-                    .foregroundColor(DS.Color.textPrimary)
-                    .minimumScaleFactor(0.7)
-                    .lineLimit(1)
-            }
-            Text(label)
-                .font(DS.Font.scaled(11, weight: .medium))
-                .foregroundColor(DS.Color.textSecondary)
-                .lineLimit(1)
-        }
-        .padding(.vertical, DS.Spacing.sm)
-        .padding(.horizontal, DS.Spacing.xs)
-        .frame(maxWidth: .infinity)
-        .background(DS.Color.surface)
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
-        .shadow(color: .black.opacity(0.035), radius: 8, x: 0, y: 2)
-    }
-
-    // pill أفقي مدمج للأكشن الثانوي (التواصل / مشاريع العائلة)
-    private func actionPill(icon: String, title: String, color: Color, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: DS.Spacing.sm) {
-                Image(systemName: icon)
-                    .font(DS.Font.scaled(13, weight: .bold))
-                    .foregroundColor(color)
-                    .frame(width: 26, height: 26)
-                    .background(color.opacity(0.14))
-                    .clipShape(Circle())
-                Text(title)
-                    .font(DS.Font.scaled(13, weight: .bold))
-                    .foregroundColor(DS.Color.textPrimary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.85)
-                Spacer(minLength: 0)
-                Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
-                    .font(DS.Font.scaled(11, weight: .bold))
-                    .foregroundColor(DS.Color.textTertiary)
-            }
-            .padding(.horizontal, DS.Spacing.md)
-            .padding(.vertical, 10)
-            .frame(maxWidth: .infinity)
-            .background(DS.Color.surface)
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
-            .shadow(color: .black.opacity(0.04), radius: 10, x: 0, y: 3)
-        }
-        .buttonStyle(DSScaleButtonStyle())
+#if DEBUG
+        return header.fullScreenCover(isPresented: $previewAuthScreens) { debugAuthPreview }
+#else
+        return header
+#endif
     }
 
     /// مربع الأخبار — بنية مستقلة (HomeNewsPreviewCard) وليست جسماً داخل هذه
     /// الصفحة، حتى يبقى عمق نوع الواجهة منخفضاً.
     private var newsBentoCard: some View {
         HomeNewsPreviewCard { activeSubPage = .news }
-    }
-
-    // صف معاينة خبر — avatar للمؤلف + نص الخبر + اسم/وقت + تفاعلات + صورة مصغّرة
-    private func newsPreviewRow(for news: NewsPost) -> some View {
-        let member = news.author_id.flatMap { memberVM.member(byId: $0) }
-        // منشور بهوية الإدارة: الاسم المحفوظ هو الصحيح — لا يُستبدل باسم العضو
-        let isAdminIdentity = news.author_name == L10n.t("إدارة العائلة", "Family Admin")
-            || news.author_name == "إدارة العائلة"
-        let displayName = isAdminIdentity ? news.author_name
-                                          : (member?.fourPartName ?? news.author_name)
-        let roleC = roleColorFor(news.role_color)
-        let likes = newsVM.likesCountByPost[news.id] ?? 0
-        let comments = newsVM.commentsCountByPost[news.id] ?? 0
-        let thumbURL = news.mediaURLs.first.flatMap { URL(string: $0) }
-        return HStack(alignment: .top, spacing: DS.Spacing.sm) {
-            if isAdminIdentity {
-                ZStack {
-                    Circle().fill(DS.Color.gradientPrimary)
-                    Image(systemName: "megaphone.fill")
-                        .font(DS.Font.scaled(13, weight: .bold))
-                        .foregroundColor(.white)
-                }
-                .frame(width: 32, height: 32)
-                .overlay(Circle().strokeBorder(DS.Color.headerBorder, lineWidth: 1))
-            } else {
-                DSMemberAvatar(
-                    name: news.author_name,
-                    avatarUrl: member?.avatarUrl,
-                    size: 32,
-                    roleColor: roleC
-                )
-            }
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text(news.content)
-                    .font(DS.Font.scaled(13, weight: .medium))
-                    .foregroundColor(DS.Color.textPrimary)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.leading)
-
-                HStack(spacing: 4) {
-                    Text(displayName)
-                        .font(DS.Font.scaled(11, weight: isAdminIdentity ? .bold : .medium))
-                        .foregroundColor(isAdminIdentity ? DS.Color.primary : DS.Color.textSecondary)
-                        .lineLimit(1)
-                    Text("•")
-                        .font(DS.Font.scaled(11))
-                        .foregroundColor(DS.Color.textTertiary)
-                    Text(getRelativeTime(for: news.timestamp))
-                        .font(DS.Font.scaled(11))
-                        .foregroundColor(DS.Color.textTertiary)
-                        .lineLimit(1)
-
-                    if news.hasPoll {
-                        previewMetaChip(icon: "chart.bar.fill", value: nil)
-                    }
-                    if likes > 0 {
-                        previewMetaChip(icon: "heart.fill", value: likes)
-                    }
-                    if comments > 0 {
-                        previewMetaChip(icon: "bubble.left.fill", value: comments)
-                    }
-                }
-            }
-
-            Spacer(minLength: 0)
-
-            if let thumbURL {
-                CachedAsyncImage(url: thumbURL) { img in
-                    img.resizable().scaledToFill()
-                } placeholder: {
-                    DS.Color.mutedBackground
-                }
-                .frame(width: 44, height: 44)
-                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
-            }
-        }
-    }
-
-    /// شريحة بيانات صغيرة في معاينة الخبر (تفاعل/تصويت)
-    private func previewMetaChip(icon: String, value: Int?) -> some View {
-        HStack(spacing: 2) {
-            Image(systemName: icon)
-                .font(DS.Font.scaled(11, weight: .bold))
-            if let value {
-                Text("\(value)")
-                    .font(DS.Font.scaled(11, weight: .bold))
-            }
-        }
-        .foregroundColor(DS.Color.textTertiary)
-    }
-
-    // MARK: - بطاقة الإدارة (Bento) — للمراقبين فقط
-    private struct AdminActivityItem: Identifiable {
-        let id: UUID
-        let icon: String
-        let color: Color
-        let title: String
-        let subtitle: String
-        let date: Date
-    }
-
-    private static let isoFormatterNoFrac: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime]
-        return f
-    }()
-
-    private func parseISO(_ str: String?) -> Date? {
-        guard let s = str, !s.isEmpty else { return nil }
-        return Self.isoFormatter.date(from: s) ?? Self.isoFormatterNoFrac.date(from: s)
-    }
-
-    private var adminPendingTotalCount: Int {
-        adminRequestVM.deceasedRequests.count
-            + adminRequestVM.childAddRequests.count
-            + adminRequestVM.phoneChangeRequests.count
-            + adminRequestVM.newsReportRequests.count
-            + adminRequestVM.treeEditRequests.count
-            + adminRequestVM.nameChangeRequests.count
-            + adminRequestVM.photoSuggestionRequests.count
-            + newsVM.pendingNewsRequests.count
-            + memberVM.allMembers.filter { $0.role == .pending }.count
-    }
-
-    private var newMembersTodayCount: Int {
-        let cal = Calendar.current
-        let today = Date()
-        return memberVM.allMembers.filter { m in
-            guard let d = parseISO(m.createdAt) else { return false }
-            return cal.isDate(d, inSameDayAs: today)
-        }.count
-    }
-
-    private var recentAdminActivity: [AdminActivityItem] {
-        var items: [AdminActivityItem] = []
-        for m in memberVM.allMembers where m.role == .pending {
-            if let d = parseISO(m.createdAt) {
-                items.append(.init(id: m.id, icon: "person.badge.plus", color: DS.Color.success,
-                    title: L10n.t("تسجيل جديد", "New registration"),
-                    subtitle: m.fullName, date: d))
-            }
-        }
-        for r in adminRequestVM.deceasedRequests {
-            if let d = parseISO(r.createdAt) {
-                items.append(.init(id: r.id, icon: "heart.slash.fill", color: DS.Color.error,
-                    title: L10n.t("طلب وفاة", "Death request"),
-                    subtitle: r.member?.fullName ?? "", date: d))
-            }
-        }
-        for r in adminRequestVM.childAddRequests {
-            if let d = parseISO(r.createdAt) {
-                items.append(.init(id: r.id, icon: "person.2.fill", color: DS.Color.accent,
-                    title: L10n.t("طلب إضافة ابن", "Add child request"),
-                    subtitle: r.member?.fullName ?? "", date: d))
-            }
-        }
-        for n in newsVM.pendingNewsRequests {
-            items.append(.init(id: n.id, icon: "newspaper.fill", color: DS.Color.primary,
-                title: L10n.t("خبر بانتظار الموافقة", "News pending"),
-                subtitle: n.author_name, date: n.timestamp))
-        }
-        return Array(items.sorted { $0.date > $1.date }.prefix(3))
-    }
-
-    /// بطاقة Bento كبيرة للوحة الإدارة — تتبع نفس نمط familyTreeCard/newsBentoCard
-    private var adminBentoCard: some View {
-        Button {
-            selectedTab = 4
-        } label: {
-            VStack(alignment: .leading, spacing: DS.Spacing.md) {
-                // الهيدر
-                HStack(alignment: .center, spacing: DS.Spacing.sm) {
-                    premiumIcon("shield.lefthalf.filled", color: DS.Color.accent)
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(L10n.t("لوحة الإدارة", "Admin Panel"))
-                            .font(DS.Font.scaled(18, weight: .bold))
-                            .foregroundColor(DS.Color.textPrimary)
-                        Text(L10n.t("نظرة سريعة على الطلبات والنشاط", "Quick overview"))
-                            .font(DS.Font.scaled(11, weight: .heavy))
-                            .foregroundColor(DS.Color.textSecondary)
-                            .tracking(0.6)
-                    }
-
-                    Spacer()
-                }
-
-                // 3 شارات إحصائية
-                HStack(spacing: DS.Spacing.sm) {
-                    adminMiniStat(
-                        icon: "tray.full.fill",
-                        value: adminPendingTotalCount,
-                        label: L10n.t("طلب", "Pending"),
-                        color: DS.Color.warning
-                    )
-                    adminMiniStat(
-                        icon: "person.badge.plus",
-                        value: newMembersTodayCount,
-                        label: L10n.t("جديد اليوم", "New Today"),
-                        color: DS.Color.success
-                    )
-                    adminMiniStat(
-                        icon: "newspaper.fill",
-                        value: newsVM.pendingNewsRequests.count,
-                        label: L10n.t("خبر", "News"),
-                        color: DS.Color.primary
-                    )
-                }
-
-                // بانر تحذيري — فقط لو فيه طلبات معلّقة
-                if adminPendingTotalCount > 0 {
-                    HStack(spacing: DS.Spacing.sm) {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .font(DS.Font.scaled(13, weight: .bold))
-                            .foregroundColor(DS.Color.warning)
-                        Text(L10n.t(
-                            "عندك \(adminPendingTotalCount) طلب ينتظر مراجعتك",
-                            "\(adminPendingTotalCount) requests awaiting review"
-                        ))
-                        .font(DS.Font.scaled(12, weight: .semibold))
-                        .foregroundColor(DS.Color.textPrimary)
-                        .lineLimit(2)
-                        Spacer(minLength: 0)
-                    }
-                    .padding(.horizontal, DS.Spacing.md)
-                    .padding(.vertical, DS.Spacing.sm)
-                    .background(DS.Color.warning.opacity(0.10))
-                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: DS.Radius.md)
-                            .strokeBorder(DS.Color.warning.opacity(0.20), lineWidth: 1)
-                    )
-                }
-
-                // آخر النشاط الإداري
-                if !recentAdminActivity.isEmpty {
-                    VStack(spacing: 0) {
-                        ForEach(Array(recentAdminActivity.enumerated()), id: \.element.id) { index, item in
-                            adminActivityRow(item)
-                                .padding(.vertical, DS.Spacing.sm)
-                            if index < recentAdminActivity.count - 1 {
-                                Rectangle()
-                                    .fill(DS.Color.textTertiary.opacity(0.10))
-                                    .frame(height: 0.5)
-                            }
-                        }
-                    }
-                }
-
-                // CTA pill
-                HStack {
-                    Spacer()
-                    Text(L10n.t("الانتقال للوحة الإدارة", "Open Admin Dashboard"))
-                        .font(DS.Font.scaled(13, weight: .bold))
-                        .foregroundColor(DS.Color.accent)
-                        .padding(.horizontal, DS.Spacing.lg)
-                        .padding(.vertical, 9)
-                        .frame(maxWidth: .infinity)
-                        .background(DS.Color.accent.opacity(0.10))
-                        .clipShape(Capsule())
-                        .overlay(
-                            Capsule()
-                                .strokeBorder(DS.Color.accent.opacity(0.20), lineWidth: 1)
-                        )
-                    Spacer()
-                }
-                .padding(.top, DS.Spacing.xs)
-            }
-            .padding(DS.Spacing.lg)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                ZStack {
-                    DS.Color.surface
-                    Circle()
-                        .fill(DS.Color.accent.opacity(0.10))
-                        .frame(width: 220, height: 220)
-                        .blur(radius: 60)
-                        .offset(x: 130, y: -90)
-                    Circle()
-                        .fill(DS.Color.warning.opacity(0.06))
-                        .frame(width: 150, height: 150)
-                        .blur(radius: 48)
-                        .offset(x: -80, y: 120)
-                    Circle()
-                        .fill(DS.Color.accent.opacity(0.13))
-                        .frame(width: 120, height: 120)
-                        .blur(radius: 36)
-                        .offset(x: -100, y: -60)
-                }
-            )
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xxl))
-            .shadow(color: .black.opacity(0.045), radius: 14, x: 0, y: 4)
-        }
-        .buttonStyle(DSScaleButtonStyle())
-    }
-
-    private func adminMiniStat(icon: String, value: Int, label: String, color: Color) -> some View {
-        VStack(spacing: 4) {
-            HStack(spacing: 5) {
-                Image(systemName: icon)
-                    .font(DS.Font.scaled(11, weight: .bold))
-                    .foregroundColor(color)
-                Text("\(value)")
-                    .font(DS.Font.scaled(17, weight: .heavy))
-                    .foregroundColor(DS.Color.textPrimary)
-                    .minimumScaleFactor(0.7)
-                    .lineLimit(1)
-            }
-            Text(label)
-                .font(DS.Font.scaled(11, weight: .medium))
-                .foregroundColor(DS.Color.textSecondary)
-                .lineLimit(1)
-        }
-        .padding(.vertical, DS.Spacing.sm)
-        .padding(.horizontal, DS.Spacing.xs)
-        .frame(maxWidth: .infinity)
-        .background(DS.Color.background.opacity(0.6))
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
-    }
-
-    private func adminActivityRow(_ item: AdminActivityItem) -> some View {
-        HStack(alignment: .center, spacing: DS.Spacing.sm) {
-            ZStack {
-                Circle().fill(item.color.opacity(0.15)).frame(width: 32, height: 32)
-                Image(systemName: item.icon)
-                    .font(DS.Font.scaled(12, weight: .semibold))
-                    .foregroundColor(item.color)
-            }
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(item.title)
-                    .font(DS.Font.scaled(12, weight: .semibold))
-                    .foregroundColor(DS.Color.textPrimary)
-                    .lineLimit(1)
-                if !item.subtitle.isEmpty {
-                    Text(item.subtitle)
-                        .font(DS.Font.scaled(11, weight: .medium))
-                        .foregroundColor(DS.Color.textSecondary)
-                        .lineLimit(1)
-                }
-            }
-
-            Spacer(minLength: DS.Spacing.sm)
-
-            Text(getRelativeTime(for: item.date))
-                .font(DS.Font.scaled(11))
-                .foregroundColor(DS.Color.textTertiary)
-                .lineLimit(1)
-        }
-    }
-
-    // مربع Bento مدمج أفقي — أيقونة جنب النص + إطار ودائرة زخرفية
-    private func bentoTile(icon: String, title: String, subtitle: String?, color: Color, height: CGFloat, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: DS.Spacing.sm) {
-                Image(systemName: icon)
-                    .font(DS.Font.scaled(14, weight: .bold))
-                    .foregroundColor(color)
-                    .frame(width: 32, height: 32)
-                    .background(color.opacity(0.14))
-                    .clipShape(Circle())
-
-                Text(title)
-                    .font(DS.Font.scaled(13, weight: .bold))
-                    .foregroundColor(DS.Color.textPrimary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, DS.Spacing.md)
-            .padding(.vertical, DS.Spacing.sm)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .frame(height: height)
-            .background(
-                ZStack {
-                    DS.Color.surface
-                    Circle()
-                        .fill(color.opacity(0.12))
-                        .frame(width: 110, height: 110)
-                        .blur(radius: 40)
-                        .offset(x: 60, y: -15)
-                    Circle()
-                        .fill(color.opacity(0.13))
-                        .frame(width: 70, height: 70)
-                        .blur(radius: 26)
-                        .offset(x: -50, y: -15)
-                }
-            )
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
-            .shadow(color: .black.opacity(0.035), radius: 8, x: 0, y: 2)
-        }
-        .buttonStyle(DSScaleButtonStyle())
-    }
-
-    // أيقونة دائرية بتدرّج خفيف + لمسة highlight
-    private func premiumIcon(_ icon: String, color: Color, size: CGFloat = 48) -> some View {
-        ZStack {
-            Circle()
-                .fill(
-                    LinearGradient(
-                        colors: [color.opacity(0.22), color.opacity(0.10)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .frame(width: size, height: size)
-                .overlay(
-                    Circle()
-                        .strokeBorder(color.opacity(0.15), lineWidth: 0.5)
-                )
-
-            Image(systemName: icon)
-                .font(DS.Font.scaled(size * 0.42, weight: .bold))
-                .foregroundColor(color)
-        }
     }
 
     // MARK: - News Feed Section
@@ -1953,17 +1009,6 @@ struct HomeNewsView: View {
         return Self.relativeFormatter.localizedString(for: date, relativeTo: Date())
     }
 
-    private static let isoFormatter: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return f
-    }()
-
-    private func relativeTimeFromISO(_ dateString: String) -> String {
-        let date = Self.isoFormatter.date(from: dateString) ?? Date()
-        return getRelativeTime(for: date)
-    }
-
     private func toggleLike(for postId: UUID) {
         Task { await newsVM.toggleNewsLike(for: postId) }
     }
@@ -2004,21 +1049,6 @@ private struct HomeWidthKey: PreferenceKey {
 }
 
 // MARK: - أيقونة الهيدر — Glass circle
-struct HeaderIconView: View {
-    let icon: String
-    let color: Color
-    var body: some View {
-        Image(systemName: icon)
-            .font(DS.Font.scaled(16, weight: .bold))
-            .foregroundColor(color)
-            .frame(width: 44, height: 44)
-            .background(color.opacity(0.12))
-            .clipShape(Circle())
-            .overlay(Circle().stroke(color.opacity(0.15), lineWidth: 1))
-    }
-}
-
-/// يمنع الارتداد المطّاطي على الأجهزة التي تدعمه، ويتجاهله على iOS 16.0–16.3
 private struct NoBounceIfAvailable: ViewModifier {
     func body(content: Content) -> some View {
         if #available(iOS 16.4, *) {

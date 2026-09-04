@@ -107,7 +107,11 @@ struct HomeNewsPreviewCard: View {
             .padding(.vertical, DS.Spacing.md)
         } else {
             VStack(spacing: DS.Spacing.md) {
-                ForEach(Array(newsVM.allNews.prefix(3))) { news in
+                // آخر مناسبة (زواج/مولود/وفاة) أولاً — هي ما يهم العائلة أكثر
+                if let occasion = latestOccasion {
+                    HomeOccasionRow(news: occasion)
+                }
+                ForEach(previewPosts) { news in
                     HomeNewsPreviewRow(
                         news: news,
                         member: news.author_id.flatMap { memberVM.member(byId: $0) },
@@ -117,6 +121,22 @@ struct HomeNewsPreviewCard: View {
                 }
             }
         }
+    }
+
+    private static let occasionTypes: Set<String> = ["زواج", "مولود", "وفاة"]
+
+    /// أحدث مناسبة خلال آخر 30 يوماً — إن وُجدت
+    private var latestOccasion: NewsPost? {
+        newsVM.allNews.first {
+            Self.occasionTypes.contains($0.type)
+                && HomeDates.isWithinLastDays($0.timestamp, days: 30)
+        }
+    }
+
+    /// أحدث الأخبار للمعاينة، بلا تكرار المناسبة المعروضة أعلاه
+    private var previewPosts: [NewsPost] {
+        let excluded = latestOccasion?.id
+        return Array(newsVM.allNews.filter { $0.id != excluded }.prefix(latestOccasion == nil ? 3 : 2))
     }
 
     private var showAllButton: some View {
@@ -277,5 +297,56 @@ struct HomeNewsPreviewRow: View {
     private static func relativeTime(_ date: Date) -> String {
         relativeFormatter.locale = L10n.isArabic ? Locale(identifier: "ar") : Locale(identifier: "en_US")
         return relativeFormatter.localizedString(for: date, relativeTo: Date())
+    }
+}
+
+/// صف «آخر مناسبة» أعلى بطاقة الأخبار — نوع المناسبة بلونه وأيقونته + النص.
+struct HomeOccasionRow: View {
+    let news: NewsPost
+
+    private var color: Color { NewsTypeHelper.color(for: news.type) }
+
+    var body: some View {
+        HStack(alignment: .center, spacing: DS.Spacing.sm) {
+            ZStack {
+                Circle().fill(color.opacity(0.16))
+                Image(systemName: NewsTypeHelper.icon(for: news.type))
+                    .font(DS.Font.scaled(14, weight: .bold))
+                    .foregroundColor(color)
+            }
+            .frame(width: 36, height: 36)
+
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text(news.type)
+                        .font(DS.Font.scaled(10, weight: .heavy))
+                        .foregroundColor(color)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 2)
+                        .background(Capsule().fill(color.opacity(0.12)))
+                    Text(HomeDates.relativeString(news.timestamp))
+                        .font(DS.Font.scaled(10))
+                        .foregroundColor(DS.Color.textTertiary)
+                        .lineLimit(1)
+                }
+                Text(news.content)
+                    .font(DS.Font.scaled(13, weight: .semibold))
+                    .foregroundColor(DS.Color.textPrimary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(DS.Spacing.sm + 2)
+        .background(
+            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                .fill(color.opacity(0.07))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                .strokeBorder(color.opacity(0.18), lineWidth: 1)
+        )
     }
 }
