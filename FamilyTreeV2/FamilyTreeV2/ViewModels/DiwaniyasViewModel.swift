@@ -113,7 +113,7 @@ class DiwaniyasViewModel: ObservableObject {
         isLoading = false
     }
     
-    func addDiwaniya(ownerId: UUID, ownerName: String, title: String, scheduleText: String?, contactPhone: String?, mapsUrl: String?, address: String? = nil, autoApprove: Bool = false) async -> Bool {
+    func addDiwaniya(ownerId: UUID, ownerName: String, title: String, scheduleText: String?, scheduleDays: [Int]? = nil, contactPhone: String?, mapsUrl: String?, address: String? = nil, autoApprove: Bool = false) async -> Bool {
         guard NetworkMonitor.shared.requireOnline() else { return false }
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedOwner = ownerName.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -162,6 +162,14 @@ class DiwaniyasViewModel: ObservableObject {
                     struct AddrUpdate: Codable { let address: String }
                     try await supabase.from("diwaniyas").update(AddrUpdate(address: address)).eq("id", value: newId.uuidString).execute()
                 } catch { Log.warning("address column not available: \(error.localizedDescription)") }
+            }
+
+            // أيام الانعقاد المهيكلة — عمود قد لا يكون مطبّقاً بعد، فيُحدَّث على حدة
+            if let scheduleDays {
+                do {
+                    struct DaysUpdate: Codable { let schedule_days: [Int] }
+                    try await supabase.from("diwaniyas").update(DaysUpdate(schedule_days: scheduleDays.sorted())).eq("id", value: newId.uuidString).execute()
+                } catch { Log.warning("schedule_days column not available: \(error.localizedDescription)") }
             }
 
             // Refresh the list so the new diwaniya appears
@@ -266,7 +274,7 @@ class DiwaniyasViewModel: ObservableObject {
         })
     }
     
-    func updateDiwaniya(id: UUID, title: String, ownerName: String, scheduleText: String?, contactPhone: String?, mapsUrl: String?, address: String?, isClosed: Bool) async -> Bool {
+    func updateDiwaniya(id: UUID, title: String, ownerName: String, scheduleText: String?, scheduleDays: [Int]? = nil, contactPhone: String?, mapsUrl: String?, address: String?, isClosed: Bool) async -> Bool {
         guard NetworkMonitor.shared.requireOnline() else { return false }
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedOwner = ownerName.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -299,6 +307,15 @@ class DiwaniyasViewModel: ObservableObject {
                 ))
                 .eq("id", value: id.uuidString)
                 .execute()
+
+            // أيام الانعقاد المهيكلة — عمود قد لا يكون مطبّقاً بعد، فيُحدَّث على حدة
+            if let scheduleDays {
+                do {
+                    struct DaysUpdate: Codable { let schedule_days: [Int] }
+                    try await supabase.from("diwaniyas").update(DaysUpdate(schedule_days: scheduleDays.sorted())).eq("id", value: id.uuidString).execute()
+                } catch { Log.warning("schedule_days column not available: \(error.localizedDescription)") }
+            }
+
             
             // Update optional columns that may not exist yet
             do {

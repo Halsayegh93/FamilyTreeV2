@@ -7,6 +7,8 @@ nonisolated struct Diwaniya: Identifiable, Codable, Sendable {
     var ownerName: String
     var title: String
     var scheduleText: String?
+    /// أيام الانعقاد الأسبوعية: 0=السبت … 6=الجمعة (نفس ترقيم نموذج الإضافة)
+    var scheduleDays: [Int]?
     var contactPhone: String?
     var mapsUrl: String?
     var imageUrl: String?
@@ -21,6 +23,7 @@ nonisolated struct Diwaniya: Identifiable, Codable, Sendable {
         case ownerName = "owner_name"
         case title = "title"
         case scheduleText = "schedule_text"
+        case scheduleDays = "schedule_days"
         case contactPhone = "contact_phone"
         case mapsUrl = "maps_url"
         case imageUrl = "image_url"
@@ -37,6 +40,7 @@ nonisolated struct Diwaniya: Identifiable, Codable, Sendable {
         ownerName = try container.decode(String.self, forKey: .ownerName)
         title = try container.decode(String.self, forKey: .title)
         scheduleText = try container.decodeIfPresent(String.self, forKey: .scheduleText)
+        scheduleDays = try container.decodeIfPresent([Int].self, forKey: .scheduleDays)
         contactPhone = try container.decodeIfPresent(String.self, forKey: .contactPhone)
         mapsUrl = try container.decodeIfPresent(String.self, forKey: .mapsUrl)
         imageUrl = try container.decodeIfPresent(String.self, forKey: .imageUrl)
@@ -48,12 +52,13 @@ nonisolated struct Diwaniya: Identifiable, Codable, Sendable {
         approvedBy = try container.decodeIfPresent(UUID.self, forKey: .approvedBy)
     }
     
-    init(id: UUID, ownerId: UUID, ownerName: String, title: String, scheduleText: String?, contactPhone: String?, mapsUrl: String?, imageUrl: String?, address: String?, isClosed: Bool? = nil, approvalStatus: String, approvedBy: UUID?) {
+    init(id: UUID, ownerId: UUID, ownerName: String, title: String, scheduleText: String?, scheduleDays: [Int]? = nil, contactPhone: String?, mapsUrl: String?, imageUrl: String?, address: String?, isClosed: Bool? = nil, approvalStatus: String, approvedBy: UUID?) {
         self.id = id
         self.ownerId = ownerId
         self.ownerName = ownerName
         self.title = title
         self.scheduleText = scheduleText
+        self.scheduleDays = scheduleDays
         self.contactPhone = contactPhone
         self.mapsUrl = mapsUrl
         self.imageUrl = imageUrl

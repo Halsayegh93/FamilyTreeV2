@@ -222,16 +222,19 @@ struct HomeNewsView: View {
     // صفحة الأخبار الكاملة (تظهر عند الضغط على مربع الأخبار)
     private var newsFullPage: some View {
         ZStack {
-            ScrollView(showsIndicators: false) {
+            VStack(spacing: 0) {
+                // شريط الفلاتر والبحث مثبّت فوق القائمة — يبقى ظاهراً أثناء التمرير
                 newsTypeFilterBar
-                    // مسافة أوضح بين الهيدر وشريط الفلاتر
                     .padding(.top, DS.Spacing.md)
-                newsFeedSection
-                    // أول منشور أقرب للفلاتر
-                    .padding(.top, 0)
-                    .padding(.bottom, isLandscape ? DS.Spacing.xxxxl + 44 : DS.Spacing.xxxxl)
+                    .padding(.bottom, DS.Spacing.xs)
+
+                ScrollView(showsIndicators: false) {
+                    newsFeedSection
+                        .padding(.top, 0)
+                        .padding(.bottom, isLandscape ? DS.Spacing.xxxxl + 44 : DS.Spacing.xxxxl)
+                }
+                .refreshable { await refreshNews(notifyIfNew: true, force: true) }
             }
-            .refreshable { await refreshNews(notifyIfNew: true, force: true) }
 
             if authVM.currentUser?.role != .pending {
                 VStack {
@@ -346,8 +349,7 @@ struct HomeNewsView: View {
     // MARK: - Bento Section — الترتيب الجديد
     //
     // 1) ترحيب مدمج     2) شريط المستجدات (الرابط مع بقية الأقسام)
-    // 3) بطاقة الإدارة للمشرفين     4) وصول سريع: المكتبة / المشاريع / التواصل
-    // 5) آخر الأخبار (مع آخر مناسبة)
+    // 3) وصول سريع: المكتبة / المشاريع / التواصل     4) آخر الأخبار (مع آخر مناسبة)
     //
     // كل بطاقة بنية View مستقلة في ملفها — يبقى نوع هذه الصفحة ضحلاً
     // (تضخّمه سابقاً أسقط التطبيق بطفح مكدس عند الإقلاع).
@@ -363,17 +365,13 @@ struct HomeNewsView: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .top)
 
-                    VStack(spacing: DS.Spacing.sm) {
-                        if authVM.canModerate { adminCard }
-                        newsBentoCard
-                    }
-                    .frame(maxWidth: max(260, UIScreen.main.bounds.width * 0.36), alignment: .top)
+                    newsBentoCard
+                        .frame(maxWidth: max(260, UIScreen.main.bounds.width * 0.36), alignment: .top)
                 }
             } else {
                 VStack(spacing: DS.Spacing.md) {
                     greetingRow
                     updatesStrip
-                    if authVM.canModerate { adminCard }
                     quickAccessGrid(tileHeight: layout.tileHeight + 6)
                     newsBentoCard
                 }
@@ -396,12 +394,9 @@ struct HomeNewsView: View {
             onNews: { activeSubPage = .news },
             onTree: { selectedTab = 1 },
             onNotifications: { showingNotifications = true },
-            onAdmin: { selectedTab = 4 }
+            onAdmin: { selectedTab = 4 },
+            onDiwaniyas: { selectedTab = 2 }
         )
-    }
-
-    private var adminCard: some View {
-        HomeAdminCard { selectedTab = 4 }
     }
 
     // MARK: - Quick Access — الأقسام التي لا تبويب لها
@@ -644,6 +639,7 @@ struct HomeNewsView: View {
 #endif
 
     private var homeHeader: some View {
+        // الجرس بشكله الأصلي (HomeBellButton) بدل جرس الهيدر الموحّد
         let header = MainHeaderView(
             selectedTab: $selectedTab,
             showingNotifications: $showingNotifications,
@@ -651,8 +647,10 @@ struct HomeNewsView: View {
             subtitle: L10n.t("تطبيق العائلة", "Family App"),
             icon: "tree.fill",
             backgroundGradient: DS.Color.gradientPrimary,
-            showNotificationBell: true
-        )
+            hideNotificationBell: true
+        ) {
+            HomeBellButton()
+        }
 #if DEBUG
         return header.fullScreenCover(isPresented: $previewAuthScreens) { debugAuthPreview }
 #else
@@ -890,24 +888,73 @@ struct HomeNewsView: View {
                     }
                 }
             } else {
-                LazyVStack(spacing: DS.Spacing.lg) {
-                    ForEach(filteredNews) { news in
-                        newsCard(for: news)
-                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                if authVM.canDeleteNews {
-                                    Button(role: .destructive) {
-                                        postToDelete = news
-                                    } label: {
-                                        Label(L10n.t("حذف", "Delete"), systemImage: "trash.fill")
+                // مجمّعة زمنياً: اليوم / أمس / هذا الأسبوع / هذا الشهر / أقدم
+                // العناوين تثبت أعلى الشاشة أثناء التمرير
+                LazyVStack(spacing: DS.Spacing.lg, pinnedViews: [.sectionHeaders]) {
+                    ForEach(groupedNews) { group in
+                        Section {
+                            ForEach(group.posts) { news in
+                                newsCard(for: news)
+                                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                        if authVM.canDeleteNews {
+                                            Button(role: .destructive) {
+                                                postToDelete = news
+                                            } label: {
+                                                Label(L10n.t("حذف", "Delete"), systemImage: "trash.fill")
+                                            }
+                                        }
                                     }
-                                }
                             }
+                        } header: {
+                            newsGroupHeader(group)
+                        }
                     }
                 }
             }
         }
         .padding(.horizontal, DS.Spacing.md)
         .padding(.top, DS.Spacing.sm)
+    }
+
+    // MARK: - تجميع الأخبار زمنياً
+
+    private struct NewsGroup: Identifiable {
+        let id: String
+        let title: String
+        let icon: String
+        let posts: [NewsPost]
+    }
+
+    private var groupedNews: [NewsGroup] {
+        let cal = Calendar.current
+        var today: [NewsPost] = [], yesterday: [NewsPost] = [], week: [NewsPost] = []
+        var month: [NewsPost] = [], older: [NewsPost] = []
+        for n in filteredNews {
+            let d = n.timestamp
+            if cal.isDateInToday(d) { today.append(n) }
+            else if cal.isDateInYesterday(d) { yesterday.append(n) }
+            else if HomeDates.isWithinLastDays(d, days: 7) { week.append(n) }
+            else if HomeDates.isWithinLastDays(d, days: 30) { month.append(n) }
+            else { older.append(n) }
+        }
+        var out: [NewsGroup] = []
+        if !today.isEmpty     { out.append(.init(id: "today",     title: L10n.t("اليوم", "Today"),               icon: "sun.max.fill",   posts: today)) }
+        if !yesterday.isEmpty { out.append(.init(id: "yesterday", title: L10n.t("أمس", "Yesterday"),             icon: "moon.fill",      posts: yesterday)) }
+        if !week.isEmpty      { out.append(.init(id: "week",      title: L10n.t("هذا الأسبوع", "This week"),     icon: "calendar",       posts: week)) }
+        if !month.isEmpty     { out.append(.init(id: "month",     title: L10n.t("هذا الشهر", "This month"),      icon: "calendar.badge.clock", posts: month)) }
+        if !older.isEmpty     { out.append(.init(id: "older",     title: L10n.t("أقدم", "Earlier"),              icon: "clock.arrow.circlepath", posts: older)) }
+        return out
+    }
+
+    private func newsGroupHeader(_ group: NewsGroup) -> some View {
+        DSSectionHeader(
+            title: group.title,
+            icon: group.icon,
+            trailing: "\(group.posts.count)"
+        )
+        .padding(.vertical, DS.Spacing.xs)
+        // خلفية مصمتة حتى لا يظهر المحتوى من خلف العنوان المثبّت
+        .background(DS.Color.background)
     }
 
     private func roleColorFor(_ roleColor: String?) -> Color {

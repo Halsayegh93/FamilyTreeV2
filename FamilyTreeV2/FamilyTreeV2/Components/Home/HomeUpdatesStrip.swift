@@ -46,11 +46,15 @@ struct HomeUpdatesStrip: View {
     @EnvironmentObject private var memberVM: MemberViewModel
     @EnvironmentObject private var notificationVM: NotificationViewModel
     @EnvironmentObject private var adminRequestVM: AdminRequestViewModel
+    @EnvironmentObject private var appSettingsVM: AppSettingsViewModel
+    /// الديوانيات ليست كائن بيئة عاماً — نجلبها هنا (بكاش داخلي في الـ ViewModel)
+    @StateObject private var diwaniyasVM = DiwaniyasViewModel()
 
     let onNews: () -> Void
     let onTree: () -> Void
     let onNotifications: () -> Void
     let onAdmin: () -> Void
+    let onDiwaniyas: () -> Void
 
     /// نافذة «الجديد» بالأيام
     private let window = 7
@@ -81,11 +85,35 @@ struct HomeUpdatesStrip: View {
             + memberVM.allMembers.filter { $0.role == .pending }.count
     }
 
+    private var diwaniyasEnabled: Bool { appSettingsVM.settings.diwaniyasEnabled ?? true }
+
+    /// معرّف اليوم بترقيم التطبيق: 0=السبت … 6=الجمعة
+    private var todayIndex: Int { Calendar.current.component(.weekday, from: Date()) % 7 }
+
+    private var openDiwaniyas: [Diwaniya] {
+        diwaniyasVM.diwaniyas.filter { $0.approvalStatus == "approved" && $0.isClosed != true }
+    }
+
+    /// ديوانيات تنعقد اليوم
+    private var diwaniyasTodayCount: Int {
+        guard diwaniyasEnabled else { return 0 }
+        return openDiwaniyas.filter { ($0.scheduleDays ?? []).contains(todayIndex) }.count
+    }
+
+    /// ديوانيات لها أيام انعقاد هذا الأسبوع (حين لا يوجد شيء اليوم)
+    private var diwaniyasThisWeekCount: Int {
+        guard diwaniyasEnabled else { return 0 }
+        return openDiwaniyas.filter { !($0.scheduleDays ?? []).isEmpty }.count
+    }
+
     private var hasAnything: Bool {
-        newPostsCount + newMembersCount + unreadCount + pendingCount > 0
+        newPostsCount + newMembersCount + unreadCount + pendingCount
+            + diwaniyasTodayCount + diwaniyasThisWeekCount > 0
     }
 
     var body: some View {
+        // VStack موجود دائماً حتى يعمل .task ولو كان الشريط فارغاً
+        VStack(spacing: 0) {
         if hasAnything {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: DS.Spacing.sm) {
@@ -125,8 +153,31 @@ struct HomeUpdatesStrip: View {
                             action: onNotifications
                         )
                     }
+                    if diwaniyasTodayCount > 0 {
+                        HomeUpdateChip(
+                            icon: "map.fill",
+                            count: diwaniyasTodayCount,
+                            label: L10n.t("ديوانية اليوم", "Diwaniya today"),
+                            color: DS.Color.tileDiwaniya,
+                            action: onDiwaniyas
+                        )
+                    } else if diwaniyasThisWeekCount > 0 {
+                        HomeUpdateChip(
+                            icon: "map.fill",
+                            count: diwaniyasThisWeekCount,
+                            label: L10n.t("ديوانيات هذا الأسبوع", "Diwaniyas this week"),
+                            color: DS.Color.tileDiwaniya,
+                            action: onDiwaniyas
+                        )
+                    }
                 }
                 .padding(.horizontal, DS.Spacing.xs)
+            }
+        }
+        }
+        .task {
+            if diwaniyasEnabled, diwaniyasVM.diwaniyas.isEmpty {
+                await diwaniyasVM.fetchDiwaniyas()
             }
         }
     }
