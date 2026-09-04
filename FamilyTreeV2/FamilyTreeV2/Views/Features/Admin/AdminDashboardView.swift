@@ -159,21 +159,16 @@ struct AdminDashboardView: View {
                                     .padding(.horizontal, DS.Spacing.lg)
                             }
 
-                            // ١) صندوق العمل — «وش ينتظرني؟» — لكل المشرفين
-                            AdminWorkInbox(pendingDiwaniyas: diwaniyaVM.pendingDiwaniyas.count)
-                                .padding(.horizontal, DS.Spacing.lg)
-                                .opacity(appeared ? 1 : 0)
-                                .offset(y: appeared ? 0 : 20)
-
-                            // ٢) إحصاء الأفراد — مدير + مراقب + مالك (المشرف لا)
+                            // إحصائيات — مدير + مراقب + مالك (المشرف لا)
                             if authVM.isAdmin || authVM.currentUser?.role == .monitor {
                                 adminStatsGrid
                                     .opacity(appeared ? 1 : 0)
                                     .offset(y: appeared ? 0 : 20)
                             }
 
-                            // ٣) الأقسام في مجموعات: العمل / الأعضاء / البيانات / الإعدادات
-                            adminSections
+                            // شبكة بلاطات — نفس لغة الرئيسية: كل قسم بلاطة متساوية
+                            // بدل بطاقات مكدّسة متفاوتة الطول تبدو عشوائية.
+                            adminBentoGrid
                                 .padding(.horizontal, DS.Spacing.lg)
 
                             Spacer(minLength: DS.Spacing.xxxl)
@@ -245,6 +240,44 @@ struct AdminDashboardView: View {
                 adminStatsSkeleton
             } else {
                 VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                    // ═══ يحتاج إجراءك — الأولوية أولاً ═══
+                    if actionableTotal > 0 {
+                        HStack(spacing: DS.Spacing.sm) {
+                            actionStat(
+                                title: L10n.t("طلبات", "Requests"),
+                                value: totalReviewRequestsCount,
+                                icon: "tray.full.fill",
+                                color: DS.Color.warning
+                            )
+                            actionStat(
+                                title: L10n.t("رسائل", "Messages"),
+                                value: adminRequestVM.unreadContactMessagesCount,
+                                icon: "bubble.left.fill",
+                                color: DS.Color.info
+                            )
+                            actionStat(
+                                title: L10n.t("بانتظار", "Pending"),
+                                value: pendingCount,
+                                icon: "clock.fill",
+                                color: DS.Color.error
+                            )
+                        }
+                    } else {
+                        HStack(spacing: DS.Spacing.sm) {
+                            Image(systemName: "checkmark.seal.fill")
+                                .font(DS.Font.scaled(14, weight: .semibold))
+                                .foregroundColor(DS.Color.success)
+                            Text(L10n.t("ما فيه شي ينتظر مراجعتك", "Nothing awaiting your review"))
+                                .font(DS.Font.scaled(12, weight: .medium))
+                                .foregroundColor(DS.Color.textSecondary)
+                            Spacer()
+                        }
+                        .padding(DS.Spacing.md)
+                        .frame(maxWidth: .infinity)
+                        .background(DS.Color.success.opacity(0.08))
+                        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+                    }
+
                     // ═══ أفراد العائلة — جدول واحد: صفّ لكل جنس، عمود لكل حالة ═══
                     // شريطان منفصلان كانا يجعلان المقارنة بينهما عمليةً ذهنية؛
                     // الجدول يجعلها نظرة واحدة.
@@ -305,149 +338,73 @@ struct AdminDashboardView: View {
 
     /// بلاطة قسم — أيقونة في قرص ملوّن، عنوان، وشارة عدد اختيارية
 
-    private var adminSections: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.lg) {
-            // ── العمل اليومي ──
-            AdminTileSection(title: L10n.t("العمل", "Work"), icon: "tray.full.fill") {
-                AdminTile(
-                    title: L10n.t("كل الطلبات", "All requests"),
-                    subtitle: L10n.t("انضمام، أخبار، بلاغات", "Join, news, reports"),
-                    icon: "tray.full.fill",
-                    color: DS.Color.warning,
-                    badge: totalReviewRequestsCount
-                ) { AdminAllRequestsView() }
+    private var adminBentoGrid: some View {
+        LazyVGrid(
+            columns: Array(
+                repeating: GridItem(.flexible(), spacing: DS.Spacing.sm),
+                count: 3
+            ),
+            spacing: DS.Spacing.sm
+        ) {
+            AdminTile(
+                title: L10n.t("طلبات المراجعة", "Review Requests"),
+                subtitle: L10n.t("انضمام، أخبار، بلاغات", "Join, news, reports"),
+                icon: "tray.full.fill",
+                color: DS.Color.warning,
+                badge: totalReviewRequestsCount
+            ) { AdminAllRequestsView() }
 
-                AdminTile(
-                    title: L10n.t("الرسائل", "Messages"),
-                    subtitle: L10n.t("محادثاتك مع الأعضاء", "Conversations with members"),
-                    icon: "bubble.left.and.bubble.right.fill",
-                    color: DS.Color.info,
-                    badge: adminRequestVM.unreadContactMessagesCount
-                ) { AdminInboxView() }
+            AdminTile(
+                title: L10n.t("الرسائل", "Messages"),
+                subtitle: L10n.t("محادثاتك مع الأعضاء", "Conversations with members"),
+                icon: "bubble.left.and.bubble.right.fill",
+                color: DS.Color.info,
+                badge: adminRequestVM.unreadContactMessagesCount
+            ) { AdminInboxView() }
 
-                AdminTile(
-                    title: L10n.t("سجل النشاط", "Activity Log"),
-                    subtitle: L10n.t("كل حركة وتغيير", "Every change"),
-                    icon: "clock.arrow.circlepath",
-                    color: DS.Color.accent,
-                    badge: notificationVM.unreadActivityLogCount
-                ) { AdminActivityLogView() }
-            }
-
-            // ── الأعضاء ──
             if authVM.canEditMembers {
-                AdminTileSection(title: L10n.t("الأعضاء", "Members"), icon: "person.2.fill") {
-                    AdminTile(
-                        title: L10n.t("إدارة الأعضاء", "Members"),
-                        subtitle: L10n.t("الحسابات والسجل والعوائل", "Accounts, registry, families"),
-                        icon: "person.2.badge.gearshape",
-                        color: DS.Color.primary,
-                        badge: issueMembersCount + treeIssuesCount
-                    ) { AdminMembersManagementView() }
-
-                    if authVM.canRegisterMembers {
-                        AdminTile(
-                            title: L10n.t("تسجيل عضو", "Register member"),
-                            subtitle: L10n.t("إضافة عضو جديد مباشرة", "Add a member directly"),
-                            icon: "person.crop.circle.badge.plus",
-                            color: DS.Color.success
-                        ) { AdminRegisterMemberView() }
-                    }
-
-                    if authVM.canManageBannedPhones {
-                        AdminTile(
-                            title: L10n.t("الأرقام المحظورة", "Banned phones"),
-                            subtitle: L10n.t("منع أرقام من التسجيل", "Block numbers from registering"),
-                            icon: "phone.down.fill",
-                            color: DS.Color.error
-                        ) { AdminBannedPhonesView() }
-                    }
-                }
+                AdminTile(
+                    title: L10n.t("إدارة الأعضاء", "Members"),
+                    subtitle: L10n.t("الحسابات والسجل والعوائل", "Accounts, registry, families"),
+                    icon: "person.2.badge.gearshape",
+                    color: DS.Color.primary,
+                    badge: issueMembersCount + treeIssuesCount
+                ) { AdminMembersManagementView() }
             }
 
-            // ── البيانات ──
+            AdminTile(
+                title: L10n.t("سجل النشاط", "Activity Log"),
+                subtitle: L10n.t("كل حركة وتغيير", "Every change"),
+                icon: "clock.arrow.circlepath",
+                color: DS.Color.accent,
+                badge: notificationVM.unreadActivityLogCount
+            ) { AdminActivityLogView() }
+
             if authVM.isAdmin {
-                AdminTileSection(title: L10n.t("البيانات", "Data"), icon: "chart.bar.xaxis") {
-                    AdminTile(
-                        title: L10n.t("إحصائيات", "Analytics"),
-                        subtitle: L10n.t("الأدوار والأعمار والنمو", "Roles, ages, growth"),
-                        icon: "chart.bar.xaxis",
-                        color: DS.Color.accent
-                    ) { AdminAnalyticsView() }
+                AdminTile(
+                    title: L10n.t("إحصائيات متقدمة", "Analytics"),
+                    subtitle: L10n.t("الأدوار والأعمار والنمو", "Roles, ages, growth"),
+                    icon: "chart.bar.xaxis",
+                    color: DS.Color.accent
+                ) { AdminAnalyticsView() }
 
-                    AdminTile(
-                        title: L10n.t("تقارير PDF", "PDF Reports"),
-                        subtitle: L10n.t("تصدير ملف للطباعة", "Export printable file"),
-                        icon: "doc.text.fill",
-                        color: DS.Color.info
-                    ) { AdminReportsView() }
-
-                    AdminTile(
-                        title: L10n.t("الأعضاء النشطون", "Active members"),
-                        subtitle: L10n.t("من يستخدم التطبيق", "Who uses the app"),
-                        icon: "person.wave.2.fill",
-                        color: DS.Color.secondary
-                    ) { AdminActiveMembersView() }
-
-                    if authVM.canManageDevices {
-                        AdminTile(
-                            title: L10n.t("الأجهزة", "Devices"),
-                            subtitle: L10n.t("أجهزة الأعضاء المسجّلة", "Registered devices"),
-                            icon: "iphone.gen3",
-                            color: DS.Color.textSecondary
-                        ) { AdminDevicesView() }
-                    }
-
-                    AdminTile(
-                        title: L10n.t("صحة الإشعارات", "Push health"),
-                        subtitle: L10n.t("وصول الإشعارات للأجهزة", "Delivery to devices"),
-                        icon: "waveform.path.ecg",
-                        color: DS.Color.tileContact
-                    ) { AdminPushHealthView() }
-                }
+                AdminTile(
+                    title: L10n.t("تقارير PDF", "PDF Reports"),
+                    subtitle: L10n.t("تصدير ملف للطباعة", "Export printable file"),
+                    icon: "doc.text.fill",
+                    color: DS.Color.info
+                ) { AdminReportsView() }
             }
 
-            // ── الإعدادات ──
             if authVM.canViewSystemSettings {
-                AdminTileSection(title: L10n.t("الإعدادات", "Settings"), icon: "gearshape.fill") {
-                    if authVM.canManageSettings {
-                        AdminTile(
-                            title: L10n.t("إعدادات التطبيق", "App settings"),
-                            subtitle: L10n.t("تفعيل الأقسام والميزات", "Sections and features"),
-                            icon: "slider.horizontal.3",
-                            color: DS.Color.primary
-                        ) { AdminAppSettingsView() }
-                    }
-
-                    AdminTile(
-                        title: L10n.t("فريق الإدارة", "Admin team"),
-                        subtitle: L10n.t("الأدوار والصلاحيات", "Roles and permissions"),
-                        icon: "person.2.badge.key.fill",
-                        color: DS.Color.accent
-                    ) { AdminModeratorsView() }
-
-                    if authVM.canSendNotifications {
-                        AdminTile(
-                            title: L10n.t("إرسال إشعار", "Send notification"),
-                            subtitle: L10n.t("تنبيه للأعضاء", "Notify members"),
-                            icon: "paperplane.fill",
-                            color: DS.Color.warning
-                        ) { AdminNotificationsView() }
-                    }
-
-                    AdminTile(
-                        title: L10n.t("تحديث التطبيق", "App update"),
-                        subtitle: L10n.t("الإصدار والرابط", "Version and link"),
-                        icon: "arrow.down.app.fill",
-                        color: DS.Color.secondary
-                    ) { AdminAppUpdateView() }
-
-                    AdminTile(
-                        title: L10n.t("الأمان والنظام", "Security & system"),
-                        subtitle: L10n.t("صحة النظام والأمان", "System health and security"),
-                        icon: "lock.shield.fill",
-                        color: DS.Color.textSecondary
-                    ) { AdminSecuritySettingsView() }
+                AdminTile(
+                    title: L10n.t("إعدادات النظام", "System Settings"),
+                    subtitle: L10n.t("الأمان وصحة النظام", "Security & health"),
+                    icon: "lock.shield.fill",
+                    color: DS.Color.textSecondary
+                ) {
+                    // الفريق والإشعارات وتحديثات التطبيق انتقلت إلى الداخل
+                    AdminSecuritySettingsView()
                 }
             }
         }

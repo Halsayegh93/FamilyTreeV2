@@ -67,7 +67,7 @@ struct MainTabView: View {
             if authVM.canModerate {
                 AdminDashboardView(selectedTab: $selectedTab)
                     .tabItem {
-                        Image(systemName: selectedTab == 4 ? "shield.fill" : "shield")
+                        Image(systemName: selectedTab == 4 ? "gearshape.2.fill" : "gearshape.2")
                         Text(verticalSizeClass == .compact ? "" : L10n.t("الإدارة", "Admin"))
                     }
                     .tag(4)
