@@ -107,9 +107,17 @@ struct HomeNewsPreviewCard: View {
             .padding(.vertical, DS.Spacing.md)
         } else {
             VStack(spacing: DS.Spacing.md) {
-                // آخر مناسبة (زواج/مولود/وفاة) أولاً — هي ما يهم العائلة أكثر
-                if let occasion = latestOccasion {
-                    HomeOccasionRow(news: occasion)
+                // مناسبات الأسبوع (زواج/مولود/وفاة) أولاً — هي ما يهم العائلة أكثر
+                if !weekOccasions.isEmpty {
+                    VStack(alignment: .leading, spacing: DS.Spacing.xs + 2) {
+                        Text(L10n.t("مناسبات هذا الأسبوع", "This week's occasions"))
+                            .font(DS.Font.scaled(11, weight: .heavy))
+                            .foregroundColor(DS.Color.textSecondary)
+                            .tracking(0.4)
+                        ForEach(weekOccasions) { occasion in
+                            HomeOccasionRow(news: occasion)
+                        }
+                    }
                 }
                 ForEach(previewPosts) { news in
                     HomeNewsPreviewRow(
@@ -125,18 +133,22 @@ struct HomeNewsPreviewCard: View {
 
     private static let occasionTypes: Set<String> = ["زواج", "مولود", "وفاة"]
 
-    /// أحدث مناسبة خلال آخر 30 يوماً — إن وُجدت
-    private var latestOccasion: NewsPost? {
-        newsVM.allNews.first {
-            Self.occasionTypes.contains($0.type)
-                && HomeDates.isWithinLastDays($0.timestamp, days: 30)
+    /// مناسبات آخر ٧ أيام (حتى ٣)، وإن لم توجد فأحدث مناسبة خلال ٣٠ يوماً
+    private var weekOccasions: [NewsPost] {
+        let all = newsVM.allNews.filter { Self.occasionTypes.contains($0.type) }
+        let week = all.filter { HomeDates.isWithinLastDays($0.timestamp, days: 7) }
+        if !week.isEmpty { return Array(week.prefix(3)) }
+        if let latest = all.first(where: { HomeDates.isWithinLastDays($0.timestamp, days: 30) }) {
+            return [latest]
         }
+        return []
     }
 
-    /// أحدث الأخبار للمعاينة، بلا تكرار المناسبة المعروضة أعلاه
+    /// أحدث الأخبار للمعاينة، بلا تكرار المناسبات المعروضة أعلاه
     private var previewPosts: [NewsPost] {
-        let excluded = latestOccasion?.id
-        return Array(newsVM.allNews.filter { $0.id != excluded }.prefix(latestOccasion == nil ? 3 : 2))
+        let excluded = Set(weekOccasions.map { $0.id })
+        let count = weekOccasions.isEmpty ? 3 : 2
+        return Array(newsVM.allNews.filter { !excluded.contains($0.id) }.prefix(count))
     }
 
     private var showAllButton: some View {
@@ -239,13 +251,14 @@ struct HomeNewsPreviewRow: View {
     private var avatar: some View {
         if isAdminIdentity {
             ZStack {
-                Circle().fill(DS.Color.gradientPrimary)
-                Image(systemName: "megaphone.fill")
-                    .font(DS.Font.scaled(13, weight: .bold))
+                RoundedRectangle(cornerRadius: DS.Radius.sm + 2, style: .continuous)
+                    .fill(LinearGradient(colors: [DS.Color.accentDark, DS.Color.primary],
+                                         startPoint: .topLeading, endPoint: .bottomTrailing))
+                Image(systemName: "checkmark.shield.fill")
+                    .font(DS.Font.scaled(14, weight: .bold))
                     .foregroundColor(.white)
             }
             .frame(width: 32, height: 32)
-            .overlay(Circle().strokeBorder(DS.Color.headerBorder, lineWidth: 1))
         } else {
             DSMemberAvatar(
                 name: news.author_name,

@@ -98,21 +98,17 @@ struct HomeNewsCardView: View {
                 .padding(.top, 2)
                 .padding(.bottom, 4)
         }
-        // منشور الإدارة: خلفية مزرقّة تميّزه عن المنشورات الشخصية البيضاء
-        .background(
-            ZStack {
-                DS.Color.surface
-                if isAdminIdentityPost { DS.Color.primary.opacity(0.07) }
-            }
-        )
+        // منشور الإدارة: جسم أبيض نظيف، والتمييز في الترويسة الرسمية والهالة
+        .background(DS.Color.surface)
         .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                .stroke(isAdminIdentityPost ? DS.Color.primary.opacity(0.45)
+                .stroke(isAdminIdentityPost ? DS.Color.primary.opacity(0.18)
                                             : DS.Color.textTertiary.opacity(0.15),
-                        lineWidth: isAdminIdentityPost ? 1.4 : 0.75)
+                        lineWidth: isAdminIdentityPost ? 1 : 0.75)
         )
-        .dsCardShadow()
+        .shadow(color: isAdminIdentityPost ? DS.Color.primaryDark.opacity(0.22) : .black.opacity(0.06),
+                radius: isAdminIdentityPost ? 16 : 8, x: 0, y: isAdminIdentityPost ? 6 : 2)
     }
 
     // MARK: - هيدر الكرت
@@ -127,32 +123,62 @@ struct HomeNewsCardView: View {
                     authorAvatar
 
                     VStack(alignment: .leading, spacing: 2) {
-                        HStack(spacing: 4) {
+                        HStack(spacing: 5) {
                             Text(shortDisplayName)
                                 .font(DS.Font.scaled(14, weight: .bold))
                                 .foregroundColor(isAdminIdentityPost ? .white : DS.Color.textPrimary)
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.85)
+                            if isAdminIdentityPost {
+                                // شارة توثيق: دائرة بيضاء بعلامة صح
+                                ZStack {
+                                    Circle().fill(SwiftUI.Color.white)
+                                    Image(systemName: "checkmark")
+                                        .font(.system(size: 8, weight: .heavy))
+                                        .foregroundColor(DS.Color.primaryDark)
+                                }
+                                .frame(width: 14, height: 14)
+                            }
                         }
 
-                        HStack(spacing: 3) {
-                            Image(systemName: NewsTypeHelper.icon(for: type))
-                                .font(DS.Font.scaled(11, weight: .bold))
-                            Text(NewsTypeHelper.displayName(for: type))
-                                .font(DS.Font.scaled(11, weight: .semibold))
+                        if isAdminIdentityPost {
+                            Text(L10n.t("منشور رسمي", "Official post") + " · " + time)
+                                .font(DS.Font.scaled(10.5, weight: .medium))
+                                .foregroundColor(SwiftUI.Color.white.opacity(0.85))
+                                .lineLimit(1)
+                        } else {
+                            HStack(spacing: 3) {
+                                Image(systemName: NewsTypeHelper.icon(for: type))
+                                    .font(DS.Font.scaled(11, weight: .bold))
+                                Text(NewsTypeHelper.displayName(for: type))
+                                    .font(DS.Font.scaled(11, weight: .semibold))
+                            }
+                            .foregroundColor(typeColor)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 1.5)
+                            .background(typeColor.opacity(0.10))
+                            .clipShape(Capsule())
                         }
-                        .foregroundColor(isAdminIdentityPost ? .white : typeColor)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 1.5)
-                        .background(isAdminIdentityPost ? SwiftUI.Color.white.opacity(0.22)
-                                                        : typeColor.opacity(0.10))
-                        .clipShape(Capsule())
                     }
                 }
             }
             .buttonStyle(.plain)
 
             Spacer()
+
+            if isAdminIdentityPost {
+                // شارة النوع بيضاء صلبة في الطرف — تُقرأ فوق الترويسة الداكنة
+                HStack(spacing: 4) {
+                    Image(systemName: NewsTypeHelper.icon(for: type))
+                        .font(DS.Font.scaled(10, weight: .heavy))
+                    Text(NewsTypeHelper.displayName(for: type))
+                        .font(DS.Font.scaled(10.5, weight: .heavy))
+                }
+                .foregroundColor(DS.Color.primaryDark)
+                .padding(.horizontal, 9)
+                .padding(.vertical, 4)
+                .background(Capsule().fill(SwiftUI.Color.white))
+            }
 
             if approvalStatus == "pending" {
                 Text(L10n.t("مراجعة", "Review"))
@@ -189,18 +215,46 @@ struct HomeNewsCardView: View {
         }
         .padding(.horizontal, DS.Spacing.md)
         .padding(.top, isAdminIdentityPost ? DS.Spacing.sm + 2 : DS.Spacing.md)
-        .padding(.bottom, isAdminIdentityPost ? DS.Spacing.sm + 2 : DS.Spacing.sm)
-        // ترويسة رسمية بتدرّج الهيدر — كورقة رسمية للعائلة
+        .padding(.bottom, isAdminIdentityPost ? DS.Spacing.md + 4 : DS.Spacing.sm)
+        // ترويسة رسمية: كحلي → أزرق مع توهّج خفيف — كورقة رسمية للعائلة
         .background(
             Group {
                 if isAdminIdentityPost {
                     ZStack {
-                        DS.Color.gradientPrimary
-                        DS.Color.headerVeil
+                        LinearGradient(
+                            colors: [DS.Color.accentDark, DS.Color.primaryDark, DS.Color.primary],
+                            startPoint: .leading, endPoint: .trailing
+                        )
+                        Circle()
+                            .fill(DS.Color.accentLight.opacity(0.45))
+                            .frame(width: 150, height: 150)
+                            .blur(radius: 30)
+                            .offset(x: -120, y: -60)
                     }
+                    .clipped()
                 }
             }
         )
+        // شريط سدو رفيع تحت الترويسة الرسمية — نفس هوية الهيدر
+        .overlay(alignment: .bottom) {
+            if isAdminIdentityPost { officialSaduStrip }
+        }
+    }
+
+    /// معيّنات سدو صغيرة بين خطين — تحت ترويسة منشور الإدارة
+    private var officialSaduStrip: some View {
+        HStack(spacing: 4) {
+            Rectangle().fill(SwiftUI.Color.white.opacity(0.18)).frame(height: 1)
+            ForEach(0..<5, id: \.self) { i in
+                Rectangle()
+                    .fill(SwiftUI.Color.white.opacity(i == 2 ? 0.95 : 0.45))
+                    .frame(width: i == 2 ? 6 : 4, height: i == 2 ? 6 : 4)
+                    .rotationEffect(.degrees(45))
+            }
+            Rectangle().fill(SwiftUI.Color.white.opacity(0.18)).frame(height: 1)
+        }
+        .padding(.horizontal, DS.Spacing.md)
+        .padding(.bottom, 4)
     }
 
     /// صورة الناشر — درع متدرّج بهوية الهيدر لمنشورات الإدارة
@@ -208,14 +262,17 @@ struct HomeNewsCardView: View {
     private var authorAvatar: some View {
         if isAdminIdentityPost {
             ZStack {
-                Circle()
-                    .fill(SwiftUI.Color.white.opacity(0.22))
-                Image(systemName: "megaphone.fill")
-                    .font(DS.Font.scaled(15, weight: .bold))
+                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                    .fill(SwiftUI.Color.white.opacity(0.16))
+                Image(systemName: "checkmark.shield.fill")
+                    .font(DS.Font.scaled(18, weight: .bold))
                     .foregroundColor(.white)
             }
-            .frame(width: 36, height: 36)
-            .overlay(Circle().strokeBorder(SwiftUI.Color.white.opacity(0.35), lineWidth: 1))
+            .frame(width: 40, height: 40)
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                    .strokeBorder(SwiftUI.Color.white.opacity(0.30), lineWidth: 1)
+            )
         } else {
             DSMemberAvatar(name: authorName,
                            avatarUrl: authorMember?.avatarUrl,

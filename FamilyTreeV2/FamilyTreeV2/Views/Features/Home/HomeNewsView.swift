@@ -41,6 +41,9 @@ struct HomeNewsView: View {
     /// الصفحة الفرعية المفتوحة — تُدفع كوجهة تنقّل حقيقية لتأخذ حركة iOS الأصلية
     @State private var activeSubPage: HomeSubPage? = nil
 
+    /// الديوانيات تُجلب مرة واحدة هنا وتُمرَّر لبطاقة المستجدات وبطاقة «الليلة»
+    @StateObject private var diwaniyasVM = DiwaniyasViewModel()
+
     /// مقاييس التخطيط المتجاوبة — تتكيّف مع عرض الجهاز الفعلي + size class
     private var layout: DS.Layout.Metrics {
         let w = contentWidth > 0 ? contentWidth : UIScreen.main.bounds.width
@@ -201,6 +204,12 @@ struct HomeNewsView: View {
             if (appSettingsVM.settings.projectsEnabled ?? true), projectsVM.projects.isEmpty {
                 await projectsVM.fetchProjects()
             }
+            // الديوانيات لبطاقة المستجدات وبطاقة «الليلة» (بكاش داخلي)
+            if (appSettingsVM.settings.diwaniyasEnabled ?? true), diwaniyasVM.diwaniyas.isEmpty {
+                await diwaniyasVM.fetchDiwaniyas()
+            }
+            // تحديث صامت للأخبار عند فتح الرئيسية — بخانق الـ ١٠ ثوانٍ نفسه
+            await refreshNews(notifyIfNew: false)
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
@@ -360,6 +369,7 @@ struct HomeNewsView: View {
                     VStack(spacing: DS.Spacing.sm) {
                         greetingRow
                         updatesStrip
+                        diwaniyaTonightCard
                         quickAccessGrid(tileHeight: max(66, layout.tileHeight - 18))
                         Spacer(minLength: 0)
                     }
@@ -372,8 +382,10 @@ struct HomeNewsView: View {
                 VStack(spacing: DS.Spacing.md) {
                     greetingRow
                     updatesStrip
+                    diwaniyaTonightCard
                     quickAccessGrid(tileHeight: layout.tileHeight + 6)
                     newsBentoCard
+                    emptyInvite
                 }
             }
         }
@@ -388,9 +400,62 @@ struct HomeNewsView: View {
         HomeGreetingRow(onOpenProfile: { selectedTab = 3 }, onLongPress: debugLongPress)
     }
 
-    /// شريط المستجدات — كل شريحة تفتح قسمها
+    /// ديوانيات اليوم (المعتمدة والمفتوحة) — لبطاقة «الليلة»
+    private var todaysDiwaniyas: [Diwaniya] {
+        guard appSettingsVM.settings.diwaniyasEnabled ?? true else { return [] }
+        return diwaniyasVM.diwaniyas.filter {
+            $0.approvalStatus == "approved" && $0.isClosed != true
+                && ($0.scheduleDays ?? []).contains(HomeDates.todayIndex)
+        }
+    }
+
+    private var diwaniyaTonightCard: some View {
+        HomeDiwaniyaTonightCard(diwaniyas: todaysDiwaniyas) { selectedTab = 2 }
+    }
+
+    /// دعوة واحدة واضحة حين لا توجد أخبار ولا مستجدات
+    @ViewBuilder
+    private var emptyInvite: some View {
+        if newsVM.allNews.isEmpty && !newsVM.isLoading && authVM.currentUser?.role != .pending {
+            Button { showingAddNews = true } label: {
+                HStack(spacing: DS.Spacing.md) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                            .fill(DS.Color.gradientPrimary)
+                            .frame(width: 44, height: 44)
+                        Image(systemName: "square.and.pencil")
+                            .font(DS.Font.scaled(18, weight: .bold))
+                            .foregroundColor(.white)
+                    }
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(L10n.t("شارك أول خبر", "Share the first post"))
+                            .font(DS.Font.scaled(15, weight: .bold))
+                            .foregroundColor(DS.Color.textPrimary)
+                        Text(L10n.t("مناسبة، إعلان، أو صورة تجمع العائلة", "An occasion, an announcement, or a photo"))
+                            .font(DS.Font.scaled(12, weight: .medium))
+                            .foregroundColor(DS.Color.textSecondary)
+                    }
+                    Spacer()
+                    Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
+                        .font(DS.Font.scaled(12, weight: .bold))
+                        .foregroundColor(DS.Color.textTertiary)
+                }
+                .padding(DS.Spacing.md)
+                .background(DS.Color.surface)
+                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                        .strokeBorder(DS.Color.primary.opacity(0.14), lineWidth: 1)
+                )
+            }
+            .buttonStyle(DSScaleButtonStyle())
+        }
+    }
+
+    /// بطاقة المستجدات — كل عمود يفتح قسمه
     private var updatesStrip: some View {
         HomeUpdatesStrip(
+            diwaniyas: diwaniyasVM.diwaniyas,
             onNews: { activeSubPage = .news },
             onTree: { selectedTab = 1 },
             onNotifications: { showingNotifications = true },
