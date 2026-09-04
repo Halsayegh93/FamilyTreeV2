@@ -139,27 +139,26 @@ jobs:
 
           sleep 25
 
-          # هل ما زالت العملية حيّة بعد 25 ثانية؟
-          xcrun devicectl device info processes \
-            --device "$DEVICE_UDID" \
-            --json-output "$RUNNER_TEMP/procs.json" > /dev/null 2>&1
-
-          ALIVE=$(python3 - "$RUNNER_TEMP/procs.json" "$PID_ON_DEVICE" <<'PY'
+          # هل التطبيق حيّ بعد 25 ثانية؟ نطابق بمسار التنفيذ لا برقم العملية:
+          # لو فتح المستخدم التطبيق بنفسه أثناء الفحص يتغيّر الرقم ويُقرأ خطأً كانهيار.
+          # ونعيد الاستعلام مرة ثانية قبل الحكم لتفادي تعثّر لحظي في القناة.
+          ALIVE=no
+          for attempt in 1 2 3; do
+            xcrun devicectl device info processes \
+              --device "$DEVICE_UDID" \
+              --json-output "$RUNNER_TEMP/procs.json" > /dev/null 2>&1
+            ALIVE=$(python3 - "$RUNNER_TEMP/procs.json" <<'PY'
           import json, sys
           try:
               procs = json.load(open(sys.argv[1]))["result"]["runningProcesses"]
           except Exception:
               procs = []
-          want = sys.argv[2]
-          for p in procs:
-              path = str(p.get("executable", ""))
-              pid = str(p.get("processIdentifier", ""))
-              if "FamilyTreeV2.app" in path and (not want or pid == want):
-                  print("yes"); break
-          else:
-              print("no")
+          print("yes" if any("FamilyTreeV2.app" in str(p.get("executable", "")) for p in procs) else "no")
           PY
-          )
+            )
+            [ "$ALIVE" = "yes" ] && break
+            sleep 4
+          done
 
           if [ "$ALIVE" != "yes" ]; then
             echo "::error::التطبيق لم يبقَ شغّالاً 25 ثانية — سيُستعاد الإصدار المستقر"
