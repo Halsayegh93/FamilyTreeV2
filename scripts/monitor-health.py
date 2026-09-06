@@ -18,6 +18,7 @@ select jsonb_build_object(
    'name', j.jobname, 'status', r.status)), '[]')
    from cron.job j left join lateral (
      select status from cron.job_run_details where jobid=j.jobid
+     and status in ('failed','succeeded')
      order by start_time desc,runid desc limit 1
    ) r on true where j.active),
  'dispatch_healthy', exists(select 1 from cron.job j join cron.job_run_details r using(jobid)
