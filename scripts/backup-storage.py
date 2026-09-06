@@ -3,7 +3,16 @@
 import argparse, datetime, hashlib, json, os, pathlib, subprocess, sys
 import urllib.request, urllib.parse, urllib.error
 import time
-import shutil, collections
+import shutil, collections, re
+
+def matches_etag(file, metadata):
+    # Single-part Storage ETags are MD5; multipart/opaque ETags are not.
+    etag = ((metadata or {}).get('eTag') or '').strip('"')
+    if not re.fullmatch(r'[0-9a-fA-F]{32}', etag): return True
+    digest = hashlib.md5()
+    with open(file, 'rb') as stream:
+        for chunk in iter(lambda: stream.read(1024*1024), b''): digest.update(chunk)
+    return digest.hexdigest() == etag.lower()
 
 def main():
     parser = argparse.ArgumentParser()
@@ -49,9 +58,9 @@ def main():
         legacy = dest/'objects'/row['bucket_id']/row['name']
         if args.resume and not target.exists() and folded[(row['bucket_id']+'/'+row['name']).casefold()] == 1 and legacy.is_file() and expected is not None and legacy.stat().st_size == int(expected):
             shutil.copyfile(legacy,target)
-        if args.resume and target.is_file() and (expected is None or target.stat().st_size == int(expected)): return
-        # Public reads support legacy Unicode keys that the CLI's authenticated
-        # download route rejects. Never use this route for a private bucket.
+        if args.resume and target.is_file() and (expected is None or target.stat().st_size == int(expected)) and matches_etag(target, row['metadata']): return
+        # Public reads avoid CLI overhead, but invalid legacy keys can still fail.
+        # Never use this route for a private bucket.
         if row['bucket_public']:
             url = 'https://poxyxsgvzwmnmewytsiw.supabase.co/storage/v1/object/public/' + urllib.parse.quote(row['bucket_id']+'/'+row['name'],safe='/') + '?backup=' + str(time.time_ns())
             try:
@@ -85,6 +94,10 @@ def main():
         if expected is not None and file.stat().st_size != int(expected):
             missing.append(str(relative))
             download_failures[str(relative)] = 'size_mismatch'
+            continue
+        if not matches_etag(file, row['metadata']):
+            missing.append(str(relative))
+            download_failures[str(relative)] = 'content_mismatch'
             continue
         digest = hashlib.sha256()
         with open(file,'rb') as stream:

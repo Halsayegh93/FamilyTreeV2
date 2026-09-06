@@ -448,8 +448,8 @@ class NewsViewModel: ObservableObject {
         guard let imageData = ImageProcessor.process(image, for: .news) else { return nil }
 
         let imageId = UUID()
-        let safeAuthorName = memberVM?.getSafeMemberName(for: authorId) ?? authorId.uuidString
-        let filePath = "news/\(safeAuthorName)/\(imageId.uuidString).jpg"
+        // Stable ASCII keys work with Storage and remain attributable after renaming.
+        let filePath = "news/\(authorId.uuidString.lowercased())/\(imageId.uuidString.lowercased()).jpg"
 
         do {
             try await supabase.storage
@@ -457,7 +457,7 @@ class NewsViewModel: ObservableObject {
                 .upload(
                     filePath,
                     data: imageData,
-                    options: FileOptions(contentType: "image/jpeg", upsert: true)
+                    options: FileOptions(contentType: "image/jpeg", upsert: false)
                 )
 
             let publicURL = try supabase.storage
